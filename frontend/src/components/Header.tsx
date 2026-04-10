@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView } from 'react-native';
+import {
+  View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 
 const FY_YEARS = [
@@ -32,6 +35,7 @@ const Header: React.FC<HeaderProps> = ({
   onFYChange,
 }) => {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [selectedFY, setSelectedFY] = useState(fyYear);
   const [showFYModal, setShowFYModal] = useState(false);
 
@@ -45,6 +49,9 @@ const Header: React.FC<HeaderProps> = ({
     onFYChange?.(fy);
     setShowFYModal(false);
   };
+
+  // Position dropdown below header (status bar + header height ~58px)
+  const dropdownTop = insets.top + 58;
 
   return (
     <>
@@ -102,21 +109,23 @@ const Header: React.FC<HeaderProps> = ({
         </View>
       </View>
 
-      {/* FY Year Dropdown Modal */}
+      {/* FY Year Dropdown — small popover, no full-screen dimming */}
       <Modal
         testID="fy-modal"
         visible={showFYModal}
         transparent
-        animationType="fade"
+        animationType="none"
         onRequestClose={() => setShowFYModal(false)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          onPress={() => setShowFYModal(false)}
-          activeOpacity={1}
-        >
-          <View style={styles.fyDropdown}>
-            {/* Arrow pointing up */}
+        <View style={{ flex: 1 }}>
+          {/* Tap outside to close */}
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            onPress={() => setShowFYModal(false)}
+            activeOpacity={1}
+          />
+          {/* Dropdown card positioned below FY pill */}
+          <View style={[styles.fyDropdown, { top: dropdownTop }]}>
             <View style={styles.dropdownArrow} />
             <Text style={styles.dropdownTitle}>Financial Year</Text>
             <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
@@ -144,7 +153,7 @@ const Header: React.FC<HeaderProps> = ({
               ))}
             </ScrollView>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
     </>
   );
@@ -226,27 +235,21 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: '700',
   },
-  // FY Dropdown Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    justifyContent: 'flex-start',
-    alignItems: 'flex-end',
-    paddingTop: 56,
-    paddingRight: SPACING.md,
-  },
+  // FY Dropdown — positioned absolutely via inline style
   fyDropdown: {
+    position: 'absolute',
+    right: SPACING.md,
     backgroundColor: COLORS.cardBg,
     borderRadius: RADIUS.lg,
     minWidth: 180,
     borderWidth: 1,
     borderColor: COLORS.borderDefault,
     overflow: 'hidden',
-    elevation: 8,
+    elevation: 12,
     shadowColor: COLORS.black,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
   },
   dropdownArrow: {
     width: 10,
@@ -256,7 +259,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 1,
     borderColor: COLORS.borderDefault,
     alignSelf: 'flex-end',
-    marginRight: 20,
+    marginRight: 22,
     marginTop: -5,
     transform: [{ rotate: '45deg' }],
   },

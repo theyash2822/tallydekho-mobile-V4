@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 
 function RootNavigation() {
@@ -23,9 +24,11 @@ function RootNavigation() {
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <StatusBar style="dark" />
-      <RootNavigation />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <StatusBar style="dark" />
+        <RootNavigation />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

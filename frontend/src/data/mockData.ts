@@ -76,6 +76,21 @@ export const MOCK_REPORTS = {
   gst: { igst: '₹1,82,000', cgst: '₹90,000', sgst: '₹90,000', totalTaxCollected: '₹3,62,000' },
 };
 
+export const MOCK_MONTHLY_REVENUE = [
+  { month: 'Jun', sales: 4.2, purchases: 2.8 },
+  { month: 'Jul', sales: 5.6, purchases: 3.5 },
+  { month: 'Aug', sales: 4.9, purchases: 3.1 },
+  { month: 'Sep', sales: 7.3, purchases: 4.8 },
+  { month: 'Oct', sales: 6.8, purchases: 4.2 },
+  { month: 'Nov', sales: 8.1, purchases: 5.0 },
+  { month: 'Dec', sales: 10.4, purchases: 6.2 },
+  { month: 'Jan', sales: 7.8, purchases: 4.9 },
+  { month: 'Feb', sales: 9.2, purchases: 5.8 },
+  { month: 'Mar', sales: 8.5, purchases: 5.3 },
+  { month: 'Apr', sales: 11.1, purchases: 6.8 },
+  { month: 'May', sales: 9.7, purchases: 6.1 },
+];
+
 export const MOCK_NOTIFICATIONS = [
   { id: 'N001', type: 'warning', title: 'Budget Overspend Warning', message: "Budget Alert: You've exceeded your monthly marketing budget by ₹2,000. Tap to adjust your plan!", time: '5 mins.', actionLabel: 'Adjust plan' },
   { id: 'N002', type: 'urgent', title: 'Daily Summary Alert', message: "Your daily financial summary is ready! Tap to review today's income, expenses, and cash flow insights.", time: '12:02 PM' },

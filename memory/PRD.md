@@ -26,13 +26,16 @@ Color scheme updated to warm cream/dark palette. Mock data fallback architecture
 ### Main App
 - Home Dashboard (KPI strip, time filters, metrics, cashflow SVG ring, recent activity)
 - Quick Actions Modal (Sales/Purchase/Voucher/Inventory/Ledgers accordion)
-- Stocks Tab (total value, SKUs, warehouses, item list with status badges)
-- Ledger Tab (list with Debit/Credit chips, search, filter)
-- Reports Tab (Financial/Compliance/Audit/AI sections)
+- **Stocks Tab v2**: Stats row (Value/SKUs/Warehouses/LowStock), Search bar, filter chips (All/In Stock/Low Stock/Out of Stock), grouped list with status sections, "Add New Item" bottom sheet (Group, Name, Unit, Price, Qty, Barcode)
+- **Ledger Tab v2**: Search, filter tabs (All/Debit/Credit) + sort, list with dark avatars + Dr/Cr badges, "Ledger Creation" full bottom sheet (Name, Nature, Group, Opening Balance Dr/Cr toggle, Narration, Party/Bank/Duties sections), Filter Modal
+- **Reports Tab v2**: KPI row (Today/MTD/YTD), SVG bar chart (Sales vs Purchases, 6M/1Y toggle), E-Way Bills stats, GST Summary, Financial/Compliance/Audit/AI sections
+- **Safe Area Fix**: All screens use `SafeAreaView` from `react-native-safe-area-context` (Android + iOS fix)
+- **FY Dropdown Fix**: Small popover card, no full-screen dimming, dynamic position via useSafeAreaInsets
+- **Custom Tab Bar**: Central elevated FAB (+) between Stocks and Ledger tabs, opens QuickActionsModal
 
 ### Infrastructure
 - `/src/constants/colors.ts` — color/typography/spacing constants
-- `/src/data/mockData.ts` — ALL static mock data in one file
+- `/src/data/mockData.ts` — ALL static mock data (added MOCK_MONTHLY_REVENUE)
 - `/src/services/api.ts` — fetchWithFallback pattern
 - `/src/context/AuthContext.tsx` — auth state management
 - `/src/components/` — Header, QuickActionsModal, CashflowCard, RecentActivity

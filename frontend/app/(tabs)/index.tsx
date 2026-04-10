@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  SafeAreaView, TextInput, RefreshControl, FlatList, ActivityIndicator
+  TextInput, RefreshControl, FlatList,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import Header from '../../src/components/Header';
-import QuickActionsModal from '../../src/components/QuickActionsModal';
 import CashflowCard from '../../src/components/CashflowCard';
 import RecentActivity from '../../src/components/RecentActivity';
 import {
@@ -27,10 +27,8 @@ export default function HomeScreen() {
   const [cashflow, setCashflow] = useState(MOCK_CASHFLOW);
   const [activity, setActivity] = useState(MOCK_RECENT_ACTIVITY);
   const [refreshing, setRefreshing] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   const loadData = useCallback(async () => {
-    setLoading(true);
     const [kpi, met, cf, act] = await Promise.all([
       getKPIStrip(),
       getMetrics(activeFilter),
@@ -41,7 +39,6 @@ export default function HomeScreen() {
     setMetrics(met as any);
     setCashflow(cf as any);
     setActivity(act as any);
-    setLoading(false);
   }, [activeFilter]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -186,21 +183,6 @@ export default function HomeScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
-
-      {/* FAB Quick Actions Button */}
-      <TouchableOpacity
-        testID="fab-quick-actions"
-        style={styles.fab}
-        onPress={() => setShowQuickActions(true)}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="add" size={28} color={COLORS.white} />
-      </TouchableOpacity>
-
-      <QuickActionsModal
-        visible={showQuickActions}
-        onClose={() => setShowQuickActions(false)}
-      />
     </SafeAreaView>
   );
 }
@@ -216,8 +198,6 @@ const styles = StyleSheet.create({
   },
   searchPlaceholder: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
   scroll: { flex: 1 },
-
-  // Sync Banner
   syncBanner: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: COLORS.brandPrimary,
@@ -232,8 +212,6 @@ const styles = StyleSheet.create({
   },
   syncTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
   syncSubtitle: { fontSize: TYPOGRAPHY.xs, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
-
-  // KPI Strip
   kpiSection: { marginTop: SPACING.md },
   kpiList: { paddingHorizontal: SPACING.md, gap: 10 },
   kpiCard: {
@@ -248,8 +226,6 @@ const styles = StyleSheet.create({
   },
   kpiLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500' },
   kpiAmount: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-
-  // Time Filter
   filterWrap: { paddingHorizontal: SPACING.md, marginTop: SPACING.md },
   filterRow: {
     flexDirection: 'row', backgroundColor: COLORS.pageBg,
@@ -260,8 +236,6 @@ const styles = StyleSheet.create({
   filterTabActive: { backgroundColor: COLORS.cardBg, elevation: 2, shadowColor: COLORS.black, shadowOpacity: 0.08, shadowRadius: 4 },
   filterText: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '500' },
   filterTextActive: { color: COLORS.textPrimary, fontWeight: '700' },
-
-  // Metrics
   metricsCard: {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
     marginHorizontal: SPACING.md, marginTop: SPACING.md,
@@ -286,8 +260,6 @@ const styles = StyleSheet.create({
   },
   changeText: { fontSize: TYPOGRAPHY.xs, fontWeight: '600' },
   metricSep: { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 58 },
-
-  // Alert
   alertBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: COLORS.warningBg,
@@ -298,14 +270,4 @@ const styles = StyleSheet.create({
   },
   alertText: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.warning, fontWeight: '500' },
   alertAction: { fontSize: TYPOGRAPHY.sm, color: COLORS.brandPrimary, fontWeight: '700' },
-
-  // FAB
-  fab: {
-    position: 'absolute', bottom: 80, right: 20,
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: COLORS.brandPrimary,
-    alignItems: 'center', justifyContent: 'center',
-    elevation: 6, shadowColor: COLORS.black, shadowOpacity: 0.3, shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-  },
 });
