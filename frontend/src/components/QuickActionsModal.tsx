@@ -1,9 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Modal,
-  ScrollView, Animated, TextInput, Dimensions
+  ScrollView, TextInput, Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 import { QUICK_ACTIONS } from '../data/mockData';
 
@@ -28,6 +29,7 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({
   onClose,
   onItemPress,
 }) => {
+  const router = useRouter();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
 
@@ -129,6 +131,7 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({
                           onPress={() => {
                             onItemPress?.(item);
                             onClose();
+                            router.push(item.route as any);
                           }}
                           activeOpacity={0.6}
                         >

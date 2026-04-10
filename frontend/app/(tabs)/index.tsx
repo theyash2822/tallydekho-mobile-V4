@@ -20,9 +20,15 @@ import {
 const TIME_FILTERS = ['7D', '1M', '3M', '6M'] as const;
 type TimeFilter = typeof TIME_FILTERS[number];
 
+const MODULE_CARDS = [
+  { id: 'sales',    label: 'Sales',    icon: 'trending-up',   route: '/sales',    color: '#2D7D46', bg: '#F0FBF4' },
+  { id: 'purchase', label: 'Purchase', icon: 'cart',          route: '/purchase', color: '#2563EB', bg: '#EFF6FF' },
+  { id: 'voucher',  label: 'Vouchers', icon: 'card',          route: '/voucher',  color: '#7C3AED', bg: '#F5F3FF' },
+  { id: 'settings', label: 'Settings', icon: 'settings-outline', route: '/settings', color: '#D97706', bg: '#FFFBEB' },
+] as const;
+
 export default function HomeScreen() {
   const router = useRouter();
-  const [showQuickActions, setShowQuickActions] = useState(false);
   const [activeFilter, setActiveFilter] = useState<TimeFilter>('7D');
   const [kpiData, setKpiData] = useState(MOCK_KPI_STRIP);
   const [metrics, setMetrics] = useState(MOCK_METRICS);
@@ -68,7 +74,7 @@ export default function HomeScreen() {
         companyName={MOCK_USER.company}
         fyYear={MOCK_USER.fyYear}
         notificationCount={1}
-        onMenuPress={() => setShowQuickActions(true)}
+        onSettingsPress={() => router.push('/settings' as any)}
       />
 
       {/* Search Bar */}
@@ -172,6 +178,27 @@ export default function HomeScreen() {
         {/* Cashflow Card */}
         <CashflowCard {...cashflow} />
 
+        {/* Modules Grid */}
+        <View style={styles.secHeader}>
+          <Text style={styles.secTitle}>Modules</Text>
+        </View>
+        <View style={styles.modulesGrid}>
+          {MODULE_CARDS.map(mod => (
+            <TouchableOpacity
+              key={mod.id}
+              style={styles.moduleCard}
+              onPress={() => router.push(mod.route as any)}
+              activeOpacity={0.75}
+            >
+              <View style={[styles.moduleIcon, { backgroundColor: mod.bg }]}>
+                <Ionicons name={mod.icon as any} size={24} color={mod.color} />
+              </View>
+              <Text style={styles.moduleLabel}>{mod.label}</Text>
+              <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
+            </TouchableOpacity>
+          ))}
+        </View>
+
         {/* Recent Activity */}
         <RecentActivity activities={activity} />
 
@@ -273,4 +300,10 @@ const styles = StyleSheet.create({
   },
   alertText: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.warning, fontWeight: '500' },
   alertAction: { fontSize: TYPOGRAPHY.sm, color: COLORS.brandPrimary, fontWeight: '700' },
+  secHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, marginTop: SPACING.md, marginBottom: 10 },
+  secTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  modulesGrid: { paddingHorizontal: SPACING.md, gap: 8 },
+  moduleCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: 14, borderWidth: 1, borderColor: COLORS.borderDefault },
+  moduleIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  moduleLabel: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
 });

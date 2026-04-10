@@ -23,6 +23,7 @@ interface HeaderProps {
   onMenuPress?: () => void;
   onCompanyPress?: () => void;
   onFYChange?: (fy: string) => void;
+  onSettingsPress?: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -33,6 +34,7 @@ const Header: React.FC<HeaderProps> = ({
   onMenuPress,
   onCompanyPress,
   onFYChange,
+  onSettingsPress,
 }) => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -42,6 +44,14 @@ const Header: React.FC<HeaderProps> = ({
   const handleNotification = () => {
     onNotificationPress?.();
     router.push('/notifications' as any);
+  };
+
+  const handleSettings = () => {
+    if (onSettingsPress) {
+      onSettingsPress();
+    } else {
+      router.push('/settings' as any);
+    }
   };
 
   const handleFYSelect = (fy: string) => {
@@ -99,12 +109,14 @@ const Header: React.FC<HeaderProps> = ({
           </TouchableOpacity>
 
           <TouchableOpacity
-            testID="menu-btn"
+            testID="settings-btn"
             style={styles.iconBtn}
-            onPress={onMenuPress}
+            onPress={handleSettings}
             activeOpacity={0.7}
           >
-            <Ionicons name="menu" size={22} color={COLORS.textPrimary} />
+            <View style={styles.avatarSmall}>
+              <Text style={styles.avatarText}>A</Text>
+            </View>
           </TouchableOpacity>
         </View>
       </View>
@@ -218,6 +230,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+  },
+  avatarSmall: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.brandPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: TYPOGRAPHY.sm,
+    fontWeight: '700',
+    color: COLORS.white,
   },
   badge: {
     position: 'absolute',
