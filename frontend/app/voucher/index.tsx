@@ -1,0 +1,106 @@
+import React from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { MOCK_PAYMENT_VOUCHERS, MOCK_RECEIPT_VOUCHERS, MOCK_JOURNAL_VOUCHERS, MOCK_CONTRA_VOUCHERS } from '../../src/data/mockData';
+
+const VOUCHER_TYPES = [
+  { label: 'Payment',  icon: 'arrow-up-circle-outline',   route: '/voucher/payment',  color: '#C0392B', bg: '#FDECEA', data: MOCK_PAYMENT_VOUCHERS },
+  { label: 'Receipt',  icon: 'arrow-down-circle-outline', route: '/voucher/receipt',  color: '#2D7D46', bg: '#F0FBF4', data: MOCK_RECEIPT_VOUCHERS },
+  { label: 'Journal',  icon: 'book-outline',              route: '/voucher/journal',  color: '#2563EB', bg: '#EFF6FF', data: MOCK_JOURNAL_VOUCHERS },
+  { label: 'Contra',   icon: 'swap-horizontal-outline',   route: '/voucher/contra',   color: '#7C3AED', bg: '#F5F3FF', data: MOCK_CONTRA_VOUCHERS },
+] as const;
+
+export default function VouchersHubScreen() {
+  const router = useRouter();
+  const recentPayment = MOCK_PAYMENT_VOUCHERS.items[0];
+  const recentReceipt = MOCK_RECEIPT_VOUCHERS.items[0];
+
+  return (
+    <SafeAreaView style={s.safe}>
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top:8,bottom:8,left:8,right:8 }}>
+          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
+        </TouchableOpacity>
+        <Text style={s.headerTitle}>Vouchers</Text>
+        <View style={{ width: 36 }} />
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
+        {/* Summary Banner */}
+        <View style={s.summaryBanner}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.sumLabel}>Total Vouchers This Month</Text>
+            <Text style={s.sumCount}>60 documents</Text>
+          </View>
+          <View style={s.sumAmounts}>
+            <Text style={s.sumSmall}>Payments ₹3,45,000</Text>
+            <Text style={s.sumSmall}>Receipts ₹5,20,000</Text>
+          </View>
+        </View>
+
+        {/* Voucher Type Cards */}
+        <View style={s.secRow}><Text style={s.secTitle}>Voucher Types</Text></View>
+        <View style={s.grid}>
+          {VOUCHER_TYPES.map(vt => (
+            <TouchableOpacity key={vt.label} style={s.vCard} onPress={() => router.push(vt.route as any)} activeOpacity={0.75}>
+              <View style={[s.vIconBox, { backgroundColor: vt.bg }]}>
+                <Ionicons name={vt.icon as any} size={26} color={vt.color} />
+              </View>
+              <Text style={s.vLabel}>{vt.label}</Text>
+              <Text style={s.vTotal}>{vt.data.summary.total}</Text>
+              <Text style={s.vDocs}>{vt.data.summary.docs} docs</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Recent */}
+        <View style={s.secRow}><Text style={s.secTitle}>Recent Activity</Text></View>
+        <View style={s.listCard}>
+          {[{ ...recentPayment, type: 'Payment' }, { ...recentReceipt, type: 'Receipt' }].map((item, idx) => (
+            <View key={item.id}>
+              <TouchableOpacity style={s.listRow} activeOpacity={0.7}>
+                <View style={[s.dot, { backgroundColor: item.type === 'Payment' ? COLORS.negative : COLORS.positive }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.listTitle}>{item.type} · {item.party}</Text>
+                  <Text style={s.listMeta}>{item.id} · {item.date} · {item.method}</Text>
+                </View>
+                <Text style={s.listAmt}>{item.amount}</Text>
+              </TouchableOpacity>
+              {idx < 1 && <View style={s.div} />}
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: COLORS.pageBg },
+  header: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
+  summaryBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.brandPrimary, margin: SPACING.md, borderRadius: RADIUS.lg, padding: SPACING.md, gap: 12 },
+  sumLabel: { fontSize: TYPOGRAPHY.xs, color: 'rgba(255,255,255,0.65)', marginBottom: 4 },
+  sumCount: { fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.white },
+  sumAmounts: { gap: 4 },
+  sumSmall: { fontSize: TYPOGRAPHY.xs, color: 'rgba(255,255,255,0.75)', fontWeight: '500' },
+  secRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: SPACING.md, marginTop: SPACING.md, marginBottom: 10 },
+  secTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: SPACING.md, gap: 10 },
+  vCard: { width: '47%', backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: 16, borderWidth: 1, borderColor: COLORS.borderDefault, gap: 6 },
+  vIconBox: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  vLabel: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  vTotal: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+  vDocs: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  listCard: { backgroundColor: COLORS.cardBg, marginHorizontal: SPACING.md, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
+  listRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 14, gap: 10 },
+  dot: { width: 9, height: 9, borderRadius: 5 },
+  listTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  listMeta: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+  listAmt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  div: { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 16 },
+});

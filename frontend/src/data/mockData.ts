@@ -141,6 +141,128 @@ export const MOCK_PURCHASE_REGISTER = {
   ],
 };
 
+// ── Sales Orders ─────────────────────────────────────────────────────────────
+export const MOCK_SALES_ORDERS = {
+  summary: { total: '₹8,45,200', pending: 12, confirmed: 28, docs: 40 },
+  orders: [
+    { id: 'SO-00245', party: 'ABC Traders',       date: '11/01/25', time: '10:00 AM', amount: '₹52,000', status: 'confirmed' },
+    { id: 'SO-00244', party: 'PQR Exports',        date: '11/01/25', time: '09:00 AM', amount: '₹34,000', status: 'pending' },
+    { id: 'SO-00243', party: 'Kumar & Sons',       date: '10/01/25', time: '02:00 PM', amount: '₹28,500', status: 'confirmed' },
+    { id: 'SO-00242', party: 'XYZ Retail',         date: '10/01/25', time: '11:00 AM', amount: '₹18,000', status: 'cancelled' },
+    { id: 'SO-00241', party: 'Sharma Electronics', date: '09/01/25', time: '09:30 AM', amount: '₹65,000', status: 'confirmed' },
+    { id: 'SO-00240', party: 'Delhi Suppliers',    date: '09/01/25', time: '04:00 PM', amount: '₹22,000', status: 'pending' },
+  ],
+};
+
+// ── Quotations ────────────────────────────────────────────────────────────────
+export const MOCK_QUOTATIONS = {
+  summary: { total: '₹5,20,000', accepted: 8, pending: 14, docs: 22 },
+  items: [
+    { id: 'QT-00156', party: 'XYZ Retail',         date: '10/01/25', time: '11:00 AM', amount: '₹28,000', status: 'accepted' },
+    { id: 'QT-00155', party: 'ABC Traders',         date: '10/01/25', time: '09:00 AM', amount: '₹45,000', status: 'pending' },
+    { id: 'QT-00154', party: 'Kumar & Sons',        date: '09/01/25', time: '03:00 PM', amount: '₹32,000', status: 'accepted' },
+    { id: 'QT-00153', party: 'PQR Exports',         date: '09/01/25', time: '10:00 AM', amount: '₹18,500', status: 'expired' },
+    { id: 'QT-00152', party: 'Sharma Electronics',  date: '08/01/25', time: '02:00 PM', amount: '₹55,000', status: 'pending' },
+    { id: 'QT-00151', party: 'Delhi Suppliers',     date: '08/01/25', time: '11:30 AM', amount: '₹12,000', status: 'accepted' },
+  ],
+};
+
+// ── Credit Notes ──────────────────────────────────────────────────────────────
+export const MOCK_CREDIT_NOTES = {
+  summary: { total: '₹42,500', count: 8, docs: 8 },
+  notes: [
+    { id: 'CN-00712', party: 'ABC Traders',   date: '10/01/25', time: '09:00 AM', amount: '₹3,200',  status: 'issued',  ref: 'INV-30978' },
+    { id: 'CN-00711', party: 'PQR Exports',   date: '09/01/25', time: '02:00 PM', amount: '₹8,500',  status: 'settled', ref: 'INV-30955' },
+    { id: 'CN-00710', party: 'Kumar & Sons',  date: '08/01/25', time: '11:00 AM', amount: '₹12,000', status: 'issued',  ref: 'INV-30943' },
+    { id: 'CN-00709', party: 'XYZ Retail',    date: '07/01/25', time: '10:30 AM', amount: '₹5,800',  status: 'settled', ref: 'INV-30930' },
+    { id: 'CN-00708', party: 'Sharma Elec.',  date: '06/01/25', time: '03:00 PM', amount: '₹13,000', status: 'issued',  ref: 'INV-30921' },
+  ],
+};
+
+// ── Delivery Notes ────────────────────────────────────────────────────────────
+export const MOCK_DELIVERY_NOTES = {
+  summary: { delivered: 28, in_transit: 6, pending: 4, docs: 38 },
+  notes: [
+    { id: 'DN-00234', party: 'Kumar & Sons',   date: '11/01/25', time: '10:30 AM', amount: '₹35,000', status: 'delivered' },
+    { id: 'DN-00233', party: 'ABC Traders',    date: '11/01/25', time: '08:00 AM', amount: '₹42,500', status: 'in_transit' },
+    { id: 'DN-00232', party: 'PQR Exports',    date: '10/01/25', time: '03:00 PM', amount: '₹28,000', status: 'delivered' },
+    { id: 'DN-00231', party: 'XYZ Retail',     date: '10/01/25', time: '10:00 AM', amount: '₹15,000', status: 'pending' },
+    { id: 'DN-00230', party: 'Sharma Elec.',   date: '09/01/25', time: '02:30 PM', amount: '₹62,000', status: 'delivered' },
+    { id: 'DN-00229', party: 'Delhi Suppliers',date: '09/01/25', time: '09:00 AM', amount: '₹18,500', status: 'in_transit' },
+  ],
+};
+
+// ── Purchase Orders ───────────────────────────────────────────────────────────
+export const MOCK_PURCHASE_ORDERS = {
+  summary: { total: '₹6,32,000', pending: 9, confirmed: 23, docs: 32 },
+  orders: [
+    { id: 'PO-00189', vendor: 'ABC Traders',      date: '11/01/25', time: '09:00 AM', amount: '₹45,000', status: 'confirmed' },
+    { id: 'PO-00188', vendor: 'PQR Exports',       date: '11/01/25', time: '08:00 AM', amount: '₹32,000', status: 'pending' },
+    { id: 'PO-00187', vendor: 'Kumar & Sons',      date: '10/01/25', time: '02:00 PM', amount: '₹28,500', status: 'received' },
+    { id: 'PO-00186', vendor: 'XYZ Retail',        date: '10/01/25', time: '11:00 AM', amount: '₹18,000', status: 'confirmed' },
+    { id: 'PO-00185', vendor: 'Sharma Electronics',date: '09/01/25', time: '10:00 AM', amount: '₹75,000', status: 'pending' },
+    { id: 'PO-00184', vendor: 'Delhi Suppliers',   date: '09/01/25', time: '04:00 PM', amount: '₹22,000', status: 'received' },
+  ],
+};
+
+// ── Debit Notes ───────────────────────────────────────────────────────────────
+export const MOCK_DEBIT_NOTES = {
+  summary: { total: '₹28,000', count: 5, docs: 5 },
+  notes: [
+    { id: 'DBN-00045', vendor: 'PQR Exports',     date: '10/01/25', time: '10:00 AM', amount: '₹8,500',  status: 'issued',  ref: 'INV-30977' },
+    { id: 'DBN-00044', vendor: 'Delhi Suppliers',  date: '09/01/25', time: '03:00 PM', amount: '₹5,200',  status: 'settled', ref: 'INV-30960' },
+    { id: 'DBN-00043', vendor: 'Kumar & Sons',     date: '08/01/25', time: '11:30 AM', amount: '₹7,300',  status: 'issued',  ref: 'INV-30948' },
+    { id: 'DBN-00042', vendor: 'ABC Traders',      date: '07/01/25', time: '02:00 PM', amount: '₹7,000',  status: 'settled', ref: 'INV-30935' },
+  ],
+};
+
+// ── Payment Vouchers ──────────────────────────────────────────────────────────
+export const MOCK_PAYMENT_VOUCHERS = {
+  summary: { total: '₹3,45,000', docs: 18 },
+  items: [
+    { id: 'PMT-00234', party: 'ABC Traders',     date: '11/01/25', time: '10:00 AM', amount: '₹45,000', method: 'NEFT',   status: 'cleared' },
+    { id: 'PMT-00233', party: 'PQR Exports',     date: '11/01/25', time: '09:00 AM', amount: '₹28,000', method: 'RTGS',   status: 'cleared' },
+    { id: 'PMT-00232', party: 'Kumar & Sons',    date: '10/01/25', time: '02:00 PM', amount: '₹15,000', method: 'Cash',   status: 'cleared' },
+    { id: 'PMT-00231', party: 'Sharma Elec.',    date: '10/01/25', time: '11:00 AM', amount: '₹62,000', method: 'Cheque', status: 'pending' },
+    { id: 'PMT-00230', party: 'Delhi Suppliers', date: '09/01/25', time: '03:00 PM', amount: '₹18,500', method: 'NEFT',   status: 'cleared' },
+  ],
+};
+
+// ── Receipt Vouchers ──────────────────────────────────────────────────────────
+export const MOCK_RECEIPT_VOUCHERS = {
+  summary: { total: '₹5,20,000', docs: 24 },
+  items: [
+    { id: 'RCT-00312', party: 'Kumar & Sons',   date: '11/01/25', time: '11:00 AM', amount: '₹52,000', method: 'Cash',   status: 'received' },
+    { id: 'RCT-00311', party: 'ABC Traders',    date: '11/01/25', time: '10:00 AM', amount: '₹42,500', method: 'NEFT',   status: 'received' },
+    { id: 'RCT-00310', party: 'PQR Exports',    date: '10/01/25', time: '02:00 PM', amount: '₹28,000', method: 'Cheque', status: 'pending' },
+    { id: 'RCT-00309', party: 'XYZ Retail',     date: '10/01/25', time: '11:30 AM', amount: '₹15,000', method: 'Cash',   status: 'received' },
+    { id: 'RCT-00308', party: 'Sharma Elec.',   date: '09/01/25', time: '03:30 PM', amount: '₹62,000', method: 'RTGS',   status: 'received' },
+  ],
+};
+
+// ── Journal Vouchers ──────────────────────────────────────────────────────────
+export const MOCK_JOURNAL_VOUCHERS = {
+  summary: { total: '₹1,28,000', docs: 12 },
+  items: [
+    { id: 'JNL-00089', narration: 'Depreciation entry - Jan 2025',  date: '11/01/25', time: '09:00 AM', debit: '₹15,000', credit: '₹15,000', status: 'posted' },
+    { id: 'JNL-00088', narration: 'Interest accrual - Bank loan',   date: '10/01/25', time: '11:00 AM', debit: '₹8,200',  credit: '₹8,200',  status: 'posted' },
+    { id: 'JNL-00087', narration: 'Prepaid expense adjustment',     date: '09/01/25', time: '02:00 PM', debit: '₹22,000', credit: '₹22,000', status: 'posted' },
+    { id: 'JNL-00086', narration: 'Provision for bad debts',        date: '08/01/25', time: '10:30 AM', debit: '₹5,000',  credit: '₹5,000',  status: 'posted' },
+    { id: 'JNL-00085', narration: 'Outstanding salary payable',     date: '08/01/25', time: '09:00 AM', debit: '₹48,000', credit: '₹48,000', status: 'posted' },
+  ],
+};
+
+// ── Contra Vouchers ───────────────────────────────────────────────────────────
+export const MOCK_CONTRA_VOUCHERS = {
+  summary: { total: '₹80,000', docs: 6 },
+  items: [
+    { id: 'CTR-00023', narration: 'Cash to HDFC Bank transfer',     date: '10/01/25', time: '02:00 PM', amount: '₹20,000', from: 'Cash',      to: 'HDFC Bank', status: 'cleared' },
+    { id: 'CTR-00022', narration: 'SBI to HDFC inter-bank',         date: '09/01/25', time: '11:00 AM', amount: '₹30,000', from: 'SBI',       to: 'HDFC Bank', status: 'cleared' },
+    { id: 'CTR-00021', narration: 'Bank to cash withdrawal',        date: '08/01/25', time: '10:00 AM', amount: '₹10,000', from: 'HDFC Bank', to: 'Cash',      status: 'cleared' },
+    { id: 'CTR-00020', narration: 'Cash deposit to SBI Current',    date: '07/01/25', time: '03:00 PM', amount: '₹20,000', from: 'Cash',      to: 'SBI',       status: 'cleared' },
+  ],
+};
+
 export const QUICK_ACTIONS = [
   {
     id: 'sales',
