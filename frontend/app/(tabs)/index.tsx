@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import Header from '../../src/components/Header';
 import CashflowCard from '../../src/components/CashflowCard';
@@ -20,6 +21,7 @@ const TIME_FILTERS = ['7D', '1M', '3M', '6M'] as const;
 type TimeFilter = typeof TIME_FILTERS[number];
 
 export default function HomeScreen() {
+  const router = useRouter();
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [activeFilter, setActiveFilter] = useState<TimeFilter>('7D');
   const [kpiData, setKpiData] = useState(MOCK_KPI_STRIP);
@@ -134,6 +136,7 @@ export default function HomeScreen() {
                 testID={`metric-row-${item.id}`}
                 style={styles.metricRow}
                 activeOpacity={0.7}
+                onPress={() => (item as any).route && router.push((item as any).route)}
               >
                 <View style={styles.metricLeft}>
                   <View style={styles.metricIconBox}>

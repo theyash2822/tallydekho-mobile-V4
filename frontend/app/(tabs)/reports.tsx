@@ -229,20 +229,19 @@ interface GSTGaugeProps {
 
 function GSTGauge({ filedCount, needleIndex }: GSTGaugeProps) {
   const svgW   = CONTENT_W;
-  const svgH   = 220;
+  const svgH   = 240;
   const cx     = svgW / 2;
-  const cy     = 192;           // near bottom, leaving room for base circle
-  const outerR = 106;           // fixed — fits labels within card
-  const innerR = 66;
-  const midR   = (outerR + innerR) / 2;   // 86
+  const cy     = 208;
+  const outerR = 100;
+  const innerR = 62;
+  const midR   = (outerR + innerR) / 2;   // 81
   const segH   = (outerR - innerR) * 0.82;
   const arcSpacing = (Math.PI * midR) / 12;
   const segW   = arcSpacing * 0.76;
-  const labelR = outerR + 20;  // 126 — clear of segments
+  const labelR = outerR + 20;  // 120
 
-  // Needle: points between needleIndex and needleIndex+1 segment
   const needleAngleRad = Math.PI - (needleIndex + 1) * (Math.PI / 12);
-  const needleLen = innerR - 6;
+  const needleLen = innerR - 6;  // 56
   const nx = cx + needleLen * Math.cos(needleAngleRad);
   const ny = cy - needleLen * Math.sin(needleAngleRad);
 
@@ -254,22 +253,22 @@ function GSTGauge({ filedCount, needleIndex }: GSTGaugeProps) {
           const angleRad = Math.PI - (i + 0.5) * (Math.PI / 12);
           const angleDeg = angleRad * (180 / Math.PI);
 
-          // Segment center
           const segCX = cx + midR * Math.cos(angleRad);
           const segCY = cy - midR * Math.sin(angleRad);
-          // Rotate rect HEIGHT along radial direction
           const rotateDeg = angleDeg - 90;
 
           const isFiled = i < filedCount;
 
-          // Label — NO rotation for readability
           const labelX = cx + labelR * Math.cos(angleRad);
-          const labelY = cy - labelR * Math.sin(angleRad) + 3.5; // +3.5 baseline offset
+          // Progressive y-offset: push bottom months down to avoid crowding
+          let extraY = 4;
+          if (i === 0 || i === 11) extraY = 14;        // Apr / Mar — very near horizontal
+          else if (i === 1 || i === 10) extraY = 8;     // May / Feb — near horizontal
+          const labelY = cy - labelR * Math.sin(angleRad) + extraY;
 
-          // Smart text anchor: left-half labels end here, right-half labels start here
           let anchor: 'end' | 'start' | 'middle';
-          if (angleDeg > 100) anchor = 'end';
-          else if (angleDeg < 80) anchor = 'start';
+          if (angleDeg > 108) anchor = 'end';
+          else if (angleDeg < 72) anchor = 'start';
           else anchor = 'middle';
 
           return (
@@ -285,12 +284,12 @@ function GSTGauge({ filedCount, needleIndex }: GSTGaugeProps) {
                   fill={isFiled ? C_GREEN : C_GREY}
                 />
               </G>
-              {/* Label — horizontal, no rotation */}
+              {/* Label — horizontal, optimally positioned */}
               <SvgText
                 x={labelX.toFixed(1)}
                 y={labelY.toFixed(1)}
                 textAnchor={anchor}
-                fontSize={8.5}
+                fontSize={8}
                 fill={isFiled ? '#1A4D2E' : COLORS.textTertiary}
                 fontWeight={isFiled ? '700' : '400'}
               >
@@ -299,6 +298,27 @@ function GSTGauge({ filedCount, needleIndex }: GSTGaugeProps) {
             </G>
           );
         })}
+
+        {/* Center: filed count */}
+        <SvgText
+          x={cx.toFixed(1)}
+          y={(cy - 20).toFixed(1)}
+          textAnchor="middle"
+          fontSize={17}
+          fontWeight="700"
+          fill={COLORS.textPrimary}
+        >
+          {`${filedCount}/12`}
+        </SvgText>
+        <SvgText
+          x={cx.toFixed(1)}
+          y={(cy - 5).toFixed(1)}
+          textAnchor="middle"
+          fontSize={9}
+          fill={COLORS.textSecondary}
+        >
+          months filed
+        </SvgText>
 
         {/* Needle */}
         <Line

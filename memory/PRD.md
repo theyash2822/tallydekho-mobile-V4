@@ -61,6 +61,12 @@ Color scheme updated to warm cream/dark palette. Mock data fallback architecture
 - [ ] AI Insights screen
 - [ ] Settings screen (Account, Preferences, Notifications, Integrations)
 
+## Implemented Screens (Session 3)
+- Sales Register (`/sales/register`) — filters, stats row, E-Way Bills shortcut, invoice list with color-coded status
+- E-Way Bill (`/sales/ewaybill`) — pending/cancelled counts, Generated CTA, bill cards with Cancel/Extend actions, Share bar
+- Purchase Register (`/purchase/register`) — filters, stats row, Today's summary, invoice list with Share
+- GST Gauge chart improved — "9/12 months filed" center display, progressive y-offsets for edge months (Apr/May/Jan/Feb/Mar)
+
 ## API Endpoints Expected (Backend)
 - POST /api/auth/send-otp
 - POST /api/auth/verify-otp

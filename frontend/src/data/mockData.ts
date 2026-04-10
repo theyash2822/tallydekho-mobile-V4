@@ -23,9 +23,9 @@ export const MOCK_KPI_STRIP = [
 ];
 
 export const MOCK_METRICS = [
-  { id: 'expenses', label: 'Expenses', amount: '₹130.00', change: 12.0, positive: false, icon: 'trending-up-outline' },
-  { id: 'sales', label: 'Sales', amount: '₹130.00', change: 5.1, positive: true, icon: 'stats-chart-outline' },
-  { id: 'purchases', label: 'Purchases', amount: '₹130.00', change: 8.7, positive: true, icon: 'people-outline' },
+  { id: 'expenses', label: 'Expenses', amount: '₹130.00', change: 12.0, positive: false, icon: 'trending-up-outline', route: null },
+  { id: 'sales', label: 'Sales', amount: '₹92,000', change: 5.1, positive: true, icon: 'stats-chart-outline', route: '/sales/register' },
+  { id: 'purchases', label: 'Purchases', amount: '₹74,500', change: 8.7, positive: true, icon: 'cart-outline', route: '/purchase/register' },
 ];
 
 export const MOCK_CASHFLOW = {
@@ -96,6 +96,50 @@ export const MOCK_NOTIFICATIONS = [
   { id: 'N002', type: 'urgent', title: 'Daily Summary Alert', message: "Your daily financial summary is ready! Tap to review today's income, expenses, and cash flow insights.", time: '12:02 PM' },
   { id: 'N003', type: 'info', title: 'Goal Progress Update', message: "Great news! You're 75% closer to your savings goal for this month. Keep up the momentum!", time: 'Jan 20, 2025' },
 ];
+
+// ── Sales Register ──────────────────────────────────────────────────────────
+export const MOCK_SALES_REGISTER = {
+  summary: { total: '₹12,74,560', tax: '₹1,38,240', avg: '₹14,380', docs: 34 },
+  invoices: [
+    { id: 'INV-30978', party: 'ABC Traders',          date: '11/01/25', time: '09:00 AM', amount: '₹42,500', status: 'paid' },
+    { id: 'INV-30977', party: 'PQR Exports',          date: '11/01/25', time: '09:00 AM', amount: '₹28,000', status: 'unpaid' },
+    { id: 'INV-30976', party: 'XYZ Retail',           date: '11/01/25', time: '10:00 AM', amount: '₹15,000', status: 'paid' },
+    { id: 'INV-30975', party: 'ABC Traders',          date: '11/01/25', time: '09:00 AM', amount: '₹42,500', status: 'paid' },
+    { id: 'INV-30974', party: 'Kumar & Sons',         date: '10/01/25', time: '11:30 AM', amount: '₹35,000', status: 'unpaid' },
+    { id: 'CN-00712',  party: 'ABC Traders',          date: '10/01/25', time: '09:00 AM', amount: '₹3,200',  status: 'credit_note' },
+    { id: 'INV-30973', party: 'Sharma Electronics',   date: '10/01/25', time: '08:00 AM', amount: '₹62,000', status: 'paid' },
+    { id: 'INV-30972', party: 'Delhi Suppliers',      date: '09/01/25', time: '02:00 PM', amount: '₹18,500', status: 'irm' },
+  ],
+};
+
+// ── E-Way Bills ──────────────────────────────────────────────────────────────
+export const MOCK_EWAYBILLS = {
+  pending: 17,
+  cancelled: 17,
+  generated: 265,
+  bills: [
+    { id: 'EWB-10045678', company: 'Maaruji Technologies Pvt Ltd', generatedAt: '12 Jul 23:59', date: '10 Jul', status: 'generated' },
+    { id: 'EWB-10045677', company: 'Rahul Enterprises',            generatedAt: '10 Jul 14:00', date: '09 Jul', status: 'generated' },
+    { id: 'EWB-10045676', company: 'ABC Traders',                  generatedAt: '09 Jul 10:30', date: '08 Jul', status: 'pending' },
+    { id: 'EWB-10045675', company: 'PQR Exports Ltd',              generatedAt: '08 Jul 08:00', date: '07 Jul', status: 'cancelled' },
+    { id: 'EWB-10045674', company: 'Kumar & Sons',                 generatedAt: '07 Jul 16:00', date: '06 Jul', status: 'generated' },
+    { id: 'EWB-10045673', company: 'Sharma Electronics',           generatedAt: '06 Jul 12:00', date: '05 Jul', status: 'generated' },
+  ],
+};
+
+// ── Purchase Register ────────────────────────────────────────────────────────
+export const MOCK_PURCHASE_REGISTER = {
+  summary: { total: '₹12,74,560', tax: '₹1,38,240', avg: '₹14,380', docs: 34 },
+  invoices: [
+    { id: 'INV-30978', vendor: 'ABC Traders',     date: '11/01/25', time: '09:00 AM', amount: '₹42,500', status: 'paid' },
+    { id: 'INV-30977', vendor: 'ABC Traders',     date: '11/01/25', time: '09:00 AM', amount: '₹42,500', status: 'unpaid' },
+    { id: 'INV-30976', vendor: 'PQR Exports',     date: '11/01/25', time: '09:00 AM', amount: '₹42,500', status: 'irm' },
+    { id: 'INV-30975', vendor: 'ABC Traders',     date: '11/01/25', time: '09:00 AM', amount: '₹42,500', status: 'paid' },
+    { id: 'INV-30974', vendor: 'Kumar & Sons',    date: '10/01/25', time: '11:30 AM', amount: '₹35,000', status: 'unpaid' },
+    { id: 'INV-30973', vendor: 'PQR Exports',     date: '10/01/25', time: '09:00 AM', amount: '₹28,000', status: 'paid' },
+    { id: 'INV-30972', vendor: 'Delhi Suppliers', date: '09/01/25', time: '02:00 PM', amount: '₹18,500', status: 'irm' },
+  ],
+};
 
 export const QUICK_ACTIONS = [
   {
