@@ -228,20 +228,21 @@ interface GSTGaugeProps {
 }
 
 function GSTGauge({ filedCount, needleIndex }: GSTGaugeProps) {
-  const svgW  = CONTENT_W;
-  const svgH  = 190;
-  const cx    = svgW / 2;
-  const cy    = svgH - 18;      // near bottom
-  const outerR = svgH * 0.70;   // ≈ 133px
-  const innerR = outerR * 0.62; // ≈ 82px
-  const midR   = (outerR + innerR) / 2; // ≈ 107px
-  const segH   = (outerR - innerR) * 0.80;
-  const arcSpacing = (Math.PI * midR) / 12; // half-circle / 12
+  const svgW   = CONTENT_W;
+  const svgH   = 220;
+  const cx     = svgW / 2;
+  const cy     = 192;           // near bottom, leaving room for base circle
+  const outerR = 106;           // fixed — fits labels within card
+  const innerR = 66;
+  const midR   = (outerR + innerR) / 2;   // 86
+  const segH   = (outerR - innerR) * 0.82;
+  const arcSpacing = (Math.PI * midR) / 12;
   const segW   = arcSpacing * 0.76;
+  const labelR = outerR + 20;  // 126 — clear of segments
 
-  // Needle angle: between needleIndex and needleIndex+1
+  // Needle: points between needleIndex and needleIndex+1 segment
   const needleAngleRad = Math.PI - (needleIndex + 1) * (Math.PI / 12);
-  const needleLen = innerR - 8;
+  const needleLen = innerR - 6;
   const nx = cx + needleLen * Math.cos(needleAngleRad);
   const ny = cy - needleLen * Math.sin(needleAngleRad);
 
@@ -250,24 +251,26 @@ function GSTGauge({ filedCount, needleIndex }: GSTGaugeProps) {
       <Text style={gauge.title}>GST filed</Text>
       <Svg width={svgW} height={svgH}>
         {GST_MONTHS.map((month, i) => {
-          // Angle of this segment center (in radians, 0 = right, π = left)
           const angleRad = Math.PI - (i + 0.5) * (Math.PI / 12);
           const angleDeg = angleRad * (180 / Math.PI);
 
-          // Center of segment in SVG
+          // Segment center
           const segCX = cx + midR * Math.cos(angleRad);
           const segCY = cy - midR * Math.sin(angleRad);
-
-          // Rotate rect so HEIGHT is along the radial direction
+          // Rotate rect HEIGHT along radial direction
           const rotateDeg = angleDeg - 90;
 
           const isFiled = i < filedCount;
 
-          // Label position (slightly beyond outer radius)
-          const labelR = outerR + 13;
+          // Label — NO rotation for readability
           const labelX = cx + labelR * Math.cos(angleRad);
-          const labelY = cy - labelR * Math.sin(angleRad);
-          const labelRotate = angleDeg - 90;
+          const labelY = cy - labelR * Math.sin(angleRad) + 3.5; // +3.5 baseline offset
+
+          // Smart text anchor: left-half labels end here, right-half labels start here
+          let anchor: 'end' | 'start' | 'middle';
+          if (angleDeg > 100) anchor = 'end';
+          else if (angleDeg < 80) anchor = 'start';
+          else anchor = 'middle';
 
           return (
             <G key={month}>
@@ -282,17 +285,17 @@ function GSTGauge({ filedCount, needleIndex }: GSTGaugeProps) {
                   fill={isFiled ? C_GREEN : C_GREY}
                 />
               </G>
-              {/* Month label */}
-              <G transform={`translate(${labelX.toFixed(1)},${labelY.toFixed(1)}) rotate(${labelRotate.toFixed(1)})`}>
-                <SvgText
-                  textAnchor="middle"
-                  fontSize={7.5}
-                  fill={isFiled ? '#1A4D2E' : COLORS.textTertiary}
-                  fontWeight={isFiled ? '700' : '400'}
-                >
-                  {month}
-                </SvgText>
-              </G>
+              {/* Label — horizontal, no rotation */}
+              <SvgText
+                x={labelX.toFixed(1)}
+                y={labelY.toFixed(1)}
+                textAnchor={anchor}
+                fontSize={8.5}
+                fill={isFiled ? '#1A4D2E' : COLORS.textTertiary}
+                fontWeight={isFiled ? '700' : '400'}
+              >
+                {month}
+              </SvgText>
             </G>
           );
         })}
@@ -303,16 +306,9 @@ function GSTGauge({ filedCount, needleIndex }: GSTGaugeProps) {
           x2={nx.toFixed(1)} y2={ny.toFixed(1)}
           stroke="#1A1A1A" strokeWidth={2.5} strokeLinecap="round"
         />
-        {/* Needle base circle */}
-        <Circle
-          cx={cx.toFixed(1)} cy={cy.toFixed(1)}
-          r={5} fill="#1A1A1A"
-        />
-        {/* Outer base arc indicator */}
-        <Circle
-          cx={cx.toFixed(1)} cy={cy.toFixed(1)}
-          r={9} fill="none" stroke="#1A1A1A" strokeWidth={1}
-        />
+        {/* Needle pivot */}
+        <Circle cx={cx.toFixed(1)} cy={cy.toFixed(1)} r={6} fill="#1A1A1A" />
+        <Circle cx={cx.toFixed(1)} cy={cy.toFixed(1)} r={10} fill="none" stroke="#1A1A1A" strokeWidth={1.5} />
       </Svg>
     </View>
   );
