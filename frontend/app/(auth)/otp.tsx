@@ -104,7 +104,7 @@ export default function OTPScreen() {
                 <TextInput
                   key={idx}
                   testID={`otp-input-${idx}`}
-                  ref={ref => (inputRefs.current[idx] = ref)}
+                  ref={ref => { inputRefs.current[idx] = ref; }}
                   style={[styles.otpBox, digit && styles.otpBoxFilled, error && styles.otpBoxError]}
                   value={digit}
                   onChangeText={text => handleChange(text, idx)}

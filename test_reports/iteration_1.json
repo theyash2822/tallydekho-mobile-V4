@@ -1,0 +1,45 @@
+{
+  "summary": "Phase 1 frontend testing of TallyDekho auth flow and main screens. Critical routing bug found: after completing auth flow (login->otp->register->tally-sync->skip), the app redirects back to login screen instead of showing the Home Dashboard. Root cause identified in _layout.tsx.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "OTP Screen - OTP boxes",
+        "issue": "6 OTP input boxes render as overlapping/broken layout on web preview - first box appears very wide, rest are hidden. Functionally works but visually broken.",
+        "testID": "otp-input-0 through otp-input-5",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Full auth flow: login -> otp -> register -> tally-sync -> skip -> home dashboard",
+        "issue": "CRITICAL BUG: After completing registration and clicking Skip on tally-sync screen, app redirects back to login screen instead of Home Dashboard. Root cause: _layout.tsx reads auth_token from AsyncStorage only once on mount. When user navigates to /(tabs) after saving token during registration, authState is still 'unauthenticated', causing redirect back to /(auth).",
+        "affected_testIDs": ["skip-sync-btn", "register-login-btn"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "CRITICAL: Fix _layout.tsx auth state management. The authState is read once on mount but never updated when AsyncStorage is written during the auth flow. Solution: Either (1) use a React context/global state for auth that gets updated when token is saved, (2) add an event listener for AsyncStorage changes, or (3) pass auth state as a prop/context when navigating. The verifyOTP and registerUser handlers save to AsyncStorage but the root layout never re-reads.",
+    "MEDIUM: Fix OTP input boxes layout on web - the flexbox layout with gap causes boxes to overflow/be hidden on web preview. Consider using fixed widths instead of flex:1 for OTP boxes."
+  ],
+  "critical_code_review_comments": [
+    "_layout.tsx: authState only initialized once from AsyncStorage.getItem, never updated when token is written during auth flow. This causes the entire auth flow to redirect back to login after registration.",
+    "The fix: After saving auth_token in otp.tsx and register.tsx, the root layout needs to know about the new auth state. Consider using a global auth context or Zustand store that the layout subscribes to."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A - not tested (frontend only)",
+    "frontend": "40% - Login screen, OTP screen, Register screen, Tally Sync screen all load correctly, but the final navigation to Home Dashboard fails due to auth state bug"
+  },
+  "seed_data_creation": "None",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The auth flow from login to tally-sync works. The critical bug is in _layout.tsx where authState never updates after AsyncStorage writes during auth. Once this is fixed, retest the full flow through to Home Dashboard, then test tabs (Home, Stocks, Ledger, Reports) and FAB Quick Actions modal.",
+  "rca_of_issue": "ROOT CAUSE: In /app/frontend/app/_layout.tsx, the auth state is read once via: AsyncStorage.getItem('auth_token').then(token => setAuthState(...)). This runs only on mount. During the auth flow, otp.tsx and register.tsx write to AsyncStorage via AsyncStorage.setItem('auth_token', ...) and then call router.replace('/(tabs)'). When segments change to ['(tabs)', ...], the second useEffect fires with authState still = 'unauthenticated', causing it to redirect to /(auth) again. FIX: Use a shared auth context/store (Zustand or React Context) that both the layout and auth screens can update. When token is saved in auth screens, update the context state, which the layout reads reactively."
+}
