@@ -57,10 +57,12 @@ export default function OTPScreen() {
     try {
       const res = await verifyOTP(phone || '', code) as any;
       if (res?.token) {
-        await signIn(res.token);
         if (res?.isNewUser) {
-          router.replace({ pathname: '/(auth)/register', params: { phone } });
+          // Don't call signIn() yet - user must complete registration first
+          // Pass token as param so register/tally-sync can signIn after full onboarding
+          router.replace({ pathname: '/(auth)/register', params: { phone, token: res.token } });
         } else {
+          await signIn(res.token);
           router.replace('/(tabs)');
         }
       } else {
@@ -212,7 +214,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   otpBox: {
-    flex: 1,
+    width: 44,
     height: 52,
     borderWidth: 1.5,
     borderColor: COLORS.borderDefault,

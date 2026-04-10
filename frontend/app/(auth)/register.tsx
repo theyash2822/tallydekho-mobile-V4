@@ -15,7 +15,7 @@ const LANGUAGES = ['English', 'Hindi', 'Bengali', 'Arabic', 'French', 'German', 
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { phone } = useLocalSearchParams<{ phone: string }>();
+  const { phone, token } = useLocalSearchParams<{ phone: string; token: string }>();
   const { signIn } = useAuth();
   const [name, setName] = useState('');
   const [language, setLanguage] = useState('English');
