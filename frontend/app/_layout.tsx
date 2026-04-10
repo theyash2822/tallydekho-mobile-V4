@@ -11,11 +11,18 @@ function RootNavigation() {
 
   useEffect(() => {
     if (isLoading) return;
+
     const inAuth = segments[0] === '(auth)';
-    if (!isAuthenticated && !inAuth) {
-      router.replace('/(auth)');
-    } else if (isAuthenticated && inAuth) {
-      router.replace('/(tabs)');
+    const inTabs = segments[0] === '(tabs)';
+
+    if (!isAuthenticated) {
+      // Not logged in — always go to auth (unless already there)
+      if (!inAuth) router.replace('/(auth)');
+    } else {
+      // Logged in — go to tabs (unless already in tabs or other non-auth screen)
+      if (inAuth || (!inTabs && segments.length === 0)) {
+        router.replace('/(tabs)');
+      }
     }
   }, [isAuthenticated, isLoading, segments]);
 
