@@ -49,35 +49,37 @@ const CashflowCard: React.FC<CashflowCardProps> = ({
 
       {/* Ring Chart */}
       <View style={styles.chartWrap}>
-        <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
-          {/* Background track */}
-          <Circle
-            cx={CENTER}
-            cy={CENTER}
-            r={RADIUS_SIZE}
-            fill="none"
-            stroke={COLORS.borderDefault}
-            strokeWidth={STROKE_W}
-          />
-          {/* Income arc */}
-          <Circle
-            cx={CENTER}
-            cy={CENTER}
-            r={RADIUS_SIZE}
-            fill="none"
-            stroke={COLORS.positive}
-            strokeWidth={STROKE_W}
-            strokeDasharray={`${incomeArc} ${CIRCUMFERENCE}`}
-            strokeLinecap="round"
-            transform={`rotate(-90 ${CENTER} ${CENTER})`}
-          />
-        </Svg>
+        <View style={styles.svgContainer}>
+          <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
+            {/* Background track */}
+            <Circle
+              cx={CENTER}
+              cy={CENTER}
+              r={RADIUS_SIZE}
+              fill="none"
+              stroke={COLORS.borderDefault}
+              strokeWidth={STROKE_W}
+            />
+            {/* Income arc */}
+            <Circle
+              cx={CENTER}
+              cy={CENTER}
+              r={RADIUS_SIZE}
+              fill="none"
+              stroke={COLORS.positive}
+              strokeWidth={STROKE_W}
+              strokeDasharray={`${incomeArc} ${CIRCUMFERENCE}`}
+              strokeLinecap="round"
+              transform={`rotate(-90 ${CENTER} ${CENTER})`}
+            />
+          </Svg>
 
-        {/* Center Label */}
-        <View style={[styles.centerLabel, { width: SIZE, height: SIZE }]}>
-          <Text style={styles.netCashLabel}>Net Cash</Text>
-          <Text style={styles.netCashValue}>₹{netCash.toLocaleString('en-IN')}</Text>
-          <Text style={styles.updatedText}>Updated {updatedAt}</Text>
+          {/* Center Label — absolutely fills the SVG container */}
+          <View style={styles.centerLabel}>
+            <Text style={styles.netCashLabel}>Net Cash</Text>
+            <Text style={styles.netCashValue}>₹{netCash.toLocaleString('en-IN')}</Text>
+            <Text style={styles.updatedText}>Updated {updatedAt}</Text>
+          </View>
         </View>
       </View>
 
@@ -150,13 +152,19 @@ const styles = StyleSheet.create({
   },
   chartWrap: {
     alignItems: 'center',
-    position: 'relative',
     marginBottom: 12,
+  },
+  svgContainer: {
+    width: SIZE,
+    height: SIZE,
+    position: 'relative',
   },
   centerLabel: {
     position: 'absolute',
     top: 0,
     left: 0,
+    right: 0,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
