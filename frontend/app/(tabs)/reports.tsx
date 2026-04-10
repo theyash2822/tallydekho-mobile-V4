@@ -227,67 +227,83 @@ interface GSTGaugeProps {
   needleIndex: number;  // needle between needleIndex and needleIndex+1
 }
 
+// gap in radians between adjacent arc segments (~2.3°)
+const GAUGE_GAP = 0.04;
+
 function GSTGauge({ filedCount, needleIndex }: GSTGaugeProps) {
   const svgW   = CONTENT_W;
-  const svgH   = 240;
+  const svgH   = 222;
   const cx     = svgW / 2;
-  const cy     = 208;
-  const outerR = 100;
-  const innerR = 62;
-  const midR   = (outerR + innerR) / 2;   // 81
-  const segH   = (outerR - innerR) * 0.82;
-  const arcSpacing = (Math.PI * midR) / 12;
-  const segW   = arcSpacing * 0.76;
-  const labelR = outerR + 20;  // 120
+  const cy     = 196;          // arc baseline sits here
+  const outerR = 112;
+  const innerR = 70;
+  const labelR = outerR + 20; // 132 — labels outside arc
 
-  const needleAngleRad = Math.PI - (needleIndex + 1) * (Math.PI / 12);
-  const needleLen = innerR - 6;  // 56
-  const nx = cx + needleLen * Math.cos(needleAngleRad);
-  const ny = cy - needleLen * Math.sin(needleAngleRad);
+  // Needle points to the mid-angle of the current month segment
+  const needleAngle = Math.PI - (needleIndex + 0.5) * (Math.PI / 12);
+  const needleLen   = innerR - 8; // stops before inner edge
+  const nx = cx + needleLen * Math.cos(needleAngle);
+  const ny = cy - needleLen * Math.sin(needleAngle);
 
   return (
     <View style={{ alignItems: 'center' }}>
       <Text style={gauge.title}>GST filed</Text>
       <Svg width={svgW} height={svgH}>
-        {GST_MONTHS.map((month, i) => {
-          const angleRad = Math.PI - (i + 0.5) * (Math.PI / 12);
-          const angleDeg = angleRad * (180 / Math.PI);
 
-          const segCX = cx + midR * Math.cos(angleRad);
-          const segCY = cy - midR * Math.sin(angleRad);
-          const rotateDeg = angleDeg - 90;
+        {GST_MONTHS.map((month, i) => {
+          // Centre angle of this month (math convention, CCW from +x)
+          const angleDeg = 180 - (i + 0.5) * 15;
+          const angleRad = (angleDeg * Math.PI) / 180;
+
+          // Arc boundaries with gap inset
+          const aR = Math.PI - (i + 1) * (Math.PI / 12) + GAUGE_GAP; // right edge
+          const aL = Math.PI - i       * (Math.PI / 12) - GAUGE_GAP; // left  edge
+
+          // Helper: convert math angle → SVG point on radius r
+          const pt = (a: number, r: number) => ({
+            x: cx + r * Math.cos(a),
+            y: cy - r * Math.sin(a),
+          });
+
+          const o1 = pt(aR, outerR); const o2 = pt(aL, outerR);
+          const i1 = pt(aR, innerR); const i2 = pt(aL, innerR);
+
+          // Donut arc segment path:
+          //   outer arc right→left  (sweep=1 = SVG-CW = increasing math angle)
+          //   line  outer-left  → inner-left
+          //   inner arc left→right  (sweep=0 = SVG-CCW = decreasing math angle)
+          //   close
+          const d = [
+            `M ${o1.x.toFixed(2)} ${o1.y.toFixed(2)}`,
+            `A ${outerR} ${outerR} 0 0 1 ${o2.x.toFixed(2)} ${o2.y.toFixed(2)}`,
+            `L ${i2.x.toFixed(2)} ${i2.y.toFixed(2)}`,
+            `A ${innerR} ${innerR} 0 0 0 ${i1.x.toFixed(2)} ${i1.y.toFixed(2)}`,
+            'Z',
+          ].join(' ');
 
           const isFiled = i < filedCount;
 
-          const labelX = cx + labelR * Math.cos(angleRad);
-          // Progressive y-offset: push bottom months down to avoid crowding
+          // Label: outside arc, smart anchor & y-offset for edge months
+          const lx = cx + labelR * Math.cos(angleRad);
           let extraY = 4;
-          if (i === 0 || i === 11) extraY = 14;        // Apr / Mar — very near horizontal
-          else if (i === 1 || i === 10) extraY = 8;     // May / Feb — near horizontal
-          const labelY = cy - labelR * Math.sin(angleRad) + extraY;
+          if (i === 0 || i === 11)        extraY = 16;  // Apr / Mar — near horizontal
+          else if (i === 1 || i === 10)   extraY = 9;   // May / Feb
+          const ly = cy - labelR * Math.sin(angleRad) + extraY;
 
           let anchor: 'end' | 'start' | 'middle';
-          if (angleDeg > 108) anchor = 'end';
-          else if (angleDeg < 72) anchor = 'start';
-          else anchor = 'middle';
+          if (angleDeg > 108)      anchor = 'end';
+          else if (angleDeg < 72)  anchor = 'start';
+          else                     anchor = 'middle';
 
           return (
             <G key={month}>
-              {/* Segment pill */}
-              <G transform={`translate(${segCX.toFixed(1)},${segCY.toFixed(1)}) rotate(${rotateDeg.toFixed(1)})`}>
-                <Rect
-                  x={(-segW / 2).toFixed(1)}
-                  y={(-segH / 2).toFixed(1)}
-                  width={segW.toFixed(1)}
-                  height={segH.toFixed(1)}
-                  rx={(segW / 2).toFixed(1)}
-                  fill={isFiled ? C_GREEN : C_GREY}
-                />
-              </G>
-              {/* Label — horizontal, optimally positioned */}
+              <Path
+                d={d}
+                fill={isFiled ? C_GREEN : C_GREY}
+              />
               <SvgText
-                x={labelX.toFixed(1)}
-                y={labelY.toFixed(1)}
+                x={lx.toFixed(2)}
+                y={ly.toFixed(2)}
                 textAnchor={anchor}
                 fontSize={8}
                 fill={isFiled ? '#1A4D2E' : COLORS.textTertiary}
@@ -299,20 +315,20 @@ function GSTGauge({ filedCount, needleIndex }: GSTGaugeProps) {
           );
         })}
 
-        {/* Center: filed count */}
+        {/* ── Center info ── */}
         <SvgText
-          x={cx.toFixed(1)}
-          y={(cy - 20).toFixed(1)}
+          x={cx.toFixed(2)}
+          y={(cy - 30).toFixed(2)}
           textAnchor="middle"
-          fontSize={17}
+          fontSize={22}
           fontWeight="700"
           fill={COLORS.textPrimary}
         >
           {`${filedCount}/12`}
         </SvgText>
         <SvgText
-          x={cx.toFixed(1)}
-          y={(cy - 5).toFixed(1)}
+          x={cx.toFixed(2)}
+          y={(cy - 13).toFixed(2)}
           textAnchor="middle"
           fontSize={9}
           fill={COLORS.textSecondary}
@@ -320,15 +336,15 @@ function GSTGauge({ filedCount, needleIndex }: GSTGaugeProps) {
           months filed
         </SvgText>
 
-        {/* Needle */}
+        {/* ── Needle ── */}
         <Line
-          x1={cx.toFixed(1)} y1={cy.toFixed(1)}
-          x2={nx.toFixed(1)} y2={ny.toFixed(1)}
+          x1={cx.toFixed(2)} y1={cy.toFixed(2)}
+          x2={nx.toFixed(2)} y2={ny.toFixed(2)}
           stroke="#1A1A1A" strokeWidth={2.5} strokeLinecap="round"
         />
-        {/* Needle pivot */}
-        <Circle cx={cx.toFixed(1)} cy={cy.toFixed(1)} r={6} fill="#1A1A1A" />
-        <Circle cx={cx.toFixed(1)} cy={cy.toFixed(1)} r={10} fill="none" stroke="#1A1A1A" strokeWidth={1.5} />
+        {/* Pivot cap */}
+        <Circle cx={cx.toFixed(2)} cy={cy.toFixed(2)} r={8}  fill="#1A1A1A" />
+        <Circle cx={cx.toFixed(2)} cy={cy.toFixed(2)} r={3}  fill={COLORS.cardBg} />
       </Svg>
     </View>
   );
