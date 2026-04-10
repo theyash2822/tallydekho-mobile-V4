@@ -269,11 +269,11 @@ export const QUICK_ACTIONS = [
     label: 'Sales',
     icon: 'trending-up',
     items: [
-      { id: 'create_invoice', label: 'Create Invoice', route: '/sales/invoice' },
-      { id: 'create_quotation', label: 'Create Quotation', route: '/sales/quotation' },
-      { id: 'create_sales_order', label: 'Create Sales Orders', route: '/sales/order' },
-      { id: 'create_delivery_note', label: 'Create Delivery Note', route: '/sales/delivery-note' },
-      { id: 'credit_note', label: 'Credit Note', route: '/sales/credit-note' },
+      { id: 'create_invoice',      label: 'Create Invoice',     route: '/sales/register' },
+      { id: 'create_quotation',    label: 'Create Quotation',   route: '/sales/quotation' },
+      { id: 'create_sales_order',  label: 'Create Sales Orders',route: '/sales/order' },
+      { id: 'create_delivery_note',label: 'Create Delivery Note',route: '/sales/delivery-note' },
+      { id: 'credit_note',         label: 'Credit Note',        route: '/sales/credit-note' },
     ],
   },
   {
@@ -281,9 +281,9 @@ export const QUICK_ACTIONS = [
     label: 'Purchase',
     icon: 'cart',
     items: [
-      { id: 'purchase_invoice', label: 'Purchase Invoice', route: '/purchase/invoice' },
-      { id: 'purchase_order', label: 'Purchase Order', route: '/purchase/order' },
-      { id: 'debit_note', label: 'Debit Note', route: '/purchase/debit-note' },
+      { id: 'purchase_invoice', label: 'Purchase Invoice', route: '/purchase/register' },
+      { id: 'purchase_order',   label: 'Purchase Order',   route: '/purchase/order' },
+      { id: 'debit_note',       label: 'Debit Note',       route: '/purchase/debit-note' },
     ],
   },
   {
@@ -293,7 +293,7 @@ export const QUICK_ACTIONS = [
     items: [
       { id: 'payment_voucher', label: 'Payment Voucher', route: '/voucher/payment' },
       { id: 'receipt_voucher', label: 'Receipt Voucher', route: '/voucher/receipt' },
-      { id: 'contra_voucher', label: 'Contra Voucher', route: '/voucher/contra' },
+      { id: 'contra_voucher',  label: 'Contra Voucher',  route: '/voucher/contra' },
       { id: 'journal_voucher', label: 'Journal Voucher', route: '/voucher/journal' },
     ],
   },
@@ -302,10 +302,10 @@ export const QUICK_ACTIONS = [
     label: 'Inventory',
     icon: 'cube',
     items: [
-      { id: 'stock_adjustment', label: 'Stock Adjustment', route: '/inventory/adjustment' },
-      { id: 'stock_transfer', label: 'Stock Transfer', route: '/inventory/transfer' },
-      { id: 'add_item', label: 'Add Item', route: '/inventory/add-item' },
-      { id: 'add_warehouse', label: 'Add Warehouse', route: '/inventory/add-warehouse' },
+      { id: 'stock_adjustment', label: 'Stock Adjustment', route: '/stocks' },
+      { id: 'stock_transfer',   label: 'Stock Transfer',   route: '/stocks' },
+      { id: 'add_item',         label: 'Add Item',          route: '/stocks' },
+      { id: 'add_warehouse',    label: 'Add Warehouse',     route: '/stocks' },
     ],
   },
   {
@@ -313,10 +313,10 @@ export const QUICK_ACTIONS = [
     label: 'Ledgers',
     icon: 'journal',
     items: [
-      { id: 'sundry_creditors', label: 'Sundry Creditors', route: '/ledger/creditors' },
-      { id: 'sundry_debtors', label: 'Sundry Debtors', route: '/ledger/debtors' },
-      { id: 'duties_taxes', label: 'Duties & Taxes', route: '/ledger/duties' },
-      { id: 'custom_groups', label: 'Custom Groups', route: '/ledger/custom' },
+      { id: 'sundry_creditors', label: 'Sundry Creditors', route: '/ledger' },
+      { id: 'sundry_debtors',   label: 'Sundry Debtors',   route: '/ledger' },
+      { id: 'duties_taxes',     label: 'Duties & Taxes',   route: '/ledger' },
+      { id: 'custom_groups',    label: 'Custom Groups',     route: '/ledger' },
     ],
   },
 ];
