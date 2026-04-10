@@ -1,35 +1,31 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AuthProvider, useAuth } from '../src/context/AuthContext';
 
-type AuthState = 'loading' | 'authenticated' | 'unauthenticated';
-
-export default function RootLayout() {
+function RootNavigation() {
+  const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
-  const [authState, setAuthState] = useState<AuthState>('loading');
 
   useEffect(() => {
-    AsyncStorage.getItem('auth_token').then(token => {
-      setAuthState(token ? 'authenticated' : 'unauthenticated');
-    });
-  }, []);
-
-  useEffect(() => {
-    if (authState === 'loading') return;
+    if (isLoading) return;
     const inAuth = segments[0] === '(auth)';
-    if (authState === 'unauthenticated' && !inAuth) {
+    if (!isAuthenticated && !inAuth) {
       router.replace('/(auth)');
-    } else if (authState === 'authenticated' && inAuth) {
+    } else if (isAuthenticated && inAuth) {
       router.replace('/(tabs)');
     }
-  }, [authState, segments]);
+  }, [isAuthenticated, isLoading, segments]);
 
+  return <Slot />;
+}
+
+export default function RootLayout() {
   return (
-    <>
+    <AuthProvider>
       <StatusBar style="dark" />
-      <Slot />
-    </>
+      <RootNavigation />
+    </AuthProvider>
   );
 }

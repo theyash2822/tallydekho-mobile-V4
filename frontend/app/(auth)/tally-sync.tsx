@@ -6,12 +6,14 @@ import {
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../src/context/AuthContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 type SyncStep = 'prompt' | 'input' | 'syncing' | 'done';
 
 export default function TallySyncScreen() {
   const router = useRouter();
+  const { signIn } = useAuth();
   const [step, setStep] = useState<SyncStep>('prompt');
   const [pairKey, setPairKey] = useState('');
   const [progress, setProgress] = useState(0);
@@ -25,11 +27,13 @@ export default function TallySyncScreen() {
       setProgress(i);
     }
     await AsyncStorage.setItem('tally_synced', 'true');
+    await signIn('mock_token_tally');
     router.replace('/(tabs)');
   };
 
   const handleSkip = async () => {
     await AsyncStorage.setItem('tally_synced', 'false');
+    await signIn('mock_token_skip');
     router.replace('/(tabs)');
   };
 

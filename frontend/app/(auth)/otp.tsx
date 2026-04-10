@@ -5,15 +5,16 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { verifyOTP, sendOTP } from '../../src/services/api';
+import { useAuth } from '../../src/context/AuthContext';
 
 const OTP_LENGTH = 6;
 
 export default function OTPScreen() {
   const router = useRouter();
   const { phone } = useLocalSearchParams<{ phone: string }>();
+  const { signIn } = useAuth();
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -56,7 +57,7 @@ export default function OTPScreen() {
     try {
       const res = await verifyOTP(phone || '', code) as any;
       if (res?.token) {
-        await AsyncStorage.setItem('auth_token', res.token);
+        await signIn(res.token);
         if (res?.isNewUser) {
           router.replace({ pathname: '/(auth)/register', params: { phone } });
         } else {

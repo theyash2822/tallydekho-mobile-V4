@@ -9,12 +9,14 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { registerUser } from '../../src/services/api';
+import { useAuth } from '../../src/context/AuthContext';
 
 const LANGUAGES = ['English', 'Hindi', 'Bengali', 'Arabic', 'French', 'German', 'Italian', 'Japanese', 'Korean'];
 
 export default function RegisterScreen() {
   const router = useRouter();
   const { phone } = useLocalSearchParams<{ phone: string }>();
+  const { signIn } = useAuth();
   const [name, setName] = useState('');
   const [language, setLanguage] = useState('English');
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -31,7 +33,6 @@ export default function RegisterScreen() {
     try {
       const res = await registerUser({ name: name.trim(), language, phone: phone || '' }) as any;
       if (res?.token) {
-        await AsyncStorage.setItem('auth_token', res.token);
         await AsyncStorage.setItem('user_data', JSON.stringify({ name: name.trim(), language, phone }));
         router.replace('/(auth)/tally-sync');
       } else {

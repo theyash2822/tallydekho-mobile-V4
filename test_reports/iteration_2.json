@@ -1,0 +1,54 @@
+{
+  "summary": "Frontend testing of TallyDekho Phase 1. All API calls fall back to mock data as expected. Most UI flows work correctly. Critical auth bug found: Register screen is completely skipped because signIn() is called in otp.tsx before navigating to register, causing root layout to immediately redirect to tabs.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "OTP Screen - otpRow",
+        "issue": "6 OTP input boxes overflow the card width at 375px mobile viewport. Boxes from index 2+ are outside viewport. The card padding + 6 boxes with gap:10 is too wide.",
+        "testID": "otp-input-2 through otp-input-5",
+        "priority": "HIGH"
+      },
+      {
+        "component": "QuickActionsModal - close button",
+        "issue": "qa-bottom-close button (bottom circle X) may be outside viewport when modal content is long. The top X button (close-quick-actions) is accessible.",
+        "testID": "qa-bottom-close",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "New User OTP → Register Screen",
+        "issue": "CRITICAL BUG: In otp.tsx handleVerify(), signIn(res.token) is called BEFORE router.replace('/(auth)/register') for new users. This sets isAuthenticated=true. Root layout's useEffect detects isAuthenticated=true AND inAuth=true and redirects to /(tabs), completely bypassing the Register screen. Fix: Do NOT call signIn() in otp.tsx for new users - only call signIn() from tally-sync.tsx (which already does it correctly). Store the temp token in a context or route param instead.",
+        "affected_testIDs": ["register-screen", "name-input", "register-submit-btn"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "CRITICAL FIX: In otp.tsx, remove the signIn(res.token) call for isNewUser=true case. Instead, pass the token as a route param to register screen. Only call signIn() after registration is complete (tally-sync already handles this). The current code: `await signIn(res.token); if (res?.isNewUser) { router.replace('/(auth)/register', ...) }` causes root layout to redirect away from register immediately.",
+    "FIX: OTP boxes in otp.tsx - reduce otpBox flex size or use fixed width (e.g., width: 44) instead of flex:1 with gap:10 so all 6 boxes fit within 375px card width.",
+    "OPTIONAL: Add testID to bottom nav tabs in (tabs)/_layout.tsx for better testability.",
+    "OPTIONAL: Change FAB testID from 'fab-quick-actions' to 'fab-btn' OR update test scripts to use 'fab-quick-actions'.",
+    "OPTIONAL: Change QuickActionsModal container testID to 'quick-actions-modal' (currently uses 'quick-actions-sheet' and 'quick-actions-overlay')."
+  ],
+  "critical_code_review_comments": [
+    "otp.tsx L59-63: signIn() called before router.replace to register - race condition with AuthContext causes root layout redirect. New user flow is broken.",
+    "register.tsx L37: Navigates to /(auth)/tally-sync without calling signIn - this is correct pattern but never reached due to bug above."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend only test)",
+    "frontend": "75% (auth flow partially broken - register screen skipped, all other screens working)"
+  },
+  "seed_data_creation": "None",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Test the full new user flow: Login → OTP → Register screen → Tally Sync → Home. The register screen was completely skipped in this iteration due to auth bug. After fix, verify: Register screen shows Full Name input, Language selector defaulting to English, Terms checkbox. Enter name, check terms, click Login button - should navigate to Tally Sync (not directly to Home). Then on Tally Sync click Skip - should navigate to Home Dashboard.",
+  "rca_of_issue": "Root Cause: otp.tsx handleVerify() calls await signIn(res.token) which sets isAuthenticated=true in AuthContext. Immediately after, it calls router.replace('/(auth)/register'). But _layout.tsx RootNavigation useEffect listens to isAuthenticated and fires: when isAuthenticated=true AND segments[0]==='(auth)', it calls router.replace('/(tabs)'). This override happens before register screen renders. Fix: For new users, do NOT call signIn() in OTP screen. Pass token via route params to register.tsx. In register.tsx after successful registration, pass token to tally-sync.tsx. tally-sync.tsx already calls signIn() correctly."
+}
