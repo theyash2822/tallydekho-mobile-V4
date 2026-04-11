@@ -105,14 +105,18 @@
 user_problem_statement: |
   TallyDekho mobile app frontend in React Native (Expo). Full app skeleton with:
   - Auth flow (WhatsApp OTP)
-  - Home Dashboard with KPI strip, metrics, cashflow, module navigation
+  - Home Dashboard with KPI strip (auto-scrolling), metrics carousel (auto-swipe 3s), cashflow, module navigation
   - Tabs: Home, Stocks, Ledger, Reports
   - Sales module: index hub, register, e-way bill, order, quotation, credit-note, delivery-note
   - Purchase module: index hub, register, order, debit-note
   - Vouchers module: index hub, payment, receipt, journal, contra
-  - Settings module: index with all settings sections
+  - Settings module: accordion with 5 sections (Account, Preferences, Notifications, Integrations, Contact)
   - QuickActions FAB modal with navigation to all sub-screens
   - Profile/Settings access from Header
+  - Company Name dropdown in Header (like FY dropdown)
+  - Ledger Detail page with donut chart and transaction history
+  - Stock Total screen with swipeable tiles (right=Edit+Reorder, left=Delete)
+  - Reports with Financial/Compliance/Audit Trail sections
   - Design system: pageBg #F5F4EF, white cards, #1A1A1A text
 
 backend:

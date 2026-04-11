@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, RefreshControl, FlatList,
+  RefreshControl, FlatList, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +20,85 @@ import {
 const TIME_FILTERS = ['7D', '1M', '3M', '6M'] as const;
 type TimeFilter = typeof TIME_FILTERS[number];
 
+const SCREEN_W = Dimensions.get('window').width;
+
+// ─── Metrics Carousel ─────────────────────────────────────────────────────────
+function MetricsCarousel({ metrics, router }: { metrics: any[]; router: any }) {
+  const scrollRef = useRef<ScrollView>(null);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const activeIdxRef = useRef(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const next = (activeIdxRef.current + 1) % metrics.length;
+      activeIdxRef.current = next;
+      scrollRef.current?.scrollTo({ x: next * SCREEN_W, animated: true });
+      setActiveIdx(next);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [metrics.length]);
+
+  return (
+    <View>
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        scrollEventThrottle={200}
+        onMomentumScrollEnd={e => {
+          const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+          activeIdxRef.current = idx;
+          setActiveIdx(idx);
+        }}
+      >
+        {metrics.map(item => (
+          <TouchableOpacity
+            key={item.id}
+            style={{ width: SCREEN_W, paddingHorizontal: SPACING.md }}
+            activeOpacity={0.85}
+            onPress={() => (item as any).route && router.push((item as any).route as any)}
+          >
+            <View style={styles.metricCarouselCard}>
+              <View style={styles.metricCarouselLeft}>
+                <View style={styles.metricIconBox}>
+                  <Ionicons name={item.icon as any} size={22} color={COLORS.textSecondary} />
+                </View>
+                <View>
+                  <Text style={styles.metricLabel}>{item.label}</Text>
+                  <Text style={styles.metricAmount}>{item.amount}</Text>
+                </View>
+              </View>
+              <View style={[
+                styles.changeBadge,
+                { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg }
+              ]}>
+                <Ionicons
+                  name={item.positive ? 'trending-up' : 'trending-down'}
+                  size={13}
+                  color={item.positive ? COLORS.positive : COLORS.negative}
+                />
+                <Text style={[
+                  styles.changeText,
+                  { color: item.positive ? COLORS.positive : COLORS.negative }
+                ]}>
+                  {item.change}%
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+      {/* Page dots */}
+      <View style={styles.dotsRow}>
+        {metrics.map((_, i) => (
+          <View key={i} style={[styles.dot, i === activeIdx && styles.dotActive]} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 const MODULE_CARDS = [
   { id: 'sales',    label: 'Sales',    icon: 'trending-up',   route: '/sales',    color: '#2D7D46', bg: '#F0FBF4' },
   { id: 'purchase', label: 'Purchase', icon: 'cart',          route: '/purchase', color: '#2563EB', bg: '#EFF6FF' },
@@ -35,6 +114,8 @@ export default function HomeScreen() {
   const [cashflow, setCashflow] = useState(MOCK_CASHFLOW);
   const [activity, setActivity] = useState(MOCK_RECENT_ACTIVITY);
   const [refreshing, setRefreshing] = useState(false);
+  const kpiRef = useRef<FlatList>(null);
+  const kpiIdxRef = useRef(0);
 
   const loadData = useCallback(async () => {
     const [kpi, met, cf, act] = await Promise.all([
@@ -50,6 +131,21 @@ export default function HomeScreen() {
   }, [activeFilter]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Auto-scroll KPI strip every 1.8s
+  useEffect(() => {
+    const timer = setInterval(() => {
+      kpiIdxRef.current = (kpiIdxRef.current + 1) % kpiData.length;
+      try {
+        kpiRef.current?.scrollToIndex({
+          index: kpiIdxRef.current,
+          animated: true,
+          viewPosition: 0.5,
+        });
+      } catch (_) {}
+    }, 1800);
+    return () => clearInterval(timer);
+  }, [kpiData.length]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -108,12 +204,14 @@ export default function HomeScreen() {
         {/* KPI Horizontal Strip */}
         <View style={styles.kpiSection}>
           <FlatList
+            ref={kpiRef}
             horizontal
             data={kpiData}
             keyExtractor={i => i.id}
             renderItem={renderKPI}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.kpiList}
+            onScrollToIndexFailed={() => {}}
           />
         </View>
 
@@ -134,46 +232,8 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Metrics Card */}
-        <View style={styles.metricsCard}>
-          {metrics.map((item, idx) => (
-            <View key={item.id}>
-              <TouchableOpacity
-                testID={`metric-row-${item.id}`}
-                style={styles.metricRow}
-                activeOpacity={0.7}
-                onPress={() => (item as any).route && router.push((item as any).route)}
-              >
-                <View style={styles.metricLeft}>
-                  <View style={styles.metricIconBox}>
-                    <Ionicons name={item.icon as any} size={18} color={COLORS.textSecondary} />
-                  </View>
-                  <Text style={styles.metricLabel}>{item.label}</Text>
-                </View>
-                <View style={styles.metricRight}>
-                  <Text style={styles.metricAmount}>{item.amount}</Text>
-                  <View style={[
-                    styles.changeBadge,
-                    { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg }
-                  ]}>
-                    <Ionicons
-                      name={item.positive ? 'trending-up' : 'trending-down'}
-                      size={11}
-                      color={item.positive ? COLORS.positive : COLORS.negative}
-                    />
-                    <Text style={[
-                      styles.changeText,
-                      { color: item.positive ? COLORS.positive : COLORS.negative }
-                    ]}>
-                      {item.change}%
-                    </Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-              {idx < metrics.length - 1 && <View style={styles.metricSep} />}
-            </View>
-          ))}
-        </View>
+        {/* Metrics Carousel - auto-swiping */}
+        <MetricsCarousel metrics={metrics} router={router} />
 
         {/* Cashflow Card */}
         <CashflowCard {...cashflow} />
@@ -272,6 +332,14 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: COLORS.borderDefault,
     overflow: 'hidden',
   },
+  metricCarouselCard: {
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
+    marginTop: SPACING.md,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    padding: SPACING.md,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
+  metricCarouselLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   metricRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: SPACING.md, paddingVertical: 14,
@@ -290,6 +358,13 @@ const styles = StyleSheet.create({
   },
   changeText: { fontSize: TYPOGRAPHY.xs, fontWeight: '600' },
   metricSep: { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 58 },
+  // Carousel dots
+  dotsRow: {
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+    gap: 6, paddingTop: 8, paddingBottom: 4,
+  },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.borderDefault },
+  dotActive: { width: 18, backgroundColor: COLORS.brandPrimary },
   alertBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: COLORS.warningBg,

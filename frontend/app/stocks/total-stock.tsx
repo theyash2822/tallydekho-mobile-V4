@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Animated, Modal, KeyboardAvoidingView, Platform, Alert,
+  TextInput, Modal, Platform, Alert, FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,28 +20,34 @@ const STATUS_CONFIG: Record<StockStatus, { label: string; color: string; bg: str
 
 const FILTER_CHIPS = ['Warehouse', 'Category', 'Item Group'];
 
-// Swipe left action — Transfer
+// Swipe left (drag LEFT) action — Delete
 function RightActions({ onPress }: { onPress: () => void }) {
   return (
-    <TouchableOpacity style={styles.swipeRight} onPress={onPress} activeOpacity={0.8}>
-      <Ionicons name="swap-horizontal-outline" size={20} color={COLORS.white} />
-      <Text style={styles.swipeLabel}>Transfer</Text>
+    <TouchableOpacity style={styles.swipeDelete} onPress={onPress} activeOpacity={0.8}>
+      <Ionicons name="trash-outline" size={20} color={COLORS.white} />
+      <Text style={styles.swipeLabel}>Delete</Text>
     </TouchableOpacity>
   );
 }
 
-// Swipe right action — Edit
-function LeftActions({ onPress }: { onPress: () => void }) {
+// Swipe right (drag RIGHT) action — Edit + Reorder
+function LeftActions({ onEdit, onReorder }: { onEdit: () => void; onReorder: () => void }) {
   return (
-    <TouchableOpacity style={styles.swipeLeft} onPress={onPress} activeOpacity={0.8}>
-      <Ionicons name="pencil-outline" size={20} color={COLORS.white} />
-      <Text style={styles.swipeLabel}>Edit</Text>
-    </TouchableOpacity>
+    <View style={styles.swipeLeftContainer}>
+      <TouchableOpacity style={styles.swipeEdit} onPress={onEdit} activeOpacity={0.8}>
+        <Ionicons name="pencil-outline" size={18} color={COLORS.white} />
+        <Text style={styles.swipeLabel}>Edit</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.swipeReorder} onPress={onReorder} activeOpacity={0.8}>
+        <Ionicons name="refresh-outline" size={18} color={COLORS.white} />
+        <Text style={styles.swipeLabel}>Reorder</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
-function StockItemRow({ item, onEdit, onTransfer, onPress }: {
-  item: any; onEdit: () => void; onTransfer: () => void; onPress: () => void;
+function StockItemRow({ item, onEdit, onReorder, onDelete, onPress }: {
+  item: any; onEdit: () => void; onReorder: () => void; onDelete: () => void; onPress: () => void;
 }) {
   const st = STATUS_CONFIG[item.status as StockStatus];
   const swipeRef = useRef<Swipeable>(null);
@@ -49,8 +55,15 @@ function StockItemRow({ item, onEdit, onTransfer, onPress }: {
   return (
     <Swipeable
       ref={swipeRef}
-      renderLeftActions={() => <LeftActions onPress={() => { swipeRef.current?.close(); onEdit(); }} />}
-      renderRightActions={() => <RightActions onPress={() => { swipeRef.current?.close(); onTransfer(); }} />}
+      renderLeftActions={() => (
+        <LeftActions
+          onEdit={() => { swipeRef.current?.close(); onEdit(); }}
+          onReorder={() => { swipeRef.current?.close(); onReorder(); }}
+        />
+      )}
+      renderRightActions={() => (
+        <RightActions onPress={() => { swipeRef.current?.close(); onDelete(); }} />
+      )}
       overshootLeft={false}
       overshootRight={false}
     >
@@ -91,8 +104,12 @@ export default function TotalStockScreen() {
     i.sku.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleEdit   = (item: any) => Alert.alert('Edit', `Edit ${item.name}`);
-  const handleTransfer = (item: any) => Alert.alert('Transfer', `Transfer ${item.name}`);
+  const handleEdit     = (item: any) => Alert.alert('Edit', `Edit ${item.name}`);
+  const handleReorder  = (item: any) => Alert.alert('Reorder', `Reorder ${item.name}`);
+  const handleDelete   = (item: any) => Alert.alert('Delete', `Delete ${item.name}?`, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Delete', style: 'destructive', onPress: () => {} },
+  ]);
   const handleDetail = (item: any) => router.push(`/stocks/item-detail?id=${item.id}` as any);
 
   return (
@@ -127,7 +144,7 @@ export default function TotalStockScreen() {
         </View>
 
         {/* Filter chips */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+        <View style={styles.filterWrap}>
           {FILTER_CHIPS.map(chip => (
             <TouchableOpacity
               key={chip}
@@ -145,7 +162,7 @@ export default function TotalStockScreen() {
               />
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </View>
 
         {/* Stock count */}
         <View style={styles.countRow}>
@@ -159,7 +176,8 @@ export default function TotalStockScreen() {
               key={item.id}
               item={item}
               onEdit={() => handleEdit(item)}
-              onTransfer={() => handleTransfer(item)}
+              onReorder={() => handleReorder(item)}
+              onDelete={() => handleDelete(item)}
               onPress={() => handleDetail(item)}
             />
           ))}
@@ -215,7 +233,11 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, paddingVertical: 10, paddingHorizontal: 8, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
 
-  filterRow:  { paddingHorizontal: SPACING.md, paddingBottom: 10, gap: 8 },
+  filterWrap:  { 
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: SPACING.md, paddingVertical: 8, gap: 8, 
+  },
+  filterRow:  { paddingHorizontal: SPACING.md, paddingBottom: 10, gap: 8, alignItems: 'center' },
   filterChip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 12, paddingVertical: 6,
@@ -252,11 +274,15 @@ const styles = StyleSheet.create({
   statusText:  { fontSize: 10, fontWeight: '700' },
 
   // Swipe actions
-  swipeLeft: {
+  swipeLeftContainer: { flexDirection: 'row', alignItems: 'stretch' },
+  swipeEdit: {
     backgroundColor: '#2563EB', width: 72, alignItems: 'center', justifyContent: 'center', gap: 4,
   },
-  swipeRight: {
-    backgroundColor: '#7C3AED', width: 80, alignItems: 'center', justifyContent: 'center', gap: 4,
+  swipeReorder: {
+    backgroundColor: '#059669', width: 80, alignItems: 'center', justifyContent: 'center', gap: 4,
+  },
+  swipeDelete: {
+    backgroundColor: COLORS.negative, width: 80, alignItems: 'center', justifyContent: 'center', gap: 4,
   },
   swipeLabel: { fontSize: 10, color: COLORS.white, fontWeight: '700' },
 

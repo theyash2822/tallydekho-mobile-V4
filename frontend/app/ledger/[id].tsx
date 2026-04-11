@@ -81,7 +81,7 @@ export default function LedgerDetailScreen() {
   const [showCrOnly, setShowCrOnly] = useState(false);
 
   // Find ledger from mock or use a default
-  const ledger = MOCK_LEDGERS?.items?.find((l: any) => l.id === id) ||
+  const ledger = MOCK_LEDGERS?.find((l: any) => l.id === id) ||
     { id: id || 'L001', name: 'Alliance Trading Co.', group: 'Sundry Debtors', balance: '₹37,500 Dr' };
 
   const txns = MOCK_TRANSACTIONS.filter(t => {

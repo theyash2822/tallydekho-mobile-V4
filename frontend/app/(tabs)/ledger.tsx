@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getLedgers } from '../../src/services/api';
 import { MOCK_LEDGERS } from '../../src/data/mockData';
@@ -375,6 +376,7 @@ function FilterModal({ visible, onClose, onApply }: FilterModalProps) {
 
 // ─── Main Ledger Screen ───────────────────────────────────────────────────────
 export default function LedgerScreen() {
+  const router = useRouter();
   const [data, setData] = useState<LedgerItem[]>(MOCK_LEDGERS);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('All');
@@ -499,6 +501,7 @@ export default function LedgerScreen() {
               testID={`ledger-item-${item.id}`}
               style={styles.itemCard}
               activeOpacity={0.7}
+              onPress={() => router.push(`/ledger/${item.id}` as any)}
             >
               {/* Avatar */}
               <View style={styles.avatar}>
