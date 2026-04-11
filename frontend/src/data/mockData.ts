@@ -7,9 +7,25 @@ export const MOCK_USER = {
   id: 'user_001',
   name: 'Ashish Agarwal',
   phone: '+91 96722 22367',
-  company: 'The Y.K Industries Private Limited',
+  company: 'YK Industries Pvt. Ltd.',
   gstin: '27ABCDE1234F1Z5',
   fyYear: 'FY 2025-26',
+};
+
+export const MOCK_COMPANIES = [
+  { id: 'c1', name: 'YK Industries Pvt. Ltd.',        gstin: '27ABCDE1234F1Z5', active: true  },
+  { id: 'c2', name: 'Maaruji Technologies Pvt. Ltd.', gstin: '08AAFCM1234G1Z5', active: false },
+  { id: 'c3', name: 'Demo India Trading Co.',         gstin: '07XXXXX1234X1Z1', active: false },
+];
+
+export const MOCK_STOCK_DASHBOARD = {
+  totalQty: '3,24,666',
+  totalValue: '₹13,00,000',
+  warehouses: { total: 5, utilization: 76 },
+  lowStockCount: 12,
+  agedInventory: { value: '₹12,500', days: 90 },
+  fastMovingCount: 130,
+  reorderQueueCount: 8,
 };
 
 export const MOCK_KPI_STRIP = [
