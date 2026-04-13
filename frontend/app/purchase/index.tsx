@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -14,6 +14,7 @@ const QUICK_LINKS = [
 
 export default function PurchaseHubScreen() {
   const router = useRouter();
+  const [showCreate, setShowCreate] = useState(false);
   const recent = MOCK_PURCHASE_REGISTER.invoices.slice(0, 4);
 
   return (
@@ -26,7 +27,7 @@ export default function PurchaseHubScreen() {
         <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Summary */}
         <View style={s.summaryCard}>
           <View style={{ flex: 1 }}>
@@ -79,6 +80,31 @@ export default function PurchaseHubScreen() {
           ))}
         </View>
       </ScrollView>
+
+      {/* FAB */}
+      <TouchableOpacity style={s.fab} onPress={() => setShowCreate(true)} activeOpacity={0.85}>
+        <Ionicons name="add" size={28} color={COLORS.white} />
+      </TouchableOpacity>
+
+      {/* Create Modal */}
+      <Modal visible={showCreate} transparent animationType="slide" onRequestClose={() => setShowCreate(false)}>
+        <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setShowCreate(false)} />
+        <View style={s.sheet}>
+          <View style={s.sheetHandle} />
+          <Text style={s.sheetTitle}>Create New</Text>
+          <TouchableOpacity style={s.createOpt} onPress={() => { setShowCreate(false); router.push('/purchase/create-invoice' as any); }} activeOpacity={0.7}>
+            <View style={[s.createIcon, { backgroundColor: '#F0FBF4' }]}>
+              <Ionicons name="scan-outline" size={22} color="#2D7D46" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.createLabel}>Purchase Invoice</Text>
+              <Text style={s.createSub}>Scan bill with OCR or enter details manually</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
+          </TouchableOpacity>
+          <View style={{ height: 24 }} />
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -110,4 +136,13 @@ const s = StyleSheet.create({
   listMeta: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
   listAmt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   div: { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 16 },
+  fab: { position: 'absolute', right: 20, bottom: 30, width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 8 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
+  sheet: { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12 },
+  sheetHandle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+  sheetTitle: { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary, paddingHorizontal: SPACING.md, marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  createOpt: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: SPACING.md, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  createIcon: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
+  createLabel: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  createSub: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
 });

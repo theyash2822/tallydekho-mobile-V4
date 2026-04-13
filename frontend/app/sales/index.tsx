@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -17,6 +17,7 @@ const QUICK_LINKS = [
 
 export default function SalesHubScreen() {
   const router = useRouter();
+  const [showCreate, setShowCreate] = useState(false);
   const recent = MOCK_SALES_REGISTER.invoices.slice(0, 4);
 
   return (
@@ -96,6 +97,41 @@ export default function SalesHubScreen() {
           <Ionicons name="chevron-forward" size={18} color={COLORS.textSecondary} />
         </TouchableOpacity>
       </ScrollView>
+
+      {/* FAB */}
+      <TouchableOpacity style={s.fab} onPress={() => setShowCreate(true)} activeOpacity={0.85}>
+        <Ionicons name="add" size={28} color={COLORS.white} />
+      </TouchableOpacity>
+
+      {/* Create Modal */}
+      <Modal visible={showCreate} transparent animationType="slide" onRequestClose={() => setShowCreate(false)}>
+        <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setShowCreate(false)} />
+        <View style={s.sheet}>
+          <View style={s.sheetHandle} />
+          <Text style={s.sheetTitle}>Create New</Text>
+          <TouchableOpacity style={s.createOpt} onPress={() => { setShowCreate(false); router.push('/sales/create-invoice' as any); }} activeOpacity={0.7}>
+            <View style={[s.createIcon, { backgroundColor: '#F0FBF4' }]}>
+              <Ionicons name="document-text-outline" size={22} color="#2D7D46" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.createLabel}>Sales Invoice</Text>
+              <Text style={s.createSub}>Create a new sales invoice with items & GST</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={s.createOpt} onPress={() => { setShowCreate(false); router.push('/sales/create-quotation' as any); }} activeOpacity={0.7}>
+            <View style={[s.createIcon, { backgroundColor: '#FFFBEB' }]}>
+              <Ionicons name="chatbubble-outline" size={22} color="#D97706" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.createLabel}>Quotation</Text>
+              <Text style={s.createSub}>Send a price quote to your customer</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
+          </TouchableOpacity>
+          <View style={{ height: 24 }} />
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -133,4 +169,13 @@ const s = StyleSheet.create({
   bannerIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: COLORS.positiveBg, alignItems: 'center', justifyContent: 'center' },
   bannerTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   bannerSub: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+  fab: { position: 'absolute', right: 20, bottom: 30, width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 8 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
+  sheet: { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12 },
+  sheetHandle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+  sheetTitle: { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary, paddingHorizontal: SPACING.md, marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  createOpt: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: SPACING.md, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  createIcon: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
+  createLabel: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  createSub: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
 });

@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -13,8 +13,16 @@ const VOUCHER_TYPES = [
   { label: 'Contra',   icon: 'swap-horizontal-outline',   route: '/voucher/contra',   color: '#7C3AED', bg: '#F5F3FF', data: MOCK_CONTRA_VOUCHERS },
 ] as const;
 
+const CREATE_OPTIONS = [
+  { label: 'Payment Voucher', icon: 'arrow-up-circle-outline', color: '#C0392B', bg: '#FDECEA', type: 'payment' },
+  { label: 'Receipt Voucher', icon: 'arrow-down-circle-outline', color: '#2D7D46', bg: '#F0FBF4', type: 'receipt' },
+  { label: 'Journal Entry', icon: 'book-outline', color: '#2563EB', bg: '#EFF6FF', type: 'journal' },
+  { label: 'Contra Voucher', icon: 'swap-horizontal-outline', color: '#7C3AED', bg: '#F5F3FF', type: 'contra' },
+];
+
 export default function VouchersHubScreen() {
   const router = useRouter();
+  const [showCreate, setShowCreate] = useState(false);
   const recentPayment = MOCK_PAYMENT_VOUCHERS.items[0];
   const recentReceipt = MOCK_RECEIPT_VOUCHERS.items[0];
 
@@ -28,7 +36,7 @@ export default function VouchersHubScreen() {
         <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Summary Banner */}
         <View style={s.summaryBanner}>
           <View style={{ flex: 1 }}>
@@ -74,6 +82,35 @@ export default function VouchersHubScreen() {
           ))}
         </View>
       </ScrollView>
+
+      {/* FAB */}
+      <TouchableOpacity style={s.fab} onPress={() => setShowCreate(true)} activeOpacity={0.85}>
+        <Ionicons name="add" size={28} color={COLORS.white} />
+      </TouchableOpacity>
+
+      {/* Create Voucher Modal */}
+      <Modal visible={showCreate} transparent animationType="slide" onRequestClose={() => setShowCreate(false)}>
+        <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setShowCreate(false)} />
+        <View style={s.createSheet}>
+          <View style={s.sheetHandle} />
+          <Text style={s.sheetTitle}>Create Voucher</Text>
+          {CREATE_OPTIONS.map(opt => (
+            <TouchableOpacity
+              key={opt.type}
+              style={s.createOpt}
+              onPress={() => { setShowCreate(false); router.push(`/voucher/create?type=${opt.type}` as any); }}
+              activeOpacity={0.7}
+            >
+              <View style={[s.createOptIcon, { backgroundColor: opt.bg }]}>
+                <Ionicons name={opt.icon as any} size={22} color={opt.color} />
+              </View>
+              <Text style={s.createOptTxt}>{opt.label}</Text>
+              <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
+            </TouchableOpacity>
+          ))}
+          <View style={{ height: 24 }} />
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -103,4 +140,12 @@ const s = StyleSheet.create({
   listMeta: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
   listAmt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   div: { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 16 },
+  fab: { position: 'absolute', right: 20, bottom: 30, width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 8 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
+  createSheet: { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12 },
+  sheetHandle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+  sheetTitle: { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary, paddingHorizontal: SPACING.md, marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  createOpt: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: SPACING.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  createOptIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  createOptTxt: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
 });
