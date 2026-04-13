@@ -14,7 +14,7 @@ import {
   getKPIStrip, getMetrics, getCashflow, getRecentActivity
 } from '../../src/services/api';
 import {
-  MOCK_KPI_STRIP, MOCK_METRICS, MOCK_CASHFLOW, MOCK_RECENT_ACTIVITY, MOCK_USER
+  MOCK_KPI_STRIP, MOCK_METRICS, MOCK_CASHFLOW, MOCK_RECENT_ACTIVITY, MOCK_USER, FY_DASHBOARD,
 } from '../../src/data/mockData';
 
 const TIME_FILTERS = ['7D', '1M', '3M', '6M'] as const;
@@ -29,12 +29,22 @@ const MODULE_CARDS = [
 
 export default function HomeScreen() {
   const router = useRouter();
+  const [activeFY, setActiveFY] = useState(MOCK_USER.fyYear);
   const [activeFilter, setActiveFilter] = useState<TimeFilter>('7D');
   const [kpiData, setKpiData] = useState(MOCK_KPI_STRIP);
   const [metrics, setMetrics] = useState(MOCK_METRICS);
   const [cashflow, setCashflow] = useState(MOCK_CASHFLOW);
   const [activity, setActivity] = useState(MOCK_RECENT_ACTIVITY);
   const [refreshing, setRefreshing] = useState(false);
+
+  // When FY changes, update dashboard data from FY_DASHBOARD lookup table
+  const handleFYChange = useCallback((fy: string) => {
+    setActiveFY(fy);
+    const fyData = FY_DASHBOARD[fy] || FY_DASHBOARD['FY 2025-26'];
+    setKpiData(fyData.kpi as any);
+    setMetrics(fyData.metrics as any);
+    setCashflow(fyData.cashflow as any);
+  }, []);
 
   const loadData = useCallback(async () => {
     const [kpi, met, cf, act] = await Promise.all([
@@ -43,11 +53,14 @@ export default function HomeScreen() {
       getCashflow(),
       getRecentActivity(),
     ]);
-    setKpiData(kpi as any);
-    setMetrics(met as any);
-    setCashflow(cf as any);
+    // Only update if still on the current FY (2025-26 = live API data)
+    if (activeFY === 'FY 2025-26') {
+      setKpiData(kpi as any);
+      setMetrics(met as any);
+      setCashflow(cf as any);
+    }
     setActivity(act as any);
-  }, [activeFilter]);
+  }, [activeFilter, activeFY]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -72,8 +85,9 @@ export default function HomeScreen() {
       {/* Header */}
       <Header
         companyName={MOCK_USER.company}
-        fyYear={MOCK_USER.fyYear}
+        fyYear={activeFY}
         notificationCount={1}
+        onFYChange={handleFYChange}
         onSettingsPress={() => router.push('/settings' as any)}
       />
 

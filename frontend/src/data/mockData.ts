@@ -279,6 +279,70 @@ export const MOCK_CONTRA_VOUCHERS = {
   ],
 };
 
+// ── FY-Specific Dashboard Data ────────────────────────────────────────────────
+export const FY_DASHBOARD: Record<string, {
+  kpi: typeof MOCK_KPI_STRIP;
+  metrics: typeof MOCK_METRICS;
+  cashflow: typeof MOCK_CASHFLOW;
+}> = {
+  'FY 2025-26': {
+    kpi: MOCK_KPI_STRIP,
+    metrics: MOCK_METRICS,
+    cashflow: MOCK_CASHFLOW,
+  },
+  'FY 2024-25': {
+    kpi: [
+      { id: 'cash',       label: 'Cash In Hand', amount: '₹8,20,000',  icon: 'cash-outline',             route: '/cash' },
+      { id: 'bank',       label: 'Bank Balance', amount: '₹6,40,000',  icon: 'card-outline',             route: '/bank' },
+      { id: 'receivable', label: 'Receivables',  amount: '₹2,80,000',  icon: 'arrow-down-circle-outline',route: '/receivables' },
+      { id: 'payable',    label: 'Payables',     amount: '₹4,12,000',  icon: 'arrow-up-circle-outline',  route: '/payables' },
+      { id: 'loans',      label: 'Loans & ODs',  amount: '₹2,10,000',  icon: 'git-merge-outline',        route: '/loans' },
+      { id: 'payments',   label: 'Payments',     amount: '₹1,08,000',  icon: 'send-outline',             route: '/payments' },
+      { id: 'receipts',   label: 'Receipts',     amount: '₹28,500',    icon: 'download-outline',         route: '/receipts' },
+    ],
+    metrics: [
+      { id: 'expenses', label: 'Expenses', amount: '₹108.00',  change: 9.2,  positive: false, icon: 'trending-up-outline',  route: null },
+      { id: 'sales',    label: 'Sales',    amount: '₹74,500',  change: 3.8,  positive: true,  icon: 'stats-chart-outline',   route: '/sales/register' },
+      { id: 'purchases',label: 'Purchases',amount: '₹60,200',  change: 6.2,  positive: true,  icon: 'cart-outline',          route: '/purchase/register' },
+    ],
+    cashflow: { netCash: 16800, grossCash: 480.50, netRealisableBalance: 16200, grossProfit: 382000, netProfit: 104000, incomePercentage: 58, updatedAt: 'FY 2024-25' },
+  },
+  'FY 2023-24': {
+    kpi: [
+      { id: 'cash',       label: 'Cash In Hand', amount: '₹6,50,000',  icon: 'cash-outline',             route: '/cash' },
+      { id: 'bank',       label: 'Bank Balance', amount: '₹5,10,000',  icon: 'card-outline',             route: '/bank' },
+      { id: 'receivable', label: 'Receivables',  amount: '₹2,10,000',  icon: 'arrow-down-circle-outline',route: '/receivables' },
+      { id: 'payable',    label: 'Payables',     amount: '₹3,20,000',  icon: 'arrow-up-circle-outline',  route: '/payables' },
+      { id: 'loans',      label: 'Loans & ODs',  amount: '₹2,80,000',  icon: 'git-merge-outline',        route: '/loans' },
+      { id: 'payments',   label: 'Payments',     amount: '₹82,000',    icon: 'send-outline',             route: '/payments' },
+      { id: 'receipts',   label: 'Receipts',     amount: '₹22,000',    icon: 'download-outline',         route: '/receipts' },
+    ],
+    metrics: [
+      { id: 'expenses', label: 'Expenses', amount: '₹85.00',   change: 7.1,  positive: false, icon: 'trending-up-outline',  route: null },
+      { id: 'sales',    label: 'Sales',    amount: '₹58,000',  change: 2.4,  positive: true,  icon: 'stats-chart-outline',   route: '/sales/register' },
+      { id: 'purchases',label: 'Purchases',amount: '₹46,500',  change: 4.1,  positive: true,  icon: 'cart-outline',          route: '/purchase/register' },
+    ],
+    cashflow: { netCash: 12400, grossCash: 366.80, netRealisableBalance: 12000, grossProfit: 298000, netProfit: 82000, incomePercentage: 48, updatedAt: 'FY 2023-24' },
+  },
+  'FY 2022-23': {
+    kpi: [
+      { id: 'cash',       label: 'Cash In Hand', amount: '₹4,80,000',  icon: 'cash-outline',             route: '/cash' },
+      { id: 'bank',       label: 'Bank Balance', amount: '₹3,90,000',  icon: 'card-outline',             route: '/bank' },
+      { id: 'receivable', label: 'Receivables',  amount: '₹1,60,000',  icon: 'arrow-down-circle-outline',route: '/receivables' },
+      { id: 'payable',    label: 'Payables',     amount: '₹2,40,000',  icon: 'arrow-up-circle-outline',  route: '/payables' },
+      { id: 'loans',      label: 'Loans & ODs',  amount: '₹3,20,000',  icon: 'git-merge-outline',        route: '/loans' },
+      { id: 'payments',   label: 'Payments',     amount: '₹62,000',    icon: 'send-outline',             route: '/payments' },
+      { id: 'receipts',   label: 'Receipts',     amount: '₹16,000',    icon: 'download-outline',         route: '/receipts' },
+    ],
+    metrics: [
+      { id: 'expenses', label: 'Expenses', amount: '₹62.00',   change: 5.0,  positive: false, icon: 'trending-up-outline',  route: null },
+      { id: 'sales',    label: 'Sales',    amount: '₹44,500',  change: 1.2,  positive: true,  icon: 'stats-chart-outline',   route: '/sales/register' },
+      { id: 'purchases',label: 'Purchases',amount: '₹35,000',  change: 3.0,  positive: true,  icon: 'cart-outline',          route: '/purchase/register' },
+    ],
+    cashflow: { netCash: 9200, grossCash: 280.40, netRealisableBalance: 8900, grossProfit: 228000, netProfit: 62000, incomePercentage: 40, updatedAt: 'FY 2022-23' },
+  },
+};
+
 export const QUICK_ACTIONS = [
   {
     id: 'sales',

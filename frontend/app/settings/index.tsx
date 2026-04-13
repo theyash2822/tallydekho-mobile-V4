@@ -44,9 +44,9 @@ const SECTIONS: Section[] = [
     id: 'preferences', title: 'Preferences',
     icon: 'options-outline', iconColor: '#2563EB', iconBg: '#EFF6FF',
     subItems: [
-      { id: 'language', label: 'Language & Region', icon: 'language-outline' },
-      { id: 'currency', label: 'Currency & Number Format', icon: 'cash-outline' },
-      { id: 'voucher', label: 'Voucher Configuration', icon: 'document-text-outline' },
+      { id: 'language', label: 'Language & Region', icon: 'language-outline', route: '/settings/preferences' },
+      { id: 'currency', label: 'Currency & Number Format', icon: 'cash-outline', route: '/settings/preferences' },
+      { id: 'voucher', label: 'Voucher Configuration', icon: 'document-text-outline', route: '/settings/preferences' },
     ],
   },
   {
@@ -74,7 +74,7 @@ const SECTIONS: Section[] = [
     icon: 'information-circle-outline', iconColor: '#6B7280', iconBg: '#F3F4F6',
     subItems: [
       { id: 'about', label: 'About & Version', icon: 'phone-portrait-outline' },
-      { id: 'security', label: 'Data Security', icon: 'lock-closed-outline' },
+      { id: 'security', label: 'Data Security', icon: 'lock-closed-outline', route: '/settings/security' },
       { id: 'help', label: 'Help Center', icon: 'help-circle-outline' },
     ],
   },

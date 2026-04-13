@@ -7,6 +7,7 @@ import Svg, {
   Path, Circle, Line, G, Text as SvgText, Rect,
 } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import Header from '../../src/components/Header';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_REPORTS, MOCK_USER } from '../../src/data/mockData';
@@ -414,18 +415,19 @@ interface SectionCardProps {
   iconName: keyof typeof Ionicons.glyphMap;
   title: string;
   children: React.ReactNode;
+  onPress?: () => void;
 }
 
-function SectionCard({ iconName, title, children }: SectionCardProps) {
+function SectionCard({ iconName, title, children, onPress }: SectionCardProps) {
   return (
     <View style={sc.card}>
       {/* Header */}
-      <TouchableOpacity style={sc.header} activeOpacity={0.7}>
+      <TouchableOpacity style={sc.header} onPress={onPress} activeOpacity={onPress ? 0.7 : 1}>
         <View style={sc.iconBox}>
           <Ionicons name={iconName} size={14} color={COLORS.textSecondary} />
         </View>
         <Text style={sc.title}>{title}</Text>
-        <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
+        <Ionicons name="chevron-forward" size={18} color={onPress ? COLORS.brandPrimary : COLORS.textTertiary} />
       </TouchableOpacity>
       {/* Content */}
       <View style={sc.body}>{children}</View>
@@ -476,6 +478,7 @@ const sc = StyleSheet.create({
 // ══════════════════════════════════════════════════════════════════════════════
 export default function ReportsScreen() {
   const r = MOCK_REPORTS;
+  const router = useRouter();
 
   return (
     <SafeAreaView testID="reports-screen" style={styles.safe}>
@@ -490,7 +493,7 @@ export default function ReportsScreen() {
         <Text style={styles.pageTitle}>Reports Dashboard</Text>
 
         {/* ── 1. Financial ───────────────────────────────────────────────── */}
-        <SectionCard iconName="stats-chart-outline" title="Financial">
+        <SectionCard iconName="stats-chart-outline" title="Financial" onPress={() => router.push('/reports/financial' as any)}>
           <View style={{ position: 'relative' }}>
             <LogLineChart
               lines={[
@@ -504,7 +507,7 @@ export default function ReportsScreen() {
         </SectionCard>
 
         {/* ── 2. Compliance ─────────────────────────────────────────────── */}
-        <SectionCard iconName="shield-checkmark-outline" title="Compliance">
+        <SectionCard iconName="shield-checkmark-outline" title="GST Compliance" onPress={() => router.push('/reports/gst' as any)}>
           {/* GST gauge: 9 filed (Apr-Dec), needle between Dec & Jan */}
           <GSTGauge filedCount={9} needleIndex={8} />
         </SectionCard>
@@ -519,7 +522,7 @@ export default function ReportsScreen() {
         </SectionCard>
 
         {/* ── 4. AI Insights ────────────────────────────────────────────── */}
-        <SectionCard iconName="sparkles-outline" title="AI Insights">
+        <SectionCard iconName="sparkles-outline" title="AI Insights" onPress={() => router.push('/reports/ai-insights' as any)}>
           <LogLineChart
             lines={[
               { values: AI_FORECAST, color: C_GREEN, label: 'Sales forecast', latestLabel: '₹460' },
