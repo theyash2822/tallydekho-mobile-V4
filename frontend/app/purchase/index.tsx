@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
@@ -14,6 +14,7 @@ const QUICK_LINKS = [
 
 export default function PurchaseHubScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [showCreate, setShowCreate] = useState(false);
   const recent = MOCK_PURCHASE_REGISTER.invoices.slice(0, 4);
 
@@ -24,7 +25,9 @@ export default function PurchaseHubScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Purchase</Text>
-        <View style={{ width: 36 }} />
+        <TouchableOpacity style={s.headerAddBtn} onPress={() => setShowCreate(true)} activeOpacity={0.7}>
+          <Ionicons name="add" size={22} color={COLORS.textPrimary} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
@@ -82,7 +85,11 @@ export default function PurchaseHubScreen() {
       </ScrollView>
 
       {/* FAB */}
-      <TouchableOpacity style={s.fab} onPress={() => setShowCreate(true)} activeOpacity={0.85}>
+      <TouchableOpacity
+        style={[s.fab, { bottom: insets.bottom + 20 }]}
+        onPress={() => setShowCreate(true)}
+        activeOpacity={0.85}
+      >
         <Ionicons name="add" size={28} color={COLORS.white} />
       </TouchableOpacity>
 
@@ -136,7 +143,8 @@ const s = StyleSheet.create({
   listMeta: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
   listAmt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   div: { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 16 },
-  fab: { position: 'absolute', right: 20, bottom: 30, width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 8 },
+  headerAddBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.borderDefault },
+  fab: { position: 'absolute', right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 8 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
   sheet: { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12 },
   sheetHandle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },

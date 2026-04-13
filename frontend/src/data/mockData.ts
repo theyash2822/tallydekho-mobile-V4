@@ -285,8 +285,8 @@ export const QUICK_ACTIONS = [
     label: 'Sales',
     icon: 'trending-up',
     items: [
-      { id: 'create_invoice',      label: 'Create Invoice',     route: '/sales/register' },
-      { id: 'create_quotation',    label: 'Create Quotation',   route: '/sales/quotation' },
+      { id: 'create_invoice',      label: 'Create Invoice',     route: '/sales/create-invoice' },
+      { id: 'create_quotation',    label: 'Create Quotation',   route: '/sales/create-quotation' },
       { id: 'create_sales_order',  label: 'Create Sales Orders',route: '/sales/order' },
       { id: 'create_delivery_note',label: 'Create Delivery Note',route: '/sales/delivery-note' },
       { id: 'credit_note',         label: 'Credit Note',        route: '/sales/credit-note' },
@@ -297,7 +297,7 @@ export const QUICK_ACTIONS = [
     label: 'Purchase',
     icon: 'cart',
     items: [
-      { id: 'purchase_invoice', label: 'Purchase Invoice', route: '/purchase/register' },
+      { id: 'purchase_invoice', label: 'Purchase Invoice', route: '/purchase/create-invoice' },
       { id: 'purchase_order',   label: 'Purchase Order',   route: '/purchase/order' },
       { id: 'debit_note',       label: 'Debit Note',       route: '/purchase/debit-note' },
     ],
@@ -307,10 +307,10 @@ export const QUICK_ACTIONS = [
     label: 'Voucher',
     icon: 'card',
     items: [
-      { id: 'payment_voucher', label: 'Payment Voucher', route: '/voucher/payment' },
-      { id: 'receipt_voucher', label: 'Receipt Voucher', route: '/voucher/receipt' },
-      { id: 'contra_voucher',  label: 'Contra Voucher',  route: '/voucher/contra' },
-      { id: 'journal_voucher', label: 'Journal Voucher', route: '/voucher/journal' },
+      { id: 'payment_voucher', label: 'Payment Voucher', route: '/voucher/create?type=payment' },
+      { id: 'receipt_voucher', label: 'Receipt Voucher', route: '/voucher/create?type=receipt' },
+      { id: 'contra_voucher',  label: 'Contra Voucher',  route: '/voucher/create?type=contra' },
+      { id: 'journal_voucher', label: 'Journal Voucher', route: '/voucher/create?type=journal' },
     ],
   },
   {
