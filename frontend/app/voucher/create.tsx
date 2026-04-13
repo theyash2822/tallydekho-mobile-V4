@@ -9,6 +9,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
+import AddPartyModal, { PartyData } from '../../src/components/forms/AddPartyModal';
 
 type VType = 'payment' | 'receipt' | 'journal' | 'contra';
 
@@ -87,6 +88,8 @@ export default function CreateVoucherScreen() {
   const initType = (['payment','receipt','journal','contra'].includes(params.type || '') ? params.type : 'payment') as VType;
   const [vType, setVType] = useState<VType>(initType);
   const [date, setDate] = useState(todayStr());
+  const [showAddParty, setShowAddParty] = useState(false);
+  const [localParties, setLocalParties] = useState<DropdownOption[]>(PARTIES);
 
   // Payment / Receipt
   const [party, setParty] = useState('');
@@ -120,6 +123,13 @@ export default function CreateVoucherScreen() {
       [{ text: 'OK', onPress: () => router.back() }]
     );
   }, [cfg, vType, router]);
+
+  const handleAddParty = useCallback((data: PartyData) => {
+    const val = data.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const newOpt: DropdownOption = { label: data.name, value: val };
+    setLocalParties(prev => [...prev, newOpt]);
+    setParty(val);
+  }, []);
 
   const resetFields = () => {
     setParty(''); setAmount(''); setMode(''); setBank('');
@@ -205,11 +215,21 @@ export default function CreateVoucherScreen() {
               <>
                 <FormDropdown
                   label={vType === 'payment' ? 'Pay To (Party)' : 'Received From (Party)'}
-                  value={party} options={PARTIES}
+                  value={party} options={localParties}
                   onSelect={o => setParty(o.value)}
                   placeholder="Select party..."
                   required
                 />
+                <TouchableOpacity
+                  style={s.addPartyBtn}
+                  onPress={() => setShowAddParty(true)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="person-add-outline" size={14} color={COLORS.brandPrimary} />
+                  <Text style={s.addPartyTxt}>
+                    + Add New {vType === 'payment' ? 'Vendor' : 'Customer'}
+                  </Text>
+                </TouchableOpacity>
                 <FormField
                   label="Amount (₹)" value={amount}
                   onChangeText={setAmount}
@@ -349,7 +369,7 @@ export default function CreateVoucherScreen() {
                   {vType === 'payment' ? 'Paying Out' : vType === 'receipt' ? 'Receiving' : 'Amount'}
                 </Text>
                 {party && <Text style={s.amtParty}>
-                  {PARTIES.find(p => p.value === party)?.label}
+                  {localParties.find(p => p.value === party)?.label}
                 </Text>}
               </View>
               <Text style={[s.amtValue, { color: vType === 'payment' ? COLORS.negative : COLORS.positive }]}>
@@ -370,6 +390,14 @@ export default function CreateVoucherScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Add Party Modal */}
+      <AddPartyModal
+        visible={showAddParty}
+        type={vType === 'payment' ? 'vendor' : 'customer'}
+        onSave={handleAddParty}
+        onClose={() => setShowAddParty(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -414,4 +442,6 @@ const s = StyleSheet.create({
   draftTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textSecondary },
   submitBtn: { flex: 2, flexDirection: 'row', gap: 8, paddingVertical: 14, borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center' },
   submitTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+  addPartyBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 4, marginTop: -8, marginBottom: 8 },
+  addPartyTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.brandPrimary, fontWeight: '600' },
 });

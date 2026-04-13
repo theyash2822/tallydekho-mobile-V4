@@ -119,8 +119,8 @@ export default function CreateQuotationScreen() {
     return { gross, discTotal, taxTotal, grand: gross-discTotal+taxTotal };
   },[items]);
 
-  const handleSubmit = useCallback((draft:boolean)=>{
-    Alert.alert(draft?'Draft Saved':'Quotation Created', draft?`${qtNo} saved as draft.`:`${qtNo} created successfully!`,[{text:'OK',onPress:()=>router.back()}]);
+  const handleSubmit = useCallback(()=>{
+    Alert.alert('✓ Quotation Created', `${qtNo} has been created and sent successfully!`,[{text:'OK',onPress:()=>router.back()}]);
   },[qtNo,router]);
 
   return (
@@ -203,10 +203,7 @@ export default function CreateQuotationScreen() {
         </ScrollView>
 
         <View style={[s.footer,{paddingBottom:Math.max(insets.bottom,12)}]}>
-          <TouchableOpacity style={s.draftBtn} onPress={()=>handleSubmit(true)} activeOpacity={0.7}>
-            <Text style={s.draftTxt}>Save Draft</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={s.submitBtn} onPress={()=>handleSubmit(false)} activeOpacity={0.7}>
+          <TouchableOpacity style={s.submitBtn} onPress={()=>handleSubmit()} activeOpacity={0.7}>
             <Ionicons name="send-outline" size={16} color={COLORS.white} />
             <Text style={s.submitTxt}>Create Quotation</Text>
           </TouchableOpacity>
@@ -287,10 +284,8 @@ const s = StyleSheet.create({
   sumDiv:{height:1,backgroundColor:COLORS.borderDefault,marginBottom:12},
   sumGrandL:{fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.textPrimary},
   sumGrandV:{fontSize:TYPOGRAPHY.lg,fontWeight:'800',color:COLORS.warning},
-  footer:{flexDirection:'row',gap:12,paddingHorizontal:SPACING.md,paddingTop:SPACING.md,borderTopWidth:1,borderTopColor:COLORS.borderDefault,backgroundColor:COLORS.cardBg},
-  draftBtn:{flex:1,paddingVertical:14,borderRadius:RADIUS.md,borderWidth:1.5,borderColor:COLORS.borderDefault,alignItems:'center',justifyContent:'center'},
-  draftTxt:{fontSize:TYPOGRAPHY.base,fontWeight:'600',color:COLORS.textSecondary},
-  submitBtn:{flex:2,flexDirection:'row',gap:8,paddingVertical:14,borderRadius:RADIUS.md,backgroundColor:COLORS.brandPrimary,alignItems:'center',justifyContent:'center'},
+  footer:{paddingHorizontal:SPACING.md,paddingTop:SPACING.md,borderTopWidth:1,borderTopColor:COLORS.borderDefault,backgroundColor:COLORS.cardBg},
+  submitBtn:{flexDirection:'row',gap:8,paddingVertical:14,borderRadius:RADIUS.md,backgroundColor:COLORS.brandPrimary,alignItems:'center',justifyContent:'center'},
   submitTxt:{fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.white},
 });
 const m = StyleSheet.create({

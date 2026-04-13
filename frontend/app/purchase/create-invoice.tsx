@@ -6,6 +6,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
@@ -48,14 +49,14 @@ const LOGISTICS_TYPES: DropdownOption[] = [
   { label: 'Custom', value: 'custom' },
 ];
 
-// OCR Mock Data
+// OCR Mock Data — simulates a real sales invoice from vendor becoming our purchase record
 const OCR_MOCK = {
-  vendor: 'abc',
-  vendorName: 'ABC Traders',
-  vendorInvNo: 'ABC/2025/1234',
+  vendor: 'pqr',
+  vendorName: 'PQR Exports',
+  vendorInvNo: 'PQR/INV/2025-26/4872',
   items: [
     { id: '1', product: 'jbl_speaker', qty: '10', unit: 'Pcs', rate: '3400', discountType: '%' as '%'|'flat', discount: '5', taxRate: '18' },
-    { id: '2', product: 'sony_xm5', qty: '5', unit: 'Pcs', rate: '2800', discountType: '%' as '%'|'flat', discount: '0', taxRate: '18' },
+    { id: '2', product: 'sony_xm5', qty: '5', unit: 'Pcs', rate: '28500', discountType: '%' as '%'|'flat', discount: '0', taxRate: '18' },
   ],
 };
 
@@ -135,6 +136,8 @@ export default function CreatePurchaseInvoiceScreen() {
   const insets = useSafeAreaInsets();
 
   const [ocrStatus, setOcrStatus] = useState<OcrStatus>('idle');
+  const [showCamera, setShowCamera] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
   const [ledger, setLedger] = useState('purchase_raw');
   const [invNo] = useState('PINV-00089');
   const [date, setDate] = useState(todayStr());
@@ -161,7 +164,9 @@ export default function CreatePurchaseInvoiceScreen() {
     return { gross, discTotal, taxTotal, cgst:taxTotal/2, sgst:taxTotal/2, logAmt, grand };
   },[items,logAmount]);
 
-  const handleOcrScan = useCallback(()=>{
+  // handleCapture: called when user presses shutter inside camera modal
+  const handleCapture = useCallback(()=>{
+    setShowCamera(false);
     setOcrStatus('scanning');
     setTimeout(()=>{
       setVendor(OCR_MOCK.vendor);
@@ -171,6 +176,14 @@ export default function CreatePurchaseInvoiceScreen() {
       setOcrStatus('done');
     }, 2200);
   },[]);
+
+  // openCamera: request permission then open camera modal
+  const openCamera = useCallback(async ()=>{
+    if (permission && !permission.granted && permission.canAskAgain) {
+      await requestPermission();
+    }
+    setShowCamera(true);
+  },[permission, requestPermission]);
 
   const handleSubmit = useCallback((draft:boolean)=>{
     Alert.alert(draft?'Draft Saved':'Invoice Submitted', draft?`${invNo} saved as draft.`:`Purchase invoice ${invNo} submitted successfully!`,[{text:'OK',onPress:()=>router.back()}]);
@@ -202,11 +215,11 @@ export default function CreatePurchaseInvoiceScreen() {
                 </View>
               </View>
               <View style={s.ocrBtns}>
-                <TouchableOpacity style={s.ocrBtn} onPress={handleOcrScan} activeOpacity={0.7}>
+                <TouchableOpacity style={s.ocrBtn} onPress={openCamera} activeOpacity={0.7}>
                   <Ionicons name="camera-outline" size={16} color={COLORS.white} />
                   <Text style={s.ocrBtnTxt}>Scan Bill</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={s.ocrBtnOutline} onPress={handleOcrScan} activeOpacity={0.7}>
+                <TouchableOpacity style={s.ocrBtnOutline} onPress={openCamera} activeOpacity={0.7}>
                   <Ionicons name="cloud-upload-outline" size={16} color={COLORS.brandPrimary} />
                   <Text style={s.ocrBtnOutlineTxt}>Upload Image / PDF</Text>
                 </TouchableOpacity>
@@ -328,6 +341,56 @@ export default function CreatePurchaseInvoiceScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Camera OCR Modal */}
+      <Modal visible={showCamera} animationType="slide" statusBarTranslucent onRequestClose={()=>setShowCamera(false)}>
+        <View style={cam.container}>
+          {permission?.granted ? (
+            <CameraView style={StyleSheet.absoluteFillObject} facing="back">
+              <View style={cam.overlay}>
+                <SafeAreaView edges={['top']} style={cam.topBar}>
+                  <TouchableOpacity style={cam.closeBtn} onPress={()=>setShowCamera(false)} activeOpacity={0.7}>
+                    <Ionicons name="close" size={26} color="#fff" />
+                  </TouchableOpacity>
+                  <Text style={cam.topTitle}>Scan Vendor Bill</Text>
+                  <View style={{width:44}} />
+                </SafeAreaView>
+                <View style={cam.frameArea}>
+                  <View style={cam.scanFrame}>
+                    <View style={[cam.corner,cam.tl]} /><View style={[cam.corner,cam.tr]} />
+                    <View style={[cam.corner,cam.bl]} /><View style={[cam.corner,cam.br]} />
+                    <View style={cam.scanLine} />
+                  </View>
+                  <Text style={cam.frameHint}>Align vendor bill within the frame</Text>
+                </View>
+                <View style={cam.bottomBar}>
+                  <View style={cam.ocrBadge}>
+                    <Ionicons name="scan-outline" size={12} color={COLORS.brandPrimary} />
+                    <Text style={cam.ocrBadgeTxt}>OCR • Auto-fill Invoice Details</Text>
+                  </View>
+                  <TouchableOpacity style={cam.captureBtn} onPress={handleCapture} activeOpacity={0.8}>
+                    <View style={cam.captureRing}><View style={cam.captureDot} /></View>
+                  </TouchableOpacity>
+                  <Text style={cam.captureLabel}>Tap to Capture & Scan</Text>
+                </View>
+              </View>
+            </CameraView>
+          ) : (
+            <View style={cam.permBox}>
+              <View style={cam.permIconBox}><Ionicons name="camera-outline" size={52} color={COLORS.textTertiary} /></View>
+              <Text style={cam.permTitle}>Camera Access Required</Text>
+              <Text style={cam.permSub}>Allow camera to scan vendor bills{'\n'}and auto-fill purchase invoice details</Text>
+              <TouchableOpacity style={cam.permBtn} onPress={requestPermission} activeOpacity={0.7}>
+                <Ionicons name="camera" size={16} color="#fff" />
+                <Text style={cam.permBtnTxt}>Allow Camera Access</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={cam.skipBtn} onPress={handleCapture} activeOpacity={0.7}>
+                <Text style={cam.skipTxt}>Use Sample Data Instead →</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </Modal>
 
       {/* Item Modals */}
       <Modal visible={activeModal?.type==='product'} transparent animationType="slide" onRequestClose={()=>setActiveModal(null)}>
@@ -461,4 +524,36 @@ const ir = StyleSheet.create({
   subRow:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',borderTopWidth:1,borderTopColor:COLORS.borderDefault,paddingTop:8},
   subL:{fontSize:TYPOGRAPHY.xs,fontWeight:'600',color:COLORS.textSecondary},
   subV:{fontSize:TYPOGRAPHY.sm,fontWeight:'800',color:COLORS.textPrimary},
+});
+
+const cam = StyleSheet.create({
+  container:{flex:1,backgroundColor:'#000'},
+  overlay:{flex:1,backgroundColor:'rgba(0,0,0,0.3)'},
+  topBar:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingHorizontal:20,paddingBottom:12},
+  closeBtn:{width:44,height:44,borderRadius:22,backgroundColor:'rgba(0,0,0,0.55)',alignItems:'center',justifyContent:'center'},
+  topTitle:{fontSize:17,fontWeight:'700',color:'#fff'},
+  frameArea:{flex:1,alignItems:'center',justifyContent:'center',gap:18},
+  scanFrame:{width:290,height:188,borderRadius:6,position:'relative',overflow:'visible'},
+  corner:{position:'absolute',width:26,height:26,borderColor:COLORS.brandPrimary,borderWidth:3},
+  tl:{top:-1,left:-1,borderRightWidth:0,borderBottomWidth:0,borderTopLeftRadius:6},
+  tr:{top:-1,right:-1,borderLeftWidth:0,borderBottomWidth:0,borderTopRightRadius:6},
+  bl:{bottom:-1,left:-1,borderRightWidth:0,borderTopWidth:0,borderBottomLeftRadius:6},
+  br:{bottom:-1,right:-1,borderLeftWidth:0,borderTopWidth:0,borderBottomRightRadius:6},
+  scanLine:{position:'absolute',top:'48%',left:10,right:10,height:2,backgroundColor:COLORS.brandPrimary,opacity:0.7,borderRadius:1},
+  frameHint:{fontSize:14,color:'rgba(255,255,255,0.82)',textAlign:'center',fontWeight:'500'},
+  bottomBar:{paddingBottom:52,paddingHorizontal:32,alignItems:'center',gap:14},
+  ocrBadge:{flexDirection:'row',alignItems:'center',gap:6,backgroundColor:'rgba(0,0,0,0.65)',paddingHorizontal:14,paddingVertical:8,borderRadius:20,borderWidth:1,borderColor:COLORS.brandPrimary+'60'},
+  ocrBadgeTxt:{fontSize:12,color:COLORS.brandPrimary,fontWeight:'700'},
+  captureBtn:{width:76,height:76,borderRadius:38,borderWidth:3,borderColor:'rgba(255,255,255,0.9)',alignItems:'center',justifyContent:'center'},
+  captureRing:{width:62,height:62,borderRadius:31,borderWidth:2,borderColor:'rgba(255,255,255,0.4)',alignItems:'center',justifyContent:'center'},
+  captureDot:{width:52,height:52,borderRadius:26,backgroundColor:'#fff'},
+  captureLabel:{fontSize:12,color:'rgba(255,255,255,0.65)',fontWeight:'500'},
+  permBox:{flex:1,backgroundColor:COLORS.pageBg,alignItems:'center',justifyContent:'center',padding:32,gap:18},
+  permIconBox:{width:100,height:100,borderRadius:50,backgroundColor:COLORS.pageBg,borderWidth:1.5,borderColor:COLORS.borderDefault,alignItems:'center',justifyContent:'center',marginBottom:4},
+  permTitle:{fontSize:20,fontWeight:'800',color:COLORS.textPrimary,textAlign:'center'},
+  permSub:{fontSize:14,color:COLORS.textSecondary,textAlign:'center',lineHeight:22},
+  permBtn:{flexDirection:'row',alignItems:'center',gap:8,backgroundColor:COLORS.brandPrimary,paddingHorizontal:28,paddingVertical:14,borderRadius:12,marginTop:4},
+  permBtnTxt:{fontSize:15,fontWeight:'700',color:'#fff'},
+  skipBtn:{paddingVertical:10},
+  skipTxt:{fontSize:14,color:COLORS.textSecondary,textDecorationLine:'underline'},
 });
