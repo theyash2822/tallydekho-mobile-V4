@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput, Modal,
+  KeyboardAvoidingView, Platform, Alert, TextInput, Modal, Switch,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,8 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
+import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 const LEDGER_OPTS: DropdownOption[] = [
@@ -260,11 +262,22 @@ function ItemRow({ item, onUpdate, onRemove, onOpenModal }: {
   );
 }
 
+// ─── Payment Mode options ─────────────────────────────────────────────────────
+const PAY_MODES: DropdownOption[] = [
+  { label: 'Cash', value: 'cash' },
+  { label: 'NEFT', value: 'neft' },
+  { label: 'RTGS', value: 'rtgs' },
+  { label: 'Cheque', value: 'cheque' },
+  { label: 'UPI', value: 'upi' },
+  { label: 'IMPS', value: 'imps' },
+];
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CreateSalesInvoiceScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  const [entryType, setEntryType] = useState<EntryType>('regular');
   const [ledger, setLedger] = useState('credit_sales');
   const [invoiceNo] = useState('INV-30979');
   const [date, setDate] = useState(todayStr());
@@ -273,9 +286,17 @@ export default function CreateSalesInvoiceScreen() {
   const [dueDate, setDueDate] = useState('');
   const [refNo, setRefNo] = useState('');
   const [items, setItems] = useState<InvoiceItem[]>([newItem()]);
+  const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
+  const [logTaxRate, setLogTaxRate] = useState('0');
   const [narration, setNarration] = useState('');
-  const [terms, setTerms] = useState('Goods once sold will not be taken back.');
+  const [termsText, setTermsText] = useState('Goods once sold will not be taken back.');
   const [activeModal, setActiveModal] = useState<ModalState>(null);
+
+  // Collect Payment Now
+  const [collectPayNow, setCollectPayNow] = useState(false);
+  const [payNowMode, setPayNowMode] = useState('');
+  const [payNowAmount, setPayNowAmount] = useState('');
+  const [payNowRef, setPayNowRef] = useState('');
 
   const updateItem = useCallback((id: string, field: keyof InvoiceItem, val: string) => {
     setItems(prev => prev.map(i => i.id === id ? { ...i, [field]: val } : i));
@@ -285,6 +306,8 @@ export default function CreateSalesInvoiceScreen() {
   }, []);
   const addItem = useCallback(() => setItems(prev => [...prev, newItem()]), []);
 
+  const logisticsTotal = useMemo(() => calcLogisticsTotal(logEntries, logTaxRate), [logEntries, logTaxRate]);
+
   const totals = useMemo(() => {
     let gross = 0, discTotal = 0, taxTotal = 0;
     items.forEach(item => {
@@ -293,14 +316,22 @@ export default function CreateSalesInvoiceScreen() {
       discTotal += c.discAmt;
       taxTotal += c.taxAmt;
     });
-    const grand = gross - discTotal + taxTotal;
-    return { gross, discTotal, taxTotal, cgst: taxTotal/2, sgst: taxTotal/2, grand };
-  }, [items]);
+    const grand = gross - discTotal + taxTotal + logisticsTotal;
+    return { gross, discTotal, taxTotal, cgst: taxTotal/2, sgst: taxTotal/2, logisticsTotal, grand };
+  }, [items, logisticsTotal]);
 
-  const handleSubmit = useCallback((draft: boolean) => {
+  const paymentStatus = useMemo(() => {
+    if (!collectPayNow) return 'pending';
+    const paidAmt = parseFloat(payNowAmount) || 0;
+    if (paidAmt <= 0) return 'pending';
+    if (paidAmt >= totals.grand) return 'paid';
+    return 'partial';
+  }, [collectPayNow, payNowAmount, totals.grand]);
+
+  const handleSubmit = useCallback(() => {
     Alert.alert(
-      draft ? '✓ Draft Saved' : '✓ Invoice Submitted',
-      draft ? `Invoice ${invoiceNo} saved as draft.` : `Invoice ${invoiceNo} submitted successfully!`,
+      '✓ Invoice Submitted',
+      `Invoice ${invoiceNo} submitted successfully!`,
       [{ text: 'OK', onPress: () => router.back() }]
     );
   }, [invoiceNo, router]);
@@ -315,6 +346,7 @@ export default function CreateSalesInvoiceScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Create Sales Invoice</Text>
+        <RegularOptionalToggle value={entryType} onChange={setEntryType} />
         <View style={s.invNoBadge}>
           <Text style={s.invNoTxt}>{invoiceNo}</Text>
         </View>
@@ -429,6 +461,99 @@ export default function CreateSalesInvoiceScreen() {
             <Text style={s.addItemTxt}>Add Item / Service</Text>
           </TouchableOpacity>
 
+          {/* Logistics Section */}
+          <LogisticsSection
+            entries={logEntries}
+            taxRate={logTaxRate}
+            onEntriesChange={setLogEntries}
+            onTaxRateChange={setLogTaxRate}
+          />
+
+          {/* Collect Payment Now */}
+          <View style={s.card}>
+            <TouchableOpacity
+              style={s.payNowToggleRow}
+              onPress={() => setCollectPayNow(v => !v)}
+              activeOpacity={0.8}
+            >
+              <View style={s.payNowLeft}>
+                <View style={[s.payNowIcon, { backgroundColor: collectPayNow ? COLORS.positiveBg : COLORS.pageBg }]}>
+                  <Ionicons name="cash-outline" size={18} color={collectPayNow ? COLORS.positive : COLORS.textSecondary} />
+                </View>
+                <View>
+                  <Text style={s.payNowTitle}>Collect Payment Now</Text>
+                  <Text style={s.payNowSub}>Record payment received at the time of billing</Text>
+                </View>
+              </View>
+              <Switch
+                value={collectPayNow}
+                onValueChange={setCollectPayNow}
+                trackColor={{ false: COLORS.borderDefault, true: COLORS.positive }}
+                thumbColor={COLORS.white}
+              />
+            </TouchableOpacity>
+
+            {collectPayNow && (
+              <View style={s.payNowBody}>
+                <View style={s.divider} />
+                <FormDropdown
+                  label="Mode of Payment"
+                  value={payNowMode}
+                  options={PAY_MODES}
+                  onSelect={o => setPayNowMode(o.value)}
+                  placeholder="Select payment mode..."
+                  required
+                />
+                <View style={s.row2}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.fLabel}>Amount Received (₹)</Text>
+                    <TextInput
+                      style={s.fInput}
+                      value={payNowAmount}
+                      onChangeText={setPayNowAmount}
+                      keyboardType="numeric"
+                      placeholder="0.00"
+                      placeholderTextColor={COLORS.textTertiary}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.fLabel}>Reference No.</Text>
+                    <TextInput
+                      style={s.fInput}
+                      value={payNowRef}
+                      onChangeText={setPayNowRef}
+                      placeholder="Txn / Cheque No."
+                      placeholderTextColor={COLORS.textTertiary}
+                    />
+                  </View>
+                </View>
+                {/* Payment Status Chip */}
+                <View style={[
+                  s.payStatusChip,
+                  paymentStatus === 'paid' ? s.payStatusPaid :
+                  paymentStatus === 'partial' ? s.payStatusPartial : s.payStatusPending
+                ]}>
+                  <Ionicons
+                    name={paymentStatus === 'paid' ? 'checkmark-circle' : paymentStatus === 'partial' ? 'time-outline' : 'alert-circle-outline'}
+                    size={16}
+                    color={paymentStatus === 'paid' ? COLORS.positive : paymentStatus === 'partial' ? COLORS.warning : COLORS.negative}
+                  />
+                  <Text style={[
+                    s.payStatusTxt,
+                    { color: paymentStatus === 'paid' ? COLORS.positive : paymentStatus === 'partial' ? COLORS.warning : COLORS.negative }
+                  ]}>
+                    {paymentStatus === 'paid' ? 'Fully Paid' : paymentStatus === 'partial' ? 'Partially Paid' : 'Payment Pending'}
+                  </Text>
+                  {paymentStatus === 'partial' && totals.grand > 0 && (
+                    <Text style={[s.payStatusSub, { color: COLORS.warning }]}>
+                      {' '}(₹{(totals.grand - (parseFloat(payNowAmount) || 0)).toLocaleString('en-IN', { maximumFractionDigits: 2 })} due)
+                    </Text>
+                  )}
+                </View>
+              </View>
+            )}
+          </View>
+
           {/* Summary */}
           <View style={s.summaryCard}>
             <Text style={s.summaryTitle}>Invoice Summary</Text>
@@ -454,6 +579,12 @@ export default function CreateSalesInvoiceScreen() {
                 </View>
               </>
             )}
+            {totals.logisticsTotal > 0 && (
+              <View style={s.summaryRow}>
+                <Text style={s.sumLabel}>Logistics</Text>
+                <Text style={s.sumVal}>₹{totals.logisticsTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+              </View>
+            )}
             <View style={s.sumDivider} />
             <View style={s.summaryRow}>
               <Text style={s.grandLabel}>Grand Total</Text>
@@ -476,7 +607,7 @@ export default function CreateSalesInvoiceScreen() {
             />
             <FormField
               label="Terms & Conditions"
-              value={terms} onChangeText={setTerms}
+              value={termsText} onChangeText={setTermsText}
               multiline numberOfLines={3}
               style={{ minHeight: 72, textAlignVertical: 'top' } as any}
               containerStyle={{ marginBottom: 0 }}
