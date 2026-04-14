@@ -225,7 +225,7 @@ const s = StyleSheet.create({
   },
   sectionCardActive: {
     borderColor: LIGHT_GREEN_BORDER,
-    backgroundColor: LIGHT_GREEN_BG,
+    backgroundColor: COLORS.cardBg,
   },
   sectionRow: {
     flexDirection: 'row',
