@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
     padding: 14, width: 140, gap: 6,
     borderWidth: 1, borderColor: COLORS.borderDefault,
-    elevation: 1, shadowColor: COLORS.black, shadowOpacity: 0.04, shadowRadius: 4,
+    elevation: 1, boxShadow: '0 0 4px rgba(0, 0, 0, 0.04)',
   },
   kpiIconBox: {
     width: 34, height: 34, borderRadius: 8,
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start', gap: 2,
   },
   filterTab: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: RADIUS.full },
-  filterTabActive: { backgroundColor: COLORS.cardBg, elevation: 2, shadowColor: COLORS.black, shadowOpacity: 0.08, shadowRadius: 4 },
+  filterTabActive: { backgroundColor: COLORS.cardBg, elevation: 2, boxShadow: '0 0 4px rgba(0, 0, 0, 0.08)' },
   filterText: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '500' },
   filterTextActive: { color: COLORS.textPrimary, fontWeight: '700' },
   metricsCard: {

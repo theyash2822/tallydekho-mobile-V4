@@ -134,10 +134,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.navBg,
     paddingTop: 8,
     elevation: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: -3 },
+    boxShadow: '0 -3px 10px rgba(0, 0, 0, 0.3)',
     alignItems: 'flex-end',
   },
   tabSide: {
@@ -176,9 +173,6 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#F5F4EF',
     elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
+    boxShadow: '0 4px 10px rgba(0, 0, 0, 0.35)',
   },
 });

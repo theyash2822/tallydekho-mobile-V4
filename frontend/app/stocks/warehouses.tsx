@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -70,7 +70,7 @@ export default function WarehousesScreen() {
               key={wh.id}
               style={styles.whCard}
               activeOpacity={0.8}
-              onPress={() => Alert.alert(wh.name, `Manager: ${wh.manager}\nSKUs: ${wh.skus}\nValue: ${wh.value}`)}
+              onPress={() => router.push(`/stocks/warehouse-detail?id=${wh.id}` as any)}
             >
               <View style={styles.whTop}>
                 <View style={styles.whIconBox}>

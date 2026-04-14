@@ -723,7 +723,7 @@ const cs = StyleSheet.create({
   pickerBox: {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
     width: '70%', overflow: 'hidden',
-    elevation: 10, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12,
+    elevation: 10, boxShadow: '0 0 12px rgba(0, 0, 0, 0.2)',
   },
   pickerTitle: {
     fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary,

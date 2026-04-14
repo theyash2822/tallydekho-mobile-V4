@@ -217,8 +217,7 @@ const styles = StyleSheet.create({
     position: 'absolute', backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
     minWidth: 220, maxWidth: 280, borderWidth: 1, borderColor: COLORS.borderDefault,
     overflow: 'hidden', elevation: 16,
-    shadowColor: COLORS.black, shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18, shadowRadius: 14,
+    boxShadow: '0 6px 14px rgba(0, 0, 0, 0.18)',
   },
   dropdownArrowLeft: {
     width: 10, height: 10, backgroundColor: COLORS.cardBg,
