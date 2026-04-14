@@ -507,13 +507,13 @@ export default function ReportsScreen() {
         </SectionCard>
 
         {/* ── 2. Compliance ─────────────────────────────────────────────── */}
-        <SectionCard iconName="shield-checkmark-outline" title="GST Compliance" onPress={() => router.push('/reports/gst' as any)}>
+        <SectionCard iconName="shield-checkmark-outline" title="Compliance" onPress={() => router.push('/reports/compliance' as any)}>
           {/* GST gauge: 9 filed (Apr-Dec), needle between Dec & Jan */}
           <GSTGauge filedCount={9} needleIndex={8} />
         </SectionCard>
 
         {/* ── 3. Audit Trail ────────────────────────────────────────────── */}
-        <SectionCard iconName="git-branch-outline" title="Audit Trail">
+        <SectionCard iconName="git-branch-outline" title="Audit Trail" onPress={() => router.push('/reports/audit-trail' as any)}>
           <AuditProgressBar
             label="Unreconciled vouchers"
             count={14}
