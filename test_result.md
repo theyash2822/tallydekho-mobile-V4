@@ -268,6 +268,54 @@ frontend:
         agent: "main"
         comment: "Tabs layout unchanged from before but QuickActionsModal was updated. Needs verification."
 
+  - task: "Reports sub-screens (Financial, Compliance Hub, GST, EWB, EInvoice, Other Taxes, Audit Trail, AI Insights)"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/reports/"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "All 8 reports sub-screens created. Reports tab links to Financial, Compliance, Audit Trail, AI Insights. Compliance hub links to GST, EWB, EInvoice, Other Taxes. Needs visual verification."
+
+  - task: "Stocks sub-screens (Total Stock, Warehouses, Reorder Queue, Aged Items, Movement Analytics, etc.)"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/stocks/"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "All stocks sub-screens created including: total-stock, warehouses, warehouse-detail, reorder-queue, aged-items, movement-analytics, expiry-schedule, transfer-history, stock-snapshot, stock-ledger, valuation-summary, negative-stock, barcodes, reports, settings. Needs visual verification."
+
+  - task: "Daybook screen (Day Book + My Entries with filters and multi-select)"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/daybook/index.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Daybook screen created with Day Book/My Entries mode toggle, voucher type filter chips, search, grouped entries by month, multi-select with Push to Tally action. Needs visual verification."
+
+  - task: "Settings sub-screens (Profile, Company, License, Language, Currency, Voucher Config, Notification Channels, Stock Alerts, Compliance Reminders, Payment Reminders, Tally Sync, Bank Feeds, EWB, EInvoice, About, Security, Help)"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/settings/"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "All 17 settings sub-screens created and linked from settings/index.tsx accordion. Needs visual verification."
+
 metadata:
   created_by: "main_agent"
   version: "1.0"
@@ -291,7 +339,32 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: |
-      I've made the following changes that need testing:
+      NEW SCREENS ADDED - PLEASE TEST VISUALLY:
+      
+      All newly scaffolded screens have been verified for code quality and are ready for visual testing.
+      
+      AUTH FLOW for testing:
+      - Go to http://localhost:3000
+      - Enter any 10-digit number (e.g. 9876543210)
+      - Click Send OTP, enter any 6 digits
+      - Click Verify → should reach Home screen with tabs
+      
+      KEY SCREENS TO VERIFY (navigate by clicking in the UI):
+      1. Reports tab → clicks on Financial, Compliance, Audit Trail, AI Insights cards
+      2. Compliance → then click GST, EWB, EInvoice, Other Taxes cards
+      3. Stocks tab → click on each widget tile (Total Stock, Warehouses, Reorder Queue, Aged Items, Fast-Moving, Report, Barcode)
+      4. Settings → navigate from Home Modules → Settings → expand accordion → click sub-items
+      5. Daybook → navigate from Ledger tab or via direct URL /daybook
+      
+      EXPECTED BEHAVIOR:
+      - All screens should render correctly with no white screens
+      - Consistent design: pageBg #F5F4EF, white cards, #1A1A1A text
+      - Back arrow should work on all sub-screens
+      - Filter chips should toggle correctly
+      
+  - agent: "main"
+    message: |
+      Previous testing context - I've made the following changes that need testing:
       
       1. CRITICAL FIX: AsyncStorage was hanging on web - fixed in AuthContext.tsx with localStorage fallback
       2. QuickActionsModal - added useRouter so items navigate when pressed
