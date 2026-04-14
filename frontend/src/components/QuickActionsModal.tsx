@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Modal,
-  ScrollView, TextInput, Dimensions
+  ScrollView, Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -9,169 +9,162 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+const BRAND_GREEN = '#2D7D46';
+const LIGHT_GREEN_BG = '#EAF7EE';
+const LIGHT_GREEN_BORDER = '#A8D5B0';
+const CLOSE_BTN_GREEN = '#1B5E20';
+
 interface QuickActionsModalProps {
   visible: boolean;
   onClose: () => void;
   onItemPress?: (item: { id: string; label: string; route: string }) => void;
 }
 
-// Flat list of quick actions — organized by section
-const ALL_ACTIONS = [
-  // Sales
-  { id: 'sale-invoice',   section: 'Sales',     label: 'New Sales Invoice',    icon: 'document-text',         color: '#2D7D46', bg: '#F0FBF4',  route: '/sales/create-invoice' },
-  { id: 'sale-order',     section: 'Sales',     label: 'New Sales Order',       icon: 'clipboard',             color: '#2D7D46', bg: '#F0FBF4',  route: '/sales/create-order' },
-  { id: 'sale-quotation', section: 'Sales',     label: 'New Quotation',         icon: 'chatbubble-ellipses',   color: '#2D7D46', bg: '#F0FBF4',  route: '/sales/create-quotation' },
-  { id: 'sale-credit',    section: 'Sales',     label: 'Credit Note',           icon: 'return-down-back',      color: '#7C3AED', bg: '#F5F3FF',  route: '/sales/create-credit-note' },
-  { id: 'sale-delivery',  section: 'Sales',     label: 'Delivery Note',         icon: 'cube',                  color: '#0891B2', bg: '#ECFEFF',  route: '/sales/create-delivery-note' },
-  // Purchase
-  { id: 'pur-invoice',    section: 'Purchase',  label: 'New Purchase Invoice',  icon: 'cart',                  color: '#2563EB', bg: '#EFF6FF',  route: '/purchase/create-invoice' },
-  { id: 'pur-order',      section: 'Purchase',  label: 'New Purchase Order',    icon: 'bag-handle',            color: '#2563EB', bg: '#EFF6FF',  route: '/purchase/create-order' },
-  { id: 'pur-debit',      section: 'Purchase',  label: 'Debit Note',            icon: 'return-up-forward',     color: '#C0392B', bg: '#FDECEA',  route: '/purchase/create-debit-note' },
-  // Vouchers
-  { id: 'vou-receipt',    section: 'Vouchers',  label: 'Receipt Voucher',       icon: 'download',              color: '#2D7D46', bg: '#F0FBF4',  route: '/voucher/receipt' },
-  { id: 'vou-payment',    section: 'Vouchers',  label: 'Payment Voucher',       icon: 'send',                  color: '#DC2626', bg: '#FDECEA',  route: '/voucher/payment' },
-  { id: 'vou-journal',    section: 'Vouchers',  label: 'Journal Entry',         icon: 'bookmarks',             color: '#7C3AED', bg: '#F5F3FF',  route: '/voucher/journal' },
-  { id: 'vou-contra',     section: 'Vouchers',  label: 'Contra Entry',          icon: 'swap-horizontal',       color: '#0891B2', bg: '#ECFEFF',  route: '/voucher/contra' },
-  // Inventory
-  { id: 'inv-adjust',     section: 'Inventory', label: 'Stock Adjustment',      icon: 'settings',              color: '#D97706', bg: '#FFFBEB',  route: '/stocks/create-adjustment' },
-  { id: 'inv-transfer',   section: 'Inventory', label: 'Stock Transfer',        icon: 'swap-horizontal',       color: '#0891B2', bg: '#ECFEFF',  route: '/stocks/create-transfer' },
-  { id: 'inv-item',       section: 'Inventory', label: 'Add New Item',          icon: 'add-circle',            color: '#2563EB', bg: '#EFF6FF',  route: '/stocks/create-item' },
-  // Ledger
-  { id: 'led-create',     section: 'Ledger',    label: 'Create Ledger',         icon: 'person-add',            color: '#7C3AED', bg: '#F5F3FF',  route: '/ledger/create' },
-  { id: 'led-custom',     section: 'Ledger',    label: 'Custom Entry',          icon: 'pencil',                color: '#1A1A1A', bg: '#F0EFE9',  route: '/ledger/create?type=custom' },
+const SECTIONS = [
+  {
+    id: 'sales',
+    label: 'Sales',
+    icon: 'trending-up-outline' as const,
+    items: [
+      { id: 'sale-invoice',   label: 'Create Invoice',       route: '/sales/create-invoice' },
+      { id: 'sale-quotation', label: 'Create Quotation',      route: '/sales/create-quotation' },
+      { id: 'sale-order',     label: 'Create Sales Orders',   route: '/sales/create-order' },
+      { id: 'sale-delivery',  label: 'Create Delivery Note',  route: '/sales/create-delivery-note' },
+      { id: 'sale-credit',    label: 'Credit Note',           route: '/sales/create-credit-note' },
+    ],
+  },
+  {
+    id: 'purchase',
+    label: 'Purchase',
+    icon: 'cart-outline' as const,
+    items: [
+      { id: 'pur-invoice', label: 'Purchase Invoice', route: '/purchase/create-invoice' },
+      { id: 'pur-order',   label: 'Purchase Order',   route: '/purchase/create-order' },
+      { id: 'pur-debit',   label: 'Debit Note',       route: '/purchase/create-debit-note' },
+    ],
+  },
+  {
+    id: 'voucher',
+    label: 'Voucher',
+    icon: 'card-outline' as const,
+    items: [
+      { id: 'vou-receipt', label: 'Receipt Voucher', route: '/voucher/receipt' },
+      { id: 'vou-payment', label: 'Payment Voucher', route: '/voucher/payment' },
+      { id: 'vou-journal', label: 'Journal Entry',   route: '/voucher/journal' },
+      { id: 'vou-contra',  label: 'Contra Entry',    route: '/voucher/contra' },
+    ],
+  },
+  {
+    id: 'inventory',
+    label: 'Inventory',
+    icon: 'cube-outline' as const,
+    items: [
+      { id: 'inv-adjust',    label: 'Stock Adjustment', route: '/stocks/create-adjustment' },
+      { id: 'inv-transfer',  label: 'Stock Transfer',   route: '/stocks/create-transfer' },
+      { id: 'inv-item',      label: 'Add Item',         route: '/stocks/create-item' },
+      { id: 'inv-warehouse', label: 'Add Warehouse',    route: '/stocks/create-warehouse' },
+    ],
+  },
+  {
+    id: 'ledgers',
+    label: 'Ledgers',
+    icon: 'desktop-outline' as const,
+    items: [
+      { id: 'led-creditors', label: 'Sundry Creditors', route: '/ledger/sundry-creditors' },
+      { id: 'led-debtors',   label: 'Sundry Debtors',   route: '/ledger/sundry-debtors' },
+      { id: 'led-taxes',     label: 'Duties & Taxes',   route: '/ledger/duties-taxes' },
+      { id: 'led-custom',    label: 'Custom Groups',    route: '/ledger/custom-groups' },
+    ],
+  },
 ];
 
-const SECTIONS = ['Sales', 'Purchase', 'Vouchers', 'Inventory', 'Ledger'] as const;
-
-const SECTION_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
-  Sales: 'trending-up',
-  Purchase: 'cart',
-  Vouchers: 'card',
-  Inventory: 'cube',
-  Ledger: 'journal',
-};
-
-const QuickActionsModal: React.FC<QuickActionsModalProps> = ({
-  visible,
-  onClose,
-  onItemPress,
-}) => {
+const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose, onItemPress }) => {
   const router = useRouter();
-  const [searchText, setSearchText] = useState('');
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
-  const filtered = searchText
-    ? ALL_ACTIONS.filter(a => a.label.toLowerCase().includes(searchText.toLowerCase()))
-    : ALL_ACTIONS;
+  const toggleSection = (sectionId: string) => {
+    setExpandedSection(prev => (prev === sectionId ? null : sectionId));
+  };
 
-  const handlePress = (item: typeof ALL_ACTIONS[0]) => {
+  const handleItemPress = (item: { id: string; label: string; route: string }) => {
     onItemPress?.({ id: item.id, label: item.label, route: item.route });
     onClose();
     router.push(item.route as any);
   };
 
-  // Group by section
-  const grouped = SECTIONS.map(sec => ({
-    section: sec,
-    items: filtered.filter(a => a.section === sec),
-  })).filter(g => g.items.length > 0);
-
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
-    >
-      <View style={styles.overlay}>
-        <TouchableOpacity style={styles.backdrop} onPress={onClose} activeOpacity={1} />
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={s.overlay}>
+        <TouchableOpacity style={s.backdrop} onPress={onClose} activeOpacity={1} />
 
-        <View style={styles.sheet}>
-          {/* Handle */}
-          <View style={styles.handle} />
-
+        <View style={s.sheet}>
           {/* Header */}
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Quick Actions</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
-              <Ionicons name="close" size={20} color={COLORS.textSecondary} />
+          <View style={s.header}>
+            <Text style={s.title}>Quick Actions</Text>
+            <TouchableOpacity onPress={onClose} style={s.headerClose} activeOpacity={0.7}>
+              <Ionicons name="close" size={22} color={COLORS.textPrimary} />
             </TouchableOpacity>
           </View>
 
-          {/* Search */}
-          <View style={styles.searchBar}>
-            <Ionicons name="search" size={16} color={COLORS.textTertiary} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search actions..."
-              placeholderTextColor={COLORS.textTertiary}
-              value={searchText}
-              onChangeText={setSearchText}
-              autoCorrect={false}
-            />
-            {searchText.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchText('')} activeOpacity={0.7}>
-                <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Actions List */}
+          {/* Accordion Sections */}
           <ScrollView
-            style={styles.list}
             showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
+            style={s.scroll}
+            contentContainerStyle={s.scrollContent}
             bounces={false}
           >
-            {grouped.map(({ section, items }) => (
-              <View key={section} style={styles.sectionBlock}>
-                {/* Section Header */}
-                <View style={styles.sectionHeader}>
-                  <View style={styles.sectionIconBox}>
-                    <Ionicons name={SECTION_ICONS[section]} size={14} color={COLORS.textSecondary} />
-                  </View>
-                  <Text style={styles.sectionLabel}>{section}</Text>
-                </View>
-
-                {/* List of action rows */}
-                <View style={styles.listBlock}>
-                  {items.map((item, idx) => (
-                    <View key={item.id}>
-                      <TouchableOpacity
-                        style={styles.actionRow}
-                        onPress={() => handlePress(item)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={[styles.actionIcon, { backgroundColor: item.bg }]}>
-                          <Ionicons name={item.icon as any} size={20} color={item.color} />
-                        </View>
-                        <Text style={styles.actionLabel}>{item.label}</Text>
-                        <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
-                      </TouchableOpacity>
-                      {idx < items.length - 1 && <View style={styles.rowDivider} />}
+            {SECTIONS.map(section => {
+              const isExpanded = expandedSection === section.id;
+              return (
+                <View
+                  key={section.id}
+                  style={[
+                    s.sectionCard,
+                    isExpanded && s.sectionCardActive,
+                  ]}
+                >
+                  {/* Section Header Row */}
+                  <TouchableOpacity
+                    style={s.sectionRow}
+                    onPress={() => toggleSection(section.id)}
+                    activeOpacity={0.75}
+                  >
+                    <View style={[s.iconCircle, isExpanded && s.iconCircleActive]}>
+                      <Ionicons name={section.icon} size={22} color={BRAND_GREEN} />
                     </View>
-                  ))}
+                    <Text style={s.sectionLabel}>{section.label}</Text>
+                    <Ionicons
+                      name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                      size={20}
+                      color={isExpanded ? BRAND_GREEN : COLORS.textSecondary}
+                    />
+                  </TouchableOpacity>
+
+                  {/* Expanded Sub-items */}
+                  {isExpanded && (
+                    <View style={s.subList}>
+                      {section.items.map(item => (
+                        <TouchableOpacity
+                          key={item.id}
+                          style={s.subItem}
+                          onPress={() => handleItemPress(item)}
+                          activeOpacity={0.6}
+                        >
+                          <Text style={s.subItemText}>{item.label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
                 </View>
-              </View>
-            ))}
-
-            {filtered.length === 0 && (
-              <View style={styles.emptyState}>
-                <Ionicons name="search-outline" size={40} color={COLORS.textTertiary} />
-                <Text style={styles.emptyText}>No actions found for "{searchText}"</Text>
-              </View>
-            )}
-
-            <View style={{ height: 20 }} />
+              );
+            })}
+            <View style={{ height: 8 }} />
           </ScrollView>
 
           {/* Bottom Close Button */}
-          <View style={styles.bottomRow}>
-            <TouchableOpacity
-              style={styles.bottomCloseBtn}
-              onPress={onClose}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="close" size={22} color={COLORS.white} />
+          <View style={s.bottomRow}>
+            <TouchableOpacity style={s.bottomClose} onPress={onClose} activeOpacity={0.8}>
+              <Ionicons name="close" size={24} color={COLORS.white} />
             </TouchableOpacity>
           </View>
         </View>
@@ -180,160 +173,114 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
-    backgroundColor: COLORS.cardBg,
+    backgroundColor: '#F4F4F4',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: SCREEN_HEIGHT * 0.88,
-    paddingBottom: 12,
+    maxHeight: SCREEN_HEIGHT * 0.92,
+    paddingBottom: 16,
   },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: COLORS.borderStrong,
-    alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  sheetHeader: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.md,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderDefault,
+    paddingTop: 20,
+    paddingBottom: 14,
   },
-  sheetTitle: {
-    fontSize: TYPOGRAPHY.xl,
+  title: {
+    fontSize: 22,
     fontWeight: '700',
     color: COLORS.textPrimary,
   },
-  closeBtn: {
+  headerClose: {
     width: 32,
     height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.pageBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: SPACING.md,
-    marginTop: 12,
-    marginBottom: 4,
-    backgroundColor: COLORS.pageBg,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: COLORS.borderDefault,
-  },
-  searchInput: {
+  scroll: {
     flex: 1,
-    fontSize: TYPOGRAPHY.base,
-    color: COLORS.textPrimary,
-    padding: 0,
   },
-  list: {
-    flex: 1,
+  scrollContent: {
     paddingHorizontal: SPACING.md,
+    gap: 10,
   },
-  sectionBlock: {
-    marginTop: SPACING.md,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 10,
-  },
-  sectionIconBox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: COLORS.pageBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.borderDefault,
-  },
-  sectionLabel: {
-    fontSize: TYPOGRAPHY.sm,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  listBlock: {
+  // Section card
+  sectionCard: {
     backgroundColor: COLORS.cardBg,
     borderRadius: RADIUS.lg,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: COLORS.borderDefault,
     overflow: 'hidden',
-    marginBottom: 4,
   },
-  actionRow: {
+  sectionCardActive: {
+    borderColor: LIGHT_GREEN_BORDER,
+    backgroundColor: LIGHT_GREEN_BG,
+  },
+  sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
     gap: 14,
   },
-  actionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.white,
+    borderWidth: 1.5,
+    borderColor: COLORS.borderDefault,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  actionLabel: {
+  iconCircleActive: {
+    borderColor: BRAND_GREEN,
+  },
+  sectionLabel: {
     flex: 1,
-    fontSize: TYPOGRAPHY.base,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: COLORS.textPrimary,
   },
-  rowDivider: {
-    height: 1,
-    backgroundColor: COLORS.borderDefault,
-    marginLeft: 68,
+  // Sub-items
+  subList: {
+    paddingBottom: 10,
   },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-    gap: 12,
+  subItem: {
+    paddingVertical: 12,
+    paddingLeft: 76,
+    paddingRight: 14,
   },
-  emptyText: {
-    fontSize: TYPOGRAPHY.sm,
-    color: COLORS.textSecondary,
+  subItemText: {
+    fontSize: TYPOGRAPHY.base,
+    fontWeight: '500',
+    color: '#6B7280',
   },
+  // Bottom close
   bottomRow: {
     alignItems: 'center',
     paddingTop: 12,
-    paddingBottom: 8,
+    paddingBottom: 4,
   },
-  bottomCloseBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: COLORS.textPrimary,
+  bottomClose: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: CLOSE_BTN_GREEN,
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 4,
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.25)',
   } as any,
 });
 
