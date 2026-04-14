@@ -132,20 +132,23 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({
                   <Text style={styles.sectionLabel}>{section}</Text>
                 </View>
 
-                {/* Grid of action tiles */}
-                <View style={styles.tileGrid}>
-                  {items.map(item => (
-                    <TouchableOpacity
-                      key={item.id}
-                      style={styles.tile}
-                      onPress={() => handlePress(item)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.tileIcon, { backgroundColor: item.bg }]}>
-                        <Ionicons name={item.icon as any} size={20} color={item.color} />
-                      </View>
-                      <Text style={styles.tileLabel} numberOfLines={2}>{item.label}</Text>
-                    </TouchableOpacity>
+                {/* List of action rows */}
+                <View style={styles.listBlock}>
+                  {items.map((item, idx) => (
+                    <View key={item.id}>
+                      <TouchableOpacity
+                        style={styles.actionRow}
+                        onPress={() => handlePress(item)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={[styles.actionIcon, { backgroundColor: item.bg }]}>
+                          <Ionicons name={item.icon as any} size={20} color={item.color} />
+                        </View>
+                        <Text style={styles.actionLabel}>{item.label}</Text>
+                        <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
+                      </TouchableOpacity>
+                      {idx < items.length - 1 && <View style={styles.rowDivider} />}
+                    </View>
                   ))}
                 </View>
               </View>
@@ -274,36 +277,38 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  tileGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  tile: {
-    width: '30%',
-    backgroundColor: COLORS.pageBg,
-    borderRadius: RADIUS.md,
-    padding: 10,
-    alignItems: 'center',
-    gap: 8,
+  listBlock: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.lg,
     borderWidth: 1,
     borderColor: COLORS.borderDefault,
-    minHeight: 80,
-    justifyContent: 'center',
+    overflow: 'hidden',
+    marginBottom: 4,
   },
-  tileIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 14,
+    gap: 14,
+  },
+  actionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tileLabel: {
-    fontSize: 11,
+  actionLabel: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.base,
     fontWeight: '600',
     color: COLORS.textPrimary,
-    textAlign: 'center',
-    lineHeight: 14,
+  },
+  rowDivider: {
+    height: 1,
+    backgroundColor: COLORS.borderDefault,
+    marginLeft: 68,
   },
   emptyState: {
     alignItems: 'center',
