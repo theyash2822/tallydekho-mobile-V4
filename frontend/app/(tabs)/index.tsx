@@ -198,27 +198,6 @@ export default function HomeScreen() {
         {/* Cashflow Card */}
         <CashflowCard {...cashflow} />
 
-        {/* Modules Grid */}
-        <View style={styles.secHeader}>
-          <Text style={styles.secTitle}>Modules</Text>
-        </View>
-        <View style={styles.modulesGrid}>
-          {MODULE_CARDS.map(mod => (
-            <TouchableOpacity
-              key={mod.id}
-              style={styles.moduleCard}
-              onPress={() => router.push(mod.route as any)}
-              activeOpacity={0.75}
-            >
-              <View style={[styles.moduleIcon, { backgroundColor: mod.bg }]}>
-                <Ionicons name={mod.icon as any} size={24} color={mod.color} />
-              </View>
-              <Text style={styles.moduleLabel}>{mod.label}</Text>
-              <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
-            </TouchableOpacity>
-          ))}
-        </View>
-
         {/* Recent Activity */}
         <RecentActivity activities={activity} />
 
