@@ -48,10 +48,10 @@ const SECTIONS = [
     label: 'Voucher',
     icon: 'card-outline' as const,
     items: [
-      { id: 'vou-receipt', label: 'Receipt Voucher', route: '/voucher/receipt' },
-      { id: 'vou-payment', label: 'Payment Voucher', route: '/voucher/payment' },
-      { id: 'vou-journal', label: 'Journal Entry',   route: '/voucher/journal' },
-      { id: 'vou-contra',  label: 'Contra Entry',    route: '/voucher/contra' },
+      { id: 'vou-receipt', label: 'Receipt Voucher', route: '/voucher/create-receipt' },
+      { id: 'vou-payment', label: 'Payment Voucher', route: '/voucher/create-payment' },
+      { id: 'vou-journal', label: 'Journal Entry',   route: '/voucher/create-journal' },
+      { id: 'vou-contra',  label: 'Contra Entry',    route: '/voucher/create-contra' },
     ],
   },
   {
