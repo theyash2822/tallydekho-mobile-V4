@@ -43,9 +43,15 @@ const PRODUCTS: DropdownOption[] = [
 ];
 const UNITS = ['Pcs', 'Kg', 'Ltr', 'Mtr', 'Box', 'Nos'];
 const TAX_RATES = ['0', '5', '12', '18', '28'];
+const WAREHOUSES: DropdownOption[] = [
+  { label: 'Main Warehouse', value: 'main_wh' },
+  { label: 'Store A', value: 'store_a' },
+  { label: 'Store B', value: 'store_b' },
+  { label: 'Delhi Depot', value: 'delhi_depot' },
+];
 
-interface DItem { id: string; product: string; qty: string; unit: string; rate: string; taxRate: string; }
-const newItem = (): DItem => ({ id: Date.now().toString(), product: '', qty: '1', unit: 'Pcs', rate: '', taxRate: '18' });
+interface DItem { id: string; product: string; qty: string; unit: string; rate: string; taxRate: string; warehouse: string; }
+const newItem = (): DItem => ({ id: Date.now().toString(), product: '', qty: '1', unit: 'Pcs', rate: '', taxRate: '18', warehouse: '' });
 const todayStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`; };
 const calcItem = (item: DItem) => {
   const taxable = (parseFloat(item.qty)||0)*(parseFloat(item.rate)||0);
@@ -53,7 +59,7 @@ const calcItem = (item: DItem) => {
   return { taxable, taxAmt, subtotal: taxable+taxAmt };
 };
 
-type ModalState = { type: 'product'|'unit'|'tax'; itemId: string }|null;
+type ModalState = { type: 'product'|'unit'|'tax'|'warehouse'; itemId: string }|null;
 
 function DebitItemRow({ item, onUpdate, onRemove, onModal }: {
   item: DItem; onUpdate:(id:string,f:keyof DItem,v:string)=>void;
@@ -61,6 +67,7 @@ function DebitItemRow({ item, onUpdate, onRemove, onModal }: {
 }) {
   const calc = calcItem(item);
   const pname = PRODUCTS.find(p=>p.value===item.product)?.label;
+  const wname = WAREHOUSES.find(w=>w.value===item.warehouse)?.label;
   return (
     <View style={ir.card}>
       <View style={ir.topRow}>
@@ -73,6 +80,11 @@ function DebitItemRow({ item, onUpdate, onRemove, onModal }: {
           <Ionicons name="close-circle" size={20} color={COLORS.negative} />
         </TouchableOpacity>
       </View>
+      <TouchableOpacity style={ir.warehouseBtn} onPress={()=>onModal({type:'warehouse',itemId:item.id})} activeOpacity={0.7}>
+        <Ionicons name="business-outline" size={12} color={COLORS.info} />
+        <Text style={[ir.warehouseTxt,!wname&&ir.phTxt]}>{wname||'Select Warehouse'}</Text>
+        <Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
+      </TouchableOpacity>
       <View style={ir.row}>
         <View style={ir.qBox}><Text style={ir.ml}>Qty</Text>
           <TextInput style={ir.mi} value={item.qty} onChangeText={v=>onUpdate(item.id,'qty',v)} keyboardType="numeric" placeholder="1" placeholderTextColor={COLORS.textTertiary} />
@@ -149,8 +161,8 @@ export default function CreateDebitNoteScreen() {
                 <TextInput style={s.fInput} value={date} onChangeText={setDate} placeholder="DD/MM/YY" placeholderTextColor={COLORS.textTertiary} />
               </View>
             </View>
-            <FormDropdown label="Vendor / Supplier" value={vendor} options={VENDORS} onSelect={o=>setVendor(o.value)} placeholder="Select vendor..." required />
-            <FormDropdown label="Against Invoice / PO" value={linkedRef} options={LINKED_PO} onSelect={o=>setLinkedRef(o.value)} placeholder="Select reference..." />
+            <FormDropdown label="Customer Name" value={vendor} options={VENDORS} onSelect={o=>setVendor(o.value)} placeholder="Select customer..." required />
+            <FormDropdown label="Reference Invoice" value={linkedRef} options={LINKED_PO} onSelect={o=>setLinkedRef(o.value)} placeholder="Select reference invoice..." />
             <FormDropdown label="Reason" value={reason} options={REASONS} onSelect={o=>setReason(o.value)} placeholder="Select reason..." required containerStyle={{marginBottom:0}} />
           </View>
 
@@ -230,6 +242,19 @@ export default function CreateDebitNoteScreen() {
           ))}</View>
         </TouchableOpacity>
       </Modal>
+      <Modal visible={activeModal?.type==='warehouse'} transparent animationType="slide" onRequestClose={()=>setActiveModal(null)}>
+        <TouchableOpacity style={m.overlay} activeOpacity={1} onPress={()=>setActiveModal(null)} />
+        <View style={m.sheet}>
+          <View style={m.handle}/><Text style={m.title}>Select Warehouse</Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {WAREHOUSES.map(w=>(
+              <TouchableOpacity key={w.value} style={m.opt} onPress={()=>{if(activeModal)updateItem(activeModal.itemId,'warehouse',w.value);setActiveModal(null);}} activeOpacity={0.7}>
+                <Text style={m.optTxt}>{w.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -292,6 +317,8 @@ const ir = StyleSheet.create({
   prodTxt:{flex:1,fontSize:TYPOGRAPHY.sm,color:COLORS.textPrimary,fontWeight:'500'},
   phTxt:{color:COLORS.textTertiary},
   delBtn:{width:36,height:36,alignItems:'center',justifyContent:'center'},
+  warehouseBtn:{flexDirection:'row',alignItems:'center',gap:6,backgroundColor:COLORS.infoBg,borderRadius:RADIUS.sm,paddingHorizontal:10,paddingVertical:7,borderWidth:1,borderColor:COLORS.info+'30',marginBottom:8},
+  warehouseTxt:{flex:1,fontSize:TYPOGRAPHY.xs,fontWeight:'600',color:COLORS.info},
   row:{flexDirection:'row',gap:8,marginBottom:8,alignItems:'flex-end'},
   qBox:{width:72},rBox:{flex:1},
   ml:{fontSize:TYPOGRAPHY.xs,fontWeight:'600',color:COLORS.textSecondary,marginBottom:4},

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput, Modal,
+  KeyboardAvoidingView, Platform, Alert, TextInput, Modal, Switch,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,7 +10,6 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
-import LogisticsSection, { LogEntry } from '../../src/components/forms/LogisticsSection';
 
 const PARTIES: DropdownOption[] = [
   { label: 'ABC Traders', value: 'abc' },
@@ -27,6 +26,14 @@ const INVOICES: DropdownOption[] = [
   { label: 'SO-00246 - Kumar & Sons', value: 'so246' },
   { label: 'SO-00245 - ABC Traders', value: 'so245' },
 ];
+const DISPATCH_METHODS: DropdownOption[] = [
+  { label: 'By Courier', value: 'courier' },
+  { label: 'By Road', value: 'road' },
+  { label: 'By Rail', value: 'rail' },
+  { label: 'By Air', value: 'air' },
+  { label: 'Own Vehicle', value: 'own' },
+  { label: 'By Hand', value: 'hand' },
+];
 const PRODUCTS: DropdownOption[] = [
   { label: 'JBL Portable Speaker', value: 'jbl_speaker' },
   { label: 'Samsung Galaxy J1 Bluetooth', value: 'samsung_j1' },
@@ -36,8 +43,8 @@ const PRODUCTS: DropdownOption[] = [
 ];
 const UNITS = ['Pcs', 'Kg', 'Ltr', 'Mtr', 'Box', 'Nos'];
 
-interface DNItem { id: string; product: string; qty: string; unit: string; }
-const newItem = (): DNItem => ({ id: Date.now().toString(), product: '', qty: '1', unit: 'Pcs' });
+interface DNItem { id: string; product: string; qty: string; unit: string; unitPrice: string; }
+const newItem = (): DNItem => ({ id: Date.now().toString(), product: '', qty: '1', unit: 'Pcs', unitPrice: '' });
 const todayStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`; };
 
 type ModalState = { type: 'product'|'unit'; itemId: string }|null;
@@ -66,6 +73,9 @@ function DeliveryItemRow({ item, onUpdate, onRemove, onModal }: {
         <TouchableOpacity style={ir.unitBtn} onPress={()=>onModal({type:'unit',itemId:item.id})} activeOpacity={0.7}>
           <Text style={ir.unitTxt}>{item.unit}</Text><Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
         </TouchableOpacity>
+        <View style={ir.rBox}><Text style={ir.ml}>Unit Price (₹)</Text>
+          <TextInput style={ir.mi} value={item.unitPrice} onChangeText={v=>onUpdate(item.id,'unitPrice',v)} keyboardType="numeric" placeholder="0.00" placeholderTextColor={COLORS.textTertiary} />
+        </View>
       </View>
     </View>
   );
@@ -80,12 +90,14 @@ export default function CreateDeliveryNoteScreen() {
   const [dispatchDate, setDispatchDate] = useState('');
   const [party, setParty] = useState('');
   const [linkedRef, setLinkedRef] = useState('');
-  const [deliveryAddress, setDeliveryAddress] = useState('');
-  const [vehicleNo, setVehicleNo] = useState('');
-  const [lrNo, setLrNo] = useState('');
+  const [dispatchMethod, setDispatchMethod] = useState('');
+  const [trackingNo, setTrackingNo] = useState('');
+  const [showVehicleInfo, setShowVehicleInfo] = useState(false);
+  const [driverName, setDriverName] = useState('');
+  const [driverPhone, setDriverPhone] = useState('');
+  const [vehicleNumber, setVehicleNumber] = useState('');
+  const [vehicleNarration, setVehicleNarration] = useState('');
   const [items, setItems] = useState<DNItem[]>([newItem()]);
-  const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
-  const [logTaxRate, setLogTaxRate] = useState('0');
   const [narration, setNarration] = useState('');
   const [activeModal, setActiveModal] = useState<ModalState>(null);
 
@@ -130,13 +142,38 @@ export default function CreateDeliveryNoteScreen() {
                 <TextInput style={s.fInput} value={dispatchDate} onChangeText={setDispatchDate} placeholder="DD/MM/YY" placeholderTextColor={COLORS.textTertiary} />
               </View>
               <View style={{flex:1}}>
-                <Text style={s.fLabel}>Vehicle No.</Text>
-                <TextInput style={s.fInput} value={vehicleNo} onChangeText={setVehicleNo} placeholder="e.g. MH12AB1234" placeholderTextColor={COLORS.textTertiary} autoCapitalize="characters" />
+                <Text style={s.fLabel}>Tracking No.</Text>
+                <TextInput style={s.fInput} value={trackingNo} onChangeText={setTrackingNo} placeholder="Optional" placeholderTextColor={COLORS.textTertiary} />
               </View>
             </View>
-            <FormField label="LR / Consignment No." value={lrNo} onChangeText={setLrNo} placeholder="Optional" containerStyle={{marginBottom:SPACING.sm}} />
-            <FormField label="Delivery Address" value={deliveryAddress} onChangeText={setDeliveryAddress} placeholder="Full delivery address" multiline numberOfLines={2}
-              style={{minHeight:64,textAlignVertical:'top'} as any} containerStyle={{marginBottom:0}} />
+            <FormDropdown label="Dispatch Method" value={dispatchMethod} options={DISPATCH_METHODS} onSelect={o=>setDispatchMethod(o.value)} placeholder="Select dispatch method..." containerStyle={{marginBottom:SPACING.sm}} />
+            {/* Vehicle Information Toggle */}
+            <View style={s.switchRow}>
+              <View style={s.switchLabelWrap}>
+                <Ionicons name="car-sport-outline" size={16} color={COLORS.textSecondary} />
+                <Text style={s.switchLabel}>Vehicle Information</Text>
+              </View>
+              <Switch value={showVehicleInfo} onValueChange={setShowVehicleInfo} trackColor={{false:COLORS.borderDefault,true:COLORS.info+'60'}} thumbColor={showVehicleInfo?COLORS.info:COLORS.textTertiary} />
+            </View>
+            {showVehicleInfo && (
+              <View style={s.vehicleBox}>
+                <View style={s.row2}>
+                  <View style={{flex:1}}>
+                    <Text style={s.fLabel}>Driver Name</Text>
+                    <TextInput style={s.fInput} value={driverName} onChangeText={setDriverName} placeholder="Full name" placeholderTextColor={COLORS.textTertiary} />
+                  </View>
+                  <View style={{flex:1}}>
+                    <Text style={s.fLabel}>Phone Number</Text>
+                    <TextInput style={s.fInput} value={driverPhone} onChangeText={setDriverPhone} placeholder="+91 XXXXX" keyboardType="phone-pad" placeholderTextColor={COLORS.textTertiary} />
+                  </View>
+                </View>
+                <View style={{marginBottom:SPACING.sm}}>
+                  <Text style={s.fLabel}>Vehicle Number</Text>
+                  <TextInput style={s.fInput} value={vehicleNumber} onChangeText={setVehicleNumber} placeholder="e.g. MH12AB1234" placeholderTextColor={COLORS.textTertiary} autoCapitalize="characters" />
+                </View>
+                <FormField label="Narration / Notes" value={vehicleNarration} onChangeText={setVehicleNarration} placeholder="Additional vehicle info..." containerStyle={{marginBottom:0}} />
+              </View>
+            )}
           </View>
 
           <View style={s.secHdr}>
@@ -151,13 +188,6 @@ export default function CreateDeliveryNoteScreen() {
             <Ionicons name="add-circle-outline" size={18} color={COLORS.positive} />
             <Text style={s.addTxt}>Add Item</Text>
           </TouchableOpacity>
-
-          <LogisticsSection
-            entries={logEntries}
-            taxRate={logTaxRate}
-            onEntriesChange={setLogEntries}
-            onTaxRateChange={setLogTaxRate}
-          />
 
           <View style={s.card}>
             <FormField label="Narration / Instructions" value={narration} onChangeText={setNarration} placeholder="Delivery instructions..." multiline numberOfLines={2}
@@ -217,6 +247,10 @@ const s = StyleSheet.create({
   autoBox:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',backgroundColor:COLORS.pageBg,borderWidth:1,borderColor:COLORS.borderDefault,borderRadius:RADIUS.md,paddingHorizontal:14,paddingVertical:12,minHeight:48},
   autoTxt:{fontSize:TYPOGRAPHY.sm,color:COLORS.textSecondary,fontWeight:'600'},
   star:{color:COLORS.negative},
+  switchRow:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingVertical:12,borderTopWidth:1,borderTopColor:COLORS.borderDefault,marginTop:4},
+  switchLabelWrap:{flexDirection:'row',alignItems:'center',gap:8},
+  switchLabel:{fontSize:TYPOGRAPHY.base,fontWeight:'600',color:COLORS.textPrimary},
+  vehicleBox:{backgroundColor:COLORS.pageBg,borderRadius:RADIUS.md,padding:SPACING.md,marginTop:8,borderWidth:1,borderColor:COLORS.borderDefault},
   secHdr:{flexDirection:'row',alignItems:'center',gap:8,marginBottom:SPACING.sm},
   secTitle:{flex:1,fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.textPrimary},
   countBadge:{backgroundColor:COLORS.brandPrimary,width:22,height:22,borderRadius:11,alignItems:'center',justifyContent:'center'},
@@ -246,19 +280,9 @@ const ir = StyleSheet.create({
   phTxt:{color:COLORS.textTertiary},
   delBtn:{width:36,height:36,alignItems:'center',justifyContent:'center'},
   row:{flexDirection:'row',gap:8,marginBottom:4,alignItems:'flex-end'},
-  qBox:{width:130},
+  qBox:{width:110},rBox:{flex:1},
   ml:{fontSize:TYPOGRAPHY.xs,fontWeight:'600',color:COLORS.textSecondary,marginBottom:4},
   mi:{backgroundColor:COLORS.pageBg,borderWidth:1,borderColor:COLORS.borderDefault,borderRadius:RADIUS.sm,paddingHorizontal:8,paddingVertical:9,fontSize:TYPOGRAPHY.sm,color:COLORS.textPrimary,textAlign:'center',minHeight:38},
   unitBtn:{flexDirection:'row',alignItems:'center',gap:3,backgroundColor:COLORS.pageBg,borderRadius:RADIUS.sm,paddingHorizontal:8,paddingVertical:9,borderWidth:1,borderColor:COLORS.borderDefault,alignSelf:'flex-end',minHeight:38},
   unitTxt:{fontSize:TYPOGRAPHY.xs,fontWeight:'700',color:COLORS.textPrimary},
-  discRow:{flex:1,flexDirection:'row',alignItems:'center',gap:4,backgroundColor:COLORS.pageBg,borderRadius:RADIUS.sm,borderWidth:1,borderColor:COLORS.borderDefault,paddingHorizontal:6,paddingVertical:4,minHeight:38},
-  discType:{backgroundColor:COLORS.brandPrimary,paddingHorizontal:6,paddingVertical:4,borderRadius:4},
-  discTypeTxt:{fontSize:TYPOGRAPHY.xs,fontWeight:'800',color:'#fff',width:16,textAlign:'center'},
-  discInput:{flex:1,fontSize:TYPOGRAPHY.sm,color:COLORS.textPrimary,textAlign:'center',paddingVertical:2},
-  dl:{fontSize:TYPOGRAPHY.xs,color:COLORS.textTertiary},
-  taxBtn:{flexDirection:'row',alignItems:'center',gap:4,backgroundColor:COLORS.infoBg,borderRadius:RADIUS.sm,paddingHorizontal:8,paddingVertical:9,borderWidth:1,borderColor:COLORS.info+'30',minHeight:38},
-  taxTxt:{fontSize:TYPOGRAPHY.xs,fontWeight:'700',color:COLORS.info},
-  subRow:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',borderTopWidth:1,borderTopColor:COLORS.borderDefault,paddingTop:8},
-  subL:{fontSize:TYPOGRAPHY.xs,fontWeight:'600',color:COLORS.textSecondary},
-  subV:{fontSize:TYPOGRAPHY.sm,fontWeight:'800',color:COLORS.textPrimary},
 });

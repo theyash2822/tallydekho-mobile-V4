@@ -28,19 +28,26 @@ const PRODUCTS: DropdownOption[] = [
 ];
 const UNITS = ['Pcs', 'Kg', 'Ltr', 'Mtr', 'Box', 'Nos'];
 const TAX_RATES = ['0', '5', '12', '18', '28'];
+const WAREHOUSES: DropdownOption[] = [
+  { label: 'Main Warehouse', value: 'main_wh' },
+  { label: 'Store A', value: 'store_a' },
+  { label: 'Store B', value: 'store_b' },
+  { label: 'Delhi Depot', value: 'delhi_depot' },
+];
 const TERMS: DropdownOption[] = [
   { label: 'Immediate', value: 'immediate' },
   { label: '7 Days', value: '7d' },
   { label: '30 Days', value: '30d' },
   { label: '45 Days', value: '45d' },
   { label: '60 Days', value: '60d' },
+  { label: 'Custom', value: 'custom' },
 ];
 
 interface POItem {
   id: string; product: string; qty: string; unit: string;
-  rate: string; discountType: '%' | 'flat'; discount: string; taxRate: string;
+  rate: string; discountType: '%' | 'flat'; discount: string; taxRate: string; warehouse: string;
 }
-const newItem = (): POItem => ({ id: Date.now().toString(), product: '', qty: '1', unit: 'Pcs', rate: '', discountType: '%', discount: '0', taxRate: '18' });
+const newItem = (): POItem => ({ id: Date.now().toString(), product: '', qty: '1', unit: 'Pcs', rate: '', discountType: '%', discount: '0', taxRate: '18', warehouse: '' });
 const todayStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`; };
 const calcItem = (item: POItem) => {
   const qty = parseFloat(item.qty)||0, rate = parseFloat(item.rate)||0;
@@ -52,7 +59,7 @@ const calcItem = (item: POItem) => {
   return { gross, discAmt, taxAmt, subtotal: taxable+taxAmt };
 };
 
-type ModalState = { type: 'product'|'unit'|'tax'; itemId: string }|null;
+type ModalState = { type: 'product'|'unit'|'tax'|'warehouse'; itemId: string }|null;
 
 function ItemRow({ item, onUpdate, onRemove, onModal }: {
   item: POItem; onUpdate:(id:string,f:keyof POItem,v:string)=>void;
@@ -60,6 +67,7 @@ function ItemRow({ item, onUpdate, onRemove, onModal }: {
 }) {
   const calc = calcItem(item);
   const pname = PRODUCTS.find(p=>p.value===item.product)?.label;
+  const wname = WAREHOUSES.find(w=>w.value===item.warehouse)?.label;
   return (
     <View style={ir.card}>
       <View style={ir.topRow}>
@@ -68,10 +76,18 @@ function ItemRow({ item, onUpdate, onRemove, onModal }: {
           <Text style={[ir.prodTxt,!item.product&&ir.phTxt]} numberOfLines={1}>{pname||'Select product...'}</Text>
           <Ionicons name="chevron-down" size={12} color={COLORS.textSecondary} />
         </TouchableOpacity>
+        <TouchableOpacity style={ir.barcodeBtn} onPress={()=>Alert.alert('Scan Barcode','Barcode scanner ready')} activeOpacity={0.7}>
+          <Ionicons name="barcode-outline" size={18} color={COLORS.textSecondary} />
+        </TouchableOpacity>
         <TouchableOpacity style={ir.delBtn} onPress={()=>onRemove(item.id)} activeOpacity={0.7}>
           <Ionicons name="close-circle" size={20} color={COLORS.negative} />
         </TouchableOpacity>
       </View>
+      <TouchableOpacity style={ir.warehouseBtn} onPress={()=>onModal({type:'warehouse',itemId:item.id})} activeOpacity={0.7}>
+        <Ionicons name="business-outline" size={12} color={COLORS.info} />
+        <Text style={[ir.warehouseTxt,!wname&&ir.phTxt]}>{wname||'Select Warehouse'}</Text>
+        <Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
+      </TouchableOpacity>
       <View style={ir.row}>
         <View style={ir.qBox}><Text style={ir.ml}>Qty</Text>
           <TextInput style={ir.mi} value={item.qty} onChangeText={v=>onUpdate(item.id,'qty',v)} keyboardType="numeric" placeholder="1" placeholderTextColor={COLORS.textTertiary} />
@@ -109,10 +125,10 @@ export default function CreatePurchaseOrderScreen() {
   const [entryType, setEntryType] = useState<EntryType>('regular');
   const [poNo] = useState('PO-00190');
   const [date, setDate] = useState(todayStr());
-  const [deliveryDate, setDeliveryDate] = useState('');
+  const [dueDate, setDueDate] = useState('');
   const [vendor, setVendor] = useState('');
   const [terms, setTerms] = useState('30d');
-  const [shipTo, setShipTo] = useState('');
+  const [customDays, setCustomDays] = useState('');
   const [refNo, setRefNo] = useState('');
   const [items, setItems] = useState<POItem[]>([newItem()]);
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
@@ -155,24 +171,28 @@ export default function CreatePurchaseOrderScreen() {
                 <View style={s.autoBox}><Text style={s.autoTxt}>{poNo}</Text><Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} /></View>
               </View>
               <View style={{flex:1}}>
-                <Text style={s.fLabel}>Date <Text style={s.star}>*</Text></Text>
+                <Text style={s.fLabel}>PO Date <Text style={s.star}>*</Text></Text>
                 <TextInput style={s.fInput} value={date} onChangeText={setDate} placeholder="DD/MM/YY" placeholderTextColor={COLORS.textTertiary} />
               </View>
             </View>
             <FormDropdown label="Vendor / Supplier" value={vendor} options={VENDORS} onSelect={o=>setVendor(o.value)} placeholder="Select vendor..." required />
             <View style={s.row2}>
               <View style={{flex:1}}>
-                <Text style={s.fLabel}>Expected Delivery</Text>
-                <TextInput style={s.fInput} value={deliveryDate} onChangeText={setDeliveryDate} placeholder="DD/MM/YY" placeholderTextColor={COLORS.textTertiary} />
+                <Text style={s.fLabel}>Due Date</Text>
+                <TextInput style={s.fInput} value={dueDate} onChangeText={setDueDate} placeholder="DD/MM/YY" placeholderTextColor={COLORS.textTertiary} />
               </View>
               <View style={{flex:1}}>
                 <Text style={s.fLabel}>Reference No.</Text>
                 <TextInput style={s.fInput} value={refNo} onChangeText={setRefNo} placeholder="Optional" placeholderTextColor={COLORS.textTertiary} />
               </View>
             </View>
-            <FormDropdown label="Payment Terms" value={terms} options={TERMS} onSelect={o=>setTerms(o.value)} placeholder="Select terms..." />
-            <FormField label="Ship To Address" value={shipTo} onChangeText={setShipTo} placeholder="Delivery warehouse/address" multiline numberOfLines={2}
-              style={{minHeight:60,textAlignVertical:'top'} as any} containerStyle={{marginBottom:0}} />
+            <FormDropdown label="Payment Terms" value={terms} options={TERMS} onSelect={o=>setTerms(o.value)} placeholder="Select terms..." containerStyle={{marginBottom: terms==='custom' ? SPACING.sm : 0}} />
+            {terms==='custom' && (
+              <View style={{marginBottom:0}}>
+                <Text style={s.fLabel}>Number of Days</Text>
+                <TextInput style={s.fInput} value={customDays} onChangeText={setCustomDays} placeholder="e.g. 45" keyboardType="numeric" placeholderTextColor={COLORS.textTertiary} />
+              </View>
+            )}
           </View>
 
           <View style={s.secHdr}>
@@ -249,6 +269,20 @@ export default function CreatePurchaseOrderScreen() {
           ))}</View>
         </TouchableOpacity>
       </Modal>
+      <Modal visible={activeModal?.type==='warehouse'} transparent animationType="slide" onRequestClose={()=>setActiveModal(null)}>
+        <TouchableOpacity style={m.overlay} activeOpacity={1} onPress={()=>setActiveModal(null)} />
+        <View style={m.sheet}>
+          <View style={m.handle}/><Text style={m.title}>Select Warehouse</Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {WAREHOUSES.map(w=>(
+              <TouchableOpacity key={w.value} style={m.opt} onPress={()=>{if(activeModal)updateItem(activeModal.itemId,'warehouse',w.value);setActiveModal(null);}} activeOpacity={0.7}>
+                <Ionicons name="business-outline" size={14} color={COLORS.info} />
+                <Text style={m.optTxt}>{w.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -308,6 +342,9 @@ const ir = StyleSheet.create({
   prodTxt:{flex:1,fontSize:TYPOGRAPHY.sm,color:COLORS.textPrimary,fontWeight:'500'},
   phTxt:{color:COLORS.textTertiary},
   delBtn:{width:36,height:36,alignItems:'center',justifyContent:'center'},
+  barcodeBtn:{width:36,height:36,alignItems:'center',justifyContent:'center',backgroundColor:COLORS.pageBg,borderRadius:RADIUS.sm,borderWidth:1,borderColor:COLORS.borderDefault},
+  warehouseBtn:{flexDirection:'row',alignItems:'center',gap:6,backgroundColor:COLORS.infoBg,borderRadius:RADIUS.sm,paddingHorizontal:10,paddingVertical:7,borderWidth:1,borderColor:COLORS.info+'30',marginBottom:8},
+  warehouseTxt:{flex:1,fontSize:TYPOGRAPHY.xs,fontWeight:'600',color:COLORS.info},
   row:{flexDirection:'row',gap:8,marginBottom:8,alignItems:'flex-end'},
   qBox:{width:72},rBox:{flex:1},
   ml:{fontSize:TYPOGRAPHY.xs,fontWeight:'600',color:COLORS.textSecondary,marginBottom:4},

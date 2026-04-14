@@ -26,14 +26,11 @@ const LINKED_INVOICES: DropdownOption[] = [
   { label: 'INV-30975 — ₹42,500', value: 'inv30975' },
   { label: 'INV-30974 — ₹35,000', value: 'inv30974' },
 ];
-const REASONS: DropdownOption[] = [
-  { label: 'Goods Return', value: 'return' },
-  { label: 'Discount / Price Correction', value: 'discount' },
-  { label: 'Damaged Goods', value: 'damage' },
-  { label: 'Quality Issue', value: 'quality' },
-  { label: 'Short Delivery', value: 'short' },
-  { label: 'Cancelled Order', value: 'cancelled' },
-  { label: 'Other', value: 'other' },
+const WAREHOUSES: DropdownOption[] = [
+  { label: 'Main Warehouse', value: 'main_wh' },
+  { label: 'Store A', value: 'store_a' },
+  { label: 'Store B', value: 'store_b' },
+  { label: 'Delhi Depot', value: 'delhi_depot' },
 ];
 const PRODUCTS: DropdownOption[] = [
   { label: 'JBL Portable Speaker', value: 'jbl_speaker' },
@@ -47,18 +44,21 @@ const TAX_RATES = ['0', '5', '12', '18', '28'];
 
 interface CItem {
   id: string; product: string; qty: string; unit: string;
-  rate: string; taxRate: string;
+  rate: string; discountType: '%'|'flat'; discount: string; taxRate: string; warehouse: string;
 }
-const newItem = (): CItem => ({ id: Date.now().toString(), product: '', qty: '1', unit: 'Pcs', rate: '', taxRate: '18' });
+const newItem = (): CItem => ({ id: Date.now().toString(), product: '', qty: '1', unit: 'Pcs', rate: '', discountType: '%', discount: '0', taxRate: '18', warehouse: '' });
 const todayStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`; };
 const calcItem = (item: CItem) => {
   const qty = parseFloat(item.qty)||0, rate = parseFloat(item.rate)||0;
-  const taxable = qty*rate;
+  const gross = qty*rate;
+  const disc = parseFloat(item.discount)||0;
+  const discAmt = item.discountType==='%' ? gross*disc/100 : Math.min(disc,gross);
+  const taxable = gross - discAmt;
   const taxAmt = taxable*(parseFloat(item.taxRate)||0)/100;
-  return { taxable, taxAmt, subtotal: taxable+taxAmt };
+  return { gross, discAmt, taxable, taxAmt, subtotal: taxable+taxAmt };
 };
 
-type ModalState = { type: 'product'|'unit'|'tax'; itemId: string }|null;
+type ModalState = { type: 'product'|'unit'|'tax'|'warehouse'; itemId: string }|null;
 
 function CreditItemRow({ item, onUpdate, onRemove, onModal }: {
   item: CItem; onUpdate:(id:string,f:keyof CItem,v:string)=>void;
@@ -66,6 +66,7 @@ function CreditItemRow({ item, onUpdate, onRemove, onModal }: {
 }) {
   const calc = calcItem(item);
   const pname = PRODUCTS.find(p=>p.value===item.product)?.label;
+  const wname = WAREHOUSES.find(w=>w.value===item.warehouse)?.label;
   return (
     <View style={ir.card}>
       <View style={ir.topRow}>
@@ -78,6 +79,11 @@ function CreditItemRow({ item, onUpdate, onRemove, onModal }: {
           <Ionicons name="close-circle" size={20} color={COLORS.negative} />
         </TouchableOpacity>
       </View>
+      <TouchableOpacity style={ir.warehouseBtn} onPress={()=>onModal({type:'warehouse',itemId:item.id})} activeOpacity={0.7}>
+        <Ionicons name="business-outline" size={12} color={COLORS.info} />
+        <Text style={[ir.warehouseTxt,!wname&&ir.phTxt]}>{wname||'Select Warehouse'}</Text>
+        <Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
+      </TouchableOpacity>
       <View style={ir.row}>
         <View style={ir.qBox}><Text style={ir.ml}>Return Qty</Text>
           <TextInput style={ir.mi} value={item.qty} onChangeText={v=>onUpdate(item.id,'qty',v)} keyboardType="numeric" placeholder="1" placeholderTextColor={COLORS.textTertiary} />
@@ -85,18 +91,25 @@ function CreditItemRow({ item, onUpdate, onRemove, onModal }: {
         <TouchableOpacity style={ir.unitBtn} onPress={()=>onModal({type:'unit',itemId:item.id})} activeOpacity={0.7}>
           <Text style={ir.unitTxt}>{item.unit}</Text><Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
         </TouchableOpacity>
-        <View style={ir.rBox}><Text style={ir.ml}>Original Rate (₹)</Text>
+        <View style={ir.rBox}><Text style={ir.ml}>Unit Price (₹)</Text>
           <TextInput style={ir.mi} value={item.rate} onChangeText={v=>onUpdate(item.id,'rate',v)} keyboardType="numeric" placeholder="0.00" placeholderTextColor={COLORS.textTertiary} />
         </View>
       </View>
-      <View style={[ir.row,{justifyContent:'space-between',alignItems:'center'}]}>
+      <View style={ir.row}>
+        <View style={ir.discRow}>
+          <TouchableOpacity style={ir.discType} onPress={()=>onUpdate(item.id,'discountType',item.discountType==='%'?'flat':'%')} activeOpacity={0.7}>
+            <Text style={ir.discTypeTxt}>{item.discountType}</Text>
+          </TouchableOpacity>
+          <TextInput style={ir.discInput} value={item.discount} onChangeText={v=>onUpdate(item.id,'discount',v)} keyboardType="numeric" placeholder="0" placeholderTextColor={COLORS.textTertiary} />
+          <Text style={ir.dl}>Disc</Text>
+        </View>
         <TouchableOpacity style={ir.taxBtn} onPress={()=>onModal({type:'tax',itemId:item.id})} activeOpacity={0.7}>
           <Text style={ir.taxTxt}>GST {item.taxRate}%</Text><Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
         </TouchableOpacity>
-        <View style={ir.subRow}>
-          <Text style={ir.subL}>Credit Amount: </Text>
-          <Text style={[ir.subV,{color:COLORS.negative}]}>₹{calc.subtotal.toLocaleString('en-IN',{minimumFractionDigits:2})}</Text>
-        </View>
+      </View>
+      <View style={ir.subRow}>
+        <Text style={ir.subL}>Credit Amount</Text>
+        <Text style={[ir.subV,{color:COLORS.negative}]}>₹{calc.subtotal.toLocaleString('en-IN',{minimumFractionDigits:2})}</Text>
       </View>
     </View>
   );
@@ -110,7 +123,6 @@ export default function CreateCreditNoteScreen() {
   const [date, setDate] = useState(todayStr());
   const [party, setParty] = useState('');
   const [linkedInvoice, setLinkedInvoice] = useState('');
-  const [reason, setReason] = useState('');
   const [items, setItems] = useState<CItem[]>([newItem()]);
   const [narration, setNarration] = useState('');
   const [activeModal, setActiveModal] = useState<ModalState>(null);
@@ -119,13 +131,13 @@ export default function CreateCreditNoteScreen() {
   const removeItem = useCallback((id:string)=>setItems(prev=>prev.length>1?prev.filter(i=>i.id!==id):prev),[]);
 
   const totals = useMemo(()=>{
-    let taxable=0,taxTotal=0;
-    items.forEach(i=>{const c=calcItem(i);taxable+=c.taxable;taxTotal+=c.taxAmt;});
-    return { taxable, taxTotal, grand: taxable+taxTotal };
+    let gross=0,discTotal=0,taxTotal=0;
+    items.forEach(i=>{const c=calcItem(i);gross+=c.gross;discTotal+=c.discAmt;taxTotal+=c.taxAmt;});
+    return { gross, discTotal, taxTotal, grand: gross-discTotal+taxTotal };
   },[items]);
 
   const handleSubmit = useCallback(()=>{
-    Alert.alert('✓ Credit Note Issued', `Credit Note ${cnNo} issued successfully!`,[{text:'OK',onPress:()=>router.back()}]);
+    Alert.alert('✓ Credit Note Submitted', `Credit Note ${cnNo} submitted successfully!`,[{text:'OK',onPress:()=>router.back()}]);
   },[cnNo,router]);
 
   return (
@@ -158,16 +170,8 @@ export default function CreateCreditNoteScreen() {
               </View>
             </View>
             <FormDropdown label="Customer / Party" value={party} options={PARTIES} onSelect={o=>setParty(o.value)} placeholder="Select customer..." required />
-            <FormDropdown label="Against Invoice" value={linkedInvoice} options={LINKED_INVOICES} onSelect={o=>setLinkedInvoice(o.value)} placeholder="Select original invoice..." required />
-            <FormDropdown label="Reason for Credit" value={reason} options={REASONS} onSelect={o=>setReason(o.value)} placeholder="Select reason..." required containerStyle={{marginBottom:0}} />
+            <FormDropdown label="Reference Invoice" value={linkedInvoice} options={LINKED_INVOICES} onSelect={o=>setLinkedInvoice(o.value)} placeholder="Select reference invoice..." required containerStyle={{marginBottom:0}} />
           </View>
-
-          {reason !== '' && (
-            <View style={s.reasonBanner}>
-              <Ionicons name="information-circle-outline" size={16} color={COLORS.warning} />
-              <Text style={s.reasonTxt}>Reason: <Text style={{fontWeight:'700'}}>{REASONS.find(r=>r.value===reason)?.label}</Text></Text>
-            </View>
-          )}
 
           <View style={s.secHdr}>
             <Ionicons name="return-up-back-outline" size={16} color={COLORS.negative} />
@@ -184,7 +188,8 @@ export default function CreateCreditNoteScreen() {
 
           <View style={s.sumCard}>
             <Text style={s.sumTitle}>Credit Note Summary</Text>
-            <View style={s.sumRow}><Text style={s.sumL}>Taxable Value</Text><Text style={s.sumV}>₹{totals.taxable.toLocaleString('en-IN',{minimumFractionDigits:2})}</Text></View>
+            <View style={s.sumRow}><Text style={s.sumL}>Subtotal</Text><Text style={s.sumV}>₹{totals.gross.toLocaleString('en-IN',{minimumFractionDigits:2})}</Text></View>
+            {totals.discTotal>0&&<View style={s.sumRow}><Text style={s.sumL}>Discount</Text><Text style={[s.sumV,{color:COLORS.positive}]}>-₹{totals.discTotal.toLocaleString('en-IN',{minimumFractionDigits:2})}</Text></View>}
             {totals.taxTotal>0&&<View style={s.sumRow}><Text style={s.sumL}>Tax (GST)</Text><Text style={s.sumV}>₹{totals.taxTotal.toLocaleString('en-IN',{minimumFractionDigits:2})}</Text></View>}
             <View style={s.sumDiv} />
             <View style={s.sumRow}><Text style={s.sumGL}>Total Credit</Text><Text style={[s.sumGV,{color:COLORS.negative}]}>₹{totals.grand.toLocaleString('en-IN',{minimumFractionDigits:2})}</Text></View>
@@ -199,7 +204,7 @@ export default function CreateCreditNoteScreen() {
         <View style={[s.footer,{paddingBottom:Math.max(insets.bottom,12)}]}>
           <TouchableOpacity style={[s.submitBtn,{backgroundColor:COLORS.negative}]} onPress={handleSubmit} activeOpacity={0.7}>
             <Ionicons name="return-up-back-outline" size={18} color={COLORS.white} />
-            <Text style={s.submitTxt}>Issue Credit Note</Text>
+            <Text style={s.submitTxt}>Submit Credit Note</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -213,6 +218,20 @@ export default function CreateCreditNoteScreen() {
               <TouchableOpacity key={p.value} style={m.opt} onPress={()=>{if(activeModal)updateItem(activeModal.itemId,'product',p.value);setActiveModal(null);}} activeOpacity={0.7}>
                 <Ionicons name="cube-outline" size={14} color={COLORS.textSecondary} />
                 <Text style={m.optTxt}>{p.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
+      <Modal visible={activeModal?.type==='warehouse'} transparent animationType="slide" onRequestClose={()=>setActiveModal(null)}>
+        <TouchableOpacity style={m.overlay} activeOpacity={1} onPress={()=>setActiveModal(null)} />
+        <View style={m.sheet}>
+          <View style={m.handle}/><Text style={m.title}>Select Warehouse</Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {WAREHOUSES.map(w=>(
+              <TouchableOpacity key={w.value} style={m.opt} onPress={()=>{if(activeModal)updateItem(activeModal.itemId,'warehouse',w.value);setActiveModal(null);}} activeOpacity={0.7}>
+                <Ionicons name="business-outline" size={14} color={COLORS.info} />
+                <Text style={m.optTxt}>{w.label}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -304,9 +323,11 @@ const ir = StyleSheet.create({
   unitTxt:{fontSize:TYPOGRAPHY.xs,fontWeight:'700',color:COLORS.textPrimary},
   taxBtn:{flexDirection:'row',alignItems:'center',gap:4,backgroundColor:COLORS.infoBg,borderRadius:RADIUS.sm,paddingHorizontal:8,paddingVertical:9,borderWidth:1,borderColor:COLORS.info+'30',minHeight:38},
   taxTxt:{fontSize:TYPOGRAPHY.xs,fontWeight:'700',color:COLORS.info},
-  subRow:{flexDirection:'row',alignItems:'center',gap:4},
+  subRow:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingTop:4},
   subL:{fontSize:TYPOGRAPHY.xs,fontWeight:'600',color:COLORS.textSecondary},
   subV:{fontSize:TYPOGRAPHY.sm,fontWeight:'800',color:COLORS.textPrimary},
+  warehouseBtn:{flexDirection:'row',alignItems:'center',gap:6,backgroundColor:COLORS.infoBg,borderRadius:RADIUS.sm,paddingHorizontal:10,paddingVertical:7,borderWidth:1,borderColor:COLORS.info+'30',marginBottom:8},
+  warehouseTxt:{flex:1,fontSize:TYPOGRAPHY.xs,fontWeight:'600',color:COLORS.info},
   discRow:{flex:1,flexDirection:'row',alignItems:'center',gap:4,backgroundColor:COLORS.pageBg,borderRadius:RADIUS.sm,borderWidth:1,borderColor:COLORS.borderDefault,paddingHorizontal:6,paddingVertical:4,minHeight:38},
   discType:{backgroundColor:COLORS.brandPrimary,paddingHorizontal:6,paddingVertical:4,borderRadius:4},
   discTypeTxt:{fontSize:TYPOGRAPHY.xs,fontWeight:'800',color:'#fff',width:16,textAlign:'center'},

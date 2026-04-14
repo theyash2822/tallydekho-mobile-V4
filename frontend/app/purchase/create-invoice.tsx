@@ -43,6 +43,18 @@ const PRODUCTS: DropdownOption[] = [
 ];
 const UNITS = ['Pcs','Kg','Ltr','Mtr','Box','Nos'];
 const TAX_RATES = ['0','5','12','18','28'];
+const WAREHOUSES: DropdownOption[] = [
+  { label: 'Main Warehouse', value: 'main_wh' },
+  { label: 'Store A', value: 'store_a' },
+  { label: 'Store B', value: 'store_b' },
+  { label: 'Delhi Depot', value: 'delhi_depot' },
+];
+const PAY_STATUS_OPTS: DropdownOption[] = [
+  { label: 'Payment Received', value: 'received' },
+  { label: '15 Days', value: '15d' },
+  { label: '30 Days', value: '30d' },
+  { label: 'Custom', value: 'custom' },
+];
 const LOGISTICS_TYPES: DropdownOption[] = [
   { label: 'Courier', value: 'courier' },
   { label: 'Transport', value: 'transport' },
@@ -52,20 +64,20 @@ const LOGISTICS_TYPES: DropdownOption[] = [
 
 // OCR Mock Data — simulates a real sales invoice from vendor becoming our purchase record
 const OCR_MOCK = {
-  vendor: 'pqr',
-  vendorName: 'PQR Exports',
-  vendorInvNo: 'PQR/INV/2025-26/4872',
+  vendor: 'pqr', vendorName: 'PQR Exports', vendorInvNo: 'PQR/INV/2025-26/4872',
   items: [
-    { id: '1', product: 'jbl_speaker', qty: '10', unit: 'Pcs', rate: '3400', discountType: '%' as '%'|'flat', discount: '5', taxRate: '18' },
-    { id: '2', product: 'sony_xm5', qty: '5', unit: 'Pcs', rate: '28500', discountType: '%' as '%'|'flat', discount: '0', taxRate: '18' },
+    { id: '1', product: 'jbl_speaker', qty: '10', unit: 'Pcs', rate: '3400', discountType: '%' as '%'|'flat', discount: '5', taxRate: '18', warehouse: '' },
+    { id: '2', product: 'sony_xm5', qty: '5', unit: 'Pcs', rate: '28500', discountType: '%' as '%'|'flat', discount: '0', taxRate: '18', warehouse: '' },
   ],
 };
 
 interface PItem {
   id: string; product: string; qty: string; unit: string;
-  rate: string; discountType: '%'|'flat'; discount: string; taxRate: string;
+  rate: string; discountType: '%'|'flat'; discount: string; taxRate: string; warehouse: string;
 }
-const newItem = (): PItem => ({ id: Date.now().toString(), product:'', qty:'1', unit:'Pcs', rate:'', discountType:'%', discount:'0', taxRate:'18' });
+const newItem = (): PItem => ({ id: Date.now().toString(), product:'', qty:'1', unit:'Pcs', rate:'', discountType:'%', discount:'0', taxRate:'18', warehouse:'' });
+
+type ModalState = { type:'product'|'unit'|'tax'|'warehouse'; itemId:string }|null;
 const todayStr = () => { const d=new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`; };
 const calcItem = (item: PItem) => {
   const qty=parseFloat(item.qty)||0, rate=parseFloat(item.rate)||0;
@@ -77,7 +89,6 @@ const calcItem = (item: PItem) => {
   return { gross, discAmt, taxAmt, subtotal: taxable+taxAmt };
 };
 
-type ModalState = { type:'product'|'unit'|'tax'; itemId:string }|null;
 type OcrStatus = 'idle'|'scanning'|'done';
 
 function ItemRow({ item, onUpdate, onRemove, onModal }: {
@@ -86,6 +97,7 @@ function ItemRow({ item, onUpdate, onRemove, onModal }: {
 }) {
   const calc = calcItem(item);
   const pname = PRODUCTS.find(p=>p.value===item.product)?.label;
+  const wname = WAREHOUSES.find(w=>w.value===item.warehouse)?.label;
   return (
     <View style={ir.card}>
       <View style={ir.topRow}>
@@ -101,6 +113,11 @@ function ItemRow({ item, onUpdate, onRemove, onModal }: {
           <Ionicons name="close-circle" size={20} color={COLORS.negative} />
         </TouchableOpacity>
       </View>
+      <TouchableOpacity style={ir.warehouseBtn} onPress={()=>onModal({type:'warehouse',itemId:item.id})} activeOpacity={0.7}>
+        <Ionicons name="business-outline" size={12} color={COLORS.info} />
+        <Text style={[ir.warehouseTxt,!wname&&ir.phTxt]}>{wname||'Select Warehouse'}</Text>
+        <Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
+      </TouchableOpacity>
       <View style={ir.row}>
         <View style={ir.qBox}><Text style={ir.ml}>Qty</Text>
           <TextInput style={ir.mi} value={item.qty} onChangeText={v=>onUpdate(item.id,'qty',v)} keyboardType="numeric" placeholder="1" placeholderTextColor={COLORS.textTertiary} />
@@ -147,6 +164,11 @@ export default function CreatePurchaseInvoiceScreen() {
   const [vendorInvNo, setVendorInvNo] = useState('');
   const [vendorInvDate, setVendorInvDate] = useState('');
   const [payTerms, setPayTerms] = useState('30d');
+  const [purchaseRefNo, setPurchaseRefNo] = useState('');
+  const [payStatus, setPayStatus] = useState('');
+  const [payCustomDays, setPayCustomDays] = useState('');
+  const [logRemark, setLogRemark] = useState('');
+  const [logTaxRate, setLogTaxRate] = useState('0');
   const [items, setItems] = useState<PItem[]>([newItem()]);
   const [showLogistics, setShowLogistics] = useState(false);
   const [logType, setLogType] = useState('');
@@ -271,15 +293,23 @@ export default function CreatePurchaseInvoiceScreen() {
             <FormDropdown label="Vendor / Supplier" value={vendor} options={VENDORS} onSelect={o=>setVendor(o.value)} placeholder="Select vendor..." required />
             <View style={s.row2}>
               <View style={{flex:1}}>
-                <Text style={s.fLabel}>Vendor Invoice No.</Text>
-                <TextInput style={s.fInput} value={vendorInvNo} onChangeText={setVendorInvNo} placeholder="e.g. ABC/2025/123" placeholderTextColor={COLORS.textTertiary} />
+                <Text style={s.fLabel}>Purchase Reference No. <Text style={s.star}>*</Text></Text>
+                <TextInput style={s.fInput} value={purchaseRefNo} onChangeText={setPurchaseRefNo} placeholder="e.g. PR-2025/001" placeholderTextColor={COLORS.textTertiary} />
               </View>
+              <View style={{flex:1}}>
+                <Text style={s.fLabel}>Vendor Invoice No.</Text>
+                <TextInput style={s.fInput} value={vendorInvNo} onChangeText={setVendorInvNo} placeholder="Optional" placeholderTextColor={COLORS.textTertiary} />
+              </View>
+            </View>
+            <View style={s.row2}>
               <View style={{flex:1}}>
                 <Text style={s.fLabel}>Vendor Inv. Date</Text>
                 <TextInput style={s.fInput} value={vendorInvDate} onChangeText={setVendorInvDate} placeholder="DD/MM/YY" placeholderTextColor={COLORS.textTertiary} />
               </View>
+              <View style={{flex:1}}>
+                <FormDropdown label="Payment Terms" value={payTerms} options={TERMS} onSelect={o=>setPayTerms(o.value)} placeholder="Select terms..." containerStyle={{marginBottom:0}} />
+              </View>
             </View>
-            <FormDropdown label="Payment Terms" value={payTerms} options={TERMS} onSelect={o=>setPayTerms(o.value)} placeholder="Select terms..." containerStyle={{marginBottom:0}} />
           </View>
 
           {/* Products Section */}
@@ -313,8 +343,22 @@ export default function CreatePurchaseInvoiceScreen() {
                   <TextInput style={s.fInput} value={logTracking} onChangeText={setLogTracking} placeholder="Optional" placeholderTextColor={COLORS.textTertiary} />
                 </View>
               </View>
+              <FormDropdown label="Tax on Logistics" value={logTaxRate} options={[{label:'No Tax (0%)',value:'0'},{label:'GST 5%',value:'5'},{label:'GST 12%',value:'12'},{label:'GST 18%',value:'18'}]} onSelect={o=>setLogTaxRate(o.value)} placeholder="Select tax..." containerStyle={{marginBottom:SPACING.sm}} />
+              <FormField label="Remark" value={logRemark} onChangeText={setLogRemark} placeholder="Logistics notes..." containerStyle={{marginBottom:0}} />
             </View>
           )}
+
+          {/* Payment Status */}
+          <View style={s.card}>
+            <View style={s.cardHdr}><Ionicons name="card-outline" size={18} color={COLORS.positive} /><Text style={s.cardTitle}>Payment Status</Text></View>
+            <FormDropdown label="Status" value={payStatus} options={PAY_STATUS_OPTS} onSelect={o=>setPayStatus(o.value)} placeholder="Select payment status..." containerStyle={{marginBottom: payStatus==='custom' ? SPACING.sm : 0}} />
+            {payStatus==='custom' && (
+              <View>
+                <Text style={s.fLabel}>Number of Days</Text>
+                <TextInput style={[s.fInput,{marginBottom:0}]} value={payCustomDays} onChangeText={setPayCustomDays} placeholder="e.g. 45" keyboardType="numeric" placeholderTextColor={COLORS.textTertiary} />
+              </View>
+            )}
+          </View>
 
           {/* Narration */}
           <View style={s.card}>
@@ -432,6 +476,20 @@ export default function CreatePurchaseInvoiceScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+      <Modal visible={activeModal?.type==='warehouse'} transparent animationType="slide" onRequestClose={()=>setActiveModal(null)}>
+        <TouchableOpacity style={mm.overlay} activeOpacity={1} onPress={()=>setActiveModal(null)} />
+        <View style={mm.sheet}>
+          <View style={mm.handle}/><Text style={mm.title}>Select Warehouse</Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {WAREHOUSES.map(w=>(
+              <TouchableOpacity key={w.value} style={mm.opt} onPress={()=>{if(activeModal)updateItem(activeModal.itemId,'warehouse',w.value);setActiveModal(null);}} activeOpacity={0.7}>
+                <Ionicons name="business-outline" size={15} color={COLORS.info} />
+                <Text style={mm.optTxt}>{w.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -511,6 +569,8 @@ const ir = StyleSheet.create({
   phTxt:{color:COLORS.textTertiary},
   barcodeBtn:{width:36,height:36,backgroundColor:COLORS.pageBg,borderRadius:RADIUS.sm,borderWidth:1,borderColor:COLORS.borderDefault,alignItems:'center',justifyContent:'center'},
   delBtn:{width:36,height:36,alignItems:'center',justifyContent:'center'},
+  warehouseBtn:{flexDirection:'row',alignItems:'center',gap:6,backgroundColor:COLORS.infoBg,borderRadius:RADIUS.sm,paddingHorizontal:10,paddingVertical:7,borderWidth:1,borderColor:COLORS.info+'30',marginBottom:8},
+  warehouseTxt:{flex:1,fontSize:TYPOGRAPHY.xs,fontWeight:'600',color:COLORS.info},
   row:{flexDirection:'row',gap:8,marginBottom:8,alignItems:'flex-end'},
   qBox:{width:72},rBox:{flex:1},
   ml:{fontSize:TYPOGRAPHY.xs,fontWeight:'600',color:COLORS.textSecondary,marginBottom:4},

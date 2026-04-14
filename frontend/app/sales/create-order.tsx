@@ -21,6 +21,17 @@ const PARTIES: DropdownOption[] = [
   { label: 'Delhi Suppliers', value: 'delhi' },
   { label: 'Raj Enterprises', value: 'raj' },
 ];
+const LEDGER_OPTS = [
+  { key: 'sales', label: 'Sales A/c' },
+  { key: 'cash', label: 'Cash Sales' },
+  { key: 'credit', label: 'Credit Sales' },
+];
+const WAREHOUSES: DropdownOption[] = [
+  { label: 'Main Warehouse', value: 'main_wh' },
+  { label: 'Store A', value: 'store_a' },
+  { label: 'Store B', value: 'store_b' },
+  { label: 'Delhi Depot', value: 'delhi_depot' },
+];
 const PRODUCTS: DropdownOption[] = [
   { label: 'JBL Portable Speaker', value: 'jbl_speaker' },
   { label: 'Samsung Galaxy J1 Bluetooth', value: 'samsung_j1' },
@@ -41,9 +52,9 @@ const TERMS: DropdownOption[] = [
 
 interface OItem {
   id: string; product: string; qty: string; unit: string;
-  rate: string; discountType: '%' | 'flat'; discount: string; taxRate: string;
+  rate: string; discountType: '%' | 'flat'; discount: string; taxRate: string; warehouse: string;
 }
-const newItem = (): OItem => ({ id: Date.now().toString(), product: '', qty: '1', unit: 'Pcs', rate: '', discountType: '%', discount: '0', taxRate: '18' });
+const newItem = (): OItem => ({ id: Date.now().toString(), product: '', qty: '1', unit: 'Pcs', rate: '', discountType: '%', discount: '0', taxRate: '18', warehouse: '' });
 const todayStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`; };
 const calcItem = (item: OItem) => {
   const qty = parseFloat(item.qty)||0, rate = parseFloat(item.rate)||0;
@@ -55,7 +66,7 @@ const calcItem = (item: OItem) => {
   return { gross, discAmt, taxAmt, subtotal: taxable+taxAmt };
 };
 
-type ModalState = { type: 'product'|'unit'|'tax'; itemId: string }|null;
+type ModalState = { type: 'product'|'unit'|'tax'|'warehouse'; itemId: string }|null;
 
 function ItemRow({ item, onUpdate, onRemove, onModal }: {
   item: OItem; onUpdate:(id:string,f:keyof OItem,v:string)=>void;
@@ -63,6 +74,7 @@ function ItemRow({ item, onUpdate, onRemove, onModal }: {
 }) {
   const calc = calcItem(item);
   const pname = PRODUCTS.find(p=>p.value===item.product)?.label;
+  const wname = WAREHOUSES.find(w=>w.value===item.warehouse)?.label;
   return (
     <View style={ir.card}>
       <View style={ir.topRow}>
@@ -71,10 +83,18 @@ function ItemRow({ item, onUpdate, onRemove, onModal }: {
           <Text style={[ir.prodTxt,!item.product&&ir.phTxt]} numberOfLines={1}>{pname||'Select product / service...'}</Text>
           <Ionicons name="chevron-down" size={12} color={COLORS.textSecondary} />
         </TouchableOpacity>
+        <TouchableOpacity style={ir.barcodeBtn} onPress={()=>Alert.alert('Scan Barcode','Barcode scanner ready')} activeOpacity={0.7}>
+          <Ionicons name="barcode-outline" size={18} color={COLORS.textSecondary} />
+        </TouchableOpacity>
         <TouchableOpacity style={ir.delBtn} onPress={()=>onRemove(item.id)} activeOpacity={0.7}>
           <Ionicons name="close-circle" size={20} color={COLORS.negative} />
         </TouchableOpacity>
       </View>
+      <TouchableOpacity style={ir.warehouseBtn} onPress={()=>onModal({type:'warehouse',itemId:item.id})} activeOpacity={0.7}>
+        <Ionicons name="business-outline" size={12} color={COLORS.info} />
+        <Text style={[ir.warehouseTxt,!wname&&ir.phTxt]}>{wname||'Select Warehouse'}</Text>
+        <Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
+      </TouchableOpacity>
       <View style={ir.row}>
         <View style={ir.qBox}><Text style={ir.ml}>Qty</Text>
           <TextInput style={ir.mi} value={item.qty} onChangeText={v=>onUpdate(item.id,'qty',v)} keyboardType="numeric" placeholder="1" placeholderTextColor={COLORS.textTertiary} />
@@ -112,7 +132,9 @@ export default function CreateSalesOrderScreen() {
   const [entryType, setEntryType] = useState<EntryType>('regular');
   const [orderNo] = useState('SO-00246');
   const [date, setDate] = useState(todayStr());
-  const [deliveryDate, setDeliveryDate] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [validityDays, setValidityDays] = useState('');
+  const [ledger, setLedger] = useState('sales');
   const [party, setParty] = useState('');
   const [terms, setTerms] = useState('15d');
   const [refNo, setRefNo] = useState('');
@@ -151,6 +173,15 @@ export default function CreateSalesOrderScreen() {
 
           <View style={s.card}>
             <View style={s.cardHdr}><Ionicons name="clipboard-outline" size={18} color={COLORS.info} /><Text style={s.cardTitle}>Order Details</Text></View>
+            {/* Ledger Selection */}
+            <Text style={s.fLabel}>Ledger <Text style={s.star}>*</Text></Text>
+            <View style={s.ledgerRow}>
+              {LEDGER_OPTS.map(l=>(
+                <TouchableOpacity key={l.key} style={[s.ledgerChip,ledger===l.key&&s.ledgerChipActive]} onPress={()=>setLedger(l.key)} activeOpacity={0.7}>
+                  <Text style={[s.ledgerChipTxt,ledger===l.key&&s.ledgerChipTxtActive]}>{l.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
             <View style={s.row2}>
               <View style={{flex:1}}>
                 <Text style={s.fLabel}>Order No.</Text>
@@ -164,15 +195,23 @@ export default function CreateSalesOrderScreen() {
             <FormDropdown label="Customer / Party" value={party} options={PARTIES} onSelect={o=>setParty(o.value)} placeholder="Select customer..." required />
             <View style={s.row2}>
               <View style={{flex:1}}>
-                <Text style={s.fLabel}>Delivery Date</Text>
-                <TextInput style={s.fInput} value={deliveryDate} onChangeText={setDeliveryDate} placeholder="DD/MM/YY" placeholderTextColor={COLORS.textTertiary} />
+                <Text style={s.fLabel}>Due Date</Text>
+                <TextInput style={s.fInput} value={dueDate} onChangeText={setDueDate} placeholder="DD/MM/YY" placeholderTextColor={COLORS.textTertiary} />
               </View>
               <View style={{flex:1}}>
                 <Text style={s.fLabel}>Reference No.</Text>
                 <TextInput style={s.fInput} value={refNo} onChangeText={setRefNo} placeholder="Optional" placeholderTextColor={COLORS.textTertiary} />
               </View>
             </View>
-            <FormDropdown label="Payment Terms" value={terms} options={TERMS} onSelect={o=>setTerms(o.value)} placeholder="Select terms..." containerStyle={{marginBottom:0}} />
+            <View style={s.row2}>
+              <View style={{flex:1}}>
+                <Text style={s.fLabel}>Validity Period (Days)</Text>
+                <TextInput style={s.fInput} value={validityDays} onChangeText={setValidityDays} placeholder="e.g. 30" keyboardType="numeric" placeholderTextColor={COLORS.textTertiary} />
+              </View>
+              <View style={{flex:1}}>
+                <FormDropdown label="Payment Terms" value={terms} options={TERMS} onSelect={o=>setTerms(o.value)} placeholder="Select terms..." containerStyle={{marginBottom:0}} />
+              </View>
+            </View>
           </View>
 
           <View style={s.secHdr}>
@@ -251,6 +290,20 @@ export default function CreateSalesOrderScreen() {
           ))}</View>
         </TouchableOpacity>
       </Modal>
+      <Modal visible={activeModal?.type==='warehouse'} transparent animationType="slide" onRequestClose={()=>setActiveModal(null)}>
+        <TouchableOpacity style={m.overlay} activeOpacity={1} onPress={()=>setActiveModal(null)} />
+        <View style={m.sheet}>
+          <View style={m.handle}/><Text style={m.title}>Select Warehouse</Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {WAREHOUSES.map(w=>(
+              <TouchableOpacity key={w.value} style={m.opt} onPress={()=>{if(activeModal)updateItem(activeModal.itemId,'warehouse',w.value);setActiveModal(null);}} activeOpacity={0.7}>
+                <Ionicons name="business-outline" size={14} color={COLORS.info} />
+                <Text style={m.optTxt}>{w.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -263,6 +316,11 @@ const s = StyleSheet.create({
   badge:{backgroundColor:COLORS.infoBg,paddingHorizontal:8,paddingVertical:4,borderRadius:RADIUS.full},
   badgeTxt:{fontSize:TYPOGRAPHY.xs,fontWeight:'700',color:COLORS.info},
   scroll:{padding:SPACING.md,paddingBottom:8},
+  ledgerRow:{flexDirection:'row',gap:8,marginBottom:SPACING.md},
+  ledgerChip:{flex:1,paddingVertical:10,borderRadius:RADIUS.md,borderWidth:1.5,borderColor:COLORS.borderDefault,backgroundColor:COLORS.cardBg,alignItems:'center'},
+  ledgerChipActive:{backgroundColor:COLORS.brandPrimary,borderColor:COLORS.brandPrimary},
+  ledgerChipTxt:{fontSize:TYPOGRAPHY.xs,fontWeight:'700',color:COLORS.textSecondary},
+  ledgerChipTxtActive:{color:'#fff'},
   card:{backgroundColor:COLORS.cardBg,borderRadius:RADIUS.lg,padding:SPACING.md,marginBottom:SPACING.md,borderWidth:1,borderColor:COLORS.borderDefault},
   cardHdr:{flexDirection:'row',alignItems:'center',gap:8,marginBottom:SPACING.md},
   cardTitle:{fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.textPrimary},
@@ -308,6 +366,9 @@ const ir = StyleSheet.create({
   prodTxt:{flex:1,fontSize:TYPOGRAPHY.sm,color:COLORS.textPrimary,fontWeight:'500'},
   phTxt:{color:COLORS.textTertiary},
   delBtn:{width:36,height:36,alignItems:'center',justifyContent:'center'},
+  barcodeBtn:{width:36,height:36,alignItems:'center',justifyContent:'center',backgroundColor:COLORS.pageBg,borderRadius:RADIUS.sm,borderWidth:1,borderColor:COLORS.borderDefault},
+  warehouseBtn:{flexDirection:'row',alignItems:'center',gap:6,backgroundColor:COLORS.infoBg,borderRadius:RADIUS.sm,paddingHorizontal:10,paddingVertical:7,borderWidth:1,borderColor:COLORS.info+'30',marginBottom:8},
+  warehouseTxt:{flex:1,fontSize:TYPOGRAPHY.xs,fontWeight:'600',color:COLORS.info},
   row:{flexDirection:'row',gap:8,marginBottom:8,alignItems:'flex-end'},
   qBox:{width:72},rBox:{flex:1},
   ml:{fontSize:TYPOGRAPHY.xs,fontWeight:'600',color:COLORS.textSecondary,marginBottom:4},

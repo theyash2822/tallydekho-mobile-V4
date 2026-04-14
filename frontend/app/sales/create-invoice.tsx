@@ -43,6 +43,12 @@ const PRODUCTS: DropdownOption[] = [
   { label: 'Shipping & Handling', value: 'shipping' },
   { label: 'Consulting Services', value: 'consulting' },
 ];
+const WAREHOUSES: DropdownOption[] = [
+  { label: 'Main Warehouse', value: 'main_wh' },
+  { label: 'Store A', value: 'store_a' },
+  { label: 'Store B', value: 'store_b' },
+  { label: 'Delhi Depot', value: 'delhi_depot' },
+];
 const UNITS: DropdownOption[] = [
   { label: 'Pcs', value: 'pcs' },
   { label: 'Kg', value: 'kg' },
@@ -69,11 +75,12 @@ interface InvoiceItem {
   discountType: '%' | 'flat';
   discount: string;
   taxRate: string;
+  warehouse: string;
 }
 
 const newItem = (): InvoiceItem => ({
   id: Date.now().toString(),
-  product: '', qty: '1', unit: 'pcs', rate: '', discountType: '%', discount: '0', taxRate: '18',
+  product: '', qty: '1', unit: 'pcs', rate: '', discountType: '%', discount: '0', taxRate: '18', warehouse: '',
 });
 
 const todayStr = () => {
@@ -166,7 +173,7 @@ function TaxModal({ visible, value, onSelect, onClose }: {
   );
 }
 
-type ModalState = { type: 'product'|'unit'|'tax'; itemId: string } | null;
+type ModalState = { type: 'product'|'unit'|'tax'|'warehouse'; itemId: string } | null;
 
 function ItemRow({ item, onUpdate, onRemove, onOpenModal }: {
   item: InvoiceItem;
@@ -177,6 +184,7 @@ function ItemRow({ item, onUpdate, onRemove, onOpenModal }: {
   const calc = calcItem(item);
   const productName = PRODUCTS.find(p => p.value === item.product)?.label;
   const unitLabel = UNITS.find(u => u.value === item.unit)?.label || item.unit;
+  const warehouseLabel = WAREHOUSES.find(w => w.value === item.warehouse)?.label;
 
   return (
     <View style={ir.card}>
@@ -189,10 +197,20 @@ function ItemRow({ item, onUpdate, onRemove, onOpenModal }: {
           </Text>
           <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
         </TouchableOpacity>
+        <TouchableOpacity style={ir.barcodeBtn} onPress={() => Alert.alert('Scan Barcode', 'Barcode scanner ready')} activeOpacity={0.7}>
+          <Ionicons name="barcode-outline" size={18} color={COLORS.textSecondary} />
+        </TouchableOpacity>
         <TouchableOpacity style={ir.delBtn} onPress={() => onRemove(item.id)} activeOpacity={0.7}>
           <Ionicons name="close-circle" size={20} color={COLORS.negative} />
         </TouchableOpacity>
       </View>
+
+      {/* Warehouse */}
+      <TouchableOpacity style={ir.warehouseBtn} onPress={() => onOpenModal({ type: 'warehouse', itemId: item.id })} activeOpacity={0.7}>
+        <Ionicons name="business-outline" size={12} color={COLORS.info} />
+        <Text style={[ir.warehouseTxt, !warehouseLabel && ir.placeholderTxt]}>{warehouseLabel || 'Select Warehouse'}</Text>
+        <Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
+      </TouchableOpacity>
 
       {/* Qty + Unit + Rate */}
       <View style={ir.fieldRow}>
@@ -650,6 +668,21 @@ export default function CreateSalesInvoiceScreen() {
         onSelect={v => { if (activeModal) updateItem(activeModal.itemId, 'taxRate', v); }}
         onClose={closeModal}
       />
+      {/* Warehouse Modal */}
+      <Modal visible={activeModal?.type === 'warehouse'} transparent animationType="slide" onRequestClose={closeModal}>
+        <TouchableOpacity style={m.overlay} activeOpacity={1} onPress={closeModal} />
+        <View style={m.sheet}>
+          <View style={m.handle} />
+          <Text style={m.title}>Select Warehouse</Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {WAREHOUSES.map(w => (
+              <TouchableOpacity key={w.value} style={m.opt} onPress={() => { if (activeModal) updateItem(activeModal.itemId, 'warehouse', w.value); closeModal(); }} activeOpacity={0.7}>
+                <View style={m.optLeft}><Ionicons name="business-outline" size={16} color={COLORS.info} /><Text style={m.optTxt}>{w.label}</Text></View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -725,6 +758,9 @@ const ir = StyleSheet.create({
   productTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
   placeholderTxt: { color: COLORS.textTertiary },
   delBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  barcodeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.borderDefault },
+  warehouseBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.infoBg, borderRadius: RADIUS.sm, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: COLORS.info + '30', marginBottom: 8 },
+  warehouseTxt: { flex: 1, fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.info },
   fieldRow: { flexDirection: 'row', gap: 8, marginBottom: 8, alignItems: 'flex-end' },
   qtyBox: { width: 72 },
   rateBox: { flex: 1 },

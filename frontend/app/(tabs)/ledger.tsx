@@ -383,6 +383,7 @@ export default function LedgerScreen() {
   const [sortAsc, setSortAsc] = useState(true);
   const [showFilter, setShowFilter] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [showTypeSheet, setShowTypeSheet] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => { getLedgers().then((d: any) => setData(d)); }, []);
@@ -417,7 +418,7 @@ export default function LedgerScreen() {
           <TouchableOpacity
             testID="add-ledger-btn"
             style={styles.headerIconBtn}
-            onPress={() => setShowCreate(true)}
+            onPress={() => setShowTypeSheet(true)}
             activeOpacity={0.7}
           >
             <Ionicons name="add" size={22} color={COLORS.textPrimary} />
@@ -554,6 +555,32 @@ export default function LedgerScreen() {
         onClose={() => setShowFilter(false)}
         onApply={(d) => console.log('Filter:', d)}
       />
+      {/* Ledger Type Selection Sheet */}
+      <Modal visible={showTypeSheet} transparent animationType="slide" onRequestClose={() => setShowTypeSheet(false)}>
+        <TouchableOpacity style={styles.tsOverlay} activeOpacity={1} onPress={() => setShowTypeSheet(false)} />
+        <View style={styles.tsSheet}>
+          <View style={styles.tsHandle} />
+          <Text style={styles.tsTitle}>Add Ledger</Text>
+          <Text style={styles.tsSubtitle}>Select ledger group type</Text>
+          {[
+            { type: 'sundry_creditor', label: 'Sundry Creditors', icon: 'person-add-outline', color: COLORS.positive, desc: 'Vendor/supplier accounts' },
+            { type: 'sundry_debtor', label: 'Sundry Debtors', icon: 'person-outline', color: COLORS.info, desc: 'Customer/party accounts' },
+            { type: 'duties_taxes', label: 'Duties and Taxes', icon: 'receipt-outline', color: COLORS.warning, desc: 'GST, TDS and duty accounts' },
+            { type: 'custom', label: 'Custom Groups', icon: 'settings-outline', color: COLORS.textSecondary, desc: 'Custom ledger under any group' },
+          ].map(opt => (
+            <TouchableOpacity key={opt.type} style={styles.tsOption} onPress={() => { setShowTypeSheet(false); router.push(`/ledger/create?type=${opt.type}` as any); }} activeOpacity={0.7}>
+              <View style={[styles.tsIconWrap, { backgroundColor: opt.color + '18' }]}>
+                <Ionicons name={opt.icon as any} size={22} color={opt.color} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.tsOptionLabel}>{opt.label}</Text>
+                <Text style={styles.tsOptionDesc}>{opt.desc}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -785,4 +812,13 @@ const fm = StyleSheet.create({
     paddingVertical: 14, alignItems: 'center',
   },
   applyBtnText: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+  tsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
+  tsSheet: { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingBottom: 30 },
+  tsHandle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+  tsTitle: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary, paddingHorizontal: SPACING.md, marginBottom: 4 },
+  tsSubtitle: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, paddingHorizontal: SPACING.md, marginBottom: 16 },
+  tsOption: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: SPACING.md, paddingVertical: 14, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
+  tsIconWrap: { width: 44, height: 44, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center' },
+  tsOptionLabel: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 2 },
+  tsOptionDesc: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
 });

@@ -11,6 +11,8 @@ import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 
+import LogisticsSection, { LogEntry } from '../../src/components/forms/LogisticsSection';
+
 const PARTIES: DropdownOption[] = [
   { label: 'ABC Traders', value: 'abc' },
   { label: 'PQR Exports', value: 'pqr' },
@@ -19,6 +21,12 @@ const PARTIES: DropdownOption[] = [
   { label: 'Sharma Electronics', value: 'sharma' },
   { label: 'Delhi Suppliers', value: 'delhi' },
   { label: 'Raj Enterprises', value: 'raj' },
+];
+const WAREHOUSES: DropdownOption[] = [
+  { label: 'Main Warehouse', value: 'main_wh' },
+  { label: 'Store A', value: 'store_a' },
+  { label: 'Store B', value: 'store_b' },
+  { label: 'Delhi Depot', value: 'delhi_depot' },
 ];
 const PRODUCTS: DropdownOption[] = [
   { label: 'JBL Portable Speaker', value: 'jbl_speaker' },
@@ -33,9 +41,9 @@ const TAX_RATES = ['0','5','12','18','28'];
 
 interface QItem {
   id: string; product: string; qty: string; unit: string;
-  rate: string; discountType: '%' | 'flat'; discount: string; taxRate: string;
+  rate: string; discountType: '%' | 'flat'; discount: string; taxRate: string; warehouse: string;
 }
-const newItem = (): QItem => ({ id: Date.now().toString(), product: '', qty: '1', unit: 'Pcs', rate: '', discountType: '%', discount: '0', taxRate: '0' });
+const newItem = (): QItem => ({ id: Date.now().toString(), product: '', qty: '1', unit: 'Pcs', rate: '', discountType: '%', discount: '0', taxRate: '0', warehouse: '' });
 const todayStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`; };
 const calcItem = (item: QItem) => {
   const qty = parseFloat(item.qty)||0, rate = parseFloat(item.rate)||0;
@@ -47,7 +55,7 @@ const calcItem = (item: QItem) => {
   return { gross, discAmt, taxAmt, subtotal: taxable+taxAmt };
 };
 
-type ModalState = { type: 'product'|'unit'|'tax'; itemId: string }|null;
+type ModalState = { type: 'product'|'unit'|'tax'|'warehouse'; itemId: string }|null;
 
 function ItemRow({ item, onUpdate, onRemove, onModal }: {
   item: QItem; onUpdate:(id:string,f:keyof QItem,v:string)=>void;
@@ -55,6 +63,7 @@ function ItemRow({ item, onUpdate, onRemove, onModal }: {
 }) {
   const calc = calcItem(item);
   const pname = PRODUCTS.find(p=>p.value===item.product)?.label;
+  const wname = WAREHOUSES.find(w=>w.value===item.warehouse)?.label;
   return (
     <View style={ir.card}>
       <View style={ir.topRow}>
@@ -63,10 +72,18 @@ function ItemRow({ item, onUpdate, onRemove, onModal }: {
           <Text style={[ir.prodTxt,!item.product&&ir.phTxt]} numberOfLines={1}>{pname||'Select product / service...'}</Text>
           <Ionicons name="chevron-down" size={12} color={COLORS.textSecondary} />
         </TouchableOpacity>
+        <TouchableOpacity style={ir.barcodeBtn} onPress={()=>Alert.alert('Scan Barcode','Barcode scanner ready')} activeOpacity={0.7}>
+          <Ionicons name="barcode-outline" size={18} color={COLORS.textSecondary} />
+        </TouchableOpacity>
         <TouchableOpacity style={ir.delBtn} onPress={()=>onRemove(item.id)} activeOpacity={0.7}>
           <Ionicons name="close-circle" size={20} color={COLORS.negative} />
         </TouchableOpacity>
       </View>
+      <TouchableOpacity style={ir.warehouseBtn} onPress={()=>onModal({type:'warehouse',itemId:item.id})} activeOpacity={0.7}>
+        <Ionicons name="business-outline" size={12} color={COLORS.info} />
+        <Text style={[ir.warehouseTxt,!wname&&ir.phTxt]}>{wname||'Select Warehouse'}</Text>
+        <Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
+      </TouchableOpacity>
       <View style={ir.row}>
         <View style={ir.qBox}><Text style={ir.mLabel}>Qty</Text>
           <TextInput style={ir.mInput} value={item.qty} onChangeText={v=>onUpdate(item.id,'qty',v)} keyboardType="numeric" placeholder="1" placeholderTextColor={COLORS.textTertiary} />
@@ -108,6 +125,8 @@ export default function CreateQuotationScreen() {
   const [party, setParty] = useState('');
   const [refNo, setRefNo] = useState('');
   const [items, setItems] = useState<QItem[]>([newItem()]);
+  const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
+  const [logTaxRate, setLogTaxRate] = useState('0');
   const [narration, setNarration] = useState('');
   const [terms, setTerms] = useState('This quotation is valid for 30 days from the date of issue.');
   const [activeModal, setActiveModal] = useState<ModalState>(null);
@@ -187,6 +206,8 @@ export default function CreateQuotationScreen() {
             <Text style={s.addTxt}>Add Item / Service</Text>
           </TouchableOpacity>
 
+          <LogisticsSection entries={logEntries} taxRate={logTaxRate} onEntriesChange={setLogEntries} onTaxRateChange={setLogTaxRate} />
+
           {/* Summary */}
           <View style={s.sumCard}>
             <Text style={s.sumTitle}>Quotation Summary</Text>
@@ -250,6 +271,19 @@ export default function CreateQuotationScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+      <Modal visible={activeModal?.type==='warehouse'} transparent animationType="slide" onRequestClose={()=>setActiveModal(null)}>
+        <TouchableOpacity style={m.overlay} activeOpacity={1} onPress={()=>setActiveModal(null)} />
+        <View style={m.sheet}>
+          <View style={m.handle}/><Text style={m.title}>Select Warehouse</Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {WAREHOUSES.map(w=>(
+              <TouchableOpacity key={w.value} style={m.opt} onPress={()=>{if(activeModal)updateItem(activeModal.itemId,'warehouse',w.value);setActiveModal(null);}} activeOpacity={0.7}>
+                <Text style={m.optTxt}>{w.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -310,6 +344,9 @@ const ir = StyleSheet.create({
   prodTxt:{flex:1,fontSize:TYPOGRAPHY.sm,color:COLORS.textPrimary,fontWeight:'500'},
   phTxt:{color:COLORS.textTertiary},
   delBtn:{width:36,height:36,alignItems:'center',justifyContent:'center'},
+  barcodeBtn:{width:36,height:36,alignItems:'center',justifyContent:'center',backgroundColor:COLORS.pageBg,borderRadius:RADIUS.sm,borderWidth:1,borderColor:COLORS.borderDefault},
+  warehouseBtn:{flexDirection:'row',alignItems:'center',gap:6,backgroundColor:COLORS.infoBg,borderRadius:RADIUS.sm,paddingHorizontal:10,paddingVertical:7,borderWidth:1,borderColor:COLORS.info+'30',marginBottom:8},
+  warehouseTxt:{flex:1,fontSize:TYPOGRAPHY.xs,fontWeight:'600',color:COLORS.info},
   row:{flexDirection:'row',gap:8,marginBottom:8,alignItems:'flex-end'},
   qBox:{width:72},rBox:{flex:1},
   mLabel:{fontSize:TYPOGRAPHY.xs,fontWeight:'600',color:COLORS.textSecondary,marginBottom:4},
