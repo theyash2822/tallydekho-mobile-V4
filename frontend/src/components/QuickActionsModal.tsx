@@ -136,7 +136,7 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose,
                     <Ionicons
                       name={isExpanded ? 'chevron-up' : 'chevron-down'}
                       size={20}
-                      color={isExpanded ? BRAND_GREEN : COLORS.textSecondary}
+                      color={COLORS.textSecondary}
                     />
                   </TouchableOpacity>
 
@@ -224,7 +224,7 @@ const s = StyleSheet.create({
     overflow: 'hidden',
   },
   sectionCardActive: {
-    borderColor: LIGHT_GREEN_BORDER,
+    borderColor: COLORS.borderStrong,
     backgroundColor: COLORS.cardBg,
   },
   sectionRow: {
@@ -245,7 +245,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   iconCircleActive: {
-    borderColor: BRAND_GREEN,
+    borderColor: COLORS.borderStrong,
   },
   sectionLabel: {
     flex: 1,
