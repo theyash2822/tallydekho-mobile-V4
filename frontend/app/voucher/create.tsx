@@ -10,6 +10,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import AddPartyModal, { PartyData } from '../../src/components/forms/AddPartyModal';
+import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 
 type VType = 'payment' | 'receipt' | 'journal' | 'contra';
 
@@ -87,6 +88,7 @@ export default function CreateVoucherScreen() {
 
   const initType = (['payment','receipt','journal','contra'].includes(params.type || '') ? params.type : 'payment') as VType;
   const [vType, setVType] = useState<VType>(initType);
+  const [entryType, setEntryType] = useState<EntryType>('regular');
   const [date, setDate] = useState(todayStr());
   const [showAddParty, setShowAddParty] = useState(false);
   const [localParties, setLocalParties] = useState<DropdownOption[]>(PARTIES);
@@ -146,6 +148,7 @@ export default function CreateVoucherScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Create Voucher</Text>
+        <RegularOptionalToggle value={entryType} onChange={setEntryType} />
         <View style={[s.badge, { backgroundColor: cfg.bg }]}>
           <Text style={[s.badgeTxt, { color: cfg.color }]}>{AUTO_NOS[vType]}</Text>
         </View>

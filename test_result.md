@@ -192,6 +192,21 @@ frontend:
       - working: false
         agent: "main"
         comment: "Previously items pressed did nothing. Fixed by adding useRouter and router.push(item.route) on item press."
+      - working: "NA"
+        agent: "main"
+        comment: "FIXED: 13 broken routes in QUICK_ACTIONS array in mockData.ts. Routes were pointing to list views (/sales/order, /purchase/order, /stocks etc). All routes now correctly point to /create form screens: /sales/create-order, /purchase/create-order, /stocks/create-adjustment, /stocks/create-transfer, /stocks/create-item, /stocks/create-warehouse, /ledger/create?type=sundry_creditor, etc."
+
+  - task: "RegularOptionalToggle on all 10+ data entry forms"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/sales/create-quotation.tsx, frontend/app/purchase/create-invoice.tsx, frontend/app/voucher/create.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Added RegularOptionalToggle import + entryType state + toggle in header to: (1) sales/create-quotation.tsx, (2) purchase/create-invoice.tsx, (3) voucher/create.tsx. Other screens (create-order, create-delivery-note, create-credit-note, purchase/create-order, purchase/create-debit-note, stocks/*, ledger/create) already had the toggle from previous agent."
 
   - task: "Sales module screens (hub, register, ewaybill, order, quotation, credit-note, delivery-note)"
     implemented: true

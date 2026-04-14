@@ -10,6 +10,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
+import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 const LEDGER_OPTS: DropdownOption[] = [
@@ -138,6 +139,7 @@ export default function CreatePurchaseInvoiceScreen() {
   const [ocrStatus, setOcrStatus] = useState<OcrStatus>('idle');
   const [showCamera, setShowCamera] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
+  const [entryType, setEntryType] = useState<EntryType>('regular');
   const [ledger, setLedger] = useState('purchase_raw');
   const [invNo] = useState('PINV-00089');
   const [date, setDate] = useState(todayStr());
@@ -196,6 +198,7 @@ export default function CreatePurchaseInvoiceScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Create Purchase Invoice</Text>
+        <RegularOptionalToggle value={entryType} onChange={setEntryType} />
         <View style={s.badge}><Text style={s.badgeTxt}>{invNo}</Text></View>
       </View>
 

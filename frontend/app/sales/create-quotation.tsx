@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
+import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 
 const PARTIES: DropdownOption[] = [
   { label: 'ABC Traders', value: 'abc' },
@@ -100,6 +101,7 @@ function ItemRow({ item, onUpdate, onRemove, onModal }: {
 export default function CreateQuotationScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [entryType, setEntryType] = useState<EntryType>('regular');
   const [qtNo] = useState('QT-00157');
   const [date, setDate] = useState(todayStr());
   const [validUntil, setValidUntil] = useState('');
@@ -130,6 +132,7 @@ export default function CreateQuotationScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Create Quotation</Text>
+        <RegularOptionalToggle value={entryType} onChange={setEntryType} />
         <View style={s.badge}><Text style={s.badgeTxt}>{qtNo}</Text></View>
       </View>
 
