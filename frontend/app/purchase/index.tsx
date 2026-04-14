@@ -12,10 +12,19 @@ const QUICK_LINKS = [
   { label: 'Debit Notes',  icon: 'return-up-forward-outline', route: '/purchase/debit-note', color: '#C0392B', bg: '#FDECEA' },
 ] as const;
 
+const TOP_VENDORS = [
+  { id: 'TV1', name: 'Global Supplies Co.',  gstin: '27AABCG1234F1Z5', total: '₹3,82,000', orders: 10, badge: '🥇', color: '#D97706' },
+  { id: 'TV2', name: 'Prime Distributors',   gstin: '07AADCP9876G2Z1', total: '₹2,61,500', orders: 8,  badge: '🥈', color: '#6B7280' },
+  { id: 'TV3', name: 'ShreeStar Traders',    gstin: '24AABCS3456K4Z2', total: '₹1,88,000', orders: 7,  badge: '🥉', color: '#92400E' },
+  { id: 'TV4', name: 'National Wholesalers', gstin: '07AABCN5678H1Z3', total: '₹1,54,000', orders: 5,  badge: '',    color: '#2563EB' },
+  { id: 'TV5', name: 'Metro Raw Materials',  gstin: '27AABCM2345J3Z9', total: '₹1,12,500', orders: 4,  badge: '',    color: '#2563EB' },
+];
+
 export default function PurchaseHubScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [showCreate, setShowCreate] = useState(false);
+  const [activeTab, setActiveTab] = useState<'recent' | 'vendors'>('recent');
   const recent = MOCK_PURCHASE_REGISTER.invoices.slice(0, 4);
 
   return (
@@ -60,28 +69,78 @@ export default function PurchaseHubScreen() {
           ))}
         </View>
 
-        {/* Recent */}
-        <View style={s.secRow}>
-          <Text style={s.secTitle}>Recent Purchases</Text>
-          <TouchableOpacity onPress={() => router.push('/purchase/register' as any)}>
-            <Text style={s.viewAll}>View All</Text>
+        {/* ---- TABS ---- */}
+        <View style={s.tabRow}>
+          <TouchableOpacity style={[s.tabBtn, activeTab === 'recent' && s.tabActive]} onPress={() => setActiveTab('recent')} activeOpacity={0.7}>
+            <Text style={[s.tabTxt, activeTab === 'recent' && s.tabActiveTxt]}>Recent Purchases</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[s.tabBtn, activeTab === 'vendors' && s.tabActive]} onPress={() => setActiveTab('vendors')} activeOpacity={0.7}>
+            <Text style={[s.tabTxt, activeTab === 'vendors' && s.tabActiveTxt]}>Top Vendors</Text>
           </TouchableOpacity>
         </View>
-        <View style={s.listCard}>
-          {recent.map((inv, idx) => (
-            <View key={inv.id}>
-              <TouchableOpacity style={s.listRow} activeOpacity={0.7}>
-                <View style={[s.dot, { backgroundColor: inv.status === 'paid' ? COLORS.positive : inv.status === 'unpaid' ? COLORS.negative : '#9CA3AF' }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={s.listParty}>{inv.vendor}</Text>
-                  <Text style={s.listMeta}>{inv.id} · {inv.date}</Text>
-                </View>
-                <Text style={s.listAmt}>{inv.amount}</Text>
+
+        {/* Recent Purchases Tab */}
+        {activeTab === 'recent' && (
+          <>
+            <View style={s.secRow}>
+              <Text style={s.secTitle}></Text>
+              <TouchableOpacity onPress={() => router.push('/purchase/register' as any)}>
+                <Text style={s.viewAll}>View All →</Text>
               </TouchableOpacity>
-              {idx < recent.length - 1 && <View style={s.div} />}
             </View>
-          ))}
-        </View>
+            <View style={s.listCard}>
+              {recent.map((inv, idx) => (
+                <View key={inv.id}>
+                  <TouchableOpacity style={s.listRow} activeOpacity={0.7}>
+                    <View style={[s.dot, { backgroundColor: inv.status === 'paid' ? COLORS.positive : inv.status === 'unpaid' ? COLORS.negative : '#9CA3AF' }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.listParty}>{inv.vendor}</Text>
+                      <Text style={s.listMeta}>{inv.id} · {inv.date}</Text>
+                    </View>
+                    <View style={s.listRight}>
+                      <Text style={s.listAmt}>{inv.amount}</Text>
+                      <View style={[s.statusBadge, { backgroundColor: inv.status === 'paid' ? '#F0FBF4' : '#FDECEA' }]}>
+                        <Text style={[s.statusTxt, { color: inv.status === 'paid' ? '#2D7D46' : '#DC2626' }]}>{inv.status}</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                  {idx < recent.length - 1 && <View style={s.div} />}
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* Top Vendors Tab */}
+        {activeTab === 'vendors' && (
+          <View style={s.listCard}>
+            {TOP_VENDORS.map((vendor, idx) => (
+              <View key={vendor.id}>
+                <TouchableOpacity style={s.partyRow} activeOpacity={0.7}>
+                  <View style={s.rankCol}>
+                    {vendor.badge ? (
+                      <Text style={s.rankBadge}>{vendor.badge}</Text>
+                    ) : (
+                      <Text style={s.rankNum}>#{idx + 1}</Text>
+                    )}
+                  </View>
+                  <View style={[s.partyAvatar, { backgroundColor: vendor.color + '20' }]}>
+                    <Text style={[s.partyAvatarTxt, { color: vendor.color }]}>{vendor.name.charAt(0)}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.partyName}>{vendor.name}</Text>
+                    <Text style={s.partyGstin}>{vendor.gstin}</Text>
+                  </View>
+                  <View style={s.partyRight}>
+                    <Text style={s.partyTotal}>{vendor.total}</Text>
+                    <Text style={s.partyInvoices}>{vendor.orders} orders</Text>
+                  </View>
+                </TouchableOpacity>
+                {idx < TOP_VENDORS.length - 1 && <View style={s.div} />}
+              </View>
+            ))}
+          </View>
+        )}
       </ScrollView>
 
       {/* FAB */}
@@ -143,6 +202,27 @@ const s = StyleSheet.create({
   listMeta: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
   listAmt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   div: { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 16 },
+  // Tabs
+  tabRow: { flexDirection: 'row', marginHorizontal: SPACING.md, marginTop: SPACING.md, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full, padding: 3, borderWidth: 1, borderColor: COLORS.borderDefault },
+  tabBtn: { flex: 1, paddingVertical: 9, alignItems: 'center' as const, borderRadius: RADIUS.full },
+  tabActive: { backgroundColor: COLORS.brandPrimary },
+  tabTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600' as const, color: COLORS.textSecondary },
+  tabActiveTxt: { color: COLORS.white },
+  listRight: { alignItems: 'flex-end' as const, gap: 4 },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: RADIUS.full },
+  statusTxt: { fontSize: 10, fontWeight: '700' as const },
+  // Top Vendors
+  partyRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 12, gap: 10 },
+  rankCol: { width: 32, alignItems: 'center' as const },
+  rankBadge: { fontSize: 18 },
+  rankNum: { fontSize: TYPOGRAPHY.sm, fontWeight: '700' as const, color: COLORS.textTertiary },
+  partyAvatar: { width: 38, height: 38, borderRadius: 19, alignItems: 'center' as const, justifyContent: 'center' as const },
+  partyAvatarTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '800' as const },
+  partyName: { fontSize: TYPOGRAPHY.sm, fontWeight: '700' as const, color: COLORS.textPrimary },
+  partyGstin: { fontSize: 10, color: COLORS.textTertiary, marginTop: 2 },
+  partyRight: { alignItems: 'flex-end' as const },
+  partyTotal: { fontSize: TYPOGRAPHY.sm, fontWeight: '800' as const, color: COLORS.textPrimary },
+  partyInvoices: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
   headerAddBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.borderDefault },
   fab: { position: 'absolute', right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 8px rgba(0, 0, 0, 0.25)', elevation: 8 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
