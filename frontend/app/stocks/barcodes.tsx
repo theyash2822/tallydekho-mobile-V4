@@ -60,14 +60,14 @@ export default function BarcodesScreen() {
       {/* Quick actions */}
       <View style={styles.quickRow}>
         {[
-          { label: 'Manual Entry', icon: 'keypad-outline',    color: '#2563EB', bg: '#EFF6FF' },
-          { label: 'Bulk Import',  icon: 'cloud-upload-outline', color: '#7C3AED', bg: '#F5F3FF' },
-          { label: 'Print Label',  icon: 'print-outline',     color: '#D97706', bg: '#FFFBEB' },
+          { label: 'Manual Entry', icon: 'keypad-outline',    color: '#2563EB', bg: '#EFF6FF', route: null },
+          { label: 'Bulk Import',  icon: 'cloud-upload-outline', color: '#7C3AED', bg: '#F5F3FF', route: null },
+          { label: 'Print Labels', icon: 'print-outline',     color: '#D97706', bg: '#FFFBEB', route: '/stocks/print-barcodes' },
         ].map(q => (
           <TouchableOpacity
             key={q.label}
             style={[styles.quickBtn, { backgroundColor: q.bg }]}
-            onPress={() => Alert.alert(q.label, 'Feature coming soon!')}
+            onPress={() => q.route ? router.push(q.route as any) : Alert.alert(q.label, 'Feature coming soon!')}
             activeOpacity={0.7}
           >
             <Ionicons name={q.icon as any} size={20} color={q.color} />

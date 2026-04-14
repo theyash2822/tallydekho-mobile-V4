@@ -24,6 +24,7 @@ const MODULE_CARDS = [
   { id: 'sales',    label: 'Sales',    icon: 'trending-up',   route: '/sales',    color: '#2D7D46', bg: '#F0FBF4' },
   { id: 'purchase', label: 'Purchase', icon: 'cart',          route: '/purchase', color: '#2563EB', bg: '#EFF6FF' },
   { id: 'voucher',  label: 'Vouchers', icon: 'card',          route: '/voucher',  color: '#7C3AED', bg: '#F5F3FF' },
+  { id: 'expenses', label: 'Expenses', icon: 'receipt-outline', route: '/expenses', color: '#DC2626', bg: '#FDECEA' },
   { id: 'settings', label: 'Settings', icon: 'settings-outline', route: '/settings', color: '#D97706', bg: '#FFFBEB' },
 ] as const;
 
@@ -71,7 +72,12 @@ export default function HomeScreen() {
   };
 
   const renderKPI = ({ item }: any) => (
-    <TouchableOpacity testID={`kpi-card-${item.id}`} style={styles.kpiCard} activeOpacity={0.7}>
+    <TouchableOpacity
+      testID={`kpi-card-${item.id}`}
+      style={styles.kpiCard}
+      activeOpacity={0.7}
+      onPress={() => item.route && router.push(item.route as any)}
+    >
       <View style={styles.kpiIconBox}>
         <Ionicons name={item.icon} size={20} color={COLORS.textSecondary} />
       </View>

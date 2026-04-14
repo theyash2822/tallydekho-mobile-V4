@@ -29,17 +29,17 @@ export const MOCK_STOCK_DASHBOARD = {
 };
 
 export const MOCK_KPI_STRIP = [
-  { id: 'cash', label: 'Cash In Hand', amount: '₹10,00,000', icon: 'cash-outline', route: '/cash' },
-  { id: 'bank', label: 'Bank Balance', amount: '₹8,00,000', icon: 'card-outline', route: '/bank' },
-  { id: 'receivable', label: 'Receivables', amount: '₹3,50,000', icon: 'arrow-down-circle-outline', route: '/receivables' },
-  { id: 'payable', label: 'Payables', amount: '₹5,61,500', icon: 'arrow-up-circle-outline', route: '/payables' },
-  { id: 'loans', label: 'Loans & ODs', amount: '₹1,62,500', icon: 'git-merge-outline', route: '/loans' },
-  { id: 'payments', label: 'Payments', amount: '₹1,36,000', icon: 'send-outline', route: '/payments' },
-  { id: 'receipts', label: 'Receipts', amount: '₹36,000', icon: 'download-outline', route: '/receipts' },
+  { id: 'cash', label: 'Cash In Hand', amount: '₹10,00,000', icon: 'cash-outline', route: '/kpi/cash-in-hand' },
+  { id: 'bank', label: 'Bank Balance', amount: '₹8,00,000', icon: 'card-outline', route: '/kpi/bank-balance' },
+  { id: 'receivable', label: 'Receivables', amount: '₹3,50,000', icon: 'arrow-down-circle-outline', route: '/kpi/receivables' },
+  { id: 'payable', label: 'Payables', amount: '₹5,61,500', icon: 'arrow-up-circle-outline', route: '/kpi/payables' },
+  { id: 'loans', label: 'Loans & ODs', amount: '₹1,62,500', icon: 'git-merge-outline', route: '/kpi/loans-ods' },
+  { id: 'payments', label: 'Payments', amount: '₹1,36,000', icon: 'send-outline', route: '/kpi/payments' },
+  { id: 'receipts', label: 'Receipts', amount: '₹36,000', icon: 'download-outline', route: '/kpi/receipts' },
 ];
 
 export const MOCK_METRICS = [
-  { id: 'expenses', label: 'Expenses', amount: '₹130.00', change: 12.0, positive: false, icon: 'trending-up-outline', route: null },
+  { id: 'expenses', label: 'Expenses', amount: '₹1,42,000', change: 12.0, positive: false, icon: 'trending-up-outline', route: '/expenses' },
   { id: 'sales', label: 'Sales', amount: '₹92,000', change: 5.1, positive: true, icon: 'stats-chart-outline', route: '/sales/register' },
   { id: 'purchases', label: 'Purchases', amount: '₹74,500', change: 8.7, positive: true, icon: 'cart-outline', route: '/purchase/register' },
 ];

@@ -251,6 +251,16 @@ export default function GSTReportScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Unmatched List FAB */}
+      <TouchableOpacity
+        style={s.unmatchedFab}
+        onPress={() => router.push('/reports/unmatched-list' as any)}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="warning-outline" size={18} color={COLORS.white} />
+        <Text style={s.unmatchedFabTxt}>View Unmatched (5)</Text>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -302,4 +312,7 @@ const s = StyleSheet.create({
   itcInv: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, width: 48 },
   itcAmt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, width: 70, textAlign: 'right' },
   itcStatus: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: RADIUS.full },
+
+  unmatchedFab: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, margin: SPACING.md, backgroundColor: '#DC2626', paddingVertical: 13, borderRadius: RADIUS.md, elevation: 4, boxShadow: '0 2px 8px rgba(220,38,38,0.3)' } as any,
+  unmatchedFabTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
 });

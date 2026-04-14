@@ -72,6 +72,24 @@ export default function StockReportsScreen() {
       </View>
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        {/* Fast vs Slow Moving CTA */}
+        <TouchableOpacity
+          style={styles.fastSlowBanner}
+          onPress={() => router.push('/stocks/fast-slow' as any)}
+          activeOpacity={0.85}
+        >
+          <View style={styles.fastSlowLeft}>
+            <View style={styles.fastSlowIcon}>
+              <Ionicons name="swap-horizontal-outline" size={22} color={COLORS.white} />
+            </View>
+            <View>
+              <Text style={styles.fastSlowTitle}>Fast vs Slow Moving Analysis</Text>
+              <Text style={styles.fastSlowSub}>62% fast · 38% slow · 377 total SKUs</Text>
+            </View>
+          </View>
+          <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
+        </TouchableOpacity>
+
         {/* KPI grid */}
         <View style={styles.kpiGrid}>
           {REPORT_CARDS.map(c => (
@@ -144,6 +162,11 @@ const styles = StyleSheet.create({
   scroll:  { flex: 1 },
   content: { padding: SPACING.md, gap: SPACING.md },
 
+  fastSlowBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: SPACING.md, marginTop: SPACING.md, marginBottom: 4, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.lg, padding: SPACING.md },
+  fastSlowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  fastSlowIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  fastSlowTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
+  fastSlowSub: { fontSize: TYPOGRAPHY.xs, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
   kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   kpiCard: {
     width: (CARD_W - 10) / 2, backgroundColor: COLORS.cardBg,

@@ -20,29 +20,23 @@ const STATUS_CONFIG: Record<StockStatus, { label: string; color: string; bg: str
 
 const FILTER_CHIPS = ['Warehouse', 'Category', 'Item Group'];
 
-// Swipe left (drag LEFT) action — Delete
+// Swipe left (drag LEFT) action — Stock Transfer (per doc)
 function RightActions({ onPress }: { onPress: () => void }) {
   return (
-    <TouchableOpacity style={styles.swipeDelete} onPress={onPress} activeOpacity={0.8}>
-      <Ionicons name="trash-outline" size={20} color={COLORS.white} />
-      <Text style={styles.swipeLabel}>Delete</Text>
+    <TouchableOpacity style={styles.swipeTransfer} onPress={onPress} activeOpacity={0.8}>
+      <Ionicons name="swap-horizontal-outline" size={20} color={COLORS.white} />
+      <Text style={styles.swipeLabel}>Transfer</Text>
     </TouchableOpacity>
   );
 }
 
-// Swipe right (drag RIGHT) action — Edit + Reorder
-function LeftActions({ onEdit, onReorder }: { onEdit: () => void; onReorder: () => void }) {
+// Swipe right (drag RIGHT) action — Stock Edit only (per doc)
+function LeftActions({ onEdit }: { onEdit: () => void }) {
   return (
-    <View style={styles.swipeLeftContainer}>
-      <TouchableOpacity style={styles.swipeEdit} onPress={onEdit} activeOpacity={0.8}>
-        <Ionicons name="pencil-outline" size={18} color={COLORS.white} />
-        <Text style={styles.swipeLabel}>Edit</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.swipeReorder} onPress={onReorder} activeOpacity={0.8}>
-        <Ionicons name="refresh-outline" size={18} color={COLORS.white} />
-        <Text style={styles.swipeLabel}>Reorder</Text>
-      </TouchableOpacity>
-    </View>
+    <TouchableOpacity style={styles.swipeEdit} onPress={onEdit} activeOpacity={0.8}>
+      <Ionicons name="pencil-outline" size={18} color={COLORS.white} />
+      <Text style={styles.swipeLabel}>Edit</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -56,10 +50,7 @@ function StockItemRow({ item, onEdit, onReorder, onDelete, onPress }: {
     <Swipeable
       ref={swipeRef}
       renderLeftActions={() => (
-        <LeftActions
-          onEdit={() => { swipeRef.current?.close(); onEdit(); }}
-          onReorder={() => { swipeRef.current?.close(); onReorder(); }}
-        />
+        <LeftActions onEdit={() => { swipeRef.current?.close(); onEdit(); }} />
       )}
       renderRightActions={() => (
         <RightActions onPress={() => { swipeRef.current?.close(); onDelete(); }} />
@@ -278,11 +269,8 @@ const styles = StyleSheet.create({
   swipeEdit: {
     backgroundColor: '#2563EB', width: 72, alignItems: 'center', justifyContent: 'center', gap: 4,
   },
-  swipeReorder: {
-    backgroundColor: '#059669', width: 80, alignItems: 'center', justifyContent: 'center', gap: 4,
-  },
-  swipeDelete: {
-    backgroundColor: COLORS.negative, width: 80, alignItems: 'center', justifyContent: 'center', gap: 4,
+  swipeTransfer: {
+    backgroundColor: '#7C3AED', width: 85, alignItems: 'center', justifyContent: 'center', gap: 4,
   },
   swipeLabel: { fontSize: 10, color: COLORS.white, fontWeight: '700' },
 
