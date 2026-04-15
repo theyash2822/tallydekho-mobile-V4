@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, RefreshControl, Modal, KeyboardAvoidingView,
@@ -12,6 +12,7 @@ import { getLedgers } from '../../src/services/api';
 import { MOCK_LEDGERS } from '../../src/data/mockData';
 
 type FilterType = 'All' | 'Debit' | 'Credit';
+type NatureType = 'All' | 'Assets' | 'Liabilities' | 'Income' | 'Expense';
 
 interface LedgerItem {
   id: string;
@@ -19,6 +20,7 @@ interface LedgerItem {
   group: string;
   balance: string;
   type: 'credit' | 'debit';
+  nature?: string;
   lastUpdated: string;
 }
 
@@ -305,67 +307,105 @@ function CreateLedgerModal({ visible, onClose, onSave }: CreateLedgerModalProps)
 }
 
 // ─── Filter Modal ─────────────────────────────────────────────────────────────
+const NATURE_FILTER_OPTIONS: NatureType[] = ['Assets', 'Liabilities', 'Income', 'Expense'];
+
 interface FilterModalProps {
   visible: boolean;
   onClose: () => void;
-  onApply: (data: any) => void;
+  activeNature: NatureType;
+  onApply: (nature: NatureType) => void;
 }
 
-function FilterModal({ visible, onClose, onApply }: FilterModalProps) {
-  const [nature, setNature] = useState('Assets');
-  const [hideZero, setHideZero] = useState(false);
-  const [group, setGroup] = useState('');
+function FilterModal({ visible, onClose, activeNature, onApply }: FilterModalProps) {
+  const [selectedCategory, setSelectedCategory] = useState<'Nature' | 'Group'>('Nature');
+  const [localNature, setLocalNature] = useState<NatureType>(activeNature);
+  const [groupSearch, setGroupSearch] = useState('');
+
+  // Sync with external active nature whenever modal opens
+  React.useEffect(() => {
+    if (visible) setLocalNature(activeNature);
+  }, [visible, activeNature]);
+
+  const CATEGORIES = ['Nature', 'Group'] as const;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={fm.overlay}>
-        <TouchableOpacity style={fm.backdrop} onPress={onClose} activeOpacity={1} />
+        {/* Top spacer — tap to close */}
+        <TouchableOpacity style={{ flex: 1 }} onPress={onClose} activeOpacity={1} />
+
         <View style={fm.sheet}>
-          <View style={fm.sheetHeader}>
-            <Text style={fm.sheetTitle}>Filter</Text>
-            <TouchableOpacity onPress={onClose} style={fm.closeBtn} activeOpacity={0.7}>
-              <Ionicons name="close" size={20} color={COLORS.textSecondary} />
-            </TouchableOpacity>
+          {/* Title */}
+          <View style={fm.titleRow}>
+            <Text style={fm.title}>Filter</Text>
           </View>
 
+          {/* Two-panel body */}
           <View style={fm.body}>
-            <Text style={fm.label}>Nature</Text>
-            <View style={fm.row}>
-              <View style={fm.selectBox}>
-                <Text style={fm.selectText}>{nature}</Text>
-                <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
-              </View>
-              <View style={fm.toggleRow}>
-                <Text style={fm.toggleLabel}>Hide Zero</Text>
-                <Switch
-                  value={hideZero}
-                  onValueChange={setHideZero}
-                  trackColor={{ false: COLORS.borderDefault, true: COLORS.brandPrimary }}
-                  thumbColor={COLORS.white}
-                />
-              </View>
+            {/* LEFT: category sidebar */}
+            <View style={fm.sidebar}>
+              {CATEGORIES.map(cat => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[fm.sideItem, selectedCategory === cat && fm.sideItemActive]}
+                  onPress={() => setSelectedCategory(cat)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[fm.sideItemTxt, selectedCategory === cat && fm.sideItemTxtActive]}>
+                    {cat}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
-            <Text style={fm.label}>Group</Text>
-            <View style={fm.searchBox}>
-              <Ionicons name="search" size={14} color={COLORS.textTertiary} />
-              <TextInput
-                style={fm.searchInput}
-                placeholder="Search Group"
-                placeholderTextColor={COLORS.textTertiary}
-                value={group}
-                onChangeText={setGroup}
-              />
+            {/* RIGHT: options panel */}
+            <View style={fm.content}>
+              {selectedCategory === 'Nature' ? (
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {NATURE_FILTER_OPTIONS.map((opt, idx) => (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[fm.optRow, idx === NATURE_FILTER_OPTIONS.length - 1 && { borderBottomWidth: 0 }]}
+                      onPress={() => setLocalNature(localNature === opt ? 'All' : opt)}
+                      activeOpacity={0.7}
+                    >
+                      {/* Radio circle */}
+                      <View style={[fm.radio, localNature === opt && fm.radioActive]}>
+                        {localNature === opt && <View style={fm.radioDot} />}
+                      </View>
+                      <Text style={[fm.optTxt, localNature === opt && fm.optTxtActive]}>{opt}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              ) : (
+                <View>
+                  <View style={fm.searchBox}>
+                    <Ionicons name="search" size={14} color={COLORS.textTertiary} />
+                    <TextInput
+                      style={fm.searchInput}
+                      placeholder="Search Group..."
+                      placeholderTextColor={COLORS.textTertiary}
+                      value={groupSearch}
+                      onChangeText={setGroupSearch}
+                    />
+                  </View>
+                  <Text style={fm.groupHint}>Filter by ledger group name</Text>
+                </View>
+              )}
             </View>
           </View>
 
+          {/* Bottom actions */}
           <View style={fm.footer}>
+            <TouchableOpacity style={fm.cancelBtn} onPress={onClose} activeOpacity={0.8}>
+              <Text style={fm.cancelTxt}>Cancel</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={fm.applyBtn}
-              onPress={() => { onApply({ nature, hideZero, group }); onClose(); }}
+              onPress={() => { onApply(localNature); onClose(); }}
               activeOpacity={0.85}
             >
-              <Text style={fm.applyBtnText}>Save & Use</Text>
+              <Text style={fm.applyBtnText}>Apply filters</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -377,15 +417,19 @@ function FilterModal({ visible, onClose, onApply }: FilterModalProps) {
 // ─── Main Ledger Screen ───────────────────────────────────────────────────────
 export default function LedgerScreen() {
   const router = useRouter();
+  const filterBtnRef = useRef<TouchableOpacity>(null);
   const [data, setData] = useState<LedgerItem[]>(MOCK_LEDGERS);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('All');
+  const [activeNature, setActiveNature] = useState<NatureType>('All');
   const [sortAsc, setSortAsc] = useState(true);
   const [showFilter, setShowFilter] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [showTypeSheet, setShowTypeSheet] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [hideZero, setHideZero] = useState(false);
+  const [showFilterDrop, setShowFilterDrop] = useState(false);
+  const [filterDropPos, setFilterDropPos] = useState({ x: 16, y: 200 });
 
   useEffect(() => { getLedgers().then((d: any) => setData(d)); }, []);
 
@@ -397,9 +441,15 @@ export default function LedgerScreen() {
   };
 
   const isZeroBalance = (balance: string) => {
-    // Strip everything except digits and commas, then check if numeric value is 0
     const num = parseInt(balance.replace(/[^0-9]/g, ''), 10);
     return isNaN(num) || num === 0;
+  };
+
+  const openFilterDrop = () => {
+    filterBtnRef.current?.measureInWindow((x, y, _w, h) => {
+      setFilterDropPos({ x: x - 8, y: y + h + 4 });
+      setShowFilterDrop(true);
+    });
   };
 
   const filtered = data
@@ -410,7 +460,8 @@ export default function LedgerScreen() {
         (filter === 'Debit' && item.type === 'debit') ||
         (filter === 'Credit' && item.type === 'credit');
       const matchZero = hideZero ? !isZeroBalance(item.balance) : true;
-      return matchSearch && matchFilter && matchZero;
+      const matchNature = activeNature === 'All' || item.nature === activeNature;
+      return matchSearch && matchFilter && matchZero && matchNature;
     })
     .sort((a, b) => sortAsc
       ? a.name.localeCompare(b.name)
@@ -462,33 +513,28 @@ export default function LedgerScreen() {
         </View>
       </View>
 
-      {/* Filter Tabs + Hide Zero Toggle + Sort */}
+      {/* Filter Bar: ≡ All ▾ dropdown  |  Hide Zero  |  Sort */}
       <View style={styles.tabRow}>
-        {/* Left: All / Debit / Credit tabs */}
-        <View style={styles.filterTabs}>
-          {(['All', 'Debit', 'Credit'] as FilterType[]).map(f => (
-            <TouchableOpacity
-              key={f}
-              testID={`filter-tab-${f}`}
-              style={[styles.filterTab, filter === f && styles.filterTabActive]}
-              onPress={() => setFilter(f)}
-              activeOpacity={0.7}
-            >
-              {f !== 'All' && (
-                <Ionicons
-                  name={f === 'Debit' ? 'arrow-up-circle-outline' : 'arrow-down-circle-outline'}
-                  size={13}
-                  color={filter === f ? COLORS.textPrimary : COLORS.textSecondary}
-                />
-              )}
-              <Text style={[styles.filterTabText, filter === f && styles.filterTabTextActive]}>{f}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {/* ≡ All ▾ dropdown button */}
+        <TouchableOpacity
+          ref={filterBtnRef}
+          style={[styles.filterDropBtn, filter !== 'All' && styles.filterDropBtnActive]}
+          onPress={openFilterDrop}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="list" size={15} color={filter !== 'All' ? COLORS.brandPrimary : COLORS.textSecondary} />
+          <Text style={[styles.filterDropBtnTxt, filter !== 'All' && styles.filterDropBtnTxtActive]}>
+            {filter}
+          </Text>
+          <Ionicons
+            name={showFilterDrop ? 'chevron-up' : 'chevron-down'}
+            size={14}
+            color={filter !== 'All' ? COLORS.brandPrimary : COLORS.textSecondary}
+          />
+        </TouchableOpacity>
 
-        {/* Right: Hide Zero + Sort */}
+        {/* Right side: Hide Zero + Sort */}
         <View style={styles.rightControls}>
-          {/* Hide Zero toggle */}
           <TouchableOpacity
             style={[styles.hideZeroBtn, hideZero && styles.hideZeroBtnActive]}
             onPress={() => setHideZero(v => !v)}
@@ -504,17 +550,70 @@ export default function LedgerScreen() {
             />
           </TouchableOpacity>
 
-          {/* Sort buttons */}
           <View style={styles.sortBtns}>
-            <TouchableOpacity style={styles.sortBtn} onPress={() => setSortAsc(true)} activeOpacity={0.7}>
-              <Ionicons name="arrow-up" size={14} color={sortAsc ? COLORS.textPrimary : COLORS.textTertiary} />
+            <TouchableOpacity style={[styles.sortBtn, sortAsc && styles.sortBtnActive]} onPress={() => setSortAsc(true)} activeOpacity={0.7}>
+              <Text style={[styles.sortBtnTxt, sortAsc && styles.sortBtnTxtActive]}>₁</Text>
+              <Ionicons name="arrow-down" size={10} color={sortAsc ? COLORS.brandPrimary : COLORS.textTertiary} />
+              <Text style={[styles.sortBtnTxt, sortAsc && styles.sortBtnTxtActive]}>₉</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.sortBtn} onPress={() => setSortAsc(false)} activeOpacity={0.7}>
-              <Ionicons name="arrow-down" size={14} color={!sortAsc ? COLORS.textPrimary : COLORS.textTertiary} />
+            <TouchableOpacity style={[styles.sortBtn, !sortAsc && styles.sortBtnActive]} onPress={() => setSortAsc(false)} activeOpacity={0.7}>
+              <Text style={[styles.sortBtnTxt, !sortAsc && styles.sortBtnTxtActive]}>A</Text>
+              <Ionicons name="arrow-down" size={10} color={!sortAsc ? COLORS.brandPrimary : COLORS.textTertiary} />
+              <Text style={[styles.sortBtnTxt, !sortAsc && styles.sortBtnTxtActive]}>Z</Text>
             </TouchableOpacity>
           </View>
         </View>
       </View>
+
+      {/* Active nature badge (shows when a nature filter is applied) */}
+      {activeNature !== 'All' && (
+        <View style={styles.activeBadgeRow}>
+          <View style={styles.activeBadge}>
+            <Text style={styles.activeBadgeTxt}>{activeNature}</Text>
+            <TouchableOpacity onPress={() => setActiveNature('All')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close-circle" size={14} color={COLORS.brandPrimary} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Inline floating dropdown: All / Credit / Debit */}
+      <Modal
+        visible={showFilterDrop}
+        transparent
+        animationType="none"
+        onRequestClose={() => setShowFilterDrop(false)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1 }}
+          activeOpacity={1}
+          onPress={() => setShowFilterDrop(false)}
+        >
+          <View style={[styles.floatDropCard, { top: filterDropPos.y, left: filterDropPos.x }]}>
+            {[
+              { v: 'All' as FilterType, icon: 'list', label: 'All' },
+              { v: 'Credit' as FilterType, icon: 'arrow-down-circle-outline', label: 'Credit' },
+              { v: 'Debit' as FilterType, icon: 'arrow-up-circle-outline', label: 'Debit' },
+            ].map((opt, idx) => (
+              <TouchableOpacity
+                key={opt.v}
+                style={[styles.floatDropItem, idx < 2 && styles.floatDropItemBorder, filter === opt.v && styles.floatDropItemActive]}
+                onPress={() => { setFilter(opt.v); setShowFilterDrop(false); }}
+                activeOpacity={0.75}
+              >
+                <Ionicons
+                  name={opt.icon as any}
+                  size={16}
+                  color={filter === opt.v ? COLORS.brandPrimary : COLORS.textSecondary}
+                />
+                <Text style={[styles.floatDropTxt, filter === opt.v && styles.floatDropTxtActive]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Ledger List */}
       <ScrollView
@@ -582,7 +681,8 @@ export default function LedgerScreen() {
       <FilterModal
         visible={showFilter}
         onClose={() => setShowFilter(false)}
-        onApply={(d) => console.log('Filter:', d)}
+        activeNature={activeNature}
+        onApply={(nature) => setActiveNature(nature)}
       />
       {/* Ledger Type Selection Sheet */}
       <Modal visible={showTypeSheet} transparent animationType="slide" onRequestClose={() => setShowTypeSheet(false)}>
@@ -646,21 +746,48 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBg,
     borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
-  filterTabs: { flexDirection: 'row', gap: 6 },
-  filterTab: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault,
+  // ≡ All ▾ dropdown button
+  filterDropBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: RADIUS.full,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    backgroundColor: COLORS.cardBg, minWidth: 90,
+  },
+  filterDropBtnActive: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary + '12' },
+  filterDropBtnTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+  filterDropBtnTxtActive: { color: COLORS.brandPrimary },
+  // Floating dropdown card (from the ≡ All button)
+  floatDropCard: {
+    position: 'absolute',
     backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.lg,
+    minWidth: 160,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12, shadowRadius: 8, elevation: 8,
+    overflow: 'hidden',
   },
-  filterTabActive: {
-    backgroundColor: COLORS.activeBg, borderColor: COLORS.borderStrong,
+  floatDropItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 16, paddingVertical: 14,
   },
-  filterTabText: { fontSize: TYPOGRAPHY.xs, fontWeight: '500', color: COLORS.textSecondary },
-  filterTabTextActive: { fontWeight: '700', color: COLORS.textPrimary },
-  // Right controls group
+  floatDropItemBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  floatDropItemActive: { backgroundColor: COLORS.brandPrimary + '0D' },
+  floatDropTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary, fontWeight: '500' },
+  floatDropTxtActive: { color: COLORS.brandPrimary, fontWeight: '700' },
+  // Active nature badge row
+  activeBadgeRow: {
+    flexDirection: 'row', paddingHorizontal: SPACING.md, paddingVertical: 6,
+    backgroundColor: COLORS.pageBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  activeBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: COLORS.brandPrimary + '15', borderRadius: RADIUS.full,
+    paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: COLORS.brandPrimary + '40',
+  },
+  activeBadgeTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.brandPrimary },
+  // Right controls
   rightControls: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  // Hide Zero toggle pill
   hideZeroBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 10, paddingVertical: 5,
@@ -668,19 +795,21 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: COLORS.borderDefault,
     backgroundColor: COLORS.cardBg,
   },
-  hideZeroBtnActive: {
-    borderColor: COLORS.brandPrimary,
-    backgroundColor: COLORS.brandPrimary + '12',
-  },
+  hideZeroBtnActive: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary + '12' },
   hideZeroTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
   hideZeroTxtActive: { color: COLORS.brandPrimary },
   hideZeroSwitch: { transform: [{ scaleX: 0.75 }, { scaleY: 0.75 }] },
   sortBtns: { flexDirection: 'row', gap: 4 },
   sortBtn: {
-    width: 30, height: 30, borderRadius: RADIUS.sm,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 8, paddingVertical: 5,
+    borderRadius: RADIUS.sm,
     backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault,
-    alignItems: 'center', justifyContent: 'center',
+    gap: 2,
   },
+  sortBtnActive: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary + '10' },
+  sortBtnTxt: { fontSize: 10, fontWeight: '700', color: COLORS.textTertiary },
+  sortBtnTxtActive: { color: COLORS.brandPrimary },
   scroll: { flex: 1 },
   list: { padding: SPACING.md, gap: 8 },
   itemCard: {
@@ -814,50 +943,63 @@ const cs = StyleSheet.create({
   pickerItemTextActive: { fontWeight: '700', color: COLORS.brandPrimary },
 });
 
-// Filter Modal Styles
+// Filter Modal Styles — two-panel design
 const fm = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: {
     backgroundColor: COLORS.cardBg,
     borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    maxHeight: '80%',
   },
-  sheetHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md, paddingVertical: 14,
+  titleRow: {
+    paddingHorizontal: SPACING.md, paddingVertical: 16,
     borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
-  sheetTitle: { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
-  closeBtn: {
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center',
+  title: { fontSize: TYPOGRAPHY.xl, fontWeight: '800', color: COLORS.textPrimary },
+  body: { flexDirection: 'row', flex: 1, minHeight: 380 },
+  sidebar: {
+    width: '38%', backgroundColor: COLORS.pageBg,
+    borderRightWidth: 1, borderRightColor: COLORS.borderDefault,
+    paddingTop: 4,
   },
-  body: { padding: SPACING.md },
-  label: {
-    fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary,
-    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, marginTop: 10,
+  sideItem: {
+    paddingHorizontal: 16, paddingVertical: 18,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  selectBox: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
-    paddingHorizontal: 12, paddingVertical: 10, backgroundColor: COLORS.pageBg,
+  sideItemActive: { backgroundColor: COLORS.cardBg },
+  sideItemTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary, fontWeight: '500' },
+  sideItemTxtActive: { color: COLORS.textPrimary, fontWeight: '700' },
+  content: { flex: 1, paddingTop: 4 },
+  optRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    paddingHorizontal: 16, paddingVertical: 18,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
-  selectText: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
-  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  toggleLabel: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
+  radio: {
+    width: 22, height: 22, borderRadius: 11,
+    borderWidth: 2, borderColor: COLORS.borderStrong,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  radioActive: { borderColor: COLORS.brandPrimary },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.brandPrimary },
+  optTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary, fontWeight: '500' },
+  optTxtActive: { color: COLORS.textPrimary, fontWeight: '600' },
   searchBox: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    margin: 12, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
     paddingHorizontal: 12, paddingVertical: 10, backgroundColor: COLORS.pageBg,
   },
   searchInput: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
-  footer: { padding: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
-  applyBtn: {
-    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md,
-    paddingVertical: 14, alignItems: 'center',
+  groupHint: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, paddingHorizontal: 16 },
+  footer: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
+  cancelBtn: {
+    flex: 1, paddingVertical: 18, alignItems: 'center',
+    borderRightWidth: 1, borderRightColor: COLORS.borderDefault,
   },
+  cancelTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textSecondary },
+  applyBtn: { flex: 1.8, paddingVertical: 18, alignItems: 'center', backgroundColor: COLORS.brandPrimary },
   applyBtnText: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+  // Type Sheet styles (kept for the "Add Ledger" type sheet)
   tsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   tsSheet: { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingBottom: 30 },
   tsHandle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },

@@ -78,13 +78,15 @@ export const MOCK_STOCKS = {
 };
 
 export const MOCK_LEDGERS = [
-  { id: 'LED001', name: 'Indian Export House', group: 'Sundry Creditor', balance: '₹34,000', type: 'credit', lastUpdated: '08/28' },
-  { id: 'LED002', name: 'Raj Enterprises', group: 'Sundry Debtor', balance: '₹12,500', type: 'debit', lastUpdated: '08/25' },
-  { id: 'LED003', name: 'Cash', group: 'Cash-in-hand', balance: '₹0', type: 'debit', lastUpdated: '08/22' },
-  { id: 'LED004', name: 'ABC Traders', group: 'Sundry Creditor', balance: '₹34,000', type: 'credit', lastUpdated: '08/20' },
-  { id: 'LED005', name: 'Kumar & Sons', group: 'Sundry Debtor', balance: '₹8,000', type: 'debit', lastUpdated: '08/18' },
-  { id: 'LED006', name: 'Sharma Electronics', group: 'Capital Account', balance: '₹0', type: 'credit', lastUpdated: '08/17' },
-  { id: 'LED007', name: 'Delhi Suppliers', group: 'Sundry Creditor', balance: '₹22,000', type: 'credit', lastUpdated: '08/10' },
+  { id: 'LED001', name: 'Indian Export House', group: 'Sundry Creditor', balance: '₹34,000', type: 'credit', nature: 'Liabilities', lastUpdated: '08/28' },
+  { id: 'LED002', name: 'Raj Enterprises', group: 'Sundry Debtor', balance: '₹12,500', type: 'debit', nature: 'Assets', lastUpdated: '08/25' },
+  { id: 'LED003', name: 'Cash', group: 'Cash-in-hand', balance: '₹0', type: 'debit', nature: 'Assets', lastUpdated: '08/22' },
+  { id: 'LED004', name: 'ABC Traders', group: 'Sundry Creditor', balance: '₹34,000', type: 'credit', nature: 'Liabilities', lastUpdated: '08/20' },
+  { id: 'LED005', name: 'Kumar & Sons', group: 'Sundry Debtor', balance: '₹8,000', type: 'debit', nature: 'Assets', lastUpdated: '08/18' },
+  { id: 'LED006', name: 'Sharma Electronics', group: 'Capital Account', balance: '₹0', type: 'credit', nature: 'Liabilities', lastUpdated: '08/17' },
+  { id: 'LED007', name: 'Delhi Suppliers', group: 'Sundry Creditor', balance: '₹22,000', type: 'credit', nature: 'Liabilities', lastUpdated: '08/10' },
+  { id: 'LED008', name: 'Sales Revenue', group: 'Sales Accounts', balance: '₹92,000', type: 'credit', nature: 'Income', lastUpdated: '08/08' },
+  { id: 'LED009', name: 'Office Expenses', group: 'Indirect Expenses', balance: '₹14,200', type: 'debit', nature: 'Expense', lastUpdated: '08/05' },
 ];
 
 export const MOCK_REPORTS = {
