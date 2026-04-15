@@ -186,7 +186,7 @@ function SearchableDD({
               onPress={() => { onAddNew(); setOpen(false); }}
               activeOpacity={0.7}
             >
-              <Ionicons name="add-circle-outline" size={16} color={COLORS.positive} />
+              <Ionicons name="add-circle-outline" size={16} color={COLORS.brandPrimary} />
               <Text style={sdd.addNewText}>{addNewLabel || 'Add New'}</Text>
             </TouchableOpacity>
           )}
@@ -265,6 +265,192 @@ function BarcodeScannerModal({ visible, onScan, onClose }: {
           <Text style={bs.hint}>Point camera at product barcode</Text>
         </View>
       </SafeAreaView>
+    </Modal>
+  );
+}
+
+// ─── Add Customer Bottom Drawer ───────────────────────────────────────────────
+const GST_TYPES = ['Regular', 'Unregistered', 'Composition'];
+
+function AddCustomerDrawer({ visible, onClose, onSaved }: {
+  visible: boolean;
+  onClose: () => void;
+  onSaved: (name: string) => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const [name, setName] = useState('');
+  const [openBal, setOpenBal] = useState('');
+  const [isCr, setIsCr] = useState(false);
+  const [creditDays, setCreditDays] = useState('');
+  const [mailing, setMailing] = useState(false);
+  const [bank, setBank] = useState(false);
+  const [gstType, setGstType] = useState('Regular');
+  const [gstOpen, setGstOpen] = useState(false);
+  const [gstin, setGstin] = useState('');
+  const [pan, setPan] = useState('');
+  const [nameFocused, setNameFocused] = useState(false);
+  const [creditFocused, setCreditFocused] = useState(false);
+  const [gstinFocused, setGstinFocused] = useState(false);
+  const [panFocused, setPanFocused] = useState(false);
+  const [balFocused, setBalFocused] = useState(false);
+
+  const webFix = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
+
+  const handleSave = () => {
+    if (!name.trim()) { Alert.alert('Required', 'Customer name is required.'); return; }
+    onSaved(name.trim());
+    // Reset
+    setName(''); setOpenBal(''); setIsCr(false); setCreditDays('');
+    setMailing(false); setBank(false); setGstType('Regular');
+    setGstin(''); setPan('');
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <TouchableOpacity style={acd.backdrop} activeOpacity={1} onPress={onClose} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={acd.kvWrap}
+      >
+        <View style={[acd.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          {/* Handle + Header */}
+          <View style={acd.handle} />
+          <View style={acd.header}>
+            <Text style={acd.title}>New Customer</Text>
+            <Text style={acd.subtitle}>Sundry Debtors</Text>
+            <TouchableOpacity onPress={onClose} style={acd.closeBtn}>
+              <Ionicons name="close" size={22} color={COLORS.textPrimary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={acd.body}
+          >
+            {/* Name */}
+            <Text style={acd.label}>Name <Text style={acd.star}>*</Text></Text>
+            <TextInput
+              style={[acd.input, nameFocused && acd.inputFocused, webFix]}
+              placeholder="Enter customer name"
+              placeholderTextColor={COLORS.textTertiary}
+              value={name} onChangeText={setName}
+              onFocus={() => setNameFocused(true)}
+              onBlur={() => setNameFocused(false)}
+            />
+
+            {/* Opening Balance */}
+            <Text style={acd.label}>Opening Balance</Text>
+            <View style={[acd.balBox, balFocused && acd.inputFocused]}>
+              <TextInput
+                style={[acd.balInput, webFix]}
+                placeholder="0.00"
+                placeholderTextColor={COLORS.textTertiary}
+                value={openBal} onChangeText={setOpenBal}
+                keyboardType="numeric"
+                onFocus={() => setBalFocused(true)}
+                onBlur={() => setBalFocused(false)}
+              />
+              <View style={acd.drCrRow}>
+                <Text style={[acd.drCrLbl, !isCr && acd.drCrLblActive]}>Dr</Text>
+                <Switch
+                  value={isCr} onValueChange={setIsCr}
+                  trackColor={{ false: COLORS.borderStrong, true: COLORS.borderStrong }}
+                  thumbColor={COLORS.white}
+                />
+                <Text style={[acd.drCrLbl, isCr && acd.drCrLblActive]}>Cr</Text>
+              </View>
+            </View>
+
+            {/* Credit Period */}
+            <Text style={acd.label}>Credit Period (Days)</Text>
+            <TextInput
+              style={[acd.input, creditFocused && acd.inputFocused, webFix]}
+              placeholder="Enter credit period"
+              placeholderTextColor={COLORS.textTertiary}
+              value={creditDays} onChangeText={setCreditDays}
+              keyboardType="numeric"
+              onFocus={() => setCreditFocused(true)}
+              onBlur={() => setCreditFocused(false)}
+            />
+
+            {/* Toggles */}
+            <View style={acd.divider} />
+            <View style={acd.toggleRow}>
+              <Text style={acd.toggleLbl}>Enable Mailing Details</Text>
+              <Switch value={mailing} onValueChange={setMailing}
+                trackColor={{ false: COLORS.borderStrong, true: COLORS.brandPrimary }}
+                thumbColor={COLORS.white}
+              />
+            </View>
+            <View style={acd.toggleRow}>
+              <Text style={acd.toggleLbl}>Provide Bank Details</Text>
+              <Switch value={bank} onValueChange={setBank}
+                trackColor={{ false: COLORS.borderStrong, true: COLORS.brandPrimary }}
+                thumbColor={COLORS.white}
+              />
+            </View>
+            <View style={acd.divider} />
+
+            {/* GST Registration Type */}
+            <Text style={acd.label}>GST Registration Type <Text style={acd.star}>*</Text></Text>
+            <TouchableOpacity
+              style={[acd.selectBox, gstOpen && acd.selectBoxOpen]}
+              onPress={() => setGstOpen(!gstOpen)}
+              activeOpacity={0.7}
+            >
+              <Text style={acd.selectTxt}>{gstType}</Text>
+              <Ionicons name={gstOpen ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+            {gstOpen && (
+              <View style={acd.dropList}>
+                {GST_TYPES.map((t, idx) => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[acd.dropItem, idx === GST_TYPES.length - 1 && { borderBottomWidth: 0 }]}
+                    onPress={() => { setGstType(t); setGstOpen(false); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[acd.dropTxt, gstType === t && acd.dropTxtActive]}>{t}</Text>
+                    {gstType === t && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* GSTIN */}
+            <Text style={acd.label}>GSTIN <Text style={acd.star}>*</Text></Text>
+            <TextInput
+              style={[acd.input, gstinFocused && acd.inputFocused, webFix]}
+              placeholder="Enter GSTIN"
+              placeholderTextColor={COLORS.textTertiary}
+              value={gstin} onChangeText={v => setGstin(v.toUpperCase())}
+              autoCapitalize="characters"
+              onFocus={() => setGstinFocused(true)}
+              onBlur={() => setGstinFocused(false)}
+            />
+
+            {/* PAN */}
+            <Text style={acd.label}>PAN/IT No.</Text>
+            <TextInput
+              style={[acd.input, panFocused && acd.inputFocused, webFix]}
+              placeholder="Enter PAN/IT number"
+              placeholderTextColor={COLORS.textTertiary}
+              value={pan} onChangeText={v => setPan(v.toUpperCase())}
+              autoCapitalize="characters"
+              onFocus={() => setPanFocused(true)}
+              onBlur={() => setPanFocused(false)}
+            />
+
+            <View style={{ height: 8 }} />
+          </ScrollView>
+
+          {/* Save */}
+          <TouchableOpacity style={acd.saveBtn} onPress={handleSave} activeOpacity={0.85}>
+            <Text style={acd.saveBtnTxt}>Save Customer</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -525,6 +711,8 @@ export default function CreateSalesInvoiceScreen() {
   const [invoiceNo] = useState('INV-30979');
   const [date, setDate] = useState(todayStr());
   const [party, setParty] = useState('');
+  const [parties, setParties] = useState<DropdownOption[]>(PARTIES);
+  const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [payTerms, setPayTerms] = useState('due_on_receipt');
   const [customDays, setCustomDays] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -642,10 +830,10 @@ export default function CreateSalesInvoiceScreen() {
               label="Customer / Party"
               required
               placeholder="Search customer..."
-              options={PARTIES}
+              options={parties}
               value={party}
               onSelect={o => setParty(o.value)}
-              onAddNew={() => router.push('/ledger/create?type=sundry_debtor' as any)}
+              onAddNew={() => setShowAddCustomer(true)}
               addNewLabel="Add New Customer"
             />
 
@@ -988,6 +1176,20 @@ export default function CreateSalesInvoiceScreen() {
         }}
         onClose={closeModal}
       />
+
+      {/* Add New Customer Drawer */}
+      <AddCustomerDrawer
+        visible={showAddCustomer}
+        onClose={() => setShowAddCustomer(false)}
+        onSaved={(name) => {
+          const newVal = name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
+          const newOpt: DropdownOption = { label: name, value: newVal };
+          setParties(prev => [...prev, newOpt]);
+          setParty(newVal);
+          setShowAddCustomer(false);
+          Alert.alert('✓ Customer Added', `"${name}" has been added and selected.`);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -1128,7 +1330,7 @@ const sdd = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 14,
     borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
   },
-  addNewText: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.positive },
+  addNewText: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.brandPrimary },
 });
 
 // ─── Barcode Scanner Styles ───────────────────────────────────────────────────
@@ -1166,3 +1368,92 @@ const mAdd = StyleSheet.create({
   },
   warehouseHintTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.info, flex: 1 },
 });
+
+// ─── Add Customer Drawer Styles ───────────────────────────────────────────────
+const acd = StyleSheet.create({
+  backdrop: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  kvWrap: { flex: 1, justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: COLORS.cardBg,
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    maxHeight: '92%',
+    shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15, shadowRadius: 16, elevation: 24,
+  },
+  handle: {
+    width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.borderStrong,
+    alignSelf: 'center', marginTop: 12, marginBottom: 4,
+  },
+  header: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: SPACING.md, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+    gap: 8,
+  },
+  title: { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
+  subtitle: {
+    fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textTertiary,
+    backgroundColor: COLORS.pageBg, paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: RADIUS.sm, overflow: 'hidden',
+  },
+  closeBtn: {
+    marginLeft: 'auto', width: 32, height: 32,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.pageBg, borderRadius: 16,
+  },
+  body: { paddingHorizontal: SPACING.md, paddingTop: 4, paddingBottom: 8 },
+  label: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, marginBottom: 8, marginTop: 16 },
+  star: { color: COLORS.negative },
+  input: {
+    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    paddingHorizontal: 14, paddingVertical: 13,
+    fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary,
+    backgroundColor: COLORS.cardBg,
+  },
+  inputFocused: { borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
+  balBox: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    backgroundColor: COLORS.cardBg, paddingLeft: 14, paddingRight: 10, paddingVertical: 4,
+  },
+  balInput: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, paddingVertical: 9 },
+  drCrRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 8 },
+  drCrLbl: { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textTertiary },
+  drCrLblActive: { color: COLORS.textPrimary, fontWeight: '700' },
+  divider: { height: 1, backgroundColor: COLORS.borderDefault, marginVertical: 8 },
+  toggleRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 10,
+  },
+  toggleLbl: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
+  selectBox: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    paddingHorizontal: 14, paddingVertical: 14, backgroundColor: COLORS.cardBg,
+  },
+  selectBoxOpen: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
+  selectTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, fontWeight: '600' },
+  dropList: {
+    borderWidth: 1, borderTopWidth: 0, borderColor: COLORS.borderDefault,
+    backgroundColor: COLORS.cardBg,
+    borderBottomLeftRadius: RADIUS.md, borderBottomRightRadius: RADIUS.md,
+    overflow: 'hidden',
+  },
+  dropItem: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 14, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  dropTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
+  dropTxtActive: { fontWeight: '700' },
+  saveBtn: {
+    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md,
+    paddingVertical: 15, alignItems: 'center',
+    marginHorizontal: SPACING.md, marginTop: 8,
+  },
+  saveBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+});
+
