@@ -207,6 +207,7 @@ export default function LedgerDetailScreen() {
   const [showCrOnly, setShowCrOnly] = useState(false);
   const [showInfo,   setShowInfo]   = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
 
   const ledger = MOCK_LEDGERS?.find((l: any) => l.id === id) ||
     { id: id || 'L001', name: 'Alliance Trading Co.', group: 'Sundry Debtors', balance: '₹37,500 Dr' };
@@ -311,14 +312,21 @@ export default function LedgerDetailScreen() {
           keyboardVerticalOffset={80}
         >
           <View style={styles.filterRow}>
-            <View style={styles.searchBox}>
-              <Ionicons name="search-outline" size={14} color={COLORS.textTertiary} />
+            <View style={[styles.searchBox, searchFocused && styles.searchBoxFocused]}>
+              <Ionicons
+                name="search-outline"
+                size={14}
+                color={searchFocused ? COLORS.brandPrimary : COLORS.textTertiary}
+              />
               <TextInput
                 style={styles.searchInput}
                 placeholder="Search transactions"
                 placeholderTextColor={COLORS.textTertiary}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+                selectionColor={COLORS.brandPrimary}
                 returnKeyType="search"
                 clearButtonMode="while-editing"
                 autoCorrect={false}
@@ -485,6 +493,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md,
     paddingHorizontal: 12, paddingVertical: 8,
     borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  searchBoxFocused: {
+    borderColor: COLORS.brandPrimary,
+    borderWidth: 1.5,
   },
   searchInput: {
     flex: 1,
