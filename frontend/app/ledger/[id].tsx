@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Dimensions, Modal,
+  Dimensions, Modal, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -206,14 +206,24 @@ export default function LedgerDetailScreen() {
   const [showDrOnly, setShowDrOnly] = useState(false);
   const [showCrOnly, setShowCrOnly] = useState(false);
   const [showInfo,   setShowInfo]   = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const ledger = MOCK_LEDGERS?.find((l: any) => l.id === id) ||
     { id: id || 'L001', name: 'Alliance Trading Co.', group: 'Sundry Debtors', balance: '₹37,500 Dr' };
 
-  // Apply Dr/Cr filter
+  // Apply Dr/Cr filter + search
   const txns = MOCK_TRANSACTIONS.filter(t => {
     if (showDrOnly && !t.isDebit) return false;
     if (showCrOnly &&  t.isDebit) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      return (
+        t.voucher.toLowerCase().includes(q) ||
+        t.type.toLowerCase().includes(q) ||
+        t.date.toLowerCase().includes(q) ||
+        t.amount.toLowerCase().includes(q)
+      );
+    }
     return true;
   });
 
@@ -244,6 +254,11 @@ export default function LedgerDetailScreen() {
       return next;
     });
   };
+
+  // When searching, auto-expand all months that have results
+  const effectiveExpanded = searchQuery.trim()
+    ? new Set(sortedMonths)   // all months visible while searching
+    : expandedMonths;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -291,85 +306,112 @@ export default function LedgerDetailScreen() {
         </ScrollView>
 
         {/* ── Search + Dr/Cr filter ── */}
-        <View style={styles.filterRow}>
-          <View style={styles.searchBox}>
-            <Ionicons name="search-outline" size={14} color={COLORS.textTertiary} />
-            <Text style={styles.searchPlaceholder}>Search transactions</Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={80}
+        >
+          <View style={styles.filterRow}>
+            <View style={styles.searchBox}>
+              <Ionicons name="search-outline" size={14} color={COLORS.textTertiary} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search transactions"
+                placeholderTextColor={COLORS.textTertiary}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                returnKeyType="search"
+                clearButtonMode="while-editing"
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
+                  <Ionicons name="close-circle" size={15} color={COLORS.textTertiary} />
+                </TouchableOpacity>
+              )}
+            </View>
+            <TouchableOpacity
+              style={[styles.filterPill, showDrOnly && styles.filterPillActive]}
+              onPress={() => { setShowDrOnly(!showDrOnly); setShowCrOnly(false); }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.filterPillText, showDrOnly && styles.filterPillTextActive]}>Dr</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterPill, showCrOnly && styles.filterPillActive]}
+              onPress={() => { setShowCrOnly(!showCrOnly); setShowDrOnly(false); }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.filterPillText, showCrOnly && styles.filterPillTextActive]}>Cr</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            style={[styles.filterPill, showDrOnly && styles.filterPillActive]}
-            onPress={() => { setShowDrOnly(!showDrOnly); setShowCrOnly(false); }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.filterPillText, showDrOnly && styles.filterPillTextActive]}>Dr</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterPill, showCrOnly && styles.filterPillActive]}
-            onPress={() => { setShowCrOnly(!showCrOnly); setShowDrOnly(false); }}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.filterPillText, showCrOnly && styles.filterPillTextActive]}>Cr</Text>
-          </TouchableOpacity>
-        </View>
+        </KeyboardAvoidingView>
 
         {/* ── Transaction list — month accordion ── */}
         <View style={styles.txnContainer}>
-          {sortedMonths.map(mon => {
-            const isOpen   = expandedMonths.has(mon);
-            const monTxns  = monthGroups[mon];
-            return (
-              <View key={mon} style={styles.monthGroup}>
-                {/* Month header — tappable accordion toggle */}
-                <TouchableOpacity
-                  style={styles.monthHeader}
-                  onPress={() => toggleMonth(mon)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.monthHeaderText}>{mon} 25</Text>
-                  <Ionicons
-                    name={isOpen ? 'chevron-up' : 'chevron-down'}
-                    size={15}
-                    color={COLORS.textTertiary}
-                  />
-                </TouchableOpacity>
-
-                {/* Rows — only rendered when expanded */}
-                {isOpen && monTxns.map((txn, idx) => (
+          {sortedMonths.length === 0 ? (
+            <View style={styles.emptySearch}>
+              <Ionicons name="search-outline" size={28} color={COLORS.textTertiary} />
+              <Text style={styles.emptySearchText}>No transactions match "{searchQuery}"</Text>
+            </View>
+          ) : (
+            sortedMonths.map(mon => {
+              const isOpen  = effectiveExpanded.has(mon);
+              const monTxns = monthGroups[mon];
+              return (
+                <View key={mon} style={styles.monthGroup}>
+                  {/* Month header — tappable accordion toggle */}
                   <TouchableOpacity
-                    key={txn.id}
-                    style={[
-                      styles.txnRow,
-                      idx === monTxns.length - 1 && { borderBottomWidth: 0 },
-                    ]}
-                    activeOpacity={0.75}
+                    style={styles.monthHeader}
+                    onPress={() => toggleMonth(mon)}
+                    activeOpacity={0.7}
                   >
-                    {/* Date column — two lines */}
-                    <View style={styles.txnDateCol}>
-                      <Text style={styles.txnDay}>{txn.date.split(' ')[0]}</Text>
-                      <Text style={styles.txnMon}>{txn.date.split(' ')[1]}</Text>
-                    </View>
-
-                    {/* Voucher info */}
-                    <View style={styles.txnInfo}>
-                      <Text style={styles.txnVoucher}>{txn.voucher}</Text>
-                      <Text style={styles.txnType}>{txn.type}</Text>
-                    </View>
-
-                    {/* Amount + balance */}
-                    <View style={styles.txnAmounts}>
-                      <Text style={[
-                        styles.txnAmt,
-                        { color: txn.isDebit ? COLORS.negative : COLORS.positive },
-                      ]}>
-                        {txn.isDebit ? 'Dr ' : 'Cr '}{txn.amount}
-                      </Text>
-                      <Text style={styles.txnBalance}>{txn.balance}</Text>
-                    </View>
+                    <Text style={styles.monthHeaderText}>{mon} 25</Text>
+                    <Ionicons
+                      name={isOpen ? 'chevron-up' : 'chevron-down'}
+                      size={15}
+                      color={COLORS.textTertiary}
+                    />
                   </TouchableOpacity>
-                ))}
-              </View>
-            );
-          })}
+
+                  {/* Rows — only rendered when expanded */}
+                  {isOpen && monTxns.map((txn, idx) => (
+                    <TouchableOpacity
+                      key={txn.id}
+                      style={[
+                        styles.txnRow,
+                        idx === monTxns.length - 1 && { borderBottomWidth: 0 },
+                      ]}
+                      activeOpacity={0.75}
+                    >
+                      {/* Date column — two lines */}
+                      <View style={styles.txnDateCol}>
+                        <Text style={styles.txnDay}>{txn.date.split(' ')[0]}</Text>
+                        <Text style={styles.txnMon}>{txn.date.split(' ')[1]}</Text>
+                      </View>
+
+                      {/* Voucher info */}
+                      <View style={styles.txnInfo}>
+                        <Text style={styles.txnVoucher}>{txn.voucher}</Text>
+                        <Text style={styles.txnType}>{txn.type}</Text>
+                      </View>
+
+                      {/* Amount + balance */}
+                      <View style={styles.txnAmounts}>
+                        <Text style={[
+                          styles.txnAmt,
+                          { color: txn.isDebit ? COLORS.negative : COLORS.positive },
+                        ]}>
+                          {txn.isDebit ? 'Dr ' : 'Cr '}{txn.amount}
+                        </Text>
+                        <Text style={styles.txnBalance}>{txn.balance}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              );
+            })
+          )}
         </View>
 
         {/* ── Share button ── */}
@@ -444,7 +486,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 8,
     borderWidth: 1, borderColor: COLORS.borderDefault,
   },
-  searchPlaceholder:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  searchInput: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.xs,
+    color: COLORS.textPrimary,
+    paddingVertical: 0,      // remove extra android padding
+    minHeight: 20,
+  },
   filterPill: {
     paddingHorizontal: 14, paddingVertical: 7,
     backgroundColor: COLORS.cardBg, borderRadius: 20,
@@ -492,9 +540,20 @@ const styles = StyleSheet.create({
   txnAmt:      { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
   txnBalance:  { fontSize: 10, color: COLORS.textTertiary, marginTop: 2 },
 
+  // Empty search state
+  emptySearch: {
+    paddingVertical: 32,
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: COLORS.cardBg,
+  },
+  emptySearchText: {
+    fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary,
+    textAlign: 'center', paddingHorizontal: 24,
+  },
+
   // Share
-  shareBtn: {
-    flexDirection: 'row', alignItems: 'center',
+  shareBtn: {    flexDirection: 'row', alignItems: 'center',
     justifyContent: 'center', gap: 8,
     margin: SPACING.md, backgroundColor: COLORS.brandPrimary,
     borderRadius: RADIUS.lg, paddingVertical: 14,
