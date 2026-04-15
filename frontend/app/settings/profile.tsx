@@ -5,7 +5,7 @@ import {
   Modal, Animated, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_USER } from '../../src/data/mockData';
@@ -485,18 +485,20 @@ export default function ProfileScreen() {
   const router = useRouter();
 
   // Form state
-  const [name, setName] = useState(MOCK_USER.name || 'Rajesh Sharma');
-  const [role, setRole] = useState('Admin');
-  const phone           = MOCK_USER.phone || '9876543210';
-  const email           = 'ashish@ykind.com';
+  const [name,  setName]  = useState(MOCK_USER.name || 'Rajesh Sharma');
+  const [role,  setRole]  = useState('Admin');
+  const [phone, setPhone] = useState(MOCK_USER.phone || '9876543210');
+  const [email, setEmail] = useState('ashish@ykind.com');
 
   // Security
   const [biometric, setBiometric] = useState(true);
   const [twoFA,     setTwoFA]     = useState(false);
 
   // Modals
-  const [showDelete,  setShowDelete]  = useState(false);
-  const [showPasskey, setShowPasskey] = useState(false);
+  const [showDelete,    setShowDelete]    = useState(false);
+  const [showPasskey,   setShowPasskey]   = useState(false);
+  const [showEditPhone, setShowEditPhone] = useState(false);
+  const [showEditEmail, setShowEditEmail] = useState(false);
 
   // Save toast animation (slidedown below header)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -622,13 +624,11 @@ export default function ProfileScreen() {
                 </View>
                 <TouchableOpacity
                   style={ps.editBtn}
-                  onPress={() =>
-                    Alert.alert('Edit Phone', 'Phone number change requires WhatsApp OTP verification.')
-                  }
+                  onPress={() => setShowEditPhone(true)}
                   activeOpacity={0.7}
                 >
                   <Text style={ps.editBtnText}>Edit</Text>
-                  <Ionicons name="chevron-forward" size={11} color={COLORS.info} />
+                  <Ionicons name="chevron-forward" size={11} color={COLORS.brandPrimary} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -646,13 +646,11 @@ export default function ProfileScreen() {
                 </View>
                 <TouchableOpacity
                   style={ps.editBtn}
-                  onPress={() =>
-                    Alert.alert('Edit Email', 'Email change requires OTP verification.')
-                  }
+                  onPress={() => setShowEditEmail(true)}
                   activeOpacity={0.7}
                 >
                   <Text style={ps.editBtnText}>Edit</Text>
-                  <Ionicons name="chevron-forward" size={11} color={COLORS.info} />
+                  <Ionicons name="chevron-forward" size={11} color={COLORS.brandPrimary} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -723,6 +721,40 @@ export default function ProfileScreen() {
         visible={showPasskey}
         onClose={() => setShowPasskey(false)}
         onConfirm={() => { setTwoFA(true); setShowPasskey(false); }}
+      />
+
+      {/* ── Edit Phone — WhatsApp OTP ───────────────────────────────────── */}
+      <OTPVerifySheet
+        visible={showEditPhone}
+        onClose={() => setShowEditPhone(false)}
+        onSuccess={(newPhone) => {
+          setPhone(newPhone);
+          Alert.alert('Phone Updated', 'Your phone number has been updated successfully.');
+        }}
+        channel="whatsapp"
+        title="Edit Phone Number"
+        inputLabel="Enter your new phone number"
+        inputPlaceholder="10-digit mobile number"
+        inputKeyboard="phone-pad"
+        sendLabel="Send OTP via WhatsApp"
+        getSubtitle={(val) => `Code has been sent to +91 ${val}`}
+      />
+
+      {/* ── Edit Email — Email OTP ──────────────────────────────────────── */}
+      <OTPVerifySheet
+        visible={showEditEmail}
+        onClose={() => setShowEditEmail(false)}
+        onSuccess={(newEmail) => {
+          setEmail(newEmail);
+          Alert.alert('Email Updated', 'Your email address has been updated successfully.');
+        }}
+        channel="email"
+        title="Edit Email Address"
+        inputLabel="Enter your new email address"
+        inputPlaceholder="your@email.com"
+        inputKeyboard="email-address"
+        sendLabel="Send OTP via Email"
+        getSubtitle={(val) => `Code has been sent to ${val}`}
       />
     </SafeAreaView>
   );
@@ -805,7 +837,7 @@ const ps = StyleSheet.create({
   },
   verifiedText: { fontSize: 10, color: COLORS.positive, fontWeight: '700' },
   editBtn:      { flexDirection: 'row', alignItems: 'center', gap: 1, paddingHorizontal: 6, paddingVertical: 4 },
-  editBtnText:  { fontSize: TYPOGRAPHY.sm, color: COLORS.info, fontWeight: '600' },
+  editBtnText:  { fontSize: TYPOGRAPHY.sm, color: COLORS.brandPrimary, fontWeight: '600' },
 
   // ── Security toggles ──────────────────────────────────────────────────────
   toggleRow: {
