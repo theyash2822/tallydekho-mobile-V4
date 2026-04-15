@@ -271,6 +271,48 @@ function BarcodeScannerModal({ visible, onScan, onClose }: {
 
 // ─── Add Customer Bottom Drawer ───────────────────────────────────────────────
 const GST_TYPES = ['Regular', 'Unregistered', 'Composition'];
+const INVOICE_STATES = [
+  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
+  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
+  'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram',
+  'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana',
+  'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+  'Delhi', 'Jammu & Kashmir', 'Ladakh', 'Chandigarh', 'Puducherry',
+];
+
+// Simple inline state picker for the drawer
+function StateDropdown({ value, onSelect }: { value: string; onSelect: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View>
+      <TouchableOpacity
+        style={[acd.selectBox, open && acd.selectBoxOpen]}
+        onPress={() => setOpen(!open)}
+        activeOpacity={0.7}
+      >
+        <Text style={[acd.selectTxt, !value && { color: COLORS.textTertiary }]}>{value || 'Select state'}</Text>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
+      </TouchableOpacity>
+      {open && (
+        <View style={acd.dropList}>
+          <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            {INVOICE_STATES.map((st, idx) => (
+              <TouchableOpacity
+                key={st}
+                style={[acd.dropItem, idx === INVOICE_STATES.length - 1 && { borderBottomWidth: 0 }]}
+                onPress={() => { onSelect(st); setOpen(false); }}
+                activeOpacity={0.7}
+              >
+                <Text style={[acd.dropTxt, value === st && acd.dropTxtActive]}>{st}</Text>
+                {value === st && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+    </View>
+  );
+}
 
 function AddCustomerDrawer({ visible, onClose, onSaved }: {
   visible: boolean;
@@ -284,6 +326,19 @@ function AddCustomerDrawer({ visible, onClose, onSaved }: {
   const [creditDays, setCreditDays] = useState('');
   const [mailing, setMailing] = useState(false);
   const [bank, setBank] = useState(false);
+  // Mailing fields
+  const [mailingName, setMailingName] = useState('');
+  const [address, setAddress] = useState('');
+  const [stateVal, setStateVal] = useState('');
+  const [pincode, setPincode] = useState('');
+  const [country, setCountry] = useState('India');
+  // Bank fields
+  const [beneficiaryName, setBeneficiaryName] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [accountNo, setAccountNo] = useState('');
+  const [ifscCode, setIfscCode] = useState('');
+  const [bankBranch, setBankBranch] = useState('');
+  // GST
   const [gstType, setGstType] = useState('Regular');
   const [gstOpen, setGstOpen] = useState(false);
   const [gstin, setGstin] = useState('');
@@ -374,8 +429,10 @@ function AddCustomerDrawer({ visible, onClose, onSaved }: {
               onBlur={() => setCreditFocused(false)}
             />
 
-            {/* Toggles */}
+            {/* Toggles + Expandable Sections */}
             <View style={acd.divider} />
+
+            {/* Enable Mailing Details */}
             <View style={acd.toggleRow}>
               <Text style={acd.toggleLbl}>Enable Mailing Details</Text>
               <Switch value={mailing} onValueChange={setMailing}
@@ -383,6 +440,49 @@ function AddCustomerDrawer({ visible, onClose, onSaved }: {
                 thumbColor={COLORS.white}
               />
             </View>
+            {mailing && (
+              <View style={acd.expandSection}>
+                <Text style={acd.label}>Mailing Name</Text>
+                <TextInput
+                  style={[acd.input, webFix]}
+                  placeholder="Enter mailing name"
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={mailingName} onChangeText={setMailingName}
+                />
+                <Text style={acd.label}>Address</Text>
+                <TextInput
+                  style={[acd.input, acd.textarea, webFix]}
+                  placeholder="Enter address"
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={address} onChangeText={setAddress}
+                  multiline numberOfLines={3}
+                />
+                <Text style={acd.label}>State</Text>
+                <StateDropdown value={stateVal} onSelect={setStateVal} />
+                <View style={acd.row2}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={acd.label}>Pincode</Text>
+                    <TextInput
+                      style={[acd.input, webFix]}
+                      placeholder="Pincode"
+                      placeholderTextColor={COLORS.textTertiary}
+                      value={pincode} onChangeText={setPincode}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={acd.label}>Country</Text>
+                    <TextInput
+                      style={[acd.input, webFix]}
+                      value={country} onChangeText={setCountry}
+                      placeholderTextColor={COLORS.textTertiary}
+                    />
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* Provide Bank Details */}
             <View style={acd.toggleRow}>
               <Text style={acd.toggleLbl}>Provide Bank Details</Text>
               <Switch value={bank} onValueChange={setBank}
@@ -390,6 +490,47 @@ function AddCustomerDrawer({ visible, onClose, onSaved }: {
                 thumbColor={COLORS.white}
               />
             </View>
+            {bank && (
+              <View style={acd.expandSection}>
+                <Text style={acd.label}>Beneficiary Name</Text>
+                <TextInput
+                  style={[acd.input, webFix]}
+                  placeholder="Enter beneficiary name"
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={beneficiaryName} onChangeText={setBeneficiaryName}
+                />
+                <Text style={acd.label}>Bank Name</Text>
+                <TextInput
+                  style={[acd.input, webFix]}
+                  placeholder="Enter bank name"
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={bankName} onChangeText={setBankName}
+                />
+                <Text style={acd.label}>Account Number</Text>
+                <TextInput
+                  style={[acd.input, webFix]}
+                  placeholder="Enter account number"
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={accountNo} onChangeText={setAccountNo}
+                  keyboardType="numeric"
+                />
+                <Text style={acd.label}>IFSC Code</Text>
+                <TextInput
+                  style={[acd.input, webFix]}
+                  placeholder="Enter IFSC code"
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={ifscCode} onChangeText={v => setIfscCode(v.toUpperCase())}
+                  autoCapitalize="characters"
+                />
+                <Text style={acd.label}>Bank Branch</Text>
+                <TextInput
+                  style={[acd.input, webFix]}
+                  placeholder="Enter branch name"
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={bankBranch} onChangeText={setBankBranch}
+                />
+              </View>
+            )}
             <View style={acd.divider} />
 
             {/* GST Registration Type */}
@@ -1455,5 +1596,15 @@ const acd = StyleSheet.create({
     marginHorizontal: SPACING.md, marginTop: 8,
   },
   saveBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+  expandSection: {
+    backgroundColor: COLORS.pageBg,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: COLORS.borderDefault,
+  },
+  row2: { flexDirection: 'row', gap: 10 },
+  textarea: { minHeight: 72, textAlignVertical: 'top', paddingTop: 12 },
 });
 

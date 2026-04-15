@@ -42,6 +42,15 @@ const GST_REG_TYPES = ['Regular', 'Unregistered', 'Composition'];
 
 const DUTY_TYPES = ['CGST', 'SGST', 'IGST', 'Cess', 'Others'];
 
+const INDIAN_STATES = [
+  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
+  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
+  'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram',
+  'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana',
+  'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+  'Delhi', 'Jammu & Kashmir', 'Ladakh', 'Chandigarh', 'Puducherry',
+];
+
 const ALL_TALLY_GROUPS = [
   'Capital Account', 'Reserves & Surplus', 'Sundry Creditors', 'Sundry Debtors',
   'Bank Accounts', 'Bank OD Accounts', 'Cash-in-Hand', 'Duties & Taxes',
@@ -188,6 +197,18 @@ export default function CreateLedgerScreen() {
   const [creditDays, setCreditDays] = useState('');
   const [mailingEnabled, setMailingEnabled] = useState(false);
   const [bankEnabled, setBankEnabled] = useState(false);
+  // Mailing Details
+  const [mailingName, setMailingName] = useState('');
+  const [address, setAddress] = useState('');
+  const [stateVal, setStateVal] = useState('');
+  const [pincode, setPincode] = useState('');
+  const [country, setCountry] = useState('India');
+  // Bank Details
+  const [beneficiaryName, setBeneficiaryName] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [accountNo, setAccountNo] = useState('');
+  const [ifscCode, setIfscCode] = useState('');
+  const [bankBranch, setBankBranch] = useState('');
   const [gstRegType, setGstRegType] = useState('Regular');
   const [gstin, setGstin] = useState('');
   const [pan, setPan] = useState('');
@@ -372,22 +393,67 @@ export default function CreateLedgerScreen() {
             </View>
           )}
 
-          {/* ── GST Section (Party + Custom) ── */}
           {showGstSection && (
             <>
               {/* Divider */}
               <View style={s.divider} />
 
-              <ToggleRow
-                label="Enable Mailing Details"
-                value={mailingEnabled}
-                onChange={setMailingEnabled}
-              />
-              <ToggleRow
-                label="Provide Bank Details"
-                value={bankEnabled}
-                onChange={setBankEnabled}
-              />
+              {/* ── Enable Mailing Details ── */}
+              <ToggleRow label="Enable Mailing Details" value={mailingEnabled} onChange={setMailingEnabled} />
+              {mailingEnabled && (
+                <View style={s.expandSection}>
+                  <Text style={s.label}>Mailing Name</Text>
+                  <ThemedInput placeholder="Enter mailing name" value={mailingName} onChangeText={setMailingName} />
+
+                  <Text style={s.label}>Address</Text>
+                  <ThemedInput
+                    placeholder="Enter address"
+                    value={address} onChangeText={setAddress}
+                    multiline numberOfLines={3}
+                    style={s.textarea}
+                  />
+
+                  <InlineDropdown
+                    label="State"
+                    value={stateVal}
+                    options={INDIAN_STATES}
+                    placeholder="Select state"
+                    onSelect={setStateVal}
+                  />
+
+                  <View style={s.row2}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.label}>Pincode</Text>
+                      <ThemedInput placeholder="Enter pincode" value={pincode} onChangeText={setPincode} keyboardType="numeric" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.label}>Country</Text>
+                      <ThemedInput value={country} onChangeText={setCountry} />
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* ── Provide Bank Details ── */}
+              <ToggleRow label="Provide Bank Details" value={bankEnabled} onChange={setBankEnabled} />
+              {bankEnabled && (
+                <View style={s.expandSection}>
+                  <Text style={s.label}>Beneficiary Name</Text>
+                  <ThemedInput placeholder="Enter beneficiary name" value={beneficiaryName} onChangeText={setBeneficiaryName} />
+
+                  <Text style={s.label}>Bank Name</Text>
+                  <ThemedInput placeholder="Enter bank name" value={bankName} onChangeText={setBankName} />
+
+                  <Text style={s.label}>Account Number</Text>
+                  <ThemedInput placeholder="Enter account number" value={accountNo} onChangeText={setAccountNo} keyboardType="numeric" />
+
+                  <Text style={s.label}>IFSC Code</Text>
+                  <ThemedInput placeholder="Enter IFSC code" value={ifscCode} onChangeText={v => setIfscCode(v.toUpperCase())} autoCapitalize="characters" />
+
+                  <Text style={s.label}>Bank Branch</Text>
+                  <ThemedInput placeholder="Enter branch name" value={bankBranch} onChangeText={setBankBranch} />
+                </View>
+              )}
 
               <View style={s.divider} />
 
@@ -554,6 +620,20 @@ const s = StyleSheet.create({
   // Divider
   divider: {
     height: 1, backgroundColor: COLORS.borderDefault, marginVertical: 8,
+  },
+  // Expand section (fields revealed when toggle is ON)
+  expandSection: {
+    backgroundColor: COLORS.pageBg,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: COLORS.borderDefault,
+  },
+  textarea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+    paddingTop: 12,
   },
 
   // Row of 2 columns
