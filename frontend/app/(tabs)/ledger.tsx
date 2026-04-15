@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, RefreshControl, Modal, KeyboardAvoidingView,
-  Platform,
+  Platform, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getLedgers } from '../../src/services/api';
@@ -21,6 +22,7 @@ interface LedgerItem {
   balance: string;
   type: 'credit' | 'debit';
   nature?: string;
+  phone?: string;
   lastUpdated: string;
 }
 
@@ -667,40 +669,66 @@ export default function LedgerScreen() {
       >
         <View style={styles.list}>
           {filtered.map(item => (
-            <TouchableOpacity
-              key={item.id}
-              testID={`ledger-item-${item.id}`}
-              style={styles.itemCard}
-              activeOpacity={0.7}
-              onPress={() => router.push(`/ledger/${item.id}` as any)}
-            >
-              {/* Avatar */}
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
-              </View>
-
-              {/* Info */}
-              <View style={styles.itemInfo}>
-                <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-                <Text style={styles.itemGroup}>{item.group}</Text>
-              </View>
-
-              {/* Right: balance + badge */}
-              <View style={styles.itemRight}>
-                <Text style={styles.itemBalance}>{item.balance}</Text>
-                <View style={[
-                  styles.typeBadge,
-                  { backgroundColor: item.type === 'credit' ? COLORS.positiveBg : COLORS.negativeBg }
-                ]}>
-                  <Text style={[
-                    styles.typeText,
-                    { color: item.type === 'credit' ? COLORS.positive : COLORS.negative }
-                  ]}>
-                    {item.type === 'credit' ? 'Cr' : 'Dr'}
-                  </Text>
+            <View key={item.id} style={styles.tileRow}>
+              {/* Main card — tappable to navigate */}
+              <TouchableOpacity
+                testID={`ledger-item-${item.id}`}
+                style={styles.itemCard}
+                activeOpacity={0.7}
+                onPress={() => router.push(`/ledger/${item.id}` as any)}
+              >
+                {/* Avatar */}
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
                 </View>
-              </View>
-            </TouchableOpacity>
+
+                {/* Info */}
+                <View style={styles.itemInfo}>
+                  <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+                  <Text style={styles.itemGroup}>{item.group}</Text>
+                </View>
+
+                {/* Right: balance + badge */}
+                <View style={styles.itemRight}>
+                  <Text style={styles.itemBalance}>{item.balance}</Text>
+                  <View style={[
+                    styles.typeBadge,
+                    { backgroundColor: item.type === 'credit' ? COLORS.positiveBg : COLORS.negativeBg }
+                  ]}>
+                    <Text style={[
+                      styles.typeText,
+                      { color: item.type === 'credit' ? COLORS.positive : COLORS.negative }
+                    ]}>
+                      {item.type === 'credit' ? 'Cr' : 'Dr'}
+                    </Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+
+              {/* Action buttons: Call + WhatsApp (only show if phone exists) */}
+              {item.phone ? (
+                <View style={styles.tileActions}>
+                  {/* Call */}
+                  <TouchableOpacity
+                    style={styles.callBtn}
+                    onPress={() => Linking.openURL(`tel:${item.phone}`)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="call" size={15} color="#fff" />
+                  </TouchableOpacity>
+                  {/* WhatsApp */}
+                  <TouchableOpacity
+                    style={styles.waBtn}
+                    onPress={() => Linking.openURL(`https://wa.me/91${item.phone}`)}
+                    activeOpacity={0.8}
+                  >
+                    <FontAwesome5 name="whatsapp" size={15} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.tileActionsSpacer} />
+              )}
+            </View>
           ))}
 
           {filtered.length === 0 && (
@@ -839,8 +867,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBg,
   },
   hideZeroChipOn: {
-    borderColor: '#16A34A',
-    backgroundColor: '#16A34A',
+    borderColor: COLORS.brandPrimary,
+    backgroundColor: COLORS.brandPrimary,
   },
   hideZeroChipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
   hideZeroChipTxtOn: { color: '#FFFFFF' },
@@ -858,10 +886,27 @@ const styles = StyleSheet.create({
   sortBtnLabelActive: { color: COLORS.brandPrimary },
   scroll: { flex: 1 },
   list: { padding: SPACING.md, gap: 8 },
+  // Each row: card (flex:1) + stacked action buttons
+  tileRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   itemCard: {
+    flex: 1,
     flexDirection: 'row', alignItems: 'center', gap: 12,
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md,
     padding: 14, borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  tileActions: { flexDirection: 'column', gap: 8 },
+  tileActionsSpacer: { width: 36 },
+  // Call — dark charcoal circle
+  callBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: COLORS.textPrimary,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  // WhatsApp — official green circle
+  waBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#25D366',
+    alignItems: 'center', justifyContent: 'center',
   },
   avatar: {
     width: 44, height: 44, borderRadius: 22,
