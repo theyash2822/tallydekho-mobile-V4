@@ -25,6 +25,53 @@ interface Props {
   icon?: string;
 }
 
+// ─── Styles (declared before component so they're available) ─────────────────
+const s = StyleSheet.create({
+  wrap: { marginBottom: SPACING.md },
+  label: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
+  star: { color: COLORS.negative },
+  trigger: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: COLORS.cardBg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 12, minHeight: 48, paddingVertical: 10,
+  },
+  triggerSelected: { borderColor: COLORS.borderDefault },
+  triggerTxt: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, fontWeight: '500' },
+  triggerPlh: { color: COLORS.textTertiary, fontWeight: '400' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
+  sheet: {
+    backgroundColor: COLORS.cardBg,
+    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    maxHeight: '70%',
+  },
+  handle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 8 },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  sheetTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
+  closeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  searchRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: SPACING.md, marginVertical: 12, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, paddingHorizontal: 12, minHeight: 44, borderWidth: 1, borderColor: COLORS.borderDefault },
+  searchInput: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, paddingVertical: 8 },
+  optRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  optTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
+  optTxtActive: { fontWeight: '700', color: COLORS.brandPrimary },
+  emptyRow: { alignItems: 'center', paddingVertical: 40, gap: 8 },
+  emptyTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
+  addNewRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: SPACING.md, paddingVertical: 16, borderTopWidth: 1.5, borderTopColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg },
+  addNewTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.brandPrimary },
+  inputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 12, minHeight: 48 },
+  inputBoxFocused: { borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
+  inputBoxOpen: { borderColor: COLORS.brandPrimary },
+  input: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, paddingVertical: 10 },
+  dropList: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, overflow: 'hidden' },
+  dropItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  dropText: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
+  dropTextActive: { fontWeight: '700', color: COLORS.brandPrimary },
+  addNewText: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.brandPrimary },
+});
+
+export const sd = s;
+
 export default function SearchableDropdown({
   label, required, placeholder, options, value,
   onSelect, onAddNew, addNewLabel, containerStyle, icon = 'search',
@@ -175,49 +222,3 @@ export default function SearchableDropdown({
     </View>
   );
 }
-
-export const sd = StyleSheet.create({
-  wrap: { marginBottom: SPACING.md },
-  label: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
-  star: { color: COLORS.negative },
-  trigger: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: COLORS.cardBg,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: 12, minHeight: 48, paddingVertical: 10,
-  },
-  triggerSelected: { borderColor: COLORS.borderDefault },
-  triggerTxt: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, fontWeight: '500' },
-  triggerPlh: { color: COLORS.textTertiary, fontWeight: '400' },
-  // Modal styles
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
-  sheet: {
-    backgroundColor: COLORS.cardBg,
-    borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    maxHeight: '70%',
-  },
-  handle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 8 },
-  sheetHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  sheetTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
-  closeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  searchRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: SPACING.md, marginVertical: 12, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, paddingHorizontal: 12, minHeight: 44, borderWidth: 1, borderColor: COLORS.borderDefault },
-  searchInput: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, paddingVertical: 8 },
-  optRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  optTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
-  optTxtActive: { fontWeight: '700', color: COLORS.brandPrimary },
-  emptyRow: { alignItems: 'center', paddingVertical: 40, gap: 8 },
-  emptyTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
-  addNewRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: SPACING.md, paddingVertical: 16, borderTopWidth: 1.5, borderTopColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg },
-  addNewTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.brandPrimary },
-  // Legacy (kept for existing sd.inputBox references if any)
-  inputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 12, minHeight: 48 },
-  inputBoxFocused: { borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
-  inputBoxOpen: { borderColor: COLORS.brandPrimary },
-  input: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, paddingVertical: 10 },
-  dropList: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, overflow: 'hidden' },
-  dropItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  dropText: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
-  dropTextActive: { fontWeight: '700', color: COLORS.brandPrimary },
-  addNewText: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.brandPrimary },
-});

@@ -8,43 +8,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import FormDropdown from '../../src/components/forms/FormDropdown';
 
 const WAREHOUSES = ['Main Warehouse - Mumbai', 'Warehouse B - Delhi', 'Warehouse C - Pune', 'Transit Hub - Chennai'];
 const RACKS = ['Rack A-1', 'Rack A-2', 'Rack B-1', 'Rack B-2', 'Bay 12', 'Bay 14', 'Bin C-3'];
 const WEB = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
-
-function InlineDD({ label, required, value, options, placeholder, onSelect }: {
-  label: string; required?: boolean; value: string;
-  options: string[]; placeholder?: string; onSelect: (v: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <View style={{ marginBottom: 4 }}>
-      {label ? <Text style={s.label}>{label}{required && <Text style={s.star}> *</Text>}</Text> : null}
-      <TouchableOpacity
-        style={[s.selectBox, open && s.selectBoxOpen]}
-        onPress={() => setOpen(!open)}
-        activeOpacity={0.7}
-      >
-        <Text style={[s.selectTxt, !value && { color: COLORS.textTertiary }]}>{value || placeholder || 'Select'}</Text>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
-      </TouchableOpacity>
-      {open && (
-        <View style={s.dropList}>
-          {options.map((o, idx) => (
-            <TouchableOpacity
-              key={o} style={[s.dropItem, idx === options.length - 1 && { borderBottomWidth: 0 }]}
-              onPress={() => { onSelect(o); setOpen(false); }} activeOpacity={0.7}
-            >
-              <Text style={[s.dropTxt, value === o && s.dropTxtActive]}>{o}</Text>
-              {value === o && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-    </View>
-  );
-}
 
 function ThemedInput({ style, onFocus: of_, onBlur: ob_, ...props }: React.ComponentProps<typeof TextInput>) {
   const [focused, setFocused] = useState(false);
@@ -121,7 +89,13 @@ export default function CreateStockTransferScreen() {
           <SearchInput value={warehouseSearch} onChange={setWarehouseSearch} placeholder="Search warehouse" />
 
           {/* Source Rack */}
-          <InlineDD label="Source Rack" value={sourceRack} options={RACKS} placeholder="Select rack" onSelect={setSourceRack} />
+          <FormDropdown
+            label="Source Rack"
+            value={sourceRack}
+            options={RACKS.map(s => ({ label: s, value: s }))}
+            placeholder="Select rack"
+            onSelect={o => setSourceRack(o.value)}
+          />
 
           {/* On-hand Qty + Batch / Serial Picker */}
           <View style={s.row2}>
@@ -136,12 +110,25 @@ export default function CreateStockTransferScreen() {
           </View>
 
           {/* Destination Warehouse */}
-          <InlineDD label="Destination Warehouse" required value={destWarehouse} options={WAREHOUSES} placeholder="Select warehouse" onSelect={setDestWarehouse} />
+          <FormDropdown
+            label="Destination Warehouse"
+            required
+            value={destWarehouse}
+            options={WAREHOUSES.map(s => ({ label: s, value: s }))}
+            placeholder="Select warehouse"
+            onSelect={o => setDestWarehouse(o.value)}
+          />
 
           {/* Destination Rack + Qty to Transfer */}
           <View style={s.row2}>
             <View style={{ flex: 1 }}>
-              <InlineDD label="Destination Rack" value={destRack} options={RACKS} placeholder="Select rack" onSelect={setDestRack} />
+              <FormDropdown
+                label="Destination Rack"
+                value={destRack}
+                options={RACKS.map(s => ({ label: s, value: s }))}
+                placeholder="Select rack"
+                onSelect={o => setDestRack(o.value)}
+              />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={s.label}>Quantity to Transfer <Text style={s.star}>*</Text></Text>

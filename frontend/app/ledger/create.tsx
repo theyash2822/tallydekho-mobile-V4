@@ -8,6 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import FormDropdown from '../../src/components/forms/FormDropdown';
+import SearchableDropdown from '../../src/components/forms/SearchableDropdown';
 
 // ─── Themed TextInput (no blue focus ring) ────────────────────────────────────
 function ThemedInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
@@ -60,52 +62,6 @@ const ALL_TALLY_GROUPS = [
   'Purchase Accounts', 'Direct Expenses', 'Indirect Expenses',
   'Direct Income', 'Indirect Income', 'Misc. Expenses (Asset)',
 ];
-
-// ─── Inline Accordion Dropdown ────────────────────────────────────────────────
-interface InlineDropdownProps {
-  label: string;
-  required?: boolean;
-  value: string;
-  options: string[];
-  placeholder?: string;
-  onSelect: (val: string) => void;
-}
-
-function InlineDropdown({ label, required, value, options, placeholder = 'Select', onSelect }: InlineDropdownProps) {
-  const [open, setOpen] = useState(false);
-  return (
-    <View>
-      <Text style={s.label}>
-        {label}{required && <Text style={s.required}> *</Text>}
-      </Text>
-      <TouchableOpacity
-        style={[s.selectBox, open && s.selectBoxOpen]}
-        onPress={() => setOpen(!open)}
-        activeOpacity={0.7}
-      >
-        <Text style={[s.selectText, !value && { color: COLORS.textTertiary }]}>
-          {value || placeholder}
-        </Text>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
-      </TouchableOpacity>
-      {open && (
-        <View style={s.dropList}>
-          {options.map((opt, idx) => (
-            <TouchableOpacity
-              key={opt}
-              style={[s.dropItem, idx === options.length - 1 && { borderBottomWidth: 0 }]}
-              onPress={() => { onSelect(opt); setOpen(false); }}
-              activeOpacity={0.7}
-            >
-              <Text style={[s.dropItemText, value === opt && s.dropItemTextActive]}>{opt}</Text>
-              {value === opt && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-    </View>
-  );
-}
 
 // ─── Opening Balance Row ──────────────────────────────────────────────────────
 interface BalanceRowProps {
@@ -278,59 +234,15 @@ export default function CreateLedgerScreen() {
 
           {/* ── Custom Group: Under (Group) search ── */}
           {isCustom && (
-            <>
-              <Text style={s.label}>Under (Group) <Text style={s.required}>*</Text></Text>
-              <TouchableOpacity
-                style={[s.searchBox, groupSearchFocused && s.searchBoxFocused]}
-                onPress={() => setGroupDropOpen(!groupDropOpen)}
-                activeOpacity={0.9}
-              >
-                <Ionicons name="search" size={16} color={COLORS.textTertiary} />
-                <TextInput
-                  style={[
-                    s.searchInput,
-                    Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any }),
-                  ]}
-                  placeholder="Search or type group name..."
-                  placeholderTextColor={COLORS.textTertiary}
-                  value={groupSearch}
-                  onChangeText={(t) => {
-                    setGroupSearch(t);
-                    setCustomGroup('');
-                    setGroupDropOpen(true);
-                  }}
-                  onFocus={() => setGroupSearchFocused(true)}
-                  onBlur={() => setGroupSearchFocused(false)}
-                />
-                {customGroup !== '' && (
-                  <Ionicons name="checkmark-circle" size={16} color={COLORS.positive} />
-                )}
-              </TouchableOpacity>
-              {groupDropOpen && (
-                <View style={s.dropList}>
-                  {filteredGroups.map((g, idx) => (
-                    <TouchableOpacity
-                      key={g}
-                      style={[s.dropItem, idx === filteredGroups.length - 1 && { borderBottomWidth: 0 }]}
-                      onPress={() => {
-                        setCustomGroup(g);
-                        setGroupSearch(g);
-                        setGroupDropOpen(false);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[s.dropItemText, customGroup === g && s.dropItemTextActive]}>{g}</Text>
-                      {customGroup === g && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
-                    </TouchableOpacity>
-                  ))}
-                  {filteredGroups.length === 0 && (
-                    <View style={s.dropItem}>
-                      <Text style={{ color: COLORS.textTertiary, fontSize: TYPOGRAPHY.sm }}>No groups found</Text>
-                    </View>
-                  )}
-                </View>
-              )}
-            </>
+            <SearchableDropdown
+              label="Under (Group)"
+              required
+              placeholder="Search or type group name..."
+              options={ALL_TALLY_GROUPS.map(g => ({ label: g, value: g }))}
+              value={customGroup}
+              onSelect={o => setCustomGroup(o.value)}
+              icon="folder-outline"
+            />
           )}
 
           {/* ── Opening Balance ── */}
@@ -360,13 +272,13 @@ export default function CreateLedgerScreen() {
             <View style={s.row2}>
               {/* Type of Duty / Tax */}
               <View style={{ flex: 1 }}>
-                <InlineDropdown
+                <FormDropdown
                   label="Type of Duty / Tax"
                   required
                   value={dutyType}
-                  options={DUTY_TYPES}
+                  options={DUTY_TYPES.map(s => ({ label: s, value: s }))}
                   placeholder="Select type"
-                  onSelect={setDutyType}
+                  onSelect={o => setDutyType(o.value)}
                 />
               </View>
 
@@ -413,12 +325,12 @@ export default function CreateLedgerScreen() {
                     style={s.textarea}
                   />
 
-                  <InlineDropdown
+                  <FormDropdown
                     label="State"
                     value={stateVal}
-                    options={INDIAN_STATES}
+                    options={INDIAN_STATES.map(s => ({ label: s, value: s }))}
                     placeholder="Select state"
-                    onSelect={setStateVal}
+                    onSelect={o => setStateVal(o.value)}
                   />
 
                   <View style={s.row2}>
@@ -457,12 +369,12 @@ export default function CreateLedgerScreen() {
 
               <View style={s.divider} />
 
-              <InlineDropdown
+              <FormDropdown
                 label="GST Registration Type"
                 required
                 value={gstRegType}
-                options={GST_REG_TYPES}
-                onSelect={setGstRegType}
+                options={GST_REG_TYPES.map(s => ({ label: s, value: s }))}
+                onSelect={o => setGstRegType(o.value)}
               />
 
               <Text style={s.label}>GSTIN <Text style={s.required}>*</Text></Text>

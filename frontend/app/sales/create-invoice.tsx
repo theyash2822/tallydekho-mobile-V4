@@ -12,6 +12,7 @@ import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
+import SearchableDropdown, { SDOption } from '../../src/components/forms/SearchableDropdown';
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 const LEDGER_ACCOUNTS: DropdownOption[] = [
@@ -103,96 +104,6 @@ function ThemedFInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
       onBlur={(e)  => { setFocused(false); onBlur?.(e); }}
       {...props}
     />
-  );
-}
-
-// ─── Searchable inline dropdown ───────────────────────────────────────────────
-interface SearchDDProps {
-  label: string;
-  required?: boolean;
-  placeholder?: string;
-  options: DropdownOption[];
-  value: string;
-  onSelect: (opt: DropdownOption) => void;
-  onAddNew?: () => void;
-  addNewLabel?: string;
-  containerStyle?: object;
-}
-function SearchableDD({
-  label, required, placeholder, options, value,
-  onSelect, onAddNew, addNewLabel, containerStyle,
-}: SearchDDProps) {
-  const [query, setQuery] = useState('');
-  const [open, setOpen] = useState(false);
-  const [focused, setFocused] = useState(false);
-  const selectedLabel = options.find(o => o.value === value)?.label;
-  const filtered = query
-    ? options.filter(o => o.label.toLowerCase().includes(query.toLowerCase()))
-    : options;
-
-  return (
-    <View style={[sdd.wrap, containerStyle]}>
-      <Text style={sdd.label}>
-        {label}{required ? <Text style={sdd.star}> *</Text> : null}
-      </Text>
-      <View style={[sdd.inputBox, (focused || open) && sdd.inputBoxFocused]}>
-        <Ionicons name="search" size={14} color={COLORS.textTertiary} style={{ marginRight: 4 }} />
-        <TextInput
-          style={[sdd.input, Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any })]}
-          placeholder={selectedLabel || placeholder || 'Search...'}
-          placeholderTextColor={selectedLabel ? COLORS.textPrimary : COLORS.textTertiary}
-          value={open ? query : ''}
-          onChangeText={t => { setQuery(t); setOpen(true); }}
-          onFocus={() => { setFocused(true); setOpen(true); setQuery(''); }}
-          onBlur={() => { setFocused(false); }}
-        />
-        {value ? (
-          <TouchableOpacity onPress={() => onSelect({ label: '', value: '' })} hitSlop={{ top:8,bottom:8,left:8,right:8 }}>
-            <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-          </TouchableOpacity>
-        ) : null}
-        <TouchableOpacity onPress={() => setOpen(o => !o)} style={{ paddingLeft: 4 }}>
-          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-      </View>
-      {open && (
-        <View style={sdd.dropList}>
-          <ScrollView
-            style={{ maxHeight: 200 }}
-            keyboardShouldPersistTaps="handled"
-            nestedScrollEnabled
-            showsVerticalScrollIndicator={false}
-          >
-            {filtered.map((o, idx) => (
-              <TouchableOpacity
-                key={o.value}
-                style={[sdd.dropItem, idx === filtered.length - 1 && !onAddNew && { borderBottomWidth: 0 }]}
-                onPress={() => { onSelect(o); setQuery(''); setOpen(false); }}
-                activeOpacity={0.7}
-              >
-                <Text style={[sdd.dropText, value === o.value && sdd.dropTextActive]}>{o.label}</Text>
-                {value === o.value && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
-              </TouchableOpacity>
-            ))}
-            {filtered.length === 0 && (
-              <View style={sdd.dropItem}>
-                <Text style={{ color: COLORS.textTertiary, fontSize: TYPOGRAPHY.sm }}>No results found</Text>
-              </View>
-            )}
-          </ScrollView>
-          {onAddNew && (
-            <TouchableOpacity
-              style={sdd.addNewRow}
-              onPress={() => { onAddNew(); setOpen(false); }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="add-circle-outline" size={16} color={COLORS.brandPrimary} />
-              <Text style={sdd.addNewText}>{addNewLabel || 'Add New'}</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-    </View>
   );
 }
 
@@ -932,13 +843,14 @@ export default function CreateSalesInvoiceScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* Ledger Searchable Selector */}
-          <SearchableDD
+          <SearchableDropdown
             label="Sales Ledger"
             required
             placeholder="Search ledger account..."
             options={LEDGER_ACCOUNTS}
             value={ledger}
             onSelect={o => setLedger(o.value)}
+            icon="book-outline"
             containerStyle={{ marginBottom: SPACING.md }}
           />
 
@@ -967,7 +879,7 @@ export default function CreateSalesInvoiceScreen() {
             </View>
 
             {/* Customer / Party — searchable + Add New */}
-            <SearchableDD
+            <SearchableDropdown
               label="Customer / Party"
               required
               placeholder="Search customer..."

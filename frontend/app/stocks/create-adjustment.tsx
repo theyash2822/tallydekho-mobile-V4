@@ -8,42 +8,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import FormDropdown from '../../src/components/forms/FormDropdown';
 
 const ADJ_REASONS = ['Damage', 'Physical Count Correction', 'Expired Goods', 'Theft / Loss', 'Production Consumption', 'Sample / Display', 'Opening Stock Entry', 'Other'];
 const WEB = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
-
-function InlineDD({ label, required, value, options, placeholder, onSelect }: {
-  label: string; required?: boolean; value: string;
-  options: string[]; placeholder?: string; onSelect: (v: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <View>
-      {label ? <Text style={s.label}>{label}{required && <Text style={s.star}> *</Text>}</Text> : null}
-      <TouchableOpacity
-        style={[s.selectBox, open && s.selectBoxOpen]}
-        onPress={() => setOpen(!open)}
-        activeOpacity={0.7}
-      >
-        <Text style={[s.selectTxt, !value && { color: COLORS.textTertiary }]}>{value || placeholder || 'Select'}</Text>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
-      </TouchableOpacity>
-      {open && (
-        <View style={s.dropList}>
-          {options.map((o, idx) => (
-            <TouchableOpacity
-              key={o} style={[s.dropItem, idx === options.length - 1 && { borderBottomWidth: 0 }]}
-              onPress={() => { onSelect(o); setOpen(false); }} activeOpacity={0.7}
-            >
-              <Text style={[s.dropTxt, value === o && s.dropTxtActive]}>{o}</Text>
-              {value === o && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-    </View>
-  );
-}
 
 function ThemedInput({ style, onFocus: of_, onBlur: ob_, ...props }: React.ComponentProps<typeof TextInput>) {
   const [focused, setFocused] = useState(false);
@@ -138,7 +106,14 @@ export default function CreateStockAdjustmentScreen() {
               <ThemedInput placeholder="Enter quantity" value={adjQty} onChangeText={setAdjQty} keyboardType="numeric" />
             </View>
             <View style={{ flex: 1 }}>
-              <InlineDD label="Adjustment Reason" required value={adjReason} options={ADJ_REASONS} placeholder="Select reason" onSelect={setAdjReason} />
+              <FormDropdown
+                label="Adjustment Reason"
+                required
+                value={adjReason}
+                options={ADJ_REASONS.map(s => ({ label: s, value: s }))}
+                onSelect={o => setAdjReason(o.value)}
+                placeholder="Select reason"
+              />
             </View>
           </View>
 

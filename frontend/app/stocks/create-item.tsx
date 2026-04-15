@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import FormDropdown from '../../src/components/forms/FormDropdown';
 
 const GROUPS = ['Electronics', 'Accessories', 'Raw Materials', 'Finished Goods', 'Services', 'Consumables', 'Spare Parts', 'Packaging'];
 const UNITS = ['Pcs (Pieces)', 'Kg (Kilogram)', 'Ltr (Litre)', 'Mtr (Meter)', 'Box', 'Nos (Numbers)', 'Bag', 'Roll'];
@@ -15,41 +16,6 @@ const TAX_RATES = ['0% - Exempt', '5% GST', '12% GST', '18% GST', '28% GST'];
 const WAREHOUSES = ['Main Warehouse - Mumbai', 'Warehouse B - Delhi', 'Warehouse C - Pune', 'Deltamas Logistics Center'];
 const WEB = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
 const todayStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; };
-
-function InlineDD({ label, required, value, options, placeholder, onSelect }: {
-  label: string; required?: boolean; value: string;
-  options: string[]; placeholder?: string; onSelect: (v: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <View>
-      {label ? <Text style={s.label}>{label}{required && <Text style={s.star}> *</Text>}</Text> : null}
-      <TouchableOpacity
-        style={[s.selectBox, open && s.selectBoxOpen]}
-        onPress={() => setOpen(!open)}
-        activeOpacity={0.7}
-      >
-        <Text style={[s.selectTxt, !value && { color: COLORS.textTertiary }]}>{value || placeholder || 'Select'}</Text>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
-      </TouchableOpacity>
-      {open && (
-        <View style={s.dropList}>
-          {options.map((o, idx) => (
-            <TouchableOpacity
-              key={o}
-              style={[s.dropItem, idx === options.length - 1 && { borderBottomWidth: 0 }]}
-              onPress={() => { onSelect(o); setOpen(false); }}
-              activeOpacity={0.7}
-            >
-              <Text style={[s.dropTxt, value === o && s.dropTxtActive]}>{o}</Text>
-              {value === o && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-    </View>
-  );
-}
 
 function ThemedInput({ style, onFocus: of_, onBlur: ob_, ...props }: React.ComponentProps<typeof TextInput>) {
   const [focused, setFocused] = useState(false);
@@ -126,7 +92,13 @@ export default function CreateStockItemScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* Group */}
-          <InlineDD label="Group" value={group} options={GROUPS} placeholder="Select group" onSelect={setGroup} />
+          <FormDropdown
+            label="Group"
+            value={group}
+            options={GROUPS.map(s => ({ label: s, value: s }))}
+            placeholder="Select group"
+            onSelect={o => setGroup(o.value)}
+          />
 
           {/* Product Name */}
           <Text style={s.label}>Product name <Text style={s.star}>*</Text></Text>
@@ -135,10 +107,23 @@ export default function CreateStockItemScreen() {
           {/* Unit + Tax Rate */}
           <View style={s.row2}>
             <View style={{ flex: 1 }}>
-              <InlineDD label="Unit of measure" required value={unit} options={UNITS} placeholder="Select unit" onSelect={setUnit} />
+              <FormDropdown
+                label="Unit of measure"
+                required
+                value={unit}
+                options={UNITS.map(s => ({ label: s, value: s }))}
+                placeholder="Select unit"
+                onSelect={o => setUnit(o.value)}
+              />
             </View>
             <View style={{ flex: 1 }}>
-              <InlineDD label="Tax rate" value={taxRate} options={TAX_RATES} placeholder="Select tax rate" onSelect={setTaxRate} />
+              <FormDropdown
+                label="Tax rate"
+                value={taxRate}
+                options={TAX_RATES.map(s => ({ label: s, value: s }))}
+                placeholder="Select tax rate"
+                onSelect={o => setTaxRate(o.value)}
+              />
             </View>
           </View>
 
@@ -147,7 +132,13 @@ export default function CreateStockItemScreen() {
           <InrInput value={purchasePrice} onChange={setPurchasePrice} placeholder="Enter price" />
 
           {/* Warehouse Placement */}
-          <InlineDD label="Warehouse Placement" value={warehouse} options={WAREHOUSES} placeholder="Select warehouse" onSelect={setWarehouse} />
+          <FormDropdown
+            label="Warehouse Placement"
+            value={warehouse}
+            options={WAREHOUSES.map(s => ({ label: s, value: s }))}
+            placeholder="Select warehouse"
+            onSelect={o => setWarehouse(o.value)}
+          />
 
           {/* Quantity + Sale Price */}
           <View style={s.row2}>
