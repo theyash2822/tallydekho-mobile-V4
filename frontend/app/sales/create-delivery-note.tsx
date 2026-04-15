@@ -10,8 +10,10 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import SearchableDropdown, { SDOption } from '../../src/components/forms/SearchableDropdown';
+import DatePickerModal from '../../src/components/forms/DatePickerModal';
 
-const PARTIES: DropdownOption[] = [
+const PARTIES: SDOption[] = [
   { label: 'ABC Traders', value: 'abc' },
   { label: 'PQR Exports', value: 'pqr' },
   { label: 'Kumar & Sons', value: 'kumar' },
@@ -19,14 +21,14 @@ const PARTIES: DropdownOption[] = [
   { label: 'Sharma Electronics', value: 'sharma' },
   { label: 'Delhi Suppliers', value: 'delhi' },
 ];
-const INVOICES: DropdownOption[] = [
+const INVOICES: SDOption[] = [
   { label: 'INV-30979 - ABC Traders', value: 'inv30979' },
   { label: 'INV-30978 - ABC Traders', value: 'inv30978' },
   { label: 'INV-30977 - PQR Exports', value: 'inv30977' },
   { label: 'SO-00246 - Kumar & Sons', value: 'so246' },
   { label: 'SO-00245 - ABC Traders', value: 'so245' },
 ];
-const DISPATCH_METHODS: DropdownOption[] = [
+const DISPATCH_METHODS: SDOption[] = [
   { label: 'By Courier', value: 'courier' },
   { label: 'By Road', value: 'road' },
   { label: 'By Rail', value: 'rail' },
@@ -48,6 +50,20 @@ const newItem = (): DNItem => ({ id: Date.now().toString(), product: '', qty: '1
 const todayStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`; };
 
 type ModalState = { type: 'product'|'unit'; itemId: string }|null;
+
+function DateInput({ label, value, onChange, required, title }: { label:string; value:string; onChange:(v:string)=>void; required?:boolean; title?:string; }) {
+  const [show, setShow] = useState(false);
+  return (
+    <View style={{flex:1}}>
+      <Text style={s.fLabel}>{label}{required&&<Text style={s.star}> *</Text>}</Text>
+      <TouchableOpacity style={s.dateBox} onPress={()=>setShow(true)} activeOpacity={0.7}>
+        <Text style={[s.dateTxt,!value&&s.datePlh]}>{value||'DD/MM/YY'}</Text>
+        <Ionicons name="calendar-outline" size={18} color={COLORS.brandPrimary} />
+      </TouchableOpacity>
+      <DatePickerModal visible={show} value={value} onSelect={onChange} onClose={()=>setShow(false)} title={title||label} />
+    </View>
+  );
+}
 
 function DeliveryItemRow({ item, onUpdate, onRemove, onModal }: {
   item: DNItem; onUpdate:(id:string,f:keyof DNItem,v:string)=>void;
@@ -129,24 +145,18 @@ export default function CreateDeliveryNoteScreen() {
                 <Text style={s.fLabel}>DN No.</Text>
                 <View style={s.autoBox}><Text style={s.autoTxt}>{dnNo}</Text><Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} /></View>
               </View>
-              <View style={{flex:1}}>
-                <Text style={s.fLabel}>Date <Text style={s.star}>*</Text></Text>
-                <TextInput style={s.fInput} value={date} onChangeText={setDate} placeholder="DD/MM/YY" placeholderTextColor={COLORS.textTertiary} />
-              </View>
+              <DateInput label="Date" required value={date} onChange={setDate} title="Delivery Date" />
             </View>
-            <FormDropdown label="Customer / Party" value={party} options={PARTIES} onSelect={o=>setParty(o.value)} placeholder="Select customer..." required />
-            <FormDropdown label="Linked Invoice / Order" value={linkedRef} options={INVOICES} onSelect={o=>setLinkedRef(o.value)} placeholder="Select reference..." />
+            <SearchableDropdown label="Customer / Party" required placeholder="Search customer..." options={PARTIES} value={party} onSelect={o=>setParty(o.value)} />
+            <SearchableDropdown label="Linked Invoice / Order" placeholder="Select reference..." options={INVOICES} value={linkedRef} onSelect={o=>setLinkedRef(o.value)} icon="document-outline" />
             <View style={s.row2}>
-              <View style={{flex:1}}>
-                <Text style={s.fLabel}>Dispatch Date</Text>
-                <TextInput style={s.fInput} value={dispatchDate} onChangeText={setDispatchDate} placeholder="DD/MM/YY" placeholderTextColor={COLORS.textTertiary} />
-              </View>
+              <DateInput label="Dispatch Date" value={dispatchDate} onChange={setDispatchDate} title="Dispatch Date" />
               <View style={{flex:1}}>
                 <Text style={s.fLabel}>Tracking No.</Text>
                 <TextInput style={s.fInput} value={trackingNo} onChangeText={setTrackingNo} placeholder="Optional" placeholderTextColor={COLORS.textTertiary} />
               </View>
             </View>
-            <FormDropdown label="Dispatch Method" value={dispatchMethod} options={DISPATCH_METHODS} onSelect={o=>setDispatchMethod(o.value)} placeholder="Select dispatch method..." containerStyle={{marginBottom:SPACING.sm}} />
+            <SearchableDropdown label="Dispatch Method" options={DISPATCH_METHODS} value={dispatchMethod} onSelect={o=>setDispatchMethod(o.value)} placeholder="Select dispatch method..." icon="car-outline" containerStyle={{marginBottom:SPACING.sm}} />
             {/* Vehicle Information Toggle */}
             <View style={s.switchRow}>
               <View style={s.switchLabelWrap}>
@@ -243,6 +253,10 @@ const s = StyleSheet.create({
   cardTitle:{fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.textPrimary},
   row2:{flexDirection:'row',gap:12,marginBottom:SPACING.md},
   fLabel:{fontSize:TYPOGRAPHY.sm,fontWeight:'600',color:COLORS.textSecondary,marginBottom:6},
+  star:{color:COLORS.negative},
+  dateBox:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',backgroundColor:COLORS.cardBg,borderWidth:1,borderColor:COLORS.borderDefault,borderRadius:RADIUS.md,paddingHorizontal:14,paddingVertical:12,minHeight:48},
+  dateTxt:{fontSize:TYPOGRAPHY.base,color:COLORS.textPrimary,fontWeight:'500',flex:1},
+  datePlh:{color:COLORS.textTertiary},
   fInput:{backgroundColor:COLORS.cardBg,borderWidth:1,borderColor:COLORS.borderDefault,borderRadius:RADIUS.md,paddingHorizontal:14,paddingVertical:12,fontSize:TYPOGRAPHY.base,color:COLORS.textPrimary,minHeight:48},
   autoBox:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',backgroundColor:COLORS.pageBg,borderWidth:1,borderColor:COLORS.borderDefault,borderRadius:RADIUS.md,paddingHorizontal:14,paddingVertical:12,minHeight:48},
   autoTxt:{fontSize:TYPOGRAPHY.sm,color:COLORS.textSecondary,fontWeight:'600'},

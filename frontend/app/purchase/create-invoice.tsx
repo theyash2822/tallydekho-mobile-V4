@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, Alert, TextInput, Modal, ActivityIndicator,
@@ -11,9 +11,11 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import SearchableDropdown, { SDOption } from '../../src/components/forms/SearchableDropdown';
+import DatePickerModal from '../../src/components/forms/DatePickerModal';
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
-const LEDGER_OPTS: DropdownOption[] = [
+const LEDGER_OPTS: SDOption[] = [
   { label: 'Purchase - Raw Materials', value: 'purchase_raw' },
   { label: 'Purchase - Finished Goods', value: 'purchase_fg' },
   { label: 'Expenses', value: 'expenses' },
@@ -49,6 +51,12 @@ const WAREHOUSES: DropdownOption[] = [
   { label: 'Store B', value: 'store_b' },
   { label: 'Delhi Depot', value: 'delhi_depot' },
 ];
+const WAREHOUSE_PRODUCTS: Record<string, string[]> = {
+  main_wh:     ['jbl_speaker','samsung_j1','lycan_hp','sony_xm5','jbl_wired'],
+  store_a:     ['jbl_speaker','lycan_hp'],
+  store_b:     ['samsung_j1','sony_xm5'],
+  delhi_depot: ['jbl_wired'],
+};
 const PAY_STATUS_OPTS: DropdownOption[] = [
   { label: 'Payment Received', value: 'received' },
   { label: '15 Days', value: '15d' },
@@ -77,7 +85,12 @@ interface PItem {
 }
 const newItem = (): PItem => ({ id: Date.now().toString(), product:'', qty:'1', unit:'Pcs', rate:'', discountType:'%', discount:'0', taxRate:'18', warehouse:'' });
 
-type ModalState = { type:'product'|'unit'|'tax'|'warehouse'; itemId:string }|null;
+type ModalState = { type:'product'|'unit'|'tax'|'warehouse'|'barcode'; itemId:string }|null;
+const BARCODE_MAP: Record<string, string> = {
+  '123456789012': 'jbl_speaker', '234567890123': 'samsung_j1',
+  '345678901234': 'lycan_hp',   '456789012345': 'sony_xm5', '567890123456': 'jbl_wired',
+};
+
 const todayStr = () => { const d=new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`; };
 const calcItem = (item: PItem) => {
   const qty=parseFloat(item.qty)||0, rate=parseFloat(item.rate)||0;
@@ -91,33 +104,101 @@ const calcItem = (item: PItem) => {
 
 type OcrStatus = 'idle'|'scanning'|'done';
 
+// ─── Item Barcode Scanner Modal ────────────────────────────────────────────────
+function ItemBarcodeScannerModal({ visible, onScan, onClose }: { visible:boolean; onScan:(v:string)=>void; onClose:()=>void; }) {
+  const [permission, requestPermission] = useCameraPermissions();
+  const scanned = useRef(false);
+  const handleBarcodeScanned = ({ data }: { data: string }) => {
+    if (scanned.current) return;
+    scanned.current = true;
+    const product = BARCODE_MAP[data];
+    if (product) { onScan(product); }
+    else Alert.alert('Not Found',`No product for barcode: ${data}`,[{text:'OK',onPress:()=>{scanned.current=false;}}]);
+  };
+  if (!visible) return null;
+  if (!permission?.granted) {
+    return (<Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <SafeAreaView style={{flex:1,backgroundColor:COLORS.pageBg}}>
+        <View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:16,paddingVertical:14,backgroundColor:COLORS.cardBg,borderBottomWidth:1,borderBottomColor:COLORS.borderDefault}}>
+          <TouchableOpacity onPress={onClose} style={{width:40,height:40,alignItems:'center',justifyContent:'center'}}><Ionicons name="close" size={24} color={COLORS.textPrimary} /></TouchableOpacity>
+          <Text style={{flex:1,fontSize:TYPOGRAPHY.md,fontWeight:'700',color:COLORS.textPrimary,textAlign:'center'}}>Scan Barcode</Text>
+          <View style={{width:40}} />
+        </View>
+        <View style={{flex:1,alignItems:'center',justifyContent:'center',gap:16,padding:24}}>
+          <Ionicons name="camera-outline" size={64} color={COLORS.textTertiary} />
+          <Text style={{fontSize:TYPOGRAPHY.base,color:COLORS.textSecondary,textAlign:'center'}}>Camera permission required to scan barcodes.</Text>
+          <TouchableOpacity style={{backgroundColor:COLORS.brandPrimary,paddingHorizontal:24,paddingVertical:14,borderRadius:RADIUS.md}} onPress={requestPermission}>
+            <Text style={{fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.white}}>Grant Camera Access</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </Modal>);
+  }
+  return (<Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+    <SafeAreaView style={{flex:1,backgroundColor:'#000'}} edges={['top']}>
+      <View style={{flexDirection:'row',alignItems:'center',paddingHorizontal:16,paddingVertical:14,backgroundColor:COLORS.cardBg,borderBottomWidth:1,borderBottomColor:COLORS.borderDefault}}>
+        <TouchableOpacity onPress={onClose} style={{width:40,height:40,alignItems:'center',justifyContent:'center'}}><Ionicons name="close" size={24} color={COLORS.textPrimary} /></TouchableOpacity>
+        <Text style={{flex:1,fontSize:TYPOGRAPHY.md,fontWeight:'700',color:COLORS.textPrimary,textAlign:'center'}}>Scan Item Barcode</Text>
+        <TouchableOpacity onPress={()=>{scanned.current=false;}} style={{paddingHorizontal:12,paddingVertical:8,backgroundColor:COLORS.brandPrimary,borderRadius:RADIUS.md}}><Text style={{fontSize:TYPOGRAPHY.sm,fontWeight:'700',color:COLORS.white}}>Rescan</Text></TouchableOpacity>
+      </View>
+      <CameraView style={{flex:1}} facing="back" barcodeScannerSettings={{barcodeTypes:['qr','ean13','ean8','code128','code39']}} onBarcodeScanned={handleBarcodeScanned} />
+      <View style={{position:'absolute',bottom:0,left:0,right:0,alignItems:'center',paddingBottom:60}}>
+        <View style={{width:220,height:220,borderWidth:2,borderColor:'white',borderRadius:16,marginBottom:24,opacity:0.8}} />
+        <Text style={{fontSize:TYPOGRAPHY.sm,color:'white',fontWeight:'600'}}>Point camera at product barcode</Text>
+      </View>
+    </SafeAreaView>
+  </Modal>);
+}
+
+// ─── Date Input Helper ─────────────────────────────────────────────────────────
+function DateInput({ label, value, onChange, required, title }: { label:string; value:string; onChange:(v:string)=>void; required?:boolean; title?:string; }) {
+  const [show, setShow] = useState(false);
+  return (
+    <View style={{flex:1}}>
+      <Text style={{fontSize:TYPOGRAPHY.sm,fontWeight:'600',color:COLORS.textSecondary,marginBottom:6}}>{label}{required&&<Text style={{color:COLORS.negative}}> *</Text>}</Text>
+      <TouchableOpacity style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',backgroundColor:COLORS.cardBg,borderWidth:1,borderColor:COLORS.borderDefault,borderRadius:RADIUS.md,paddingHorizontal:14,paddingVertical:12,minHeight:48}} onPress={()=>setShow(true)} activeOpacity={0.7}>
+        <Text style={{fontSize:TYPOGRAPHY.base,color:value?COLORS.textPrimary:COLORS.textTertiary,fontWeight:'500',flex:1}}>{value||'DD/MM/YY'}</Text>
+        <Ionicons name="calendar-outline" size={18} color={COLORS.brandPrimary} />
+      </TouchableOpacity>
+      <DatePickerModal visible={show} value={value} onSelect={onChange} onClose={()=>setShow(false)} title={title||label} />
+    </View>
+  );
+}
+
 function ItemRow({ item, onUpdate, onRemove, onModal }: {
   item: PItem; onUpdate:(id:string,f:keyof PItem,v:string)=>void;
   onRemove:(id:string)=>void; onModal:(s:ModalState)=>void;
 }) {
   const calc = calcItem(item);
-  const pname = PRODUCTS.find(p=>p.value===item.product)?.label;
-  const wname = WAREHOUSES.find(w=>w.value===item.warehouse)?.label;
+  const warehouseLabel = WAREHOUSES.find(w=>w.value===item.warehouse)?.label;
+  const availableProducts = item.warehouse
+    ? PRODUCTS.filter(p=>(WAREHOUSE_PRODUCTS[item.warehouse]||[]).includes(p.value))
+    : PRODUCTS;
+  const productName = availableProducts.find(p=>p.value===item.product)?.label
+    || PRODUCTS.find(p=>p.value===item.product)?.label;
   return (
     <View style={ir.card}>
+      {/* Warehouse FIRST */}
+      <TouchableOpacity style={[ir.warehouseBtn, item.warehouse && ir.warehouseBtnActive]} onPress={()=>onModal({type:'warehouse',itemId:item.id})} activeOpacity={0.7}>
+        <Ionicons name="business-outline" size={13} color={item.warehouse?COLORS.info:COLORS.textTertiary} />
+        <Text style={[ir.warehouseTxt,!warehouseLabel&&ir.phTxt]}>{warehouseLabel||'Select Warehouse first...'}</Text>
+        <Ionicons name="chevron-down" size={11} color={COLORS.textSecondary} />
+      </TouchableOpacity>
       <View style={ir.topRow}>
         <TouchableOpacity style={ir.prodBtn} onPress={()=>onModal({type:'product',itemId:item.id})} activeOpacity={0.7}>
           <Ionicons name="cube-outline" size={13} color={COLORS.textSecondary} />
-          <Text style={[ir.prodTxt,!item.product&&ir.phTxt]} numberOfLines={1}>{pname||'Select product...'}</Text>
+          <Text style={[ir.prodTxt,!item.product&&ir.phTxt]} numberOfLines={1}>
+            {productName||(item.warehouse?'Select product...':'Select warehouse first')}
+          </Text>
           <Ionicons name="chevron-down" size={12} color={COLORS.textSecondary} />
         </TouchableOpacity>
-        <TouchableOpacity style={ir.barcodeBtn} activeOpacity={0.7}>
+        <TouchableOpacity style={ir.barcodeBtn} onPress={()=>onModal({type:'barcode',itemId:item.id})} activeOpacity={0.7}>
           <Ionicons name="barcode-outline" size={18} color={COLORS.textSecondary} />
         </TouchableOpacity>
         <TouchableOpacity style={ir.delBtn} onPress={()=>onRemove(item.id)} activeOpacity={0.7}>
           <Ionicons name="close-circle" size={20} color={COLORS.negative} />
         </TouchableOpacity>
       </View>
-      <TouchableOpacity style={ir.warehouseBtn} onPress={()=>onModal({type:'warehouse',itemId:item.id})} activeOpacity={0.7}>
-        <Ionicons name="business-outline" size={12} color={COLORS.info} />
-        <Text style={[ir.warehouseTxt,!wname&&ir.phTxt]}>{wname||'Select Warehouse'}</Text>
-        <Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
-      </TouchableOpacity>
       <View style={ir.row}>
         <View style={ir.qBox}><Text style={ir.ml}>Qty</Text>
           <TextInput style={ir.mi} value={item.qty} onChangeText={v=>onUpdate(item.id,'qty',v)} keyboardType="numeric" placeholder="1" placeholderTextColor={COLORS.textTertiary} />
@@ -274,7 +355,7 @@ export default function CreatePurchaseInvoiceScreen() {
           {/* Ledger */}
           <View style={s.card}>
             <View style={s.cardHdr}><Ionicons name="albums-outline" size={18} color={COLORS.textSecondary} /><Text style={s.cardTitle}>Ledger Selection</Text></View>
-            <FormDropdown label="Purchase Ledger" value={ledger} options={LEDGER_OPTS} onSelect={o=>setLedger(o.value)} placeholder="Select ledger..." required containerStyle={{marginBottom:0}} />
+            <SearchableDropdown label="Purchase Ledger" required placeholder="Search ledger account..." options={LEDGER_OPTS} value={ledger} onSelect={o=>setLedger(o.value)} icon="book-outline" containerStyle={{marginBottom:0}} />
           </View>
 
           {/* Invoice Details */}
@@ -290,7 +371,7 @@ export default function CreatePurchaseInvoiceScreen() {
                 <TextInput style={s.fInput} value={date} onChangeText={setDate} placeholder="DD/MM/YY" placeholderTextColor={COLORS.textTertiary} />
               </View>
             </View>
-            <FormDropdown label="Vendor / Supplier" value={vendor} options={VENDORS} onSelect={o=>setVendor(o.value)} placeholder="Select vendor..." required />
+            <SearchableDropdown label="Vendor / Supplier" required placeholder="Search vendor..." options={VENDORS} value={vendor} onSelect={o=>setVendor(o.value)} />
             <View style={s.row2}>
               <View style={{flex:1}}>
                 <Text style={s.fLabel}>Purchase Reference No. <Text style={s.star}>*</Text></Text>
@@ -302,10 +383,7 @@ export default function CreatePurchaseInvoiceScreen() {
               </View>
             </View>
             <View style={s.row2}>
-              <View style={{flex:1}}>
-                <Text style={s.fLabel}>Vendor Inv. Date</Text>
-                <TextInput style={s.fInput} value={vendorInvDate} onChangeText={setVendorInvDate} placeholder="DD/MM/YY" placeholderTextColor={COLORS.textTertiary} />
-              </View>
+              <DateInput label="Vendor Inv. Date" value={vendorInvDate} onChange={setVendorInvDate} title="Vendor Invoice Date" />
               <View style={{flex:1}}>
                 <FormDropdown label="Payment Terms" value={payTerms} options={TERMS} onSelect={o=>setPayTerms(o.value)} placeholder="Select terms..." containerStyle={{marginBottom:0}} />
               </View>
@@ -445,12 +523,20 @@ export default function CreatePurchaseInvoiceScreen() {
         <View style={mm.sheet}>
           <View style={mm.handle}/><Text style={mm.title}>Select Product</Text>
           <ScrollView showsVerticalScrollIndicator={false}>
-            {PRODUCTS.map(p=>(
-              <TouchableOpacity key={p.value} style={mm.opt} onPress={()=>{if(activeModal)updateItem(activeModal.itemId,'product',p.value);setActiveModal(null);}} activeOpacity={0.7}>
-                <Ionicons name="cube-outline" size={15} color={COLORS.textSecondary} />
-                <Text style={mm.optTxt}>{p.label}</Text>
-              </TouchableOpacity>
-            ))}
+            {(()=>{
+              const itm=items.find(i=>i.id===activeModal?.itemId);
+              const filtered=itm?.warehouse?PRODUCTS.filter(p=>(WAREHOUSE_PRODUCTS[itm.warehouse]||[]).includes(p.value)):PRODUCTS;
+              return (<>
+                {itm?.warehouse?(<View style={{flexDirection:'row',alignItems:'center',gap:6,paddingHorizontal:16,paddingVertical:10,backgroundColor:COLORS.infoBg}}><Ionicons name="business-outline" size={13} color={COLORS.info} /><Text style={{fontSize:TYPOGRAPHY.xs,color:COLORS.info,fontWeight:'600'}}>Products from: {WAREHOUSES.find(w=>w.value===itm.warehouse)?.label}</Text></View>)
+                  :(<View style={{flexDirection:'row',alignItems:'center',gap:6,paddingHorizontal:16,paddingVertical:10,backgroundColor:COLORS.warningBg}}><Ionicons name="alert-circle-outline" size={13} color={COLORS.warning} /><Text style={{fontSize:TYPOGRAPHY.xs,color:COLORS.warning,fontWeight:'600'}}>Select warehouse first to filter products</Text></View>)}
+                {filtered.map(p=>(
+                  <TouchableOpacity key={p.value} style={mm.opt} onPress={()=>{if(activeModal)updateItem(activeModal.itemId,'product',p.value);setActiveModal(null);}} activeOpacity={0.7}>
+                    <Ionicons name="cube-outline" size={15} color={COLORS.textSecondary} />
+                    <Text style={mm.optTxt}>{p.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </>);
+            })()}
           </ScrollView>
         </View>
       </Modal>
@@ -482,7 +568,10 @@ export default function CreatePurchaseInvoiceScreen() {
           <View style={mm.handle}/><Text style={mm.title}>Select Warehouse</Text>
           <ScrollView showsVerticalScrollIndicator={false}>
             {WAREHOUSES.map(w=>(
-              <TouchableOpacity key={w.value} style={mm.opt} onPress={()=>{if(activeModal)updateItem(activeModal.itemId,'warehouse',w.value);setActiveModal(null);}} activeOpacity={0.7}>
+              <TouchableOpacity key={w.value} style={mm.opt} onPress={()=>{
+                if(activeModal) { updateItem(activeModal.itemId,'warehouse',w.value); updateItem(activeModal.itemId,'product',''); }
+                setActiveModal(null);
+              }} activeOpacity={0.7}>
                 <Ionicons name="business-outline" size={15} color={COLORS.info} />
                 <Text style={mm.optTxt}>{w.label}</Text>
               </TouchableOpacity>
@@ -490,6 +579,17 @@ export default function CreatePurchaseInvoiceScreen() {
           </ScrollView>
         </View>
       </Modal>
+      <ItemBarcodeScannerModal
+        visible={activeModal?.type==='barcode'}
+        onScan={(productValue) => {
+          if(activeModal) {
+            updateItem(activeModal.itemId,'product',productValue);
+            Alert.alert('✓ Product Found',`Added: ${PRODUCTS.find(p=>p.value===productValue)?.label||productValue}`);
+          }
+          setActiveModal(null);
+        }}
+        onClose={()=>setActiveModal(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -569,7 +669,8 @@ const ir = StyleSheet.create({
   phTxt:{color:COLORS.textTertiary},
   barcodeBtn:{width:36,height:36,backgroundColor:COLORS.pageBg,borderRadius:RADIUS.sm,borderWidth:1,borderColor:COLORS.borderDefault,alignItems:'center',justifyContent:'center'},
   delBtn:{width:36,height:36,alignItems:'center',justifyContent:'center'},
-  warehouseBtn:{flexDirection:'row',alignItems:'center',gap:6,backgroundColor:COLORS.infoBg,borderRadius:RADIUS.sm,paddingHorizontal:10,paddingVertical:7,borderWidth:1,borderColor:COLORS.info+'30',marginBottom:8},
+  warehouseBtn:{flexDirection:'row',alignItems:'center',gap:6,backgroundColor:COLORS.pageBg,borderRadius:RADIUS.sm,paddingHorizontal:10,paddingVertical:7,borderWidth:1,borderColor:COLORS.borderDefault,marginBottom:8},
+  warehouseBtnActive:{backgroundColor:COLORS.infoBg,borderColor:COLORS.info+'40'},
   warehouseTxt:{flex:1,fontSize:TYPOGRAPHY.xs,fontWeight:'600',color:COLORS.info},
   row:{flexDirection:'row',gap:8,marginBottom:8,alignItems:'flex-end'},
   qBox:{width:72},rBox:{flex:1},

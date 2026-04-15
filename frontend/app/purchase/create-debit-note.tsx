@@ -10,22 +10,24 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import SearchableDropdown, { SDOption } from '../../src/components/forms/SearchableDropdown';
+import DatePickerModal from '../../src/components/forms/DatePickerModal';
 
-const VENDORS: DropdownOption[] = [
+const VENDORS: SDOption[] = [
   { label: 'ABC Traders', value: 'abc' },
   { label: 'PQR Exports', value: 'pqr' },
   { label: 'Kumar & Sons', value: 'kumar' },
   { label: 'Delhi Suppliers', value: 'delhi' },
   { label: 'Indian Export House', value: 'ieh' },
 ];
-const LINKED_PO: DropdownOption[] = [
+const LINKED_PO: SDOption[] = [
   { label: 'INV-30978 — ₹42,500', value: 'inv30978' },
   { label: 'INV-30977 — ₹28,000', value: 'inv30977' },
   { label: 'INV-30976 — ₹15,000', value: 'inv30976' },
   { label: 'PO-00189 — ₹45,000', value: 'po189' },
   { label: 'PO-00188 — ₹32,000', value: 'po188' },
 ];
-const REASONS: DropdownOption[] = [
+const REASONS: SDOption[] = [
   { label: 'Defective / Damaged Goods', value: 'defective' },
   { label: 'Goods Not as Ordered', value: 'wrong_item' },
   { label: 'Short Supply', value: 'short' },
@@ -34,7 +36,7 @@ const REASONS: DropdownOption[] = [
   { label: 'Goods Returned to Vendor', value: 'return' },
   { label: 'Other', value: 'other' },
 ];
-const PRODUCTS: DropdownOption[] = [
+const ALL_PRODUCTS: SDOption[] = [
   { label: 'JBL Portable Speaker', value: 'jbl_speaker' },
   { label: 'Samsung Galaxy J1 Bluetooth', value: 'samsung_j1' },
   { label: 'Lycan Wireless Headphone', value: 'lycan_hp' },
@@ -43,12 +45,18 @@ const PRODUCTS: DropdownOption[] = [
 ];
 const UNITS = ['Pcs', 'Kg', 'Ltr', 'Mtr', 'Box', 'Nos'];
 const TAX_RATES = ['0', '5', '12', '18', '28'];
-const WAREHOUSES: DropdownOption[] = [
+const WAREHOUSES: SDOption[] = [
   { label: 'Main Warehouse', value: 'main_wh' },
   { label: 'Store A', value: 'store_a' },
   { label: 'Store B', value: 'store_b' },
   { label: 'Delhi Depot', value: 'delhi_depot' },
 ];
+const WAREHOUSE_PRODUCTS: Record<string, string[]> = {
+  main_wh:     ['jbl_speaker','samsung_j1','lycan_hp','sony_xm5','jbl_wired'],
+  store_a:     ['jbl_speaker','lycan_hp'],
+  store_b:     ['samsung_j1','sony_xm5'],
+  delhi_depot: ['jbl_wired'],
+};
 
 interface DItem { id: string; product: string; qty: string; unit: string; rate: string; taxRate: string; warehouse: string; }
 const newItem = (): DItem => ({ id: Date.now().toString(), product: '', qty: '1', unit: 'Pcs', rate: '', taxRate: '18', warehouse: '' });
@@ -61,30 +69,51 @@ const calcItem = (item: DItem) => {
 
 type ModalState = { type: 'product'|'unit'|'tax'|'warehouse'; itemId: string }|null;
 
+function DateInput({ label, value, onChange, required, title }: { label:string; value:string; onChange:(v:string)=>void; required?:boolean; title?:string; }) {
+  const [show, setShow] = useState(false);
+  return (
+    <View style={{flex:1}}>
+      <Text style={s.fLabel}>{label}{required&&<Text style={s.star}> *</Text>}</Text>
+      <TouchableOpacity style={s.dateBox} onPress={()=>setShow(true)} activeOpacity={0.7}>
+        <Text style={[s.dateTxt,!value&&s.datePlh]}>{value||'DD/MM/YY'}</Text>
+        <Ionicons name="calendar-outline" size={18} color={COLORS.brandPrimary} />
+      </TouchableOpacity>
+      <DatePickerModal visible={show} value={value} onSelect={onChange} onClose={()=>setShow(false)} title={title||label} />
+    </View>
+  );
+}
+
 function DebitItemRow({ item, onUpdate, onRemove, onModal }: {
   item: DItem; onUpdate:(id:string,f:keyof DItem,v:string)=>void;
   onRemove:(id:string)=>void; onModal:(s:ModalState)=>void;
 }) {
   const calc = calcItem(item);
-  const pname = PRODUCTS.find(p=>p.value===item.product)?.label;
-  const wname = WAREHOUSES.find(w=>w.value===item.warehouse)?.label;
+  const warehouseLabel = WAREHOUSES.find(w=>w.value===item.warehouse)?.label;
+  const availableProducts = item.warehouse
+    ? ALL_PRODUCTS.filter(p=>(WAREHOUSE_PRODUCTS[item.warehouse]||[]).includes(p.value))
+    : ALL_PRODUCTS;
+  const productName = availableProducts.find(p=>p.value===item.product)?.label
+    || ALL_PRODUCTS.find(p=>p.value===item.product)?.label;
   return (
     <View style={ir.card}>
+      {/* Warehouse FIRST */}
+      <TouchableOpacity style={[ir.warehouseBtn,item.warehouse&&ir.warehouseBtnActive]} onPress={()=>onModal({type:'warehouse',itemId:item.id})} activeOpacity={0.7}>
+        <Ionicons name="business-outline" size={13} color={item.warehouse?COLORS.info:COLORS.textTertiary} />
+        <Text style={[ir.warehouseTxt,!warehouseLabel&&ir.phTxt]}>{warehouseLabel||'Select Warehouse first...'}</Text>
+        <Ionicons name="chevron-down" size={11} color={COLORS.textSecondary} />
+      </TouchableOpacity>
       <View style={ir.topRow}>
         <TouchableOpacity style={ir.prodBtn} onPress={()=>onModal({type:'product',itemId:item.id})} activeOpacity={0.7}>
           <Ionicons name="cube-outline" size={13} color={COLORS.textSecondary} />
-          <Text style={[ir.prodTxt,!item.product&&ir.phTxt]} numberOfLines={1}>{pname||'Select product...'}</Text>
+          <Text style={[ir.prodTxt,!item.product&&ir.phTxt]} numberOfLines={1}>
+            {productName||(item.warehouse?'Select product...':'Select warehouse first')}
+          </Text>
           <Ionicons name="chevron-down" size={12} color={COLORS.textSecondary} />
         </TouchableOpacity>
         <TouchableOpacity style={ir.delBtn} onPress={()=>onRemove(item.id)} activeOpacity={0.7}>
           <Ionicons name="close-circle" size={20} color={COLORS.negative} />
         </TouchableOpacity>
       </View>
-      <TouchableOpacity style={ir.warehouseBtn} onPress={()=>onModal({type:'warehouse',itemId:item.id})} activeOpacity={0.7}>
-        <Ionicons name="business-outline" size={12} color={COLORS.info} />
-        <Text style={[ir.warehouseTxt,!wname&&ir.phTxt]}>{wname||'Select Warehouse'}</Text>
-        <Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
-      </TouchableOpacity>
       <View style={ir.row}>
         <View style={ir.qBox}><Text style={ir.ml}>Qty</Text>
           <TextInput style={ir.mi} value={item.qty} onChangeText={v=>onUpdate(item.id,'qty',v)} keyboardType="numeric" placeholder="1" placeholderTextColor={COLORS.textTertiary} />
@@ -156,14 +185,11 @@ export default function CreateDebitNoteScreen() {
                 <Text style={s.fLabel}>DBN No.</Text>
                 <View style={s.autoBox}><Text style={s.autoTxt}>{dbnNo}</Text><Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} /></View>
               </View>
-              <View style={{flex:1}}>
-                <Text style={s.fLabel}>Date <Text style={s.star}>*</Text></Text>
-                <TextInput style={s.fInput} value={date} onChangeText={setDate} placeholder="DD/MM/YY" placeholderTextColor={COLORS.textTertiary} />
-              </View>
+              <DateInput label="Date" required value={date} onChange={setDate} />
             </View>
-            <FormDropdown label="Customer Name" value={vendor} options={VENDORS} onSelect={o=>setVendor(o.value)} placeholder="Select customer..." required />
-            <FormDropdown label="Reference Invoice" value={linkedRef} options={LINKED_PO} onSelect={o=>setLinkedRef(o.value)} placeholder="Select reference invoice..." />
-            <FormDropdown label="Reason" value={reason} options={REASONS} onSelect={o=>setReason(o.value)} placeholder="Select reason..." required containerStyle={{marginBottom:0}} />
+            <SearchableDropdown label="Vendor Name" required placeholder="Search vendor..." options={VENDORS} value={vendor} onSelect={o=>setVendor(o.value)} />
+            <SearchableDropdown label="Reference Invoice" placeholder="Select reference invoice..." options={LINKED_PO} value={linkedRef} onSelect={o=>setLinkedRef(o.value)} icon="document-outline" />
+            <SearchableDropdown label="Reason" required placeholder="Select reason..." options={REASONS} value={reason} onSelect={o=>setReason(o.value)} icon="warning-outline" containerStyle={{marginBottom:0}} />
           </View>
 
           {reason !== '' && (
@@ -216,11 +242,15 @@ export default function CreateDebitNoteScreen() {
         <View style={m.sheet}>
           <View style={m.handle}/><Text style={m.title}>Select Product</Text>
           <ScrollView showsVerticalScrollIndicator={false}>
-            {PRODUCTS.map(p=>(
-              <TouchableOpacity key={p.value} style={m.opt} onPress={()=>{if(activeModal)updateItem(activeModal.itemId,'product',p.value);setActiveModal(null);}} activeOpacity={0.7}>
-                <Text style={m.optTxt}>{p.label}</Text>
-              </TouchableOpacity>
-            ))}
+            {(()=>{
+              const item=items.find(i=>i.id===activeModal?.itemId);
+              const filtered=item?.warehouse?ALL_PRODUCTS.filter(p=>(WAREHOUSE_PRODUCTS[item.warehouse]||[]).includes(p.value)):ALL_PRODUCTS;
+              return filtered.map(p=>(
+                <TouchableOpacity key={p.value} style={m.opt} onPress={()=>{if(activeModal)updateItem(activeModal.itemId,'product',p.value);setActiveModal(null);}} activeOpacity={0.7}>
+                  <Text style={m.optTxt}>{p.label}</Text>
+                </TouchableOpacity>
+              ));
+            })()}
           </ScrollView>
         </View>
       </Modal>
@@ -277,6 +307,9 @@ const s = StyleSheet.create({
   autoBox:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',backgroundColor:COLORS.pageBg,borderWidth:1,borderColor:COLORS.borderDefault,borderRadius:RADIUS.md,paddingHorizontal:14,paddingVertical:12,minHeight:48},
   autoTxt:{fontSize:TYPOGRAPHY.sm,color:COLORS.textSecondary,fontWeight:'600'},
   star:{color:COLORS.negative},
+  dateBox:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',backgroundColor:COLORS.cardBg,borderWidth:1,borderColor:COLORS.borderDefault,borderRadius:RADIUS.md,paddingHorizontal:14,paddingVertical:12,minHeight:48},
+  dateTxt:{fontSize:TYPOGRAPHY.base,color:COLORS.textPrimary,fontWeight:'500',flex:1},
+  datePlh:{color:COLORS.textTertiary},
   reasonBanner:{flexDirection:'row',alignItems:'center',gap:8,backgroundColor:COLORS.warningBg,borderRadius:RADIUS.md,padding:12,marginBottom:SPACING.md,borderWidth:1,borderColor:COLORS.warning+'40'},
   reasonTxt:{fontSize:TYPOGRAPHY.sm,color:COLORS.warning,flex:1,fontWeight:'600'},
   secHdr:{flexDirection:'row',alignItems:'center',gap:8,marginBottom:SPACING.sm},
@@ -317,7 +350,8 @@ const ir = StyleSheet.create({
   prodTxt:{flex:1,fontSize:TYPOGRAPHY.sm,color:COLORS.textPrimary,fontWeight:'500'},
   phTxt:{color:COLORS.textTertiary},
   delBtn:{width:36,height:36,alignItems:'center',justifyContent:'center'},
-  warehouseBtn:{flexDirection:'row',alignItems:'center',gap:6,backgroundColor:COLORS.infoBg,borderRadius:RADIUS.sm,paddingHorizontal:10,paddingVertical:7,borderWidth:1,borderColor:COLORS.info+'30',marginBottom:8},
+  warehouseBtn:{flexDirection:'row',alignItems:'center',gap:6,backgroundColor:COLORS.pageBg,borderRadius:RADIUS.sm,paddingHorizontal:10,paddingVertical:7,borderWidth:1,borderColor:COLORS.borderDefault,marginBottom:8},
+  warehouseBtnActive:{backgroundColor:COLORS.infoBg,borderColor:COLORS.info+'40'},
   warehouseTxt:{flex:1,fontSize:TYPOGRAPHY.xs,fontWeight:'600',color:COLORS.info},
   row:{flexDirection:'row',gap:8,marginBottom:8,alignItems:'flex-end'},
   qBox:{width:72},rBox:{flex:1},
