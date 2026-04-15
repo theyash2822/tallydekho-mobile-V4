@@ -24,56 +24,56 @@ const SECTIONS = [
   {
     id: 'sales',
     label: 'Sales',
-    icon: 'trending-up-outline' as const,
+    icon: 'receipt-outline' as const,
     items: [
-      { id: 'sale-invoice',   label: 'Create Invoice',       route: '/sales/create-invoice' },
-      { id: 'sale-quotation', label: 'Create Quotation',      route: '/sales/create-quotation' },
-      { id: 'sale-order',     label: 'Create Sales Orders',   route: '/sales/create-order' },
-      { id: 'sale-delivery',  label: 'Create Delivery Note',  route: '/sales/create-delivery-note' },
-      { id: 'sale-credit',    label: 'Credit Note',           route: '/sales/create-credit-note' },
+      { id: 'sale-invoice',   label: 'Create Invoice',       route: '/sales/create-invoice',        icon: 'document-text-outline' as const },
+      { id: 'sale-quotation', label: 'Create Quotation',      route: '/sales/create-quotation',      icon: 'clipboard-outline' as const },
+      { id: 'sale-order',     label: 'Create Sales Orders',   route: '/sales/create-order',          icon: 'list-outline' as const },
+      { id: 'sale-delivery',  label: 'Create Delivery Note',  route: '/sales/create-delivery-note',  icon: 'car-outline' as const },
+      { id: 'sale-credit',    label: 'Credit Note',           route: '/sales/create-credit-note',    icon: 'return-up-back-outline' as const },
     ],
   },
   {
     id: 'purchase',
     label: 'Purchase',
-    icon: 'cart-outline' as const,
+    icon: 'bag-handle-outline' as const,
     items: [
-      { id: 'pur-invoice', label: 'Purchase Invoice', route: '/purchase/create-invoice' },
-      { id: 'pur-order',   label: 'Purchase Order',   route: '/purchase/create-order' },
-      { id: 'pur-debit',   label: 'Debit Note',       route: '/purchase/create-debit-note' },
+      { id: 'pur-invoice', label: 'Purchase Invoice', route: '/purchase/create-invoice',   icon: 'document-text-outline' as const },
+      { id: 'pur-order',   label: 'Purchase Order',   route: '/purchase/create-order',     icon: 'bag-outline' as const },
+      { id: 'pur-debit',   label: 'Debit Note',       route: '/purchase/create-debit-note', icon: 'remove-circle-outline' as const },
     ],
   },
   {
     id: 'voucher',
     label: 'Voucher',
-    icon: 'card-outline' as const,
+    icon: 'wallet-outline' as const,
     items: [
-      { id: 'vou-receipt', label: 'Receipt Voucher', route: '/voucher/create-receipt' },
-      { id: 'vou-payment', label: 'Payment Voucher', route: '/voucher/create-payment' },
-      { id: 'vou-journal', label: 'Journal Entry',   route: '/voucher/create-journal' },
-      { id: 'vou-contra',  label: 'Contra Entry',    route: '/voucher/create-contra' },
+      { id: 'vou-receipt', label: 'Receipt Voucher', route: '/voucher/create-receipt', icon: 'cash-outline' as const },
+      { id: 'vou-payment', label: 'Payment Voucher', route: '/voucher/create-payment', icon: 'send-outline' as const },
+      { id: 'vou-journal', label: 'Journal Entry',   route: '/voucher/create-journal', icon: 'journal-outline' as const },
+      { id: 'vou-contra',  label: 'Contra Entry',    route: '/voucher/create-contra',  icon: 'swap-horizontal-outline' as const },
     ],
   },
   {
     id: 'inventory',
     label: 'Inventory',
-    icon: 'cube-outline' as const,
+    icon: 'layers-outline' as const,
     items: [
-      { id: 'inv-adjust',    label: 'Stock Adjustment', route: '/stocks/create-adjustment' },
-      { id: 'inv-transfer',  label: 'Stock Transfer',   route: '/stocks/create-transfer' },
-      { id: 'inv-item',      label: 'Add Item',         route: '/stocks/create-item' },
-      { id: 'inv-warehouse', label: 'Add Warehouse',    route: '/stocks/create-warehouse' },
+      { id: 'inv-adjust',    label: 'Stock Adjustment', route: '/stocks/create-adjustment', icon: 'options-outline' as const },
+      { id: 'inv-transfer',  label: 'Stock Transfer',   route: '/stocks/create-transfer',   icon: 'arrow-forward-circle-outline' as const },
+      { id: 'inv-item',      label: 'Add Item',         route: '/stocks/create-item',       icon: 'add-circle-outline' as const },
+      { id: 'inv-warehouse', label: 'Add Warehouse',    route: '/stocks/create-warehouse',  icon: 'business-outline' as const },
     ],
   },
   {
     id: 'ledgers',
     label: 'Ledgers',
-    icon: 'desktop-outline' as const,
+    icon: 'book-outline' as const,
     items: [
-      { id: 'led-creditors', label: 'Sundry Creditors', route: '/ledger/sundry-creditors' },
-      { id: 'led-debtors',   label: 'Sundry Debtors',   route: '/ledger/sundry-debtors' },
-      { id: 'led-taxes',     label: 'Duties & Taxes',   route: '/ledger/duties-taxes' },
-      { id: 'led-custom',    label: 'Custom Groups',    route: '/ledger/custom-groups' },
+      { id: 'led-creditors', label: 'Sundry Creditors', route: '/ledger/sundry-creditors', icon: 'person-add-outline' as const },
+      { id: 'led-debtors',   label: 'Sundry Debtors',   route: '/ledger/sundry-debtors',   icon: 'person-outline' as const },
+      { id: 'led-taxes',     label: 'Duties & Taxes',   route: '/ledger/duties-taxes',     icon: 'pricetag-outline' as const },
+      { id: 'led-custom',    label: 'Custom Groups',    route: '/ledger/custom-groups',    icon: 'settings-outline' as const },
     ],
   },
 ];
@@ -150,7 +150,11 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose,
                           onPress={() => handleItemPress(item)}
                           activeOpacity={0.6}
                         >
+                          <View style={s.subItemIconWrap}>
+                            <Ionicons name={item.icon} size={15} color={BRAND_GREEN} />
+                          </View>
                           <Text style={s.subItemText}>{item.label}</Text>
+                          <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
                         </TouchableOpacity>
                       ))}
                     </View>
@@ -258,14 +262,26 @@ const s = StyleSheet.create({
     paddingBottom: 10,
   },
   subItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: 12,
-    paddingLeft: 76,
+    paddingLeft: 68,
     paddingRight: 14,
+    gap: 10,
+  },
+  subItemIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: LIGHT_GREEN_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   subItemText: {
+    flex: 1,
     fontSize: TYPOGRAPHY.base,
     fontWeight: '500',
-    color: '#6B7280',
+    color: '#374151',
   },
   // Bottom close
   bottomRow: {
