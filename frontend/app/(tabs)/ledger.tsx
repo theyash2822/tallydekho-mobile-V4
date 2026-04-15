@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, RefreshControl, Modal, KeyboardAvoidingView,
-  Platform, Switch,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -422,7 +422,8 @@ export default function LedgerScreen() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('All');
   const [activeNature, setActiveNature] = useState<NatureType>('All');
-  const [sortAsc, setSortAsc] = useState(true);
+  const [sortType, setSortType] = useState<'alpha' | 'amount'>('alpha');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [showFilter, setShowFilter] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [showTypeSheet, setShowTypeSheet] = useState(false);
@@ -430,6 +431,16 @@ export default function LedgerScreen() {
   const [hideZero, setHideZero] = useState(false);
   const [showFilterDrop, setShowFilterDrop] = useState(false);
   const [filterDropPos, setFilterDropPos] = useState({ x: 16, y: 200 });
+
+  // Toggle sort: clicking same type flips direction, clicking new type sets asc
+  const handleSort = (type: 'alpha' | 'amount') => {
+    if (sortType === type) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortType(type);
+      setSortDir('asc');
+    }
+  };
 
   useEffect(() => { getLedgers().then((d: any) => setData(d)); }, []);
 
@@ -463,10 +474,19 @@ export default function LedgerScreen() {
       const matchNature = activeNature === 'All' || item.nature === activeNature;
       return matchSearch && matchFilter && matchZero && matchNature;
     })
-    .sort((a, b) => sortAsc
-      ? a.name.localeCompare(b.name)
-      : b.name.localeCompare(a.name)
-    );
+    .sort((a, b) => {
+      if (sortType === 'alpha') {
+        // A-Z / Z-A sort by name
+        return sortDir === 'asc'
+          ? a.name.localeCompare(b.name)
+          : b.name.localeCompare(a.name);
+      } else {
+        // ↑ Low to High / ↓ High to Low sort by balance amount
+        const aAmt = parseInt(a.balance.replace(/[^0-9]/g, ''), 10) || 0;
+        const bAmt = parseInt(b.balance.replace(/[^0-9]/g, ''), 10) || 0;
+        return sortDir === 'asc' ? aAmt - bAmt : bAmt - aAmt;
+      }
+    });
 
   return (
     <SafeAreaView testID="ledger-screen" style={styles.safe}>
@@ -535,31 +555,53 @@ export default function LedgerScreen() {
 
         {/* Right side: Hide Zero + Sort */}
         <View style={styles.rightControls}>
+
+          {/* Hide ₹0 — clean filled chip, no Switch inside */}
           <TouchableOpacity
-            style={[styles.hideZeroBtn, hideZero && styles.hideZeroBtnActive]}
+            style={[styles.hideZeroChip, hideZero && styles.hideZeroChipOn]}
             onPress={() => setHideZero(v => !v)}
             activeOpacity={0.8}
           >
-            <Text style={[styles.hideZeroTxt, hideZero && styles.hideZeroTxtActive]}>Hide ₹0</Text>
-            <Switch
-              value={hideZero}
-              onValueChange={setHideZero}
-              trackColor={{ false: COLORS.borderDefault, true: COLORS.brandPrimary }}
-              thumbColor={COLORS.white}
-              style={styles.hideZeroSwitch}
+            <Ionicons
+              name={hideZero ? 'eye-off' : 'eye-outline'}
+              size={13}
+              color={hideZero ? '#fff' : COLORS.textSecondary}
             />
+            <Text style={[styles.hideZeroChipTxt, hideZero && styles.hideZeroChipTxtOn]}>
+              Hide ₹0
+            </Text>
           </TouchableOpacity>
 
+          {/* Sort buttons: A-Z toggle + ₁-₉ toggle */}
           <View style={styles.sortBtns}>
-            <TouchableOpacity style={[styles.sortBtn, sortAsc && styles.sortBtnActive]} onPress={() => setSortAsc(true)} activeOpacity={0.7}>
-              <Text style={[styles.sortBtnTxt, sortAsc && styles.sortBtnTxtActive]}>₁</Text>
-              <Ionicons name="arrow-down" size={10} color={sortAsc ? COLORS.brandPrimary : COLORS.textTertiary} />
-              <Text style={[styles.sortBtnTxt, sortAsc && styles.sortBtnTxtActive]}>₉</Text>
+            {/* Alphabetical sort */}
+            <TouchableOpacity
+              style={[styles.sortBtn, sortType === 'alpha' && styles.sortBtnActive]}
+              onPress={() => handleSort('alpha')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.sortBtnLabel, sortType === 'alpha' && styles.sortBtnLabelActive]}>
+                {sortType === 'alpha' && sortDir === 'desc' ? 'Z–A' : 'A–Z'}
+              </Text>
+              <Ionicons
+                name={sortType === 'alpha' && sortDir === 'desc' ? 'arrow-up' : 'arrow-down'}
+                size={11}
+                color={sortType === 'alpha' ? COLORS.brandPrimary : COLORS.textTertiary}
+              />
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.sortBtn, !sortAsc && styles.sortBtnActive]} onPress={() => setSortAsc(false)} activeOpacity={0.7}>
-              <Text style={[styles.sortBtnTxt, !sortAsc && styles.sortBtnTxtActive]}>A</Text>
-              <Ionicons name="arrow-down" size={10} color={!sortAsc ? COLORS.brandPrimary : COLORS.textTertiary} />
-              <Text style={[styles.sortBtnTxt, !sortAsc && styles.sortBtnTxtActive]}>Z</Text>
+
+            {/* Amount sort */}
+            <TouchableOpacity
+              style={[styles.sortBtn, sortType === 'amount' && styles.sortBtnActive]}
+              onPress={() => handleSort('amount')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.sortBtnLabel, sortType === 'amount' && styles.sortBtnLabelActive]}>₹</Text>
+              <Ionicons
+                name={sortType === 'amount' && sortDir === 'desc' ? 'arrow-down' : 'arrow-up'}
+                size={11}
+                color={sortType === 'amount' ? COLORS.brandPrimary : COLORS.textTertiary}
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -788,28 +830,32 @@ const styles = StyleSheet.create({
   activeBadgeTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.brandPrimary },
   // Right controls
   rightControls: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  hideZeroBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 10, paddingVertical: 5,
+  // Hide ₹0 chip — filled green when active, grey outline when off
+  hideZeroChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 11, paddingVertical: 7,
     borderRadius: RADIUS.full,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderWidth: 1.5, borderColor: COLORS.borderDefault,
     backgroundColor: COLORS.cardBg,
   },
-  hideZeroBtnActive: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary + '12' },
-  hideZeroTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
-  hideZeroTxtActive: { color: COLORS.brandPrimary },
-  hideZeroSwitch: { transform: [{ scaleX: 0.75 }, { scaleY: 0.75 }] },
+  hideZeroChipOn: {
+    borderColor: '#16A34A',
+    backgroundColor: '#16A34A',
+  },
+  hideZeroChipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
+  hideZeroChipTxtOn: { color: '#FFFFFF' },
+  // Sort buttons
   sortBtns: { flexDirection: 'row', gap: 4 },
   sortBtn: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 8, paddingVertical: 5,
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingHorizontal: 9, paddingVertical: 7,
     borderRadius: RADIUS.sm,
-    backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault,
-    gap: 2,
+    backgroundColor: COLORS.pageBg,
+    borderWidth: 1.5, borderColor: COLORS.borderDefault,
   },
-  sortBtnActive: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary + '10' },
-  sortBtnTxt: { fontSize: 10, fontWeight: '700', color: COLORS.textTertiary },
-  sortBtnTxtActive: { color: COLORS.brandPrimary },
+  sortBtnActive: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary + '12' },
+  sortBtnLabel: { fontSize: 12, fontWeight: '700', color: COLORS.textTertiary },
+  sortBtnLabelActive: { color: COLORS.brandPrimary },
   scroll: { flex: 1 },
   list: { padding: SPACING.md, gap: 8 },
   itemCard: {
