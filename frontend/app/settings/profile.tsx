@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, KeyboardAvoidingView, Platform, Alert,
-  Switch, Modal, Animated, ActivityIndicator,
+  Modal, Animated, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -71,7 +71,48 @@ function CustomNumPad({ onPress }: { onPress: (key: string) => void }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PinBoxes — 4 dot-fill squares
+// CustomToggle — theme-aware animated switch (works on web + native)
+// ─────────────────────────────────────────────────────────────────────────────
+function CustomToggle({
+  value,
+  onValueChange,
+}: {
+  value: boolean;
+  onValueChange: (v: boolean) => void;
+}) {
+  const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.spring(anim, {
+      toValue: value ? 1 : 0,
+      useNativeDriver: false,
+      tension: 80,
+      friction: 9,
+    }).start();
+  }, [value]);
+
+  const trackBg = anim.interpolate({
+    inputRange:  [0, 1],
+    outputRange: [COLORS.borderDefault, COLORS.brandPrimary],
+  });
+
+  const thumbPos = anim.interpolate({
+    inputRange:  [0, 1],
+    outputRange: [3, 23],
+  });
+
+  return (
+    <TouchableOpacity
+      onPress={() => onValueChange(!value)}
+      activeOpacity={0.85}
+      style={{ padding: 4 }}
+    >
+      <Animated.View style={[ps.toggleTrack, { backgroundColor: trackBg }]}>
+        <Animated.View style={[ps.toggleThumb, { left: thumbPos }]} />
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}
 // ─────────────────────────────────────────────────────────────────────────────
 function PinBoxes({ value, length = 4 }: { value: string; length?: number }) {
   return (
@@ -453,13 +494,7 @@ export default function ProfileScreen() {
                   <Text style={ps.toggleSub}>Face ID / Fingerprint on app open</Text>
                 </View>
               </View>
-              <Switch
-                value={biometric}
-                onValueChange={setBiometric}
-                trackColor={{ false: COLORS.borderDefault, true: COLORS.brandPrimary }}
-                thumbColor={COLORS.white}
-                ios_backgroundColor={COLORS.borderDefault}
-              />
+              <CustomToggle value={biometric} onValueChange={setBiometric} />
             </View>
 
             <View style={ps.hr} />
@@ -477,13 +512,7 @@ export default function ProfileScreen() {
                   </Text>
                 </View>
               </View>
-              <Switch
-                value={twoFA}
-                onValueChange={handle2FAToggle}
-                trackColor={{ false: COLORS.borderDefault, true: COLORS.brandPrimary }}
-                thumbColor={COLORS.white}
-                ios_backgroundColor={COLORS.borderDefault}
-              />
+              <CustomToggle value={twoFA} onValueChange={handle2FAToggle} />
             </View>
           </View>
 
@@ -673,6 +702,21 @@ const ps = StyleSheet.create({
 
   resendRow: { alignItems: 'center', paddingVertical: 12, marginBottom: 10 },
   resendText: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+
+  // ── Custom Toggle ─────────────────────────────────────────────────────────
+  toggleTrack: {
+    width: 50, height: 28, borderRadius: 14,
+  },
+  toggleThumb: {
+    position: 'absolute',
+    top: 2, width: 24, height: 24, borderRadius: 12,
+    backgroundColor: COLORS.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.18,
+    shadowRadius: 2,
+    elevation: 2,
+  },
 
   // ── Custom NumPad ─────────────────────────────────────────────────────────
   numPad: {
