@@ -1,13 +1,32 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput, Switch,
+  KeyboardAvoidingView, Platform, Alert, TextInput, Switch, TextInputProps,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+
+// ─── Themed TextInput (no blue focus ring) ────────────────────────────────────
+function ThemedInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <TextInput
+      style={[
+        s.input,
+        focused && s.inputFocused,
+        Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any }),
+        style,
+      ]}
+      placeholderTextColor={COLORS.textTertiary}
+      onFocus={(e) => { setFocused(true); onFocus?.(e); }}
+      onBlur={(e)  => { setFocused(false); onBlur?.(e); }}
+      {...props}
+    />
+  );
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type LedgerType = 'sundry_creditor' | 'sundry_debtor' | 'duties_taxes' | 'custom';
@@ -88,15 +107,21 @@ interface BalanceRowProps {
 }
 
 function BalanceRow({ value, onChange, isCr, onToggleCr }: BalanceRowProps) {
+  const [focused, setFocused] = useState(false);
   return (
-    <View style={s.balanceBox}>
+    <View style={[s.balanceBox, focused && s.balanceBoxFocused]}>
       <TextInput
-        style={s.balanceInput}
+        style={[
+          s.balanceInput,
+          Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any }),
+        ]}
         placeholder="0.00"
         placeholderTextColor={COLORS.textTertiary}
         value={value}
         onChangeText={onChange}
         keyboardType="numeric"
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
       />
       <View style={s.drCrWrap}>
         <Text style={[s.drCrLabel, !isCr && s.drCrLabelActive]}>Dr</Text>
@@ -171,6 +196,7 @@ export default function CreateLedgerScreen() {
   const [customGroup, setCustomGroup] = useState('');
   const [groupSearch, setGroupSearch] = useState('');
   const [groupDropOpen, setGroupDropOpen] = useState(false);
+  const [groupSearchFocused, setGroupSearchFocused] = useState(false);
 
   // ── Duties & Taxes fields
   const [dutyType, setDutyType] = useState('');
@@ -223,10 +249,8 @@ export default function CreateLedgerScreen() {
 
           {/* ── Name ── */}
           <Text style={s.label}>Name <Text style={s.required}>*</Text></Text>
-          <TextInput
-            style={s.input}
+          <ThemedInput
             placeholder="Enter ledger name"
-            placeholderTextColor={COLORS.textTertiary}
             value={name}
             onChangeText={setName}
           />
@@ -236,13 +260,16 @@ export default function CreateLedgerScreen() {
             <>
               <Text style={s.label}>Under (Group) <Text style={s.required}>*</Text></Text>
               <TouchableOpacity
-                style={s.searchBox}
+                style={[s.searchBox, groupSearchFocused && s.searchBoxFocused]}
                 onPress={() => setGroupDropOpen(!groupDropOpen)}
                 activeOpacity={0.9}
               >
                 <Ionicons name="search" size={16} color={COLORS.textTertiary} />
                 <TextInput
-                  style={s.searchInput}
+                  style={[
+                    s.searchInput,
+                    Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any }),
+                  ]}
                   placeholder="Search or type group name..."
                   placeholderTextColor={COLORS.textTertiary}
                   value={groupSearch}
@@ -251,6 +278,8 @@ export default function CreateLedgerScreen() {
                     setCustomGroup('');
                     setGroupDropOpen(true);
                   }}
+                  onFocus={() => setGroupSearchFocused(true)}
+                  onBlur={() => setGroupSearchFocused(false)}
                 />
                 {customGroup !== '' && (
                   <Ionicons name="checkmark-circle" size={16} color={COLORS.positive} />
@@ -296,10 +325,8 @@ export default function CreateLedgerScreen() {
           {isParty && (
             <>
               <Text style={s.label}>Credit Period (Days)</Text>
-              <TextInput
-                style={s.input}
+              <ThemedInput
                 placeholder="Enter credit period in days"
-                placeholderTextColor={COLORS.textTertiary}
                 value={creditDays}
                 onChangeText={setCreditDays}
                 keyboardType="numeric"
@@ -327,7 +354,10 @@ export default function CreateLedgerScreen() {
                 <Text style={s.label}>Percentage of Calculation <Text style={s.required}>*</Text></Text>
                 <View style={s.percentBox}>
                   <TextInput
-                    style={s.percentInput}
+                    style={[
+                      s.percentInput,
+                      Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any }),
+                    ]}
                     placeholder="0.00"
                     placeholderTextColor={COLORS.textTertiary}
                     value={percentage}
@@ -370,20 +400,16 @@ export default function CreateLedgerScreen() {
               />
 
               <Text style={s.label}>GSTIN <Text style={s.required}>*</Text></Text>
-              <TextInput
-                style={s.input}
+              <ThemedInput
                 placeholder="Enter GSTIN"
-                placeholderTextColor={COLORS.textTertiary}
                 value={gstin}
                 onChangeText={v => setGstin(v.toUpperCase())}
                 autoCapitalize="characters"
               />
 
               <Text style={s.label}>PAN/IT No.</Text>
-              <TextInput
-                style={s.input}
+              <ThemedInput
                 placeholder="Enter PAN/IT number"
-                placeholderTextColor={COLORS.textTertiary}
                 value={pan}
                 onChangeText={v => setPan(v.toUpperCase())}
                 autoCapitalize="characters"
@@ -438,6 +464,12 @@ const s = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 13,
     fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary,
     backgroundColor: COLORS.cardBg,
+    // Suppress web blue outline
+    ...Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any }),
+  },
+  inputFocused: {
+    borderColor: COLORS.brandPrimary,
+    borderWidth: 1.5,
   },
 
   // Opening Balance
@@ -446,6 +478,10 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
     backgroundColor: COLORS.cardBg, paddingLeft: 14, paddingRight: 10,
     paddingVertical: 4,
+  },
+  balanceBoxFocused: {
+    borderColor: COLORS.brandPrimary,
+    borderWidth: 1.5,
   },
   balanceInput: {
     flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary,
@@ -466,6 +502,10 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 8,
     borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
     paddingHorizontal: 14, paddingVertical: 4, backgroundColor: COLORS.cardBg,
+  },
+  searchBoxFocused: {
+    borderColor: COLORS.brandPrimary,
+    borderWidth: 1.5,
   },
   searchInput: {
     flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary,

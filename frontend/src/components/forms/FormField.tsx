@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, TextInput, StyleSheet, TextInputProps, ViewStyle } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TextInput, StyleSheet, TextInputProps, ViewStyle, Platform } from 'react-native';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 
 interface Props extends TextInputProps {
@@ -9,7 +9,8 @@ interface Props extends TextInputProps {
   containerStyle?: ViewStyle;
 }
 
-export default function FormField({ label, required, hint, containerStyle, style, ...rest }: Props) {
+export default function FormField({ label, required, hint, containerStyle, style, onFocus, onBlur, ...rest }: Props) {
+  const [focused, setFocused] = useState(false);
   return (
     <View style={[s.wrap, containerStyle]}>
       <Text style={s.label}>
@@ -17,8 +18,15 @@ export default function FormField({ label, required, hint, containerStyle, style
         {required ? <Text style={s.star}> *</Text> : null}
       </Text>
       <TextInput
-        style={[s.input, rest.editable === false ? s.readOnly : null, style as any]}
+        style={[
+          s.input,
+          rest.editable === false ? s.readOnly : null,
+          focused && s.inputFocused,
+          style as any,
+        ]}
         placeholderTextColor={COLORS.textTertiary}
+        onFocus={(e) => { setFocused(true); onFocus?.(e); }}
+        onBlur={(e)  => { setFocused(false); onBlur?.(e); }}
         {...rest}
       />
       {hint ? <Text style={s.hint}>{hint}</Text> : null}
@@ -40,6 +48,12 @@ const s = StyleSheet.create({
     fontSize: TYPOGRAPHY.base,
     color: COLORS.textPrimary,
     minHeight: 48,
+    // Suppress browser blue outline on web
+    ...Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any }),
+  },
+  inputFocused: {
+    borderColor: COLORS.brandPrimary,
+    borderWidth: 1.5,
   },
   readOnly: { backgroundColor: COLORS.pageBg, color: COLORS.textSecondary },
   hint: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 4 },
