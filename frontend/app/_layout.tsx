@@ -3,6 +3,12 @@ import { Slot, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
+import { useFonts } from 'expo-font';
+import { Ionicons } from '@expo/vector-icons';
+import * as SplashScreen from 'expo-splash-screen';
+
+// Prevent splash screen from auto-hiding while fonts load
+SplashScreen.preventAutoHideAsync();
 
 function RootNavigation() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -30,6 +36,22 @@ function RootNavigation() {
 }
 
 export default function RootLayout() {
+  // Load Ionicons font — without this, all icons show as □ rectangles on device
+  const [fontsLoaded, fontError] = useFonts({
+    ...Ionicons.font,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded, fontError]);
+
+  // Block rendering until fonts are ready
+  if (!fontsLoaded && !fontError) {
+    return null;
+  }
+
   return (
     <SafeAreaProvider>
       <AuthProvider>
