@@ -1,146 +1,222 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert,
+  KeyboardAvoidingView, Platform, Alert, TextInput, Modal, Switch,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import FormField from '../../src/components/forms/FormField';
-import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 
-const CATEGORIES: DropdownOption[] = [
-  { label: 'Electronics', value: 'electronics' },
-  { label: 'Accessories', value: 'accessories' },
-  { label: 'Raw Materials', value: 'raw_materials' },
-  { label: 'Finished Goods', value: 'finished_goods' },
-  { label: 'Services', value: 'services' },
-  { label: 'Consumables', value: 'consumables' },
-  { label: 'Spare Parts', value: 'spare_parts' },
-  { label: 'Packaging', value: 'packaging' },
-];
-const UNITS: DropdownOption[] = [
-  { label: 'Pcs (Pieces)', value: 'pcs' },
-  { label: 'Kg (Kilogram)', value: 'kg' },
-  { label: 'Ltr (Litre)', value: 'ltr' },
-  { label: 'Mtr (Meter)', value: 'mtr' },
-  { label: 'Box', value: 'box' },
-  { label: 'Nos (Numbers)', value: 'nos' },
-  { label: 'Bag', value: 'bag' },
-  { label: 'Roll', value: 'roll' },
-];
-const GST_RATES: DropdownOption[] = [
-  { label: '0% - Exempt', value: '0' },
-  { label: '5% GST', value: '5' },
-  { label: '12% GST', value: '12' },
-  { label: '18% GST', value: '18' },
-  { label: '28% GST', value: '28' },
-];
-const WAREHOUSES: DropdownOption[] = [
-  { label: 'Main Warehouse - Mumbai', value: 'main_mumbai' },
-  { label: 'Warehouse B - Delhi', value: 'wh_delhi' },
-  { label: 'Warehouse C - Pune', value: 'wh_pune' },
-];
+const GROUPS = ['Electronics', 'Accessories', 'Raw Materials', 'Finished Goods', 'Services', 'Consumables', 'Spare Parts', 'Packaging'];
+const UNITS = ['Pcs (Pieces)', 'Kg (Kilogram)', 'Ltr (Litre)', 'Mtr (Meter)', 'Box', 'Nos (Numbers)', 'Bag', 'Roll'];
+const TAX_RATES = ['0% - Exempt', '5% GST', '12% GST', '18% GST', '28% GST'];
+const WAREHOUSES = ['Main Warehouse - Mumbai', 'Warehouse B - Delhi', 'Warehouse C - Pune', 'Deltamas Logistics Center'];
+const WEB = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
+const todayStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; };
+
+function InlineDD({ label, required, value, options, placeholder, onSelect }: {
+  label: string; required?: boolean; value: string;
+  options: string[]; placeholder?: string; onSelect: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View>
+      {label ? <Text style={s.label}>{label}{required && <Text style={s.star}> *</Text>}</Text> : null}
+      <TouchableOpacity
+        style={[s.selectBox, open && s.selectBoxOpen]}
+        onPress={() => setOpen(!open)}
+        activeOpacity={0.7}
+      >
+        <Text style={[s.selectTxt, !value && { color: COLORS.textTertiary }]}>{value || placeholder || 'Select'}</Text>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
+      </TouchableOpacity>
+      {open && (
+        <View style={s.dropList}>
+          {options.map((o, idx) => (
+            <TouchableOpacity
+              key={o}
+              style={[s.dropItem, idx === options.length - 1 && { borderBottomWidth: 0 }]}
+              onPress={() => { onSelect(o); setOpen(false); }}
+              activeOpacity={0.7}
+            >
+              <Text style={[s.dropTxt, value === o && s.dropTxtActive]}>{o}</Text>
+              {value === o && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function ThemedInput({ style, onFocus: of_, onBlur: ob_, ...props }: React.ComponentProps<typeof TextInput>) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <TextInput
+      style={[s.input, focused && s.inputFocused, WEB, style]}
+      placeholderTextColor={COLORS.textTertiary}
+      onFocus={e => { setFocused(true); of_?.(e); }}
+      onBlur={e => { setFocused(false); ob_?.(e); }}
+      {...props}
+    />
+  );
+}
+
+function InrInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <View style={[s.inrBox, focused && s.inputFocused]}>
+      <TextInput
+        style={[s.inrInput, WEB]}
+        placeholder={placeholder || 'Enter price'}
+        placeholderTextColor={COLORS.textTertiary}
+        value={value} onChangeText={onChange}
+        keyboardType="decimal-pad"
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+      />
+      <View style={s.inrBadge}>
+        <Text style={s.inrTxt}>INR</Text>
+      </View>
+    </View>
+  );
+}
 
 export default function CreateStockItemScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [entryType, setEntryType] = useState<EntryType>('regular');
 
-  const [name, setName] = useState('');
-  const [sku, setSku] = useState('');
-  const [category, setCategory] = useState('');
+  const [group, setGroup] = useState('');
+  const [productName, setProductName] = useState('');
   const [unit, setUnit] = useState('');
-  const [hsnSac, setHsnSac] = useState('');
-  const [gstRate, setGstRate] = useState('');
-  const [openingStock, setOpeningStock] = useState('');
-  const [purchaseRate, setPurchaseRate] = useState('');
-  const [sellingRate, setSellingRate] = useState('');
-  const [mrp, setMrp] = useState('');
-  const [minStock, setMinStock] = useState('');
-  const [reorderQty, setReorderQty] = useState('');
+  const [taxRate, setTaxRate] = useState('');
+  const [purchasePrice, setPurchasePrice] = useState('');
   const [warehouse, setWarehouse] = useState('');
-  const [description, setDescription] = useState('');
+  const [quantity, setQuantity] = useState('');
+  const [salePrice, setSalePrice] = useState('');
+  const [expiryDate, setExpiryDate] = useState(todayStr());
+  const [batchNo, setBatchNo] = useState('');
+  const [generateBarcode, setGenerateBarcode] = useState(true);
+  const [bcItemName, setBcItemName] = useState(true);
+  const [bcSku, setBcSku] = useState(false);
+  const [bcSalePrice, setBcSalePrice] = useState(false);
 
   const handleSave = () => {
-    if (!name.trim()) { Alert.alert('Error', 'Item name is required.'); return; }
-    Alert.alert('✓ Item Added', `"${name}" has been added to inventory.`,[{text:'OK',onPress:()=>router.back()}]);
+    if (!productName.trim()) { Alert.alert('Required', 'Product name is required.'); return; }
+    Alert.alert('✓ Item Saved', `"${productName}" has been added to inventory.`, [{ text: 'OK', onPress: () => router.back() }]);
   };
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       <View style={s.header}>
-        <TouchableOpacity onPress={()=>router.back()} style={s.backBtn} hitSlop={{top:8,bottom:8,left:8,right:8}}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
+        <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Add New Item</Text>
         <RegularOptionalToggle value={entryType} onChange={setEntryType} />
       </View>
 
-      <KeyboardAvoidingView style={{flex:1}} behavior={Platform.OS==='ios'?'padding':undefined}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={s.form}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Group */}
+          <InlineDD label="Group" value={group} options={GROUPS} placeholder="Select group" onSelect={setGroup} />
 
-          <View style={s.card}>
-            <View style={s.cardHdr}><Ionicons name="cube-outline" size={18} color={COLORS.brandPrimary} /><Text style={s.cardTitle}>Basic Info</Text></View>
-            <FormField label="Item Name" value={name} onChangeText={setName} placeholder="e.g. JBL Portable Speaker" required />
-            <View style={s.row2}>
-              <View style={{flex:1}}>
-                <FormField label="Item Code / SKU" value={sku} onChangeText={setSku} placeholder="Auto or custom" containerStyle={{marginBottom:0}} />
-              </View>
-              <View style={{flex:1}}>
-                <FormDropdown label="Category" value={category} options={CATEGORIES} onSelect={o=>setCategory(o.value)} placeholder="Select..." containerStyle={{marginBottom:0}} />
-              </View>
+          {/* Product Name */}
+          <Text style={s.label}>Product name <Text style={s.star}>*</Text></Text>
+          <ThemedInput placeholder="Enter product name" value={productName} onChangeText={setProductName} />
+
+          {/* Unit + Tax Rate */}
+          <View style={s.row2}>
+            <View style={{ flex: 1 }}>
+              <InlineDD label="Unit of measure" required value={unit} options={UNITS} placeholder="Select unit" onSelect={setUnit} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <InlineDD label="Tax rate" value={taxRate} options={TAX_RATES} placeholder="Select tax rate" onSelect={setTaxRate} />
             </View>
           </View>
 
-          <View style={s.card}>
-            <View style={s.cardHdr}><Ionicons name="receipt-outline" size={18} color={COLORS.info} /><Text style={s.cardTitle}>Tax & Compliance</Text></View>
-            <View style={s.row2}>
-              <View style={{flex:1}}>
-                <FormField label="HSN / SAC Code" value={hsnSac} onChangeText={setHsnSac} placeholder="8 digit code" containerStyle={{marginBottom:0}} />
-              </View>
-              <View style={{flex:1}}>
-                <FormDropdown label="GST Rate" value={gstRate} options={GST_RATES} onSelect={o=>setGstRate(o.value)} placeholder="Select %" containerStyle={{marginBottom:0}} />
-              </View>
+          {/* Purchase Price */}
+          <Text style={s.label}>Purchase Price</Text>
+          <InrInput value={purchasePrice} onChange={setPurchasePrice} placeholder="Enter price" />
+
+          {/* Warehouse Placement */}
+          <InlineDD label="Warehouse Placement" value={warehouse} options={WAREHOUSES} placeholder="Select warehouse" onSelect={setWarehouse} />
+
+          {/* Quantity + Sale Price */}
+          <View style={s.row2}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.label}>Quantity</Text>
+              <ThemedInput placeholder="Enter quantity" value={quantity} onChangeText={setQuantity} keyboardType="numeric" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.label}>Default Sale Price</Text>
+              <InrInput value={salePrice} onChange={setSalePrice} placeholder="Enter sale price" />
             </View>
           </View>
 
-          <View style={s.card}>
-            <View style={s.cardHdr}><Ionicons name="pricetag-outline" size={18} color={COLORS.positive} /><Text style={s.cardTitle}>Pricing</Text></View>
-            <View style={s.row2}>
-              <View style={{flex:1}}><FormField label="Purchase Rate (₹)" value={purchaseRate} onChangeText={setPurchaseRate} keyboardType="numeric" placeholder="0.00" containerStyle={{marginBottom:0}} /></View>
-              <View style={{flex:1}}><FormField label="Selling Rate (₹)" value={sellingRate} onChangeText={setSellingRate} keyboardType="numeric" placeholder="0.00" containerStyle={{marginBottom:0}} /></View>
+          {/* Expiry Date + Batch Number */}
+          <View style={s.row2}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.label}>Expiry Date</Text>
+              <TouchableOpacity style={s.dateBtn} activeOpacity={0.7}>
+                <Ionicons name="calendar-outline" size={16} color={COLORS.textSecondary} />
+                <Text style={s.dateTxt}>{expiryDate}</Text>
+                <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
+              </TouchableOpacity>
             </View>
-            <View style={[s.row2,{marginTop:SPACING.md}]}>
-              <View style={{flex:1}}><FormField label="MRP (₹)" value={mrp} onChangeText={setMrp} keyboardType="numeric" placeholder="0.00" containerStyle={{marginBottom:0}} /></View>
-              <View style={{flex:1}}><FormDropdown label="Unit of Measure" value={unit} options={UNITS} onSelect={o=>setUnit(o.value)} placeholder="Select unit" containerStyle={{marginBottom:0}} /></View>
-            </View>
-          </View>
-
-          <View style={s.card}>
-            <View style={s.cardHdr}><Ionicons name="layers-outline" size={18} color={COLORS.warning} /><Text style={s.cardTitle}>Stock Info</Text></View>
-            <View style={s.row2}>
-              <View style={{flex:1}}><FormField label="Opening Stock" value={openingStock} onChangeText={setOpeningStock} keyboardType="numeric" placeholder="0" containerStyle={{marginBottom:0}} /></View>
-              <View style={{flex:1}}><FormDropdown label="Primary Warehouse" value={warehouse} options={WAREHOUSES} onSelect={o=>setWarehouse(o.value)} placeholder="Select..." containerStyle={{marginBottom:0}} /></View>
-            </View>
-            <View style={[s.row2,{marginTop:SPACING.md}]}>
-              <View style={{flex:1}}><FormField label="Min. Stock Level" value={minStock} onChangeText={setMinStock} keyboardType="numeric" placeholder="0 (alert threshold)" containerStyle={{marginBottom:0}} /></View>
-              <View style={{flex:1}}><FormField label="Reorder Qty" value={reorderQty} onChangeText={setReorderQty} keyboardType="numeric" placeholder="0" containerStyle={{marginBottom:0}} /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.label}>Batch Number</Text>
+              <ThemedInput placeholder="Enter batch number" value={batchNo} onChangeText={setBatchNo} />
             </View>
           </View>
 
-          <View style={s.card}>
-            <FormField label="Description" value={description} onChangeText={setDescription} placeholder="Optional product description..." multiline numberOfLines={3}
-              style={{minHeight:72,textAlignVertical:'top'} as any} containerStyle={{marginBottom:0}} />
+          {/* Generate Barcode toggle */}
+          <View style={s.toggleRow}>
+            <Text style={s.toggleLbl}>Generate Barcode</Text>
+            <Switch
+              value={generateBarcode}
+              onValueChange={setGenerateBarcode}
+              trackColor={{ false: COLORS.borderStrong, true: COLORS.brandPrimary }}
+              thumbColor={COLORS.white}
+            />
           </View>
+
+          {/* Barcode content checkboxes */}
+          {generateBarcode && (
+            <View style={s.checkRow}>
+              {([
+                { label: 'Item Name', val: bcItemName, set: setBcItemName },
+                { label: 'SKU', val: bcSku, set: setBcSku },
+                { label: 'Sale Price', val: bcSalePrice, set: setBcSalePrice },
+              ] as const).map(c => (
+                <TouchableOpacity
+                  key={c.label}
+                  style={s.checkItem}
+                  onPress={() => (c.set as any)(!c.val)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[s.checkbox, c.val && s.checkboxActive]}>
+                    {c.val && <Ionicons name="checkmark" size={12} color={COLORS.white} />}
+                  </View>
+                  <Text style={s.checkLbl}>{c.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          <View style={{ height: 16 }} />
         </ScrollView>
 
-        <View style={[s.footer,{paddingBottom:Math.max(insets.bottom,12)}]}>
-          <TouchableOpacity style={s.submitBtn} onPress={handleSave} activeOpacity={0.7}>
-            <Ionicons name="add-circle" size={18} color={COLORS.white} />
-            <Text style={s.submitTxt}>Save Item</Text>
+        <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <TouchableOpacity style={s.saveBtn} onPress={handleSave} activeOpacity={0.85}>
+            <Text style={s.saveBtnTxt}>Save</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -149,16 +225,85 @@ export default function CreateStockItemScreen() {
 }
 
 const s = StyleSheet.create({
-  safe:{flex:1,backgroundColor:COLORS.pageBg},
-  header:{flexDirection:'row',alignItems:'center',gap:8,backgroundColor:COLORS.cardBg,paddingHorizontal:SPACING.md,paddingVertical:14,borderBottomWidth:1,borderBottomColor:COLORS.borderDefault},
-  backBtn:{width:36,height:36,borderRadius:18,backgroundColor:COLORS.pageBg,alignItems:'center',justifyContent:'center'},
-  headerTitle:{flex:1,fontSize:TYPOGRAPHY.md,fontWeight:'700',color:COLORS.textPrimary},
-  scroll:{padding:SPACING.md,paddingBottom:8},
-  card:{backgroundColor:COLORS.cardBg,borderRadius:RADIUS.lg,padding:SPACING.md,marginBottom:SPACING.md,borderWidth:1,borderColor:COLORS.borderDefault},
-  cardHdr:{flexDirection:'row',alignItems:'center',gap:8,marginBottom:SPACING.md},
-  cardTitle:{fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.textPrimary},
-  row2:{flexDirection:'row',gap:12},
-  footer:{paddingHorizontal:SPACING.md,paddingTop:SPACING.md,borderTopWidth:1,borderTopColor:COLORS.borderDefault,backgroundColor:COLORS.cardBg},
-  submitBtn:{flexDirection:'row',gap:8,paddingVertical:14,borderRadius:RADIUS.md,backgroundColor:COLORS.brandPrimary,alignItems:'center',justifyContent:'center'},
-  submitTxt:{fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.white},
+  safe: { flex: 1, backgroundColor: COLORS.pageBg },
+  header: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md,
+    paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  backBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
+  form: { padding: SPACING.md },
+  label: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, marginBottom: 8, marginTop: 16 },
+  star: { color: COLORS.negative },
+  input: {
+    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    paddingHorizontal: 14, paddingVertical: 13, fontSize: TYPOGRAPHY.base,
+    color: COLORS.textPrimary, backgroundColor: COLORS.cardBg,
+  },
+  inputFocused: { borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
+  row2: { flexDirection: 'row', gap: 12, marginTop: 4 },
+  selectBox: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    paddingHorizontal: 14, paddingVertical: 14, backgroundColor: COLORS.cardBg,
+  },
+  selectBoxOpen: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
+  selectTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, fontWeight: '600', flex: 1 },
+  dropList: {
+    borderWidth: 1, borderTopWidth: 0, borderColor: COLORS.borderDefault,
+    backgroundColor: COLORS.cardBg,
+    borderBottomLeftRadius: RADIUS.md, borderBottomRightRadius: RADIUS.md, overflow: 'hidden',
+  },
+  dropItem: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 14, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  dropTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
+  dropTxtActive: { fontWeight: '700' },
+  // INR input
+  inrBox: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    backgroundColor: COLORS.cardBg, overflow: 'hidden',
+  },
+  inrInput: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, paddingHorizontal: 14, paddingVertical: 13 },
+  inrBadge: {
+    backgroundColor: COLORS.pageBg, borderLeftWidth: 1, borderLeftColor: COLORS.borderDefault,
+    paddingHorizontal: 12, paddingVertical: 13, alignItems: 'center', justifyContent: 'center',
+  },
+  inrTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textSecondary },
+  // Date picker
+  dateBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    paddingHorizontal: 14, paddingVertical: 13, backgroundColor: COLORS.cardBg,
+  },
+  dateTxt: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, fontWeight: '600' },
+  // Toggle
+  toggleRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 14, marginTop: 8,
+  },
+  toggleLbl: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
+  // Barcode checkboxes
+  checkRow: { flexDirection: 'row', gap: 16, paddingBottom: 8 },
+  checkItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  checkbox: {
+    width: 22, height: 22, borderRadius: 4,
+    borderWidth: 2, borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.cardBg, alignItems: 'center', justifyContent: 'center',
+  },
+  checkboxActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
+  checkLbl: { fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '600' },
+  footer: {
+    paddingHorizontal: SPACING.md, paddingTop: SPACING.md,
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg,
+  },
+  saveBtn: {
+    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md,
+    paddingVertical: 15, alignItems: 'center',
+  },
+  saveBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
 });

@@ -1,95 +1,162 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert,
+  KeyboardAvoidingView, Platform, Alert, TextInput,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import FormField from '../../src/components/forms/FormField';
-import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 
-const WH_TYPES: DropdownOption[] = [
-  { label: 'Main Warehouse', value: 'main' },
-  { label: 'Secondary / Sub-Warehouse', value: 'secondary' },
-  { label: 'Transit Hub', value: 'transit' },
-  { label: 'Cold Storage', value: 'cold' },
-  { label: 'Distribution Center', value: 'distribution' },
-];
+interface RackRow { id: string; rack: string; label: string; }
+const WEB = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
+
+function ThemedInput({
+  style, onFocus: of_, onBlur: ob_, ...props
+}: React.ComponentProps<typeof TextInput>) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <TextInput
+      style={[s.input, focused && s.inputFocused, WEB, style]}
+      placeholderTextColor={COLORS.textTertiary}
+      onFocus={e => { setFocused(true); of_?.(e); }}
+      onBlur={e => { setFocused(false); ob_?.(e); }}
+      {...props}
+    />
+  );
+}
 
 export default function CreateWarehouseScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [entryType, setEntryType] = useState<EntryType>('regular');
 
+  const [code, setCode] = useState('');
   const [name, setName] = useState('');
-  const [type, setType] = useState('');
-  const [address, setAddress] = useState('');
-  const [city, setCity] = useState('');
-  const [pincode, setPincode] = useState('');
-  const [managerName, setManagerName] = useState('');
-  const [contact, setContact] = useState('');
+  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [capacity, setCapacity] = useState('');
-  const [description, setDescription] = useState('');
+  const [address, setAddress] = useState('');
+  const [zipCode, setZipCode] = useState('');
+  const [racks, setRacks] = useState<RackRow[]>([]);
+  const [newRack, setNewRack] = useState('');
+  const [newLabel, setNewLabel] = useState('');
+  const [narration, setNarration] = useState('');
+
+  const addRack = () => {
+    if (!newRack.trim()) return;
+    setRacks(prev => [...prev, { id: Date.now().toString(), rack: newRack.trim(), label: newLabel.trim() }]);
+    setNewRack('');
+    setNewLabel('');
+  };
+
+  const removeRack = (id: string) => setRacks(prev => prev.filter(r => r.id !== id));
 
   const handleSave = () => {
-    if (!name.trim()) { Alert.alert('Error', 'Warehouse name is required.'); return; }
-    Alert.alert('✓ Warehouse Added', `"${name}" has been created.`,[{text:'OK',onPress:()=>router.back()}]);
+    if (!name.trim()) { Alert.alert('Required', 'Warehouse name is required.'); return; }
+    Alert.alert('✓ Warehouse Saved', `"${name}" has been created.`, [{ text: 'OK', onPress: () => router.back() }]);
   };
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       <View style={s.header}>
-        <TouchableOpacity onPress={()=>router.back()} style={s.backBtn} hitSlop={{top:8,bottom:8,left:8,right:8}}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
+        <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Add Warehouse</Text>
         <RegularOptionalToggle value={entryType} onChange={setEntryType} />
       </View>
 
-      <KeyboardAvoidingView style={{flex:1}} behavior={Platform.OS==='ios'?'padding':undefined}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={s.form}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Warehouse Code */}
+          <Text style={s.label}>Warehouse Code <Text style={s.star}>*</Text></Text>
+          <ThemedInput placeholder="Add Code" value={code} onChangeText={setCode} />
 
-          <View style={s.card}>
-            <View style={s.cardHdr}><Ionicons name="business-outline" size={18} color={COLORS.brandPrimary} /><Text style={s.cardTitle}>Warehouse Info</Text></View>
-            <FormField label="Warehouse Name" value={name} onChangeText={setName} placeholder="e.g. Main Warehouse - Mumbai" required />
-            <FormDropdown label="Warehouse Type" value={type} options={WH_TYPES} onSelect={o=>setType(o.value)} placeholder="Select type..." required />
-            <View style={s.row2}>
-              <View style={{flex:2}}>
-                <FormField label="Address" value={address} onChangeText={setAddress} placeholder="Street address" multiline numberOfLines={2}
-                  style={{minHeight:56,textAlignVertical:'top'} as any} containerStyle={{marginBottom:0}} />
+          {/* Name */}
+          <Text style={s.label}>Name <Text style={s.star}>*</Text></Text>
+          <ThemedInput placeholder="Add Name" value={name} onChangeText={setName} />
+
+          {/* Phone + Email */}
+          <View style={s.row2}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.label}>Phone Number</Text>
+              <ThemedInput placeholder="Enter Phone number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.label}>Email</Text>
+              <ThemedInput placeholder="Enter Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+            </View>
+          </View>
+
+          {/* Address */}
+          <Text style={s.label}>Address</Text>
+          <ThemedInput
+            placeholder="Enter full address"
+            value={address} onChangeText={setAddress}
+            multiline numberOfLines={3}
+            style={s.textarea}
+          />
+
+          {/* Zip Code */}
+          <Text style={s.label}>Zip Code</Text>
+          <ThemedInput placeholder="Zip Code" value={zipCode} onChangeText={setZipCode} keyboardType="numeric" />
+
+          {/* Racks */}
+          <Text style={s.label}>Racks</Text>
+          {racks.map(r => (
+            <View key={r.id} style={s.rackRow}>
+              <View style={[s.rackInput, { flex: 1 }]}>
+                <Text style={s.rackVal}>{r.rack}</Text>
               </View>
+              <View style={[s.rackInput, { flex: 1 }]}>
+                <Text style={s.rackVal}>{r.label || '—'}</Text>
+              </View>
+              <TouchableOpacity style={s.rackDel} onPress={() => removeRack(r.id)} activeOpacity={0.7}>
+                <Ionicons name="close" size={16} color={COLORS.negative} />
+              </TouchableOpacity>
             </View>
-            <View style={[s.row2,{marginTop:SPACING.md}]}>
-              <View style={{flex:1}}><FormField label="City" value={city} onChangeText={setCity} placeholder="City" containerStyle={{marginBottom:0}} /></View>
-              <View style={{flex:1}}><FormField label="Pincode" value={pincode} onChangeText={setPincode} placeholder="6 digits" keyboardType="numeric" containerStyle={{marginBottom:0}} /></View>
-            </View>
+          ))}
+          {/* New rack entry row */}
+          <View style={s.rackRow}>
+            <TextInput
+              style={[s.rackInput, { flex: 1 }, WEB]}
+              placeholder="Enter Racks"
+              placeholderTextColor={COLORS.textTertiary}
+              value={newRack}
+              onChangeText={setNewRack}
+            />
+            <TextInput
+              style={[s.rackInput, { flex: 1 }, WEB]}
+              placeholder="Enter Label"
+              placeholderTextColor={COLORS.textTertiary}
+              value={newLabel}
+              onChangeText={setNewLabel}
+            />
+            <TouchableOpacity style={s.rackAdd} onPress={addRack} activeOpacity={0.7}>
+              <Ionicons name="add" size={18} color={COLORS.textPrimary} />
+            </TouchableOpacity>
           </View>
 
-          <View style={s.card}>
-            <View style={s.cardHdr}><Ionicons name="person-outline" size={18} color={COLORS.info} /><Text style={s.cardTitle}>Contact Person</Text></View>
-            <FormField label="Manager / In-charge Name" value={managerName} onChangeText={setManagerName} placeholder="Full name" />
-            <View style={s.row2}>
-              <View style={{flex:1}}><FormField label="Mobile" value={contact} onChangeText={setContact} placeholder="10-digit" keyboardType="phone-pad" containerStyle={{marginBottom:0}} /></View>
-              <View style={{flex:1}}><FormField label="Email" value={email} onChangeText={setEmail} placeholder="Optional" keyboardType="email-address" containerStyle={{marginBottom:0}} /></View>
-            </View>
-          </View>
+          {/* Narration */}
+          <Text style={s.label}>Narration</Text>
+          <ThemedInput
+            placeholder="Enter Narration"
+            value={narration} onChangeText={setNarration}
+            multiline numberOfLines={3}
+            style={s.textarea}
+          />
 
-          <View style={s.card}>
-            <View style={s.cardHdr}><Ionicons name="stats-chart-outline" size={18} color={COLORS.positive} /><Text style={s.cardTitle}>Capacity & Notes</Text></View>
-            <FormField label="Storage Capacity (Sq. ft. or Units)" value={capacity} onChangeText={setCapacity} placeholder="Optional" keyboardType="numeric" />
-            <FormField label="Description / Notes" value={description} onChangeText={setDescription} placeholder="Any additional details..." multiline numberOfLines={2}
-              style={{minHeight:60,textAlignVertical:'top'} as any} containerStyle={{marginBottom:0}} />
-          </View>
+          <View style={{ height: 16 }} />
         </ScrollView>
 
-        <View style={[s.footer,{paddingBottom:Math.max(insets.bottom,12)}]}>
-          <TouchableOpacity style={s.submitBtn} onPress={handleSave} activeOpacity={0.7}>
-            <Ionicons name="add-circle" size={18} color={COLORS.white} />
-            <Text style={s.submitTxt}>Create Warehouse</Text>
+        <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <TouchableOpacity style={s.saveBtn} onPress={handleSave} activeOpacity={0.85}>
+            <Text style={s.saveBtnTxt}>Save</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -98,16 +165,50 @@ export default function CreateWarehouseScreen() {
 }
 
 const s = StyleSheet.create({
-  safe:{flex:1,backgroundColor:COLORS.pageBg},
-  header:{flexDirection:'row',alignItems:'center',gap:8,backgroundColor:COLORS.cardBg,paddingHorizontal:SPACING.md,paddingVertical:14,borderBottomWidth:1,borderBottomColor:COLORS.borderDefault},
-  backBtn:{width:36,height:36,borderRadius:18,backgroundColor:COLORS.pageBg,alignItems:'center',justifyContent:'center'},
-  headerTitle:{flex:1,fontSize:TYPOGRAPHY.md,fontWeight:'700',color:COLORS.textPrimary},
-  scroll:{padding:SPACING.md,paddingBottom:8},
-  card:{backgroundColor:COLORS.cardBg,borderRadius:RADIUS.lg,padding:SPACING.md,marginBottom:SPACING.md,borderWidth:1,borderColor:COLORS.borderDefault},
-  cardHdr:{flexDirection:'row',alignItems:'center',gap:8,marginBottom:SPACING.md},
-  cardTitle:{fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.textPrimary},
-  row2:{flexDirection:'row',gap:12},
-  footer:{paddingHorizontal:SPACING.md,paddingTop:SPACING.md,borderTopWidth:1,borderTopColor:COLORS.borderDefault,backgroundColor:COLORS.cardBg},
-  submitBtn:{flexDirection:'row',gap:8,paddingVertical:14,borderRadius:RADIUS.md,backgroundColor:COLORS.brandPrimary,alignItems:'center',justifyContent:'center'},
-  submitTxt:{fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.white},
+  safe: { flex: 1, backgroundColor: COLORS.pageBg },
+  header: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md,
+    paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  backBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
+  form: { padding: SPACING.md },
+  label: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, marginBottom: 8, marginTop: 16 },
+  star: { color: COLORS.negative },
+  input: {
+    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    paddingHorizontal: 14, paddingVertical: 13, fontSize: TYPOGRAPHY.base,
+    color: COLORS.textPrimary, backgroundColor: COLORS.cardBg,
+  },
+  inputFocused: { borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
+  textarea: { minHeight: 80, textAlignVertical: 'top', paddingTop: 12 },
+  row2: { flexDirection: 'row', gap: 12 },
+  // Racks
+  rackRow: { flexDirection: 'row', gap: 8, marginBottom: 8, alignItems: 'center' },
+  rackInput: {
+    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    paddingHorizontal: 12, paddingVertical: 12, fontSize: TYPOGRAPHY.base,
+    color: COLORS.textPrimary, backgroundColor: COLORS.cardBg,
+  },
+  rackVal: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, fontWeight: '600' },
+  rackDel: {
+    width: 36, height: 44, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.negativeBg, borderRadius: RADIUS.md,
+    borderWidth: 1, borderColor: COLORS.negative + '30',
+  },
+  rackAdd: {
+    width: 36, height: 44, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  footer: {
+    paddingHorizontal: SPACING.md, paddingTop: SPACING.md,
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg,
+  },
+  saveBtn: {
+    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md,
+    paddingVertical: 15, alignItems: 'center',
+  },
+  saveBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
 });
