@@ -385,6 +385,7 @@ export default function LedgerScreen() {
   const [showCreate, setShowCreate] = useState(false);
   const [showTypeSheet, setShowTypeSheet] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [hideZero, setHideZero] = useState(false);
 
   useEffect(() => { getLedgers().then((d: any) => setData(d)); }, []);
 
@@ -395,6 +396,12 @@ export default function LedgerScreen() {
     setRefreshing(false);
   };
 
+  const isZeroBalance = (balance: string) => {
+    // Strip everything except digits and commas, then check if numeric value is 0
+    const num = parseInt(balance.replace(/[^0-9]/g, ''), 10);
+    return isNaN(num) || num === 0;
+  };
+
   const filtered = data
     .filter(item => {
       const matchSearch = item.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -402,7 +409,8 @@ export default function LedgerScreen() {
       const matchFilter = filter === 'All' ||
         (filter === 'Debit' && item.type === 'debit') ||
         (filter === 'Credit' && item.type === 'credit');
-      return matchSearch && matchFilter;
+      const matchZero = hideZero ? !isZeroBalance(item.balance) : true;
+      return matchSearch && matchFilter && matchZero;
     })
     .sort((a, b) => sortAsc
       ? a.name.localeCompare(b.name)
@@ -454,8 +462,9 @@ export default function LedgerScreen() {
         </View>
       </View>
 
-      {/* Filter Tabs + Sort */}
+      {/* Filter Tabs + Hide Zero Toggle + Sort */}
       <View style={styles.tabRow}>
+        {/* Left: All / Debit / Credit tabs */}
         <View style={styles.filterTabs}>
           {(['All', 'Debit', 'Credit'] as FilterType[]).map(f => (
             <TouchableOpacity
@@ -476,14 +485,34 @@ export default function LedgerScreen() {
             </TouchableOpacity>
           ))}
         </View>
-        {/* Sort */}
-        <View style={styles.sortBtns}>
-          <TouchableOpacity style={styles.sortBtn} onPress={() => setSortAsc(true)} activeOpacity={0.7}>
-            <Ionicons name="arrow-up" size={14} color={sortAsc ? COLORS.textPrimary : COLORS.textTertiary} />
+
+        {/* Right: Hide Zero + Sort */}
+        <View style={styles.rightControls}>
+          {/* Hide Zero toggle */}
+          <TouchableOpacity
+            style={[styles.hideZeroBtn, hideZero && styles.hideZeroBtnActive]}
+            onPress={() => setHideZero(v => !v)}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.hideZeroTxt, hideZero && styles.hideZeroTxtActive]}>Hide ₹0</Text>
+            <Switch
+              value={hideZero}
+              onValueChange={setHideZero}
+              trackColor={{ false: COLORS.borderDefault, true: COLORS.brandPrimary }}
+              thumbColor={COLORS.white}
+              style={styles.hideZeroSwitch}
+            />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.sortBtn} onPress={() => setSortAsc(false)} activeOpacity={0.7}>
-            <Ionicons name="arrow-down" size={14} color={!sortAsc ? COLORS.textPrimary : COLORS.textTertiary} />
-          </TouchableOpacity>
+
+          {/* Sort buttons */}
+          <View style={styles.sortBtns}>
+            <TouchableOpacity style={styles.sortBtn} onPress={() => setSortAsc(true)} activeOpacity={0.7}>
+              <Ionicons name="arrow-up" size={14} color={sortAsc ? COLORS.textPrimary : COLORS.textTertiary} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.sortBtn} onPress={() => setSortAsc(false)} activeOpacity={0.7}>
+              <Ionicons name="arrow-down" size={14} color={!sortAsc ? COLORS.textPrimary : COLORS.textTertiary} />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -629,6 +658,23 @@ const styles = StyleSheet.create({
   },
   filterTabText: { fontSize: TYPOGRAPHY.xs, fontWeight: '500', color: COLORS.textSecondary },
   filterTabTextActive: { fontWeight: '700', color: COLORS.textPrimary },
+  // Right controls group
+  rightControls: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  // Hide Zero toggle pill
+  hideZeroBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: RADIUS.full,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    backgroundColor: COLORS.cardBg,
+  },
+  hideZeroBtnActive: {
+    borderColor: COLORS.brandPrimary,
+    backgroundColor: COLORS.brandPrimary + '12',
+  },
+  hideZeroTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
+  hideZeroTxtActive: { color: COLORS.brandPrimary },
+  hideZeroSwitch: { transform: [{ scaleX: 0.75 }, { scaleY: 0.75 }] },
   sortBtns: { flexDirection: 'row', gap: 4 },
   sortBtn: {
     width: 30, height: 30, borderRadius: RADIUS.sm,
