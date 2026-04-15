@@ -72,7 +72,13 @@ export default function VouchersHubScreen() {
         <View style={s.listCard}>
           {[{ ...recentPayment, type: 'Payment' }, { ...recentReceipt, type: 'Receipt' }].map((item, idx) => (
             <View key={item.id}>
-              <TouchableOpacity style={s.listRow} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={s.listRow}
+                activeOpacity={0.7}
+                onPress={() => router.push(
+                  `/document/${item.id}?type=${item.type === 'Payment' ? 'payment_voucher' : 'receipt_voucher'}` as any
+                )}
+              >
                 <View style={[s.dot, { backgroundColor: item.type === 'Payment' ? COLORS.negative : COLORS.positive }]} />
                 <View style={{ flex: 1 }}>
                   <Text style={s.listTitle}>{item.type} · {item.party}</Text>

@@ -1,15 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Share, Linking,
+  Share, Linking, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useRouter } from 'expo-router';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 import { VoucherDocument } from '../../types/document';
-import { formatCurrency, amountInWords, DOC_TYPE_CONFIG } from '../../utils/documentHelpers';
+import { formatCurrency, amountInWords, DOC_TYPE_CONFIG, generateDocumentHTML } from '../../utils/documentHelpers';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utility Components
@@ -640,6 +642,7 @@ function FooterBlock({ doc }: { doc: VoucherDocument }) {
 // ─────────────────────────────────────────────────────────────────────────────
 function ActionBar({ doc }: { doc: VoucherDocument }) {
   const insets = useSafeAreaInsets();
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const handleShare = async () => {
     try {
@@ -665,9 +668,24 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
     } catch (_) {}
   };
 
-  const handlePDF = () => {
-    // PDF generation — user will configure this later
-    console.log('[DocumentPreview] PDF download requested for:', doc.id);
+  const handlePDF = async () => {
+    try {
+      setPdfLoading(true);
+      const html = generateDocumentHTML(doc);
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      setPdfLoading(false);
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: `${doc.documentNumber}.pdf`,
+          UTI: 'com.adobe.pdf',
+        });
+      }
+    } catch (err) {
+      setPdfLoading(false);
+      console.error('[DocumentPreview] PDF error:', err);
+    }
   };
 
   return (
@@ -686,9 +704,12 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
 
       <View style={ds.actionSep} />
 
-      <TouchableOpacity style={ds.actionBtn} onPress={handlePDF} activeOpacity={0.75}>
-        <Ionicons name="document-outline" size={21} color={COLORS.white} />
-        <Text style={ds.actionBtnText}>Download PDF</Text>
+      <TouchableOpacity style={ds.actionBtn} onPress={handlePDF} activeOpacity={0.75} disabled={pdfLoading}>
+        {pdfLoading
+          ? <ActivityIndicator size="small" color={COLORS.white} />
+          : <Ionicons name="document-outline" size={21} color={COLORS.white} />
+        }
+        <Text style={ds.actionBtnText}>{pdfLoading ? 'Generating…' : 'Download PDF'}</Text>
       </TouchableOpacity>
     </View>
   );

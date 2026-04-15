@@ -134,7 +134,11 @@ export default function PurchaseRegisterScreen() {
           ) : (
             filtered.map((inv, idx) => (
               <View key={inv.id}>
-                <TouchableOpacity style={styles.invoiceRow} activeOpacity={0.7}>
+                <TouchableOpacity
+                  style={styles.invoiceRow}
+                  activeOpacity={0.7}
+                  onPress={() => router.push(`/document/${inv.id}?type=sales_invoice` as any)}
+                >
                   <View style={styles.invLeft}>
                     <View
                       style={[
@@ -160,10 +164,10 @@ export default function PurchaseRegisterScreen() {
                   </View>
                   <View style={styles.invRight}>
                     <Text style={styles.invAmount}>{inv.amount}</Text>
-                    <TouchableOpacity style={styles.shareBtn} activeOpacity={0.7}>
-                      <Ionicons name="share-outline" size={14} color={COLORS.positive} />
-                      <Text style={styles.shareBtnText}>Share</Text>
-                    </TouchableOpacity>
+                    <View style={styles.viewBtn}>
+                      <Ionicons name="eye-outline" size={13} color={COLORS.info} />
+                      <Text style={styles.viewBtnText}>Preview</Text>
+                    </View>
                   </View>
                 </TouchableOpacity>
                 {idx < filtered.length - 1 && <View style={styles.divider} />}
@@ -268,12 +272,12 @@ const styles = StyleSheet.create({
   invMeta:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
   invRight:     { alignItems: 'flex-end', gap: 8 },
   invAmount:    { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-  shareBtn: {
+  viewBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 10, paddingVertical: 5,
-    backgroundColor: COLORS.positiveBg, borderRadius: RADIUS.md,
+    backgroundColor: COLORS.infoBg, borderRadius: RADIUS.md,
   },
-  shareBtnText: { fontSize: TYPOGRAPHY.xs, color: COLORS.positive, fontWeight: '600' },
+  viewBtnText: { fontSize: TYPOGRAPHY.xs, color: COLORS.info, fontWeight: '600' },
   divider:      { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 16 },
 
   emptyState:   { alignItems: 'center', paddingVertical: 40, gap: 8 },

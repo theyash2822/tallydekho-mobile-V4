@@ -41,7 +41,11 @@ export default function ReceiptVouchersScreen() {
         <View style={s.card}>
           {filtered.map((item, idx) => (
             <View key={item.id}>
-              <TouchableOpacity style={s.row} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={s.row}
+                activeOpacity={0.7}
+                onPress={() => router.push(`/document/${item.id}?type=receipt_voucher` as any)}
+              >
                 <View style={s.rowL}>
                   <View style={[s.dot, { backgroundColor: SC[item.status] || '#9CA3AF' }]} />
                   <View style={s.rInfo}>

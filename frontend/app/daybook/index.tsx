@@ -8,6 +8,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
+const DAYBOOK_TYPE_MAP: Record<string, string> = {
+  Sales:    'sales_invoice',
+  Purchase: 'purchase_invoice',
+  Payment:  'payment_voucher',
+  Receipt:  'receipt_voucher',
+  Journal:  'journal_voucher',
+  Contra:   'contra_voucher',
+};
+
 type ViewMode = 'daybook' | 'myentries';
 type VType = 'ALL' | 'Sales' | 'Purchase' | 'Payment' | 'Receipt' | 'Journal' | 'Contra';
 
@@ -143,7 +152,14 @@ export default function DaybookScreen() {
                     <TouchableOpacity
                       style={[s.row, isSel && s.rowSelected]}
                       activeOpacity={0.7}
-                      onPress={() => { if (multiSelect) toggleSelect(entry.id); }}
+                      onPress={() => {
+                        if (multiSelect) {
+                          toggleSelect(entry.id);
+                        } else {
+                          const docType = DAYBOOK_TYPE_MAP[entry.type] || 'sales_invoice';
+                          router.push(`/document/${entry.ref}?type=${docType}` as any);
+                        }
+                      }}
                       onLongPress={() => { if (mode==='myentries') { setMultiSelect(true); toggleSelect(entry.id); } }}
                     >
                       {multiSelect && mode==='myentries' && (

@@ -97,7 +97,11 @@ export default function SalesHubScreen() {
             <View style={s.listCard}>
               {recent.map((inv, idx) => (
                 <View key={inv.id}>
-                  <TouchableOpacity style={s.listRow} activeOpacity={0.7}>
+                  <TouchableOpacity
+                    style={s.listRow}
+                    activeOpacity={0.7}
+                    onPress={() => router.push(`/document/${inv.id}?type=sales_invoice` as any)}
+                  >
                     <View style={[s.dot, { backgroundColor: inv.status === 'paid' ? COLORS.positive : inv.status === 'unpaid' ? COLORS.negative : '#9CA3AF' }]} />
                     <View style={{ flex: 1 }}>
                       <Text style={s.listParty}>{inv.party}</Text>

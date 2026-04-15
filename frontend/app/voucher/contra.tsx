@@ -37,7 +37,11 @@ export default function ContraVouchersScreen() {
         <View style={s.card}>
           {filtered.map((item, idx) => (
             <View key={item.id}>
-              <TouchableOpacity style={s.row} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={s.row}
+                activeOpacity={0.7}
+                onPress={() => router.push(`/document/${item.id}?type=contra_voucher` as any)}
+              >
                 <View style={[s.iconBox, { backgroundColor: '#F5F3FF' }]}>
                   <Ionicons name="swap-horizontal-outline" size={18} color="#7C3AED" />
                 </View>

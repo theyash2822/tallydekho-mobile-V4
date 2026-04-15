@@ -37,7 +37,11 @@ export default function JournalVouchersScreen() {
         <View style={s.card}>
           {filtered.map((item, idx) => (
             <View key={item.id}>
-              <TouchableOpacity style={s.row} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={s.row}
+                activeOpacity={0.7}
+                onPress={() => router.push(`/document/${item.id}?type=journal_voucher` as any)}
+              >
                 <View style={[s.iconBox, { backgroundColor: COLORS.infoBg }]}>
                   <Ionicons name="book-outline" size={18} color={COLORS.info} />
                 </View>
