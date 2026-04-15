@@ -301,8 +301,186 @@ function CreatePasskeyModal({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ProfileScreen — main export
+// OTPVerifySheet — shared 2-step OTP bottom sheet used by Phone & Email edit
 // ─────────────────────────────────────────────────────────────────────────────
+type OTPChannel = 'whatsapp' | 'email';
+
+function OTPVerifySheet({
+  visible,
+  onClose,
+  onSuccess,
+  channel,
+  title,
+  inputLabel,
+  inputPlaceholder,
+  inputKeyboard,
+  sendLabel,
+  getSubtitle,
+}: {
+  visible:         boolean;
+  onClose:         () => void;
+  onSuccess:       (newValue: string) => void;
+  channel:         OTPChannel;
+  title:           string;
+  inputLabel:      string;
+  inputPlaceholder:string;
+  inputKeyboard:   'phone-pad' | 'email-address';
+  sendLabel:       string;
+  getSubtitle:     (val: string) => string;
+}) {
+  const [step,      setStep]      = useState<'enter' | 'verify'>('enter');
+  const [value,     setValue]     = useState('');
+  const [otp,       setOtp]       = useState('');
+  const [countdown, setCountdown] = useState(30);
+  const [canResend, setCanResend] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Reset on open/close
+  useEffect(() => {
+    if (!visible) {
+      setTimeout(() => { setStep('enter'); setValue(''); setOtp(''); }, 350);
+    }
+    return () => clearInterval(timerRef.current!);
+  }, [visible]);
+
+  const startTimer = () => {
+    clearInterval(timerRef.current!);
+    setCountdown(30); setCanResend(false);
+    timerRef.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) { clearInterval(timerRef.current!); setCanResend(true); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleSendOTP = () => {
+    if (value.trim().length < 3) return;
+    setStep('verify');
+    setOtp('');
+    startTimer();
+  };
+
+  const handleKey = (key: string) => {
+    if (key === 'back') setOtp(p => p.slice(0, -1));
+    else if (otp.length < 4) setOtp(p => p + key);
+  };
+
+  const handleVerify = () => {
+    if (otp.length < 4) return;
+    onSuccess(value.trim());
+    onClose();
+  };
+
+  const handleResend = () => {
+    if (!canResend) return;
+    startTimer();
+    Alert.alert('OTP Resent', `A new code has been sent via ${channel === 'whatsapp' ? 'WhatsApp' : 'Email'}.`);
+  };
+
+  const channelIcon: React.ReactNode =
+    channel === 'whatsapp'
+      ? <FontAwesome5 name="whatsapp" size={15} color="#25D366" />
+      : <Ionicons name="mail-outline" size={15} color={COLORS.info} />;
+  const channelLabel = channel === 'whatsapp' ? 'WhatsApp' : 'Email';
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={ps.modalOverlay}>
+        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
+
+        {step === 'enter' ? (
+          /* ── Step 1: Enter new value ───────────────────────── */
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <View style={ps.modalSheet}>
+              <View style={ps.handle} />
+              <Text style={ps.modalTitle}>{title}</Text>
+              <Text style={ps.modalSub}>{inputLabel}</Text>
+
+              {/* Input */}
+              <View style={ps.editInputWrap}>
+                {inputKeyboard === 'phone-pad' && (
+                  <View style={ps.phonePre}>
+                    <Text style={ps.phonePreText}>+91</Text>
+                  </View>
+                )}
+                <TextInput
+                  style={[ps.editInput, inputKeyboard === 'phone-pad' && { paddingLeft: 0 }]}
+                  value={value}
+                  onChangeText={setValue}
+                  placeholder={inputPlaceholder}
+                  placeholderTextColor={COLORS.textTertiary}
+                  keyboardType={inputKeyboard}
+                  autoCapitalize="none"
+                  autoFocus
+                  maxLength={inputKeyboard === 'phone-pad' ? 10 : 60}
+                  selectionColor={COLORS.brandPrimary}
+                />
+              </View>
+
+              {/* Send OTP button */}
+              <TouchableOpacity
+                style={[ps.modalBtn, ps.confirmBtnColor, value.trim().length < 3 && ps.btnDisabled]}
+                onPress={handleSendOTP}
+                activeOpacity={0.85}
+                disabled={value.trim().length < 3}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  {channelIcon}
+                  <Text style={ps.modalBtnText}>{sendLabel}</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={ps.resendRow} onPress={onClose} activeOpacity={0.7}>
+                <Text style={[ps.resendText, { color: COLORS.textTertiary }]}>Cancel</Text>
+              </TouchableOpacity>
+              <View style={{ height: 16 }} />
+            </View>
+          </KeyboardAvoidingView>
+        ) : (
+          /* ── Step 2: Verify OTP ────────────────────────────── */
+          <View style={ps.modalSheet}>
+            <View style={ps.handle} />
+            <Text style={ps.modalTitle}>Enter Verification Code</Text>
+            <Text style={ps.modalSub}>
+              {getSubtitle(value)}
+              {'\n'}
+              <Text style={{ fontWeight: '700', color: channelLabel === 'WhatsApp' ? '#25D366' : COLORS.info }}>
+                via {channelLabel}
+              </Text>
+            </Text>
+
+            {/* OTP boxes */}
+            <PinBoxes value={otp} />
+
+            {/* Verify button */}
+            <TouchableOpacity
+              style={[ps.modalBtn, ps.confirmBtnColor, otp.length < 4 && ps.btnDisabled]}
+              onPress={handleVerify}
+              activeOpacity={0.85}
+              disabled={otp.length < 4}
+            >
+              <Text style={ps.modalBtnText}>Verify &amp; Update</Text>
+            </TouchableOpacity>
+
+            {/* Resend */}
+            <TouchableOpacity style={ps.resendRow} onPress={handleResend} activeOpacity={canResend ? 0.7 : 1}>
+              <Text style={[ps.resendText, !canResend && { color: COLORS.textTertiary }]}>
+                {canResend ? `Resend OTP` : `Resend OTP (${countdown}s)`}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Numpad */}
+            <CustomNumPad onPress={handleKey} />
+            <View style={{ height: 12 }} />
+          </View>
+        )}
+      </View>
+    </Modal>
+  );
+}
+
+
 export default function ProfileScreen() {
   const router = useRouter();
 
