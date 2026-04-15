@@ -1,11 +1,12 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput, Modal, Switch,
+  KeyboardAvoidingView, Platform, Alert, TextInput, Modal, Switch, TextInputProps,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
@@ -13,10 +14,15 @@ import RegularOptionalToggle, { EntryType } from '../../src/components/forms/Reg
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
-const LEDGER_OPTS: DropdownOption[] = [
+const LEDGER_ACCOUNTS: DropdownOption[] = [
   { label: 'Credit Sales', value: 'credit_sales' },
   { label: 'Cash Sales', value: 'cash_sales' },
-  { label: 'Off-Books', value: 'off_books' },
+  { label: 'Off-Books Sales', value: 'off_books' },
+  { label: 'Export Sales', value: 'export_sales' },
+  { label: 'Domestic Sales', value: 'domestic_sales' },
+  { label: 'Online Sales', value: 'online_sales' },
+  { label: 'Retail Sales', value: 'retail_sales' },
+  { label: 'Wholesale Sales', value: 'wholesale_sales' },
 ];
 const PARTIES: DropdownOption[] = [
   { label: 'ABC Traders', value: 'abc' },
@@ -34,7 +40,15 @@ const TERMS: DropdownOption[] = [
   { label: '30 Days', value: '30d' },
   { label: 'Custom', value: 'custom' },
 ];
-const PRODUCTS: DropdownOption[] = [
+
+// Warehouse → Products mapping
+const WAREHOUSE_PRODUCTS: Record<string, string[]> = {
+  main_wh:     ['jbl_speaker', 'samsung_j1', 'lycan_hp', 'sony_xm5', 'jbl_wired', 'shipping', 'consulting'],
+  store_a:     ['jbl_speaker', 'lycan_hp', 'consulting'],
+  store_b:     ['samsung_j1', 'sony_xm5', 'shipping'],
+  delhi_depot: ['jbl_wired', 'consulting', 'shipping'],
+};
+const ALL_PRODUCTS: DropdownOption[] = [
   { label: 'JBL Portable Speaker', value: 'jbl_speaker' },
   { label: 'Samsung Galaxy J1 Bluetooth', value: 'samsung_j1' },
   { label: 'Lycan Wireless Headphone', value: 'lycan_hp' },
@@ -43,6 +57,14 @@ const PRODUCTS: DropdownOption[] = [
   { label: 'Shipping & Handling', value: 'shipping' },
   { label: 'Consulting Services', value: 'consulting' },
 ];
+// Barcode → product value mapping (mock)
+const BARCODE_MAP: Record<string, string> = {
+  '123456789012': 'jbl_speaker',
+  '234567890123': 'samsung_j1',
+  '345678901234': 'lycan_hp',
+  '456789012345': 'sony_xm5',
+  '567890123456': 'jbl_wired',
+};
 const WAREHOUSES: DropdownOption[] = [
   { label: 'Main Warehouse', value: 'main_wh' },
   { label: 'Store A', value: 'store_a' },
@@ -65,9 +87,192 @@ const TAX_RATES: DropdownOption[] = [
   { label: '28% GST', value: '28' },
 ];
 
+// ─── Themed inline input (theme-colored focus border, no blue) ────────────────
+function ThemedFInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <TextInput
+      style={[
+        s.fInput,
+        focused && s.fInputFocused,
+        Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any }),
+        style,
+      ]}
+      placeholderTextColor={COLORS.textTertiary}
+      onFocus={(e) => { setFocused(true); onFocus?.(e); }}
+      onBlur={(e)  => { setFocused(false); onBlur?.(e); }}
+      {...props}
+    />
+  );
+}
+
+// ─── Searchable inline dropdown ───────────────────────────────────────────────
+interface SearchDDProps {
+  label: string;
+  required?: boolean;
+  placeholder?: string;
+  options: DropdownOption[];
+  value: string;
+  onSelect: (opt: DropdownOption) => void;
+  onAddNew?: () => void;
+  addNewLabel?: string;
+  containerStyle?: object;
+}
+function SearchableDD({
+  label, required, placeholder, options, value,
+  onSelect, onAddNew, addNewLabel, containerStyle,
+}: SearchDDProps) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const selectedLabel = options.find(o => o.value === value)?.label;
+  const filtered = query
+    ? options.filter(o => o.label.toLowerCase().includes(query.toLowerCase()))
+    : options;
+
+  return (
+    <View style={[sdd.wrap, containerStyle]}>
+      <Text style={sdd.label}>
+        {label}{required ? <Text style={sdd.star}> *</Text> : null}
+      </Text>
+      <View style={[sdd.inputBox, (focused || open) && sdd.inputBoxFocused]}>
+        <Ionicons name="search" size={14} color={COLORS.textTertiary} style={{ marginRight: 4 }} />
+        <TextInput
+          style={[sdd.input, Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any })]}
+          placeholder={selectedLabel || placeholder || 'Search...'}
+          placeholderTextColor={selectedLabel ? COLORS.textPrimary : COLORS.textTertiary}
+          value={open ? query : ''}
+          onChangeText={t => { setQuery(t); setOpen(true); }}
+          onFocus={() => { setFocused(true); setOpen(true); setQuery(''); }}
+          onBlur={() => { setFocused(false); }}
+        />
+        {value ? (
+          <TouchableOpacity onPress={() => onSelect({ label: '', value: '' })} hitSlop={{ top:8,bottom:8,left:8,right:8 }}>
+            <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
+          </TouchableOpacity>
+        ) : null}
+        <TouchableOpacity onPress={() => setOpen(o => !o)} style={{ paddingLeft: 4 }}>
+          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
+        </TouchableOpacity>
+      </View>
+      {open && (
+        <View style={sdd.dropList}>
+          <ScrollView
+            style={{ maxHeight: 200 }}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={false}
+          >
+            {filtered.map((o, idx) => (
+              <TouchableOpacity
+                key={o.value}
+                style={[sdd.dropItem, idx === filtered.length - 1 && !onAddNew && { borderBottomWidth: 0 }]}
+                onPress={() => { onSelect(o); setQuery(''); setOpen(false); }}
+                activeOpacity={0.7}
+              >
+                <Text style={[sdd.dropText, value === o.value && sdd.dropTextActive]}>{o.label}</Text>
+                {value === o.value && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
+              </TouchableOpacity>
+            ))}
+            {filtered.length === 0 && (
+              <View style={sdd.dropItem}>
+                <Text style={{ color: COLORS.textTertiary, fontSize: TYPOGRAPHY.sm }}>No results found</Text>
+              </View>
+            )}
+          </ScrollView>
+          {onAddNew && (
+            <TouchableOpacity
+              style={sdd.addNewRow}
+              onPress={() => { onAddNew(); setOpen(false); }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="add-circle-outline" size={16} color={COLORS.positive} />
+              <Text style={sdd.addNewText}>{addNewLabel || 'Add New'}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ─── Barcode Scanner Modal ─────────────────────────────────────────────────────
+function BarcodeScannerModal({ visible, onScan, onClose }: {
+  visible: boolean;
+  onScan: (productValue: string) => void;
+  onClose: () => void;
+}) {
+  const [permission, requestPermission] = useCameraPermissions();
+  const scanned = useRef(false);
+
+  const handleBarcodeScanned = ({ data }: { data: string }) => {
+    if (scanned.current) return;
+    scanned.current = true;
+    const product = BARCODE_MAP[data];
+    if (product) {
+      onScan(product);
+    } else {
+      Alert.alert('Not Found', `No product mapped to barcode: ${data}`, [
+        { text: 'OK', onPress: () => { scanned.current = false; } },
+      ]);
+    }
+  };
+
+  if (!visible) return null;
+
+  if (!permission?.granted) {
+    return (
+      <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+        <SafeAreaView style={bs.safe}>
+          <View style={bs.header}>
+            <TouchableOpacity onPress={onClose} style={bs.closeBtn}>
+              <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+            </TouchableOpacity>
+            <Text style={bs.title}>Scan Barcode</Text>
+          </View>
+          <View style={bs.permWrap}>
+            <Ionicons name="camera-outline" size={64} color={COLORS.textTertiary} />
+            <Text style={bs.permText}>Camera permission required to scan barcodes.</Text>
+            <TouchableOpacity style={bs.permBtn} onPress={requestPermission} activeOpacity={0.85}>
+              <Text style={bs.permBtnText}>Grant Camera Access</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <SafeAreaView style={bs.safe} edges={['top']}>
+        <View style={bs.header}>
+          <TouchableOpacity onPress={onClose} style={bs.closeBtn}>
+            <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+          </TouchableOpacity>
+          <Text style={bs.title}>Scan Barcode</Text>
+          <TouchableOpacity onPress={() => { scanned.current = false; }} style={bs.rescanBtn}>
+            <Text style={bs.rescanText}>Rescan</Text>
+          </TouchableOpacity>
+        </View>
+        <CameraView
+          style={bs.camera}
+          facing="back"
+          barcodeScannerSettings={{ barcodeTypes: ['qr', 'ean13', 'ean8', 'code128', 'code39'] }}
+          onBarcodeScanned={handleBarcodeScanned}
+        />
+        <View style={bs.overlay}>
+          <View style={bs.scanFrame} />
+          <Text style={bs.hint}>Point camera at product barcode</Text>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface InvoiceItem {
   id: string;
+  warehouse: string;
   product: string;
   qty: string;
   unit: string;
@@ -75,12 +280,12 @@ interface InvoiceItem {
   discountType: '%' | 'flat';
   discount: string;
   taxRate: string;
-  warehouse: string;
 }
 
 const newItem = (): InvoiceItem => ({
   id: Date.now().toString(),
-  product: '', qty: '1', unit: 'pcs', rate: '', discountType: '%', discount: '0', taxRate: '18', warehouse: '',
+  warehouse: '', product: '', qty: '1', unit: 'pcs', rate: '',
+  discountType: '%', discount: '0', taxRate: '18',
 });
 
 const todayStr = () => {
@@ -173,7 +378,7 @@ function TaxModal({ visible, value, onSelect, onClose }: {
   );
 }
 
-type ModalState = { type: 'product'|'unit'|'tax'|'warehouse'; itemId: string } | null;
+type ModalState = { type: 'product'|'unit'|'tax'|'warehouse'|'barcode'; itemId: string } | null;
 
 function ItemRow({ item, onUpdate, onRemove, onOpenModal }: {
   item: InvoiceItem;
@@ -182,35 +387,55 @@ function ItemRow({ item, onUpdate, onRemove, onOpenModal }: {
   onOpenModal: (s: ModalState) => void;
 }) {
   const calc = calcItem(item);
-  const productName = PRODUCTS.find(p => p.value === item.product)?.label;
-  const unitLabel = UNITS.find(u => u.value === item.unit)?.label || item.unit;
   const warehouseLabel = WAREHOUSES.find(w => w.value === item.warehouse)?.label;
+
+  // Products filtered by selected warehouse
+  const availableProducts = item.warehouse
+    ? ALL_PRODUCTS.filter(p => (WAREHOUSE_PRODUCTS[item.warehouse] || []).includes(p.value))
+    : ALL_PRODUCTS;
+  const productName = availableProducts.find(p => p.value === item.product)?.label
+    || ALL_PRODUCTS.find(p => p.value === item.product)?.label;
+  const unitLabel = UNITS.find(u => u.value === item.unit)?.label || item.unit;
 
   return (
     <View style={ir.card}>
-      {/* Product Row */}
+      {/* Row 1: Warehouse (FIRST) */}
+      <TouchableOpacity
+        style={[ir.warehouseBtn, item.warehouse && ir.warehouseBtnActive]}
+        onPress={() => onOpenModal({ type: 'warehouse', itemId: item.id })}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="business-outline" size={13} color={item.warehouse ? COLORS.info : COLORS.textTertiary} />
+        <Text style={[ir.warehouseTxt, !warehouseLabel && ir.placeholderTxt]}>
+          {warehouseLabel || 'Select Warehouse first...'}
+        </Text>
+        <Ionicons name="chevron-down" size={11} color={COLORS.textSecondary} />
+      </TouchableOpacity>
+
+      {/* Row 2: Product + Barcode + Delete */}
       <View style={ir.topRow}>
-        <TouchableOpacity style={ir.productBtn} onPress={() => onOpenModal({ type: 'product', itemId: item.id })} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={ir.productBtn}
+          onPress={() => onOpenModal({ type: 'product', itemId: item.id })}
+          activeOpacity={0.7}
+        >
           <Ionicons name="cube-outline" size={14} color={COLORS.textSecondary} />
           <Text style={[ir.productTxt, !item.product && ir.placeholderTxt]} numberOfLines={1}>
-            {productName || 'Select product / service...'}
+            {productName || (item.warehouse ? 'Select product...' : 'Select warehouse first')}
           </Text>
           <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
         </TouchableOpacity>
-        <TouchableOpacity style={ir.barcodeBtn} onPress={() => Alert.alert('Scan Barcode', 'Barcode scanner ready')} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={ir.barcodeBtn}
+          onPress={() => onOpenModal({ type: 'barcode', itemId: item.id })}
+          activeOpacity={0.7}
+        >
           <Ionicons name="barcode-outline" size={18} color={COLORS.textSecondary} />
         </TouchableOpacity>
         <TouchableOpacity style={ir.delBtn} onPress={() => onRemove(item.id)} activeOpacity={0.7}>
           <Ionicons name="close-circle" size={20} color={COLORS.negative} />
         </TouchableOpacity>
       </View>
-
-      {/* Warehouse */}
-      <TouchableOpacity style={ir.warehouseBtn} onPress={() => onOpenModal({ type: 'warehouse', itemId: item.id })} activeOpacity={0.7}>
-        <Ionicons name="business-outline" size={12} color={COLORS.info} />
-        <Text style={[ir.warehouseTxt, !warehouseLabel && ir.placeholderTxt]}>{warehouseLabel || 'Select Warehouse'}</Text>
-        <Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
-      </TouchableOpacity>
 
       {/* Qty + Unit + Rate */}
       <View style={ir.fieldRow}>
@@ -301,6 +526,7 @@ export default function CreateSalesInvoiceScreen() {
   const [date, setDate] = useState(todayStr());
   const [party, setParty] = useState('');
   const [payTerms, setPayTerms] = useState('due_on_receipt');
+  const [customDays, setCustomDays] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [refNo, setRefNo] = useState('');
   const [items, setItems] = useState<InvoiceItem[]>([newItem()]);
@@ -376,21 +602,16 @@ export default function CreateSalesInvoiceScreen() {
           contentContainerStyle={s.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Ledger Selector */}
-          <View style={s.ledgerRow}>
-            {LEDGER_OPTS.map(l => (
-              <TouchableOpacity
-                key={l.value}
-                style={[s.ledgerChip, ledger === l.value && s.ledgerChipActive]}
-                onPress={() => setLedger(l.value)}
-                activeOpacity={0.7}
-              >
-                <Text style={[s.ledgerChipTxt, ledger === l.value && s.ledgerChipTxtActive]}>
-                  {l.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {/* Ledger Searchable Selector */}
+          <SearchableDD
+            label="Sales Ledger"
+            required
+            placeholder="Search ledger account..."
+            options={LEDGER_ACCOUNTS}
+            value={ledger}
+            onSelect={o => setLedger(o.value)}
+            containerStyle={{ marginBottom: SPACING.md }}
+          />
 
           {/* Invoice Details Card */}
           <View style={s.card}>
@@ -409,47 +630,71 @@ export default function CreateSalesInvoiceScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.fLabel}>Date <Text style={s.star}>*</Text></Text>
-                <TextInput
-                  style={s.fInput}
+                <ThemedFInput
                   value={date} onChangeText={setDate}
                   placeholder="DD/MM/YY"
-                  placeholderTextColor={COLORS.textTertiary}
                 />
               </View>
             </View>
 
-            <FormDropdown
+            {/* Customer / Party — searchable + Add New */}
+            <SearchableDD
               label="Customer / Party"
-              value={party} options={PARTIES}
-              onSelect={o => setParty(o.value)}
-              placeholder="Select customer..."
               required
+              placeholder="Search customer..."
+              options={PARTIES}
+              value={party}
+              onSelect={o => setParty(o.value)}
+              onAddNew={() => router.push('/ledger/create?type=sundry_debtor' as any)}
+              addNewLabel="Add New Customer"
             />
 
-            <FormDropdown
-              label="Payment Terms"
-              value={payTerms} options={TERMS}
-              onSelect={o => setPayTerms(o.value)}
-              placeholder="Select terms..."
-            />
+            {/* Payment Terms — inline accordion */}
+            <View style={{ marginBottom: SPACING.md }}>
+              <Text style={s.fLabel}>Payment Terms</Text>
+              <View style={s.termsRow}>
+                {TERMS.map(t => (
+                  <TouchableOpacity
+                    key={t.value}
+                    style={[s.termChip, payTerms === t.value && s.termChipActive]}
+                    onPress={() => setPayTerms(t.value)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[s.termChipTxt, payTerms === t.value && s.termChipTxtActive]}>
+                      {t.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {payTerms === 'custom' && (
+                <View style={s.customDaysRow}>
+                  <ThemedFInput
+                    style={{ flex: 1 }}
+                    value={customDays}
+                    onChangeText={setCustomDays}
+                    keyboardType="numeric"
+                    placeholder="Enter number of days"
+                  />
+                  <View style={s.daysBadge}>
+                    <Text style={s.daysBadgeTxt}>Days</Text>
+                  </View>
+                </View>
+              )}
+            </View>
 
             <View style={s.row2}>
               <View style={{ flex: 1 }}>
                 <Text style={s.fLabel}>Due Date</Text>
-                <TextInput
-                  style={s.fInput}
+                <ThemedFInput
                   value={dueDate} onChangeText={setDueDate}
                   placeholder="DD/MM/YY"
-                  placeholderTextColor={COLORS.textTertiary}
                 />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.fLabel}>Reference No.</Text>
-                <TextInput
-                  style={s.fInput}
+                <ThemedFInput
                   value={refNo} onChangeText={setRefNo}
                   placeholder="Optional"
-                  placeholderTextColor={COLORS.textTertiary}
                 />
               </View>
             </View>
@@ -645,15 +890,61 @@ export default function CreateSalesInvoiceScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* Product Modal */}
-      <ProductDropdownModal
+      {/* Product Modal — shows warehouse-filtered products */}
+      <Modal
         visible={activeModal?.type === 'product'}
-        value={activeModal ? items.find(i => i.id === activeModal.itemId)?.product || '' : ''}
-        onSelect={opt => {
-          if (activeModal) updateItem(activeModal.itemId, 'product', opt.value);
-        }}
-        onClose={closeModal}
-      />
+        transparent
+        animationType="slide"
+        onRequestClose={closeModal}
+      >
+        <TouchableOpacity style={m.overlay} activeOpacity={1} onPress={closeModal} />
+        <View style={m.sheet}>
+          <View style={m.handle} />
+          <Text style={m.title}>Select Product / Service</Text>
+          {(() => {
+            const itemId = activeModal?.itemId;
+            const item = items.find(i => i.id === itemId);
+            const filteredProducts = item?.warehouse
+              ? ALL_PRODUCTS.filter(p => (WAREHOUSE_PRODUCTS[item.warehouse] || []).includes(p.value))
+              : ALL_PRODUCTS;
+            const currentProduct = item?.product || '';
+            return (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {item?.warehouse ? (
+                  <View style={mAdd.warehouseHint}>
+                    <Ionicons name="business-outline" size={13} color={COLORS.info} />
+                    <Text style={mAdd.warehouseHintTxt}>
+                      Showing products from: {WAREHOUSES.find(w => w.value === item.warehouse)?.label}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={mAdd.warehouseHint}>
+                    <Ionicons name="alert-circle-outline" size={13} color={COLORS.warning} />
+                    <Text style={[mAdd.warehouseHintTxt, { color: COLORS.warning }]}>Select warehouse to filter products</Text>
+                  </View>
+                )}
+                {filteredProducts.map(p => (
+                  <TouchableOpacity
+                    key={p.value}
+                    style={[m.opt, p.value === currentProduct && m.optActive]}
+                    onPress={() => {
+                      if (activeModal) updateItem(activeModal.itemId, 'product', p.value);
+                      closeModal();
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={m.optLeft}>
+                      <Ionicons name="cube-outline" size={16} color={COLORS.textSecondary} />
+                      <Text style={[m.optTxt, p.value === currentProduct && m.optActiveTxt]}>{p.label}</Text>
+                    </View>
+                    {p.value === currentProduct && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            );
+          })()}
+        </View>
+      </Modal>
       {/* Unit Modal */}
       <UnitModal
         visible={activeModal?.type === 'unit'}
@@ -683,6 +974,20 @@ export default function CreateSalesInvoiceScreen() {
           </ScrollView>
         </View>
       </Modal>
+
+      {/* Barcode Scanner Modal */}
+      <BarcodeScannerModal
+        visible={activeModal?.type === 'barcode'}
+        onScan={(productValue) => {
+          if (activeModal) {
+            updateItem(activeModal.itemId, 'product', productValue);
+            const product = ALL_PRODUCTS.find(p => p.value === productValue);
+            Alert.alert('✓ Product Found', `Added: ${product?.label || productValue}`);
+          }
+          closeModal();
+        }}
+        onClose={closeModal}
+      />
     </SafeAreaView>
   );
 }
@@ -706,10 +1011,21 @@ const s = StyleSheet.create({
   cardTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
   row2: { flexDirection: 'row', gap: 12, marginBottom: SPACING.md },
   fLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
-  fInput: { backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, minHeight: 48 },
+  fInput: { backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, minHeight: 48, ...Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any }) },
+  fInputFocused: { borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
   autoBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48 },
   autoTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
   star: { color: COLORS.negative },
+  // Payment terms chips
+  termsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 2 },
+  termChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
+  termChipActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
+  termChipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
+  termChipTxtActive: { color: COLORS.white },
+  // Custom days input
+  customDaysRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+  daysBadge: { backgroundColor: COLORS.pageBg, borderWidth: 1, borderLeftWidth: 0, borderColor: COLORS.borderDefault, borderTopRightRadius: RADIUS.md, borderBottomRightRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
+  daysBadgeTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textSecondary },
   sectionHdr: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SPACING.sm },
   sectionTitle: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
   itemCount: { backgroundColor: COLORS.brandPrimary, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
@@ -759,7 +1075,8 @@ const ir = StyleSheet.create({
   placeholderTxt: { color: COLORS.textTertiary },
   delBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   barcodeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.borderDefault },
-  warehouseBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.infoBg, borderRadius: RADIUS.sm, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: COLORS.info + '30', marginBottom: 8 },
+  warehouseBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: COLORS.borderDefault, marginBottom: 8 },
+  warehouseBtnActive: { backgroundColor: COLORS.infoBg, borderColor: COLORS.info + '40' },
   warehouseTxt: { flex: 1, fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.info },
   fieldRow: { flexDirection: 'row', gap: 8, marginBottom: 8, alignItems: 'flex-end' },
   qtyBox: { width: 72 },
@@ -778,4 +1095,74 @@ const ir = StyleSheet.create({
   subtotalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: COLORS.borderDefault, paddingTop: 8 },
   subtotalLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
   subtotalVal: { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
+});
+
+
+// ─── SearchableDD Styles ──────────────────────────────────────────────────────
+const sdd = StyleSheet.create({
+  wrap: { marginBottom: SPACING.md },
+  label: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
+  star: { color: COLORS.negative },
+  inputBox: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 4, minHeight: 48,
+  },
+  inputBoxFocused: { borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
+  input: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, paddingVertical: 8 },
+  dropList: {
+    borderWidth: 1, borderTopWidth: 0, borderColor: COLORS.borderDefault,
+    backgroundColor: COLORS.cardBg,
+    borderBottomLeftRadius: RADIUS.md, borderBottomRightRadius: RADIUS.md,
+    overflow: 'hidden',
+  },
+  dropItem: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 14, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  dropText: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, flex: 1 },
+  dropTextActive: { fontWeight: '700', color: COLORS.brandPrimary },
+  addNewRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 14, paddingVertical: 14,
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
+  },
+  addNewText: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.positive },
+});
+
+// ─── Barcode Scanner Styles ───────────────────────────────────────────────────
+const bs = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: '#000' },
+  header: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md,
+    paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  closeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  title: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
+  rescanBtn: { paddingHorizontal: 14, paddingVertical: 8, backgroundColor: COLORS.infoBg, borderRadius: RADIUS.md },
+  rescanText: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.info },
+  camera: { flex: 1 },
+  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' },
+  scanFrame: {
+    width: 260, height: 180, borderWidth: 3, borderColor: COLORS.white,
+    borderRadius: RADIUS.lg, backgroundColor: 'transparent',
+  },
+  hint: { color: COLORS.white, fontSize: TYPOGRAPHY.sm, marginTop: 20, fontWeight: '600', textShadowColor: '#000', textShadowRadius: 4 },
+  permWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, padding: SPACING.xl, backgroundColor: COLORS.pageBg },
+  permText: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary, textAlign: 'center' },
+  permBtn: { backgroundColor: COLORS.brandPrimary, paddingHorizontal: 24, paddingVertical: 14, borderRadius: RADIUS.md },
+  permBtnText: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+});
+
+// ─── m additions ─────────────────────────────────────────────────────────────
+const mAdd = StyleSheet.create({
+  warehouseHint: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: SPACING.md, paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+    backgroundColor: COLORS.pageBg,
+  },
+  warehouseHintTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.info, flex: 1 },
 });
