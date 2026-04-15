@@ -9,10 +9,14 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-const BRAND_GREEN = '#2D7D46';
-const LIGHT_GREEN_BG = '#EAF7EE';
-const LIGHT_GREEN_BORDER = '#A8D5B0';
-const CLOSE_BTN_GREEN = '#1B5E20';
+// Per-section theme colors from the app's color system
+const SECTION_COLORS: Record<string, { color: string; bg: string }> = {
+  sales:     { color: COLORS.positive,  bg: COLORS.positiveBg },  // Green — revenue/income
+  purchase:  { color: COLORS.negative,  bg: COLORS.negativeBg },  // Red — outgoing cost
+  voucher:   { color: COLORS.warning,   bg: COLORS.warningBg  },  // Amber — cash movement
+  inventory: { color: COLORS.info,      bg: COLORS.infoBg     },  // Blue — stock data
+  ledgers:   { color: COLORS.brandPrimary, bg: COLORS.activeBg },  // Dark — official records
+};
 
 interface QuickActionsModalProps {
   visible: boolean;
@@ -115,12 +119,13 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose,
           >
             {SECTIONS.map(section => {
               const isExpanded = expandedSection === section.id;
+              const theme = SECTION_COLORS[section.id];
               return (
                 <View
                   key={section.id}
                   style={[
                     s.sectionCard,
-                    isExpanded && s.sectionCardActive,
+                    isExpanded && { borderColor: theme.color + '60', borderLeftWidth: 3, borderLeftColor: theme.color },
                   ]}
                 >
                   {/* Section Header Row */}
@@ -129,14 +134,14 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose,
                     onPress={() => toggleSection(section.id)}
                     activeOpacity={0.75}
                   >
-                    <View style={[s.iconCircle, isExpanded && s.iconCircleActive]}>
-                      <Ionicons name={section.icon} size={22} color={BRAND_GREEN} />
+                    <View style={[s.iconCircle, { backgroundColor: theme.bg }]}>
+                      <Ionicons name={section.icon} size={22} color={theme.color} />
                     </View>
                     <Text style={s.sectionLabel}>{section.label}</Text>
                     <Ionicons
                       name={isExpanded ? 'chevron-up' : 'chevron-down'}
                       size={20}
-                      color={COLORS.textSecondary}
+                      color={isExpanded ? theme.color : COLORS.textSecondary}
                     />
                   </TouchableOpacity>
 
@@ -150,11 +155,11 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose,
                           onPress={() => handleItemPress(item)}
                           activeOpacity={0.6}
                         >
-                          <View style={s.subItemIconWrap}>
-                            <Ionicons name={item.icon} size={15} color={BRAND_GREEN} />
+                          <View style={[s.subItemIconWrap, { backgroundColor: theme.bg }]}>
+                            <Ionicons name={item.icon} size={15} color={theme.color} />
                           </View>
                           <Text style={s.subItemText}>{item.label}</Text>
-                          <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
+                          <Ionicons name="chevron-forward" size={14} color={theme.color + '80'} />
                         </TouchableOpacity>
                       ))}
                     </View>
@@ -242,14 +247,8 @@ const s = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: COLORS.white,
-    borderWidth: 1.5,
-    borderColor: COLORS.borderDefault,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  iconCircleActive: {
-    borderColor: COLORS.borderStrong,
   },
   sectionLabel: {
     flex: 1,
@@ -260,20 +259,23 @@ const s = StyleSheet.create({
   // Sub-items
   subList: {
     paddingBottom: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderDefault,
   },
   subItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
-    paddingLeft: 68,
+    paddingLeft: 14,
     paddingRight: 14,
     gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderDefault,
   },
   subItemIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: LIGHT_GREEN_BG,
+    width: 32,
+    height: 32,
+    borderRadius: RADIUS.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -281,7 +283,7 @@ const s = StyleSheet.create({
     flex: 1,
     fontSize: TYPOGRAPHY.base,
     fontWeight: '500',
-    color: '#374151',
+    color: COLORS.textPrimary,
   },
   // Bottom close
   bottomRow: {
@@ -293,7 +295,7 @@ const s = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: CLOSE_BTN_GREEN,
+    backgroundColor: COLORS.brandPrimary,
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 4,
