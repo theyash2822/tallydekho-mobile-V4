@@ -19,19 +19,19 @@ function RootNavigation() {
 
   useEffect(() => {
     if (isLoading) return;
+    // Wait for router to fully resolve before acting
+    if (segments.length === 0) return;
 
     const inAuth = segments[0] === '(auth)';
-    const inTabs = segments[0] === '(tabs)';
 
-    if (!isAuthenticated) {
-      // Not logged in — always go to auth (unless already there)
-      if (!inAuth) router.replace('/(auth)');
-    } else {
-      // Logged in — go to tabs (unless already in tabs or other non-auth screen)
-      if (inAuth || (!inTabs && segments.length === 0)) {
-        router.replace('/(tabs)');
-      }
+    if (!isAuthenticated && !inAuth) {
+      // Not logged in — send to auth screen
+      router.replace('/(auth)');
+    } else if (isAuthenticated && inAuth) {
+      // Logged in but on auth screen — send to app
+      router.replace('/(tabs)');
     }
+    // Every other case: let Expo Router handle navigation naturally (no redirect)
   }, [isAuthenticated, isLoading, segments]);
 
   return <Slot />;
