@@ -1,246 +1,403 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert,
+  KeyboardAvoidingView, Platform, Alert, TextInput, Switch,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import FormField from '../../src/components/forms/FormField';
-import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 
-// ─── All Tally Predefined Groups ─────────────────────────────────────────────
-const TALLY_GROUPS: DropdownOption[] = [
-  { label: 'Capital Account', value: 'capital_account' },
-  { label: 'Reserves & Surplus', value: 'reserves_surplus' },
-  { label: 'Sundry Creditors', value: 'sundry_creditors' },
-  { label: 'Sundry Debtors', value: 'sundry_debtors' },
-  { label: 'Bank Accounts', value: 'bank_accounts' },
-  { label: 'Bank OD Accounts', value: 'bank_od' },
-  { label: 'Cash-in-Hand', value: 'cash_in_hand' },
-  { label: 'Duties & Taxes', value: 'duties_taxes' },
-  { label: 'Fixed Assets', value: 'fixed_assets' },
-  { label: 'Investments', value: 'investments' },
-  { label: 'Loans & Advances (Asset)', value: 'loans_advances_asset' },
-  { label: 'Loans (Liability)', value: 'loans_liability' },
-  { label: 'Secured Loans', value: 'secured_loans' },
-  { label: 'Unsecured Loans', value: 'unsecured_loans' },
-  { label: 'Current Assets', value: 'current_assets' },
-  { label: 'Current Liabilities', value: 'current_liabilities' },
-  { label: 'Provisions', value: 'provisions' },
-  { label: 'Deposits (Asset)', value: 'deposits_asset' },
-  { label: 'Stock-in-Hand', value: 'stock_in_hand' },
-  { label: 'Sales Accounts', value: 'sales_accounts' },
-  { label: 'Purchase Accounts', value: 'purchase_accounts' },
-  { label: 'Direct Expenses', value: 'direct_expenses' },
-  { label: 'Indirect Expenses', value: 'indirect_expenses' },
-  { label: 'Direct Income', value: 'direct_income' },
-  { label: 'Indirect Income', value: 'indirect_income' },
-  { label: 'Misc. Expenses (Asset)', value: 'misc_expenses' },
-  { label: 'Work in Progress', value: 'wip' },
-  { label: 'Expenses Payable', value: 'expenses_payable' },
-];
-
-const BALANCE_TYPES: DropdownOption[] = [
-  { label: 'Debit (Dr)', value: 'dr' },
-  { label: 'Credit (Cr)', value: 'cr' },
-];
-const DUTY_TYPES: DropdownOption[] = [
-  { label: 'CGST', value: 'cgst' },
-  { label: 'SGST', value: 'sgst' },
-  { label: 'IGST', value: 'igst' },
-  { label: 'CESS', value: 'cess' },
-  { label: 'TDS', value: 'tds' },
-  { label: 'TCS', value: 'tcs' },
-  { label: 'Service Tax', value: 'service_tax' },
-  { label: 'Custom Duty', value: 'custom_duty' },
-  { label: 'Other', value: 'other' },
-];
-const GST_RATES: DropdownOption[] = [
-  { label: '0%', value: '0' },
-  { label: '5%', value: '5' },
-  { label: '12%', value: '12' },
-  { label: '18%', value: '18' },
-  { label: '28%', value: '28' },
-];
-
+// ─── Types ────────────────────────────────────────────────────────────────────
 type LedgerType = 'sundry_creditor' | 'sundry_debtor' | 'duties_taxes' | 'custom';
 
-const TYPE_CONFIG: Record<LedgerType, { title: string; group: string; color: string; bg: string; icon: string }> = {
-  sundry_creditor: { title: 'Add Sundry Creditor', group: 'Sundry Creditors', color: COLORS.negative, bg: COLORS.negativeBg, icon: 'arrow-up-circle-outline' },
-  sundry_debtor:   { title: 'Add Sundry Debtor',   group: 'Sundry Debtors',   color: COLORS.positive, bg: COLORS.positiveBg, icon: 'arrow-down-circle-outline' },
-  duties_taxes:    { title: 'Add Duties & Taxes',   group: 'Duties & Taxes',   color: COLORS.warning,  bg: COLORS.warningBg,  icon: 'receipt-outline' },
-  custom:          { title: 'Add Custom Ledger',    group: '',                 color: COLORS.info,     bg: COLORS.infoBg,     icon: 'journal-outline' },
+const TYPE_CONFIG: Record<LedgerType, { title: string; group: string }> = {
+  sundry_creditor: { title: 'Sundry Creditors', group: 'Sundry Creditors' },
+  sundry_debtor:   { title: 'Sundry Debtors',   group: 'Sundry Debtors' },
+  duties_taxes:    { title: 'Duties & Taxes',    group: 'Duties & Taxes' },
+  custom:          { title: 'Custom Groups',     group: '' },
 };
 
+const GST_REG_TYPES = ['Regular', 'Unregistered', 'Composition'];
+
+const DUTY_TYPES = ['CGST', 'SGST', 'IGST', 'Cess', 'Others'];
+
+const ALL_TALLY_GROUPS = [
+  'Capital Account', 'Reserves & Surplus', 'Sundry Creditors', 'Sundry Debtors',
+  'Bank Accounts', 'Bank OD Accounts', 'Cash-in-Hand', 'Duties & Taxes',
+  'Fixed Assets', 'Investments', 'Loans & Advances (Asset)', 'Loans (Liability)',
+  'Secured Loans', 'Unsecured Loans', 'Current Assets', 'Current Liabilities',
+  'Provisions', 'Deposits (Asset)', 'Stock-in-Hand', 'Sales Accounts',
+  'Purchase Accounts', 'Direct Expenses', 'Indirect Expenses',
+  'Direct Income', 'Indirect Income', 'Misc. Expenses (Asset)',
+];
+
+// ─── Inline Accordion Dropdown ────────────────────────────────────────────────
+interface InlineDropdownProps {
+  label: string;
+  required?: boolean;
+  value: string;
+  options: string[];
+  placeholder?: string;
+  onSelect: (val: string) => void;
+}
+
+function InlineDropdown({ label, required, value, options, placeholder = 'Select', onSelect }: InlineDropdownProps) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View>
+      <Text style={s.label}>
+        {label}{required && <Text style={s.required}> *</Text>}
+      </Text>
+      <TouchableOpacity
+        style={[s.selectBox, open && s.selectBoxOpen]}
+        onPress={() => setOpen(!open)}
+        activeOpacity={0.7}
+      >
+        <Text style={[s.selectText, !value && { color: COLORS.textTertiary }]}>
+          {value || placeholder}
+        </Text>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
+      </TouchableOpacity>
+      {open && (
+        <View style={s.dropList}>
+          {options.map((opt, idx) => (
+            <TouchableOpacity
+              key={opt}
+              style={[s.dropItem, idx === options.length - 1 && { borderBottomWidth: 0 }]}
+              onPress={() => { onSelect(opt); setOpen(false); }}
+              activeOpacity={0.7}
+            >
+              <Text style={[s.dropItemText, value === opt && s.dropItemTextActive]}>{opt}</Text>
+              {value === opt && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ─── Opening Balance Row ──────────────────────────────────────────────────────
+interface BalanceRowProps {
+  value: string;
+  onChange: (v: string) => void;
+  isCr: boolean;
+  onToggleCr: (v: boolean) => void;
+}
+
+function BalanceRow({ value, onChange, isCr, onToggleCr }: BalanceRowProps) {
+  return (
+    <View style={s.balanceBox}>
+      <TextInput
+        style={s.balanceInput}
+        placeholder="0.00"
+        placeholderTextColor={COLORS.textTertiary}
+        value={value}
+        onChangeText={onChange}
+        keyboardType="numeric"
+      />
+      <View style={s.drCrWrap}>
+        <Text style={[s.drCrLabel, !isCr && s.drCrLabelActive]}>Dr</Text>
+        <Switch
+          value={isCr}
+          onValueChange={onToggleCr}
+          trackColor={{ false: COLORS.borderStrong, true: COLORS.borderStrong }}
+          thumbColor={COLORS.white}
+          ios_backgroundColor={COLORS.borderStrong}
+        />
+        <Text style={[s.drCrLabel, isCr && s.drCrLabelActive]}>Cr</Text>
+      </View>
+    </View>
+  );
+}
+
+// ─── Toggle Row ───────────────────────────────────────────────────────────────
+interface ToggleRowProps {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}
+
+function ToggleRow({ label, value, onChange }: ToggleRowProps) {
+  return (
+    <View style={s.toggleRow}>
+      <Text style={s.toggleLabel}>{label}</Text>
+      <Switch
+        value={value}
+        onValueChange={onChange}
+        trackColor={{ false: COLORS.borderStrong, true: COLORS.brandPrimary }}
+        thumbColor={COLORS.white}
+        ios_backgroundColor={COLORS.borderStrong}
+      />
+    </View>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CreateLedgerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ type?: string }>();
   const [entryType, setEntryType] = useState<EntryType>('regular');
 
-  const lType = ((['sundry_creditor','sundry_debtor','duties_taxes','custom'].includes(params.type||'') ? params.type : 'custom') as LedgerType);
+  const lType = (
+    ['sundry_creditor', 'sundry_debtor', 'duties_taxes', 'custom'].includes(params.type || '')
+      ? params.type
+      : 'custom'
+  ) as LedgerType;
+
   const cfg = TYPE_CONFIG[lType];
+  const isParty = lType === 'sundry_creditor' || lType === 'sundry_debtor';
+  const isDuties = lType === 'duties_taxes';
+  const isCustom = lType === 'custom';
+  const showGstSection = isParty || isCustom;
 
-  // Common fields
+  // ── Common fields
   const [name, setName] = useState('');
-  const [group, setGroup] = useState(lType !== 'custom' ? 'auto' : '');
   const [openBalance, setOpenBalance] = useState('');
-  const [balanceType, setBalanceType] = useState('cr');
-  const [narration, setNarration] = useState('');
+  const [isCr, setIsCr] = useState(false);
 
-  // Party fields (creditor/debtor)
-  const [contact, setContact] = useState('');
-  const [email, setEmail] = useState('');
-  const [address, setBillingAddress] = useState('');
+  // ── Party fields (Sundry Creditor / Debtor)
+  const [creditDays, setCreditDays] = useState('');
+  const [mailingEnabled, setMailingEnabled] = useState(false);
+  const [bankEnabled, setBankEnabled] = useState(false);
+  const [gstRegType, setGstRegType] = useState('Regular');
   const [gstin, setGstin] = useState('');
   const [pan, setPan] = useState('');
-  const [creditLimit, setCreditLimit] = useState('');
-  const [creditDays, setCreditDays] = useState('');
 
-  // Duties & taxes fields
-  const [dutyType, setDutyType] = useState('');
-  const [gstRate, setGstRate] = useState('');
-  const [gstCode, setGstCode] = useState('');
-
-  // Custom group
+  // ── Custom group fields
   const [customGroup, setCustomGroup] = useState('');
+  const [groupSearch, setGroupSearch] = useState('');
+  const [groupDropOpen, setGroupDropOpen] = useState(false);
+
+  // ── Duties & Taxes fields
+  const [dutyType, setDutyType] = useState('');
+  const [percentage, setPercentage] = useState('');
+
+  const filteredGroups = ALL_TALLY_GROUPS.filter(g =>
+    g.toLowerCase().includes(groupSearch.toLowerCase())
+  );
 
   const handleSave = () => {
-    if (!name.trim()) { Alert.alert('Error', 'Ledger name is required.'); return; }
-    Alert.alert('✓ Ledger Created', `"${name}" has been added successfully.`, [{ text: 'OK', onPress: () => router.back() }]);
+    if (!name.trim()) {
+      Alert.alert('Required', 'Ledger name is required.');
+      return;
+    }
+    if (isDuties && !dutyType) {
+      Alert.alert('Required', 'Please select a duty/tax type.');
+      return;
+    }
+    Alert.alert(
+      '✓ Ledger Created',
+      `"${name}" has been added successfully.`,
+      [{ text: 'OK', onPress: () => router.back() }]
+    );
   };
-
-  const isParty = lType === 'sundry_creditor' || lType === 'sundry_debtor';
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
+      {/* ── Header ── */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top:8, bottom:8, left:8, right:8 }}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={s.backBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle} numberOfLines={1}>{cfg.title}</Text>
+        <Text style={s.headerTitle}>{cfg.title}</Text>
         <RegularOptionalToggle value={entryType} onChange={setEntryType} />
       </View>
 
-      {/* Type Banner */}
-      <View style={[s.typeBanner, { backgroundColor: cfg.bg, borderColor: cfg.color + '40' }]}>
-        <View style={[s.typeIcon, { backgroundColor: cfg.color + '20' }]}>
-          <Ionicons name={cfg.icon as any} size={18} color={cfg.color} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[s.typeTitle, { color: cfg.color }]}>{cfg.title}</Text>
-          {cfg.group !== '' && (
-            <Text style={s.typeGroup}>Under: <Text style={{ fontWeight: '700' }}>{cfg.group}</Text></Text>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={s.form}
+        >
+
+          {/* ── Name ── */}
+          <Text style={s.label}>Name <Text style={s.required}>*</Text></Text>
+          <TextInput
+            style={s.input}
+            placeholder="Enter ledger name"
+            placeholderTextColor={COLORS.textTertiary}
+            value={name}
+            onChangeText={setName}
+          />
+
+          {/* ── Custom Group: Under (Group) search ── */}
+          {isCustom && (
+            <>
+              <Text style={s.label}>Under (Group) <Text style={s.required}>*</Text></Text>
+              <TouchableOpacity
+                style={s.searchBox}
+                onPress={() => setGroupDropOpen(!groupDropOpen)}
+                activeOpacity={0.9}
+              >
+                <Ionicons name="search" size={16} color={COLORS.textTertiary} />
+                <TextInput
+                  style={s.searchInput}
+                  placeholder="Search or type group name..."
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={groupSearch}
+                  onChangeText={(t) => {
+                    setGroupSearch(t);
+                    setCustomGroup('');
+                    setGroupDropOpen(true);
+                  }}
+                />
+                {customGroup !== '' && (
+                  <Ionicons name="checkmark-circle" size={16} color={COLORS.positive} />
+                )}
+              </TouchableOpacity>
+              {groupDropOpen && (
+                <View style={s.dropList}>
+                  {filteredGroups.map((g, idx) => (
+                    <TouchableOpacity
+                      key={g}
+                      style={[s.dropItem, idx === filteredGroups.length - 1 && { borderBottomWidth: 0 }]}
+                      onPress={() => {
+                        setCustomGroup(g);
+                        setGroupSearch(g);
+                        setGroupDropOpen(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[s.dropItemText, customGroup === g && s.dropItemTextActive]}>{g}</Text>
+                      {customGroup === g && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
+                    </TouchableOpacity>
+                  ))}
+                  {filteredGroups.length === 0 && (
+                    <View style={s.dropItem}>
+                      <Text style={{ color: COLORS.textTertiary, fontSize: TYPOGRAPHY.sm }}>No groups found</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </>
           )}
-        </View>
-      </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+          {/* ── Opening Balance ── */}
+          <Text style={s.label}>Opening Balance <Text style={s.required}>*</Text></Text>
+          <BalanceRow
+            value={openBalance}
+            onChange={setOpenBalance}
+            isCr={isCr}
+            onToggleCr={setIsCr}
+          />
 
-          {/* Common - Ledger Name + Group */}
-          <View style={s.card}>
-            <View style={s.cardHdr}><Ionicons name="journal-outline" size={18} color={COLORS.brandPrimary} /><Text style={s.cardTitle}>Ledger Details</Text></View>
-            <FormField label="Ledger Name" value={name} onChangeText={setName} placeholder="e.g. ABC Traders" required />
-
-            {lType === 'custom' ? (
-              <FormDropdown
-                label="Under Group" value={customGroup} options={TALLY_GROUPS}
-                onSelect={o => setCustomGroup(o.value)} placeholder="Select Tally group..." required
-              />
-            ) : (
-              <View style={s.groupChip}>
-                <Ionicons name="folder-outline" size={14} color={cfg.color} />
-                <Text style={[s.groupChipTxt, { color: cfg.color }]}>Group: {cfg.group}</Text>
-                <Ionicons name="lock-closed-outline" size={12} color={COLORS.textTertiary} />
-              </View>
-            )}
-
-            <View style={s.row2}>
-              <View style={{ flex: 1 }}>
-                <FormField label="Opening Balance (₹)" value={openBalance} onChangeText={setOpenBalance}
-                  keyboardType="numeric" placeholder="0.00" containerStyle={{ marginBottom: 0 }} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <FormDropdown label="Balance Type" value={balanceType} options={BALANCE_TYPES}
-                  onSelect={o => setBalanceType(o.value)} placeholder="Dr / Cr" containerStyle={{ marginBottom: 0 }} />
-              </View>
-            </View>
-          </View>
-
-          {/* Party fields - for creditor / debtor */}
+          {/* ── Credit Period (Party only) ── */}
           {isParty && (
-            <View style={s.card}>
-              <View style={s.cardHdr}><Ionicons name="person-outline" size={18} color={COLORS.info} /><Text style={s.cardTitle}>Party Details</Text></View>
-              <View style={s.row2}>
-                <View style={{ flex: 1 }}>
-                  <FormField label="Contact No." value={contact} onChangeText={setContact} keyboardType="phone-pad" placeholder="10-digit" containerStyle={{ marginBottom: 0 }} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <FormField label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="Optional" containerStyle={{ marginBottom: 0 }} />
-                </View>
+            <>
+              <Text style={s.label}>Credit Period (Days)</Text>
+              <TextInput
+                style={s.input}
+                placeholder="Enter credit period in days"
+                placeholderTextColor={COLORS.textTertiary}
+                value={creditDays}
+                onChangeText={setCreditDays}
+                keyboardType="numeric"
+              />
+            </>
+          )}
+
+          {/* ── Duties & Taxes: Type + Percentage side-by-side ── */}
+          {isDuties && (
+            <View style={s.row2}>
+              {/* Type of Duty / Tax */}
+              <View style={{ flex: 1 }}>
+                <InlineDropdown
+                  label="Type of Duty / Tax"
+                  required
+                  value={dutyType}
+                  options={DUTY_TYPES}
+                  placeholder="Select type"
+                  onSelect={setDutyType}
+                />
               </View>
-              <FormField label="Billing Address" value={address} onChangeText={setBillingAddress}
-                placeholder="Full address" multiline numberOfLines={2}
-                style={{ minHeight: 64, textAlignVertical: 'top' } as any}
-                containerStyle={{ marginTop: SPACING.md }} />
-              <View style={s.row2}>
-                <View style={{ flex: 1 }}>
-                  <FormField label="GSTIN" value={gstin} onChangeText={v => setGstin(v.toUpperCase())}
-                    placeholder="15-digit GSTIN" autoCapitalize="characters" containerStyle={{ marginBottom: 0 }} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <FormField label="PAN" value={pan} onChangeText={v => setPan(v.toUpperCase())}
-                    placeholder="10-char PAN" autoCapitalize="characters" containerStyle={{ marginBottom: 0 }} />
-                </View>
-              </View>
-              <View style={[s.row2, { marginTop: SPACING.md }]}>
-                <View style={{ flex: 1 }}>
-                  <FormField label="Credit Limit (₹)" value={creditLimit} onChangeText={setCreditLimit}
-                    keyboardType="numeric" placeholder="0 = unlimited" containerStyle={{ marginBottom: 0 }} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <FormField label="Credit Period (Days)" value={creditDays} onChangeText={setCreditDays}
-                    keyboardType="numeric" placeholder="e.g. 30" containerStyle={{ marginBottom: 0 }} />
+
+              {/* Percentage of Calculation */}
+              <View style={{ flex: 1 }}>
+                <Text style={s.label}>Percentage of Calculation <Text style={s.required}>*</Text></Text>
+                <View style={s.percentBox}>
+                  <TextInput
+                    style={s.percentInput}
+                    placeholder="0.00"
+                    placeholderTextColor={COLORS.textTertiary}
+                    value={percentage}
+                    onChangeText={setPercentage}
+                    keyboardType="decimal-pad"
+                  />
+                  <View style={s.percentSuffix}>
+                    <Text style={s.percentSuffixText}>%</Text>
+                  </View>
                 </View>
               </View>
             </View>
           )}
 
-          {/* Duties & Taxes specific */}
-          {lType === 'duties_taxes' && (
-            <View style={s.card}>
-              <View style={s.cardHdr}><Ionicons name="receipt-outline" size={18} color={COLORS.warning} /><Text style={s.cardTitle}>Tax Configuration</Text></View>
-              <FormDropdown label="Tax / Duty Type" value={dutyType} options={DUTY_TYPES}
-                onSelect={o => setDutyType(o.value)} placeholder="Select type..." required />
-              <View style={s.row2}>
-                <View style={{ flex: 1 }}>
-                  <FormDropdown label="GST Rate" value={gstRate} options={GST_RATES}
-                    onSelect={o => setGstRate(o.value)} placeholder="Select %" containerStyle={{ marginBottom: 0 }} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <FormField label="GST / Tax Code" value={gstCode} onChangeText={setGstCode}
-                    placeholder="e.g. GST18" autoCapitalize="characters" containerStyle={{ marginBottom: 0 }} />
-                </View>
-              </View>
-            </View>
+          {/* ── GST Section (Party + Custom) ── */}
+          {showGstSection && (
+            <>
+              {/* Divider */}
+              <View style={s.divider} />
+
+              <ToggleRow
+                label="Enable Mailing Details"
+                value={mailingEnabled}
+                onChange={setMailingEnabled}
+              />
+              <ToggleRow
+                label="Provide Bank Details"
+                value={bankEnabled}
+                onChange={setBankEnabled}
+              />
+
+              <View style={s.divider} />
+
+              <InlineDropdown
+                label="GST Registration Type"
+                required
+                value={gstRegType}
+                options={GST_REG_TYPES}
+                onSelect={setGstRegType}
+              />
+
+              <Text style={s.label}>GSTIN <Text style={s.required}>*</Text></Text>
+              <TextInput
+                style={s.input}
+                placeholder="Enter GSTIN"
+                placeholderTextColor={COLORS.textTertiary}
+                value={gstin}
+                onChangeText={v => setGstin(v.toUpperCase())}
+                autoCapitalize="characters"
+              />
+
+              <Text style={s.label}>PAN/IT No.</Text>
+              <TextInput
+                style={s.input}
+                placeholder="Enter PAN/IT number"
+                placeholderTextColor={COLORS.textTertiary}
+                value={pan}
+                onChangeText={v => setPan(v.toUpperCase())}
+                autoCapitalize="characters"
+              />
+            </>
           )}
 
-          {/* Narration */}
-          <View style={s.card}>
-            <FormField label="Narration / Notes" value={narration} onChangeText={setNarration}
-              placeholder="Optional internal notes..." multiline numberOfLines={2}
-              style={{ minHeight: 60, textAlignVertical: 'top' } as any} containerStyle={{ marginBottom: 0 }} />
-          </View>
+          <View style={{ height: 20 }} />
         </ScrollView>
 
-        <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-          <TouchableOpacity style={[s.submitBtn, { backgroundColor: cfg.color }]} onPress={handleSave} activeOpacity={0.7}>
-            <Ionicons name="add-circle" size={18} color={COLORS.white} />
-            <Text style={s.submitTxt}>Create Ledger</Text>
+        {/* ── Save Button ── */}
+        <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <TouchableOpacity style={s.saveBtn} onPress={handleSave} activeOpacity={0.85}>
+            <Text style={s.saveBtnText}>Save Ledger</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -248,23 +405,153 @@ export default function CreateLedgerScreen() {
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.pageBg },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
-  typeBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: SPACING.md, paddingVertical: 12, borderBottomWidth: 1 },
-  typeIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  typeTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700' },
-  typeGroup: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
-  scroll: { padding: SPACING.md, paddingBottom: 8 },
-  card: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.md, marginBottom: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
-  cardHdr: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SPACING.md },
-  cardTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-  groupChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, marginBottom: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
-  groupChipTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600' },
-  row2: { flexDirection: 'row', gap: 12 },
-  footer: { paddingHorizontal: SPACING.md, paddingTop: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
-  submitBtn: { flexDirection: 'row', gap: 8, paddingVertical: 14, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center' },
-  submitTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+
+  // Header
+  header: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: COLORS.cardBg,
+    paddingHorizontal: SPACING.md, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  backBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  headerTitle: {
+    flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary,
+  },
+
+  // Form
+  form: { padding: SPACING.md },
+  label: {
+    fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary,
+    marginBottom: 8, marginTop: 18,
+  },
+  required: { color: COLORS.negative },
+
+  // Text Input
+  input: {
+    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    paddingHorizontal: 14, paddingVertical: 13,
+    fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary,
+    backgroundColor: COLORS.cardBg,
+  },
+
+  // Opening Balance
+  balanceBox: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    backgroundColor: COLORS.cardBg, paddingLeft: 14, paddingRight: 10,
+    paddingVertical: 4,
+  },
+  balanceInput: {
+    flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary,
+    paddingVertical: 9,
+  },
+  drCrWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 8,
+  },
+  drCrLabel: {
+    fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textTertiary,
+  },
+  drCrLabelActive: {
+    color: COLORS.textPrimary, fontWeight: '700',
+  },
+
+  // Search box (Custom group)
+  searchBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    paddingHorizontal: 14, paddingVertical: 4, backgroundColor: COLORS.cardBg,
+  },
+  searchInput: {
+    flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary,
+    paddingVertical: 9,
+  },
+
+  // Accordion select box
+  selectBox: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    paddingHorizontal: 14, paddingVertical: 14,
+    backgroundColor: COLORS.cardBg,
+  },
+  selectBoxOpen: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  selectText: {
+    fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, fontWeight: '600',
+  },
+
+  // Dropdown list
+  dropList: {
+    borderWidth: 1, borderTopWidth: 0,
+    borderColor: COLORS.borderDefault,
+    backgroundColor: COLORS.cardBg,
+    borderBottomLeftRadius: RADIUS.md,
+    borderBottomRightRadius: RADIUS.md,
+    overflow: 'hidden',
+  },
+  dropItem: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 14, paddingVertical: 15,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  dropItemText: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
+  dropItemTextActive: { fontWeight: '700' },
+
+  // Toggle row
+  toggleRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 6,
+  },
+  toggleLabel: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
+
+  // Divider
+  divider: {
+    height: 1, backgroundColor: COLORS.borderDefault, marginVertical: 8,
+  },
+
+  // Row of 2 columns
+  row2: { flexDirection: 'row', gap: 12, marginTop: 18 },
+
+  // Percentage input
+  percentBox: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    backgroundColor: COLORS.cardBg, overflow: 'hidden',
+  },
+  percentInput: {
+    flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary,
+    paddingHorizontal: 14, paddingVertical: 13,
+  },
+  percentSuffix: {
+    backgroundColor: COLORS.pageBg,
+    borderLeftWidth: 1, borderLeftColor: COLORS.borderDefault,
+    paddingHorizontal: 12, paddingVertical: 13,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  percentSuffixText: {
+    fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textSecondary,
+  },
+
+  // Footer / Save button
+  footer: {
+    paddingHorizontal: SPACING.md, paddingTop: SPACING.md,
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
+    backgroundColor: COLORS.cardBg,
+  },
+  saveBtn: {
+    backgroundColor: COLORS.brandPrimary,
+    borderRadius: RADIUS.md, paddingVertical: 15,
+    alignItems: 'center',
+  },
+  saveBtnText: {
+    fontSize: TYPOGRAPHY.base, fontWeight: '700',
+    color: COLORS.white, letterSpacing: 0.3,
+  },
 });
