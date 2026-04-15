@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, KeyboardAvoidingView, Platform, Alert,
+  Switch, Modal, Animated, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,133 +10,689 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_USER } from '../../src/data/mockData';
 
-export default function ProfileScreen() {
-  const router = useRouter();
-  const [name, setName] = useState(MOCK_USER.name);
-  const [email, setEmail] = useState('ashish@ykind.com');
-  const [phone] = useState(MOCK_USER.phone);
-  const [role, setRole] = useState('Admin');
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+function maskPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  const local  = digits.length >= 10 ? digits.slice(-10) : digits;
+  const first2 = local.slice(0, 2);
+  const last2  = local.slice(-2);
+  return `+91 ${first2}** **** ${last2}`;
+}
 
-  const handleSave = () => {
-    Alert.alert('Profile Updated', 'Your profile has been saved successfully.');
+function maskEmail(email: string): string {
+  const idx = email.indexOf('@');
+  if (idx < 0) return email;
+  const local  = email.slice(0, idx);
+  const domain = email.slice(idx);
+  const visible = local.slice(0, 2);
+  const stars  = '*'.repeat(Math.max(local.length - 2, 4));
+  return `${visible}${stars}${domain}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CustomNumPad
+// ─────────────────────────────────────────────────────────────────────────────
+function CustomNumPad({ onPress }: { onPress: (key: string) => void }) {
+  const ROWS = [
+    ['1', '2', '3'],
+    ['4', '5', '6'],
+    ['7', '8', '9'],
+    ['',  '0', 'back'],
+  ];
+  return (
+    <View style={ps.numPad}>
+      {ROWS.map((row, ri) => (
+        <View key={ri} style={[ps.numRow, ri === ROWS.length - 1 && { borderBottomWidth: 0 }]}>
+          {row.map((key, ci) => {
+            if (!key) {
+              return <View key={ci} style={[ps.numKeyEmpty, ci < row.length - 1 && ps.numKeyBorderR]} />;
+            }
+            return (
+              <TouchableOpacity
+                key={ci}
+                style={[ps.numKey, ci < row.length - 1 && ps.numKeyBorderR]}
+                onPress={() => onPress(key)}
+                activeOpacity={0.45}
+              >
+                {key === 'back' ? (
+                  <Ionicons name="backspace-outline" size={22} color={COLORS.textPrimary} />
+                ) : (
+                  <Text style={ps.numKeyText}>{key}</Text>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PinBoxes — 4 dot-fill squares
+// ─────────────────────────────────────────────────────────────────────────────
+function PinBoxes({ value, length = 4 }: { value: string; length?: number }) {
+  return (
+    <View style={ps.pinRow}>
+      {Array.from({ length }).map((_, i) => (
+        <View
+          key={i}
+          style={[ps.pinBox, i < value.length && ps.pinBoxFilled]}
+        >
+          {i < value.length && <View style={ps.pinDot} />}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DeleteAccountModal
+// ─────────────────────────────────────────────────────────────────────────────
+function DeleteAccountModal({
+  visible,
+  onClose,
+  phone,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  phone: string;
+}) {
+  const [otp, setOtp]         = useState('');
+  const [countdown, setCount] = useState(30);
+  const [canResend, setResend] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startTimer = () => {
+    setCount(30); setResend(false);
+    timerRef.current = setInterval(() => {
+      setCount(prev => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current!);
+          setResend(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  useEffect(() => {
+    if (visible) { setOtp(''); startTimer(); }
+    else clearInterval(timerRef.current!);
+    return () => clearInterval(timerRef.current!);
+  }, [visible]);
+
+  const handleKey = (key: string) => {
+    if (key === 'back') setOtp(p => p.slice(0, -1));
+    else if (otp.length < 4) setOtp(p => p + key);
+  };
+
+  const handleDelete = () => {
+    if (otp.length < 4) return;
+    onClose();
+    setTimeout(() =>
+      Alert.alert('Account Deleted', 'Your account has been permanently deleted.'),
+    300);
+  };
+
+  const handleResend = () => {
+    if (!canResend) return;
+    startTimer();
+    Alert.alert('OTP Resent', `A new verification code has been sent to ${phone} via WhatsApp.`);
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={ps.modalOverlay}>
+        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
+        <View style={ps.modalSheet}>
+          <View style={ps.handle} />
+
+          {/* Heading */}
+          <Text style={ps.modalTitle}>Delete Account Confirmation</Text>
+          <Text style={ps.modalSub}>
+            {'Code has been sent to '}
+            <Text style={{ color: COLORS.textPrimary, fontWeight: '700' }}>{phone}</Text>
+            {' via WhatsApp.  '}
+            <Text
+              style={ps.changeLink}
+              onPress={() =>
+                Alert.alert('Change Number', 'Contact support to change your registered number.')
+              }
+            >
+              Change?
+            </Text>
+          </Text>
+
+          {/* OTP boxes */}
+          <PinBoxes value={otp} />
+
+          {/* Delete button */}
+          <TouchableOpacity
+            style={[ps.modalBtn, ps.deleteBtnColor, otp.length < 4 && ps.btnDisabled]}
+            onPress={handleDelete}
+            activeOpacity={0.85}
+            disabled={otp.length < 4}
+          >
+            <Text style={ps.modalBtnText}>Delete Account</Text>
+          </TouchableOpacity>
+
+          {/* Resend */}
+          <TouchableOpacity
+            style={ps.resendRow}
+            onPress={handleResend}
+            activeOpacity={canResend ? 0.7 : 1}
+          >
+            <Text style={[ps.resendText, !canResend && { color: COLORS.textTertiary }]}>
+              {canResend ? 'Resend OTP' : `Resend OTP (${countdown}s)`}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Number pad */}
+          <CustomNumPad onPress={handleKey} />
+          <View style={{ height: 12 }} />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CreatePasskeyModal
+// ─────────────────────────────────────────────────────────────────────────────
+function CreatePasskeyModal({
+  visible,
+  onClose,
+  onConfirm,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const [pin, setPin] = useState('');
+
+  useEffect(() => { if (!visible) setPin(''); }, [visible]);
+
+  const handleKey = (key: string) => {
+    if (key === 'back') setPin(p => p.slice(0, -1));
+    else if (pin.length < 4) setPin(p => p + key);
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={ps.modalOverlay}>
+        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
+        <View style={ps.modalSheet}>
+          <View style={ps.handle} />
+
+          {/* Heading */}
+          <Text style={ps.modalTitle}>Create A Passkey</Text>
+          <Text style={ps.modalSub}>Enter A 4-Character Passkey</Text>
+
+          {/* PIN boxes */}
+          <PinBoxes value={pin} />
+
+          {/* Confirm button */}
+          <TouchableOpacity
+            style={[ps.modalBtn, ps.confirmBtnColor, pin.length < 4 && ps.btnDisabled]}
+            onPress={() => pin.length === 4 && onConfirm()}
+            activeOpacity={0.85}
+            disabled={pin.length < 4}
+          >
+            <Text style={ps.modalBtnText}>Confirm</Text>
+          </TouchableOpacity>
+
+          {/* Reset link */}
+          <TouchableOpacity style={ps.resendRow} onPress={() => setPin('')} activeOpacity={0.7}>
+            <Text style={[ps.resendText, { color: COLORS.info }]}>Reset passcode</Text>
+          </TouchableOpacity>
+
+          {/* Number pad */}
+          <CustomNumPad onPress={handleKey} />
+          <View style={{ height: 12 }} />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ProfileScreen — main export
+// ─────────────────────────────────────────────────────────────────────────────
+export default function ProfileScreen() {
+  const router = useRouter();
+
+  // Form state
+  const [name, setName] = useState(MOCK_USER.name || 'Rajesh Sharma');
+  const [role, setRole] = useState('Admin');
+  const phone           = MOCK_USER.phone || '9876543210';
+  const email           = 'ashish@ykind.com';
+
+  // Security
+  const [biometric, setBiometric] = useState(true);
+  const [twoFA,     setTwoFA]     = useState(false);
+
+  // Modals
+  const [showDelete,  setShowDelete]  = useState(false);
+  const [showPasskey, setShowPasskey] = useState(false);
+
+  // Save toast animation (slidedown below header)
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const toastH    = useRef(new Animated.Value(0)).current;
+  const toastOpac = useRef(new Animated.Value(0)).current;
+
+  const showToast = (state: 'saving' | 'saved') => {
+    setSaveState(state);
+    Animated.parallel([
+      Animated.spring(toastH,    { toValue: 48, useNativeDriver: false, tension: 80, friction: 10 }),
+      Animated.timing(toastOpac, { toValue: 1,  useNativeDriver: false, duration: 200 }),
+    ]).start();
+  };
+
+  const hideToast = () => {
+    Animated.parallel([
+      Animated.timing(toastH,    { toValue: 0, useNativeDriver: false, duration: 250 }),
+      Animated.timing(toastOpac, { toValue: 0, useNativeDriver: false, duration: 200 }),
+    ]).start(() => setSaveState('idle'));
+  };
+
+  const handleSave = () => {
+    showToast('saving');
+    setTimeout(() => {
+      showToast('saved');
+      setTimeout(hideToast, 1600);
+    }, 1100);
+  };
+
+  const handle2FAToggle = (val: boolean) => {
+    if (val) { setShowPasskey(true); }
+    else     { setTwoFA(false); }
+  };
+
+  return (
+    <SafeAreaView style={ps.safe} edges={['top', 'left', 'right']}>
+      {/* ── Nav Header ─────────────────────────────────────────────────── */}
+      <View style={ps.header}>
+        <TouchableOpacity style={ps.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile</Text>
-        <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.7}>
-          <Text style={styles.saveBtnText}>Save</Text>
-        </TouchableOpacity>
+        <Text style={ps.headerTitle}>Profile</Text>
+        <View style={{ width: 44 }} />
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-          {/* Avatar */}
-          <View style={styles.avatarSection}>
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarText}>{name[0]?.toUpperCase()}</Text>
+      {/* ── Animated Toast banner (slides down below header) ──────────── */}
+      <Animated.View
+        style={[
+          ps.toast,
+          saveState === 'saved' && ps.toastSaved,
+          { maxHeight: toastH, opacity: toastOpac, overflow: 'hidden' },
+        ]}
+      >
+        <View style={ps.toastInner}>
+          {saveState === 'saving' ? (
+            <>
+              <ActivityIndicator size="small" color={COLORS.white} />
+              <Text style={ps.toastText}>Saving changes…</Text>
+            </>
+          ) : (
+            <>
+              <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />
+              <Text style={ps.toastText}>Saved successfully</Text>
+            </>
+          )}
+        </View>
+      </Animated.View>
+
+      {/* ── Body ───────────────────────────────────────────────────────── */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          style={ps.scroll}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={ps.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* ── Personal Info ────────────────────────────────────────── */}
+          <SectionLabel title="PERSONAL INFORMATION" />
+          <View style={ps.card}>
+            {/* Full Name */}
+            <View style={ps.fieldWrap}>
+              <Text style={ps.fieldLabel}>Full Name</Text>
+              <TextInput
+                style={ps.fieldInput}
+                value={name}
+                onChangeText={setName}
+                placeholder="Enter your name"
+                placeholderTextColor={COLORS.textTertiary}
+                selectionColor={COLORS.brandPrimary}
+                returnKeyType="next"
+              />
             </View>
-            <TouchableOpacity style={styles.changePhotoBtn} activeOpacity={0.7}>
-              <Ionicons name="camera-outline" size={14} color={COLORS.brandPrimary} />
-              <Text style={styles.changePhotoText}>Change Photo</Text>
-            </TouchableOpacity>
-          </View>
 
-          {/* Form */}
-          <View style={styles.formCard}>
-            <Text style={styles.formTitle}>Personal Information</Text>
+            <View style={ps.hr} />
 
-            {[
-              { label: 'Full Name', value: name, setter: setName, placeholder: 'Enter your name', editable: true },
-              { label: 'Email',     value: email, setter: setEmail, placeholder: 'Enter email', editable: true },
-              { label: 'Phone',     value: phone, setter: () => {}, placeholder: '', editable: false },
-              { label: 'Role',      value: role, setter: setRole, placeholder: 'Enter role', editable: true },
-            ].map((field, idx, arr) => (
-              <View key={field.label} style={[styles.fieldWrap, idx < arr.length - 1 && styles.fieldBorder]}>
-                <Text style={styles.fieldLabel}>{field.label}</Text>
-                <TextInput
-                  style={[styles.fieldInput, !field.editable && styles.fieldDisabled]}
-                  value={field.value}
-                  onChangeText={field.setter as any}
-                  placeholder={field.placeholder}
-                  placeholderTextColor={COLORS.textTertiary}
-                  editable={field.editable}
-                />
-              </View>
-            ))}
-          </View>
+            {/* Role */}
+            <View style={ps.fieldWrap}>
+              <Text style={ps.fieldLabel}>Role</Text>
+              <TextInput
+                style={ps.fieldInput}
+                value={role}
+                onChangeText={setRole}
+                placeholder="Enter your role"
+                placeholderTextColor={COLORS.textTertiary}
+                selectionColor={COLORS.brandPrimary}
+                returnKeyType="done"
+              />
+            </View>
 
-          {/* Linked accounts */}
-          <View style={styles.formCard}>
-            <Text style={styles.formTitle}>Linked Accounts</Text>
-            {[
-              { label: 'Google',  icon: 'logo-google',   linked: true,  account: 'ashish@gmail.com' },
-              { label: 'Tally',   icon: 'sync-outline',  linked: true,  account: 'Paired - Tally Prime' },
-              { label: 'WhatsApp',icon: 'logo-whatsapp', linked: true,  account: MOCK_USER.phone },
-            ].map((acc, idx, arr) => (
-              <TouchableOpacity
-                key={acc.label}
-                style={[styles.accountRow, idx < arr.length - 1 && styles.fieldBorder]}
-                activeOpacity={0.7}
-              >
-                <View style={styles.accLeft}>
-                  <Ionicons name={acc.icon as any} size={20} color={COLORS.textSecondary} />
-                  <View>
-                    <Text style={styles.accLabel}>{acc.label}</Text>
-                    <Text style={styles.accDetail}>{acc.account}</Text>
-                  </View>
+            <View style={ps.hr} />
+
+            {/* Phone (masked) */}
+            <View style={ps.fieldWrap}>
+              <Text style={ps.fieldLabel}>Phone Number</Text>
+              <View style={ps.maskedRow}>
+                <Text style={ps.maskedValue}>{maskPhone(phone)}</Text>
+                <View style={ps.verifiedPill}>
+                  <Ionicons name="checkmark-circle" size={12} color={COLORS.positive} />
+                  <Text style={ps.verifiedText}>Verified</Text>
                 </View>
-                <View style={[styles.linkedBadge, { backgroundColor: acc.linked ? '#F0FBF4' : '#F3F4F6' }]}>
-                  <Text style={[styles.linkedText, { color: acc.linked ? '#2D7D46' : '#6B7280' }]}>
-                    {acc.linked ? 'Linked' : 'Connect'}
+                <TouchableOpacity
+                  style={ps.editBtn}
+                  onPress={() =>
+                    Alert.alert('Edit Phone', 'Phone number change requires WhatsApp OTP verification.')
+                  }
+                  activeOpacity={0.7}
+                >
+                  <Text style={ps.editBtnText}>Edit</Text>
+                  <Ionicons name="chevron-forward" size={11} color={COLORS.info} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={ps.hr} />
+
+            {/* Email (masked) */}
+            <View style={[ps.fieldWrap, { paddingBottom: 16 }]}>
+              <Text style={ps.fieldLabel}>Email</Text>
+              <View style={ps.maskedRow}>
+                <Text style={ps.maskedValue}>{maskEmail(email)}</Text>
+                <View style={ps.verifiedPill}>
+                  <Ionicons name="checkmark-circle" size={12} color={COLORS.positive} />
+                  <Text style={ps.verifiedText}>Verified</Text>
+                </View>
+                <TouchableOpacity
+                  style={ps.editBtn}
+                  onPress={() =>
+                    Alert.alert('Edit Email', 'Email change requires OTP verification.')
+                  }
+                  activeOpacity={0.7}
+                >
+                  <Text style={ps.editBtnText}>Edit</Text>
+                  <Ionicons name="chevron-forward" size={11} color={COLORS.info} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          {/* ── Security ─────────────────────────────────────────────── */}
+          <SectionLabel title="SECURITY" />
+          <View style={ps.card}>
+            {/* Biometric */}
+            <View style={ps.toggleRow}>
+              <View style={ps.toggleLeft}>
+                <View style={ps.iconBox}>
+                  <Ionicons name="finger-print-outline" size={17} color={COLORS.textSecondary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={ps.toggleLabel}>Biometric &amp; screen lock</Text>
+                  <Text style={ps.toggleSub}>Face ID / Fingerprint on app open</Text>
+                </View>
+              </View>
+              <Switch
+                value={biometric}
+                onValueChange={setBiometric}
+                trackColor={{ false: COLORS.borderDefault, true: COLORS.brandPrimary }}
+                thumbColor={COLORS.white}
+                ios_backgroundColor={COLORS.borderDefault}
+              />
+            </View>
+
+            <View style={ps.hr} />
+
+            {/* PassKey 2FA */}
+            <View style={[ps.toggleRow, { borderBottomWidth: 0 }]}>
+              <View style={ps.toggleLeft}>
+                <View style={ps.iconBox}>
+                  <Ionicons name="key-outline" size={17} color={COLORS.textSecondary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={ps.toggleLabel}>PassKey (2FA)</Text>
+                  <Text style={ps.toggleSub}>
+                    {twoFA ? '4-digit passkey active' : 'Extra security for sensitive actions'}
                   </Text>
                 </View>
-              </TouchableOpacity>
-            ))}
+              </View>
+              <Switch
+                value={twoFA}
+                onValueChange={handle2FAToggle}
+                trackColor={{ false: COLORS.borderDefault, true: COLORS.brandPrimary }}
+                thumbColor={COLORS.white}
+                ios_backgroundColor={COLORS.borderDefault}
+              />
+            </View>
           </View>
 
-          <View style={{ height: 80 }} />
+          {/* ── Save Button ───────────────────────────────────────────── */}
+          <TouchableOpacity style={ps.saveBtn} onPress={handleSave} activeOpacity={0.85}>
+            <Text style={ps.saveBtnText}>Save Changes</Text>
+          </TouchableOpacity>
+
+          {/* ── Delete Account ────────────────────────────────────────── */}
+          <TouchableOpacity
+            style={ps.deleteTextBtn}
+            onPress={() => setShowDelete(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="trash-outline" size={14} color={COLORS.negative} />
+            <Text style={ps.deleteTextBtnLabel}>Delete Account</Text>
+          </TouchableOpacity>
+
+          <View style={{ height: 50 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* ── Modals ─────────────────────────────────────────────────────── */}
+      <DeleteAccountModal
+        visible={showDelete}
+        onClose={() => setShowDelete(false)}
+        phone={maskPhone(phone)}
+      />
+      <CreatePasskeyModal
+        visible={showPasskey}
+        onClose={() => setShowPasskey(false)}
+        onConfirm={() => { setTwoFA(true); setShowPasskey(false); }}
+      />
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: COLORS.pageBg },
-  header:  {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: SPACING.md, paddingVertical: 14,
-    backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+// ─────────────────────────────────────────────────────────────────────────────
+// SectionLabel (local utility)
+// ─────────────────────────────────────────────────────────────────────────────
+function SectionLabel({ title }: { title: string }) {
+  return (
+    <View style={ps.sectionLabelRow}>
+      <View style={ps.sectionAccent} />
+      <Text style={ps.sectionLabelText}>{title}</Text>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Styles
+// ─────────────────────────────────────────────────────────────────────────────
+const ps = StyleSheet.create({
+  safe:          { flex: 1, backgroundColor: COLORS.pageBg },
+  scroll:        { flex: 1 },
+  scrollContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm },
+
+  // ── Header ────────────────────────────────────────────────────────────────
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: SPACING.sm, paddingVertical: 10,
+    backgroundColor: COLORS.cardBg,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
-  backBtn:     { width: 40, alignItems: 'flex-start' },
-  headerTitle: { flex: 1, fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
-  saveBtn:     { paddingHorizontal: 14, paddingVertical: 6, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md },
-  saveBtnText: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
-  scroll: { flex: 1 },
+  backBtn:     { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary },
 
-  avatarSection:  { alignItems: 'center', paddingVertical: 24, gap: 12 },
-  avatarCircle:   { width: 80, height: 80, borderRadius: 40, backgroundColor: '#F59E0B', alignItems: 'center', justifyContent: 'center' },
-  avatarText:     { fontSize: 32, fontWeight: '800', color: COLORS.white },
-  changePhotoBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  changePhotoText:{ fontSize: TYPOGRAPHY.sm, color: COLORS.brandPrimary, fontWeight: '600' },
+  // ── Toast ──────────────────────────────────────────────────────────────────
+  toast:      { backgroundColor: COLORS.brandPrimary },
+  toastSaved: { backgroundColor: COLORS.positive },
+  toastInner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, paddingVertical: 12, paddingHorizontal: SPACING.md,
+  },
+  toastText: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
 
-  formCard:   { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, marginHorizontal: SPACING.md, marginBottom: SPACING.md, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
-  formTitle:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: SPACING.sm },
-  fieldWrap:  { paddingVertical: 12 },
-  fieldBorder:{ borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  fieldLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginBottom: 4 },
-  fieldInput: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, padding: 0 },
-  fieldDisabled: { color: COLORS.textTertiary },
+  // ── Section label ──────────────────────────────────────────────────────────
+  sectionLabelRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginTop: 20, marginBottom: 10,
+  },
+  sectionAccent:    { width: 3, height: 13, borderRadius: 2, backgroundColor: COLORS.brandPrimary },
+  sectionLabelText: {
+    fontSize: 10, fontWeight: '800', color: COLORS.textTertiary, letterSpacing: 1.2,
+  },
 
-  accountRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 },
-  accLeft:    { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  accLabel:   { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  accDetail:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
-  linkedBadge:{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  linkedText: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
+  // ── Card ──────────────────────────────────────────────────────────────────
+  card: {
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden',
+  },
+  hr: { height: 1, backgroundColor: COLORS.borderDefault, marginHorizontal: SPACING.md },
+
+  // ── Fields ────────────────────────────────────────────────────────────────
+  fieldWrap: { paddingHorizontal: SPACING.md, paddingTop: 14, paddingBottom: 10 },
+  fieldLabel: {
+    fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textTertiary,
+    letterSpacing: 0.4, marginBottom: 7,
+  },
+  fieldInput: {
+    fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, padding: 0, fontWeight: '500',
+  },
+
+  // Masked fields
+  maskedRow:    { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'nowrap' },
+  maskedValue:  { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, fontWeight: '500', flex: 1 },
+  verifiedPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: COLORS.positiveBg, borderRadius: RADIUS.full,
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderWidth: 1, borderColor: '#BBF7D0',
+  },
+  verifiedText: { fontSize: 10, color: COLORS.positive, fontWeight: '700' },
+  editBtn:      { flexDirection: 'row', alignItems: 'center', gap: 1, paddingHorizontal: 6, paddingVertical: 4 },
+  editBtnText:  { fontSize: TYPOGRAPHY.sm, color: COLORS.info, fontWeight: '600' },
+
+  // ── Security toggles ──────────────────────────────────────────────────────
+  toggleRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md, paddingVertical: 14,
+  },
+  toggleLeft:  { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  iconBox:     {
+    width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  toggleLabel: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
+  toggleSub:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+
+  // ── Buttons ───────────────────────────────────────────────────────────────
+  saveBtn: {
+    marginTop: 20, backgroundColor: COLORS.brandPrimary,
+    borderRadius: RADIUS.lg, paddingVertical: 16, alignItems: 'center',
+  },
+  saveBtnText: {
+    fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.white, letterSpacing: 0.4,
+  },
+
+  deleteTextBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, marginTop: 16, paddingVertical: 12,
+  },
+  deleteTextBtnLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.negative },
+
+  // ── Modal shared ──────────────────────────────────────────────────────────
+  modalOverlay: { flex: 1, backgroundColor: COLORS.overlay },
+  modalSheet: {
+    backgroundColor: COLORS.cardBg,
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: SPACING.lg, paddingTop: 12, paddingBottom: 8,
+  },
+  handle: {
+    width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.borderStrong,
+    alignSelf: 'center', marginBottom: 22,
+  },
+  modalTitle: {
+    fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary,
+    textAlign: 'center', marginBottom: 8,
+  },
+  modalSub: {
+    fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary,
+    textAlign: 'center', lineHeight: 20, marginBottom: 28,
+  },
+  changeLink: { color: COLORS.info, textDecorationLine: 'underline', fontWeight: '600' },
+
+  // ── PIN Boxes ─────────────────────────────────────────────────────────────
+  pinRow: {
+    flexDirection: 'row', justifyContent: 'center', gap: 14, marginBottom: 28,
+  },
+  pinBox: {
+    width: 62, height: 62, borderRadius: RADIUS.md,
+    borderWidth: 1.5, borderColor: COLORS.borderDefault,
+    backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center',
+  },
+  pinBoxFilled: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.cardBg },
+  pinDot:       { width: 14, height: 14, borderRadius: 7, backgroundColor: COLORS.brandPrimary },
+
+  // ── Modal buttons ─────────────────────────────────────────────────────────
+  modalBtn: {
+    borderRadius: RADIUS.lg, paddingVertical: 16,
+    alignItems: 'center', marginBottom: 4,
+  },
+  deleteBtnColor:  { backgroundColor: COLORS.negative },
+  confirmBtnColor: { backgroundColor: COLORS.brandPrimary },
+  btnDisabled:     { opacity: 0.30 },
+  modalBtnText:    { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.white },
+
+  resendRow: { alignItems: 'center', paddingVertical: 12, marginBottom: 10 },
+  resendText: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+
+  // ── Custom NumPad ─────────────────────────────────────────────────────────
+  numPad: {
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.md, overflow: 'hidden',
+    marginHorizontal: -4,
+  },
+  numRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  numKey: {
+    flex: 1, height: 54,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.cardBg,
+  },
+  numKeyEmpty: {
+    flex: 1, height: 54,
+    backgroundColor: COLORS.pageBg,
+  },
+  numKeyBorderR: { borderRightWidth: 1, borderRightColor: COLORS.borderDefault },
+  numKeyText:    { fontSize: TYPOGRAPHY.xl, fontWeight: '400', color: COLORS.textPrimary },
 });
