@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 
 const METHODS = ['Cash', 'Bank', 'Cheque', 'NEFT', 'RTGS', 'UPI'];
 const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -14,6 +15,7 @@ const voucherNo = 'PV-' + String(Math.floor(1000 + Math.random() * 9000));
 
 export default function CreatePaymentVoucher() {
   const router = useRouter();
+  const [entryType, setEntryType] = useState<EntryType>('regular');
   const [party, setParty] = useState('');
   const [invoice, setInvoice] = useState('');
   const [amount, setAmount] = useState('');
@@ -41,6 +43,7 @@ export default function CreatePaymentVoucher() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.hdrTitle}>Payment Voucher</Text>
+        <RegularOptionalToggle value={entryType} onChange={setEntryType} />
         <View style={s.vNoBox}><Text style={s.vNo}>{voucherNo}</Text></View>
       </View>
 

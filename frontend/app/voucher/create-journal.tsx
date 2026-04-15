@@ -7,12 +7,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 
 const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 const voucherNo = 'JV-' + String(Math.floor(1000 + Math.random() * 9000));
 
 export default function CreateJournalVoucher() {
   const router = useRouter();
+  const [entryType, setEntryType] = useState<EntryType>('regular');
   const [debitLedger, setDebitLedger] = useState('');
   const [creditLedger, setCreditLedger] = useState('');
   const [amount, setAmount] = useState('');
@@ -36,6 +38,7 @@ export default function CreateJournalVoucher() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.hdrTitle}>Journal Voucher</Text>
+        <RegularOptionalToggle value={entryType} onChange={setEntryType} />
         <View style={s.vNoBox}><Text style={s.vNo}>{voucherNo}</Text></View>
       </View>
 
