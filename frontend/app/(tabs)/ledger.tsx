@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, RefreshControl, Modal, KeyboardAvoidingView,
-  Platform, Linking,
+  Platform, Linking, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { Ionicons } from '@expo/vector-icons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useRouter } from 'expo-router';
@@ -668,9 +669,43 @@ export default function LedgerScreen() {
         }
       >
         <View style={styles.list}>
-          {filtered.map(item => (
-            <View key={item.id} style={styles.tileRow}>
-              {/* Main card — tappable to navigate */}
+          {filtered.map(item => {
+            const hasPhone = !!(item.phone);
+
+            const renderRightActions = (
+              _progress: Animated.AnimatedInterpolation<number>,
+              dragX: Animated.AnimatedInterpolation<number>
+            ) => {
+              const scale = dragX.interpolate({
+                inputRange: [-160, 0],
+                outputRange: [1, 0.5],
+                extrapolate: 'clamp',
+              });
+              return (
+                <Animated.View style={[styles.swipeActions, { transform: [{ scale }] }]}>
+                  {/* Call button */}
+                  <TouchableOpacity
+                    style={styles.callAction}
+                    onPress={() => Linking.openURL(`tel:${item.phone}`)}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="call" size={22} color="#fff" />
+                    <Text style={styles.actionLabel}>Call</Text>
+                  </TouchableOpacity>
+                  {/* WhatsApp button */}
+                  <TouchableOpacity
+                    style={styles.waAction}
+                    onPress={() => Linking.openURL(`https://wa.me/91${item.phone}`)}
+                    activeOpacity={0.85}
+                  >
+                    <FontAwesome5 name="whatsapp" size={22} color="#fff" />
+                    <Text style={styles.actionLabel}>WhatsApp</Text>
+                  </TouchableOpacity>
+                </Animated.View>
+              );
+            };
+
+            const cardContent = (
               <TouchableOpacity
                 testID={`ledger-item-${item.id}`}
                 style={styles.itemCard}
@@ -681,14 +716,12 @@ export default function LedgerScreen() {
                 <View style={styles.avatar}>
                   <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
                 </View>
-
                 {/* Info */}
                 <View style={styles.itemInfo}>
                   <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
                   <Text style={styles.itemGroup}>{item.group}</Text>
                 </View>
-
-                {/* Right: balance + badge */}
+                {/* Right: balance + Cr/Dr badge */}
                 <View style={styles.itemRight}>
                   <Text style={styles.itemBalance}>{item.balance}</Text>
                   <View style={[
@@ -704,32 +737,23 @@ export default function LedgerScreen() {
                   </View>
                 </View>
               </TouchableOpacity>
+            );
 
-              {/* Action buttons: Call + WhatsApp (only show if phone exists) */}
-              {item.phone ? (
-                <View style={styles.tileActions}>
-                  {/* Call */}
-                  <TouchableOpacity
-                    style={styles.callBtn}
-                    onPress={() => Linking.openURL(`tel:${item.phone}`)}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="call" size={15} color="#fff" />
-                  </TouchableOpacity>
-                  {/* WhatsApp */}
-                  <TouchableOpacity
-                    style={styles.waBtn}
-                    onPress={() => Linking.openURL(`https://wa.me/91${item.phone}`)}
-                    activeOpacity={0.8}
-                  >
-                    <FontAwesome5 name="whatsapp" size={15} color="#fff" />
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <View style={styles.tileActionsSpacer} />
-              )}
-            </View>
-          ))}
+            return hasPhone ? (
+              <Swipeable
+                key={item.id}
+                renderRightActions={renderRightActions}
+                rightThreshold={40}
+                overshootRight={false}
+                friction={2}
+                containerStyle={{ borderRadius: RADIUS.md, overflow: 'hidden' }}
+              >
+                {cardContent}
+              </Swipeable>
+            ) : (
+              <View key={item.id}>{cardContent}</View>
+            );
+          })}
 
           {filtered.length === 0 && (
             <View style={styles.emptyState}>
@@ -886,27 +910,30 @@ const styles = StyleSheet.create({
   sortBtnLabelActive: { color: COLORS.brandPrimary },
   scroll: { flex: 1 },
   list: { padding: SPACING.md, gap: 8 },
-  // Each row: card (flex:1) + stacked action buttons
-  tileRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   itemCard: {
-    flex: 1,
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md,
+    backgroundColor: COLORS.cardBg,
     padding: 14, borderWidth: 1, borderColor: COLORS.borderDefault,
   },
-  tileActions: { flexDirection: 'column', gap: 8 },
-  tileActionsSpacer: { width: 36 },
-  // Call — dark charcoal circle
-  callBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: COLORS.textPrimary,
-    alignItems: 'center', justifyContent: 'center',
+  // Swipe right-actions container
+  swipeActions: {
+    flexDirection: 'row',
+    marginBottom: 0,
   },
-  // WhatsApp — official green circle
-  waBtn: {
-    width: 36, height: 36, borderRadius: 18,
+  // Call action — dark charcoal
+  callAction: {
+    width: 80,
+    backgroundColor: COLORS.textPrimary,
+    alignItems: 'center', justifyContent: 'center', gap: 5,
+  },
+  // WhatsApp action — official green
+  waAction: {
+    width: 80,
     backgroundColor: '#25D366',
-    alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center', gap: 5,
+  },
+  actionLabel: {
+    fontSize: 11, fontWeight: '700', color: '#fff',
   },
   avatar: {
     width: 44, height: 44, borderRadius: 22,
