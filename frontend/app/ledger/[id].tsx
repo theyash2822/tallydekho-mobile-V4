@@ -9,6 +9,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_LEDGERS } from '../../src/data/mockData';
+import { TX_TO_DOC_TYPE } from '../../src/utils/documentHelpers';
 
 const SCREEN_W = Dimensions.get('window').width;
 
@@ -391,6 +392,14 @@ export default function LedgerDetailScreen() {
                         idx === monTxns.length - 1 && { borderBottomWidth: 0 },
                       ]}
                       activeOpacity={0.75}
+                      onPress={() => {
+                        const docType = TX_TO_DOC_TYPE[txn.type];
+                        router.push(
+                          docType
+                            ? `/document/${txn.voucher}?type=${docType}`
+                            : `/document/${txn.voucher}`
+                        );
+                      }}
                     >
                       {/* Date column — two lines */}
                       <View style={styles.txnDateCol}>
@@ -414,6 +423,9 @@ export default function LedgerDetailScreen() {
                         </Text>
                         <Text style={styles.txnBalance}>{txn.balance}</Text>
                       </View>
+
+                      {/* Tap indicator */}
+                      <Ionicons name="chevron-forward" size={13} color={COLORS.textTertiary} style={{ marginLeft: 2 }} />
                     </TouchableOpacity>
                   ))}
                 </View>
