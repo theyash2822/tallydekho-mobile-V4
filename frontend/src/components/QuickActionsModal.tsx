@@ -74,10 +74,10 @@ const SECTIONS = [
     label: 'Ledgers',
     icon: 'book-outline' as const,
     items: [
-      { id: 'led-creditors', label: 'Sundry Creditors', route: '/ledger/sundry-creditors', icon: 'person-add-outline' as const },
-      { id: 'led-debtors',   label: 'Sundry Debtors',   route: '/ledger/sundry-debtors',   icon: 'person-outline' as const },
-      { id: 'led-taxes',     label: 'Duties & Taxes',   route: '/ledger/duties-taxes',     icon: 'pricetag-outline' as const },
-      { id: 'led-custom',    label: 'Custom Groups',    route: '/ledger/custom-groups',    icon: 'settings-outline' as const },
+      { id: 'led-creditors', label: 'Sundry Creditors', route: '/ledger/create?type=sundry_creditor', icon: 'person-add-outline' as const },
+      { id: 'led-debtors',   label: 'Sundry Debtors',   route: '/ledger/create?type=sundry_debtor',   icon: 'person-outline' as const },
+      { id: 'led-taxes',     label: 'Duties & Taxes',   route: '/ledger/create?type=duties_taxes',    icon: 'pricetag-outline' as const },
+      { id: 'led-custom',    label: 'Custom Groups',    route: '/ledger/create?type=custom',          icon: 'settings-outline' as const },
     ],
   },
 ];
