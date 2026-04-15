@@ -1063,7 +1063,7 @@ const cs = StyleSheet.create({
 
 // Filter Modal Styles — two-panel design
 const fm = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end' },
+  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet: {
     backgroundColor: COLORS.cardBg,
     borderTopLeftRadius: 20, borderTopRightRadius: 20,
