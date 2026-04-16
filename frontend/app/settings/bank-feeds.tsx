@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Modal, ActivityIndicator, Vibration,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -142,7 +143,10 @@ function BankFormSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={bfs.overlay}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={bfs.overlay}
+      >
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
         <View style={bfs.sheet}>
           <View style={bfs.handle} />
@@ -250,7 +254,7 @@ function BankFormSheet({
           </TouchableOpacity>
           <View style={{ height: 24 }} />
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
