@@ -11,7 +11,8 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "Scan vendor bills to auto-fill purchase invoices"
+        "NSCameraUsageDescription": "Scan vendor bills to auto-fill purchase invoices",
+        "NSPhotoLibraryUsageDescription": "Upload your company logo from photo library"
       }
     },
     "android": {
