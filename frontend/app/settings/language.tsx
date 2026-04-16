@@ -81,7 +81,7 @@ const COUNTRY_TZ: Record<string, TzOption[]> = {
 
 const COUNTRIES  = Object.keys(COUNTRY_TZ).sort();
 const WEEK_DAYS  = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const DATE_FMTS  = ['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD', 'DD-MM-YYYY'];
+// Date format moved to Currency & Number Format screen
 
 // ── Generic Picker Bottom Sheet ───────────────────────────────────────────────
 type PickerItem = { value: string; label: string; sublabel?: string };
@@ -170,7 +170,6 @@ export default function LanguageRegionScreen() {
   const [country,    setCountry]    = useState('India');
   const [timezone,   setTimezone]   = useState('UTC+05:30 · Asia/Kolkata');
   const [weekday,    setWeekday]    = useState('Monday');
-  const [dateFormat, setDateFormat] = useState('DD/MM/YYYY');
   const [picker,     setPicker]     = useState<ActivePicker>(null);
 
   const langObj   = LANGUAGES.find(l => l.value === lang);
@@ -255,26 +254,6 @@ export default function LanguageRegionScreen() {
           />
         </View>
 
-        {/* ── Date Format ── */}
-        <View style={s.card}>
-          <View style={s.cardHdr}>
-            <Ionicons name="calendar-outline" size={18} color={COLORS.textSecondary} />
-            <Text style={s.cardTitle}>Date Format</Text>
-          </View>
-          <View style={s.chips}>
-            {DATE_FMTS.map(f => (
-              <TouchableOpacity
-                key={f}
-                style={[s.chip, dateFormat === f && s.chipActive]}
-                onPress={() => setDateFormat(f)}
-                activeOpacity={0.75}
-              >
-                <Text style={[s.chipTxt, dateFormat === f && s.chipTxtActive]}>{f}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
         {/* ── Save ── */}
         <TouchableOpacity style={s.saveBtn} onPress={handleSave} activeOpacity={0.85}>
           <Text style={s.saveTxt}>Save Changes</Text>
@@ -330,11 +309,6 @@ const s = StyleSheet.create({
   card:         { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault, gap: SPACING.md },
   cardHdr:      { flexDirection: 'row', alignItems: 'center', gap: 8 },
   cardTitle:    { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-  chips:        { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip:         { paddingHorizontal: 14, paddingVertical: 10, borderRadius: RADIUS.md, backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault },
-  chipActive:   { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
-  chipTxt:      { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '500' },
-  chipTxtActive:{ color: COLORS.white, fontWeight: '700' },
   saveBtn:      { backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.lg, paddingVertical: 16, alignItems: 'center' },
   saveTxt:      { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
 });
