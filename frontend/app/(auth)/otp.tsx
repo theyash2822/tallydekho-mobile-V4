@@ -12,15 +12,76 @@ import { useAuth } from '../../src/context/AuthContext';
 
 const OTP_LENGTH = 4;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// OTP Box: View+Text display with an invisible TextInput for keyboard events.
+// This is the most reliable cross-platform way to get perfectly centred digits.
+// ─────────────────────────────────────────────────────────────────────────────
+function OTPBox({
+  digit, filled, hasError, isFocused,
+  onSetRef, onChangeText, onKeyPress, onFocus,
+}: {
+  digit: string;
+  filled: boolean;
+  hasError: boolean;
+  isFocused: boolean;
+  onSetRef: (ref: TextInput | null) => void;
+  onChangeText: (t: string) => void;
+  onKeyPress: (e: any) => void;
+  onFocus: () => void;
+}) {
+  const localRef = useRef<TextInput>(null);
+
+  const handlePress = () => localRef.current?.focus();
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.otpBox,
+        filled   && styles.otpBoxFilled,
+        hasError && styles.otpBoxError,
+        isFocused && styles.otpBoxFocused,
+      ]}
+      onPress={handlePress}
+      activeOpacity={0.9}
+    >
+      {/* Perfectly centred digit via flexbox — no iOS alignment issues */}
+      <Text style={styles.otpDigit}>{digit}</Text>
+
+      {/* Blinking cursor bar when focused + empty */}
+      {isFocused && !digit ? <View style={styles.cursor} /> : null}
+
+      {/* Invisible TextInput that captures keyboard events */}
+      <TextInput
+        ref={ref => { (localRef as any).current = ref; onSetRef(ref); }}
+        style={styles.hiddenInput}
+        value={digit}
+        onChangeText={onChangeText}
+        onKeyPress={onKeyPress}
+        onFocus={onFocus}
+        keyboardType="number-pad"
+        maxLength={1}
+        caretHidden
+        selectTextOnFocus={false}
+      />
+    </TouchableOpacity>
+  );
+}
+
 export default function OTPScreen() {
   const router = useRouter();
   const { phone } = useLocalSearchParams<{ phone: string }>();
   const { signIn } = useAuth();
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
+  const [focusedIdx, setFocusedIdx] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState(30);
   const inputRefs = useRef<(TextInput | null)[]>([]);
+
+  // Auto-focus first box on mount
+  useEffect(() => {
+    setTimeout(() => inputRefs.current[0]?.focus(), 400);
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setCountdown(c => (c > 0 ? c - 1 : 0)), 1000);
@@ -35,15 +96,22 @@ export default function OTPScreen() {
     setError('');
     if (digit && idx < OTP_LENGTH - 1) {
       inputRefs.current[idx + 1]?.focus();
+      setFocusedIdx(idx + 1);
     }
   };
 
   const handleKeyPress = (key: string, idx: number) => {
-    if (key === 'Backspace' && !otp[idx] && idx > 0) {
-      inputRefs.current[idx - 1]?.focus();
+    if (key === 'Backspace') {
       const newOtp = [...otp];
-      newOtp[idx - 1] = '';
-      setOtp(newOtp);
+      if (otp[idx]) {
+        newOtp[idx] = '';
+        setOtp(newOtp);
+      } else if (idx > 0) {
+        newOtp[idx - 1] = '';
+        setOtp(newOtp);
+        inputRefs.current[idx - 1]?.focus();
+        setFocusedIdx(idx - 1);
+      }
     }
   };
 
@@ -59,8 +127,6 @@ export default function OTPScreen() {
       const res = await verifyOTP(phone || '', code) as any;
       if (res?.token) {
         if (res?.isNewUser) {
-          // Don't call signIn() yet - user must complete registration first
-          // Pass token as param so register/tally-sync can signIn after full onboarding
           router.replace({ pathname: '/(auth)/register', params: { phone, token: res.token } });
         } else {
           await signIn(res.token);
@@ -80,7 +146,9 @@ export default function OTPScreen() {
     if (countdown > 0) return;
     setCountdown(30);
     setOtp(Array(OTP_LENGTH).fill(''));
+    setFocusedIdx(0);
     await sendOTP(phone || '');
+    setTimeout(() => inputRefs.current[0]?.focus(), 300);
   };
 
   return (
@@ -105,17 +173,16 @@ export default function OTPScreen() {
             {/* OTP Boxes */}
             <View style={styles.otpRow}>
               {otp.map((digit, idx) => (
-                <TextInput
+                <OTPBox
                   key={idx}
-                  testID={`otp-input-${idx}`}
-                  ref={ref => { inputRefs.current[idx] = ref; }}
-                  style={[styles.otpBox, digit && styles.otpBoxFilled, error && styles.otpBoxError]}
-                  value={digit}
+                  digit={digit}
+                  filled={!!digit}
+                  hasError={!!error}
+                  isFocused={focusedIdx === idx}
+                  onSetRef={ref => { inputRefs.current[idx] = ref; }}
                   onChangeText={text => handleChange(text, idx)}
                   onKeyPress={({ nativeEvent: { key } }) => handleKeyPress(key, idx)}
-                  keyboardType="number-pad"
-                  maxLength={1}
-                  textAlign="center"
+                  onFocus={() => setFocusedIdx(idx)}
                 />
               ))}
             </View>
@@ -214,16 +281,40 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     justifyContent: 'center',
   },
+  // ── New OTP Box: View+Text approach for perfect iOS/Android centering ──────
   otpBox: {
     width: 64,
     height: 64,
     borderWidth: 1.5,
     borderColor: COLORS.borderDefault,
     borderRadius: RADIUS.md,
-    fontSize: TYPOGRAPHY.xxl,
+    backgroundColor: COLORS.pageBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  otpBoxFilled: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.activeBg },
+  otpBoxFocused: { borderColor: COLORS.brandPrimary, borderWidth: 2 },
+  otpDigit: {
+    fontSize: 28,
     fontWeight: '700',
     color: COLORS.textPrimary,
-    backgroundColor: COLORS.pageBg,
+    includeFontPadding: false,
+  },
+  // Blinking cursor bar shown when box is focused but empty
+  cursor: {
+    width: 2,
+    height: 28,
+    backgroundColor: COLORS.brandPrimary,
+    borderRadius: 1,
+  },
+  // The actual keyboard-capturing input — completely invisible
+  hiddenInput: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    opacity: 0,
+    color: 'transparent',
   },
   otpBoxFilled: {
     borderColor: COLORS.brandPrimary,

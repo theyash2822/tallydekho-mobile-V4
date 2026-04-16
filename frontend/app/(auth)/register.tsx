@@ -19,22 +19,24 @@ export default function RegisterScreen() {
   const { phone, token } = useLocalSearchParams<{ phone: string; token: string }>();
   const { signIn } = useAuth();
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [language, setLanguage] = useState('English');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [langModal, setLangModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const canProceed = name.trim().length > 1 && termsAccepted;
+  const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
+  const canProceed = name.trim().length > 1 && isValidEmail(email) && termsAccepted;
 
   const handleLogin = async () => {
     if (!canProceed) return;
     setLoading(true);
     setError('');
     try {
-      const res = await registerUser({ name: name.trim(), language, phone: phone || '' }) as any;
+      const res = await registerUser({ name: name.trim(), email: email.trim(), language, phone: phone || '' }) as any;
       if (res?.token) {
-        await AsyncStorage.setItem('user_data', JSON.stringify({ name: name.trim(), language, phone }));
+        await AsyncStorage.setItem('user_data', JSON.stringify({ name: name.trim(), email: email.trim(), language, phone }));
         router.replace('/(auth)/tally-sync');
       } else {
         setError('Registration failed. Please retry.');
@@ -71,6 +73,22 @@ export default function RegisterScreen() {
               value={name}
               onChangeText={setName}
               autoCapitalize="words"
+              returnKeyType="next"
+            />
+
+            {/* Email */}
+            <Text style={styles.label}>Email Address</Text>
+            <TextInput
+              testID="email-input"
+              style={styles.input}
+              placeholder="yourname@example.com"
+              placeholderTextColor={COLORS.textTertiary}
+              value={email}
+              onChangeText={t => setEmail(t.toLowerCase())}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="next"
             />
 
             {/* Language Selector */}
