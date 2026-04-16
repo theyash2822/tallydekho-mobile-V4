@@ -10,7 +10,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { verifyOTP, sendOTP } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 
-const OTP_LENGTH = 6;
+const OTP_LENGTH = 4;
 
 export default function OTPScreen() {
   const router = useRouter();
@@ -99,7 +99,7 @@ export default function OTPScreen() {
 
           {/* Card */}
           <View style={styles.card}>
-            <Text style={styles.heading}>We've sent code to{'\n'}your WhatsApp number</Text>
+            <Text style={styles.heading}>We've sent a 4-digit{'\n'}code to your WhatsApp</Text>
             <Text style={styles.subHeading}>Code has been sent to {phone}</Text>
 
             {/* OTP Boxes */}
@@ -210,17 +210,17 @@ const styles = StyleSheet.create({
   },
   otpRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 14,
     marginBottom: SPACING.sm,
-    justifyContent: 'space-between',
+    justifyContent: 'center',
   },
   otpBox: {
-    width: 44,
-    height: 52,
+    width: 64,
+    height: 64,
     borderWidth: 1.5,
     borderColor: COLORS.borderDefault,
     borderRadius: RADIUS.md,
-    fontSize: TYPOGRAPHY.xl,
+    fontSize: TYPOGRAPHY.xxl,
     fontWeight: '700',
     color: COLORS.textPrimary,
     backgroundColor: COLORS.pageBg,

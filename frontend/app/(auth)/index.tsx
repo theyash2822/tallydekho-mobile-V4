@@ -132,7 +132,7 @@ export default function LoginScreen() {
           {/* ── Card ── */}
           <View style={styles.card}>
             <Text style={styles.heading}>Enter your{'\n'}WhatsApp Number</Text>
-            <Text style={styles.subHeading}>We'll send you a 6-digit OTP to verify</Text>
+            <Text style={styles.subHeading}>We'll send you a 4-digit OTP to verify</Text>
 
             {/* ── Phone Input Row ── */}
             <View style={[styles.inputRow, !!error && styles.inputError]}>

@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 // Mock data
@@ -216,8 +217,9 @@ export default function TallySyncScreen() {
       return;
     }
     setPairState('awaiting');
-    setTimeout(() => {
+    setTimeout(async () => {
       setPairState('paired');
+      await AsyncStorage.setItem('isTallyPaired', 'true');
       Toast.show({ type: 'success', text1: 'Tally Paired!', text2: 'TallyDekho is now connected.' });
     }, 2200);
   };
@@ -230,10 +232,11 @@ export default function TallySyncScreen() {
     }, 2000);
   };
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
     setPairState('idle');
     setCode(Array(6).fill(''));
     setShowDisconnect(false);
+    await AsyncStorage.removeItem('isTallyPaired');
     Toast.show({ type: 'info', text1: 'Disconnected', text2: 'Tally sync has been removed.' });
   };
 

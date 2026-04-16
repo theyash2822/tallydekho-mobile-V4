@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  RefreshControl, FlatList,
+  RefreshControl, FlatList, AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import Header from '../../src/components/Header';
 import CashflowCard from '../../src/components/CashflowCard';
@@ -37,6 +38,21 @@ export default function HomeScreen() {
   const [cashflow, setCashflow] = useState(MOCK_CASHFLOW);
   const [activity, setActivity] = useState(MOCK_RECENT_ACTIVITY);
   const [refreshing, setRefreshing] = useState(false);
+  const [isTallyPaired, setIsTallyPaired] = useState(false);
+
+  // Check Tally pairing status on mount + whenever app comes to foreground
+  const checkPaired = useCallback(async () => {
+    const val = await AsyncStorage.getItem('isTallyPaired');
+    setIsTallyPaired(val === 'true');
+  }, []);
+
+  useEffect(() => {
+    checkPaired();
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') checkPaired();
+    });
+    return () => sub.remove();
+  }, [checkPaired]);
 
   // When FY changes, update dashboard data from FY_DASHBOARD lookup table
   const handleFYChange = useCallback((fy: string) => {
@@ -67,7 +83,7 @@ export default function HomeScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    await Promise.all([loadData(), checkPaired()]);
     setRefreshing(false);
   };
 
@@ -111,19 +127,21 @@ export default function HomeScreen() {
         style={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.brandPrimary} />}
       >
-        {/* Tally Sync Banner */}
-        <TouchableOpacity testID="sync-banner" style={styles.syncBanner} activeOpacity={0.8} onPress={() => router.push('/settings/tally-sync' as any)}>
-          <View style={styles.syncBannerLeft}>
-            <View style={styles.syncIconBox}>
-              <Ionicons name="sync" size={18} color={COLORS.white} />
+        {/* Tally Sync Banner — only shown when NOT yet paired */}
+        {!isTallyPaired && (
+          <TouchableOpacity testID="sync-banner" style={styles.syncBanner} activeOpacity={0.8} onPress={() => router.push('/settings/tally-sync' as any)}>
+            <View style={styles.syncBannerLeft}>
+              <View style={styles.syncIconBox}>
+                <Ionicons name="sync" size={18} color={COLORS.white} />
+              </View>
+              <View>
+                <Text style={styles.syncTitle}>Sync your account with Tally!</Text>
+                <Text style={styles.syncSubtitle}>Sync for seamless management!</Text>
+              </View>
             </View>
-            <View>
-              <Text style={styles.syncTitle}>Sync your account with Tally!</Text>
-              <Text style={styles.syncSubtitle}>Sync for seamless management!</Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={COLORS.white} />
-        </TouchableOpacity>
+            <Ionicons name="chevron-forward" size={18} color={COLORS.white} />
+          </TouchableOpacity>
+        )}
 
         {/* KPI Horizontal Strip */}
         <View style={styles.kpiSection}>
