@@ -257,7 +257,7 @@ function BillingDetailsSheet({ visible, onClose, onSuccess }: {
 }
 const bd = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet:   { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: SPACING.md, paddingTop: 12, maxHeight: '90%' },
+  sheet:   { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: SPACING.md, paddingTop: 12, maxHeight: '92%', paddingBottom: 40 },
   handle:  { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
   header:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   title:   { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary },
@@ -284,90 +284,72 @@ const bd = StyleSheet.create({
 });
 
 // ── Buy Credit Sheet ──────────────────────────────────────────────────────────
-function BuyCreditSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const [selected,       setSelected]       = useState('c500');
-  const [showBilling,    setShowBilling]    = useState(false);
-
-  const handleBuyNow = () => setShowBilling(true);
-
-  const handleBillingSuccess = () => {
-    const pkg = CREDIT_PACKAGES.find(p => p.id === selected);
-    onClose();
-    setTimeout(() => {
-      Toast.show({
-        type: 'success',
-        text1: 'Credits Added!',
-        text2: `${pkg?.credits} credits have been added to your account.`,
-        visibilityTime: 3500,
-      });
-    }, 300);
-  };
+function BuyCreditSheet({ visible, onClose, onBuyNow }: {
+  visible: boolean; onClose: () => void; onBuyNow: () => void;
+}) {
+  const [selected, setSelected] = useState('c500');
 
   return (
-    <>
-      <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-        <View style={bc.overlay}>
-          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
-          <View style={bc.sheet}>
-            <View style={bc.handle} />
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={bc.overlay}>
+        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
+        <View style={bc.sheet}>
+          <View style={bc.handle} />
 
-            {/* Header */}
-            <View style={bc.header}>
-              <View>
-                <Text style={bc.title}>Buy Credit</Text>
-                <Text style={bc.sub}>Add credit to your account</Text>
-              </View>
-              <TouchableOpacity onPress={onClose} style={bc.closeBtn} activeOpacity={0.7}>
-                <Ionicons name="close" size={18} color={COLORS.textSecondary} />
-              </TouchableOpacity>
+          {/* Header */}
+          <View style={bc.header}>
+            <View>
+              <Text style={bc.title}>Buy Credit</Text>
+              <Text style={bc.sub}>Add credit to your account</Text>
             </View>
-
-            {/* Credit packages */}
-            <Text style={bc.sectionLabel}>Choose a credit</Text>
-            {CREDIT_PACKAGES.map(pkg => {
-              const isSelected = selected === pkg.id;
-              return (
-                <TouchableOpacity key={pkg.id} style={[bc.packageRow, isSelected && bc.packageRowActive]} onPress={() => setSelected(pkg.id)} activeOpacity={0.8}>
-                  <View style={[bc.radio, isSelected && bc.radioActive]}>
-                    {isSelected && <View style={bc.radioDot} />}
-                  </View>
-                  <Text style={[bc.packageLabel, isSelected && bc.packageLabelActive]}>{pkg.label}</Text>
-                  <Text style={[bc.packagePrice, isSelected && bc.packagePriceActive]}>{pkg.priceLabel}</Text>
-                </TouchableOpacity>
-              );
-            })}
-
-            {/* Buy Now */}
-            <TouchableOpacity style={bc.buyBtn} onPress={handleBuyNow} activeOpacity={0.85}>
-              <Text style={bc.buyBtnText}>Buy Now</Text>
+            <TouchableOpacity onPress={onClose} style={bc.closeBtn} activeOpacity={0.7}>
+              <Ionicons name="close" size={18} color={COLORS.textSecondary} />
             </TouchableOpacity>
-
-            {/* Purchase History */}
-            <Text style={bc.sectionLabel}>Purchase History</Text>
-            <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
-              {MOCK_HISTORY.map(item => (
-                <View key={item.id} style={bc.historyRow}>
-                  <View style={bc.historyIcon}>
-                    <Ionicons name={item.icon as any} size={16} color={COLORS.textSecondary} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={bc.historyInv}>{item.inv}</Text>
-                    <Text style={bc.historyDate}>{item.date}</Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={bc.historyAmt}>{item.amount}</Text>
-                    <Text style={bc.historyType}>{item.type}</Text>
-                  </View>
-                </View>
-              ))}
-              <View style={{ height: 16 }} />
-            </ScrollView>
           </View>
-        </View>
-      </Modal>
 
-      <BillingDetailsSheet visible={showBilling} onClose={() => setShowBilling(false)} onSuccess={handleBillingSuccess} />
-    </>
+          {/* Credit packages */}
+          <Text style={bc.sectionLabel}>Choose a credit</Text>
+          {CREDIT_PACKAGES.map(pkg => {
+            const isSelected = selected === pkg.id;
+            return (
+              <TouchableOpacity key={pkg.id} style={[bc.packageRow, isSelected && bc.packageRowActive]} onPress={() => setSelected(pkg.id)} activeOpacity={0.8}>
+                <View style={[bc.radio, isSelected && bc.radioActive]}>
+                  {isSelected && <View style={bc.radioDot} />}
+                </View>
+                <Text style={[bc.packageLabel, isSelected && bc.packageLabelActive]}>{pkg.label}</Text>
+                <Text style={[bc.packagePrice, isSelected && bc.packagePriceActive]}>{pkg.priceLabel}</Text>
+              </TouchableOpacity>
+            );
+          })}
+
+          {/* Buy Now */}
+          <TouchableOpacity style={bc.buyBtn} onPress={onBuyNow} activeOpacity={0.85}>
+            <Text style={bc.buyBtnText}>Buy Now</Text>
+          </TouchableOpacity>
+
+          {/* Purchase History */}
+          <Text style={bc.sectionLabel}>Purchase History</Text>
+          <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
+            {MOCK_HISTORY.map(item => (
+              <View key={item.id} style={bc.historyRow}>
+                <View style={bc.historyIcon}>
+                  <Ionicons name={item.icon as any} size={16} color={COLORS.textSecondary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={bc.historyInv}>{item.inv}</Text>
+                  <Text style={bc.historyDate}>{item.date}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={bc.historyAmt}>{item.amount}</Text>
+                  <Text style={bc.historyType}>{item.type}</Text>
+                </View>
+              </View>
+            ))}
+            <View style={{ height: 16 }} />
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 }
 const bc = StyleSheet.create({
