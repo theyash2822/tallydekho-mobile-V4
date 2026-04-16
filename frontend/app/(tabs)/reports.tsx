@@ -8,9 +8,8 @@ import Svg, {
 } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import Header from '../../src/components/Header';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { MOCK_REPORTS, MOCK_USER } from '../../src/data/mockData';
+import { MOCK_REPORTS } from '../../src/data/mockData';
 
 const SCREEN_W = Dimensions.get('window').width;
 // Card width (screen - outer margins). Content area inside card (card - card padding).
@@ -482,23 +481,16 @@ export default function ReportsScreen() {
 
   return (
     <SafeAreaView testID="reports-screen" style={styles.safe}>
-      <Header
-        companyName={MOCK_USER.company}
-        fyYear={MOCK_USER.fyYear}
-        notificationCount={1}
-        userName={MOCK_USER.name}
-      />
+      {/* Page Header — mirrors Ledger screen style */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Reports</Text>
+      </View>
 
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        {/* Compact page sub-header */}
-        <View style={styles.pageHeader}>
-          <Text style={styles.pageTitle}>Reports</Text>
-          <Text style={styles.pageSubtitle}>Financial Year {MOCK_USER.fyYear}</Text>
-        </View>
 
         {/* ── 1. Financial ───────────────────────────────────────────────── */}
         <SectionCard iconName="stats-chart-outline" title="Financial" onPress={() => router.push('/reports/financial' as any)}>
@@ -550,28 +542,22 @@ export default function ReportsScreen() {
 const styles = StyleSheet.create({
   safe:    { flex: 1, backgroundColor: COLORS.pageBg },
   scroll:  { flex: 1 },
-  content: { paddingTop: 0 },
+  content: { paddingTop: SPACING.md },
 
-  // Compact sub-header below the global Header
-  pageHeader: {
+  // Page header — mirrors Ledger screen
+  header: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.md,
     paddingVertical: 12,
+    backgroundColor: COLORS.cardBg,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderDefault,
-    backgroundColor: COLORS.cardBg,
-    marginBottom: SPACING.md,
   },
-  pageTitle: {
-    fontSize: TYPOGRAPHY.md,
+  headerTitle: {
+    fontSize: TYPOGRAPHY.lg,
     fontWeight: '700',
     color: COLORS.textPrimary,
-  },
-  pageSubtitle: {
-    fontSize: TYPOGRAPHY.xs,
-    color: COLORS.textSecondary,
-    fontWeight: '500',
   },
 });
