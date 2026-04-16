@@ -112,7 +112,7 @@ const sp = StyleSheet.create({
   rowTextActive:{ color: COLORS.white, fontWeight: '700' },
 });
 
-// ── Billing Details Sheet ─────────────────────────────────────────────────────
+// ── Billing Details Full-Screen Modal ─────────────────────────────────────────
 function BillingDetailsSheet({ visible, onClose, onSuccess }: {
   visible: boolean; onClose: () => void; onSuccess: () => void;
 }) {
@@ -150,135 +150,144 @@ function BillingDetailsSheet({ visible, onClose, onSuccess }: {
   };
 
   const canSubmit = name.trim() && email.trim() && mobile.trim();
-  const bottomPad = Math.max(insets.bottom, 20);
 
   return (
     <>
-      <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-        <View style={bd.overlay}>
-          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-            <View style={[bd.sheet, { paddingBottom: bottomPad }]}>
-              {/* Handle + Header */}
-              <View style={bd.handle} />
-              <View style={bd.header}>
-                <View>
-                  <Text style={bd.title}>Billing Details</Text>
-                  <Text style={bd.sub}>Fill the form for information</Text>
-                </View>
-                <TouchableOpacity onPress={onClose} style={bd.closeBtn} activeOpacity={0.7}>
-                  <Ionicons name="close" size={18} color={COLORS.textSecondary} />
+      {/* Full-screen modal — completely covers everything, zero transparency */}
+      <Modal
+        visible={visible}
+        transparent={false}
+        animationType="slide"
+        onRequestClose={onClose}
+        statusBarTranslucent
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1, backgroundColor: COLORS.pageBg }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          {/* ── Navigation Header ── */}
+          <View style={[bd.navBar, { paddingTop: insets.top + 8 }]}>
+            <TouchableOpacity onPress={onClose} style={bd.backBtn} activeOpacity={0.7}>
+              <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
+            </TouchableOpacity>
+            <View style={bd.navCenter}>
+              <Text style={bd.navTitle}>Billing Details</Text>
+              <Text style={bd.navSub}>Fill the form for information</Text>
+            </View>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={[bd.scrollContent, { paddingBottom: insets.bottom + 24 }]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Name */}
+            <View style={bd.field}>
+              <Text style={bd.fieldLabel}>Name <Text style={bd.req}>*</Text></Text>
+              <TextInput style={bd.input} value={name} onChangeText={setName} placeholder="Enter your name" placeholderTextColor={COLORS.textTertiary} selectionColor={COLORS.brandPrimary} />
+            </View>
+
+            {/* Email + Mobile */}
+            <View style={bd.row2}>
+              <View style={[bd.field, { flex: 1 }]}>
+                <Text style={bd.fieldLabel}>Email <Text style={bd.req}>*</Text></Text>
+                <TextInput style={bd.input} value={email} onChangeText={setEmail} placeholder="email@example.com" placeholderTextColor={COLORS.textTertiary} keyboardType="email-address" autoCapitalize="none" selectionColor={COLORS.brandPrimary} />
+              </View>
+              <View style={[bd.field, { flex: 1 }]}>
+                <Text style={bd.fieldLabel}>Mobile <Text style={bd.req}>*</Text></Text>
+                <TextInput style={bd.input} value={mobile} onChangeText={t => setMobile(t.replace(/[^0-9]/g, '').slice(0, 10))} placeholder="10-digit number" placeholderTextColor={COLORS.textTertiary} keyboardType="phone-pad" selectionColor={COLORS.brandPrimary} />
+              </View>
+            </View>
+
+            {/* Company Info (Optional) */}
+            <View style={bd.sectionHeader}>
+              <Text style={bd.sectionTitle}>COMPANY INFORMATION</Text>
+              <Text style={bd.optional}>(Optional)</Text>
+            </View>
+
+            {/* Company Name */}
+            <View style={bd.field}>
+              <Text style={bd.fieldLabel}>Company Name</Text>
+              <TextInput style={bd.input} value={companyName} onChangeText={setCompanyName} placeholder="Enter company name" placeholderTextColor={COLORS.textTertiary} selectionColor={COLORS.brandPrimary} />
+            </View>
+
+            {/* State + GST */}
+            <View style={bd.row2}>
+              <View style={[bd.field, { flex: 1 }]}>
+                <Text style={bd.fieldLabel}>State <Text style={bd.req}>*</Text></Text>
+                <TouchableOpacity style={bd.dropdown} onPress={() => setShowStates(true)} activeOpacity={0.7}>
+                  <Text style={[bd.dropdownText, !state && { color: COLORS.textTertiary }]} numberOfLines={1}>{state || 'Select state'}</Text>
+                  <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
                 </TouchableOpacity>
               </View>
-
-              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                {/* Name */}
-                <View style={bd.field}>
-                  <Text style={bd.fieldLabel}>Name <Text style={bd.req}>*</Text></Text>
-                  <TextInput style={bd.input} value={name} onChangeText={setName} placeholder="Enter your name" placeholderTextColor={COLORS.textTertiary} selectionColor={COLORS.brandPrimary} />
-                </View>
-
-                {/* Email + Mobile */}
-                <View style={bd.row2}>
-                  <View style={[bd.field, { flex: 1 }]}>
-                    <Text style={bd.fieldLabel}>Email <Text style={bd.req}>*</Text></Text>
-                    <TextInput style={bd.input} value={email} onChangeText={setEmail} placeholder="email@example.com" placeholderTextColor={COLORS.textTertiary} keyboardType="email-address" autoCapitalize="none" selectionColor={COLORS.brandPrimary} />
-                  </View>
-                  <View style={[bd.field, { flex: 1 }]}>
-                    <Text style={bd.fieldLabel}>Mobile <Text style={bd.req}>*</Text></Text>
-                    <TextInput style={bd.input} value={mobile} onChangeText={t => setMobile(t.replace(/[^0-9]/g, '').slice(0, 10))} placeholder="10-digit number" placeholderTextColor={COLORS.textTertiary} keyboardType="phone-pad" selectionColor={COLORS.brandPrimary} />
-                  </View>
-                </View>
-
-                {/* Company Info (Optional) */}
-                <View style={bd.sectionHeader}>
-                  <Text style={bd.sectionTitle}>COMPANY INFORMATION</Text>
-                  <Text style={bd.optional}>(Optional)</Text>
-                </View>
-
-                {/* Company Name */}
-                <View style={bd.field}>
-                  <Text style={bd.fieldLabel}>Company Name</Text>
-                  <TextInput style={bd.input} value={companyName} onChangeText={setCompanyName} placeholder="Enter company name" placeholderTextColor={COLORS.textTertiary} selectionColor={COLORS.brandPrimary} />
-                </View>
-
-                {/* State + GST */}
-                <View style={bd.row2}>
-                  <View style={[bd.field, { flex: 1 }]}>
-                    <Text style={bd.fieldLabel}>State <Text style={bd.req}>*</Text></Text>
-                    <TouchableOpacity style={bd.dropdown} onPress={() => setShowStates(true)} activeOpacity={0.7}>
-                      <Text style={[bd.dropdownText, !state && { color: COLORS.textTertiary }]} numberOfLines={1}>{state || 'Select state'}</Text>
-                      <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
-                    </TouchableOpacity>
-                  </View>
-                  <View style={[bd.field, { flex: 1 }]}>
-                    <Text style={bd.fieldLabel}>GST Number</Text>
-                    <TextInput style={bd.input} value={gst} onChangeText={setGst} placeholder="27AAJCR..." placeholderTextColor={COLORS.textTertiary} autoCapitalize="characters" selectionColor={COLORS.brandPrimary} />
-                  </View>
-                </View>
-
-                {/* Address */}
-                <View style={bd.field}>
-                  <Text style={bd.fieldLabel}>Address</Text>
-                  <TextInput style={[bd.input, bd.multiline]} value={address} onChangeText={setAddress} placeholder="Enter address" placeholderTextColor={COLORS.textTertiary} multiline selectionColor={COLORS.brandPrimary} />
-                </View>
-
-                {/* Submit */}
-                <TouchableOpacity
-                  style={[bd.submitBtn, !canSubmit && bd.submitBtnDis]}
-                  onPress={handleSubmit}
-                  disabled={!canSubmit || processing}
-                  activeOpacity={0.85}
-                >
-                  <Text style={bd.submitTxt}>Submit</Text>
-                </TouchableOpacity>
-
-                <View style={{ height: 8 }} />
-              </ScrollView>
+              <View style={[bd.field, { flex: 1 }]}>
+                <Text style={bd.fieldLabel}>GST Number</Text>
+                <TextInput style={bd.input} value={gst} onChangeText={setGst} placeholder="27AAJCR..." placeholderTextColor={COLORS.textTertiary} autoCapitalize="characters" selectionColor={COLORS.brandPrimary} />
+              </View>
             </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
 
-      {/* Processing Overlay */}
-      <Modal visible={processing} transparent animationType="fade" statusBarTranslucent>
-        <View style={bd.processingOverlay}>
-          <View style={bd.processingCard}>
-            <ActivityIndicator size="large" color={COLORS.brandPrimary} />
-            <Text style={bd.processingText}>Processing payment...</Text>
-            <Text style={bd.processingSubText}>Please wait, do not close the app</Text>
+            {/* Address */}
+            <View style={bd.field}>
+              <Text style={bd.fieldLabel}>Address</Text>
+              <TextInput style={[bd.input, bd.multiline]} value={address} onChangeText={setAddress} placeholder="Enter address" placeholderTextColor={COLORS.textTertiary} multiline selectionColor={COLORS.brandPrimary} />
+            </View>
+
+            {/* Submit */}
+            <TouchableOpacity
+              style={[bd.submitBtn, !canSubmit && bd.submitBtnDis]}
+              onPress={handleSubmit}
+              disabled={!canSubmit || processing}
+              activeOpacity={0.85}
+            >
+              <Text style={bd.submitTxt}>Submit</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </KeyboardAvoidingView>
+
+        {/* Processing Overlay — shown on top of full-screen modal */}
+        {processing && (
+          <View style={bd.processingOverlay}>
+            <View style={bd.processingCard}>
+              <ActivityIndicator size="large" color={COLORS.brandPrimary} />
+              <Text style={bd.processingText}>Processing payment...</Text>
+              <Text style={bd.processingSubText}>Please wait, do not close the app</Text>
+            </View>
           </View>
-        </View>
-      </Modal>
+        )}
 
-      {/* States picker */}
-      <StatesPickerSheet visible={showStates} selected={state} onSelect={setState} onClose={() => setShowStates(false)} />
+        {/* States picker — inside full-screen modal context */}
+        <StatesPickerSheet visible={showStates} selected={state} onSelect={setState} onClose={() => setShowStates(false)} />
+      </Modal>
     </>
   );
 }
 const bd = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
-  sheet:   { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: SPACING.md, paddingTop: 12, maxHeight: '92%' },
-  handle:  { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
-  header:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  title:   { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary },
-  sub:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
-  closeBtn:{ width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
+  // Full-screen nav header
+  navBar:    { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  backBtn:   { width: 40, alignItems: 'flex-start' },
+  navCenter: { flex: 1, alignItems: 'center' },
+  navTitle:  { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
+  navSub:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 1 },
+  // Form layout
+  scrollContent: { padding: SPACING.md, gap: 0 },
   field:   { marginBottom: 12 },
   row2:    { flexDirection: 'row', gap: 10, marginBottom: 0 },
   fieldLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textTertiary, marginBottom: 6 },
   req:        { color: COLORS.negative },
-  input:   { backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, paddingHorizontal: 12, paddingVertical: 11, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
-  multiline:  { height: 72, textAlignVertical: 'top' },
-  dropdown:   { backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, paddingHorizontal: 12, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  input:      { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, paddingHorizontal: 12, paddingVertical: 11, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
+  multiline:  { height: 88, textAlignVertical: 'top' },
+  dropdown:   { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, paddingHorizontal: 12, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   dropdownText:{ fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, flex: 1, marginRight: 4 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12, marginTop: 4, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12, marginTop: 8, paddingTop: 16, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
   sectionTitle:  { fontSize: TYPOGRAPHY.xs, fontWeight: '800', color: COLORS.textTertiary, letterSpacing: 0.8 },
   optional:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontStyle: 'italic' },
-  submitBtn:     { backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.lg, paddingVertical: 15, alignItems: 'center', marginTop: 8 },
+  submitBtn:     { backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.lg, paddingVertical: 16, alignItems: 'center', marginTop: 16 },
   submitBtnDis:  { backgroundColor: COLORS.borderStrong },
   submitTxt:     { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
-  processingOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
+  // Processing overlay — positioned absolute over the full-screen modal
+  processingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', zIndex: 999 },
   processingCard:    { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.xl, padding: 32, alignItems: 'center', gap: 12, width: 240 },
   processingText:    { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginTop: 4 },
   processingSubText: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, textAlign: 'center' },
@@ -396,10 +405,9 @@ export default function LicenseScreen() {
   const CREDIT_TOTAL = 200;
   const creditPct    = (CREDIT_USED / CREDIT_TOTAL) * 100;
 
-  // When user taps "Buy Now" in BuyCreditSheet → close it, then open BillingDetailsSheet
+  // When user taps "Buy Now" in BuyCreditSheet → open full-screen BillingDetailsSheet on top
   const handleBuyNow = () => {
-    setShowBuyCredit(false);
-    setTimeout(() => setShowBillingDetails(true), 380);
+    setShowBillingDetails(true);
   };
 
   const handleBillingSuccess = () => {
