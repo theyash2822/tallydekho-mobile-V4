@@ -1040,8 +1040,8 @@ const dr = StyleSheet.create({
     backgroundColor: COLORS.activeBg,
   },
   rangeDateDone: {
-    borderColor: COLORS.positive,
-    backgroundColor: COLORS.positiveBg,
+    borderColor: COLORS.brandPrimary,
+    backgroundColor: COLORS.activeBg,
   },
   rangeDateLabel: {
     fontSize: 9, fontWeight: '800', color: COLORS.textTertiary,
