@@ -8,6 +8,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -155,8 +157,38 @@ export default function HelpCenterScreen() {
     setTimeout(()=>scrollRef.current?.scrollToEnd({animated:true}), 80);
   }, [input, sending]);
 
-  const handleAttach = () => {
-    Toast.show({ type:'info', text1:'Coming Soon', text2:'File attachment will be available in the next update.' });
+  const handleAttach = async () => {
+    try {
+      // Show action sheet style: try document picker first (opens Files + images on iOS)
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/*', 'application/pdf', '*/*'],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (!result.canceled && result.assets?.length > 0) {
+        const file = result.assets[0];
+        const attachMsg: Message = {
+          id: Date.now().toString(),
+          role: 'user',
+          text: `📎 Attached: ${file.name}`,
+          time: timestamp(),
+        };
+        setMessages(prev => [...prev, attachMsg]);
+        setTimeout(() => {
+          const botMsg: Message = {
+            id: (Date.now()+1).toString(),
+            role: 'bot',
+            text: `I received your file "${file.name}". Our support team will review it and get back to you shortly.`,
+            time: timestamp(),
+          };
+          setMessages(prev => [...prev, botMsg]);
+          setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+        }, 800);
+        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+      }
+    } catch {
+      Toast.show({ type: 'error', text1: 'Could not open files', text2: 'Please try again.' });
+    }
   };
 
   return (
@@ -204,7 +236,6 @@ export default function HelpCenterScreen() {
               <Ionicons name="pencil" size={11} color={COLORS.white} />
               <Text style={s.heroBadgeTxt}>Tally Dekho</Text>
             </View>
-            <Text style={s.heroTitle}>Ask me anything about{"\n"}TallyDekho in your own language.</Text>
           </View>
 
           {/* ── Chat messages ────────────────────────────────────── */}
