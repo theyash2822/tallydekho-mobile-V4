@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Modal, ActivityIndicator, Pressable, Vibration,
+  TextInput, Modal, ActivityIndicator, Vibration,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -62,6 +62,17 @@ const MOCK_ACCOUNTS: BankAccount[] = [
 const maskAccountNo = (acNo: string): string => {
   if (!acNo || acNo.length < 4) return `•••• ${acNo || '----'}`;
   return `•••• ${acNo.slice(-4)}`;
+};
+
+/** Credit-card style: •••• •••• •••• 2253 */
+const formatCardNumber = (acNo: string): string => {
+  if (!acNo) return '•••• •••• •••• ••••';
+  const last4  = acNo.slice(-4);
+  const masked = acNo.slice(0, -4).replace(/./g, '•');
+  const groups: string[] = [];
+  for (let i = 0; i < masked.length; i += 4) groups.push(masked.slice(i, i + 4));
+  groups.push(last4);
+  return groups.join(' ');
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -322,61 +333,58 @@ const del = StyleSheet.create({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BankCard
+// BankCard — pure visual, no gesture handling
 // ─────────────────────────────────────────────────────────────────────────────
-function BankCard({ account, isSelecting, isSelected, onPress, onLongPress }: {
+function BankCard({ account, isSelecting, isSelected }: {
   account: BankAccount;
-  isSelecting: boolean; isSelected: boolean;
-  onPress: () => void; onLongPress: () => void;
+  isSelecting: boolean;
+  isSelected: boolean;
 }) {
   return (
-    <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={2000} style={bc.wrapper}>
-      <LinearGradient
-        colors={account.gradient as [string, string]}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-        style={bc.card}
-      >
-        {/* Top: Bank pill + masked A/c */}
-        <View style={bc.topRow}>
-          <View style={bc.bankPill}>
-            <Text style={bc.bankPillTxt} numberOfLines={1}>{account.bankName}</Text>
-          </View>
-          <View style={bc.dot} />
-          <Text style={bc.maskedAcNo}>A/c {maskAccountNo(account.accountNumber)}</Text>
+    <LinearGradient
+      colors={account.gradient as [string, string]}
+      start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+      style={bc.card}
+    >
+      {/* Top row: Bank pill · IFSC */}
+      <View style={bc.topRow}>
+        <View style={bc.bankPill}>
+          <Text style={bc.bankPillTxt} numberOfLines={1}>{account.bankName}</Text>
         </View>
+        <View style={bc.dot} />
+        <Text style={bc.ifscTopTxt} numberOfLines={1}>{account.ifsc}</Text>
+      </View>
 
-        {/* Middle: IFSC / account ref */}
-        <Text style={bc.ifscTxt}>{account.ifsc}</Text>
+      {/* Center: Account Number in credit-card mask format */}
+      <Text style={bc.acNoTxt}>{formatCardNumber(account.accountNumber)}</Text>
 
-        {/* Bottom: Branch + type */}
-        <View style={bc.bottomRow}>
-          <Text style={bc.branchTxt}>{account.branch}</Text>
-          <Text style={bc.typeBadge}>{account.accountType}</Text>
+      {/* Bottom row: Branch + type */}
+      <View style={bc.bottomRow}>
+        <Text style={bc.branchTxt}>{account.branch}</Text>
+        <Text style={bc.typeBadge}>{account.accountType}</Text>
+      </View>
+
+      {/* Multi-select overlay */}
+      {isSelecting && (
+        <View style={[bc.selOverlay, isSelected && bc.selOverlayActive]}>
+          {isSelected && (
+            <View style={bc.checkCircle}>
+              <Ionicons name="checkmark" size={14} color={COLORS.brandPrimary} />
+            </View>
+          )}
         </View>
-
-        {/* Multi-select overlay */}
-        {isSelecting && (
-          <View style={[bc.selOverlay, isSelected && bc.selOverlayActive]}>
-            {isSelected && (
-              <View style={bc.checkCircle}>
-                <Ionicons name="checkmark" size={14} color={COLORS.brandPrimary} />
-              </View>
-            )}
-          </View>
-        )}
-      </LinearGradient>
-    </Pressable>
+      )}
+    </LinearGradient>
   );
 }
 const bc = StyleSheet.create({
-  wrapper:  { marginBottom: SPACING.md },
   card:     { borderRadius: 18, padding: 18, minHeight: 165 },
   topRow:   { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bankPill: { backgroundColor: 'rgba(255,255,255,0.92)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: RADIUS.full, maxWidth: 130 },
   bankPillTxt: { fontSize: 11, fontWeight: '800', color: '#111', letterSpacing: 0.2 },
-  dot:      { width: 5, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.6)' },
-  maskedAcNo: { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.88)', flex: 1 },
-  ifscTxt:  { fontSize: 22, fontWeight: '800', color: COLORS.white, letterSpacing: 2, marginVertical: 16 },
+  dot:         { width: 5, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.6)' },
+  ifscTopTxt:  { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.88)', flex: 1 },
+  acNoTxt:  { fontSize: 17, fontWeight: '800', color: COLORS.white, letterSpacing: 2.5, marginVertical: 18 },
   bottomRow:{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'auto' },
   branchTxt:{ fontSize: 12, color: 'rgba(255,255,255,0.78)', fontWeight: '500' },
   typeBadge:{ fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.95)', letterSpacing: 1.2 },
@@ -386,14 +394,35 @@ const bc = StyleSheet.create({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SwipeableCard
+// SwipeableCard — handles ALL gestures: swipe-left + long-press + tap
 // ─────────────────────────────────────────────────────────────────────────────
 function SwipeableCard({ account, isSelecting, isSelected, onPress, onLongPress, onEditPress }: {
   account: BankAccount;
   isSelecting: boolean; isSelected: boolean;
   onPress: () => void; onLongPress: () => void; onEditPress: () => void;
 }) {
-  const swipeRef = useRef<Swipeable>(null);
+  const swipeRef     = useRef<Swipeable>(null);
+  const timerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didLongPress = useRef(false);
+
+  const startTimer = useCallback(() => {
+    if (isSelecting) return;
+    didLongPress.current = false;
+    timerRef.current = setTimeout(() => {
+      didLongPress.current = true;
+      Vibration.vibrate(50);
+      onLongPress();
+    }, 2000);
+  }, [isSelecting, onLongPress]);
+
+  const cancelTimer = useCallback(() => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+  }, []);
+
+  const handlePress = useCallback(() => {
+    cancelTimer();
+    if (!didLongPress.current) onPress();
+  }, [cancelTimer, onPress]);
 
   const renderRightActions = useCallback(() => (
     <TouchableOpacity
@@ -406,31 +435,32 @@ function SwipeableCard({ account, isSelecting, isSelected, onPress, onLongPress,
     </TouchableOpacity>
   ), [onEditPress]);
 
-  if (isSelecting) {
-    return (
-      <BankCard
-        account={account} isSelecting={isSelecting} isSelected={isSelected}
-        onPress={onPress} onLongPress={onLongPress}
-      />
-    );
-  }
-
   return (
     <Swipeable
       ref={swipeRef}
-      renderRightActions={renderRightActions}
-      friction={2} rightThreshold={60} overshootRight={false}
+      renderRightActions={isSelecting ? undefined : renderRightActions}
+      friction={2}
+      rightThreshold={60}
+      overshootRight={false}
+      enabled={!isSelecting}
+      onSwipeableWillOpen={cancelTimer}
     >
-      <BankCard
-        account={account} isSelecting={isSelecting} isSelected={isSelected}
-        onPress={onPress} onLongPress={onLongPress}
-      />
+      <TouchableOpacity
+        onPressIn={startTimer}
+        onPressOut={cancelTimer}
+        onPress={handlePress}
+        activeOpacity={isSelecting ? 0.75 : 1}
+        style={sw.cardWrapper}
+      >
+        <BankCard account={account} isSelecting={isSelecting} isSelected={isSelected} />
+      </TouchableOpacity>
     </Swipeable>
   );
 }
 const sw = StyleSheet.create({
-  editAction: { backgroundColor: COLORS.brandPrimary, borderRadius: 18, marginBottom: SPACING.md, marginLeft: 8, width: 76, alignItems: 'center', justifyContent: 'center', gap: 5 },
-  editTxt:    { fontSize: 11, fontWeight: '700', color: COLORS.white, textAlign: 'center', lineHeight: 14 },
+  cardWrapper: { marginBottom: SPACING.md },
+  editAction:  { backgroundColor: COLORS.brandPrimary, borderRadius: 18, marginBottom: SPACING.md, marginLeft: 8, width: 76, alignItems: 'center', justifyContent: 'center', gap: 5 },
+  editTxt:     { fontSize: 11, fontWeight: '700', color: COLORS.white, textAlign: 'center', lineHeight: 14 },
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
