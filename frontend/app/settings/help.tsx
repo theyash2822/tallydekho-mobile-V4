@@ -167,7 +167,23 @@ export default function HelpCenterScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.hdrTitle}>Help Center</Text>
-        <View style={{width:40}} />
+        {/* WhatsApp + Mail icon buttons — top right */}
+        <View style={s.hdrIcons}>
+          <TouchableOpacity
+            style={s.hdrIconBtn}
+            onPress={()=>Linking.openURL('https://wa.me/919024466791')}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="logo-whatsapp" size={22} color={'#25D366'} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={s.hdrIconBtn}
+            onPress={()=>Linking.openURL('mailto:project@tallydekho.com')}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="mail-outline" size={22} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <KeyboardAvoidingView
@@ -204,33 +220,6 @@ export default function HelpCenterScreen() {
                 </View>
               </View>
             )}
-          </View>
-
-          {/* ── FAQ Section ──────────────────────────────────────── */}
-          <View style={s.card}>
-            {FAQS.map((faq, idx) => (
-              <FaqItem key={idx} q={faq.q} a={faq.a} isLast={idx === FAQS.length - 1} />
-            ))}
-          </View>
-
-          {/* ── Contact Buttons ──────────────────────────────────── */}
-          <View style={s.contactRow}>
-            <TouchableOpacity
-              style={s.contactBtn}
-              onPress={()=>Linking.openURL('https://wa.me/919024466791')}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="logo-whatsapp" size={20} color={'#25D366'} />
-              <Text style={s.contactBtnTxt}>WhatsApp Us</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={s.contactBtn}
-              onPress={()=>Linking.openURL('mailto:project@tallydekho.com')}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="mail-outline" size={20} color={COLORS.textSecondary} />
-              <Text style={s.contactBtnTxt}>Mail Us</Text>
-            </TouchableOpacity>
           </View>
 
           <View style={{height:8}} />
@@ -273,6 +262,8 @@ const s = StyleSheet.create({
   hdr:      { flexDirection:'row', alignItems:'center', backgroundColor:COLORS.cardBg, paddingHorizontal:SPACING.sm, paddingVertical:10, borderBottomWidth:1, borderBottomColor:COLORS.borderDefault },
   back:     { width:40, height:40, alignItems:'center', justifyContent:'center' },
   hdrTitle: { flex:1, fontSize:TYPOGRAPHY.md, fontWeight:'700', color:COLORS.textPrimary, textAlign:'center' },
+  hdrIcons: { flexDirection:'row', alignItems:'center', gap:2 },
+  hdrIconBtn:{ width:40, height:40, alignItems:'center', justifyContent:'center', borderRadius:20 },
   scroll:   { padding:SPACING.md, paddingBottom:8 },
 
   // Hero
