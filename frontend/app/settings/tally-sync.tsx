@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Modal, Animated, ActivityIndicator,
+  TextInput, Modal, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,15 +9,20 @@ import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
+// Mock data
+const DESKTOP_CODE = ['7', '4', '2', '9'];
+const MOCK_LAST_SYNCED = '15 Jun 2025, 11:42 AM';
+const MOCK_PC_NAME = 'ASHISH-PC \\ TallyPrime';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HelpSheet — "Where do I find the code?"
 // ─────────────────────────────────────────────────────────────────────────────
-const STEPS = [
-  'On your desktop where Tally is installed, open any browser and visit tallydekho.com',
+const HELP_STEPS = [
+  'On your desktop, open any browser and visit tallydekho.com',
   'Download the TallyDekho Desktop Application',
-  'Run the setup file and complete the installation process',
-  'Open the app and sync your company',
-  'A 6-digit pairing code will appear in the TallyDekho desktop application',
+  'Run the setup file and complete the installation',
+  'Open the desktop app and sync your company',
+  'A 4-digit pairing code will appear in the TallyDekho Desktop Agent',
 ];
 
 function HelpSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
@@ -27,23 +32,20 @@ function HelpSheet({ visible, onClose }: { visible: boolean; onClose: () => void
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
         <View style={hs.sheet}>
           <View style={hs.handle} />
-          {/* Header */}
           <View style={hs.hdr}>
             <Text style={hs.title}>Where Do I Find The Code?</Text>
             <TouchableOpacity onPress={onClose} style={hs.closeBtn} activeOpacity={0.7}>
               <Ionicons name="close" size={20} color={COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
-
-          {/* Icon */}
           <View style={hs.iconWrap}>
-            <Ionicons name="desktop-outline" size={40} color={COLORS.brandPrimary} />
+            <View style={hs.iconCircle}>
+              <Ionicons name="desktop-outline" size={32} color={COLORS.brandPrimary} />
+            </View>
           </View>
           <Text style={hs.subtitle}>TallyDekho Desktop Agent</Text>
-
-          {/* Steps */}
           <View style={hs.steps}>
-            {STEPS.map((step, i) => (
+            {HELP_STEPS.map((step, i) => (
               <View key={i} style={hs.stepRow}>
                 <View style={hs.stepNum}>
                   <Text style={hs.stepNumTxt}>{i + 1}</Text>
@@ -52,17 +54,15 @@ function HelpSheet({ visible, onClose }: { visible: boolean; onClose: () => void
               </View>
             ))}
           </View>
-
-          {/* Download button */}
           <TouchableOpacity
             style={hs.dlBtn}
             onPress={() => {
-              Toast.show({ type: 'info', text1: 'Download', text2: 'Redirecting to tallydekho.com…' });
+              Toast.show({ type: 'info', text1: 'Download', text2: 'Opening tallydekho.com…' });
               onClose();
             }}
             activeOpacity={0.85}
           >
-            <Ionicons name="cloud-download-outline" size={18} color={COLORS.white} />
+            <Ionicons name="cloud-download-outline" size={17} color={COLORS.white} />
             <Text style={hs.dlBtnTxt}>Download Desktop App</Text>
           </TouchableOpacity>
           <View style={{ height: 24 }} />
@@ -73,36 +73,25 @@ function HelpSheet({ visible, onClose }: { visible: boolean; onClose: () => void
 }
 const hs = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  sheet:   {
-    backgroundColor: COLORS.cardBg,
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingHorizontal: SPACING.lg, paddingTop: 12,
-    maxHeight: '85%',
-  },
+  sheet:   { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: SPACING.lg, paddingTop: 12 },
   handle:  { width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.borderStrong, alignSelf: 'center', marginBottom: 16 },
   hdr:     { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   title:   { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
   closeBtn:{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-  iconWrap:{ alignItems: 'center', marginVertical: 16 },
+  iconWrap:{ alignItems: 'center', marginTop: 12, marginBottom: 8 },
+  iconCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: COLORS.activeBg, alignItems: 'center', justifyContent: 'center' },
   subtitle:{ fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textSecondary, textAlign: 'center', marginBottom: 20 },
   steps:   { gap: 14, marginBottom: 24 },
   stepRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  stepNum: {
-    width: 24, height: 24, borderRadius: 12,
-    backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center',
-    marginTop: 1, flexShrink: 0,
-  },
+  stepNum: { width: 24, height: 24, borderRadius: 12, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center', marginTop: 1, flexShrink: 0 },
   stepNumTxt: { fontSize: 11, fontWeight: '800', color: COLORS.white },
   stepTxt:    { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, lineHeight: 20 },
-  dlBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 15,
-  },
+  dlBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 15 },
   dlBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.white },
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DisconnectSheet — confirmation
+// DisconnectSheet — confirmation bottom sheet
 // ─────────────────────────────────────────────────────────────────────────────
 function DisconnectSheet({
   visible, onClose, onConfirm,
@@ -122,7 +111,7 @@ function DisconnectSheet({
           <Text style={ds.sub}>You will need to re-pair your device to sync data again.</Text>
           <TouchableOpacity style={ds.disconnectBtn} onPress={onConfirm} activeOpacity={0.85}>
             <Ionicons name="unlink-outline" size={16} color={COLORS.white} />
-            <Text style={ds.disconnectTxt}>Disconnect</Text>
+            <Text style={ds.disconnectTxt}>Yes, Disconnect</Text>
           </TouchableOpacity>
           <TouchableOpacity style={ds.cancelBtn} onPress={onClose} activeOpacity={0.7}>
             <Text style={ds.cancelTxt}>Cancel</Text>
@@ -143,24 +132,24 @@ const ds = StyleSheet.create({
   sub:          { fontSize: 13, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
   disconnectBtn:{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: COLORS.negative, borderRadius: RADIUS.md, paddingVertical: 15, marginBottom: 10 },
   disconnectTxt:{ fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.white },
-  cancelBtn:    { alignItems: 'center', paddingVertical: 14, backgroundColor: '#F3F4F6', borderRadius: RADIUS.md },
+  cancelBtn:    { alignItems: 'center', paddingVertical: 14, backgroundColor: COLORS.activeBg, borderRadius: RADIUS.md },
   cancelTxt:    { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 6-digit OTP code input
+// 4-digit code input
 // ─────────────────────────────────────────────────────────────────────────────
-function OtpCodeInput({
+function FourDigitInput({
   code, onChange,
 }: { code: string[]; onChange: (code: string[]) => void }) {
-  const refs = useRef<(TextInput | null)[]>(Array(6).fill(null));
+  const refs = useRef<(TextInput | null)[]>(Array(4).fill(null));
 
   const handleChange = (text: string, idx: number) => {
     const digit = text.replace(/\D/g, '').slice(-1);
     const next = [...code];
     next[idx] = digit;
     onChange(next);
-    if (digit && idx < 5) refs.current[idx + 1]?.focus();
+    if (digit && idx < 3) refs.current[idx + 1]?.focus();
   };
 
   const handleKey = (e: any, idx: number) => {
@@ -173,12 +162,12 @@ function OtpCodeInput({
   };
 
   return (
-    <View style={otp.row}>
+    <View style={ci.row}>
       {code.map((digit, idx) => (
         <TextInput
           key={idx}
           ref={r => { refs.current[idx] = r; }}
-          style={[otp.box, digit ? otp.boxFilled : null]}
+          style={[ci.box, digit ? ci.boxFilled : null]}
           value={digit}
           onChangeText={t => handleChange(t, idx)}
           onKeyPress={e => handleKey(e, idx)}
@@ -186,212 +175,249 @@ function OtpCodeInput({
           maxLength={1}
           selectTextOnFocus
           selectionColor={COLORS.brandPrimary}
-          // suppress web outline
+          placeholder="-"
+          placeholderTextColor={COLORS.textTertiary}
           {...({ outlineStyle: 'none' } as any)}
         />
       ))}
     </View>
   );
 }
-const otp = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 10, justifyContent: 'center', marginVertical: SPACING.md },
+const ci = StyleSheet.create({
+  row: { flexDirection: 'row', gap: 12, justifyContent: 'center', marginBottom: SPACING.sm },
   box: {
-    width: 46, height: 54,
-    borderRadius: RADIUS.md, borderWidth: 2,
-    borderColor: COLORS.borderDefault,
+    width: 62, height: 64,
+    borderRadius: RADIUS.md, borderWidth: 1.5,
+    borderColor: COLORS.borderStrong,
     backgroundColor: COLORS.pageBg,
     textAlign: 'center',
-    fontSize: TYPOGRAPHY.xxl ?? 24, fontWeight: '800',
+    fontSize: 26, fontWeight: '800',
     color: COLORS.textPrimary,
   },
-  boxFilled: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.activeBg ?? COLORS.pageBg },
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Awaiting dots animation
-// ─────────────────────────────────────────────────────────────────────────────
-function AwaitingDots() {
-  const dots = [useRef(new Animated.Value(0.3)).current, useRef(new Animated.Value(0.3)).current, useRef(new Animated.Value(0.3)).current];
-  useEffect(() => {
-    const animations = dots.map((dot, i) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(i * 220),
-          Animated.timing(dot, { toValue: 1, duration: 400, useNativeDriver: true }),
-          Animated.timing(dot, { toValue: 0.3, duration: 400, useNativeDriver: true }),
-          Animated.delay((2 - i) * 220),
-        ])
-      )
-    );
-    animations.forEach(a => a.start());
-    return () => animations.forEach(a => a.stop());
-  }, []);
-  return (
-    <View style={aw.row}>
-      {dots.map((dot, i) => (
-        <Animated.View key={i} style={[aw.dot, { opacity: dot }]} />
-      ))}
-    </View>
-  );
-}
-const aw = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 10, justifyContent: 'center', marginVertical: SPACING.lg },
-  dot: { width: 14, height: 14, borderRadius: 7, backgroundColor: COLORS.brandPrimary },
+  boxFilled: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.activeBg },
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Screen
 // ─────────────────────────────────────────────────────────────────────────────
-const LAST_SYNCED = '15 Jun 2025, 11:42 AM';
-
 export default function TallySyncScreen() {
   const router = useRouter();
   const [pairState, setPairState] = useState<'idle' | 'awaiting' | 'paired'>('idle');
-  const [code, setCode]           = useState<string[]>(Array(6).fill(''));
+  const [code, setCode]           = useState<string[]>(Array(4).fill(''));
+  const [codeRevealed, setCodeRevealed] = useState(false);
+  const [syncing, setSyncing]     = useState(false);
   const [showHelp,       setShowHelp]       = useState(false);
   const [showDisconnect, setShowDisconnect] = useState(false);
 
   const codeStr = code.join('');
-  const isComplete = codeStr.length === 6;
+  const isComplete = codeStr.length === 4;
 
   const handlePair = () => {
     if (!isComplete) {
-      Toast.show({ type: 'error', text1: 'Incomplete Code', text2: 'Please enter all 6 digits.' });
+      Toast.show({ type: 'error', text1: 'Incomplete Code', text2: 'Please enter all 4 digits.' });
       return;
     }
     setPairState('awaiting');
-    // Simulate pairing — replace with API call
     setTimeout(() => {
       setPairState('paired');
-      Toast.show({ type: 'success', text1: 'Paired!', text2: 'TallyDekho is now connected.' });
-    }, 2500);
+      Toast.show({ type: 'success', text1: 'Tally Paired!', text2: 'TallyDekho is now connected.' });
+    }, 2200);
+  };
+
+  const handleSyncNow = () => {
+    setSyncing(true);
+    setTimeout(() => {
+      setSyncing(false);
+      Toast.show({ type: 'success', text1: 'Sync Complete', text2: 'All data has been synced.' });
+    }, 2000);
   };
 
   const handleDisconnect = () => {
     setPairState('idle');
-    setCode(Array(6).fill(''));
+    setCode(Array(4).fill(''));
+    setCodeRevealed(false);
     setShowDisconnect(false);
     Toast.show({ type: 'info', text1: 'Disconnected', text2: 'Tally sync has been removed.' });
   };
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      {/* Header */}
+      {/* Screen Header */}
       <View style={s.hdr}>
-        <TouchableOpacity onPress={() => router.back()} style={s.back}>
+        <TouchableOpacity onPress={() => router.back()} style={s.back} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.title}>Tally Prime Sync</Text>
+        <Text style={s.hdrTitle}>Tally Prime Sync</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
 
-        {/* ── Status banner (only when paired) ──────────────── */}
-        {pairState === 'paired' && (
-          <View style={s.pairedBanner}>
-            <Ionicons name="checkmark-circle" size={22} color={COLORS.positive} />
-            <View style={{ flex: 1 }}>
-              <Text style={s.pairedTitle}>Tally Paired</Text>
-              <Text style={s.pairedSub}>Last synced: {LAST_SYNCED}</Text>
-            </View>
-          </View>
-        )}
-
-        {/* ════════════════════════════════════════════════════
+        {/* ════════════════════════════════════════════
             PAIRED STATE
-        ════════════════════════════════════════════════════ */}
+        ════════════════════════════════════════════ */}
         {pairState === 'paired' && (
-          <View style={s.card}>
-            {/* PC details */}
-            <View style={s.deviceRow}>
-              <View style={s.deviceIcon}>
-                <Ionicons name="desktop-outline" size={28} color={COLORS.info} />
-              </View>
-              <View style={s.deviceInfo}>
-                <Text style={s.deviceName}>ASHISH-PC \ TallyPrime</Text>
-                <Text style={s.deviceSub}>Last seen: {LAST_SYNCED}</Text>
+          <>
+            {/* Paired status banner */}
+            <View style={s.pairedBanner}>
+              <Ionicons name="checkmark-circle" size={22} color={COLORS.positive} />
+              <View style={{ flex: 1 }}>
+                <Text style={s.pairedTitle}>Tally Paired</Text>
+                <Text style={s.pairedSub}>Last synced: {MOCK_LAST_SYNCED}</Text>
               </View>
             </View>
-            {/* Disconnect only — no Sync Now */}
-            <TouchableOpacity
-              style={s.disconnectBtn}
-              onPress={() => setShowDisconnect(true)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="unlink-outline" size={16} color={COLORS.negative} />
-              <Text style={s.disconnectTxt}>Disconnect</Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
-        {/* ════════════════════════════════════════════════════
-            UNPAIRED / AWAITING STATE
-        ════════════════════════════════════════════════════ */}
-        {(pairState === 'idle' || pairState === 'awaiting') && (
-          <View style={s.card}>
-            <View style={s.cardHdr}>
-              <Ionicons name="key-outline" size={18} color={COLORS.info} />
-              <Text style={s.cardTitle}>Pair Device</Text>
-            </View>
-            <Text style={s.sub}>
-              Open TallyDekho on your desktop and enter the 6-digit pairing code shown in the app.
-            </Text>
+            {/* PC details card */}
+            <View style={s.card}>
+              <View style={s.deviceRow}>
+                <View style={s.deviceIconBox}>
+                  <Ionicons name="desktop-outline" size={26} color={COLORS.brandPrimary} />
+                </View>
+                <View style={s.deviceInfo}>
+                  <Text style={s.deviceName}>{MOCK_PC_NAME}</Text>
+                  <Text style={s.deviceSub}>Last seen: {MOCK_LAST_SYNCED}</Text>
+                  <View style={s.onlineRow}>
+                    <View style={s.onlineDot} />
+                    <Text style={s.onlineTxt}>Online</Text>
+                  </View>
+                </View>
+              </View>
 
-            {/* ── IDLE: OTP boxes ── */}
-            {pairState === 'idle' && (
-              <>
-                <OtpCodeInput code={code} onChange={setCode} />
-
+              {/* Action buttons */}
+              <View style={s.btnRow}>
                 <TouchableOpacity
-                  style={[s.primaryBtn, !isComplete && s.primaryBtnDisabled]}
-                  onPress={handlePair}
-                  activeOpacity={0.85}
-                  disabled={!isComplete}
-                >
-                  <Ionicons name="link-outline" size={16} color={COLORS.white} />
-                  <Text style={s.primaryTxt}>Pair Now</Text>
-                </TouchableOpacity>
-              </>
-            )}
-
-            {/* ── AWAITING: animated dots ── */}
-            {pairState === 'awaiting' && (
-              <View style={s.awaitingWrap}>
-                <AwaitingDots />
-                <Text style={s.awaitingTxt}>Awaiting Approval…</Text>
-                <TouchableOpacity
-                  style={s.cancelPairBtn}
-                  onPress={() => { setPairState('idle'); setCode(Array(6).fill('')); }}
+                  style={s.disconnectBtn}
+                  onPress={() => setShowDisconnect(true)}
                   activeOpacity={0.7}
                 >
-                  <Text style={s.cancelPairTxt}>Cancel Pairing</Text>
+                  <Ionicons name="unlink-outline" size={15} color={COLORS.negative} />
+                  <Text style={s.disconnectTxt}>Disconnect</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[s.syncNowBtn, syncing && s.syncNowBtnDisabled]}
+                  onPress={handleSyncNow}
+                  activeOpacity={0.85}
+                  disabled={syncing}
+                >
+                  {syncing
+                    ? <ActivityIndicator size="small" color={COLORS.white} />
+                    : <Ionicons name="sync-outline" size={15} color={COLORS.white} />
+                  }
+                  <Text style={s.syncNowTxt}>{syncing ? 'Syncing…' : 'Sync Now'}</Text>
                 </TouchableOpacity>
               </View>
-            )}
+            </View>
 
-            {/* Help link — shown in both idle & awaiting */}
-            <TouchableOpacity
-              style={s.helpLink}
-              onPress={() => setShowHelp(true)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="help-circle-outline" size={15} color={COLORS.brandPrimary} />
-              <Text style={s.helpLinkTxt}>Where do I find the code?</Text>
-            </TouchableOpacity>
-          </View>
+            {/* Info note */}
+            <View style={s.infoCard}>
+              <Ionicons name="information-circle-outline" size={17} color={COLORS.textSecondary} />
+              <Text style={s.infoTxt}>
+                Make sure TallyPrime is open and TallyDekho Desktop Agent is running to enable sync.
+              </Text>
+            </View>
+          </>
         )}
 
-        {/* ── Info card ─────────────────────────────────────── */}
-        <View style={s.infoCard}>
-          <Ionicons name="information-circle-outline" size={18} color={COLORS.info} />
-          <Text style={s.infoTxt}>
-            Make sure TallyPrime is open and TallyDekho Desktop Agent is running to enable sync.
-          </Text>
-        </View>
+        {/* ════════════════════════════════════════════
+            UNPAIRED / AWAITING STATE
+        ════════════════════════════════════════════ */}
+        {(pairState === 'idle' || pairState === 'awaiting') && (
+          <>
+            <Text style={s.stepsHeader}>Follow the steps mentioned below</Text>
+
+            {/* ── Step 1: Download ── */}
+            <View style={s.stepCard}>
+              <Text style={s.stepLabel}>Step 1</Text>
+
+              {/* Tally logo box */}
+              <View style={s.tallyLogoBox}>
+                <Text style={s.tallyLogoText}>Tally</Text>
+              </View>
+
+              <Text style={s.stepBody}>
+                Download{' '}
+                <Text style={s.boldText}>TallyDekho</Text>
+                {' '}Agent from{'\n'}
+                <Text style={s.linkText}>https://www.tallydekho.com/download</Text>
+              </Text>
+            </View>
+
+            {/* ── Step 2: Pairing code ── */}
+            <View style={s.stepCard}>
+              <Text style={s.stepLabel}>Step 2</Text>
+              <Text style={s.stepTitle}>Pairing</Text>
+
+              {/* Code dots + Reveal button */}
+              <View style={s.revealRow}>
+                <View style={s.dotsContainer}>
+                  {DESKTOP_CODE.map((digit, i) => (
+                    codeRevealed
+                      ? <View key={i} style={s.digitBox}><Text style={s.digitTxt}>{digit}</Text></View>
+                      : <View key={i} style={s.codeDot} />
+                  ))}
+                </View>
+                <TouchableOpacity
+                  style={s.revealBtn}
+                  onPress={() => setCodeRevealed(v => !v)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={s.revealBtnTxt}>{codeRevealed ? 'Hide code' : 'Reveal code'}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={s.stepInstr}>
+                Enter this code in the mobile app → Settings → Account Pairing
+              </Text>
+            </View>
+
+            {/* ── Pair Device ── */}
+            <Text style={s.pairDeviceHeader}>Pair Device</Text>
+
+            <View style={s.pairCard}>
+              {pairState === 'idle' ? (
+                <>
+                  <FourDigitInput code={code} onChange={setCode} />
+                  <Text style={s.codeHint}>Enter 4-digit code</Text>
+
+                  <TouchableOpacity
+                    style={[s.primaryBtn, !isComplete && s.primaryBtnDisabled]}
+                    onPress={handlePair}
+                    activeOpacity={0.85}
+                    disabled={!isComplete}
+                  >
+                    <Text style={s.primaryTxt}>Pair Now</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={s.helpLink}
+                    onPress={() => setShowHelp(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={s.helpLinkTxt}>Where do I find the code?</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                /* ── Awaiting state ── */
+                <View style={s.awaitingWrap}>
+                  <ActivityIndicator size="large" color={COLORS.brandPrimary} style={{ marginBottom: 16 }} />
+                  <Text style={s.awaitingTxt}>Awaiting Pairing…</Text>
+                  <Text style={s.awaitingSub}>Confirm on the TallyDekho Desktop Agent</Text>
+                  <TouchableOpacity
+                    style={s.cancelBtn}
+                    onPress={() => { setPairState('idle'); setCode(Array(4).fill('')); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={s.cancelTxt}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </>
+        )}
+
       </ScrollView>
 
-      {/* Sheets */}
       <HelpSheet       visible={showHelp}       onClose={() => setShowHelp(false)} />
       <DisconnectSheet visible={showDisconnect} onClose={() => setShowDisconnect(false)} onConfirm={handleDisconnect} />
     </SafeAreaView>
@@ -402,72 +428,91 @@ export default function TallySyncScreen() {
 // Styles
 // ─────────────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: COLORS.pageBg },
-  hdr:    { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.sm, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  back:   { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  title:  { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
-  scroll: { padding: SPACING.md, paddingBottom: 40 },
+  safe:    { flex: 1, backgroundColor: COLORS.pageBg },
+  hdr:     { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.sm, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  back:    { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  hdrTitle:{ flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
+  scroll:  { padding: SPACING.md, paddingBottom: 48 },
 
-  // Paired banner
+  // ── Paired ──────────────────────────────────────────────────────────────────
   pairedBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: COLORS.positiveBg ?? '#ECFDF5',
+    backgroundColor: COLORS.positiveBg,
     borderRadius: RADIUS.lg, padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1, borderColor: COLORS.positive,
   },
   pairedTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.positive },
-  pairedSub:   { fontSize: TYPOGRAPHY.xs, color: COLORS.positive, opacity: 0.8, marginTop: 2 },
+  pairedSub:   { fontSize: 11, color: COLORS.positive, opacity: 0.85, marginTop: 2 },
 
-  // Card
-  card:      { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.md, marginBottom: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
-  cardHdr:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SPACING.sm },
-  cardTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-  sub:       { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, lineHeight: 20, marginBottom: 4 },
+  card: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.md, marginBottom: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
 
-  // Paired – device row
-  deviceRow:  { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: SPACING.md, paddingBottom: SPACING.md, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  deviceIcon: { width: 52, height: 52, borderRadius: RADIUS.md, backgroundColor: COLORS.infoBg ?? '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
-  deviceInfo: { flex: 1 },
-  deviceName: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-  deviceSub:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 3 },
-  disconnectBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    paddingVertical: 12, borderRadius: RADIUS.md,
-    borderWidth: 1.5, borderColor: COLORS.negative,
+  deviceRow:    { flexDirection: 'row', alignItems: 'flex-start', gap: 14, marginBottom: SPACING.md, paddingBottom: SPACING.md, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  deviceIconBox:{ width: 52, height: 52, borderRadius: RADIUS.md, backgroundColor: COLORS.activeBg, alignItems: 'center', justifyContent: 'center' },
+  deviceInfo:   { flex: 1 },
+  deviceName:   { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  deviceSub:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 3 },
+  onlineRow:    { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5 },
+  onlineDot:    { width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.positive },
+  onlineTxt:    { fontSize: TYPOGRAPHY.xs, color: COLORS.positive, fontWeight: '600' },
+
+  btnRow:       { flexDirection: 'row', gap: 10 },
+  disconnectBtn:{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 12, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.negative },
+  disconnectTxt:{ fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.negative },
+  syncNowBtn:   { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 12, borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary },
+  syncNowBtnDisabled: { opacity: 0.5 },
+  syncNowTxt:   { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
+
+  infoCard: { flexDirection: 'row', gap: 10, backgroundColor: COLORS.activeBg, borderRadius: RADIUS.md, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.borderStrong },
+  infoTxt:  { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, lineHeight: 20 },
+
+  // ── Unpaired ──────────────────────────────────────────────────────────────────
+  stepsHeader:   { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '500', marginBottom: SPACING.sm },
+
+  stepCard: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.md, marginBottom: SPACING.sm, borderWidth: 1, borderColor: COLORS.borderDefault },
+  stepLabel:{ fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary, fontWeight: '600', marginBottom: SPACING.sm },
+  stepTitle:{ fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary, marginBottom: 12 },
+  stepBody: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, lineHeight: 22, textAlign: 'center' },
+  boldText: { fontWeight: '800', color: COLORS.textPrimary },
+  linkText: { color: COLORS.brandPrimary, fontWeight: '600', textDecorationLine: 'underline' },
+  stepInstr:{ fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, lineHeight: 20, marginTop: 10 },
+
+  // Tally logo box
+  tallyLogoBox: {
+    alignSelf: 'center', marginVertical: 14,
+    paddingHorizontal: 28, paddingVertical: 12,
+    borderWidth: 1.5, borderColor: COLORS.borderStrong,
+    borderRadius: RADIUS.md, backgroundColor: COLORS.cardBg,
   },
-  disconnectTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.negative },
+  tallyLogoText: { fontSize: 22, fontStyle: 'italic', fontWeight: '700', color: COLORS.brandPrimary, letterSpacing: 1 },
 
-  // Pair Now button
+  // Reveal code row
+  revealRow:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  dotsContainer: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  codeDot:       { width: 14, height: 14, borderRadius: 7, backgroundColor: COLORS.textPrimary },
+  digitBox:      { width: 26, height: 26, borderRadius: 6, backgroundColor: COLORS.activeBg, alignItems: 'center', justifyContent: 'center' },
+  digitTxt:      { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
+  revealBtn:     { paddingHorizontal: 14, paddingVertical: 7, borderRadius: RADIUS.full, borderWidth: 1.5, borderColor: COLORS.borderStrong },
+  revealBtnTxt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+
+  // Pair Device
+  pairDeviceHeader: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600', marginBottom: SPACING.sm, marginTop: SPACING.sm },
+  pairCard: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
+  codeHint:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, textAlign: 'center', marginBottom: 14 },
   primaryBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     paddingVertical: 15, borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary,
-    marginTop: SPACING.sm,
+    marginBottom: SPACING.md,
   },
-  primaryBtnDisabled: { opacity: 0.45 },
-  primaryTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+  primaryBtnDisabled: { opacity: 0.4 },
+  primaryTxt:    { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+  helpLink:      { alignItems: 'center', paddingVertical: 4 },
+  helpLinkTxt:   { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.brandPrimary, textDecorationLine: 'underline' },
 
   // Awaiting
-  awaitingWrap:  { alignItems: 'center', paddingVertical: SPACING.md },
-  awaitingTxt:   { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textSecondary, marginTop: 4 },
-  cancelPairBtn: {
-    marginTop: SPACING.md, paddingVertical: 12, paddingHorizontal: 32,
-    borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.borderStrong,
-  },
-  cancelPairTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-
-  // Help hyperlink
-  helpLink: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    alignSelf: 'center', marginTop: SPACING.md, paddingVertical: 4,
-  },
-  helpLinkTxt: {
-    fontSize: TYPOGRAPHY.sm, fontWeight: '600',
-    color: COLORS.brandPrimary,
-    textDecorationLine: 'underline',
-  },
-
-  // Info card
-  infoCard: { flexDirection: 'row', gap: 10, backgroundColor: COLORS.infoBg ?? '#EFF6FF', borderRadius: RADIUS.md, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.info },
-  infoTxt:  { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.info, lineHeight: 20 },
+  awaitingWrap:  { alignItems: 'center', paddingVertical: SPACING.lg },
+  awaitingTxt:   { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 4 },
+  awaitingSub:   { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, marginBottom: SPACING.lg },
+  cancelBtn:     { paddingVertical: 12, paddingHorizontal: 32, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.borderStrong },
+  cancelTxt:     { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
 });

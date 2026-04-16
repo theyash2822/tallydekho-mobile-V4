@@ -112,7 +112,7 @@ export default function HomeScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.brandPrimary} />}
       >
         {/* Tally Sync Banner */}
-        <TouchableOpacity testID="sync-banner" style={styles.syncBanner} activeOpacity={0.8}>
+        <TouchableOpacity testID="sync-banner" style={styles.syncBanner} activeOpacity={0.8} onPress={() => router.push('/settings/tally-sync' as any)}>
           <View style={styles.syncBannerLeft}>
             <View style={styles.syncIconBox}>
               <Ionicons name="sync" size={18} color={COLORS.white} />
