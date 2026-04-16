@@ -458,7 +458,7 @@ const sc = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#EEF2FF',
+    backgroundColor: COLORS.pageBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -482,15 +482,23 @@ export default function ReportsScreen() {
 
   return (
     <SafeAreaView testID="reports-screen" style={styles.safe}>
-      <Header companyName={MOCK_USER.company} fyYear={MOCK_USER.fyYear} notificationCount={1} />
+      <Header
+        companyName={MOCK_USER.company}
+        fyYear={MOCK_USER.fyYear}
+        notificationCount={1}
+        userName={MOCK_USER.name}
+      />
 
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        {/* Page title */}
-        <Text style={styles.pageTitle}>Reports Dashboard</Text>
+        {/* Compact page sub-header */}
+        <View style={styles.pageHeader}>
+          <Text style={styles.pageTitle}>Reports</Text>
+          <Text style={styles.pageSubtitle}>Financial Year {MOCK_USER.fyYear}</Text>
+        </View>
 
         {/* ── 1. Financial ───────────────────────────────────────────────── */}
         <SectionCard iconName="stats-chart-outline" title="Financial" onPress={() => router.push('/reports/financial' as any)}>
@@ -540,15 +548,30 @@ export default function ReportsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.pageBg },
-  scroll: { flex: 1 },
-  content: { paddingTop: SPACING.md },
+  safe:    { flex: 1, backgroundColor: COLORS.pageBg },
+  scroll:  { flex: 1 },
+  content: { paddingTop: 0 },
+
+  // Compact sub-header below the global Header
+  pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderDefault,
+    backgroundColor: COLORS.cardBg,
+    marginBottom: SPACING.md,
+  },
   pageTitle: {
-    fontSize: TYPOGRAPHY.xl,
+    fontSize: TYPOGRAPHY.md,
     fontWeight: '700',
     color: COLORS.textPrimary,
-    textAlign: 'center',
-    marginBottom: SPACING.md,
-    marginHorizontal: SPACING.md,
+  },
+  pageSubtitle: {
+    fontSize: TYPOGRAPHY.xs,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
   },
 });
