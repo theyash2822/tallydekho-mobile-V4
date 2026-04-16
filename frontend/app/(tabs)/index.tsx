@@ -168,6 +168,7 @@ export default function HomeScreen() {
         companyName={MOCK_USER.company}
         fyYear={activeFY}
         notificationCount={1}
+        userName={MOCK_USER.name}
         onFYChange={handleFYChange}
         onSettingsPress={() => router.push('/settings' as any)}
       />

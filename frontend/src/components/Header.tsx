@@ -20,6 +20,7 @@ interface HeaderProps {
   fyYear?: string;
   notificationCount?: number;
   lastSyncTime?: string;
+  userName?: string;
   onNotificationPress?: () => void;
   onFYChange?: (fy: string) => void;
   onSettingsPress?: () => void;
@@ -31,6 +32,7 @@ const Header: React.FC<HeaderProps> = ({
   fyYear = 'FY 2025-26',
   notificationCount = 1,
   lastSyncTime = MOCK_LAST_SYNCED,
+  userName = 'Ashish Agarwal',
   onNotificationPress,
   onFYChange,
   onSettingsPress,
@@ -124,7 +126,7 @@ const Header: React.FC<HeaderProps> = ({
 
           <TouchableOpacity style={styles.iconBtn} onPress={handleSettings} activeOpacity={0.7}>
             <View style={styles.avatarSmall}>
-              <Text style={styles.avatarText}>{selectedCompany[0] || 'A'}</Text>
+              <Text style={styles.avatarText}>{userName[0]?.toUpperCase() || 'A'}</Text>
             </View>
           </TouchableOpacity>
         </View>

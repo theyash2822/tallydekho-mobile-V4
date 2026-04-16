@@ -3,12 +3,19 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 
+// Supports both the legacy mock shape AND the new API shape
 interface Activity {
   id: string;
   type: string;
-  description: string;
-  time: string;
-  isUser: boolean;
+  // API shape
+  label?: string;
+  amount?: string;
+  date?: string;
+  party?: string;
+  // Legacy mock shape
+  description?: string;
+  time?: string;
+  isUser?: boolean;
   avatar?: string;
 }
 
@@ -17,115 +24,133 @@ interface RecentActivityProps {
   onSeeAll?: () => void;
 }
 
-const ActivityItem: React.FC<{ item: Activity }> = ({ item }) => (
-  <View testID={`activity-item-${item.id}`} style={styles.item}>
-    {item.isUser ? (
-      <View style={styles.iconBox}>
-        <Ionicons name="document-text-outline" size={16} color={COLORS.textSecondary} />
+const ActivityItem: React.FC<{ item: Activity }> = ({ item }) => {
+  // Prefer API shape, fall back to legacy shape
+  const title  = item.label       ?? item.description ?? '';
+  const sub    = item.party       ?? '';
+  const timing = item.date        ?? item.time        ?? '';
+  const amount = item.amount      ?? '';
+  const isCredit = item.type === 'credit';
+  const isDebit  = item.type === 'debit';
+
+  // Derive avatar initial: from party or avatar field
+  const initial = (item.party?.[0] ?? item.avatar?.[0] ?? 'T').toUpperCase();
+
+  return (
+    <View testID={`activity-item-${item.id}`} style={styles.item}>
+      {/* Icon / Avatar */}
+      {isCredit || isDebit ? (
+        <View style={[styles.txIcon, isCredit ? styles.txIconCredit : styles.txIconDebit]}>
+          <Ionicons
+            name={isCredit ? 'arrow-down' : 'arrow-up'}
+            size={15}
+            color={isCredit ? COLORS.positive : COLORS.negative}
+          />
+        </View>
+      ) : item.isUser ? (
+        <View style={styles.iconBox}>
+          <Ionicons name="document-text-outline" size={16} color={COLORS.textSecondary} />
+        </View>
+      ) : (
+        <View style={styles.avatarBox}>
+          <Text style={styles.avatarText}>{initial}</Text>
+        </View>
+      )}
+
+      {/* Body */}
+      <View style={styles.body}>
+        <Text style={styles.title} numberOfLines={1}>{title}</Text>
+        {sub ? <Text style={styles.sub} numberOfLines={1}>{sub}</Text> : null}
       </View>
-    ) : (
-      <View style={[styles.avatarBox]}>
-        <Text style={styles.avatarText}>{item.avatar?.charAt(0) || 'U'}</Text>
+
+      {/* Right: amount + time */}
+      <View style={styles.right}>
+        {amount ? (
+          <Text style={[styles.amount, isCredit ? styles.amountCredit : isDebit ? styles.amountDebit : {}]}>
+            {amount}
+          </Text>
+        ) : null}
+        <Text style={styles.time}>{timing}</Text>
       </View>
-    )}
-    <Text style={[styles.description, { flex: 1 }]} numberOfLines={1}>
-      {item.description}
-    </Text>
-    <Text style={styles.time}>{item.time}</Text>
-  </View>
-);
+    </View>
+  );
+};
 
 const RecentActivity: React.FC<RecentActivityProps> = ({ activities, onSeeAll }) => (
   <View testID="recent-activity" style={styles.container}>
     <View style={styles.header}>
-      <Text style={styles.title}>Recent Activity</Text>
+      <Text style={styles.sectionTitle}>Recent Activity</Text>
       <TouchableOpacity testID="see-all-activity" onPress={onSeeAll} activeOpacity={0.7}>
         <Text style={styles.seeAll}>See all</Text>
       </TouchableOpacity>
     </View>
     <View style={styles.card}>
-      {activities.map((item, idx) => (
-        <View key={item.id}>
-          <ActivityItem item={item} />
-          {idx < activities.length - 1 && <View style={styles.sep} />}
+      {activities.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="receipt-outline" size={28} color={COLORS.textTertiary} />
+          <Text style={styles.emptyText}>No recent activity</Text>
         </View>
-      ))}
+      ) : (
+        activities.map((item, idx) => (
+          <View key={item.id}>
+            <ActivityItem item={item} />
+            {idx < activities.length - 1 && <View style={styles.sep} />}
+          </View>
+        ))
+      )}
     </View>
   </View>
 );
 
 const styles = StyleSheet.create({
-  container: {
-    marginHorizontal: SPACING.md,
-    marginBottom: SPACING.md,
-  },
+  container: { marginHorizontal: SPACING.md, marginBottom: SPACING.md },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: 10,
   },
-  title: {
-    fontSize: TYPOGRAPHY.md,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  seeAll: {
-    fontSize: TYPOGRAPHY.sm,
-    color: COLORS.positive,
-    fontWeight: '500',
-  },
+  sectionTitle: { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
+  seeAll: { fontSize: TYPOGRAPHY.sm, color: COLORS.brandPrimary, fontWeight: '600' },
   card: {
-    backgroundColor: COLORS.cardBg,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.borderDefault,
-    overflow: 'hidden',
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden',
   },
   item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 13,
-    gap: 10,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: SPACING.md, paddingVertical: 13, gap: 10,
   },
+  // Credit/debit icon
+  txIcon: {
+    width: 34, height: 34, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  txIconCredit: { backgroundColor: COLORS.positiveBg },
+  txIconDebit:  { backgroundColor: COLORS.negativeBg },
+  // Legacy icon/avatar
   iconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
+    width: 34, height: 34, borderRadius: 8,
     backgroundColor: COLORS.pageBg,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
   avatarBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 34, height: 34, borderRadius: 17,
     backgroundColor: COLORS.activeBg,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
-  avatarText: {
-    fontSize: TYPOGRAPHY.sm,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  description: {
-    fontSize: TYPOGRAPHY.sm,
-    color: COLORS.textPrimary,
-    fontWeight: '400',
-    flex: 1,
-  },
-  time: {
-    fontSize: TYPOGRAPHY.xs,
-    color: COLORS.positive,
-    fontWeight: '500',
-  },
-  sep: {
-    height: 1,
-    backgroundColor: COLORS.borderDefault,
-    marginLeft: 58,
-  },
+  avatarText: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  // Body
+  body: { flex: 1, gap: 2 },
+  title: { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textPrimary },
+  sub:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  // Right
+  right: { alignItems: 'flex-end', gap: 3 },
+  amount: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  amountCredit: { color: COLORS.positive },
+  amountDebit:  { color: COLORS.negative },
+  time: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  sep:  { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 58 },
+  // Empty
+  emptyState: { alignItems: 'center', paddingVertical: 28, gap: 8 },
+  emptyText: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
 });
 
 export default RecentActivity;
