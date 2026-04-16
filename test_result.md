@@ -144,6 +144,9 @@ frontend:
       - working: true
         agent: "main"
         comment: "Auth screen renders correctly with phone input and Send OTP button. Mock auth works."
+      - working: true
+        agent: "main"
+        comment: "ENHANCED: Added Country Code Selector bottom sheet with all 20 Tally Prime countries. Dynamic placeholder per country (e.g., India=98765 43210, UAE=50 123 4567). Dynamic validation (10 digits India, 8-10 for others). Full number (code+digits) passed to OTP screen. Verified via screenshot tool - country selection works and placeholder updates correctly."
 
   - task: "AsyncStorage web compatibility fix"
     implemented: true
