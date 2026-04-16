@@ -8,6 +8,8 @@ import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import * as SplashScreen from 'expo-splash-screen';
+import Toast from 'react-native-toast-message';
+import { toastConfig } from '../src/utils/toastConfig';
 
 // Prevent splash screen from auto-hiding while fonts load
 SplashScreen.preventAutoHideAsync();
@@ -63,6 +65,8 @@ export default function RootLayout() {
           <RootNavigation />
         </AuthProvider>
       </SafeAreaProvider>
+      {/* Toast must be LAST so it renders above everything */}
+      <Toast config={toastConfig} topOffset={56} />
     </GestureHandlerRootView>
   );
 }

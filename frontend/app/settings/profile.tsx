@@ -7,6 +7,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_USER } from '../../src/data/mockData';
 
@@ -793,7 +794,12 @@ export default function ProfileScreen() {
         onClose={() => setShowEditPhone(false)}
         onSuccess={(newPhone) => {
           setPhone(newPhone);
-          Alert.alert('Phone Updated', 'Your phone number has been updated successfully.');
+          Toast.show({
+            type: 'success',
+            text1: 'Phone Number Updated',
+            text2: 'Your phone number has been changed successfully.',
+            visibilityTime: 3000,
+          });
         }}
         channel="whatsapp"
         title="Edit Phone Number"
@@ -809,7 +815,12 @@ export default function ProfileScreen() {
         onClose={() => setShowEditEmail(false)}
         onSuccess={(newEmail) => {
           setEmail(newEmail);
-          Alert.alert('Email Updated', 'Your email address has been updated successfully.');
+          Toast.show({
+            type: 'success',
+            text1: 'Email Address Updated',
+            text2: 'Your email address has been changed successfully.',
+            visibilityTime: 3000,
+          });
         }}
         channel="email"
         title="Edit Email Address"

@@ -7,7 +7,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -135,7 +135,12 @@ export default function CompanyScreen() {
   };
 
   const handleSave = () => {
-    Alert.alert('Saved', 'Company information has been updated successfully.');
+    Toast.show({
+      type: 'success',
+      text1: 'Company Info Saved',
+      text2: 'Your company information has been updated.',
+      visibilityTime: 3000,
+    });
   };
 
   return (
