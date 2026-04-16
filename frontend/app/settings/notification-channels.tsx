@@ -1,9 +1,31 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, TextInput, Alert } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+
+// ── Custom Themed Toggle ──────────────────────────────────────────────────────
+function CustomToggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.spring(anim, { toValue: value ? 1 : 0, useNativeDriver: false, tension: 60, friction: 7 }).start();
+  }, [value, anim]);
+  const trackBg = anim.interpolate({ inputRange: [0, 1], outputRange: [COLORS.borderStrong, COLORS.brandPrimary] });
+  const thumbX  = anim.interpolate({ inputRange: [0, 1], outputRange: [2, 22] });
+  return (
+    <TouchableOpacity onPress={() => onChange(!value)} activeOpacity={0.85}>
+      <Animated.View style={[ct.track, { backgroundColor: trackBg }]}>
+        <Animated.View style={[ct.thumb, { transform: [{ translateX: thumbX }] }]} />
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}
+const ct = StyleSheet.create({
+  track: { width: 46, height: 26, borderRadius: 13, justifyContent: 'center' },
+  thumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: COLORS.white, elevation: 2 },
+});
 
 const CHANNELS = [
   { id:'email', label:'Email', icon:'mail-outline', sub:'Get notified via email' },
@@ -21,7 +43,9 @@ export default function NotificationChannelsScreen() {
   const [saturday, setSaturday] = useState(false);
   const [sunday, setSunday] = useState(true);
 
-  const save = () => Alert.alert('Saved!', 'Notification settings updated.', [{text:'OK', onPress:()=>router.back()}]);
+  const save = () => {
+    Toast.show({ type: 'success', text1: 'Settings Saved', text2: 'Notification preferences updated.' });
+  };
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -32,25 +56,25 @@ export default function NotificationChannelsScreen() {
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
         <View style={s.card}>
-          <View style={s.cardHdr}><Ionicons name="notifications-outline" size={18} color={COLORS.warning} /><Text style={s.cardTitle}>Notification Channels</Text></View>
+          <View style={s.cardHdr}><Ionicons name="notifications-outline" size={18} color={COLORS.textSecondary} /><Text style={s.cardTitle}>Notification Channels</Text></View>
           {CHANNELS.map((ch, idx)=>(
             <View key={ch.id} style={[s.row, idx>0 && s.rowBorder]}>
-              <View style={[s.chIcon, {backgroundColor: ch.id==='whatsapp' ? '#25D36618':'#EFF6FF'}]}>
-                <Ionicons name={ch.icon as any} size={18} color={ch.id==='whatsapp'?'#25D366':COLORS.info} />
+              <View style={s.chIcon}>
+                <Ionicons name={ch.icon as any} size={18} color={COLORS.textSecondary} />
               </View>
               <View style={s.rowInfo}>
                 <Text style={s.rowLabel}>{ch.label}</Text>
                 <Text style={s.rowSub}>{ch.sub}</Text>
               </View>
-              <Switch value={enabled[ch.id]} onValueChange={v=>setEnabled(prev=>({...prev,[ch.id]:v}))} trackColor={{false:COLORS.borderDefault,true:COLORS.positive}} thumbColor={COLORS.white} />
+              <CustomToggle value={enabled[ch.id]} onChange={v => setEnabled(prev => ({...prev, [ch.id]: v}))} />
             </View>
           ))}
         </View>
 
         <View style={s.card}>
           <View style={[s.row, {borderBottomWidth:0}]}>
-            <View style={s.cardHdr}><Ionicons name="moon-outline" size={18} color={'#7C3AED'} /><Text style={s.cardTitle}>Quiet Hours</Text></View>
-            <Switch value={quietHours} onValueChange={setQuietHours} trackColor={{false:COLORS.borderDefault,true:COLORS.positive}} thumbColor={COLORS.white} />
+            <View style={s.cardHdr}><Ionicons name="moon-outline" size={18} color={COLORS.textSecondary} /><Text style={s.cardTitle}>Quiet Hours</Text></View>
+            <CustomToggle value={quietHours} onChange={setQuietHours} />
           </View>
           {quietHours && (
             <View style={s.quietBody}>
@@ -96,7 +120,7 @@ const s = StyleSheet.create({
   cardTitle:{fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.textPrimary},
   row:{flexDirection:'row',alignItems:'center',gap:12,paddingVertical:12},
   rowBorder:{borderTopWidth:1,borderTopColor:COLORS.borderDefault},
-  chIcon:{width:40,height:40,borderRadius:20,alignItems:'center',justifyContent:'center'},
+  chIcon:{width:40,height:40,borderRadius:20,backgroundColor:COLORS.pageBg,alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:COLORS.borderDefault},
   rowInfo:{flex:1},
   rowLabel:{fontSize:TYPOGRAPHY.base,fontWeight:'600',color:COLORS.textPrimary},
   rowSub:{fontSize:TYPOGRAPHY.xs,color:COLORS.textSecondary,marginTop:2},
