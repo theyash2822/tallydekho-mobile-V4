@@ -10,7 +10,6 @@ import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 // Mock data
-const DESKTOP_CODE = ['7', '4', '2', '9'];
 const MOCK_LAST_SYNCED = '15 Jun 2025, 11:42 AM';
 const MOCK_PC_NAME = 'ASHISH-PC \\ TallyPrime';
 
@@ -22,7 +21,7 @@ const HELP_STEPS = [
   'Download the TallyDekho Desktop Application',
   'Run the setup file and complete the installation',
   'Open the desktop app and sync your company',
-  'A 4-digit pairing code will appear in the TallyDekho Desktop Agent',
+  'A 6-digit pairing code will appear in the TallyDekho Desktop Agent',
 ];
 
 function HelpSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
@@ -137,19 +136,19 @@ const ds = StyleSheet.create({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4-digit code input
+// 6-digit code input
 // ─────────────────────────────────────────────────────────────────────────────
-function FourDigitInput({
+function SixDigitInput({
   code, onChange,
 }: { code: string[]; onChange: (code: string[]) => void }) {
-  const refs = useRef<(TextInput | null)[]>(Array(4).fill(null));
+  const refs = useRef<(TextInput | null)[]>(Array(6).fill(null));
 
   const handleChange = (text: string, idx: number) => {
     const digit = text.replace(/\D/g, '').slice(-1);
     const next = [...code];
     next[idx] = digit;
     onChange(next);
-    if (digit && idx < 3) refs.current[idx + 1]?.focus();
+    if (digit && idx < 5) refs.current[idx + 1]?.focus();
   };
 
   const handleKey = (e: any, idx: number) => {
@@ -184,14 +183,14 @@ function FourDigitInput({
   );
 }
 const ci = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 12, justifyContent: 'center', marginBottom: SPACING.sm },
+  row: { flexDirection: 'row', gap: 8, justifyContent: 'center', marginBottom: SPACING.sm },
   box: {
-    width: 62, height: 64,
+    width: 46, height: 56,
     borderRadius: RADIUS.md, borderWidth: 1.5,
     borderColor: COLORS.borderStrong,
     backgroundColor: COLORS.pageBg,
     textAlign: 'center',
-    fontSize: 26, fontWeight: '800',
+    fontSize: 22, fontWeight: '800',
     color: COLORS.textPrimary,
   },
   boxFilled: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.activeBg },
@@ -203,18 +202,17 @@ const ci = StyleSheet.create({
 export default function TallySyncScreen() {
   const router = useRouter();
   const [pairState, setPairState] = useState<'idle' | 'awaiting' | 'paired'>('idle');
-  const [code, setCode]           = useState<string[]>(Array(4).fill(''));
-  const [codeRevealed, setCodeRevealed] = useState(false);
+  const [code, setCode]           = useState<string[]>(Array(6).fill(''));
   const [syncing, setSyncing]     = useState(false);
   const [showHelp,       setShowHelp]       = useState(false);
   const [showDisconnect, setShowDisconnect] = useState(false);
 
   const codeStr = code.join('');
-  const isComplete = codeStr.length === 4;
+  const isComplete = codeStr.length === 6;
 
   const handlePair = () => {
     if (!isComplete) {
-      Toast.show({ type: 'error', text1: 'Incomplete Code', text2: 'Please enter all 4 digits.' });
+      Toast.show({ type: 'error', text1: 'Incomplete Code', text2: 'Please enter all 6 digits.' });
       return;
     }
     setPairState('awaiting');
@@ -234,8 +232,7 @@ export default function TallySyncScreen() {
 
   const handleDisconnect = () => {
     setPairState('idle');
-    setCode(Array(4).fill(''));
-    setCodeRevealed(false);
+    setCode(Array(6).fill(''));
     setShowDisconnect(false);
     Toast.show({ type: 'info', text1: 'Disconnected', text2: 'Tally sync has been removed.' });
   };
@@ -343,31 +340,15 @@ export default function TallySyncScreen() {
               </Text>
             </View>
 
-            {/* ── Step 2: Pairing code ── */}
+            {/* ── Step 2: Pairing instructions ── */}
             <View style={s.stepCard}>
               <Text style={s.stepLabel}>Step 2</Text>
               <Text style={s.stepTitle}>Pairing</Text>
-
-              {/* Code dots + Reveal button */}
-              <View style={s.revealRow}>
-                <View style={s.dotsContainer}>
-                  {DESKTOP_CODE.map((digit, i) => (
-                    codeRevealed
-                      ? <View key={i} style={s.digitBox}><Text style={s.digitTxt}>{digit}</Text></View>
-                      : <View key={i} style={s.codeDot} />
-                  ))}
-                </View>
-                <TouchableOpacity
-                  style={s.revealBtn}
-                  onPress={() => setCodeRevealed(v => !v)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={s.revealBtnTxt}>{codeRevealed ? 'Hide code' : 'Reveal code'}</Text>
-                </TouchableOpacity>
-              </View>
-
               <Text style={s.stepInstr}>
-                Enter this code in the mobile app → Settings → Account Pairing
+                Open the TallyDekho Desktop Agent on your PC. A 6-digit pairing code will be displayed there.
+              </Text>
+              <Text style={[s.stepInstr, { marginTop: 8 }]}>
+                Enter that code below in the Pair Device section to connect your account.
               </Text>
             </View>
 
@@ -377,8 +358,8 @@ export default function TallySyncScreen() {
             <View style={s.pairCard}>
               {pairState === 'idle' ? (
                 <>
-                  <FourDigitInput code={code} onChange={setCode} />
-                  <Text style={s.codeHint}>Enter 4-digit code</Text>
+                  <SixDigitInput code={code} onChange={setCode} />
+                  <Text style={s.codeHint}>Enter 6-digit code from the TallyDekho Desktop Agent</Text>
 
                   <TouchableOpacity
                     style={[s.primaryBtn, !isComplete && s.primaryBtnDisabled]}
@@ -405,7 +386,7 @@ export default function TallySyncScreen() {
                   <Text style={s.awaitingSub}>Confirm on the TallyDekho Desktop Agent</Text>
                   <TouchableOpacity
                     style={s.cancelBtn}
-                    onPress={() => { setPairState('idle'); setCode(Array(4).fill('')); }}
+                    onPress={() => { setPairState('idle'); setCode(Array(6).fill('')); }}
                     activeOpacity={0.7}
                   >
                     <Text style={s.cancelTxt}>Cancel</Text>
@@ -485,15 +466,6 @@ const s = StyleSheet.create({
     borderRadius: RADIUS.md, backgroundColor: COLORS.cardBg,
   },
   tallyLogoText: { fontSize: 22, fontStyle: 'italic', fontWeight: '700', color: COLORS.brandPrimary, letterSpacing: 1 },
-
-  // Reveal code row
-  revealRow:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  dotsContainer: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  codeDot:       { width: 14, height: 14, borderRadius: 7, backgroundColor: COLORS.textPrimary },
-  digitBox:      { width: 26, height: 26, borderRadius: 6, backgroundColor: COLORS.activeBg, alignItems: 'center', justifyContent: 'center' },
-  digitTxt:      { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
-  revealBtn:     { paddingHorizontal: 14, paddingVertical: 7, borderRadius: RADIUS.full, borderWidth: 1.5, borderColor: COLORS.borderStrong },
-  revealBtnTxt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
 
   // Pair Device
   pairDeviceHeader: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600', marginBottom: SPACING.sm, marginTop: SPACING.sm },
