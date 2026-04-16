@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Modal, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Animated,
+  Modal, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
@@ -116,6 +116,7 @@ const sp = StyleSheet.create({
 function BillingDetailsSheet({ visible, onClose, onSuccess }: {
   visible: boolean; onClose: () => void; onSuccess: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   const [name,        setName]        = useState('');
   const [email,       setEmail]       = useState('');
   const [mobile,      setMobile]      = useState('');
@@ -125,7 +126,6 @@ function BillingDetailsSheet({ visible, onClose, onSuccess }: {
   const [address,     setAddress]     = useState('');
   const [showStates,  setShowStates]  = useState(false);
   const [processing,  setProcessing]  = useState(false);
-  const spinAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!visible) {
@@ -150,14 +150,15 @@ function BillingDetailsSheet({ visible, onClose, onSuccess }: {
   };
 
   const canSubmit = name.trim() && email.trim() && mobile.trim();
+  const bottomPad = Math.max(insets.bottom, 20);
 
   return (
     <>
-      <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
         <View style={bd.overlay}>
           <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-            <View style={bd.sheet}>
+            <View style={[bd.sheet, { paddingBottom: bottomPad }]}>
               {/* Handle + Header */}
               <View style={bd.handle} />
               <View style={bd.header}>
@@ -232,7 +233,7 @@ function BillingDetailsSheet({ visible, onClose, onSuccess }: {
                   <Text style={bd.submitTxt}>Submit</Text>
                 </TouchableOpacity>
 
-                <View style={{ height: 24 }} />
+                <View style={{ height: 8 }} />
               </ScrollView>
             </View>
           </KeyboardAvoidingView>
@@ -240,7 +241,7 @@ function BillingDetailsSheet({ visible, onClose, onSuccess }: {
       </Modal>
 
       {/* Processing Overlay */}
-      <Modal visible={processing} transparent animationType="fade">
+      <Modal visible={processing} transparent animationType="fade" statusBarTranslucent>
         <View style={bd.processingOverlay}>
           <View style={bd.processingCard}>
             <ActivityIndicator size="large" color={COLORS.brandPrimary} />
@@ -256,8 +257,8 @@ function BillingDetailsSheet({ visible, onClose, onSuccess }: {
   );
 }
 const bd = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet:   { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: SPACING.md, paddingTop: 12, maxHeight: '92%', paddingBottom: 40 },
+  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
+  sheet:   { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: SPACING.md, paddingTop: 12, maxHeight: '92%' },
   handle:  { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
   header:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   title:   { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary },
@@ -287,13 +288,15 @@ const bd = StyleSheet.create({
 function BuyCreditSheet({ visible, onClose, onBuyNow }: {
   visible: boolean; onClose: () => void; onBuyNow: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState('c500');
+  const bottomPad = Math.max(insets.bottom, 20);
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <View style={bc.overlay}>
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
-        <View style={bc.sheet}>
+        <View style={[bc.sheet, { paddingBottom: bottomPad }]}>
           <View style={bc.handle} />
 
           {/* Header */}
@@ -353,7 +356,7 @@ function BuyCreditSheet({ visible, onClose, onBuyNow }: {
   );
 }
 const bc = StyleSheet.create({
-  overlay:  { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.48)' },
+  overlay:  { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.55)' },
   sheet:    { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: SPACING.md, paddingTop: 12, maxHeight: '88%' },
   handle:   { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
   header:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
@@ -383,14 +386,29 @@ const bc = StyleSheet.create({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function LicenseScreen() {
   const router = useRouter();
-  const [showBuyCredit, setShowBuyCredit] = useState(false);
-  const [useEmail,      setUseEmail]      = useState(true);
-  const [useWhatsApp,   setUseWhatsApp]   = useState(false);
-  const [useSMS,        setUseSMS]        = useState(false);
+  const [showBuyCredit,     setShowBuyCredit]     = useState(false);
+  const [showBillingDetails, setShowBillingDetails] = useState(false);
+  const [useEmail,           setUseEmail]           = useState(true);
+  const [useWhatsApp,        setUseWhatsApp]        = useState(false);
+  const [useSMS,             setUseSMS]             = useState(false);
 
   const CREDIT_USED  = 28;
   const CREDIT_TOTAL = 200;
   const creditPct    = (CREDIT_USED / CREDIT_TOTAL) * 100;
+
+  // When user taps "Buy Now" in BuyCreditSheet → close it, then open BillingDetailsSheet
+  const handleBuyNow = () => {
+    setShowBuyCredit(false);
+    setTimeout(() => setShowBillingDetails(true), 380);
+  };
+
+  const handleBillingSuccess = () => {
+    Toast.show({
+      type: 'success',
+      text1: 'Payment Successful!',
+      text2: 'Your credits have been added to your account.',
+    });
+  };
 
   return (
     <SafeAreaView style={s.safe}>
@@ -531,7 +549,18 @@ export default function LicenseScreen() {
       </ScrollView>
 
       {/* ── Buy Credit Bottom Sheet ── */}
-      <BuyCreditSheet visible={showBuyCredit} onClose={() => setShowBuyCredit(false)} />
+      <BuyCreditSheet
+        visible={showBuyCredit}
+        onClose={() => setShowBuyCredit(false)}
+        onBuyNow={handleBuyNow}
+      />
+
+      {/* ── Billing Details Bottom Sheet (sibling, never nested) ── */}
+      <BillingDetailsSheet
+        visible={showBillingDetails}
+        onClose={() => setShowBillingDetails(false)}
+        onSuccess={handleBillingSuccess}
+      />
     </SafeAreaView>
   );
 }
