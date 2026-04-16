@@ -230,14 +230,6 @@ export default function HelpCenterScreen() {
           keyboardShouldPersistTaps="handled"
           onContentSizeChange={()=>scrollRef.current?.scrollToEnd({animated:false})}
         >
-          {/* ── Hero Banner ──────────────────────────────────────── */}
-          <View style={s.heroBanner}>
-            <View style={s.heroBadge}>
-              <Ionicons name="pencil" size={11} color={COLORS.white} />
-              <Text style={s.heroBadgeTxt}>Tally Dekho</Text>
-            </View>
-          </View>
-
           {/* ── Chat messages ────────────────────────────────────── */}
           <View style={s.messagesArea}>
             {messages.map(msg => <MessageBubble key={msg.id} msg={msg} />)}
@@ -296,15 +288,6 @@ const s = StyleSheet.create({
   hdrIcons: { flexDirection:'row', alignItems:'center', gap:2 },
   hdrIconBtn:{ width:40, height:40, alignItems:'center', justifyContent:'center', borderRadius:20 },
   scroll:   { padding:SPACING.md, paddingBottom:8 },
-
-  // Hero
-  heroBanner: {
-    backgroundColor:COLORS.brandPrimary, borderRadius:18,
-    padding:SPACING.lg, marginBottom:SPACING.md, alignItems:'center',
-  },
-  heroBadge:    { flexDirection:'row', alignItems:'center', gap:6, backgroundColor:'rgba(255,255,255,0.15)', paddingHorizontal:10, paddingVertical:5, borderRadius:RADIUS.full, marginBottom:10 },
-  heroBadgeTxt: { fontSize:12, fontWeight:'700', color:COLORS.white },
-  heroTitle:    { fontSize:TYPOGRAPHY.md, fontWeight:'800', color:COLORS.white, textAlign:'center', lineHeight:26 },
 
   // Chat
   messagesArea: { marginBottom:SPACING.md },
