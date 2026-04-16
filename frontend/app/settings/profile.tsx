@@ -301,7 +301,11 @@ function CreatePasskeyModal({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OTPVerifySheet — shared 2-step OTP bottom sheet used by Phone & Email edit
+// OTPVerifySheet — 4-step: verify current → enter new → verify new
+// Step 1: Enter current value  (TextInput)
+// Step 2: OTP for current      (CustomNumPad, 6-digit)
+// Step 3: Enter new value      (TextInput)
+// Step 4: OTP for new value    (CustomNumPad, 6-digit)
 // ─────────────────────────────────────────────────────────────────────────────
 type OTPChannel = 'whatsapp' | 'email';
 
@@ -311,34 +315,39 @@ function OTPVerifySheet({
   onSuccess,
   channel,
   title,
-  inputLabel,
   inputPlaceholder,
   inputKeyboard,
   sendLabel,
   getSubtitle,
 }: {
-  visible:         boolean;
-  onClose:         () => void;
-  onSuccess:       (newValue: string) => void;
-  channel:         OTPChannel;
-  title:           string;
-  inputLabel:      string;
-  inputPlaceholder:string;
-  inputKeyboard:   'phone-pad' | 'email-address';
-  sendLabel:       string;
-  getSubtitle:     (val: string) => string;
+  visible:          boolean;
+  onClose:          () => void;
+  onSuccess:        (newValue: string) => void;
+  channel:          OTPChannel;
+  title:            string;
+  inputPlaceholder: string;
+  inputKeyboard:    'phone-pad' | 'email-address';
+  sendLabel:        string;
+  getSubtitle:      (val: string) => string;
 }) {
-  const [step,      setStep]      = useState<'enter' | 'verify'>('enter');
-  const [value,     setValue]     = useState('');
-  const [otp,       setOtp]       = useState('');
-  const [countdown, setCountdown] = useState(30);
-  const [canResend, setCanResend] = useState(false);
+  const isPhone      = inputKeyboard === 'phone-pad';
+  const channelLabel = channel === 'whatsapp' ? 'WhatsApp' : 'Email';
+
+  const [step,       setStep]       = useState<1|2|3|4>(1);
+  const [currentVal, setCurrentVal] = useState('');
+  const [newVal,     setNewVal]     = useState('');
+  const [otp,        setOtp]        = useState('');
+  const [countdown,  setCountdown]  = useState(30);
+  const [canResend,  setCanResend]  = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Reset on open/close
+  // Reset on close
   useEffect(() => {
     if (!visible) {
-      setTimeout(() => { setStep('enter'); setValue(''); setOtp(''); }, 350);
+      setTimeout(() => {
+        setStep(1); setCurrentVal(''); setNewVal('');
+        setOtp(''); setCountdown(30); setCanResend(false);
+      }, 350);
     }
     return () => clearInterval(timerRef.current!);
   }, [visible]);
@@ -354,127 +363,182 @@ function OTPVerifySheet({
     }, 1000);
   };
 
-  const handleSendOTP = () => {
-    if (value.trim().length < 3) return;
-    setStep('verify');
-    setOtp('');
-    startTimer();
-  };
-
-  const handleKey = (key: string) => {
-    if (key === 'back') setOtp(p => p.slice(0, -1));
-    else if (otp.length < 4) setOtp(p => p + key);
-  };
-
-  const handleVerify = () => {
-    if (otp.length < 4) return;
-    onSuccess(value.trim());
-    onClose();
+  const handleSendCurrentOTP  = () => { setOtp(''); setStep(2); startTimer(); };
+  const handleVerifyCurrentOTP = () => { if (otp.length < 6) return; setOtp(''); setStep(3); };
+  const handleSendNewOTP       = () => { setOtp(''); setStep(4); startTimer(); };
+  const handleVerifyNewOTP     = () => {
+    if (otp.length < 6) return;
+    onSuccess(newVal.trim()); onClose();
   };
 
   const handleResend = () => {
     if (!canResend) return;
     startTimer();
-    Alert.alert('OTP Resent', `A new code has been sent via ${channel === 'whatsapp' ? 'WhatsApp' : 'Email'}.`);
+    Alert.alert('OTP Resent', `A new code has been sent to you via ${channelLabel}.`, [{ text: 'OK' }]);
   };
+
+  const handleKey = (key: string) => {
+    if (key === 'back') setOtp(p => p.slice(0, -1));
+    else if (otp.length < 6) setOtp(p => p + key);
+  };
+
+  const isCurrentValid = isPhone ? currentVal.length === 10 : currentVal.includes('@') && currentVal.length > 5;
+  const isNewValid     = isPhone ? newVal.length === 10     : newVal.includes('@')     && newVal.length > 5;
 
   const channelIcon: React.ReactNode =
     channel === 'whatsapp'
       ? <FontAwesome5 name="whatsapp" size={15} color="#25D366" />
-      : <Ionicons name="mail-outline" size={15} color={COLORS.info} />;
-  const channelLabel = channel === 'whatsapp' ? 'WhatsApp' : 'Email';
+      : <Ionicons name="mail-outline" size={15} color={COLORS.white} />;
+
+  const stepTitles: Record<1|2|3|4, string> = {
+    1: `Verify Current ${isPhone ? 'Number' : 'Email'}`,
+    2: 'Enter OTP',
+    3: `New ${isPhone ? 'Phone Number' : 'Email Address'}`,
+    4: 'Confirm New OTP',
+  };
+
+  const displayCurrent = isPhone ? `+91 ${currentVal}` : currentVal;
+  const displayNew     = isPhone ? `+91 ${newVal}`     : newVal;
+
+  /* ── Input step (1 & 3) ──────────────────────────────── */
+  const renderInput = (isCurrentStep: boolean) => {
+    const val     = isCurrentStep ? currentVal : newVal;
+    const setter  = isCurrentStep ? setCurrentVal : setNewVal;
+    const canSend = isCurrentStep ? isCurrentValid : isNewValid;
+    const onSend  = isCurrentStep ? handleSendCurrentOTP : handleSendNewOTP;
+    const subTitle = isCurrentStep
+      ? `Enter your current ${isPhone ? 'phone number' : 'email address'}`
+      : `Enter your new ${isPhone ? 'phone number' : 'email address'}`;
+
+    return (
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <Text style={ps.modalSub}>{subTitle}</Text>
+
+        {/* Input row */}
+        <View style={ps.editInputWrap}>
+          {isPhone && (
+            <View style={ps.phonePre}>
+              <Text style={ps.phonePreText}>+91</Text>
+            </View>
+          )}
+          <TextInput
+            style={ps.editInput}
+            value={val}
+            onChangeText={text =>
+              isPhone ? setter(text.replace(/[^0-9]/g, '').slice(0, 10)) : setter(text)
+            }
+            placeholder={inputPlaceholder}
+            placeholderTextColor={COLORS.textTertiary}
+            keyboardType={inputKeyboard}
+            autoCapitalize="none"
+            autoFocus
+            maxLength={isPhone ? 10 : 80}
+            selectionColor={COLORS.brandPrimary}
+          />
+        </View>
+
+        {/* Send OTP button */}
+        <TouchableOpacity
+          style={[ps.modalBtn, ps.confirmBtnColor, !canSend && ps.btnDisabled]}
+          onPress={onSend}
+          activeOpacity={0.85}
+          disabled={!canSend}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {channelIcon}
+            <Text style={ps.modalBtnText}>{sendLabel}</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={ps.resendRow} onPress={onClose} activeOpacity={0.7}>
+          <Text style={[ps.resendText, { color: COLORS.textTertiary }]}>Cancel</Text>
+        </TouchableOpacity>
+        <View style={{ height: 16 }} />
+      </KeyboardAvoidingView>
+    );
+  };
+
+  /* ── OTP step (2 & 4) ────────────────────────────────── */
+  const renderOTP = (isCurrentStep: boolean) => {
+    const display   = isCurrentStep ? displayCurrent : displayNew;
+    const onVerify  = isCurrentStep ? handleVerifyCurrentOTP : handleVerifyNewOTP;
+    const btnLabel  = isCurrentStep ? 'Verify & Continue →' : 'Verify & Update ✓';
+    const canVerify = otp.length === 6;
+
+    return (
+      <View>
+        <Text style={ps.modalSub}>
+          {getSubtitle(display)}{'\n'}
+          <Text style={{ fontWeight: '700', color: channel === 'whatsapp' ? '#25D366' : COLORS.brandPrimary }}>
+            via {channelLabel}
+          </Text>
+        </Text>
+
+        {/* 6-dot OTP boxes */}
+        <PinBoxes value={otp} length={6} />
+
+        {/* Verify button */}
+        <TouchableOpacity
+          style={[ps.modalBtn, ps.confirmBtnColor, !canVerify && ps.btnDisabled]}
+          onPress={onVerify}
+          activeOpacity={0.85}
+          disabled={!canVerify}
+        >
+          <Text style={ps.modalBtnText}>{btnLabel}</Text>
+        </TouchableOpacity>
+
+        {/* Resend / Didn't receive */}
+        <TouchableOpacity
+          style={ps.resendRow}
+          onPress={handleResend}
+          activeOpacity={canResend ? 0.7 : 1}
+        >
+          {canResend ? (
+            <Text style={[ps.resendText, { color: COLORS.brandPrimary, textDecorationLine: 'underline' }]}>
+              Didn't receive OTP? Resend
+            </Text>
+          ) : (
+            <Text style={[ps.resendText, { color: COLORS.textTertiary }]}>
+              Resend OTP in {countdown}s
+            </Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Custom numpad */}
+        <CustomNumPad onPress={handleKey} />
+        <View style={{ height: 12 }} />
+      </View>
+    );
+  };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={ps.modalOverlay}>
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
+        <View style={ps.modalSheet}>
+          <View style={ps.handle} />
 
-        {step === 'enter' ? (
-          /* ── Step 1: Enter new value ───────────────────────── */
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-            <View style={ps.modalSheet}>
-              <View style={ps.handle} />
-              <Text style={ps.modalTitle}>{title}</Text>
-              <Text style={ps.modalSub}>{inputLabel}</Text>
-
-              {/* Input */}
-              <View style={ps.editInputWrap}>
-                {inputKeyboard === 'phone-pad' && (
-                  <View style={ps.phonePre}>
-                    <Text style={ps.phonePreText}>+91</Text>
-                  </View>
-                )}
-                <TextInput
-                  style={[ps.editInput, inputKeyboard === 'phone-pad' && { paddingLeft: 0 }]}
-                  value={value}
-                  onChangeText={setValue}
-                  placeholder={inputPlaceholder}
-                  placeholderTextColor={COLORS.textTertiary}
-                  keyboardType={inputKeyboard}
-                  autoCapitalize="none"
-                  autoFocus
-                  maxLength={inputKeyboard === 'phone-pad' ? 10 : 60}
-                  selectionColor={COLORS.brandPrimary}
-                />
-              </View>
-
-              {/* Send OTP button */}
-              <TouchableOpacity
-                style={[ps.modalBtn, ps.confirmBtnColor, value.trim().length < 3 && ps.btnDisabled]}
-                onPress={handleSendOTP}
-                activeOpacity={0.85}
-                disabled={value.trim().length < 3}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  {channelIcon}
-                  <Text style={ps.modalBtnText}>{sendLabel}</Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={ps.resendRow} onPress={onClose} activeOpacity={0.7}>
-                <Text style={[ps.resendText, { color: COLORS.textTertiary }]}>Cancel</Text>
-              </TouchableOpacity>
-              <View style={{ height: 16 }} />
-            </View>
-          </KeyboardAvoidingView>
-        ) : (
-          /* ── Step 2: Verify OTP ────────────────────────────── */
-          <View style={ps.modalSheet}>
-            <View style={ps.handle} />
-            <Text style={ps.modalTitle}>Enter Verification Code</Text>
-            <Text style={ps.modalSub}>
-              {getSubtitle(value)}
-              {'\n'}
-              <Text style={{ fontWeight: '700', color: channelLabel === 'WhatsApp' ? '#25D366' : COLORS.info }}>
-                via {channelLabel}
-              </Text>
-            </Text>
-
-            {/* OTP boxes */}
-            <PinBoxes value={otp} />
-
-            {/* Verify button */}
-            <TouchableOpacity
-              style={[ps.modalBtn, ps.confirmBtnColor, otp.length < 4 && ps.btnDisabled]}
-              onPress={handleVerify}
-              activeOpacity={0.85}
-              disabled={otp.length < 4}
-            >
-              <Text style={ps.modalBtnText}>Verify &amp; Update</Text>
-            </TouchableOpacity>
-
-            {/* Resend */}
-            <TouchableOpacity style={ps.resendRow} onPress={handleResend} activeOpacity={canResend ? 0.7 : 1}>
-              <Text style={[ps.resendText, !canResend && { color: COLORS.textTertiary }]}>
-                {canResend ? `Resend OTP` : `Resend OTP (${countdown}s)`}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Numpad */}
-            <CustomNumPad onPress={handleKey} />
-            <View style={{ height: 12 }} />
+          {/* ── Step progress ── */}
+          <View style={ps.stepTrack}>
+            {([1, 2, 3, 4] as (1|2|3|4)[]).map(s => (
+              <View
+                key={s}
+                style={[
+                  ps.stepDot,
+                  s === step && ps.stepDotActive,
+                  s <  step  && ps.stepDotDone,
+                ]}
+              />
+            ))}
           </View>
-        )}
+
+          <Text style={ps.modalTitle}>{stepTitles[step]}</Text>
+
+          {step === 1 && renderInput(true)}
+          {step === 2 && renderOTP(true)}
+          {step === 3 && renderInput(false)}
+          {step === 4 && renderOTP(false)}
+        </View>
       </View>
     </Modal>
   );
@@ -733,11 +797,10 @@ export default function ProfileScreen() {
         }}
         channel="whatsapp"
         title="Edit Phone Number"
-        inputLabel="Enter your new phone number"
         inputPlaceholder="10-digit mobile number"
         inputKeyboard="phone-pad"
         sendLabel="Send OTP via WhatsApp"
-        getSubtitle={(val) => `Code has been sent to +91 ${val}`}
+        getSubtitle={(val) => `Code has been sent to ${val}`}
       />
 
       {/* ── Edit Email — Email OTP ──────────────────────────────────────── */}
@@ -750,7 +813,6 @@ export default function ProfileScreen() {
         }}
         channel="email"
         title="Edit Email Address"
-        inputLabel="Enter your new email address"
         inputPlaceholder="your@email.com"
         inputKeyboard="email-address"
         sendLabel="Send OTP via Email"
@@ -949,6 +1011,22 @@ const ps = StyleSheet.create({
   },
   numKeyBorderR: { borderRightWidth: 1, borderRightColor: COLORS.borderDefault },
   numKeyText:    { fontSize: TYPOGRAPHY.xl, fontWeight: '400', color: COLORS.textPrimary },
+
+  // ── Step progress indicator ───────────────────────────────────────────────
+  stepTrack: {
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+    gap: 6, marginBottom: 14,
+  },
+  stepDot: {
+    height: 6, width: 6, borderRadius: 3,
+    backgroundColor: COLORS.borderStrong,
+  },
+  stepDotActive: {
+    width: 22, backgroundColor: COLORS.brandPrimary, borderRadius: 3,
+  },
+  stepDotDone: {
+    backgroundColor: COLORS.textTertiary,
+  },
 
   // ── Edit Input (Phone & Email shared container) ───────────────────────────
   editInputWrap: {
