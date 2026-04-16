@@ -363,11 +363,11 @@ function OTPVerifySheet({
     }, 1000);
   };
 
-  const handleSendCurrentOTP  = () => { setOtp(''); setStep(2); startTimer(); };
-  const handleVerifyCurrentOTP = () => { if (otp.length < 6) return; setOtp(''); setStep(3); };
+  const handleSendCurrentOTP   = () => { setOtp(''); setStep(2); startTimer(); };
+  const handleVerifyCurrentOTP = () => { if (otp.length < 4) return; setOtp(''); setStep(3); };
   const handleSendNewOTP       = () => { setOtp(''); setStep(4); startTimer(); };
   const handleVerifyNewOTP     = () => {
-    if (otp.length < 6) return;
+    if (otp.length < 4) return;
     onSuccess(newVal.trim()); onClose();
   };
 
@@ -379,7 +379,7 @@ function OTPVerifySheet({
 
   const handleKey = (key: string) => {
     if (key === 'back') setOtp(p => p.slice(0, -1));
-    else if (otp.length < 6) setOtp(p => p + key);
+    else if (otp.length < 4) setOtp(p => p + key);
   };
 
   const isCurrentValid = isPhone ? currentVal.length === 10 : currentVal.includes('@') && currentVal.length > 5;
@@ -463,7 +463,7 @@ function OTPVerifySheet({
     const display   = isCurrentStep ? displayCurrent : displayNew;
     const onVerify  = isCurrentStep ? handleVerifyCurrentOTP : handleVerifyNewOTP;
     const btnLabel  = isCurrentStep ? 'Verify & Continue →' : 'Verify & Update ✓';
-    const canVerify = otp.length === 6;
+    const canVerify = otp.length === 4;
 
     return (
       <View>
@@ -474,8 +474,8 @@ function OTPVerifySheet({
           </Text>
         </Text>
 
-        {/* 6-dot OTP boxes */}
-        <PinBoxes value={otp} length={6} />
+        {/* 4-digit OTP boxes */}
+        <PinBoxes value={otp} length={4} />
 
         {/* Verify button */}
         <TouchableOpacity
