@@ -519,10 +519,14 @@ const rc = StyleSheet.create({
   },
   nameInput: {
     flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '700',
-    color: COLORS.textPrimary, padding: 0,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-    paddingBottom: 2,
-  },
+    color: COLORS.textPrimary,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.pageBg,
+    // Remove native web focus outline
+    outlineStyle: 'none',
+  } as any,
   collapseBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   body:    { paddingHorizontal: SPACING.md, paddingBottom: SPACING.md },
   divider: { height: 1, backgroundColor: COLORS.borderDefault },
