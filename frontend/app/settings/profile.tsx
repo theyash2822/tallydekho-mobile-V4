@@ -662,18 +662,10 @@ export default function ProfileScreen() {
 
             <View style={ps.hr} />
 
-            {/* Role */}
+            {/* Role — read-only, set by backend */}
             <View style={ps.fieldWrap}>
               <Text style={ps.fieldLabel}>Role</Text>
-              <TextInput
-                style={ps.fieldInput}
-                value={role}
-                onChangeText={setRole}
-                placeholder="Enter your role"
-                placeholderTextColor={COLORS.textTertiary}
-                selectionColor={COLORS.brandPrimary}
-                returnKeyType="done"
-              />
+              <Text style={ps.fieldInput}>{role}</Text>
             </View>
 
             <View style={ps.hr} />
