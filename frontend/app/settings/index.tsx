@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Alert, Switch,
+  Modal, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -80,19 +80,116 @@ const SECTIONS: Section[] = [
   },
 ];
 
+// ── Logout Confirm Bottom Sheet ───────────────────────────────────────────────
+function LogoutConfirmSheet({
+  visible,
+  onClose,
+  onConfirm,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const slideY = useRef(new Animated.Value(300)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.spring(slideY, { toValue: 0, useNativeDriver: true, tension: 80, friction: 10 }),
+        Animated.timing(opacity, { toValue: 1, useNativeDriver: true, duration: 200 }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(slideY, { toValue: 300, useNativeDriver: true, duration: 220 }),
+        Animated.timing(opacity, { toValue: 0, useNativeDriver: true, duration: 180 }),
+      ]).start();
+    }
+  }, [visible]);
+
+  return (
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      <Animated.View style={[ls.overlay, { opacity }]}>
+        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
+        <Animated.View style={[ls.sheet, { transform: [{ translateY: slideY }] }]}>
+          <View style={ls.handle} />
+          {/* Icon */}
+          <View style={ls.iconWrap}>
+            <View style={ls.iconCircle}>
+              <Ionicons name="log-out-outline" size={28} color="#E53935" />
+            </View>
+          </View>
+          <Text style={ls.title}>Log Out</Text>
+          <Text style={ls.sub}>Are you sure you want to log out of TallyDekho?</Text>
+          {/* Log Out (destructive) */}
+          <TouchableOpacity style={ls.logoutBtn} onPress={onConfirm} activeOpacity={0.85}>
+            <Ionicons name="log-out-outline" size={16} color="#fff" />
+            <Text style={ls.logoutBtnTxt}>Log Out</Text>
+          </TouchableOpacity>
+          {/* Cancel */}
+          <TouchableOpacity style={ls.cancelBtn} onPress={onClose} activeOpacity={0.7}>
+            <Text style={ls.cancelBtnTxt}>Cancel</Text>
+          </TouchableOpacity>
+          <View style={{ height: 16 }} />
+        </Animated.View>
+      </Animated.View>
+    </Modal>
+  );
+}
+
+const ls = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+  },
+  handle: {
+    width: 40, height: 4, borderRadius: 2, backgroundColor: '#D1D5DB',
+    alignSelf: 'center', marginBottom: 20,
+  },
+  iconWrap:   { alignItems: 'center', marginBottom: 14 },
+  iconCircle: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  title: {
+    fontSize: 18, fontWeight: '800', color: '#1A1A1A',
+    textAlign: 'center', marginBottom: 8,
+  },
+  sub: {
+    fontSize: 13, color: '#6B7280',
+    textAlign: 'center', lineHeight: 20, marginBottom: 24,
+  },
+  logoutBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, backgroundColor: '#E53935',
+    borderRadius: 12, paddingVertical: 15, marginBottom: 10,
+  },
+  logoutBtnTxt: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  cancelBtn: {
+    alignItems: 'center', paddingVertical: 14,
+    backgroundColor: '#F3F4F6', borderRadius: 12,
+  },
+  cancelBtnTxt: { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
+});
+
 export default function SettingsScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
   const [expanded, setExpanded] = useState<SectionId | null>('account');
+  const [showLogoutSheet, setShowLogoutSheet] = useState(false);
 
   const toggle = (id: SectionId) => setExpanded(prev => prev === id ? null : id);
 
-  const handleLogout = () => {
-    Alert.alert('Log Out', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Log Out', style: 'destructive', onPress: () => signOut() },
-    ]);
-  };
+  const handleLogout = () => setShowLogoutSheet(true);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -106,8 +203,8 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Profile mini card */}
-        <TouchableOpacity style={styles.profileCard} onPress={() => {}} activeOpacity={0.8}>
+        {/* Profile mini card — static display only; edit via Account & Organization → Profile */}
+        <View style={styles.profileCard}>
           <View style={styles.avatarLarge}>
             <Text style={styles.avatarLargeText}>{MOCK_USER.name[0]}</Text>
           </View>
@@ -115,8 +212,7 @@ export default function SettingsScreen() {
             <Text style={styles.profileName}>{MOCK_USER.name}</Text>
             <Text style={styles.profilePhone}>{MOCK_USER.phone}</Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
-        </TouchableOpacity>
+        </View>
 
         {/* Accordion sections */}
         <View style={styles.accordionContainer}>
@@ -188,6 +284,13 @@ export default function SettingsScreen() {
 
         <View style={{ height: 30 }} />
       </ScrollView>
+
+      {/* Custom Logout Confirmation Sheet */}
+      <LogoutConfirmSheet
+        visible={showLogoutSheet}
+        onClose={() => setShowLogoutSheet(false)}
+        onConfirm={() => { setShowLogoutSheet(false); signOut(); }}
+      />
     </SafeAreaView>
   );
 }
