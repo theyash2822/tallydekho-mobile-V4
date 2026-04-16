@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import DatePickerModal, { formatDMY } from '../../src/components/forms/DatePickerModal';
+import DateRangePickerModal, { fmtDMY } from '../../src/components/DateRangePickerModal';
 
 // ── Mock Data (Tally Prime format) ─────────────────────────────────────────
 const MOCK_PL = {
@@ -331,137 +331,6 @@ const tbg = StyleSheet.create({
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Date Range Bottom Sheet
-// ══════════════════════════════════════════════════════════════════════════════
-function DateRangeSheet({
-  visible, fromDate, toDate, onApply, onClose,
-}: {
-  visible: boolean;
-  fromDate: string;
-  toDate: string;
-  onApply: (from: string, to: string) => void;
-  onClose: () => void;
-}) {
-  const [localFrom, setLocalFrom] = useState(fromDate);
-  const [localTo,   setLocalTo]   = useState(toDate);
-  const [showFrom,  setShowFrom]  = useState(false);
-  const [showTo,    setShowTo]    = useState(false);
-
-  useEffect(() => {
-    if (visible) { setLocalFrom(fromDate); setLocalTo(toDate); }
-  }, [visible]);
-
-  const canApply = !!localFrom && !!localTo;
-
-  return (
-    <>
-      <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-        <TouchableOpacity style={drs.backdrop} activeOpacity={1} onPress={onClose} />
-        <View style={drs.sheet}>
-          <View style={drs.handle} />
-          <Text style={drs.title}>Select Date Range</Text>
-
-          {/* From */}
-          <TouchableOpacity style={drs.dateRow} onPress={() => setShowFrom(true)} activeOpacity={0.7}>
-            <View style={drs.dateLabel}>
-              <Ionicons name="calendar-outline" size={15} color={COLORS.textTertiary} />
-              <Text style={drs.dateLabelTxt}>From</Text>
-            </View>
-            <Text style={[drs.dateValue, !localFrom && drs.datePlaceholder]}>
-              {localFrom || 'DD / MM / YY'}
-            </Text>
-          </TouchableOpacity>
-
-          <View style={drs.divider} />
-
-          {/* To */}
-          <TouchableOpacity style={drs.dateRow} onPress={() => setShowTo(true)} activeOpacity={0.7}>
-            <View style={drs.dateLabel}>
-              <Ionicons name="calendar-outline" size={15} color={COLORS.textTertiary} />
-              <Text style={drs.dateLabelTxt}>To</Text>
-            </View>
-            <Text style={[drs.dateValue, !localTo && drs.datePlaceholder]}>
-              {localTo || 'DD / MM / YY'}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Buttons */}
-          <View style={drs.btnRow}>
-            <TouchableOpacity style={drs.cancelBtn} onPress={onClose} activeOpacity={0.7}>
-              <Text style={drs.cancelTxt}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[drs.applyBtn, !canApply && drs.applyBtnDis]}
-              onPress={() => { if (canApply) { onApply(localFrom, localTo); onClose(); } }}
-              activeOpacity={0.8}
-              disabled={!canApply}
-            >
-              <Ionicons name="checkmark" size={16} color={COLORS.white} />
-              <Text style={drs.applyTxt}>Apply Filter</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Single-date pickers (reuse existing component) */}
-      <DatePickerModal
-        visible={showFrom}
-        value={localFrom}
-        onSelect={setLocalFrom}
-        onClose={() => setShowFrom(false)}
-        title="Select From Date"
-      />
-      <DatePickerModal
-        visible={showTo}
-        value={localTo}
-        onSelect={setLocalTo}
-        onClose={() => setShowTo(false)}
-        title="Select To Date"
-      />
-    </>
-  );
-}
-
-const drs = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
-  sheet: {
-    backgroundColor: COLORS.cardBg,
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingHorizontal: SPACING.md, paddingBottom: SPACING.xl,
-  },
-  handle: {
-    width: 40, height: 4, backgroundColor: COLORS.borderStrong,
-    borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 16,
-  },
-  title: {
-    fontSize: TYPOGRAPHY.md, fontWeight: '700',
-    color: COLORS.textPrimary, textAlign: 'center', marginBottom: 20,
-  },
-  dateRow: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', paddingVertical: 16, paddingHorizontal: 4,
-  },
-  dateLabel:      { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  dateLabelTxt:   { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary, fontWeight: '600' },
-  dateValue:      { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-  datePlaceholder:{ color: COLORS.textTertiary, fontWeight: '400' },
-  divider:        { height: 1, backgroundColor: COLORS.borderDefault },
-  btnRow:  { flexDirection: 'row', gap: 12, marginTop: 24 },
-  cancelBtn: {
-    flex: 1, paddingVertical: 14, borderRadius: RADIUS.md,
-    borderWidth: 1.5, borderColor: COLORS.borderDefault, alignItems: 'center',
-  },
-  cancelTxt:   { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textSecondary },
-  applyBtn: {
-    flex: 2, flexDirection: 'row', gap: 6, paddingVertical: 14,
-    borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  applyBtnDis: { backgroundColor: COLORS.borderStrong },
-  applyTxt:    { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
-});
-
-// ══════════════════════════════════════════════════════════════════════════════
 // Main Screen
 // ══════════════════════════════════════════════════════════════════════════════
 export default function FinancialReportScreen() {
@@ -475,10 +344,10 @@ export default function FinancialReportScreen() {
   // Date range — default to current FY (Apr 1 → Mar 31)
   const today     = new Date();
   const fyYear    = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1;
-  const fyStart   = new Date(fyYear, 3, 1);       // Apr 1
-  const fyEnd     = new Date(fyYear + 1, 2, 31);  // Mar 31
-  const [fromDate, setFromDate]       = useState(formatDMY(fyStart));
-  const [toDate,   setToDate]         = useState(formatDMY(fyEnd));
+  const fyStart   = new Date(fyYear, 3, 1);
+  const fyEnd     = new Date(fyYear + 1, 2, 31);
+  const [fromDate, setFromDate]           = useState(fmtDMY(fyStart));
+  const [toDate,   setToDate]             = useState(fmtDMY(fyEnd));
   const [showDateSheet, setShowDateSheet] = useState(false);
 
   return (
@@ -538,12 +407,14 @@ export default function FinancialReportScreen() {
         </AccSection>
       </ScrollView>
 
-      {/* ── Date Range Sheet ────────────────────────────────────────── */}
-      <DateRangeSheet
+      {/* ── Date Range Picker (shared full-calendar component) ── */}
+      <DateRangePickerModal
         visible={showDateSheet}
         fromDate={fromDate}
         toDate={toDate}
-        onApply={(from, to) => { setFromDate(from); setToDate(to); }}
+        onApply={(from, to) => {
+          if (from && to) { setFromDate(from); setToDate(to); }
+        }}
         onClose={() => setShowDateSheet(false)}
       />
     </SafeAreaView>
