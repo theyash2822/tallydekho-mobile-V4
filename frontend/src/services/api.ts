@@ -63,17 +63,28 @@ export const registerUser = (data: { name: string; language: string; phone: stri
   );
 
 // Dashboard
-export const getKPIStrip = () =>
-  fetchWithFallback(() => get('/dashboard/kpi-strip'), MOCK_KPI_STRIP);
+export const getKPIStrip = (period: string = '7D') =>
+  fetchWithFallback(() => get(`/dashboard/kpi-strip?period=${period}`), MOCK_KPI_STRIP);
 
-export const getMetrics = (period: string) =>
+export const getMetrics = (period: string = '7D') =>
   fetchWithFallback(() => get(`/dashboard/metrics?period=${period}`), MOCK_METRICS);
 
-export const getCashflow = () =>
-  fetchWithFallback(() => get('/dashboard/cashflow'), MOCK_CASHFLOW);
+export const getCashflow = (period: string = '7D') =>
+  fetchWithFallback(() => get(`/dashboard/cashflow?period=${period}`), MOCK_CASHFLOW);
 
 export const getRecentActivity = () =>
   fetchWithFallback(() => get('/dashboard/recent-activity'), MOCK_RECENT_ACTIVITY);
+
+export const searchDashboard = (q: string) =>
+  fetchWithFallback(() => get(`/dashboard/search?q=${encodeURIComponent(q)}`), MOCK_RECENT_ACTIVITY);
+
+// Sales
+export const getSalesInvoices = () =>
+  fetchWithFallback(() => get('/sales/invoices'), {
+    invoices: [],
+    pending_irn_count: 14,
+    total: 14,
+  });
 
 // Stocks
 export const getStocks = () =>

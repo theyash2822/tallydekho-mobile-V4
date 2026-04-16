@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  RefreshControl, FlatList, AppState,
+  RefreshControl, FlatList, AppState, TextInput,
+  Modal, Animated, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,7 +13,7 @@ import Header from '../../src/components/Header';
 import CashflowCard from '../../src/components/CashflowCard';
 import RecentActivity from '../../src/components/RecentActivity';
 import {
-  getKPIStrip, getMetrics, getCashflow, getRecentActivity
+  getKPIStrip, getMetrics, getCashflow, getRecentActivity,
 } from '../../src/services/api';
 import {
   MOCK_KPI_STRIP, MOCK_METRICS, MOCK_CASHFLOW, MOCK_RECENT_ACTIVITY, MOCK_USER, FY_DASHBOARD,
@@ -29,6 +30,8 @@ const MODULE_CARDS = [
   { id: 'settings', label: 'Settings', icon: 'settings-outline', route: '/settings', color: '#D97706', bg: '#FFFBEB' },
 ] as const;
 
+const MOCK_VOICE_SEARCHES = ['Sales Invoice', 'Mehta Enterprises', 'Payment Received', 'Kumar Trading'];
+
 export default function HomeScreen() {
   const router = useRouter();
   const [activeFY, setActiveFY] = useState(MOCK_USER.fyYear);
@@ -40,7 +43,26 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [isTallyPaired, setIsTallyPaired] = useState(false);
 
-  // Check Tally pairing status on mount + whenever app comes to foreground
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [showMicModal, setShowMicModal] = useState(false);
+  const micScale = useRef(new Animated.Value(1)).current;
+  const micOpacity = useRef(new Animated.Value(0.7)).current;
+  const micTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Filtered activity for search results
+  const filteredActivity = useMemo(() => {
+    if (!searchQuery.trim()) return activity;
+    const q = searchQuery.toLowerCase();
+    return (activity as any[]).filter(item =>
+      (item.label || '').toLowerCase().includes(q) ||
+      (item.party || '').toLowerCase().includes(q) ||
+      (item.amount || '').toLowerCase().includes(q)
+    );
+  }, [searchQuery, activity]);
+
+  // ── Tally pairing check ──────────────────────────────────────────────────
   const checkPaired = useCallback(async () => {
     const val = await AsyncStorage.getItem('isTallyPaired');
     setIsTallyPaired(val === 'true');
@@ -54,7 +76,7 @@ export default function HomeScreen() {
     return () => sub.remove();
   }, [checkPaired]);
 
-  // When FY changes, update dashboard data from FY_DASHBOARD lookup table
+  // ── Data loading ─────────────────────────────────────────────────────────
   const handleFYChange = useCallback((fy: string) => {
     setActiveFY(fy);
     const fyData = FY_DASHBOARD[fy] || FY_DASHBOARD['FY 2025-26'];
@@ -65,12 +87,11 @@ export default function HomeScreen() {
 
   const loadData = useCallback(async () => {
     const [kpi, met, cf, act] = await Promise.all([
-      getKPIStrip(),
+      getKPIStrip(activeFilter),
       getMetrics(activeFilter),
-      getCashflow(),
+      getCashflow(activeFilter),
       getRecentActivity(),
     ]);
-    // Only update if still on the current FY (2025-26 = live API data)
     if (activeFY === 'FY 2025-26') {
       setKpiData(kpi as any);
       setMetrics(met as any);
@@ -87,6 +108,42 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
+  // ── Mic / Voice search ───────────────────────────────────────────────────
+  const startMicAnimation = () => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(micScale, { toValue: 1.4, duration: 700, useNativeDriver: true }),
+          Animated.timing(micOpacity, { toValue: 0.15, duration: 700, useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(micScale, { toValue: 1, duration: 700, useNativeDriver: true }),
+          Animated.timing(micOpacity, { toValue: 0.7, duration: 700, useNativeDriver: true }),
+        ]),
+      ])
+    ).start();
+  };
+
+  const handleMicPress = () => {
+    setShowMicModal(true);
+    startMicAnimation();
+    micTimerRef.current = setTimeout(() => {
+      setShowMicModal(false);
+      micScale.stopAnimation(); micScale.setValue(1);
+      micOpacity.stopAnimation(); micOpacity.setValue(0.7);
+      const pick = MOCK_VOICE_SEARCHES[Math.floor(Math.random() * MOCK_VOICE_SEARCHES.length)];
+      setSearchQuery(pick);
+      setSearchFocused(true);
+    }, 2500);
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    setSearchFocused(false);
+    if (micTimerRef.current) clearTimeout(micTimerRef.current);
+  };
+
+  // ── KPI row render ────────────────────────────────────────────────────────
   const renderKPI = ({ item }: any) => (
     <TouchableOpacity
       testID={`kpi-card-${item.id}`}
@@ -102,6 +159,8 @@ export default function HomeScreen() {
     </TouchableOpacity>
   );
 
+  const isSearching = searchQuery.trim().length > 0;
+
   return (
     <SafeAreaView testID="home-screen" style={styles.safe}>
       {/* Header */}
@@ -113,21 +172,42 @@ export default function HomeScreen() {
         onSettingsPress={() => router.push('/settings' as any)}
       />
 
-      {/* Search Bar */}
-      <View style={styles.searchWrap}>
-        <TouchableOpacity testID="search-bar" style={styles.searchBar} activeOpacity={0.7}>
-          <Ionicons name="search" size={16} color={COLORS.textTertiary} />
-          <Text style={styles.searchPlaceholder}>Search for recent transactions...</Text>
-          <Ionicons name="mic-outline" size={16} color={COLORS.textTertiary} />
-        </TouchableOpacity>
-      </View>
+      {/* ── Real Search Bar ── */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.searchWrap}>
+          <View style={[styles.searchBar, searchFocused && styles.searchBarFocused]}>
+            <Ionicons name="search" size={16} color={searchFocused ? COLORS.brandPrimary : COLORS.textTertiary} />
+            <TextInput
+              testID="search-bar"
+              style={styles.searchInput}
+              placeholder="Search transactions, parties..."
+              placeholderTextColor={COLORS.textTertiary}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => { if (!searchQuery) setSearchFocused(false); }}
+              returnKeyType="search"
+            />
+            {searchQuery ? (
+              <TouchableOpacity onPress={clearSearch} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close-circle" size={16} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity onPress={handleMicPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="mic-outline" size={16} color={COLORS.textTertiary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </KeyboardAvoidingView>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         style={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.brandPrimary} />}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* Tally Sync Banner — only shown when NOT yet paired */}
+        {/* Tally Sync Banner */}
         {!isTallyPaired && (
           <TouchableOpacity testID="sync-banner" style={styles.syncBanner} activeOpacity={0.8} onPress={() => router.push('/settings/tally-sync' as any)}>
             <View style={styles.syncBannerLeft}>
@@ -166,7 +246,9 @@ export default function HomeScreen() {
                 onPress={() => setActiveFilter(f)}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>{f}</Text>
+                <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>
+                  {f === '7D' ? '7 Days' : f === '1M' ? '1 Month' : f === '3M' ? '3 Months' : '6 Months'}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -216,20 +298,35 @@ export default function HomeScreen() {
         {/* Cashflow Card */}
         <CashflowCard {...cashflow} />
 
-        {/* Recent Activity */}
-        <RecentActivity activities={activity} />
+        {/* Recent Activity — filtered when searching */}
+        <RecentActivity activities={isSearching ? filteredActivity : activity} />
 
-        {/* IRN Alert Banner */}
-        <View testID="irn-alert" style={styles.alertBanner}>
-          <Ionicons name="warning-outline" size={16} color={COLORS.warning} />
-          <Text style={styles.alertText}>14 invoices due for IRN generation</Text>
-          <TouchableOpacity testID="irn-generate-btn" activeOpacity={0.7}>
-            <Text style={styles.alertAction}>Generate now</Text>
-          </TouchableOpacity>
-        </View>
+        {isSearching && filteredActivity.length === 0 && (
+          <View style={styles.emptySearch}>
+            <Ionicons name="search" size={32} color={COLORS.textTertiary} />
+            <Text style={styles.emptySearchText}>No results for "{searchQuery}"</Text>
+          </View>
+        )}
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* ── Mic "Speak Now" Modal ── */}
+      <Modal visible={showMicModal} transparent animationType="fade" onRequestClose={() => { setShowMicModal(false); clearSearch(); }}>
+        <TouchableOpacity style={styles.micBackdrop} activeOpacity={1} onPress={() => { setShowMicModal(false); clearSearch(); }}>
+          <View style={styles.micCard}>
+            {/* Pulsing ring */}
+            <View style={styles.micRingOuter}>
+              <Animated.View style={[styles.micRingPulse, { transform: [{ scale: micScale }], opacity: micOpacity }]} />
+              <View style={styles.micCircle}>
+                <Ionicons name="mic" size={32} color={COLORS.white} />
+              </View>
+            </View>
+            <Text style={styles.micListeningText}>Listening...</Text>
+            <Text style={styles.micHint}>Speak now to search</Text>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -241,9 +338,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full,
     paddingHorizontal: 14, paddingVertical: 10,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderWidth: 1.5, borderColor: COLORS.borderDefault,
   },
-  searchPlaceholder: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
+  searchBarFocused: { borderColor: COLORS.brandPrimary },
+  searchInput: {
+    flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary,
+    paddingVertical: 0,
+  },
   scroll: { flex: 1 },
   syncBanner: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -307,20 +408,43 @@ const styles = StyleSheet.create({
   },
   changeText: { fontSize: TYPOGRAPHY.xs, fontWeight: '600' },
   metricSep: { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 58 },
-  alertBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: COLORS.warningBg,
-    marginHorizontal: SPACING.md, borderRadius: RADIUS.md,
-    paddingHorizontal: 14, paddingVertical: 12,
-    borderWidth: 1, borderColor: '#FDE68A',
-    marginBottom: SPACING.md,
-  },
-  alertText: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.warning, fontWeight: '500' },
-  alertAction: { fontSize: TYPOGRAPHY.sm, color: COLORS.brandPrimary, fontWeight: '700' },
+  alertBanner: { display: 'none' as any },
+  alertText: { display: 'none' as any },
+  alertAction: { display: 'none' as any },
   secHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, marginTop: SPACING.md, marginBottom: 10 },
   secTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
   modulesGrid: { paddingHorizontal: SPACING.md, gap: 8 },
   moduleCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: 14, borderWidth: 1, borderColor: COLORS.borderDefault },
   moduleIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   moduleLabel: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
+
+  // ── Empty search state ────────────────────────────────────────────────────
+  emptySearch: { alignItems: 'center' as const, paddingVertical: 40, gap: 10 },
+  emptySearchText: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
+
+  // ── Mic Modal ─────────────────────────────────────────────────────────────
+  micBackdrop: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center' as const, justifyContent: 'flex-end' as const, paddingBottom: 80,
+  },
+  micCard: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.xl, padding: 36,
+    alignItems: 'center' as const, gap: 12, width: 220,
+  },
+  micRingOuter: {
+    alignItems: 'center' as const, justifyContent: 'center' as const, width: 100, height: 100,
+  },
+  micRingPulse: {
+    position: 'absolute' as const,
+    width: 100, height: 100, borderRadius: 50,
+    backgroundColor: COLORS.brandPrimary,
+  },
+  micCircle: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: COLORS.brandPrimary,
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
+  micListeningText: { fontSize: TYPOGRAPHY.md, fontWeight: '700' as const, color: COLORS.textPrimary },
+  micHint: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
 });

@@ -1,8 +1,12 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
+
+// ── Theme-matched ring colors ─────────────────────────────────────────────────
+const RING_INCOME  = '#1A1A1A';  // Brand primary — income arc
+const RING_OUTCOME = '#E0DEDA';  // Warm light gray — outcome track
 
 interface CashflowCardProps {
   netCash?: number;
@@ -12,6 +16,8 @@ interface CashflowCardProps {
   netProfit?: number;
   incomePercentage?: number;
   updatedAt?: string;
+  totalIncome?: number;
+  totalExpense?: number;
 }
 
 const RADIUS_SIZE = 80;
@@ -34,8 +40,13 @@ const CashflowCard: React.FC<CashflowCardProps> = ({
   netProfit = 130999,
   incomePercentage = 68,
   updatedAt = '5 mins. ago',
+  totalIncome,
+  totalExpense,
 }) => {
   const incomeArc = (incomePercentage / 100) * CIRCUMFERENCE;
+  const [showTooltip, setShowTooltip] = useState(false);
+  const incomeDisplay  = totalIncome  ? formatAmount(totalIncome)  : formatAmount(Math.round(netCash * 1.8));
+  const expenseDisplay = totalExpense ? formatAmount(totalExpense)  : formatAmount(Math.round(netCash * 0.8));
 
   return (
     <View testID="cashflow-card" style={styles.card}>
@@ -45,19 +56,24 @@ const CashflowCard: React.FC<CashflowCardProps> = ({
           <Ionicons name="eye-outline" size={16} color={COLORS.textSecondary} />
         </View>
         <Text style={styles.title}>Cashflow</Text>
+        <Text style={styles.tapHint}>Tap ring to see breakdown</Text>
       </View>
 
-      {/* Ring Chart */}
+      {/* Ring Chart — tap to toggle income/expense tooltip */}
       <View style={styles.chartWrap}>
-        <View style={styles.svgContainer}>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => setShowTooltip(p => !p)}
+          style={styles.svgContainer}
+        >
           <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
-            {/* Background track */}
+            {/* Outcome background track */}
             <Circle
               cx={CENTER}
               cy={CENTER}
               r={RADIUS_SIZE}
               fill="none"
-              stroke={COLORS.borderDefault}
+              stroke={RING_OUTCOME}
               strokeWidth={STROKE_W}
             />
             {/* Income arc */}
@@ -66,7 +82,7 @@ const CashflowCard: React.FC<CashflowCardProps> = ({
               cy={CENTER}
               r={RADIUS_SIZE}
               fill="none"
-              stroke={COLORS.positive}
+              stroke={RING_INCOME}
               strokeWidth={STROKE_W}
               strokeDasharray={`${incomeArc} ${CIRCUMFERENCE}`}
               strokeLinecap="round"
@@ -74,23 +90,45 @@ const CashflowCard: React.FC<CashflowCardProps> = ({
             />
           </Svg>
 
-          {/* Center Label — absolutely fills the SVG container */}
+          {/* Center Label */}
           <View style={styles.centerLabel}>
-            <Text style={styles.netCashLabel}>Net Cash</Text>
-            <Text style={styles.netCashValue}>₹{netCash.toLocaleString('en-IN')}</Text>
-            <Text style={styles.updatedText}>Updated {updatedAt}</Text>
+            {showTooltip ? (
+              <>
+                <View style={styles.tooltipRow}>
+                  <View style={[styles.tooltipDot, { backgroundColor: RING_INCOME }]} />
+                  <View>
+                    <Text style={styles.tooltipLabel}>Income</Text>
+                    <Text style={styles.tooltipValue}>{incomeDisplay}</Text>
+                  </View>
+                </View>
+                <View style={styles.tooltipDivider} />
+                <View style={styles.tooltipRow}>
+                  <View style={[styles.tooltipDot, { backgroundColor: '#A0A0A0' }]} />
+                  <View>
+                    <Text style={styles.tooltipLabel}>Expense</Text>
+                    <Text style={styles.tooltipValue}>{expenseDisplay}</Text>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={styles.netCashLabel}>Net Cash</Text>
+                <Text style={styles.netCashValue}>₹{netCash.toLocaleString('en-IN')}</Text>
+                <Text style={styles.updatedText}>Updated {updatedAt}</Text>
+              </>
+            )}
           </View>
-        </View>
+        </TouchableOpacity>
       </View>
 
       {/* Legend */}
       <View style={styles.legend}>
         <View style={styles.legendItem}>
-          <View style={[styles.legendLine, { backgroundColor: COLORS.borderStrong }]} />
+          <View style={[styles.legendLine, { backgroundColor: RING_OUTCOME, borderWidth: 1, borderColor: COLORS.borderDefault }]} />
           <Text style={styles.legendText}>Outcome</Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.legendLine, { backgroundColor: COLORS.positive }]} />
+          <View style={[styles.legendLine, { backgroundColor: RING_INCOME }]} />
           <Text style={styles.legendText}>Income</Text>
         </View>
       </View>
@@ -138,18 +176,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   iconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 28, height: 28, borderRadius: 14,
     backgroundColor: COLORS.pageBg,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
-  title: {
-    fontSize: TYPOGRAPHY.md,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-  },
+  title: { fontSize: TYPOGRAPHY.md, fontWeight: '600', color: COLORS.textPrimary },
+  tapHint: { flex: 1, textAlign: 'right', fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
   chartWrap: {
     alignItems: 'center',
     marginBottom: 12,
@@ -234,6 +266,23 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.base,
     fontWeight: '600',
     color: COLORS.textPrimary,
+  },
+  // ── Tooltip (tap to reveal) ─────────────────────────────────────────────────
+  tooltipRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 4,
+  },
+  tooltipDot: {
+    width: 10, height: 10, borderRadius: 5,
+  },
+  tooltipLabel: {
+    fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary,
+  },
+  tooltipValue: {
+    fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary,
+  },
+  tooltipDivider: {
+    height: 1, backgroundColor: COLORS.borderDefault, marginVertical: 4,
   },
 });
 

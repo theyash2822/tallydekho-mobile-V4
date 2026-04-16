@@ -16,9 +16,9 @@ interface TabDef {
 }
 
 const TAB_DEFS: TabDef[] = [
-  { name: 'index', title: 'Home', icon: 'home', iconOutline: 'home-outline' },
-  { name: 'stocks', title: 'Stocks', icon: 'cube', iconOutline: 'cube-outline' },
-  { name: 'ledger', title: 'Ledger', icon: 'journal', iconOutline: 'journal-outline' },
+  { name: 'index',   title: 'Home',    icon: 'home',      iconOutline: 'home-outline'      },
+  { name: 'ledger',  title: 'Ledger',  icon: 'journal',   iconOutline: 'journal-outline'   },
+  { name: 'stocks',  title: 'Stocks',  icon: 'cube',      iconOutline: 'cube-outline'      },
   { name: 'reports', title: 'Reports', icon: 'bar-chart', iconOutline: 'bar-chart-outline' },
 ];
 
@@ -121,8 +121,8 @@ export default function TabsLayout() {
       tabBar={(props: any) => <CustomTabBar {...props} />}
     >
       <Tabs.Screen name="index" />
-      <Tabs.Screen name="stocks" />
       <Tabs.Screen name="ledger" />
+      <Tabs.Screen name="stocks" />
       <Tabs.Screen name="reports" />
     </Tabs>
   );
