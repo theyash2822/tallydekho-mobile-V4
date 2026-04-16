@@ -98,6 +98,14 @@ export const getLedgers = () =>
 export const getReports = () =>
   fetchWithFallback(() => get('/reports'), MOCK_REPORTS);
 
+// Financial Report (P&L, Balance Sheet, Trial Balance)
+// API endpoint: GET /api/reports/financial-report?from=DD/MM/YY&to=DD/MM/YY
+export const getFinancialReport = (fromDate?: string, toDate?: string) =>
+  fetchWithFallback(
+    () => get(`/reports/financial-report${fromDate && toDate ? `?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}` : ''}`),
+    null   // mock data lives inside the screen component; backend will return real data
+  );
+
 export const getFinancialData = () =>
   fetchWithFallback(
     () => get<{ months: string[]; revenue: number[]; expenses: number[] }>('/reports/financial'),
