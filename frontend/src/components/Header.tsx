@@ -12,10 +12,14 @@ const FY_YEARS = [
   'FY 2025-26', 'FY 2024-25', 'FY 2023-24', 'FY 2022-23', 'FY 2021-22',
 ];
 
+// Mock last synced time — will be replaced by real state/context when backend is integrated
+const MOCK_LAST_SYNCED = '15 Jun 2025, 11:42 AM';
+
 interface HeaderProps {
   companyName?: string;
   fyYear?: string;
   notificationCount?: number;
+  lastSyncTime?: string;
   onNotificationPress?: () => void;
   onFYChange?: (fy: string) => void;
   onSettingsPress?: () => void;
@@ -26,6 +30,7 @@ const Header: React.FC<HeaderProps> = ({
   companyName = 'YK Industries Pvt. Ltd.',
   fyYear = 'FY 2025-26',
   notificationCount = 1,
+  lastSyncTime = MOCK_LAST_SYNCED,
   onNotificationPress,
   onFYChange,
   onSettingsPress,
@@ -33,9 +38,9 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [selectedFY, setSelectedFY] = useState(fyYear);
+  const [selectedFY,      setSelectedFY]      = useState(fyYear);
   const [selectedCompany, setSelectedCompany] = useState(companyName);
-  const [showFYModal, setShowFYModal] = useState(false);
+  const [showFYModal,      setShowFYModal]      = useState(false);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
 
   const dropdownTop = insets.top + 58;
@@ -64,13 +69,13 @@ const Header: React.FC<HeaderProps> = ({
 
   // Abbreviate long company names
   const shortCompany = selectedCompany.length > 18
-    ? selectedCompany.substring(0, 16) + '…'
+    ? selectedCompany.substring(0, 16) + '\u2026'
     : selectedCompany;
 
   return (
     <>
       <View testID="app-header" style={styles.container}>
-        {/* Left: Logo + Company Dropdown */}
+        {/* Left: Logo + Company Dropdown + Sync time */}
         <TouchableOpacity
           testID="company-selector"
           style={styles.leftSection}
@@ -80,9 +85,19 @@ const Header: React.FC<HeaderProps> = ({
           <View style={styles.logoBox}>
             <Ionicons name="stats-chart" size={14} color={COLORS.brandPrimary} />
           </View>
-          <View style={styles.companyRow}>
-            <Text style={styles.companyName} numberOfLines={1}>{shortCompany}</Text>
-            <Ionicons name="chevron-down" size={12} color={COLORS.brandPrimary} />
+          <View style={styles.companyBlock}>
+            <View style={styles.companyRow}>
+              <Text style={styles.companyName} numberOfLines={1}>{shortCompany}</Text>
+              <Ionicons name="chevron-down" size={12} color={COLORS.brandPrimary} />
+            </View>
+            {lastSyncTime ? (
+              <View style={styles.syncRow}>
+                <Ionicons name="sync-outline" size={9} color={COLORS.textTertiary} />
+                <Text style={styles.syncTxt} numberOfLines={1}>
+                  Synced {lastSyncTime}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </TouchableOpacity>
 
@@ -186,13 +201,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md, paddingVertical: 10,
     backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
-  leftSection: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 },
+  leftSection:  { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 },
   logoBox: {
     width: 30, height: 30, borderRadius: 8,
     backgroundColor: COLORS.activeBg, alignItems: 'center', justifyContent: 'center',
   },
-  companyRow: { flexDirection: 'row', alignItems: 'center', gap: 3, flex: 1 },
-  companyName: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, flex: 1 },
+  companyBlock: { flex: 1 },
+  companyRow:   { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  companyName:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, flex: 1 },
+  syncRow:      { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+  syncTxt:      { fontSize: 9, color: COLORS.textTertiary, fontWeight: '500', flex: 1 },
   rightSection: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   fyPill: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
@@ -200,12 +218,9 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: COLORS.borderStrong,
     borderRadius: 6, borderStyle: 'dashed',
   },
-  fyText: { fontSize: 10, fontWeight: '700', color: COLORS.brandPrimary },
-  iconBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', position: 'relative' },
-  avatarSmall: {
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center',
-  },
+  fyText:     { fontSize: 10, fontWeight: '700', color: COLORS.brandPrimary },
+  iconBtn:    { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  avatarSmall:{ width: 30, height: 30, borderRadius: 15, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: TYPOGRAPHY.xs, fontWeight: '800', color: COLORS.white },
   badge: {
     position: 'absolute', top: 2, right: 2,
@@ -219,40 +234,23 @@ const styles = StyleSheet.create({
     overflow: 'hidden', elevation: 16,
     boxShadow: '0 6px 14px rgba(0, 0, 0, 0.18)',
   },
-  dropdownArrowLeft: {
-    width: 10, height: 10, backgroundColor: COLORS.cardBg,
-    borderTopWidth: 1, borderLeftWidth: 1, borderColor: COLORS.borderDefault,
-    alignSelf: 'flex-start', marginLeft: 20, marginTop: -5,
-    transform: [{ rotate: '45deg' }],
-  },
-  dropdownArrowRight: {
-    width: 10, height: 10, backgroundColor: COLORS.cardBg,
-    borderTopWidth: 1, borderLeftWidth: 1, borderColor: COLORS.borderDefault,
-    alignSelf: 'flex-end', marginRight: 20, marginTop: -5,
-    transform: [{ rotate: '45deg' }],
-  },
+  dropdownArrowLeft:  { width: 10, height: 10, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderLeftWidth: 1, borderColor: COLORS.borderDefault, alignSelf: 'flex-start', marginLeft: 20, marginTop: -5, transform: [{ rotate: '45deg' }] },
+  dropdownArrowRight: { width: 10, height: 10, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderLeftWidth: 1, borderColor: COLORS.borderDefault, alignSelf: 'flex-end', marginRight: 20, marginTop: -5, transform: [{ rotate: '45deg' }] },
   dropdownTitle: {
     fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary,
     textTransform: 'uppercase', letterSpacing: 0.8,
     paddingHorizontal: 14, paddingTop: 12, paddingBottom: 8,
     borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
-  optionRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 14, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-  },
+  optionRow:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   optionRowActive: { backgroundColor: COLORS.activeBg },
-  optionLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  coIcon: {
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: COLORS.borderDefault, alignItems: 'center', justifyContent: 'center',
-  },
-  coIconActive: { backgroundColor: COLORS.brandPrimary },
-  coIconText: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  optionText: { fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
-  optionTextActive: { fontWeight: '700', color: COLORS.brandPrimary },
-  optionSub: { fontSize: 10, color: COLORS.textTertiary, marginTop: 1 },
+  optionLeft:      { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  coIcon:          { width: 30, height: 30, borderRadius: 15, backgroundColor: COLORS.borderDefault, alignItems: 'center', justifyContent: 'center' },
+  coIconActive:    { backgroundColor: COLORS.brandPrimary },
+  coIconText:      { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  optionText:      { fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
+  optionTextActive:{ fontWeight: '700', color: COLORS.brandPrimary },
+  optionSub:       { fontSize: 10, color: COLORS.textTertiary, marginTop: 1 },
 });
 
 export default Header;
