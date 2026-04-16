@@ -1,13 +1,15 @@
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput, Modal, Switch, TextInputProps,
+  KeyboardAvoidingView, Platform, Alert, TextInput, Modal, TextInputProps,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
@@ -319,10 +321,8 @@ function AddCustomerDrawer({ visible, onClose, onSaved }: {
               />
               <View style={acd.drCrRow}>
                 <Text style={[acd.drCrLbl, !isCr && acd.drCrLblActive]}>Dr</Text>
-                <Switch
+                <BrandSwitch
                   value={isCr} onValueChange={setIsCr}
-                  trackColor={{ false: COLORS.borderStrong, true: COLORS.borderStrong }}
-                  thumbColor={COLORS.white}
                 />
                 <Text style={[acd.drCrLbl, isCr && acd.drCrLblActive]}>Cr</Text>
               </View>
@@ -346,10 +346,7 @@ function AddCustomerDrawer({ visible, onClose, onSaved }: {
             {/* Enable Mailing Details */}
             <View style={acd.toggleRow}>
               <Text style={acd.toggleLbl}>Enable Mailing Details</Text>
-              <Switch value={mailing} onValueChange={setMailing}
-                trackColor={{ false: COLORS.borderStrong, true: COLORS.brandPrimary }}
-                thumbColor={COLORS.white}
-              />
+              <BrandSwitch value={mailing} onValueChange={setMailing} />
             </View>
             {mailing && (
               <View style={acd.expandSection}>
@@ -396,10 +393,7 @@ function AddCustomerDrawer({ visible, onClose, onSaved }: {
             {/* Provide Bank Details */}
             <View style={acd.toggleRow}>
               <Text style={acd.toggleLbl}>Provide Bank Details</Text>
-              <Switch value={bank} onValueChange={setBank}
-                trackColor={{ false: COLORS.borderStrong, true: COLORS.brandPrimary }}
-                thumbColor={COLORS.white}
-              />
+              <BrandSwitch value={bank} onValueChange={setBank} />
             </View>
             {bank && (
               <View style={acd.expandSection}>
@@ -813,11 +807,12 @@ export default function CreateSalesInvoiceScreen() {
   }, [collectPayNow, payNowAmount, totals.grand]);
 
   const handleSubmit = useCallback(() => {
-    Alert.alert(
-      '✓ Invoice Submitted',
-      `Invoice ${invoiceNo} submitted successfully!`,
-      [{ text: 'OK', onPress: () => router.back() }]
-    );
+    Toast.show({
+      type: 'success',
+      text1: 'Invoice Submitted',
+      text2: `Invoice ${invoiceNo} submitted successfully.`,
+    });
+    setTimeout(() => router.back(), 1000);
   }, [invoiceNo, router]);
 
   const closeModal = useCallback(() => setActiveModal(null), []);
@@ -989,11 +984,9 @@ export default function CreateSalesInvoiceScreen() {
                   <Text style={s.payNowSub}>Record payment received at the time of billing</Text>
                 </View>
               </View>
-              <Switch
+              <BrandSwitch
                 value={collectPayNow}
                 onValueChange={setCollectPayNow}
-                trackColor={{ false: COLORS.borderDefault, true: COLORS.positive }}
-                thumbColor={COLORS.white}
               />
             </TouchableOpacity>
 

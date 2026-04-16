@@ -7,6 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
@@ -221,7 +222,8 @@ export default function CreateCreditNoteScreen() {
   },[items]);
 
   const handleSubmit = useCallback(()=>{
-    Alert.alert('✓ Credit Note Issued',`Credit Note ${cnNo} issued successfully!`,[{text:'OK',onPress:()=>router.back()}]);
+    Toast.show({ type: 'success', text1: 'Credit Note Issued', text2: `Credit Note ${cnNo} issued successfully.` });
+    setTimeout(() => router.back(), 1000);
   },[cnNo,router]);
 
   return (

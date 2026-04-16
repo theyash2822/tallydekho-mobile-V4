@@ -7,6 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import FormField from '../../src/components/forms/FormField';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
@@ -270,8 +271,8 @@ export default function CreateSalesOrderScreen() {
   const closeModal = useCallback(() => setActiveModal(null), []);
 
   const handleSubmit = useCallback(() => {
-    Alert.alert('✓ Order Created', `Sales Order ${orderNo} created successfully!`,
-      [{ text: 'OK', onPress: () => router.back() }]);
+    Toast.show({ type: 'success', text1: 'Order Created', text2: `Sales Order ${orderNo} created successfully.` });
+    setTimeout(() => router.back(), 1000);
   }, [orderNo, router]);
 
   return (

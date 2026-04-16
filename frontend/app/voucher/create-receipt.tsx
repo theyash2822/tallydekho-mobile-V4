@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 
@@ -29,11 +30,13 @@ export default function CreateReceiptVoucher() {
   const handleSubmit = () => {
     if (!party.trim()) { Alert.alert('Required', 'Please enter party name'); return; }
     if (!amount.trim()) { Alert.alert('Required', 'Please enter amount'); return; }
-    Alert.alert('✅ Success', `Receipt Voucher ${voucherNo} submitted successfully!`, [{ text: 'OK', onPress: () => router.back() }]);
+    Toast.show({ type: 'success', text1: 'Voucher Posted', text2: `Receipt Voucher ${voucherNo} posted successfully.` });
+    setTimeout(() => router.replace('/document/PV-2089?type=receipt_voucher' as any), 800);
   };
 
   const handleSaveOptional = () => {
-    Alert.alert('Saved', `Receipt Voucher saved as optional (not posted to books).`, [{ text: 'OK', onPress: () => router.back() }]);
+    Toast.show({ type: 'success', text1: 'Draft Saved', text2: 'Receipt Voucher saved as optional.' });
+    setTimeout(() => router.back(), 1000);
   };
 
   return (

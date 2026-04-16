@@ -7,6 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
@@ -291,7 +292,8 @@ export default function CreatePurchaseInvoiceScreen() {
   },[permission, requestPermission]);
 
   const handleSubmit = useCallback((draft:boolean)=>{
-    Alert.alert(draft?'Draft Saved':'Invoice Submitted', draft?`${invNo} saved as draft.`:`Purchase invoice ${invNo} submitted successfully!`,[{text:'OK',onPress:()=>router.back()}]);
+    Toast.show({ type: 'success', text1: draft ? 'Draft Saved' : 'Invoice Submitted', text2: draft ? `${invNo} saved as draft.` : `Purchase invoice ${invNo} submitted successfully.` });
+    setTimeout(() => router.back(), 1000);
   },[invNo,router]);
 
   return (

@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput, Modal, Switch,
+  KeyboardAvoidingView, Platform, Alert, TextInput, Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import FormDropdown from '../../src/components/forms/FormDropdown';
+import BrandSwitch from '../../src/components/forms/BrandSwitch';
 
 const GROUPS = ['Electronics', 'Accessories', 'Raw Materials', 'Finished Goods', 'Services', 'Consumables', 'Spare Parts', 'Packaging'];
 const UNITS = ['Pcs (Pieces)', 'Kg (Kilogram)', 'Ltr (Litre)', 'Mtr (Meter)', 'Box', 'Nos (Numbers)', 'Bag', 'Roll'];
@@ -72,7 +74,12 @@ export default function CreateStockItemScreen() {
 
   const handleSave = () => {
     if (!productName.trim()) { Alert.alert('Required', 'Product name is required.'); return; }
-    Alert.alert('✓ Item Saved', `"${productName}" has been added to inventory.`, [{ text: 'OK', onPress: () => router.back() }]);
+    Toast.show({
+      type: 'success',
+      text1: 'Item Saved',
+      text2: `"${productName}" has been added to inventory.`,
+    });
+    setTimeout(() => router.back(), 1000);
   };
 
   return (
@@ -171,12 +178,7 @@ export default function CreateStockItemScreen() {
           {/* Generate Barcode toggle */}
           <View style={s.toggleRow}>
             <Text style={s.toggleLbl}>Generate Barcode</Text>
-            <Switch
-              value={generateBarcode}
-              onValueChange={setGenerateBarcode}
-              trackColor={{ false: COLORS.borderStrong, true: COLORS.brandPrimary }}
-              thumbColor={COLORS.white}
-            />
+            <BrandSwitch value={generateBarcode} onValueChange={setGenerateBarcode} />
           </View>
 
           {/* Barcode content checkboxes */}

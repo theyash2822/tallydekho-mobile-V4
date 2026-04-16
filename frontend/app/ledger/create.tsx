@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput, Switch, TextInputProps,
+  KeyboardAvoidingView, Platform, Alert, TextInput, TextInputProps,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -10,6 +11,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import FormDropdown from '../../src/components/forms/FormDropdown';
 import SearchableDropdown from '../../src/components/forms/SearchableDropdown';
+import BrandSwitch from '../../src/components/forms/BrandSwitch';
 
 // ─── Themed TextInput (no blue focus ring) ────────────────────────────────────
 function ThemedInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
@@ -90,13 +92,7 @@ function BalanceRow({ value, onChange, isCr, onToggleCr }: BalanceRowProps) {
       />
       <View style={s.drCrWrap}>
         <Text style={[s.drCrLabel, !isCr && s.drCrLabelActive]}>Dr</Text>
-        <Switch
-          value={isCr}
-          onValueChange={onToggleCr}
-          trackColor={{ false: COLORS.borderStrong, true: COLORS.borderStrong }}
-          thumbColor={COLORS.white}
-          ios_backgroundColor={COLORS.borderStrong}
-        />
+        <BrandSwitch value={isCr} onValueChange={onToggleCr} />
         <Text style={[s.drCrLabel, isCr && s.drCrLabelActive]}>Cr</Text>
       </View>
     </View>
@@ -114,13 +110,7 @@ function ToggleRow({ label, value, onChange }: ToggleRowProps) {
   return (
     <View style={s.toggleRow}>
       <Text style={s.toggleLabel}>{label}</Text>
-      <Switch
-        value={value}
-        onValueChange={onChange}
-        trackColor={{ false: COLORS.borderStrong, true: COLORS.brandPrimary }}
-        thumbColor={COLORS.white}
-        ios_backgroundColor={COLORS.borderStrong}
-      />
+      <BrandSwitch value={value} onValueChange={onChange} />
     </View>
   );
 }
@@ -192,11 +182,12 @@ export default function CreateLedgerScreen() {
       Alert.alert('Required', 'Please select a duty/tax type.');
       return;
     }
-    Alert.alert(
-      '✓ Ledger Created',
-      `"${name}" has been added successfully.`,
-      [{ text: 'OK', onPress: () => router.back() }]
-    );
+    Toast.show({
+      type: 'success',
+      text1: 'Ledger Created',
+      text2: `"${name}" has been added successfully.`,
+    });
+    setTimeout(() => router.back(), 1200);
   };
 
   return (
@@ -284,7 +275,7 @@ export default function CreateLedgerScreen() {
 
               {/* Percentage of Calculation */}
               <View style={{ flex: 1 }}>
-                <Text style={s.label}>Percentage of Calculation <Text style={s.required}>*</Text></Text>
+                <Text style={[s.label, { marginTop: 0, marginBottom: 6 }]}>% of Calculation <Text style={s.required}>*</Text></Text>
                 <View style={s.percentBox}>
                   <TextInput
                     style={[
@@ -548,8 +539,8 @@ const s = StyleSheet.create({
     paddingTop: 12,
   },
 
-  // Row of 2 columns
-  row2: { flexDirection: 'row', gap: 12, marginTop: 18 },
+  // Row of 2 columns — align from top
+  row2: { flexDirection: 'row', gap: 12, marginTop: 18, alignItems: 'flex-start' },
 
   // Percentage input
   percentBox: {

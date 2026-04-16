@@ -6,6 +6,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
@@ -119,11 +120,24 @@ export default function CreateVoucherScreen() {
   }, [amount]);
 
   const handleSubmit = useCallback((draft: boolean) => {
-    Alert.alert(
-      draft ? '✓ Draft Saved' : '✓ Voucher Posted',
-      draft ? `${cfg.label} voucher saved as draft.` : `${cfg.label} voucher (${AUTO_NOS[vType]}) posted successfully.`,
-      [{ text: 'OK', onPress: () => router.back() }]
-    );
+    if (draft) {
+      Toast.show({
+        type: 'success',
+        text1: 'Draft Saved',
+        text2: `${cfg.label} voucher saved as draft.`,
+      });
+      setTimeout(() => router.back(), 1000);
+    } else {
+      // Option A: show toast then navigate to document preview
+      Toast.show({
+        type: 'success',
+        text1: 'Voucher Posted',
+        text2: `${cfg.label} voucher ${AUTO_NOS[vType]} posted successfully.`,
+      });
+      setTimeout(() => {
+        router.replace(`/document/PV-2089?type=${vType}_voucher` as any);
+      }, 800);
+    }
   }, [cfg, vType, router]);
 
   const handleAddParty = useCallback((data: PartyData) => {

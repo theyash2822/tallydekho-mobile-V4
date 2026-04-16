@@ -7,6 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import FormField from '../../src/components/forms/FormField';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
@@ -238,7 +239,8 @@ export default function CreatePurchaseOrderScreen() {
   },[items,logisticsTotal]);
 
   const handleSubmit = useCallback((draft:boolean)=>{
-    Alert.alert(draft?'✓ Draft Saved':'✓ PO Created',draft?`${poNo} saved as draft.`:`Purchase Order ${poNo} sent to vendor!`,[{text:'OK',onPress:()=>router.back()}]);
+    Toast.show({ type: 'success', text1: draft ? 'Draft Saved' : 'PO Created', text2: draft ? `${poNo} saved as draft.` : `Purchase Order ${poNo} sent to vendor.` });
+    setTimeout(() => router.back(), 1000);
   },[poNo,router]);
 
   return (

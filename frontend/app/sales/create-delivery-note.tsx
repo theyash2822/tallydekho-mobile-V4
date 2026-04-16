@@ -1,17 +1,19 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput, Modal, Switch,
+  KeyboardAvoidingView, Platform, Alert, TextInput, Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import SearchableDropdown, { SDOption } from '../../src/components/forms/SearchableDropdown';
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
+import BrandSwitch from '../../src/components/forms/BrandSwitch';
 
 const PARTIES: SDOption[] = [
   { label: 'ABC Traders', value: 'abc' },
@@ -121,7 +123,12 @@ export default function CreateDeliveryNoteScreen() {
   const removeItem = useCallback((id:string)=>setItems(prev=>prev.length>1?prev.filter(i=>i.id!==id):prev),[]);
 
   const handleSubmit = useCallback(()=>{
-    Alert.alert('✓ Delivery Note Created', `Delivery Note ${dnNo} issued successfully!`,[{text:'OK',onPress:()=>router.back()}]);
+    Toast.show({
+      type: 'success',
+      text1: 'Delivery Note Created',
+      text2: `Delivery Note ${dnNo} issued successfully.`,
+    });
+    setTimeout(() => router.back(), 1000);
   },[dnNo,router]);
 
   return (
@@ -163,7 +170,7 @@ export default function CreateDeliveryNoteScreen() {
                 <Ionicons name="car-sport-outline" size={16} color={COLORS.textSecondary} />
                 <Text style={s.switchLabel}>Vehicle Information</Text>
               </View>
-              <Switch value={showVehicleInfo} onValueChange={setShowVehicleInfo} trackColor={{false:COLORS.borderDefault,true:COLORS.info+'60'}} thumbColor={showVehicleInfo?COLORS.info:COLORS.textTertiary} />
+              <BrandSwitch value={showVehicleInfo} onValueChange={setShowVehicleInfo} />
             </View>
             {showVehicleInfo && (
               <View style={s.vehicleBox}>
