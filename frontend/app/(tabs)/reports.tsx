@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions,
+  PanResponder, ActivityIndicator, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, {
@@ -10,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_REPORTS } from '../../src/data/mockData';
+import { getFinancialData } from '../../src/services/api';
 
 const SCREEN_W = Dimensions.get('window').width;
 // Card width (screen - outer margins). Content area inside card (card - card padding).
@@ -22,19 +24,20 @@ const C_GOLD   = '#D97706';
 const C_GREY   = '#E0DED6';
 const C_GRID   = '#E8E7E1';
 
-// ── Chart data (24 points for 8 time periods → 3 pts/period for dense lines) ──
-const FIN_REVENUE  = [280,250,320,290,380,340,420,390,450,480,420,500,
-                      520,480,560,530,580,550,610,580,640,610,650,680];
-const FIN_EXPENSES = [18000,16000,21000,25000,28000,23000,35000,30000,
-                      42000,45000,38000,52000,55000,48000,62000,58000,
-                      52000,70000,68000,62000,75000,78000,70000,72000];
-const FIN_X = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug'];
-
+// ── AI Insights static data ────────────────────────────────────────────────────
 const AI_FORECAST  = [280,260,300,320,310,340,330,360,350,370,360,390,
                       380,400,395,420,410,430,420,445,435,455,445,460];
 const AI_ACTUAL    = [260,240,280,270,310,380,420,400,380,450,490,540,
                       580,630,680,740,800,860,820,900,940,980,1020,990];
 const AI_X = ['Wk 1','Wk 2','Wk 3','Wk 4','Wk 5','Wk 6','Wk 7','Wk 8'];
+
+// ── Value formatter (lakh/crore aware) ────────────────────────────────────────
+function fmtVal(v: number): string {
+  if (v >= 10000000) return `₹${(v / 10000000).toFixed(1)}Cr`;
+  if (v >= 100000)   return `₹${(v / 100000).toFixed(1)}L`;
+  if (v >= 1000)     return `₹${(v / 1000).toFixed(0)}k`;
+  return `₹${Math.round(v)}`;
+}
 
 // ── Logarithmic Y-scale helpers ───────────────────────────────────────────────
 const MIN_LOG = 2;  // log10(100)

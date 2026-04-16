@@ -98,6 +98,16 @@ export const getLedgers = () =>
 export const getReports = () =>
   fetchWithFallback(() => get('/reports'), MOCK_REPORTS);
 
+export const getFinancialData = () =>
+  fetchWithFallback(
+    () => get<{ months: string[]; revenue: number[]; expenses: number[] }>('/reports/financial'),
+    {
+      months:   ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'],
+      revenue:  [450000,520000,480000,610000,580000,640000,720000,680000,750000,820000,790000,950000],
+      expenses: [380000,420000,410000,490000,460000,510000,580000,545000,600000,660000,630000,720000],
+    }
+  );
+
 // Notifications
 export const getNotifications = () =>
   fetchWithFallback(() => get('/notifications'), MOCK_NOTIFICATIONS);
