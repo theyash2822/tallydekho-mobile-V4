@@ -648,25 +648,23 @@ export default function StockAlertsScreen() {
             <Ionicons name="chevron-down" size={14} color={COLORS.textTertiary} />
           </TouchableOpacity>
 
-          {/* Chips — tracked batches + group by warehouse */}
-          <View style={[s.chipRow, { marginTop: SPACING.md }]}>
+          {/* Chips — tracked batches + group by warehouse (always one row) */}
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: SPACING.md }}>
             {[
-              { key: 'tracked',  label: 'Only track batches',  val: trackedBatches, set: setTrackedBatches },
-              { key: 'group',    label: 'Group by warehouse',  val: groupByWh,      set: setGroupByWh      },
+              { key: 'tracked', label: 'Only track batches', val: trackedBatches, set: setTrackedBatches },
+              { key: 'group',   label: 'Group by warehouse', val: groupByWh,      set: setGroupByWh      },
             ].map(item => (
-              <TouchableOpacity
-                key={item.key}
-                style={[s.expiryChip, item.val && s.expiryChipActive]}
-                onPress={() => item.set(p => !p)}
-                activeOpacity={0.7}
-              >
-                {item.val && (
-                  <Ionicons name="checkmark" size={13} color={COLORS.white} style={{ marginRight: 5 }} />
-                )}
-                <Text style={[s.expiryChipTxt, item.val && s.expiryChipTxtActive]}>
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
+              <View key={item.key} style={{ flex: 1, overflow: 'hidden' }}>
+                <TouchableOpacity
+                  style={[s.expiryChip, item.val && s.expiryChipActive, { width: '100%' }]}
+                  onPress={() => item.set(p => !p)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[s.expiryChipTxt, item.val && s.expiryChipTxtActive]} numberOfLines={1}>
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             ))}
           </View>
         </View>
@@ -855,13 +853,13 @@ const s = StyleSheet.create({
 
   // Expiry chips (can wrap to two lines)
   expiryChip: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 12, paddingVertical: 9,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 8, paddingVertical: 9,
     borderRadius: RADIUS.full, backgroundColor: COLORS.pageBg,
     borderWidth: 1.5, borderColor: COLORS.borderDefault,
   },
   expiryChipActive:   { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
-  expiryChipTxt:      { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
+  expiryChipTxt:      { fontSize: 12, color: COLORS.textSecondary, fontWeight: '600', textAlign: 'center' },
   expiryChipTxtActive:{ color: COLORS.white, fontWeight: '700' },
 
   // Save button
