@@ -221,6 +221,221 @@ const lc = StyleSheet.create({
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
+// Interactive Line Chart — linear scale, touch + web-hover tooltip
+// ══════════════════════════════════════════════════════════════════════════════
+interface ILineChartProps {
+  lines: { values: number[]; color: string; label: string }[];
+  xLabels: string[];
+  isLoading?: boolean;
+}
+
+function InteractiveLineChart({ lines, xLabels, isLoading }: ILineChartProps) {
+  const [tooltipIdx, setTooltipIdx] = useState<number | null>(null);
+
+  const PAD_LEFT   = 52;
+  const PAD_RIGHT  = 10;
+  const PAD_TOP    = 14;
+  const PAD_BOTTOM = 28;
+  const svgW  = CONTENT_W;
+  const svgH  = 190;
+  const chartW = svgW - PAD_LEFT - PAD_RIGHT;
+  const chartH = svgH - PAD_TOP - PAD_BOTTOM;
+  const n = lines[0]?.values.length ?? 0;
+
+  // Linear scale: compute bounds with 12% padding
+  const allValues = lines.flatMap(l => l.values);
+  const rawMin = allValues.length > 0 ? Math.min(...allValues) : 0;
+  const rawMax = allValues.length > 0 ? Math.max(...allValues) : 1;
+  const pad    = (rawMax - rawMin) * 0.12;
+  const minVal = Math.max(0, rawMin - pad);
+  const maxVal = rawMax + pad;
+  const range  = maxVal - minVal || 1;
+
+  const getX = (i: number) => PAD_LEFT + (n > 1 ? (i / (n - 1)) * chartW : chartW / 2);
+  const getY = (v: number) => PAD_TOP + chartH - ((v - minVal) / range) * chartH;
+
+  const buildLinePath = (values: number[]) =>
+    values.map((v, i) => `${i === 0 ? 'M' : 'L'}${getX(i).toFixed(1)},${getY(v).toFixed(1)}`).join(' ');
+
+  // 5 horizontal grid lines
+  const yGrid = Array.from({ length: 5 }, (_, i) => minVal + (range / 4) * i);
+
+  // ── Stale-closure-safe refs for PanResponder ──
+  const nRef      = useRef(n);
+  const chartWRef = useRef(chartW);
+  const padLRef   = useRef(PAD_LEFT);
+  nRef.current      = n;
+  chartWRef.current = chartW;
+  padLRef.current   = PAD_LEFT;
+
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleTouch = useCallback((touchX: number) => {
+    const _n = nRef.current;
+    if (_n === 0) return;
+    const idx = Math.max(0, Math.min(_n - 1,
+      Math.round(((touchX - padLRef.current) / chartWRef.current) * (_n - 1))
+    ));
+    setTooltipIdx(idx);
+  }, []);
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder:       () => true,
+      onMoveShouldSetPanResponder:        () => true,
+      onPanResponderTerminationRequest:   () => false,
+      onPanResponderGrant:  (e) => { if (hideTimer.current) clearTimeout(hideTimer.current); handleTouch(e.nativeEvent.locationX); },
+      onPanResponderMove:   (e) => handleTouch(e.nativeEvent.locationX),
+      onPanResponderRelease: () => { hideTimer.current = setTimeout(() => setTooltipIdx(null), 2000); },
+    })
+  ).current;
+
+  // Web mouse hover
+  const webProps = Platform.OS === 'web' ? {
+    onMouseMove: (e: any) => {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+      handleTouch(e.clientX - e.currentTarget.getBoundingClientRect().left);
+    },
+    onMouseLeave: () => setTooltipIdx(null),
+  } : {};
+
+  if (isLoading) {
+    return (
+      <View style={{ height: svgH, alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+        <ActivityIndicator color={COLORS.brandPrimary} size="small" />
+        <Text style={{ fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary }}>Loading...</Text>
+      </View>
+    );
+  }
+
+  // Tooltip position — clamp so it never overflows card edges
+  const TOOLTIP_W = 168;
+  const tx = tooltipIdx !== null ? getX(tooltipIdx) : 0;
+  const tooltipLeft = tooltipIdx !== null
+    ? Math.min(Math.max(tx - TOOLTIP_W / 2, PAD_LEFT - 8), CONTENT_W - TOOLTIP_W)
+    : 0;
+
+  return (
+    <View style={{ position: 'relative' }} {...pan.panHandlers} {...(webProps as any)}>
+      <Svg width={svgW} height={svgH}>
+
+        {/* Y-grid + labels */}
+        {yGrid.map((v, i) => {
+          const y = getY(v);
+          return (
+            <G key={i}>
+              <Line
+                x1={PAD_LEFT} y1={y.toFixed(1)}
+                x2={(PAD_LEFT + chartW).toFixed(1)} y2={y.toFixed(1)}
+                stroke={C_GRID} strokeWidth={1}
+              />
+              <SvgText
+                x={(PAD_LEFT - 5).toFixed(1)} y={(y + 4).toFixed(1)}
+                textAnchor="end" fontSize={8} fill={COLORS.textTertiary}
+              >
+                {fmtVal(v)}
+              </SvgText>
+            </G>
+          );
+        })}
+
+        {/* X-axis baseline */}
+        <Line
+          x1={PAD_LEFT} y1={(PAD_TOP + chartH).toFixed(1)}
+          x2={(PAD_LEFT + chartW).toFixed(1)} y2={(PAD_TOP + chartH).toFixed(1)}
+          stroke={C_GRID} strokeWidth={1}
+        />
+
+        {/* X-axis labels */}
+        {xLabels.map((lbl, j) => (
+          <SvgText
+            key={`xl-${j}`}
+            x={getX(j).toFixed(1)}
+            y={(svgH - 5).toFixed(1)}
+            textAnchor="middle" fontSize={8.5} fill={COLORS.textSecondary}
+          >
+            {lbl}
+          </SvgText>
+        ))}
+
+        {/* Data lines */}
+        {lines.map(l => (
+          <Path
+            key={l.label}
+            d={buildLinePath(l.values)}
+            stroke={l.color} strokeWidth={2.5}
+            fill="none" strokeLinecap="round" strokeLinejoin="round"
+          />
+        ))}
+
+        {/* Vertical crosshair */}
+        {tooltipIdx !== null && (
+          <Line
+            x1={tx.toFixed(1)} y1={PAD_TOP.toString()}
+            x2={tx.toFixed(1)} y2={(PAD_TOP + chartH).toFixed(1)}
+            stroke={COLORS.textSecondary} strokeWidth={1} strokeDasharray="4,3"
+          />
+        )}
+
+        {/* Highlight dots at crosshair */}
+        {tooltipIdx !== null && lines.map(l => (
+          <Circle
+            key={`hd-${l.label}`}
+            cx={tx.toFixed(1)} cy={getY(l.values[tooltipIdx]).toFixed(1)}
+            r={5} fill={l.color} stroke="#fff" strokeWidth={2}
+          />
+        ))}
+      </Svg>
+
+      {/* Floating tooltip bubble */}
+      {tooltipIdx !== null && (
+        <View style={[ilc.tooltip, { left: tooltipLeft, top: PAD_TOP }]}>
+          <Text style={ilc.month}>{xLabels[tooltipIdx]}</Text>
+          {lines.map(l => (
+            <View key={l.label} style={ilc.row}>
+              <View style={[ilc.dot, { backgroundColor: l.color }]} />
+              <Text style={ilc.label}>{l.label}</Text>
+              <Text style={ilc.val}>{fmtVal(l.values[tooltipIdx])}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+const ilc = StyleSheet.create({
+  tooltip: {
+    position: 'absolute',
+    backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: COLORS.borderDefault,
+    minWidth: 168,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 10,
+    zIndex: 100,
+  },
+  month: {
+    fontSize: TYPOGRAPHY.xs,
+    fontWeight: '700',
+    color: COLORS.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 7,
+  },
+  row:   { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  dot:   { width: 8, height: 8, borderRadius: 4 },
+  label: { flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  val:   { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary },
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
 // GST Gauge — Fan / Semicircle
 // ══════════════════════════════════════════════════════════════════════════════
 const GST_MONTHS = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
@@ -479,8 +694,22 @@ const sc = StyleSheet.create({
 // Main Reports Screen
 // ══════════════════════════════════════════════════════════════════════════════
 export default function ReportsScreen() {
-  const r = MOCK_REPORTS;
   const router = useRouter();
+
+  // Financial chart data — fetched from API (falls back to mock data)
+  const [finData, setFinData] = useState<{
+    months: string[];
+    revenue: number[];
+    expenses: number[];
+  } | null>(null);
+  const [finLoading, setFinLoading] = useState(true);
+
+  useEffect(() => {
+    getFinancialData().then((d) => {
+      setFinData(d);
+      setFinLoading(false);
+    }).catch(() => setFinLoading(false));
+  }, []);
 
   return (
     <SafeAreaView testID="reports-screen" style={styles.safe}>
@@ -497,16 +726,14 @@ export default function ReportsScreen() {
 
         {/* ── 1. Financial ───────────────────────────────────────────────── */}
         <SectionCard iconName="stats-chart-outline" title="Financial" onPress={() => router.push('/reports/financial' as any)}>
-          <View style={{ position: 'relative' }}>
-            <LogLineChart
-              lines={[
-                { values: FIN_REVENUE,  color: C_GREEN, label: 'Revenue',  latestLabel: '₹680' },
-                { values: FIN_EXPENSES, color: C_GOLD,  label: 'Expenses', latestLabel: '₹72k' },
-              ]}
-              xLabels={FIN_X}
-              legendPosition="top-right"
-            />
-          </View>
+          <InteractiveLineChart
+            isLoading={finLoading}
+            lines={finData ? [
+              { values: finData.revenue,  color: C_GREEN, label: 'Revenue'  },
+              { values: finData.expenses, color: C_GOLD,  label: 'Expenses' },
+            ] : []}
+            xLabels={finData?.months ?? []}
+          />
         </SectionCard>
 
         {/* ── 2. Compliance ─────────────────────────────────────────────── */}
