@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { ShimmerBox } from '../../src/components/Skeleton';
 
 // Mock data
 const MOCK_LAST_SYNCED = '15 Jun 2025, 11:42 AM';
@@ -382,9 +383,13 @@ export default function TallySyncScreen() {
                   </TouchableOpacity>
                 </>
               ) : (
-                /* ── Awaiting state ── */
+                /* ── Awaiting state ── shimmer replaces the spinner */
                 <View style={s.awaitingWrap}>
-                  <ActivityIndicator size="large" color={COLORS.brandPrimary} style={{ marginBottom: 16 }} />
+                  <ShimmerBox width={64} height={64} borderRadius={32} />
+                  <View style={{ gap: 6, alignItems: 'center', marginTop: 16 }}>
+                    <ShimmerBox height={16} width={180} borderRadius={6} />
+                    <ShimmerBox height={11} width={230} borderRadius={5} />
+                  </View>
                   <Text style={s.awaitingTxt}>Awaiting Pairing…</Text>
                   <Text style={s.awaitingSub}>Confirm on the TallyDekho Desktop Agent</Text>
                   <TouchableOpacity

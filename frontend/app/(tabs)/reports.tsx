@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions,
-  PanResponder, ActivityIndicator, Platform,
+  PanResponder, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, {
@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_REPORTS } from '../../src/data/mockData';
 import { getFinancialData } from '../../src/services/api';
+import { FinancialChartSkeleton } from '../../src/components/Skeleton';
 
 const SCREEN_W = Dimensions.get('window').width;
 // Card width (screen - outer margins). Content area inside card (card - card padding).
@@ -300,12 +301,7 @@ function InteractiveLineChart({ lines, xLabels, isLoading }: ILineChartProps) {
   } : {};
 
   if (isLoading) {
-    return (
-      <View style={{ height: svgH, alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-        <ActivityIndicator color={COLORS.brandPrimary} size="small" />
-        <Text style={{ fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary }}>Loading...</Text>
-      </View>
-    );
+    return <FinancialChartSkeleton />;
   }
 
   // Tooltip position — clamp so it never overflows card edges

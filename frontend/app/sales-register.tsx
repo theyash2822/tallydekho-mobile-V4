@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  ActivityIndicator, RefreshControl,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../src/constants/colors';
 import { getSalesInvoices } from '../src/services/api';
+import { SalesRegisterSkeleton } from '../src/components/Skeleton';
 
 type InvoiceStatus = 'all' | 'pending_irn' | 'generated';
 
@@ -156,9 +157,7 @@ export default function SalesRegisterScreen() {
 
       {/* Invoice List */}
       {loading ? (
-        <View style={styles.loadingState}>
-          <ActivityIndicator color={COLORS.brandPrimary} />
-        </View>
+        <SalesRegisterSkeleton />
       ) : (
         <FlatList
           data={filtered}
