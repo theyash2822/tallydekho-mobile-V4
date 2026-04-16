@@ -949,4 +949,24 @@ const ps = StyleSheet.create({
   },
   numKeyBorderR: { borderRightWidth: 1, borderRightColor: COLORS.borderDefault },
   numKeyText:    { fontSize: TYPOGRAPHY.xl, fontWeight: '400', color: COLORS.textPrimary },
+
+  // ── Edit Input (Phone & Email shared container) ───────────────────────────
+  editInputWrap: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1.5, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.md, backgroundColor: COLORS.pageBg,
+    overflow: 'hidden', marginBottom: 20,
+  },
+  phonePre: {
+    paddingHorizontal: 14, paddingVertical: 16,
+    borderRightWidth: 1.5, borderRightColor: COLORS.borderDefault,
+    backgroundColor: COLORS.cardBg, alignItems: 'center', justifyContent: 'center',
+  },
+  phonePreText: {
+    fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary,
+  },
+  editInput: {
+    flex: 1, paddingHorizontal: 14, paddingVertical: 16,
+    fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary,
+  },
 });
