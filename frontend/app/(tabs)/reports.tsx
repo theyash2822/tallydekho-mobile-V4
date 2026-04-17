@@ -71,27 +71,65 @@ function buildPath(
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Multi-Line Chart
+// Multi-Line Chart  (log scale + optional touch tooltip)
 // ══════════════════════════════════════════════════════════════════════════════
 interface LineChartProps {
   lines: { values: number[]; color: string; label: string; latestLabel: string }[];
   xLabels: string[];
   legendPosition?: 'top-right' | 'bottom';
+  interactive?: boolean;
 }
 
-function LogLineChart({ lines, xLabels, legendPosition = 'top-right' }: LineChartProps) {
+function LogLineChart({ lines, xLabels, legendPosition = 'top-right', interactive = false }: LineChartProps) {
+  const [tooltipIdx, setTooltipIdx] = useState<number | null>(null);
+  const hideTimer    = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const PAD_LEFT   = 40;
   const PAD_RIGHT  = 8;
   const PAD_TOP    = 12;
   const PAD_BOTTOM = 28;
 
-  const svgW = CONTENT_W;
-  const svgH = 160;
+  const svgW   = CONTENT_W;
+  const svgH   = 160;
   const chartW = svgW - PAD_LEFT - PAD_RIGHT;
   const chartH = svgH - PAD_TOP - PAD_BOTTOM;
   const nPts   = lines[0].values.length;
   const nLbls  = xLabels.length;
   const ptsPerLabel = nPts / nLbls;
+
+  // Stale-closure refs
+  const nPtsRef   = useRef(nPts);
+  const chartWRef = useRef(chartW);
+  const padLRef   = useRef(PAD_LEFT);
+  nPtsRef.current   = nPts;
+  chartWRef.current = chartW;
+  padLRef.current   = PAD_LEFT;
+
+  const getX = (i: number) => PAD_LEFT + (i / (nPts - 1)) * chartW;
+
+  // Touch handler
+  const handleTouch = useCallback((lx: number) => {
+    if (!interactive) return;
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    const idx = Math.round(((lx - padLRef.current) / chartWRef.current) * (nPtsRef.current - 1));
+    setTooltipIdx(Math.max(0, Math.min(nPtsRef.current - 1, idx)));
+  }, [interactive]);
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder:     () => interactive,
+      onMoveShouldSetPanResponder:      () => interactive,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant:   (e) => handleTouch(e.nativeEvent.locationX),
+      onPanResponderMove:    (e) => handleTouch(e.nativeEvent.locationX),
+      onPanResponderRelease: () => { hideTimer.current = setTimeout(() => setTooltipIdx(null), 2000); },
+    })
+  ).current;
+
+  // Tooltip label & values
+  const tooltipLabelIdx = tooltipIdx !== null ? Math.floor(tooltipIdx / ptsPerLabel) : null;
+  const tooltipXLabel   = tooltipLabelIdx !== null ? xLabels[Math.min(tooltipLabelIdx, nLbls - 1)] : '';
+  const tooltipX        = tooltipIdx !== null ? getX(tooltipIdx) : 0;
 
   return (
     <View>
@@ -107,83 +145,100 @@ function LogLineChart({ lines, xLabels, legendPosition = 'top-right' }: LineChar
         </View>
       )}
 
-      <Svg width={svgW} height={svgH}>
-        {/* Grid lines + Y labels */}
-        {Y_GRID.map((v, i) => {
-          const y = logY(v, chartH, PAD_TOP);
-          return (
-            <G key={v}>
-              <Line
-                x1={PAD_LEFT} y1={y.toFixed(1)}
-                x2={(PAD_LEFT + chartW).toFixed(1)} y2={y.toFixed(1)}
-                stroke={C_GRID} strokeWidth={1}
-              />
-              <SvgText
-                x={(PAD_LEFT - 4).toFixed(1)} y={(y + 3.5).toFixed(1)}
-                textAnchor="end" fontSize={8} fill={COLORS.textTertiary}
-              >
-                {Y_LABELS[i]}
-              </SvgText>
-            </G>
-          );
-        })}
+      {/* Touch tooltip bubble */}
+      {interactive && tooltipIdx !== null && (
+        <View style={[lc.tooltip, {
+          left: Math.max(0, Math.min(svgW - 120, tooltipX - 55)),
+        }]}>
+          <Text style={lc.tooltipHdr}>{tooltipXLabel}</Text>
+          {lines.map(l => (
+            <View key={l.label} style={lc.tooltipRow}>
+              <View style={[lc.tooltipDot, { backgroundColor: l.color }]} />
+              <Text style={lc.tooltipLbl}>{l.label.split(' ')[0]}</Text>
+              <Text style={lc.tooltipVal}>{fmtVal(l.values[tooltipIdx])}</Text>
+            </View>
+          ))}
+        </View>
+      )}
 
-        {/* "0" label at the bottom axis line */}
-        <Line
-          x1={PAD_LEFT} y1={(PAD_TOP + chartH).toFixed(1)}
-          x2={(PAD_LEFT + chartW).toFixed(1)} y2={(PAD_TOP + chartH).toFixed(1)}
-          stroke={C_GRID} strokeWidth={1}
-        />
-        <SvgText
-          x={(PAD_LEFT - 4).toFixed(1)}
-          y={(PAD_TOP + chartH + 4).toFixed(1)}
-          textAnchor="end" fontSize={8} fill={COLORS.textTertiary}
-        >
-          0
-        </SvgText>
+      <View {...(interactive ? pan.panHandlers : {})}>
+        <Svg width={svgW} height={svgH}>
+          {/* Grid lines + Y labels */}
+          {Y_GRID.map((v, i) => {
+            const y = logY(v, chartH, PAD_TOP);
+            return (
+              <G key={v}>
+                <Line
+                  x1={PAD_LEFT} y1={y.toFixed(1)}
+                  x2={(PAD_LEFT + chartW).toFixed(1)} y2={y.toFixed(1)}
+                  stroke={C_GRID} strokeWidth={1}
+                />
+                <SvgText
+                  x={(PAD_LEFT - 4).toFixed(1)} y={(y + 3.5).toFixed(1)}
+                  textAnchor="end" fontSize={8} fill={COLORS.textTertiary}
+                >
+                  {Y_LABELS[i]}
+                </SvgText>
+              </G>
+            );
+          })}
 
-        {/* X-axis labels */}
-        {xLabels.map((lbl, j) => {
-          const centerIdx = j * ptsPerLabel + ptsPerLabel / 2;
-          const x = PAD_LEFT + (centerIdx / (nPts - 1)) * chartW;
-          return (
-            <SvgText
-              key={lbl}
-              x={x.toFixed(1)}
-              y={(svgH - 4).toFixed(1)}
-              textAnchor="middle" fontSize={8.5} fill={COLORS.textSecondary}
-            >
-              {lbl}
-            </SvgText>
-          );
-        })}
-
-        {/* Lines */}
-        {lines.map(l => (
-          <Path
-            key={l.label}
-            d={buildPath(l.values, chartW, chartH, PAD_LEFT, PAD_TOP)}
-            stroke={l.color}
-            strokeWidth={2}
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+          {/* Bottom axis */}
+          <Line
+            x1={PAD_LEFT} y1={(PAD_TOP + chartH).toFixed(1)}
+            x2={(PAD_LEFT + chartW).toFixed(1)} y2={(PAD_TOP + chartH).toFixed(1)}
+            stroke={C_GRID} strokeWidth={1}
           />
-        ))}
+          <SvgText
+            x={(PAD_LEFT - 4).toFixed(1)} y={(PAD_TOP + chartH + 4).toFixed(1)}
+            textAnchor="end" fontSize={8} fill={COLORS.textTertiary}
+          >0</SvgText>
 
-        {/* Dots at latest points */}
-        {lines.map(l => {
-          const lastVal = l.values[l.values.length - 1];
-          const lx = PAD_LEFT + chartW;
-          const ly = logY(lastVal, chartH, PAD_TOP);
-          return (
-            <Circle key={`dot-${l.label}`}
-              cx={lx.toFixed(1)} cy={ly.toFixed(1)}
-              r={4} fill="#1A1A1A"
+          {/* X-axis labels */}
+          {xLabels.map((lbl, j) => {
+            const centerIdx = j * ptsPerLabel + ptsPerLabel / 2;
+            const x = PAD_LEFT + (centerIdx / (nPts - 1)) * chartW;
+            return (
+              <SvgText key={lbl} x={x.toFixed(1)} y={(svgH - 4).toFixed(1)}
+                textAnchor="middle" fontSize={8.5} fill={COLORS.textSecondary}
+              >{lbl}</SvgText>
+            );
+          })}
+
+          {/* Lines */}
+          {lines.map(l => (
+            <Path
+              key={l.label}
+              d={buildPath(l.values, chartW, chartH, PAD_LEFT, PAD_TOP)}
+              stroke={l.color} strokeWidth={2} fill="none"
+              strokeLinecap="round" strokeLinejoin="round"
             />
-          );
-        })}
-      </Svg>
+          ))}
+
+          {/* Dots at latest points */}
+          {lines.map(l => {
+            const lastVal = l.values[l.values.length - 1];
+            const lx = PAD_LEFT + chartW;
+            const ly = logY(lastVal, chartH, PAD_TOP);
+            return <Circle key={`dot-${l.label}`} cx={lx.toFixed(1)} cy={ly.toFixed(1)} r={4} fill="#1A1A1A" />;
+          })}
+
+          {/* Crosshair on touch */}
+          {interactive && tooltipIdx !== null && (
+            <>
+              <Line
+                x1={tooltipX.toFixed(1)} y1={PAD_TOP.toFixed(1)}
+                x2={tooltipX.toFixed(1)} y2={(PAD_TOP + chartH).toFixed(1)}
+                stroke={COLORS.textTertiary} strokeWidth={1} strokeDasharray="3,3"
+              />
+              {lines.map(l => {
+                const cy = logY(l.values[tooltipIdx], chartH, PAD_TOP);
+                return <Circle key={`cross-${l.label}`} cx={tooltipX.toFixed(1)} cy={cy.toFixed(1)} r={4} fill={l.color} stroke={COLORS.white} strokeWidth={1.5} />;
+              })}
+            </>
+          )}
+        </Svg>
+      </View>
 
       {legendPosition === 'bottom' && (
         <View style={lc.legendBottom}>
@@ -210,15 +265,35 @@ const lc = StyleSheet.create({
     zIndex: 10,
     gap: 3,
   },
-  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  legendLbl: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
-  legendVal: { fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary, fontWeight: '600' },
-  legendBottom: {
-    flexDirection: 'row', justifyContent: 'center',
-    gap: 20, paddingTop: 4,
-  },
+  legendRow:    { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  dot:          { width: 8, height: 8, borderRadius: 4 },
+  legendLbl:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  legendVal:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary, fontWeight: '600' },
+  legendBottom: { flexDirection: 'row', justifyContent: 'center', gap: 20, paddingTop: 4 },
   legendLblBottom: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+
+  // Touch tooltip
+  tooltip: {
+    position: 'absolute',
+    top: 0,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 10, paddingVertical: 7,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    zIndex: 20,
+    gap: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 4,
+    minWidth: 110,
+  },
+  tooltipHdr:  { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 2 },
+  tooltipRow:  { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  tooltipDot:  { width: 7, height: 7, borderRadius: 4 },
+  tooltipLbl:  { flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  tooltipVal:  { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary },
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -432,151 +507,196 @@ const ilc = StyleSheet.create({
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// GST Gauge — Fan / Semicircle
+// ══════════════════════════════════════════════════════════════════════════════
+// GST Gauge — interactive semicircle, brand-toned, touch-to-scrub
 // ══════════════════════════════════════════════════════════════════════════════
 const GST_MONTHS = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
 
 interface GSTGaugeProps {
   filedCount: number;   // 0-12
-  needleIndex: number;  // needle between needleIndex and needleIndex+1
+  needleIndex: number;  // default needle position (month index)
 }
 
-// gap in radians between adjacent arc segments (~2.3°)
+// gap between arc segments (~2.3°)
 const GAUGE_GAP = 0.04;
 
 function GSTGauge({ filedCount, needleIndex }: GSTGaugeProps) {
-  const svgW   = CONTENT_W;
-  const svgH   = 222;
-  const cx     = svgW / 2;
-  const cy     = 196;          // arc baseline sits here
-  const outerR = 112;
-  const innerR = 70;
-  const labelR = outerR + 20; // 132 — labels outside arc
+  const [activeMonth, setActiveMonth] = useState<number | null>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Needle points to the mid-angle of the current month segment
-  const needleAngle = Math.PI - (needleIndex + 0.5) * (Math.PI / 12);
-  const needleLen   = innerR - 8; // stops before inner edge
+  const svgW    = CONTENT_W;
+  const svgH    = 222;
+  const cx      = svgW / 2;
+  const cy      = 196;
+  const outerR  = 112;
+  const innerR  = 70;
+  const labelR  = outerR + 20;
+
+  // Needle follows touch, falls back to needleIndex
+  const displayIdx  = activeMonth ?? needleIndex;
+  const needleAngle = Math.PI - (displayIdx + 0.5) * (Math.PI / 12);
+  const needleLen   = innerR - 8;
   const nx = cx + needleLen * Math.cos(needleAngle);
   const ny = cy - needleLen * Math.sin(needleAngle);
+
+  // Map touch → month index
+  const handleGaugeTouch = useCallback((lx: number, ly: number) => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    const dx = lx - cx;
+    const dy = cy - ly;                // flip y (SVG y goes down)
+    if (dy < -10) return;              // below baseline
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < innerR * 0.5) return;  // too close to pivot
+    const angle = Math.atan2(dy, dx);
+    if (angle < 0 || angle > Math.PI) return;
+    const idx = Math.min(11, Math.max(0, Math.floor((Math.PI - angle) / (Math.PI / 12))));
+    setActiveMonth(idx);
+  }, [cx, cy, innerR]);
+
+  const gaugeRef = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder:     () => true,
+      onMoveShouldSetPanResponder:      () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant:   (e) => handleGaugeTouch(e.nativeEvent.locationX, e.nativeEvent.locationY),
+      onPanResponderMove:    (e) => handleGaugeTouch(e.nativeEvent.locationX, e.nativeEvent.locationY),
+      onPanResponderRelease: () => {
+        hideTimer.current = setTimeout(() => setActiveMonth(null), 2200);
+      },
+    })
+  ).current;
+
+  const tooltipMonth = GST_MONTHS[displayIdx];
+  const tooltipFiled = displayIdx < filedCount;
 
   return (
     <View style={{ alignItems: 'center' }}>
       <Text style={gauge.title}>GST filed</Text>
-      <Svg width={svgW} height={svgH}>
 
-        {GST_MONTHS.map((month, i) => {
-          // Centre angle of this month (math convention, CCW from +x)
-          const angleDeg = 180 - (i + 0.5) * 15;
-          const angleRad = (angleDeg * Math.PI) / 180;
+      {/* Tooltip chip — visible only while touching */}
+      {activeMonth !== null ? (
+        <View style={gauge.tooltipWrap}>
+          <Text style={gauge.tooltipMonth}>{tooltipMonth}</Text>
+          <View style={[gauge.tooltipBadge, {
+            backgroundColor: tooltipFiled ? COLORS.brandPrimary : '#A89060',
+          }]}>
+            <Text style={gauge.tooltipBadgeTxt}>
+              {tooltipFiled ? '✓ Filed' : '● Pending'}
+            </Text>
+          </View>
+        </View>
+      ) : (
+        <View style={gauge.tooltipWrap}>
+          <Text style={gauge.tooltipHint}>Touch arc to explore</Text>
+        </View>
+      )}
 
-          // Arc boundaries with gap inset
-          const aR = Math.PI - (i + 1) * (Math.PI / 12) + GAUGE_GAP; // right edge
-          const aL = Math.PI - i       * (Math.PI / 12) - GAUGE_GAP; // left  edge
+      <View {...gaugeRef.panHandlers}>
+        <Svg width={svgW} height={svgH}>
 
-          // Helper: convert math angle → SVG point on radius r
-          const pt = (a: number, r: number) => ({
-            x: cx + r * Math.cos(a),
-            y: cy - r * Math.sin(a),
-          });
+          {GST_MONTHS.map((month, i) => {
+            const angleDeg = 180 - (i + 0.5) * 15;
+            const angleRad = (angleDeg * Math.PI) / 180;
 
-          const o1 = pt(aR, outerR); const o2 = pt(aL, outerR);
-          const i1 = pt(aR, innerR); const i2 = pt(aL, innerR);
+            const aR = Math.PI - (i + 1) * (Math.PI / 12) + GAUGE_GAP;
+            const aL = Math.PI - i       * (Math.PI / 12) - GAUGE_GAP;
 
-          // Donut arc segment path:
-          //   outer arc right→left  (sweep=1 = SVG-CW = increasing math angle)
-          //   line  outer-left  → inner-left
-          //   inner arc left→right  (sweep=0 = SVG-CCW = decreasing math angle)
-          //   close
-          const d = [
-            `M ${o1.x.toFixed(2)} ${o1.y.toFixed(2)}`,
-            `A ${outerR} ${outerR} 0 0 1 ${o2.x.toFixed(2)} ${o2.y.toFixed(2)}`,
-            `L ${i2.x.toFixed(2)} ${i2.y.toFixed(2)}`,
-            `A ${innerR} ${innerR} 0 0 0 ${i1.x.toFixed(2)} ${i1.y.toFixed(2)}`,
-            'Z',
-          ].join(' ');
+            const pt = (a: number, r: number) => ({
+              x: cx + r * Math.cos(a),
+              y: cy - r * Math.sin(a),
+            });
 
-          const isFiled = i < filedCount;
+            const o1 = pt(aR, outerR); const o2 = pt(aL, outerR);
+            const i1 = pt(aR, innerR); const i2 = pt(aL, innerR);
 
-          // Label: outside arc, smart anchor & y-offset for edge months
-          const lx = cx + labelR * Math.cos(angleRad);
-          let extraY = 4;
-          if (i === 0 || i === 11)        extraY = 16;  // Apr / Mar — near horizontal
-          else if (i === 1 || i === 10)   extraY = 9;   // May / Feb
-          const ly = cy - labelR * Math.sin(angleRad) + extraY;
+            const d = [
+              `M ${o1.x.toFixed(2)} ${o1.y.toFixed(2)}`,
+              `A ${outerR} ${outerR} 0 0 1 ${o2.x.toFixed(2)} ${o2.y.toFixed(2)}`,
+              `L ${i2.x.toFixed(2)} ${i2.y.toFixed(2)}`,
+              `A ${innerR} ${innerR} 0 0 0 ${i1.x.toFixed(2)} ${i1.y.toFixed(2)}`,
+              'Z',
+            ].join(' ');
 
-          let anchor: 'end' | 'start' | 'middle';
-          if (angleDeg > 108)      anchor = 'end';
-          else if (angleDeg < 72)  anchor = 'start';
-          else                     anchor = 'middle';
+            const isFiled  = i < filedCount;
+            const isActive = i === activeMonth;
 
-          return (
-            <G key={month}>
-              <Path
-                d={d}
-                fill={isFiled ? C_GREEN : C_GREY}
-              />
-              <SvgText
-                x={lx.toFixed(2)}
-                y={ly.toFixed(2)}
-                textAnchor={anchor}
-                fontSize={8}
-                fill={isFiled ? '#1A4D2E' : COLORS.textTertiary}
-                fontWeight={isFiled ? '700' : '400'}
-              >
-                {month}
-              </SvgText>
-            </G>
-          );
-        })}
+            // Label outside arc
+            const lx = cx + labelR * Math.cos(angleRad);
+            let extraY = 4;
+            if (i === 0 || i === 11)      extraY = 16;
+            else if (i === 1 || i === 10) extraY = 9;
+            const ly = cy - labelR * Math.sin(angleRad) + extraY;
 
-        {/* ── Center info ── */}
-        <SvgText
-          x={cx.toFixed(2)}
-          y={(cy - 30).toFixed(2)}
-          textAnchor="middle"
-          fontSize={22}
-          fontWeight="700"
-          fill={COLORS.textPrimary}
-        >
-          {`${filedCount}/12`}
-        </SvgText>
-        <SvgText
-          x={cx.toFixed(2)}
-          y={(cy - 13).toFixed(2)}
-          textAnchor="middle"
-          fontSize={9}
-          fill={COLORS.textSecondary}
-        >
-          months filed
-        </SvgText>
+            let anchor: 'end' | 'start' | 'middle';
+            if (angleDeg > 108)     anchor = 'end';
+            else if (angleDeg < 72) anchor = 'start';
+            else                    anchor = 'middle';
 
-        {/* ── Needle ── */}
-        <Line
-          x1={cx.toFixed(2)} y1={cy.toFixed(2)}
-          x2={nx.toFixed(2)} y2={ny.toFixed(2)}
-          stroke="#1A1A1A" strokeWidth={2.5} strokeLinecap="round"
-        />
-        {/* Pivot cap */}
-        <Circle cx={cx.toFixed(2)} cy={cy.toFixed(2)} r={8}  fill="#1A1A1A" />
-        <Circle cx={cx.toFixed(2)} cy={cy.toFixed(2)} r={3}  fill={COLORS.cardBg} />
-      </Svg>
+            return (
+              <G key={month}>
+                <Path
+                  d={d}
+                  fill={isFiled ? COLORS.brandPrimary : COLORS.borderDefault}
+                  opacity={isActive ? 1 : isFiled ? 0.82 : 0.65}
+                />
+                <SvgText
+                  x={lx.toFixed(2)} y={ly.toFixed(2)}
+                  textAnchor={anchor}
+                  fontSize={isActive ? 9 : 8}
+                  fill={isActive ? COLORS.textPrimary : isFiled ? COLORS.textSecondary : COLORS.textTertiary}
+                  fontWeight={isActive ? '700' : isFiled ? '600' : '400'}
+                >
+                  {month}
+                </SvgText>
+              </G>
+            );
+          })}
+
+          {/* Center count */}
+          <SvgText
+            x={cx.toFixed(2)} y={(cy - 30).toFixed(2)}
+            textAnchor="middle" fontSize={22} fontWeight="700"
+            fill={COLORS.textPrimary}
+          >{`${filedCount}/12`}</SvgText>
+          <SvgText
+            x={cx.toFixed(2)} y={(cy - 13).toFixed(2)}
+            textAnchor="middle" fontSize={9}
+            fill={COLORS.textSecondary}
+          >months filed</SvgText>
+
+          {/* Needle */}
+          <Line
+            x1={cx.toFixed(2)} y1={cy.toFixed(2)}
+            x2={nx.toFixed(2)} y2={ny.toFixed(2)}
+            stroke={COLORS.brandPrimary} strokeWidth={2.5} strokeLinecap="round"
+          />
+          {/* Pivot cap */}
+          <Circle cx={cx.toFixed(2)} cy={cy.toFixed(2)} r={8}  fill={COLORS.brandPrimary} />
+          <Circle cx={cx.toFixed(2)} cy={cy.toFixed(2)} r={3}  fill={COLORS.cardBg} />
+        </Svg>
+      </View>
     </View>
   );
 }
 
 const gauge = StyleSheet.create({
   title: {
-    fontSize: TYPOGRAPHY.md,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    textAlign: 'center',
-    marginTop: 4,
-    marginBottom: 0,
+    fontSize: TYPOGRAPHY.md, fontWeight: '700',
+    color: COLORS.textPrimary, textAlign: 'center',
+    marginTop: 4, marginBottom: 2,
   },
+  tooltipWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    minHeight: 28, marginBottom: 2,
+  },
+  tooltipMonth:    { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  tooltipBadge:    { paddingHorizontal: 10, paddingVertical: 3, borderRadius: RADIUS.full },
+  tooltipBadgeTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white },
+  tooltipHint:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontStyle: 'italic' },
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Audit Progress Bar
+// Audit Progress Bar — brand-toned + touch tooltip
 // ══════════════════════════════════════════════════════════════════════════════
 interface AuditBarProps {
   label: string;
@@ -585,15 +705,46 @@ interface AuditBarProps {
   color?: string;
 }
 
-function AuditProgressBar({ label, count, total, color = C_GREEN }: AuditBarProps) {
-  const filled = (total - count) / total; // reconciled fraction
+function AuditProgressBar({ label, count, total, color = COLORS.brandPrimary }: AuditBarProps) {
+  const [touchX, setTouchX]     = useState<number | null>(null);
+  const [barWidth, setBarWidth]  = useState(1);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const filled = (total - count) / total;
+  const pct    = Math.round(filled * 100);
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder:     () => true,
+      onMoveShouldSetPanResponder:      () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant:   (e) => { if (hideTimer.current) clearTimeout(hideTimer.current); setTouchX(e.nativeEvent.locationX); },
+      onPanResponderMove:    (e) => setTouchX(e.nativeEvent.locationX),
+      onPanResponderRelease: () => { hideTimer.current = setTimeout(() => setTouchX(null), 1800); },
+    })
+  ).current;
+
   return (
     <View>
       <View style={ap.row}>
         <Text style={ap.label}>{label}</Text>
         <Text style={ap.count}>{count}</Text>
       </View>
-      <View style={ap.track}>
+
+      {/* Tooltip */}
+      {touchX !== null && (
+        <View style={[ap.tooltip, {
+          left: Math.max(0, Math.min(barWidth - 96, touchX - 48)),
+        }]}>
+          <Text style={ap.tooltipTxt}>{pct}% reconciled</Text>
+        </View>
+      )}
+
+      <View
+        {...pan.panHandlers}
+        style={ap.track}
+        onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
+      >
         <View style={[ap.fill, { width: `${filled * 100}%` as any, backgroundColor: color }]} />
       </View>
     </View>
@@ -601,24 +752,24 @@ function AuditProgressBar({ label, count, total, color = C_GREEN }: AuditBarProp
 }
 
 const ap = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
+  row:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   label: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
   count: { fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary },
   track: {
-    height: 10,
-    backgroundColor: C_GREY,
-    borderRadius: 5,
-    overflow: 'hidden',
+    height: 10, backgroundColor: COLORS.borderDefault,
+    borderRadius: 5, overflow: 'hidden',
   },
-  fill: {
-    height: '100%',
-    borderRadius: 5,
+  fill: { height: '100%', borderRadius: 5 },
+  // touch tooltip
+  tooltip: {
+    position: 'absolute',
+    bottom: 16,
+    backgroundColor: COLORS.brandPrimary,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 10, paddingVertical: 5,
+    zIndex: 10,
   },
+  tooltipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white },
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -751,11 +902,12 @@ export default function ReportsScreen() {
         <SectionCard iconName="sparkles-outline" title="AI Insights" onPress={() => router.push('/reports/ai-insights' as any)}>
           <LogLineChart
             lines={[
-              { values: AI_FORECAST, color: C_GREEN, label: 'Sales forecast', latestLabel: '₹460' },
-              { values: AI_ACTUAL,   color: C_GOLD,  label: 'Actual',         latestLabel: '₹990' },
+              { values: AI_FORECAST, color: COLORS.brandPrimary, label: 'Sales forecast', latestLabel: '₹460' },
+              { values: AI_ACTUAL,   color: '#A89060',           label: 'Actual',          latestLabel: '₹990' },
             ]}
             xLabels={AI_X}
             legendPosition="bottom"
+            interactive
           />
         </SectionCard>
 
