@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Dimensions, Modal, TextInput, KeyboardAvoidingView, Platform,
+  Alert, Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -470,6 +471,32 @@ export default function LedgerDetailScreen() {
   const [toDate,       setToDate]       = useState('');
   const [showDateRange, setShowDateRange] = useState(false);
 
+  // ── Multi-select state ─────────────────────────────────────────────────────
+  const [selectedTxns, setSelectedTxns] = useState<string[]>([]);
+  const txnSelectMode = selectedTxns.length > 0;
+
+  const toggleTxnSelect = (id: string) => {
+    setSelectedTxns(prev =>
+      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
+    );
+  };
+  const cancelTxnSelect = () => setSelectedTxns([]);
+
+  const handleTxnShare = async () => {
+    const lines = txns
+      .filter(t => selectedTxns.includes(t.id))
+      .map(t => `• ${t.date}  ${t.voucher}  ${t.isDebit ? 'Dr' : 'Cr'} ${t.amount}`);
+    try {
+      await Share.share({
+        message: `TallyDekho — ${ledger.name}\n${lines.join('\n')}`,
+        title: 'Share Transaction Report',
+      });
+    } catch {
+      Alert.alert('Share PDF', `${selectedTxns.length} transaction(s) ready to share as PDF.`);
+    }
+    cancelTxnSelect();
+  };
+
   const ledger = MOCK_LEDGERS?.find((l: any) => l.id === id) ||
     { id: id || 'L001', name: 'Alliance Trading Co.', group: 'Sundry Debtors', balance: '₹37,500 Dr' };
 
@@ -686,22 +713,31 @@ export default function LedgerDetailScreen() {
                   </TouchableOpacity>
 
                   {/* Rows — only rendered when expanded */}
-                  {isOpen && monTxns.map((txn, idx) => (
+                  {isOpen && monTxns.map((txn, idx) => {
+                    const isTxnSelected = selectedTxns.includes(txn.id);
+                    return (
                     <TouchableOpacity
                       key={txn.id}
                       style={[
                         styles.txnRow,
                         idx === monTxns.length - 1 && { borderBottomWidth: 0 },
+                        isTxnSelected && styles.txnRowSelected,
                       ]}
                       activeOpacity={0.75}
                       onPress={() => {
-                        const docType = TX_TO_DOC_TYPE[txn.type];
-                        router.push(
-                          docType
-                            ? `/document/${txn.voucher}?type=${docType}`
-                            : `/document/${txn.voucher}`
-                        );
+                        if (txnSelectMode) {
+                          toggleTxnSelect(txn.id);
+                        } else {
+                          const docType = TX_TO_DOC_TYPE[txn.type];
+                          router.push(
+                            docType
+                              ? `/document/${txn.voucher}?type=${docType}`
+                              : `/document/${txn.voucher}`
+                          );
+                        }
                       }}
+                      onLongPress={() => toggleTxnSelect(txn.id)}
+                      delayLongPress={500}
                     >
                       {/* Date column — two lines */}
                       <View style={styles.txnDateCol}>
@@ -726,10 +762,17 @@ export default function LedgerDetailScreen() {
                         <Text style={styles.txnBalance}>{txn.balance}</Text>
                       </View>
 
-                      {/* Tap indicator */}
-                      <Ionicons name="chevron-forward" size={13} color={COLORS.textTertiary} style={{ marginLeft: 2 }} />
+                      {/* Checkmark / chevron */}
+                      {txnSelectMode ? (
+                        <View style={[styles.txnCheckbox, isTxnSelected && styles.txnCheckboxOn]}>
+                          {isTxnSelected && <Ionicons name="checkmark" size={12} color={COLORS.white} />}
+                        </View>
+                      ) : (
+                        <Ionicons name="chevron-forward" size={13} color={COLORS.textTertiary} style={{ marginLeft: 2 }} />
+                      )}
                     </TouchableOpacity>
-                  ))}
+                    );
+                  })}
                 </View>
               );
             })
@@ -737,12 +780,12 @@ export default function LedgerDetailScreen() {
         </View>
 
         {/* ── Share button ── */}
-        <TouchableOpacity style={styles.shareBtn} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.shareBtn} activeOpacity={0.8} onPress={handleTxnShare}>
           <Ionicons name="share-outline" size={16} color={COLORS.white} />
           <Text style={styles.shareBtnText}>Share PDF / XLSX</Text>
         </TouchableOpacity>
 
-        <View style={{ height: 30 }} />
+        <View style={{ height: txnSelectMode ? 90 : 30 }} />
       </ScrollView>
 
       {/* ── Info modal ── */}
@@ -756,6 +799,30 @@ export default function LedgerDetailScreen() {
         onApply={(f, t) => { setFromDate(f); setToDate(t); }}
         onClose={() => setShowDateRange(false)}
       />
+
+      {/* ── Transaction Multi-select Share Bar ── */}
+      {txnSelectMode && (
+        <View style={styles.txnShareBar}>
+          <View style={styles.txnShareLeft}>
+            <Text style={styles.txnShareCount}>{selectedTxns.length} selected</Text>
+            <TouchableOpacity
+              onPress={cancelTxnSelect}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.txnShareCancelTxt}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            style={styles.txnShareActionBtn}
+            onPress={handleTxnShare}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="share-outline" size={16} color={COLORS.white} />
+            <Text style={styles.txnShareActionTxt}>Share PDF / XLS</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -919,6 +986,45 @@ const styles = StyleSheet.create({
   dateRangeClearBtn: {
     width: 32, height: 32, alignItems: 'center', justifyContent: 'center',
   },
+
+  // ── Transaction row selection ──────────────────────────────────────────────
+  txnRowSelected: {
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.brandPrimary,
+    backgroundColor: COLORS.brandPrimary + '06',
+  },
+  txnCheckbox: {
+    width: 22, height: 22, borderRadius: 11,
+    borderWidth: 2, borderColor: COLORS.borderStrong,
+    alignItems: 'center', justifyContent: 'center',
+    marginLeft: 2,
+  },
+  txnCheckboxOn: {
+    backgroundColor: COLORS.brandPrimary,
+    borderColor: COLORS.brandPrimary,
+  },
+
+  // ── Transaction Share Bar ──────────────────────────────────────────────────
+  txnShareBar: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: SPACING.md, paddingVertical: 14,
+    backgroundColor: COLORS.cardBg,
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
+    gap: 12,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.08, shadowRadius: 6, elevation: 8,
+  },
+  txnShareLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  txnShareCount: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  txnShareCancelTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+  txnShareActionBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    backgroundColor: COLORS.brandPrimary,
+    paddingHorizontal: 18, paddingVertical: 12,
+    borderRadius: RADIUS.md,
+  },
+  txnShareActionTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
 });
 
 // ── Info Modal Styles ─────────────────────────────────────────────────────────

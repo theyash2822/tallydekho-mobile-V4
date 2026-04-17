@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, RefreshControl, Modal, KeyboardAvoidingView,
-  Platform, Linking, Animated,
+  Platform, Linking, Animated, Alert, Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
@@ -435,6 +435,35 @@ export default function LedgerScreen() {
   const [showFilterDrop, setShowFilterDrop] = useState(false);
   const [filterDropPos, setFilterDropPos] = useState({ x: 16, y: 200 });
 
+  // ── Multi-select state ─────────────────────────────────────────────────────
+  const [selected,    setSelected]    = useState<string[]>([]);
+  const [selectMode,  setSelectMode]  = useState(false);
+
+  const enterSelectMode = (id: string) => {
+    setSelectMode(true);
+    setSelected([id]);
+  };
+  const toggleSelect = (id: string) => {
+    setSelected(prev =>
+      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
+    );
+  };
+  const cancelSelectMode = () => { setSelectMode(false); setSelected([]); };
+  const selectAll = () => setSelected(filtered.map(i => i.id));
+
+  const handleShareMock = async () => {
+    try {
+      await Share.share({
+        message: `TallyDekho — Sharing ${selected.length} ledger(s) as PDF\n` +
+          filtered.filter(i => selected.includes(i.id)).map(i => `• ${i.name}: ${i.balance}`).join('\n'),
+        title: 'Share Ledger Report',
+      });
+    } catch {
+      Alert.alert('Share PDF', `${selected.length} ledger(s) ready to share as PDF.`);
+    }
+    cancelSelectMode();
+  };
+
   // Toggle sort: clicking same type flips direction, clicking new type sets asc
   const handleSort = (type: 'alpha' | 'amount') => {
     if (sortType === type) {
@@ -495,24 +524,47 @@ export default function LedgerScreen() {
     <SafeAreaView testID="ledger-screen" style={styles.safe}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Ledgers</Text>
+        <Text style={styles.headerTitle}>
+          {selectMode ? `${selected.length} Selected` : 'Ledgers'}
+        </Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity
-            testID="add-ledger-btn"
-            style={styles.headerIconBtn}
-            onPress={() => setShowTypeSheet(true)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="add" size={22} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            testID="ledger-filter-btn"
-            style={styles.headerIconBtn}
-            onPress={() => setShowFilter(true)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="filter" size={20} color={COLORS.textPrimary} />
-          </TouchableOpacity>
+          {selectMode ? (
+            <>
+              <TouchableOpacity
+                style={styles.headerTextBtn}
+                onPress={selectAll}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.headerTextBtnPrimary}>Select All</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.headerTextBtn}
+                onPress={cancelSelectMode}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.headerTextBtnCancel}>Cancel</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <TouchableOpacity
+                testID="add-ledger-btn"
+                style={styles.headerIconBtn}
+                onPress={() => setShowTypeSheet(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="add" size={22} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="ledger-filter-btn"
+                style={styles.headerIconBtn}
+                onPress={() => setShowFilter(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="filter" size={20} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </View>
 
@@ -671,6 +723,7 @@ export default function LedgerScreen() {
         <View style={styles.list}>
           {filtered.map(item => {
             const hasPhone = !!(item.phone);
+            const isSelected = selected.includes(item.id);
 
             const renderRightActions = (
               _progress: Animated.AnimatedInterpolation<number>,
@@ -708,13 +761,21 @@ export default function LedgerScreen() {
             const cardContent = (
               <TouchableOpacity
                 testID={`ledger-item-${item.id}`}
-                style={styles.itemCard}
+                style={[styles.itemCard, isSelected && styles.itemCardSelected]}
                 activeOpacity={0.7}
-                onPress={() => router.push(`/ledger/${item.id}` as any)}
+                onPress={() => {
+                  if (selectMode) { toggleSelect(item.id); }
+                  else { router.push(`/ledger/${item.id}` as any); }
+                }}
+                onLongPress={() => enterSelectMode(item.id)}
+                delayLongPress={500}
               >
-                {/* Avatar */}
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
+                {/* Avatar / Checkbox */}
+                <View style={[styles.avatar, isSelected && styles.avatarSelected]}>
+                  {isSelected
+                    ? <Ionicons name="checkmark" size={20} color={COLORS.white} />
+                    : <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
+                  }
                 </View>
                 {/* Info */}
                 <View style={styles.itemInfo}>
@@ -739,7 +800,7 @@ export default function LedgerScreen() {
               </TouchableOpacity>
             );
 
-            return hasPhone ? (
+            return hasPhone && !selectMode ? (
               <Swipeable
                 key={item.id}
                 renderRightActions={renderRightActions}
@@ -763,8 +824,33 @@ export default function LedgerScreen() {
           )}
         </View>
 
-        <View style={{ height: 80 }} />
+        <View style={{ height: selectMode ? 100 : 80 }} />
       </ScrollView>
+
+      {/* ── Multi-select Share Bar ─────────────────────────────────────── */}
+      {selectMode && (
+        <View style={styles.shareBar}>
+          <View style={styles.shareLeft}>
+            <Text style={styles.shareCount}>{selected.length} selected</Text>
+            <TouchableOpacity
+              onPress={cancelSelectMode}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.shareCancelTxt}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            style={[styles.shareActionBtn, selected.length === 0 && { opacity: 0.5 }]}
+            onPress={handleShareMock}
+            activeOpacity={0.85}
+            disabled={selected.length === 0}
+          >
+            <Ionicons name="share-outline" size={16} color={COLORS.white} />
+            <Text style={styles.shareActionTxt}>Share PDF / XLS</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Modals */}
       <CreateLedgerModal
@@ -950,6 +1036,46 @@ const styles = StyleSheet.create({
   typeText: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
   emptyState: { alignItems: 'center', paddingVertical: 48, gap: 8 },
   emptyText: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textSecondary },
+
+  // ── Multi-select styles ────────────────────────────────────────────────────
+  itemCardSelected: {
+    borderColor: COLORS.brandPrimary,
+    borderWidth: 2,
+    backgroundColor: COLORS.brandPrimary + '08',
+  },
+  avatarSelected: {
+    backgroundColor: COLORS.brandPrimary,
+  },
+  headerTextBtn: {
+    paddingHorizontal: 10, paddingVertical: 8,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  headerTextBtnPrimary: {
+    fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.brandPrimary,
+  },
+  headerTextBtnCancel: {
+    fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.negative,
+  },
+  shareBar: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: SPACING.md, paddingVertical: 14,
+    backgroundColor: COLORS.cardBg,
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
+    gap: 12,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.08, shadowRadius: 6, elevation: 8,
+  },
+  shareLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  shareCount: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  shareCancelTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+  shareActionBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    backgroundColor: COLORS.brandPrimary,
+    paddingHorizontal: 18, paddingVertical: 12,
+    borderRadius: RADIUS.md,
+  },
+  shareActionTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
 });
 
 // Create Ledger Modal Styles
