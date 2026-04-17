@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import Svg, { Path, Circle, G, Rect, Text as SvgText } from 'react-native-svg';
+import Svg, { Path, Circle, G, Rect, Line, Text as SvgText } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
@@ -25,8 +25,9 @@ const DONUT_SEGS = [
   { label: 'Expiring',  pct: 12, count: 38,  color: '#2563EB' },
 ];
 
-const BAR_DATA = [4,7,3,8,12,6,9,5,11,8,14,7,10,6,13,9,8,12,7,11,6,9,14,8,10,7,12,5,9,11];
-const MAX_BAR = Math.max(...BAR_DATA);
+const BAR_DATA = [28,45,18,52,68,35,72,22,58,40,82,30,47,65,25,60,43,76,33,55,38,70,48,85,42,20,62,78,50,35,58];
+const MAX_Y    = 100; // fixed scale — clean grid lines at 0/25/50/75/100
+const Y_AXIS_W = 28;  // fixed left panel for Y labels
 
 const TRANSPORT = [
   { mode: 'Road', count: 240 },
@@ -81,46 +82,84 @@ function InteractiveDonut({
 }
 
 // ── Interactive Bar Chart ─────────────────────────────────────────────────────
+const BAR_H     = 160;
+const BAR_PAD_T = 22;   // space above top bar (room for tooltip)
+const BAR_PAD_B = 22;   // space for date labels
+const CHART_H   = BAR_H - BAR_PAD_T - BAR_PAD_B;
+const BAR_W     = 18;
+const BAR_GAP   = 6;
+const Y_LEVELS  = [0, 25, 50, 75, 100];
+
 function InteractiveBarChart({
   active, onPress,
 }: {
   active: number | null;
   onPress: (i: number | null) => void;
 }) {
-  const H = 100; const PAD_B = 18; const PAD_T = 18; const chartH = H - PAD_B - PAD_T;
-  const barW = 10; const gap = 3;
-  const totalW = BAR_DATA.length * (barW + gap);
+  const totalW = BAR_DATA.length * (BAR_W + BAR_GAP);
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <Svg width={totalW} height={H}>
-        {BAR_DATA.map((v, i) => {
-          const bh = (v / MAX_BAR) * chartH;
-          const x = i * (barW + gap);
-          const y = PAD_T + chartH - bh;
-          const isActive = active === i;
-          return (
-            <G key={i} onPress={() => onPress(active === i ? null : i)}>
-              <Rect
-                x={x} y={y} width={barW} height={bh} rx={3}
-                fill={isActive ? COLORS.brandPrimary : '#4B7BE5'}
-                opacity={active !== null && !isActive ? 0.4 : 0.85}
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+
+      {/* Fixed Y-axis labels */}
+      <View style={{ width: Y_AXIS_W, height: BAR_H, paddingBottom: BAR_PAD_B, paddingTop: BAR_PAD_T, justifyContent: 'space-between', alignItems: 'flex-end', paddingRight: 4 }}>
+        {[100, 75, 50, 25, 0].map(v => (
+          <Text key={v} style={{ fontSize: 8, color: COLORS.textTertiary, lineHeight: 10 }}>{v}</Text>
+        ))}
+      </View>
+
+      {/* Scrollable bars */}
+      <ScrollView horizontal showsHorizontalScrollIndicator style={{ flex: 1 }}>
+        <Svg width={totalW} height={BAR_H}>
+
+          {/* Horizontal dashed grid lines */}
+          {Y_LEVELS.map(v => {
+            const gy = BAR_PAD_T + CHART_H - (v / MAX_Y) * CHART_H;
+            return (
+              <Line
+                key={v}
+                x1={0} y1={gy} x2={totalW} y2={gy}
+                stroke={COLORS.borderDefault}
+                strokeWidth={1}
+                strokeDasharray={v === 0 ? undefined : '4,4'}
               />
-              {isActive && (
-                <>
-                  <Rect x={Math.max(0, x - 5)} y={y - 20} width={20} height={16} rx={3} fill={COLORS.brandPrimary} />
-                  <SvgText x={x + barW / 2} y={y - 9} textAnchor="middle" fontSize={8} fontWeight="700" fill="#FFF">{v}</SvgText>
-                </>
-              )}
-              {(i === 0 || (i + 1) % 7 === 0) && (
-                <SvgText x={x + barW / 2} y={H - 4} textAnchor="middle" fontSize={6.5} fill={COLORS.textTertiary}>
-                  {`${i + 1} Aug`}
-                </SvgText>
-              )}
-            </G>
-          );
-        })}
-      </Svg>
-    </ScrollView>
+            );
+          })}
+
+          {/* Bars */}
+          {BAR_DATA.map((v, i) => {
+            const bh       = (v / MAX_Y) * CHART_H;
+            const x        = i * (BAR_W + BAR_GAP);
+            const y        = BAR_PAD_T + CHART_H - bh;
+            const isActive = active === i;
+            return (
+              <G key={i} onPress={() => onPress(active === i ? null : i)}>
+                <Rect
+                  x={x} y={y} width={BAR_W} height={bh} rx={4}
+                  fill={isActive ? COLORS.brandPrimary : '#A89060'}
+                  opacity={active !== null && !isActive ? 0.35 : 1}
+                />
+                {/* Tooltip above active bar */}
+                {isActive && (
+                  <>
+                    <Rect x={Math.max(0, x - 4)} y={y - 22} width={26} height={18} rx={4} fill={COLORS.brandPrimary} />
+                    <SvgText x={x + BAR_W / 2} y={y - 10} textAnchor="middle" fontSize={9} fontWeight="700" fill="#FFF">{v}</SvgText>
+                  </>
+                )}
+                {/* Date label every 7 days */}
+                {(i === 0 || (i + 1) % 7 === 0) && (
+                  <SvgText
+                    x={x + BAR_W / 2} y={BAR_H - 6}
+                    textAnchor="middle" fontSize={8} fill={COLORS.textTertiary}
+                  >
+                    {i === 0 ? 'Aug' : `${i + 1} Aug`}
+                  </SvgText>
+                )}
+              </G>
+            );
+          })}
+        </Svg>
+      </ScrollView>
+    </View>
   );
 }
 
