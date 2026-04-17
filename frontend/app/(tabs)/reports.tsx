@@ -652,18 +652,6 @@ function GSTGauge({ filedCount, needleIndex }: GSTGaugeProps) {
             );
           })}
 
-          {/* Center count */}
-          <SvgText
-            x={cx.toFixed(2)} y={(cy - 30).toFixed(2)}
-            textAnchor="middle" fontSize={22} fontWeight="700"
-            fill={COLORS.textPrimary}
-          >{`${filedCount}/12`}</SvgText>
-          <SvgText
-            x={cx.toFixed(2)} y={(cy - 13).toFixed(2)}
-            textAnchor="middle" fontSize={9}
-            fill={COLORS.textSecondary}
-          >months filed</SvgText>
-
           {/* Needle */}
           <Line
             x1={cx.toFixed(2)} y1={cy.toFixed(2)}
@@ -876,8 +864,8 @@ export default function ReportsScreen() {
           <InteractiveLineChart
             isLoading={finLoading}
             lines={finData ? [
-              { values: finData.revenue,  color: C_GREEN, label: 'Revenue'  },
-              { values: finData.expenses, color: C_GOLD,  label: 'Expenses' },
+              { values: finData.revenue,  color: C_GREEN,    label: 'Revenue'  },
+              { values: finData.expenses, color: '#A89060',  label: 'Expenses' },
             ] : []}
             xLabels={finData?.months ?? []}
           />
