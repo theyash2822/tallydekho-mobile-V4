@@ -25,16 +25,16 @@ interface Invoice {
 }
 
 const MOCK_INVOICES: Invoice[] = [
-  { id: '1',  invoiceNo: 'XYD-0909A', type: 'Sales',    party: 'Netaji Industries',  date: '25 July 2025', dateObj: new Date(2025, 6, 25), amount: '\u20b93,60,000', matched: false, gstr: ['GSTR-1', 'GSTR-6'] },
-  { id: '2',  invoiceNo: 'XYD-0908B', type: 'Sales',    party: 'ABC Corporation',    date: '24 July 2025', dateObj: new Date(2025, 6, 24), amount: '\u20b92,80,000', matched: true,  gstr: ['GSTR-1', 'GSTR-2A', 'GSTR-6'] },
-  { id: '3',  invoiceNo: 'XYD-0907C', type: 'Sales',    party: 'XYZ Limited',        date: '23 July 2025', dateObj: new Date(2025, 6, 23), amount: '\u20b91,95,000', matched: true,  gstr: ['GSTR-1', 'GSTR-2A', 'GSTR-9', 'GSTR-6'] },
-  { id: '4',  invoiceNo: 'XYD-0906D', type: 'Sales',    party: 'Tech Solutions Ltd', date: '22 July 2025', dateObj: new Date(2025, 6, 22), amount: '\u20b94,20,000', matched: false, gstr: ['GSTR-1', 'GSTR-3B'] },
-  { id: '5',  invoiceNo: 'XYD-0905E', type: 'Sales',    party: 'Global Industries',  date: '21 July 2025', dateObj: new Date(2025, 6, 21), amount: '\u20b91,80,000', matched: true,  gstr: ['GSTR-1', 'GSTR-2A', 'GSTR-9', 'GSTR-4'] },
-  { id: '6',  invoiceNo: 'XYD-0904F', type: 'Sales',    party: 'Prime Services',     date: '20 July 2025', dateObj: new Date(2025, 6, 20), amount: '\u20b93,20,000', matched: true,  gstr: ['GSTR-2A', 'GSTR-3B'] },
-  { id: '7',  invoiceNo: 'XYD-0903G', type: 'Purchase', party: 'Innovation Corp',    date: '19 July 2025', dateObj: new Date(2025, 6, 19), amount: '\u20b92,75,000', matched: false, gstr: ['GSTR-2A', 'GSTR-4', 'GSTR-3B', 'GSTR-6'] },
-  { id: '8',  invoiceNo: 'XYD-0902H', type: 'Purchase', party: 'Metro Traders',      date: '18 July 2025', dateObj: new Date(2025, 6, 18), amount: '\u20b91,50,000', matched: true,  gstr: ['GSTR-9', 'GSTR-4'] },
-  { id: '9',  invoiceNo: 'XYD-0901I', type: 'Sales',    party: 'Sunrise Exports',    date: '17 July 2025', dateObj: new Date(2025, 6, 17), amount: '\u20b95,10,000', matched: false, gstr: ['GSTR-1', 'GSTR-3B', 'GSTR-6'] },
-  { id: '10', invoiceNo: 'XYD-0900J', type: 'Sales',    party: 'Apex Distributors',  date: '16 July 2025', dateObj: new Date(2025, 6, 16), amount: '\u20b92,10,000', matched: true,  gstr: ['GSTR-9', 'GSTR-4', 'GSTR-3B'] },
+  { id: '1',  invoiceNo: 'XYD-0909A', type: 'Sales',    party: 'Netaji Industries',  date: '25 July 2025', dateObj: new Date(2025, 6, 25), amount: '₹3,60,000', matched: false, gstr: ['GSTR-1', 'GSTR-6'] },
+  { id: '2',  invoiceNo: 'XYD-0908B', type: 'Sales',    party: 'ABC Corporation',    date: '24 July 2025', dateObj: new Date(2025, 6, 24), amount: '₹2,80,000', matched: true,  gstr: ['GSTR-1', 'GSTR-2A', 'GSTR-6'] },
+  { id: '3',  invoiceNo: 'XYD-0907C', type: 'Sales',    party: 'XYZ Limited',        date: '23 July 2025', dateObj: new Date(2025, 6, 23), amount: '₹1,95,000', matched: true,  gstr: ['GSTR-1', 'GSTR-2A', 'GSTR-9', 'GSTR-6'] },
+  { id: '4',  invoiceNo: 'XYD-0906D', type: 'Sales',    party: 'Tech Solutions Ltd', date: '22 July 2025', dateObj: new Date(2025, 6, 22), amount: '₹4,20,000', matched: false, gstr: ['GSTR-1', 'GSTR-3B'] },
+  { id: '5',  invoiceNo: 'XYD-0905E', type: 'Sales',    party: 'Global Industries',  date: '21 July 2025', dateObj: new Date(2025, 6, 21), amount: '₹1,80,000', matched: true,  gstr: ['GSTR-1', 'GSTR-2A', 'GSTR-9', 'GSTR-4'] },
+  { id: '6',  invoiceNo: 'XYD-0904F', type: 'Sales',    party: 'Prime Services',     date: '20 July 2025', dateObj: new Date(2025, 6, 20), amount: '₹3,20,000', matched: true,  gstr: ['GSTR-2A', 'GSTR-3B'] },
+  { id: '7',  invoiceNo: 'XYD-0903G', type: 'Purchase', party: 'Innovation Corp',    date: '19 July 2025', dateObj: new Date(2025, 6, 19), amount: '₹2,75,000', matched: false, gstr: ['GSTR-2A', 'GSTR-4', 'GSTR-3B', 'GSTR-6'] },
+  { id: '8',  invoiceNo: 'XYD-0902H', type: 'Purchase', party: 'Metro Traders',      date: '18 July 2025', dateObj: new Date(2025, 6, 18), amount: '₹1,50,000', matched: true,  gstr: ['GSTR-9', 'GSTR-4'] },
+  { id: '9',  invoiceNo: 'XYD-0901I', type: 'Sales',    party: 'Sunrise Exports',    date: '17 July 2025', dateObj: new Date(2025, 6, 17), amount: '₹5,10,000', matched: false, gstr: ['GSTR-1', 'GSTR-3B', 'GSTR-6'] },
+  { id: '10', invoiceNo: 'XYD-0900J', type: 'Sales',    party: 'Apex Distributors',  date: '16 July 2025', dateObj: new Date(2025, 6, 16), amount: '₹2,10,000', matched: true,  gstr: ['GSTR-9', 'GSTR-4', 'GSTR-3B'] },
 ];
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
@@ -133,17 +133,17 @@ export default function GSTScreen() {
         <View style={s.summaryCard}>
           <View style={s.summaryRow}>
             <Text style={s.summaryLabel}>GST Collected</Text>
-            <Text style={s.summaryValue}>\u20b9475 K</Text>
+            <Text style={s.summaryValue}>{'₹4,75,000'}</Text>
           </View>
           <View style={s.summaryDivider} />
           <View style={s.summaryRow}>
             <Text style={s.summaryLabel}>ITC Balance</Text>
-            <Text style={s.summaryValue}>\u20b9392 K</Text>
+            <Text style={s.summaryValue}>{'₹3,92,000'}</Text>
           </View>
           <View style={s.summaryDivider} />
           <View style={s.summaryRow}>
             <Text style={s.summaryLabel}>Net Payable</Text>
-            <Text style={s.summaryValue}>\u20b983 K</Text>
+            <Text style={s.summaryValue}>{'₹83,000'}</Text>
           </View>
         </View>
 

@@ -7,16 +7,16 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 // ── Mock Data ─────────────────────────────────────────────────────────────────
 const UNMATCHED = [
-  { id: '1',  invoiceNo: 'XYD-0909A', type: 'Sales',    errorType: 'HSN error',     party: 'Netaji Industries',  date: '25 July 2025', amount: '\u20b93,60,000' },
-  { id: '2',  invoiceNo: 'XYD-0908B', type: 'Sales',    errorType: 'HSN error',     party: 'ABC Corporation',    date: '24 July 2025', amount: '\u20b92,80,000' },
-  { id: '3',  invoiceNo: 'XYD-0907C', type: 'Sales',    errorType: 'HSN error',     party: 'XYZ Limited',        date: '23 July 2025', amount: '\u20b91,95,000' },
-  { id: '4',  invoiceNo: 'XYD-0906D', type: 'Sales',    errorType: 'HSN error',     party: 'Tech Solutions Ltd', date: '22 July 2025', amount: '\u20b94,20,000' },
-  { id: '5',  invoiceNo: 'XYD-0905E', type: 'Sales',    errorType: 'HSN error',     party: 'Global Industries',  date: '21 July 2025', amount: '\u20b91,80,000' },
-  { id: '6',  invoiceNo: 'XYD-0904F', type: 'Sales',    errorType: 'HSN error',     party: 'Prime Services',     date: '20 July 2025', amount: '\u20b93,20,000' },
-  { id: '7',  invoiceNo: 'XYD-0903G', type: 'Sales',    errorType: 'HSN error',     party: 'Innovation Corp',    date: '19 July 2025', amount: '\u20b92,75,000' },
-  { id: '8',  invoiceNo: 'XYD-0902H', type: 'Purchase', errorType: 'Rate mismatch', party: 'Metro Traders',      date: '18 July 2025', amount: '\u20b91,50,000' },
-  { id: '9',  invoiceNo: 'XYD-0901I', type: 'Sales',    errorType: 'GSTIN error',   party: 'Sunrise Exports',    date: '17 July 2025', amount: '\u20b95,10,000' },
-  { id: '10', invoiceNo: 'XYD-0900J', type: 'Sales',    errorType: 'HSN error',     party: 'Apex Distributors',  date: '16 July 2025', amount: '\u20b92,10,000' },
+  { id: '1',  invoiceNo: 'XYD-0909A', type: 'Sales',    errorType: 'HSN error',     party: 'Netaji Industries',  date: '25 July 2025', amount: '₹3,60,000' },
+  { id: '2',  invoiceNo: 'XYD-0908B', type: 'Sales',    errorType: 'HSN error',     party: 'ABC Corporation',    date: '24 July 2025', amount: '₹2,80,000' },
+  { id: '3',  invoiceNo: 'XYD-0907C', type: 'Sales',    errorType: 'HSN error',     party: 'XYZ Limited',        date: '23 July 2025', amount: '₹1,95,000' },
+  { id: '4',  invoiceNo: 'XYD-0906D', type: 'Sales',    errorType: 'HSN error',     party: 'Tech Solutions Ltd', date: '22 July 2025', amount: '₹4,20,000' },
+  { id: '5',  invoiceNo: 'XYD-0905E', type: 'Sales',    errorType: 'HSN error',     party: 'Global Industries',  date: '21 July 2025', amount: '₹1,80,000' },
+  { id: '6',  invoiceNo: 'XYD-0904F', type: 'Sales',    errorType: 'HSN error',     party: 'Prime Services',     date: '20 July 2025', amount: '₹3,20,000' },
+  { id: '7',  invoiceNo: 'XYD-0903G', type: 'Sales',    errorType: 'HSN error',     party: 'Innovation Corp',    date: '19 July 2025', amount: '₹2,75,000' },
+  { id: '8',  invoiceNo: 'XYD-0902H', type: 'Purchase', errorType: 'Rate mismatch', party: 'Metro Traders',      date: '18 July 2025', amount: '₹1,50,000' },
+  { id: '9',  invoiceNo: 'XYD-0901I', type: 'Sales',    errorType: 'GSTIN error',   party: 'Sunrise Exports',    date: '17 July 2025', amount: '₹5,10,000' },
+  { id: '10', invoiceNo: 'XYD-0900J', type: 'Sales',    errorType: 'HSN error',     party: 'Apex Distributors',  date: '16 July 2025', amount: '₹2,10,000' },
 ];
 
 // Error type config — all using brand palette
