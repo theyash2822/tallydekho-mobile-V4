@@ -1,189 +1,150 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
+// ── Mock Data ─────────────────────────────────────────────────────────────────
 const UNMATCHED = [
-  { id: 'U1', party: 'Raj Enterprises', gstin: '27AABCE1234F1Z5', voucher: 'INV-2025-042', date: '25 May', ourAmt: '₹18,000', theirAmt: '₹17,500', diff: '₹500', type: 'Amount Mismatch' },
-  { id: 'U2', party: 'Kumar & Sons', gstin: '07AADCK9876G2Z1', voucher: 'INV-2025-039', date: '22 May', ourAmt: '₹35,400', theirAmt: null, diff: '₹35,400', type: 'Missing in 2A' },
-  { id: 'U3', party: 'Delhi Distributors', gstin: '07AABCD5678H1Z3', voucher: 'INV-2025-036', date: '20 May', ourAmt: '₹62,000', theirAmt: '₹61,800', diff: '₹200', type: 'Amount Mismatch' },
-  { id: 'U4', party: 'Mumbai Wholesale', gstin: '27AABCM2345J3Z9', voucher: 'INV-2025-031', date: '15 May', ourAmt: null, theirAmt: '₹28,000', diff: '₹28,000', type: 'Extra in 2A' },
-  { id: 'U5', party: 'Sharma Traders', gstin: '24AABCS3456K4Z2', voucher: 'INV-2025-028', date: '12 May', ourAmt: '₹45,000', theirAmt: '₹45,000', diff: '₹0', type: 'GSTIN Mismatch' },
+  { id: '1',  invoiceNo: 'XYD-0909A', type: 'Sales',    errorType: 'HSN error',     party: 'Netaji Industries',  date: '25 July 2025', amount: '\u20b93,60,000' },
+  { id: '2',  invoiceNo: 'XYD-0908B', type: 'Sales',    errorType: 'HSN error',     party: 'ABC Corporation',    date: '24 July 2025', amount: '\u20b92,80,000' },
+  { id: '3',  invoiceNo: 'XYD-0907C', type: 'Sales',    errorType: 'HSN error',     party: 'XYZ Limited',        date: '23 July 2025', amount: '\u20b91,95,000' },
+  { id: '4',  invoiceNo: 'XYD-0906D', type: 'Sales',    errorType: 'HSN error',     party: 'Tech Solutions Ltd', date: '22 July 2025', amount: '\u20b94,20,000' },
+  { id: '5',  invoiceNo: 'XYD-0905E', type: 'Sales',    errorType: 'HSN error',     party: 'Global Industries',  date: '21 July 2025', amount: '\u20b91,80,000' },
+  { id: '6',  invoiceNo: 'XYD-0904F', type: 'Sales',    errorType: 'HSN error',     party: 'Prime Services',     date: '20 July 2025', amount: '\u20b93,20,000' },
+  { id: '7',  invoiceNo: 'XYD-0903G', type: 'Sales',    errorType: 'HSN error',     party: 'Innovation Corp',    date: '19 July 2025', amount: '\u20b92,75,000' },
+  { id: '8',  invoiceNo: 'XYD-0902H', type: 'Purchase', errorType: 'Rate mismatch', party: 'Metro Traders',      date: '18 July 2025', amount: '\u20b91,50,000' },
+  { id: '9',  invoiceNo: 'XYD-0901I', type: 'Sales',    errorType: 'GSTIN error',   party: 'Sunrise Exports',    date: '17 July 2025', amount: '\u20b95,10,000' },
+  { id: '10', invoiceNo: 'XYD-0900J', type: 'Sales',    errorType: 'HSN error',     party: 'Apex Distributors',  date: '16 July 2025', amount: '\u20b92,10,000' },
 ];
 
-const TYPE_CONFIG: Record<string, { color: string; bg: string }> = {
-  'Amount Mismatch': { color: '#D97706', bg: '#FFFBEB' },
-  'Missing in 2A': { color: '#DC2626', bg: '#FDECEA' },
-  'Extra in 2A': { color: '#7C3AED', bg: '#F5F3FF' },
-  'GSTIN Mismatch': { color: '#2563EB', bg: '#EFF6FF' },
+// Error type config — all using brand palette
+const ERROR_CFG: Record<string, { badgeBg: string; dotColor: string; textColor: string }> = {
+  'HSN error':     { badgeBg: '#FEE2E2', dotColor: '#DC2626', textColor: '#DC2626' },
+  'Rate mismatch': { badgeBg: '#FEF3C7', dotColor: '#D97706', textColor: '#D97706' },
+  'GSTIN error':   { badgeBg: '#F3E8FF', dotColor: '#7C3AED', textColor: '#7C3AED' },
 };
+const DEFAULT_ERR = { badgeBg: '#FEE2E2', dotColor: '#DC2626', textColor: '#DC2626' };
 
+// ── Main Screen ───────────────────────────────────────────────────────────────
 export default function UnmatchedListScreen() {
   const router = useRouter();
-  const [selected, setSelected] = useState<string[]>([]);
-  const [activeFilter, setActiveFilter] = useState('All');
-
-  const toggleSelect = (id: string) => {
-    setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
-  };
-
-  const filtered = activeFilter === 'All' ? UNMATCHED : UNMATCHED.filter(u => u.type === activeFilter);
 
   return (
     <SafeAreaView style={s.safe}>
+
+      {/* ── Header ──────────────────────────────────────────────────────── */}
       <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
+        <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
+          <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Unmatched List</Text>
-        <TouchableOpacity style={s.exportBtn}>
-          <Ionicons name="share-outline" size={20} color={COLORS.brandPrimary} />
-        </TouchableOpacity>
+        <View style={{ width: 44 }} />
       </View>
 
-      {/* Filter Chips */}
-      <View style={s.filterBar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterContent}>
-          {['All', 'Amount Mismatch', 'Missing in 2A', 'Extra in 2A', 'GSTIN Mismatch'].map(f => (
-            <TouchableOpacity key={f} style={[s.chip, activeFilter === f && s.chipActive]} onPress={() => setActiveFilter(f)} activeOpacity={0.7}>
-              <Text style={[s.chipTxt, activeFilter === f && s.chipActiveTxt]}>{f}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+      {/* ── List ────────────────────────────────────────────────────────── */}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={s.listContent}
+      >
+        {UNMATCHED.map((item) => {
+          const cfg = ERROR_CFG[item.errorType] ?? DEFAULT_ERR;
 
-      {/* Summary Strip */}
-      <View style={s.summaryStrip}>
-        <View style={s.summaryItem}>
-          <Text style={s.summaryVal}>{UNMATCHED.length}</Text>
-          <Text style={s.summaryLbl}>Total Unmatched</Text>
-        </View>
-        <View style={s.summaryDivider} />
-        <View style={s.summaryItem}>
-          <Text style={[s.summaryVal, { color: '#DC2626' }]}>3</Text>
-          <Text style={s.summaryLbl}>Needs Attention</Text>
-        </View>
-        <View style={s.summaryDivider} />
-        <View style={s.summaryItem}>
-          <Text style={[s.summaryVal, { color: '#D97706' }]}>₹64,100</Text>
-          <Text style={s.summaryLbl}>Total Diff.</Text>
-        </View>
-      </View>
-
-      {selected.length > 0 && (
-        <View style={s.selectionBar}>
-          <Text style={s.selectionTxt}>{selected.length} selected</Text>
-          <TouchableOpacity style={s.selectionBtn} onPress={() => setSelected([])} activeOpacity={0.7}>
-            <Text style={s.selectionBtnTxt}>Clear</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {filtered.map((item, i) => {
-          const cfg = TYPE_CONFIG[item.type] || { color: '#666', bg: '#F5F5F5' };
-          const isSelected = selected.includes(item.id);
           return (
             <TouchableOpacity
               key={item.id}
-              style={[s.row, isSelected && s.rowSelected, i < filtered.length - 1 && s.rowBorder]}
-              onPress={() => toggleSelect(item.id)}
-              onLongPress={() => toggleSelect(item.id)}
-              activeOpacity={0.85}
+              style={s.card}
+              onPress={() => router.push(`/document/${item.id}` as any)}
+              activeOpacity={0.8}
             >
-              <View style={[s.checkbox, isSelected && s.checkboxActive]}>
-                {isSelected && <Ionicons name="checkmark" size={12} color={COLORS.white} />}
+              {/* Top row: error badge + invoice ID + type */}
+              <View style={s.cardTopRow}>
+                <View style={[s.errorBadge, { backgroundColor: cfg.badgeBg }]}>
+                  <View style={[s.errorDot, { backgroundColor: cfg.dotColor }]} />
+                  <Text style={[s.errorTxt, { color: cfg.textColor }]}>
+                    {item.errorType}
+                  </Text>
+                </View>
+                <Text style={s.invId}>{item.invoiceNo}</Text>
+                <Text style={s.invSep}> \u2022 </Text>
+                <Text style={s.invType}>{item.type}</Text>
               </View>
-              <View style={s.rowContent}>
-                <View style={s.rowTop}>
+
+              {/* Body row: warning icon + party name + amount */}
+              <View style={s.cardBody}>
+                <View style={s.warningWrap}>
+                  <Ionicons name="warning" size={20} color="#DC2626" />
+                </View>
+                <View style={s.partyBlock}>
                   <Text style={s.partyName}>{item.party}</Text>
-                  <View style={[s.typeBadge, { backgroundColor: cfg.bg }]}>
-                    <Text style={[s.typeTxt, { color: cfg.color }]}>{item.type}</Text>
-                  </View>
+                  <Text style={s.partyDate}>{item.date}</Text>
                 </View>
-                <View style={s.rowMid}>
-                  <Text style={s.voucherRef}>{item.voucher} · {item.date}</Text>
-                  <Text style={s.gstin}>{item.gstin}</Text>
-                </View>
-                <View style={s.rowBottom}>
-                  <View style={s.amtCol}>
-                    <Text style={s.amtLbl}>Our Books</Text>
-                    <Text style={s.amtVal}>{item.ourAmt || '—'}</Text>
-                  </View>
-                  <Ionicons name="arrow-forward" size={12} color={COLORS.textTertiary} />
-                  <View style={s.amtCol}>
-                    <Text style={s.amtLbl}>GSTR-2A</Text>
-                    <Text style={s.amtVal}>{item.theirAmt || '—'}</Text>
-                  </View>
-                  <View style={[s.diffBadge, { backgroundColor: cfg.bg }]}>
-                    <Text style={[s.diffTxt, { color: cfg.color }]}>Diff: {item.diff}</Text>
-                  </View>
-                </View>
+                <Text style={s.amount}>{item.amount}</Text>
               </View>
             </TouchableOpacity>
           );
         })}
-        <View style={{ height: 100 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
-
-      {/* Bottom Action */}
-      <View style={s.actionBar}>
-        <TouchableOpacity style={s.pdfBtn} activeOpacity={0.8}>
-          <Ionicons name="document-text-outline" size={16} color={COLORS.white} />
-          <Text style={s.actionBtnTxt}>Share PDF</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[s.pdfBtn, { backgroundColor: '#2D7D46' }]} activeOpacity={0.8}>
-          <Ionicons name="grid-outline" size={16} color={COLORS.white} />
-          <Text style={s.actionBtnTxt}>Export XLS</Text>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.pageBg },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 14, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  backBtn: { width: 40, alignItems: 'flex-start' },
-  headerTitle: { flex: 1, fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
-  exportBtn: { width: 40, alignItems: 'flex-end' },
-  filterBar: { backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  filterContent: { paddingHorizontal: SPACING.md, paddingVertical: 10, gap: 8 },
-  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.full, backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault },
-  chipActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
-  chipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
-  chipActiveTxt: { color: COLORS.white },
-  summaryStrip: { flexDirection: 'row', backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  summaryItem: { flex: 1, alignItems: 'center', paddingVertical: 12 },
-  summaryVal: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary },
-  summaryLbl: { fontSize: 10, color: COLORS.textSecondary, marginTop: 2 },
-  summaryDivider: { width: 1, backgroundColor: COLORS.borderDefault },
-  selectionBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 8, backgroundColor: '#1A1A1A' },
-  selectionTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.white },
-  selectionBtn: { paddingHorizontal: 12, paddingVertical: 4, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: RADIUS.full },
-  selectionBtnTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.white },
-  row: { backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md, paddingVertical: 12, flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  rowSelected: { backgroundColor: '#F0EFE9' },
-  rowBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  checkbox: { width: 20, height: 20, borderRadius: 5, borderWidth: 2, borderColor: COLORS.borderStrong, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
-  checkboxActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
-  rowContent: { flex: 1, gap: 4 },
-  rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  partyName: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, flex: 1 },
-  typeBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: RADIUS.full },
-  typeTxt: { fontSize: 10, fontWeight: '700' },
-  rowMid: { gap: 2 },
-  voucherRef: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
-  gstin: { fontSize: 10, color: COLORS.textTertiary, fontFamily: 'monospace' },
-  rowBottom: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
-  amtCol: { alignItems: 'center' },
-  amtLbl: { fontSize: 10, color: COLORS.textTertiary },
-  amtVal: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary },
-  diffBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: RADIUS.full, marginLeft: 'auto' as any },
-  diffTxt: { fontSize: 10, fontWeight: '700' },
-  actionBar: { flexDirection: 'row', gap: 10, padding: SPACING.md, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
-  pdfBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: COLORS.brandPrimary, paddingVertical: 12, borderRadius: RADIUS.md },
-  actionBtnTxt: { color: COLORS.white, fontSize: TYPOGRAPHY.sm, fontWeight: '700' },
+
+  // Header
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: SPACING.xs, paddingVertical: 10,
+    backgroundColor: COLORS.cardBg,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  backBtn:     { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: {
+    flex: 1, textAlign: 'center',
+    fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary,
+  },
+
+  // List
+  listContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.md },
+
+  // Card
+  card: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    paddingHorizontal: SPACING.md, paddingVertical: 12,
+    marginBottom: SPACING.sm,
+    gap: 8,
+  },
+
+  // Top row
+  cardTopRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
+  errorBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: RADIUS.full,
+  },
+  errorDot:  { width: 7, height: 7, borderRadius: 4 },
+  errorTxt:  { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
+  invId:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500' },
+  invSep:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  invType:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500' },
+
+  // Body row
+  cardBody: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 2,
+  },
+  warningWrap: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  partyBlock: { flex: 1, gap: 3 },
+  partyName:  { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  partyDate:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  amount:     { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
 });
