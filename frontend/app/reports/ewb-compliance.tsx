@@ -1,76 +1,120 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, Alert } from 'react-native';
+import {
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  Dimensions, Linking,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import Svg, { Path, Circle, G, Text as SvgText, Rect } from 'react-native-svg';
+import Svg, { Path, Circle, G, Rect, Text as SvgText } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
+import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
-const W = Dimensions.get('window').width;
-const CONTENT_W = W - SPACING.md * 4;
+const { width: W } = Dimensions.get('window');
+const CARD_INNER = W - SPACING.md * 2 - SPACING.md * 2; // card content width
+const DONUT_W = Math.min(140, CARD_INNER * 0.42);
 
-const PERIODS: DropdownOption[] = [
-  { label: 'This Month', value: 'month' },
-  { label: 'Quarterly', value: 'quarter' },
-  { label: 'Half Yearly', value: 'half' },
-];
+// ── Chart Data ───────────────────────────────────────────────────────────────
+const TOTAL_BILLS = 319;
+const GENERATED  = 265;
 
-// ── Donut Chart ──────────────────────────────────────────────────────────
 const DONUT_SEGS = [
-  { label: 'Generated', pct: 68, color: '#2D7D46' },
-  { label: 'Pending',   pct: 12, color: '#D97706' },
-  { label: 'Errors',    pct: 5,  color: '#C0392B' },
-  { label: 'Expiring',  pct: 15, color: '#2563EB' },
+  { label: 'Generated', pct: 74, count: 236, color: '#2D7D46' },
+  { label: 'Pending',   pct: 11, count: 35,  color: '#D97706' },
+  { label: 'Errors',    pct: 3,  count: 9,   color: '#DC2626' },
+  { label: 'Expiring',  pct: 12, count: 38,  color: '#2563EB' },
 ];
 
-function DonutChart() {
-  const r = 60; const cx = CONTENT_W / 2; const cy = 74;
+const BAR_DATA = [4,7,3,8,12,6,9,5,11,8,14,7,10,6,13,9,8,12,7,11,6,9,14,8,10,7,12,5,9,11];
+const MAX_BAR = Math.max(...BAR_DATA);
+
+const TRANSPORT = [
+  { mode: 'Road', count: 240 },
+  { mode: 'Rail', count: 20  },
+  { mode: 'Air',  count: 38  },
+  { mode: 'Sea',  count: 6   },
+];
+
+const RECENT_ACTIVITY = [
+  { text: '14 bills generated',  time: '10 Jul 14:42' },
+  { text: '9 bills extended',    time: '10 Jul 14:42' },
+  { text: '1 bill cancelled',    time: '10 Jul 14:42' },
+];
+
+// ── Interactive Donut ────────────────────────────────────────────────────────
+function InteractiveDonut({
+  active, onPress,
+}: {
+  active: number | null;
+  onPress: (i: number | null) => void;
+}) {
+  const r = DONUT_W * 0.38; const ir = DONUT_W * 0.26;
+  const cx = DONUT_W / 2;   const cy = DONUT_W / 2;
   let angle = -Math.PI / 2;
+  const paths = DONUT_SEGS.map((seg, i) => {
+    const startA = angle;
+    const sweep  = (seg.pct / 100) * 2 * Math.PI;
+    angle += sweep;
+    const endA = angle; const large = sweep > Math.PI ? 1 : 0;
+    const outerR = active === i ? r + 5 : r;
+    const x1 = cx + outerR * Math.cos(startA); const y1 = cy + outerR * Math.sin(startA);
+    const x2 = cx + outerR * Math.cos(endA);   const y2 = cy + outerR * Math.sin(endA);
+    const xi1 = cx + ir * Math.cos(startA);    const yi1 = cy + ir * Math.sin(startA);
+    const xi2 = cx + ir * Math.cos(endA);      const yi2 = cy + ir * Math.sin(endA);
+    const d = `M ${x1.toFixed(1)} ${y1.toFixed(1)} A ${outerR} ${outerR} 0 ${large} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} L ${xi2.toFixed(1)} ${yi2.toFixed(1)} A ${ir} ${ir} 0 ${large} 0 ${xi1.toFixed(1)} ${yi1.toFixed(1)} Z`;
+    return { seg, d, i };
+  });
+  const dCount = active !== null ? DONUT_SEGS[active].count : TOTAL_BILLS;
+  const dLabel = active !== null ? `${DONUT_SEGS[active].pct}%` : 'Total';
   return (
-    <Svg width={CONTENT_W} height={150}>
-      {DONUT_SEGS.map((seg, i) => {
-        const startA = angle;
-        const sweep = (seg.pct / 100) * 2 * Math.PI;
-        angle += sweep;
-        const endA = angle;
-        const large = sweep > Math.PI ? 1 : 0;
-        const x1 = cx + r * Math.cos(startA); const y1 = cy + r * Math.sin(startA);
-        const x2 = cx + r * Math.cos(endA);   const y2 = cy + r * Math.sin(endA);
-        const ir = 38;
-        const xi1 = cx + ir * Math.cos(startA); const yi1 = cy + ir * Math.sin(startA);
-        const xi2 = cx + ir * Math.cos(endA);   const yi2 = cy + ir * Math.sin(endA);
-        const d = `M ${x1.toFixed(1)} ${y1.toFixed(1)} A ${r} ${r} 0 ${large} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} L ${xi2.toFixed(1)} ${yi2.toFixed(1)} A ${ir} ${ir} 0 ${large} 0 ${xi1.toFixed(1)} ${yi1.toFixed(1)} Z`;
-        return <Path key={i} d={d} fill={seg.color} />;
-      })}
-      <Circle cx={cx} cy={cy} r={36} fill={COLORS.cardBg} />
-      <SvgText x={cx} y={cy - 6} textAnchor="middle" fontSize={18} fontWeight="700" fill={COLORS.textPrimary}>142</SvgText>
-      <SvgText x={cx} y={cy + 10} textAnchor="middle" fontSize={9} fill={COLORS.textSecondary}>Total Bills</SvgText>
+    <Svg width={DONUT_W} height={DONUT_W}>
+      {paths.map(({ seg, d, i }) => (
+        <G key={i} onPress={() => onPress(active === i ? null : i)}>
+          <Path d={d} fill={seg.color} opacity={active !== null && active !== i ? 0.3 : 1} />
+        </G>
+      ))}
+      <Circle cx={cx} cy={cy} r={ir - 1} fill={COLORS.cardBg} />
+      <SvgText x={cx} y={cy - 4} textAnchor="middle" fontSize={16} fontWeight="700" fill={COLORS.textPrimary}>{dCount}</SvgText>
+      <SvgText x={cx} y={cy + 11} textAnchor="middle" fontSize={9} fill={COLORS.textSecondary}>{dLabel}</SvgText>
     </Svg>
   );
 }
 
-// ── Bar Chart (30 days) ──────────────────────────────────────────────────
-const BAR_DATA = [
-  4,7,3,8,12,6,9,5,11,8,14,7,10,6,13,9,8,12,7,11,6,9,14,8,10,7,12,5,9,11,
-];
-const maxBar = Math.max(...BAR_DATA);
-
-function EWBBarChart() {
-  const H = 80; const PAD_B = 16; const PAD_T = 6;
-  const chartH = H - PAD_B - PAD_T;
-  const barW = (CONTENT_W / 30) - 1.5;
+// ── Interactive Bar Chart ─────────────────────────────────────────────────────
+function InteractiveBarChart({
+  active, onPress,
+}: {
+  active: number | null;
+  onPress: (i: number | null) => void;
+}) {
+  const H = 100; const PAD_B = 18; const PAD_T = 18; const chartH = H - PAD_B - PAD_T;
+  const barW = 10; const gap = 3;
+  const totalW = BAR_DATA.length * (barW + gap);
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <Svg width={CONTENT_W} height={H}>
+      <Svg width={totalW} height={H}>
         {BAR_DATA.map((v, i) => {
-          const bh = (v / maxBar) * chartH;
-          const x = i * (barW + 1.5);
+          const bh = (v / MAX_BAR) * chartH;
+          const x = i * (barW + gap);
+          const y = PAD_T + chartH - bh;
+          const isActive = active === i;
           return (
-            <G key={i}>
-              <Rect x={x} y={PAD_T + chartH - bh} width={barW} height={bh} rx={2} fill="#2563EB" opacity={0.8} />
-              {(i === 0 || (i + 1) % 5 === 0) && (
-                <SvgText x={x + barW / 2} y={H - 2} textAnchor="middle" fontSize={7} fill={COLORS.textTertiary}>{i + 1}</SvgText>
+            <G key={i} onPress={() => onPress(active === i ? null : i)}>
+              <Rect
+                x={x} y={y} width={barW} height={bh} rx={3}
+                fill={isActive ? COLORS.brandPrimary : '#4B7BE5'}
+                opacity={active !== null && !isActive ? 0.4 : 0.85}
+              />
+              {isActive && (
+                <>
+                  <Rect x={Math.max(0, x - 5)} y={y - 20} width={20} height={16} rx={3} fill={COLORS.brandPrimary} />
+                  <SvgText x={x + barW / 2} y={y - 9} textAnchor="middle" fontSize={8} fontWeight="700" fill="#FFF">{v}</SvgText>
+                </>
+              )}
+              {(i === 0 || (i + 1) % 7 === 0) && (
+                <SvgText x={x + barW / 2} y={H - 4} textAnchor="middle" fontSize={6.5} fill={COLORS.textTertiary}>
+                  {`${i + 1} Aug`}
+                </SvgText>
               )}
             </G>
           );
@@ -80,92 +124,145 @@ function EWBBarChart() {
   );
 }
 
-const KPI_CARDS = [
-  { label: 'Pending Gen', value: '18',  color: '#D97706', icon: 'time-outline' },
-  { label: 'Errors',      value: '7',   color: '#C0392B', icon: 'warning-outline' },
-  { label: 'Expiring <24h',value: '8',  color: '#2563EB', icon: 'timer-outline' },
-  { label: 'Generated',   value: '142', color: '#2D7D46', icon: 'checkmark-circle-outline' },
-];
-
-const TRANSPORT_MODES = [
-  { mode: 'Road',  count: 98, icon: 'car-outline',       color: '#2D7D46' },
-  { mode: 'Rail',  count: 12, icon: 'train-outline',     color: '#2563EB' },
-  { mode: 'Air',   count: 8,  icon: 'airplane-outline',  color: '#7C3AED' },
-  { mode: 'Sea',   count: 24, icon: 'boat-outline',      color: '#0891B2' },
-];
-
-const RECENT = [
-  { ewb: 'EWB-220081', party: 'ABC Traders → Mumbai', date: '15 Jun', status: 'Active', statusColor: '#2D7D46' },
-  { ewb: 'EWB-220080', party: 'XYZ Retail → Delhi', date: '14 Jun', status: 'Expiring', statusColor: '#D97706' },
-  { ewb: 'EWB-220079', party: 'Kumar & Sons → Chennai', date: '13 Jun', status: 'Active', statusColor: '#2D7D46' },
-  { ewb: 'EWB-220078', party: 'PQR Exports → Kolkata', date: '12 Jun', status: 'Expired', statusColor: '#C0392B' },
-];
-
+// ── Main Screen ───────────────────────────────────────────────────────────────
 export default function EWBComplianceScreen() {
   const router = useRouter();
-  const [period, setPeriod] = useState('month');
+  const [fromDate,       setFromDate]       = useState('');
+  const [toDate,         setToDate]         = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [activeSeg,      setActiveSeg]      = useState<number | null>(null);
+  const [activeBar,      setActiveBar]      = useState<number | null>(null);
+
+  const isDateActive = fromDate.length > 0 && toDate.length > 0;
 
   return (
     <SafeAreaView style={s.safe}>
+
+      {/* Header */}
       <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
+        <TouchableOpacity style={s.iconBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>E-Way Bill</Text>
-        <TouchableOpacity style={s.exportBtn} activeOpacity={0.7}>
-          <Ionicons name="download-outline" size={20} color={COLORS.brandPrimary} />
+        <TouchableOpacity style={s.iconBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
+          <Ionicons
+            name="calendar-outline" size={20}
+            color={isDateActive ? COLORS.brandPrimary : COLORS.textSecondary}
+          />
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
-        <View style={s.filterRow}>
-          <FormDropdown label="Period" value={period} options={PERIODS} onSelect={o => setPeriod(o.value)} placeholder="Period" containerStyle={{ flex: 1, marginBottom: 0 }} />
+      {/* Date Strip */}
+      <TouchableOpacity style={s.dateStrip} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
+        <Ionicons name="calendar-outline" size={13} color={isDateActive ? COLORS.brandPrimary : COLORS.textTertiary} />
+        <Text style={[s.dateStripTxt, isDateActive && s.dateStripActive]}>
+          {isDateActive ? `${fromDate}  →  ${toDate}` : 'All Dates'}
+        </Text>
+        {!isDateActive && <Ionicons name="chevron-down" size={11} color={COLORS.textTertiary} />}
+        {isDateActive && (
+          <TouchableOpacity onPress={() => { setFromDate(''); setToDate(''); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close-circle" size={16} color={COLORS.brandPrimary} />
+          </TouchableOpacity>
+        )}
+      </TouchableOpacity>
+
+      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
+
+        {/* Stats 2×2 grid */}
+        <View style={s.statsCard}>
+          <View style={s.statsRow}>
+            <View style={s.statCell}>
+              <Text style={s.statLabel}>Pending Gen</Text>
+              <Text style={s.statValue}>33</Text>
+            </View>
+            <View style={s.statDivV} />
+            <View style={s.statCell}>
+              <Text style={s.statLabel}>Errors</Text>
+              <Text style={[s.statValue, { color: '#DC2626' }]}>9</Text>
+            </View>
+          </View>
+          <View style={s.statDivH} />
+          <View style={s.statsRow}>
+            <View style={s.statCell}>
+              <Text style={s.statLabel}>Expiring {'<'}24h</Text>
+              <Text style={[s.statValue, { color: '#D97706' }]}>12</Text>
+            </View>
+            <View style={s.statDivV} />
+            <View style={s.statCell}>
+              <Text style={s.statLabel}>Generated</Text>
+              <Text style={[s.statValue, { color: '#2D7D46' }]}>{GENERATED}</Text>
+            </View>
+          </View>
         </View>
 
-        {/* KPI Cards */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.kpiScroll}>
-          {KPI_CARDS.map(kpi => (
-            <View key={kpi.label} style={[s.kpiCard, { borderTopColor: kpi.color }]}>
-              <View style={[s.kpiIcon, { backgroundColor: kpi.color + '18' }]}>
-                <Ionicons name={kpi.icon as any} size={18} color={kpi.color} />
-              </View>
-              <Text style={s.kpiVal}>{kpi.value}</Text>
-              <Text style={s.kpiLbl}>{kpi.label}</Text>
-            </View>
-          ))}
-        </ScrollView>
+        {/* Generated CTA */}
+        <TouchableOpacity
+          style={s.generatedBtn}
+          onPress={() => router.push('/reports/ewb-list' as any)}
+          activeOpacity={0.85}
+        >
+          <Text style={s.generatedBtnTxt}>Generated  {GENERATED}</Text>
+          <Ionicons name="chevron-forward" size={18} color={COLORS.white} />
+        </TouchableOpacity>
 
-        {/* Donut Chart */}
+        {/* Donut + Legend */}
         <View style={s.card}>
-          <Text style={s.cardTitle}>EWB Status Distribution</Text>
-          <DonutChart />
-          <View style={s.donutLegend}>
-            {DONUT_SEGS.map(seg => (
-              <View key={seg.label} style={s.donutLegendItem}>
-                <View style={[s.legendDot, { backgroundColor: seg.color }]} />
-                <Text style={s.legendTxt}>{seg.label} ({seg.pct}%)</Text>
-              </View>
-            ))}
+          <View style={s.donutRow}>
+            <InteractiveDonut active={activeSeg} onPress={setActiveSeg} />
+            <View style={s.legendList}>
+              {DONUT_SEGS.map((seg, i) => (
+                <TouchableOpacity
+                  key={seg.label}
+                  style={[s.legendItem, activeSeg === i && s.legendItemActive]}
+                  onPress={() => setActiveSeg(activeSeg === i ? null : i)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[s.legendDot, { backgroundColor: seg.color }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.legendLbl, activeSeg === i && { color: COLORS.textPrimary, fontWeight: '700' }]}>
+                      {seg.label}
+                    </Text>
+                    <Text style={[s.legendPct, { color: seg.color }]}>{seg.pct}%</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
+          {/* Touch tooltip */}
+          {activeSeg !== null && (
+            <View style={[s.tooltip, { borderLeftColor: DONUT_SEGS[activeSeg].color }]}>
+              <Text style={s.tooltipTxt}>
+                <Text style={{ fontWeight: '800', color: DONUT_SEGS[activeSeg].color }}>
+                  {DONUT_SEGS[activeSeg].label}
+                </Text>
+                {`  —  ${DONUT_SEGS[activeSeg].count} bills  (${DONUT_SEGS[activeSeg].pct}%)`}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Bar Chart */}
         <View style={s.card}>
-          <Text style={s.cardTitle}>Daily Generation (Last 30 Days)</Text>
-          <EWBBarChart />
+          <Text style={s.cardTitle}>Bills generated per day (Aug 1–31)</Text>
+          <InteractiveBarChart active={activeBar} onPress={setActiveBar} />
+          {activeBar !== null && (
+            <View style={s.tooltip}>
+              <Text style={s.tooltipTxt}>
+                <Text style={{ fontWeight: '800', color: COLORS.textPrimary }}>{`Aug ${activeBar + 1}`}</Text>
+                {`  —  ${BAR_DATA[activeBar]} bills generated`}
+              </Text>
+            </View>
+          )}
         </View>
 
-        {/* Transport Modes */}
+        {/* Transport Mode */}
         <View style={s.card}>
-          <Text style={s.cardTitle}>Transport Mode Breakdown</Text>
+          <Text style={s.cardTitle}>Transport Mode</Text>
           <View style={s.modesGrid}>
-            {TRANSPORT_MODES.map(tm => (
-              <View key={tm.mode} style={s.modeCard}>
-                <View style={[s.modeIcon, { backgroundColor: tm.color + '18' }]}>
-                  <Ionicons name={tm.icon as any} size={18} color={tm.color} />
-                </View>
-                <Text style={s.modeCount}>{tm.count}</Text>
+            {TRANSPORT.map((tm) => (
+              <View key={tm.mode} style={s.modeCell}>
                 <Text style={s.modeName}>{tm.mode}</Text>
+                <Text style={s.modeCount}>{tm.count}</Text>
               </View>
             ))}
           </View>
@@ -174,64 +271,133 @@ export default function EWBComplianceScreen() {
         {/* Recent Activity */}
         <View style={s.card}>
           <Text style={s.cardTitle}>Recent Activity</Text>
-          {RECENT.map((item, idx) => (
-            <View key={item.ewb} style={[s.recentRow, idx < RECENT.length - 1 && s.recentBorder]}>
-              <View style={s.recentLeft}>
-                <Text style={s.recentEwb}>{item.ewb}</Text>
-                <Text style={s.recentParty} numberOfLines={1}>{item.party}</Text>
-                <Text style={s.recentDate}>{item.date}</Text>
-              </View>
-              <View style={[s.statusBadge, { backgroundColor: item.statusColor + '18' }]}>
-                <Text style={[s.statusTxt, { color: item.statusColor }]}>{item.status}</Text>
-              </View>
+          {RECENT_ACTIVITY.map((item, idx) => (
+            <View key={idx} style={[s.actRow, idx < RECENT_ACTIVITY.length - 1 && s.actBorder]}>
+              <Text style={s.actTxt}>{item.text}</Text>
+              <Text style={s.actTime}>{item.time}</Text>
             </View>
           ))}
         </View>
 
-        {/* Generate Button */}
-        <TouchableOpacity style={s.genBtn} onPress={() => Alert.alert('Generate', 'Generating E-Way Bills...')} activeOpacity={0.8}>
-          <Ionicons name="add-circle-outline" size={18} color={COLORS.white} />
-          <Text style={s.genTxt}>Generate E-Way Bill</Text>
+        {/* View Details — opens portal */}
+        <TouchableOpacity
+          style={s.viewDetailsBtn}
+          onPress={() => Linking.openURL('https://ewaybillgst.gov.in/')}
+          activeOpacity={0.85}
+        >
+          <Text style={s.viewDetailsTxt}>View Details</Text>
         </TouchableOpacity>
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      <DateRangePickerModal
+        visible={showDatePicker}
+        fromDate={fromDate}
+        toDate={toDate}
+        onApply={(f, t) => { if (f && t) { setFromDate(f); setToDate(t); } }}
+        onClose={() => setShowDatePicker(false)}
+      />
     </SafeAreaView>
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: COLORS.pageBg },
-  header:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.sm, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  safe:   { flex: 1, backgroundColor: COLORS.pageBg },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: SPACING.xs, paddingVertical: 10,
+    backgroundColor: COLORS.cardBg,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  iconBtn:     { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary },
-  exportBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  scroll: { flex: 1 },
-  filterRow: { flexDirection: 'row', gap: 12, margin: SPACING.md },
-  kpiScroll: { paddingHorizontal: SPACING.md, paddingBottom: SPACING.sm, gap: 10 },
-  kpiCard: { width: 110, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, padding: SPACING.sm, borderWidth: 1, borderColor: COLORS.borderDefault, borderTopWidth: 3, gap: 4, alignItems: 'center' },
-  kpiIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  kpiVal:  { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary },
-  kpiLbl:  { fontSize: 10, color: COLORS.textSecondary, textAlign: 'center' },
-  card:    { margin: SPACING.md, marginTop: 0, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, padding: SPACING.md, marginBottom: SPACING.md },
-  cardTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginBottom: SPACING.sm },
-  donutLegend: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: SPACING.sm, justifyContent: 'center' },
-  donutLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
-  modesGrid: { flexDirection: 'row', gap: 10 },
-  modeCard:  { flex: 1, alignItems: 'center', backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, padding: SPACING.sm, gap: 4 },
-  modeIcon:  { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+
+  dateStrip: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 9, backgroundColor: COLORS.cardBg,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  dateStripTxt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+  dateStripActive: { color: COLORS.brandPrimary },
+
+  scroll:        { flex: 1 },
+  scrollContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.md },
+
+  // Stats
+  statsCard: {
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    marginBottom: SPACING.sm, overflow: 'hidden',
+  },
+  statsRow: { flexDirection: 'row' },
+  statCell: { flex: 1, paddingHorizontal: SPACING.md, paddingVertical: 14 },
+  statDivV: { width: 1, backgroundColor: COLORS.borderDefault },
+  statDivH: { height: 1, backgroundColor: COLORS.borderDefault },
+  statLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500', marginBottom: 4 },
+  statValue: { fontSize: 22, fontWeight: '800', color: COLORS.textPrimary },
+
+  // Generated CTA
+  generatedBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md,
+    paddingVertical: 15, marginBottom: SPACING.sm,
+  },
+  generatedBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white, letterSpacing: 0.5 },
+
+  // Card
+  card: {
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    padding: SPACING.md, marginBottom: SPACING.sm,
+  },
+  cardTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 12 },
+
+  // Donut layout
+  donutRow:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  legendList: { flex: 1, gap: 8 },
+  legendItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingVertical: 3, paddingHorizontal: 6, borderRadius: 6,
+  },
+  legendItemActive: { backgroundColor: COLORS.pageBg },
+  legendDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
+  legendLbl: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500' },
+  legendPct: { fontSize: TYPOGRAPHY.sm, fontWeight: '800' },
+
+  // Tooltip (shared for both charts)
+  tooltip: {
+    marginTop: 12, borderLeftWidth: 3, borderLeftColor: COLORS.brandPrimary,
+    paddingLeft: 10, paddingVertical: 9,
+    backgroundColor: COLORS.pageBg, borderRadius: 6,
+  },
+  tooltipTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
+
+  // Transport
+  modesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  modeCell: {
+    width: '47%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    paddingHorizontal: SPACING.md, paddingVertical: 12,
+  },
+  modeName:  { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textSecondary },
   modeCount: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary },
-  modeName:  { fontSize: 11, color: COLORS.textSecondary },
-  recentRow:    { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 },
-  recentBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  recentLeft:   { flex: 1, gap: 2 },
-  recentEwb:    { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  recentParty:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
-  recentDate:   { fontSize: 10, color: COLORS.textTertiary },
-  statusBadge:  { paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.full },
-  statusTxt:    { fontSize: 11, fontWeight: '700' },
-  genBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.positive, borderRadius: RADIUS.md, paddingVertical: 14 },
-  genTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+
+  // Activity
+  actRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 12,
+  },
+  actBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  actTxt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textPrimary, flex: 1 },
+  actTime:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+
+  // View Details
+  viewDetailsBtn: {
+    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md,
+    paddingVertical: 15, alignItems: 'center', marginBottom: SPACING.sm,
+  },
+  viewDetailsTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white, letterSpacing: 0.2 },
 });
