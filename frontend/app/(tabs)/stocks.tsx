@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
@@ -8,21 +8,21 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_STOCK_DASHBOARD } from '../../src/data/mockData';
 
-const AMBER     = '#A89060';
-const AMBER_BG  = '#FDF9F4';
-const DARK      = '#1A1A1A';
-const DARK_BG   = '#F5F4EF';
+const DARK = '#1A1A1A';
+
+const ICON_COLOR = COLORS.textSecondary;  // #787774 — matches Home & Reports
+const ICON_BG    = COLORS.pageBg;         // #F5F4EF — matches Home & Reports
 
 const SHORTCUTS = [
-  { id: 'report',   label: 'Report',         icon: 'bar-chart-outline', color: AMBER, bg: AMBER_BG, route: '/stocks/reports'  },
-  { id: 'settings', label: 'Stock Settings', icon: 'options-outline',   color: DARK,  bg: DARK_BG,  route: '/stocks/settings' },
-  { id: 'barcode',  label: 'Barcode',         icon: 'barcode-outline',   color: AMBER, bg: AMBER_BG, route: '/stocks/barcodes' },
+  { id: 'report',   label: 'Report',         icon: 'bar-chart-outline', color: ICON_COLOR, bg: ICON_BG, route: '/stocks/reports'  },
+  { id: 'settings', label: 'Stock Settings', icon: 'options-outline',   color: ICON_COLOR, bg: ICON_BG, route: '/stocks/settings' },
+  { id: 'barcode',  label: 'Barcode',         icon: 'barcode-outline',   color: ICON_COLOR, bg: ICON_BG, route: '/stocks/barcodes' },
 ];
 
 const WIDGET_TILES = [
   {
     id: 'total_stock', title: 'Total Stock',
-    icon: 'cube-outline', iconColor: AMBER, iconBg: AMBER_BG,
+    icon: 'cube-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
     route: '/stocks/total-stock',
     getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
       { label: 'QTY',   value: d.totalQty   },
@@ -31,7 +31,7 @@ const WIDGET_TILES = [
   },
   {
     id: 'warehouses', title: 'Warehouses',
-    icon: 'business-outline', iconColor: AMBER, iconBg: AMBER_BG,
+    icon: 'business-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
     route: '/stocks/warehouses',
     getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
       { label: 'Total',       value: String(d.warehouses.total)       },
@@ -48,7 +48,7 @@ const WIDGET_TILES = [
   },
   {
     id: 'aged', title: 'Aged Inventory',
-    icon: 'time-outline', iconColor: AMBER, iconBg: AMBER_BG,
+    icon: 'time-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
     route: '/stocks/aged-items',
     getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
       { label: 'Value', value: d.agedInventory.value              },
@@ -57,7 +57,7 @@ const WIDGET_TILES = [
   },
   {
     id: 'fast_moving', title: 'Fast-Moving Items',
-    icon: 'flash-outline', iconColor: DARK, iconBg: DARK_BG,
+    icon: 'flash-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
     route: '/stocks/movement-analytics',
     getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
       { label: 'Items', value: String(d.fastMovingCount) },
@@ -65,7 +65,7 @@ const WIDGET_TILES = [
   },
   {
     id: 'reorder', title: 'Reorder Queue',
-    icon: 'reload-circle-outline', iconColor: AMBER, iconBg: AMBER_BG,
+    icon: 'reload-circle-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
     route: '/stocks/reorder-queue',
     getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
       { label: 'Items', value: String(d.reorderQueueCount) },
