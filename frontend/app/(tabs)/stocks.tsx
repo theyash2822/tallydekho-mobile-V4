@@ -8,16 +8,21 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_STOCK_DASHBOARD } from '../../src/data/mockData';
 
+const AMBER     = '#A89060';
+const AMBER_BG  = '#FDF9F4';
+const DARK      = '#1A1A1A';
+const DARK_BG   = '#F5F4EF';
+
 const SHORTCUTS = [
-  { id: 'report',   label: 'Report',         icon: 'bar-chart-outline',  color: '#2563EB', bg: '#EFF6FF', route: '/stocks/reports'   },
-  { id: 'settings', label: 'Stock Settings', icon: 'options-outline',    color: '#7C3AED', bg: '#F5F3FF', route: '/stocks/settings'  },
-  { id: 'barcode',  label: 'Barcode',         icon: 'barcode-outline',    color: '#D97706', bg: '#FFFBEB', route: '/stocks/barcodes'  },
+  { id: 'report',   label: 'Report',         icon: 'bar-chart-outline', color: AMBER, bg: AMBER_BG, route: '/stocks/reports'  },
+  { id: 'settings', label: 'Stock Settings', icon: 'options-outline',   color: DARK,  bg: DARK_BG,  route: '/stocks/settings' },
+  { id: 'barcode',  label: 'Barcode',         icon: 'barcode-outline',   color: AMBER, bg: AMBER_BG, route: '/stocks/barcodes' },
 ];
 
 const WIDGET_TILES = [
   {
     id: 'total_stock', title: 'Total Stock',
-    icon: 'cube-outline', iconColor: '#2D7D46', iconBg: '#F0FBF4',
+    icon: 'cube-outline', iconColor: AMBER, iconBg: AMBER_BG,
     route: '/stocks/total-stock',
     getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
       { label: 'QTY',   value: d.totalQty   },
@@ -26,7 +31,7 @@ const WIDGET_TILES = [
   },
   {
     id: 'warehouses', title: 'Warehouses',
-    icon: 'business-outline', iconColor: '#2563EB', iconBg: '#EFF6FF',
+    icon: 'business-outline', iconColor: AMBER, iconBg: AMBER_BG,
     route: '/stocks/warehouses',
     getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
       { label: 'Total',       value: String(d.warehouses.total)       },
@@ -43,7 +48,7 @@ const WIDGET_TILES = [
   },
   {
     id: 'aged', title: 'Aged Inventory',
-    icon: 'time-outline', iconColor: '#D97706', iconBg: '#FFFBEB',
+    icon: 'time-outline', iconColor: AMBER, iconBg: AMBER_BG,
     route: '/stocks/aged-items',
     getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
       { label: 'Value', value: d.agedInventory.value              },
@@ -52,7 +57,7 @@ const WIDGET_TILES = [
   },
   {
     id: 'fast_moving', title: 'Fast-Moving Items',
-    icon: 'flash-outline', iconColor: '#7C3AED', iconBg: '#F5F3FF',
+    icon: 'flash-outline', iconColor: DARK, iconBg: DARK_BG,
     route: '/stocks/movement-analytics',
     getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
       { label: 'Items', value: String(d.fastMovingCount) },
@@ -60,7 +65,7 @@ const WIDGET_TILES = [
   },
   {
     id: 'reorder', title: 'Reorder Queue',
-    icon: 'reload-circle-outline', iconColor: '#0891B2', iconBg: '#ECFEFF',
+    icon: 'reload-circle-outline', iconColor: AMBER, iconBg: AMBER_BG,
     route: '/stocks/reorder-queue',
     getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
       { label: 'Items', value: String(d.reorderQueueCount) },
@@ -180,5 +185,5 @@ const styles = StyleSheet.create({
   metricsRow:  { flexDirection: 'row', gap: 16 },
   metricItem:  { flexDirection: 'row', gap: 4, alignItems: 'center' },
   metricLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500' },
-  metricValue: { fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '700' },
+  metricValue: { fontSize: TYPOGRAPHY.sm, color: AMBER, fontWeight: '700' },
 });
