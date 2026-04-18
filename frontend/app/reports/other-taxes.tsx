@@ -120,23 +120,24 @@ export default function OtherTaxesScreen() {
       </TouchableOpacity>
 
       {/* Tax Tab Bar */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={s.tabBarWrap}
-        contentContainerStyle={s.tabBarContent}
-      >
-        {TABS.map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={[s.tabPill, activeTab === tab && s.tabPillActive]}
-            onPress={() => setActiveTab(tab)}
-            activeOpacity={0.7}
-          >
-            <Text style={[s.tabTxt, activeTab === tab && s.tabTxtActive]}>{tab}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <View style={s.tabBarWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.tabBarContent}
+        >
+          {TABS.map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              style={[s.tabPill, activeTab === tab && s.tabPillActive]}
+              onPress={() => setActiveTab(tab)}
+              activeOpacity={0.7}
+            >
+              <Text style={[s.tabTxt, activeTab === tab && s.tabTxtActive]}>{tab}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
 
       <ScrollView
         style={s.scroll}
@@ -248,26 +249,29 @@ const s = StyleSheet.create({
   dateStripActive: { color: COLORS.brandPrimary },
 
   // Tab bar
-  tabBarWrap: {
+  tabBarWrapper: {
+    height: 52,
     backgroundColor: COLORS.cardBg,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-    height: 54,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderDefault,
+    overflow: 'hidden',
   },
   tabBarContent: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SPACING.sm,
+    paddingVertical: 9,
     gap: 8,
-    height: 54,
   },
   tabPill: {
+    height: 34,
     paddingHorizontal: 14,
-    paddingVertical: 8,
     borderRadius: RADIUS.full,
     borderWidth: 1.5,
     borderColor: COLORS.borderDefault,
     backgroundColor: COLORS.pageBg,
-    alignSelf: 'center',
+    justifyContent: 'center',
+    alignItems: 'center',
     flexShrink: 0,
   },
   tabPillActive: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.cardBg },
