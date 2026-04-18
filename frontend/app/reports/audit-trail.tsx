@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Dimensions, Modal, Alert,
+  Dimensions, Modal,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -289,17 +290,42 @@ export default function AuditTrailScreen() {
     return                           { icon: 'checkmark-circle-outline' as const, color: COLORS.positive, borderColor: 'transparent' };
   };
 
-  const handleSinglePush = (entry: VoucherEntry) =>
-    Alert.alert('Push to Tally', `Push "${entry.ref}" to Tally?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Push', onPress: () => Alert.alert('Success', `${entry.ref} pushed successfully!`) },
-    ]);
+  const handleSinglePush = (entry: VoucherEntry) => {
+    Toast.show({
+      type: 'info',
+      text1: 'Pushing to Tally...',
+      text2: `${entry.ref} — ${entry.party}`,
+      visibilityTime: 1400,
+    });
+    setTimeout(() => {
+      Toast.show({
+        type: 'success',
+        text1: 'Pushed Successfully!',
+        text2: `${entry.ref} synced to Tally Prime`,
+        visibilityTime: 2500,
+      });
+    }, 1600);
+  };
 
-  const handleBulkPush = () =>
-    Alert.alert('Push to Tally', `Push ${selected.length} voucher(s) to Tally?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Push', onPress: () => { Alert.alert('Success', `${selected.length} voucher(s) pushed!`); clearSelection(); } },
-    ]);
+  const handleBulkPush = () => {
+    if (selected.length === 0) return;
+    const count = selected.length;
+    Toast.show({
+      type: 'info',
+      text1: `Pushing ${count} entr${count === 1 ? 'y' : 'ies'}...`,
+      text2: 'Syncing to Tally Prime',
+      visibilityTime: 1600,
+    });
+    setTimeout(() => {
+      Toast.show({
+        type: 'success',
+        text1: `${count} Entr${count === 1 ? 'y' : 'ies'} Pushed!`,
+        text2: `All vouchers synced to Tally Prime`,
+        visibilityTime: 3000,
+      });
+      clearSelection();
+    }, 1800);
+  };
 
   const handleShare = () =>
     Alert.alert('Export', `Export ${selected.length > 0 ? selected.length : 'all'} entries?`, [
@@ -459,141 +485,141 @@ export default function AuditTrailScreen() {
           </View>
         </View>
 
-        {/* Month-wise Voucher List */}
         {grouped.length === 0 ? (
           <View style={s.empty}>
             <Ionicons name="document-text-outline" size={48} color={COLORS.borderStrong} />
             <Text style={s.emptyTxt}>No entries found</Text>
           </View>
-        ) : (
-          grouped.map(([month, entries]) => {
-            const isCollapsed = collapsedMonths.has(month);
-            return (
-              <View key={month}>
-                <TouchableOpacity
-                  style={s.monthHdr}
-                  onPress={() => toggleMonth(month)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={s.monthTxt}>{month}</Text>
-                  <View style={s.monthLine} />
-                  <View style={s.monthCountBadge}>
-                    <Text style={s.monthCountTxt}>{entries.length}</Text>
-                  </View>
-                  <Ionicons
-                    name={isCollapsed ? 'chevron-down' : 'chevron-up'}
-                    size={14} color={COLORS.textTertiary}
-                  />
-                </TouchableOpacity>
+        ) : grouped.map(([month, entries]) => {
+          const isCollapsed = collapsedMonths.has(month);
+          return (
+            <View key={month}>
+              {/* Month Header — tap to collapse */}
+              <TouchableOpacity
+                style={s.monthHdr}
+                onPress={() => toggleMonth(month)}
+                activeOpacity={0.7}
+              >
+                <Text style={s.monthTxt}>{month}</Text>
+                <View style={s.monthLine} />
+                <View style={s.monthCountBadge}>
+                  <Text style={s.monthCountTxt}>{entries.length}</Text>
+                </View>
+                <Ionicons
+                  name={isCollapsed ? 'chevron-down' : 'chevron-up'}
+                  size={14} color={COLORS.textTertiary}
+                />
+              </TouchableOpacity>
 
-                {!isCollapsed && (
-                  <View style={s.monthCard}>
-                {entries.map((entry, idx) => {
-                  const isSel   = selected.includes(entry.id);
-                  const tc      = TYPE_COLORS[entry.type] || COLORS.textSecondary;
-                  const sInfo   = activeTab === 'myentries' ? getSyncInfo(entry.syncStatus) : null;
-                  const hasBorder =
-                    activeTab === 'myentries' &&
-                    (entry.syncStatus === 'pending' || entry.syncStatus === 'failed');
+              {/* Entries — hidden when collapsed */}
+              {isCollapsed ? null : (
+                <View style={s.monthCard}>
+                  {entries.map((entry, idx) => {
+                    const isSel  = selected.includes(entry.id);
+                    const tc     = TYPE_COLORS[entry.type] || COLORS.textSecondary;
+                    const sInfo  = activeTab === 'myentries' ? getSyncInfo(entry.syncStatus) : null;
+                    const hasBorder =
+                      activeTab === 'myentries' &&
+                      (entry.syncStatus === 'pending' || entry.syncStatus === 'failed');
 
-                  return (
-                    <View key={entry.id}>
-                      <TouchableOpacity
-                        style={[
-                          s.entryRow,
-                          isSel && s.entryRowSelected,
-                          hasBorder && { borderLeftWidth: 3, borderLeftColor: sInfo!.borderColor },
-                        ]}
-                        activeOpacity={0.75}
-                        onPress={() => {
-                          if (multiSelect) {
-                            toggleSelect(entry.id);
-                          } else {
-                            router.push(`/document/${entry.ref}` as any);
-                          }
-                        }}
-                        onLongPress={() => { setMultiSelect(true); toggleSelect(entry.id); }}
-                        delayLongPress={450}
-                      >
-                        {/* Checkbox */}
-                        {multiSelect && (
-                          <View style={[s.checkbox, isSel && s.checkboxActive]}>
-                            {isSel && <Ionicons name="checkmark" size={12} color={COLORS.white} />}
-                          </View>
-                        )}
-
-                        {/* Sync Status Icon (My Entries, not in multiselect) */}
-                        {!multiSelect && activeTab === 'myentries' && sInfo && (
-                          <TouchableOpacity
-                            style={[s.statusIcon, { backgroundColor: sInfo.color + '18' }]}
-                            onPress={() => {
-                              if (entry.syncStatus !== 'synced') handleSinglePush(entry);
-                            }}
-                            activeOpacity={entry.syncStatus !== 'synced' ? 0.7 : 1}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          >
-                            <Ionicons name={sInfo.icon} size={19} color={sInfo.color} />
-                          </TouchableOpacity>
-                        )}
-
-                        {/* Day Book action icon */}
-                        {!multiSelect && activeTab === 'daybook' && (
-                          <View style={[s.statusIcon, { backgroundColor: (ACTION_COLORS[entry.action!] || '#999') + '18' }]}>
-                            <Ionicons
-                              name={
-                                entry.action === 'Created' ? 'add-circle-outline' :
-                                entry.action === 'Edited'  ? 'create-outline'     : 'trash-outline'
-                              }
-                              size={19}
-                              color={ACTION_COLORS[entry.action!] || COLORS.textSecondary}
-                            />
-                          </View>
-                        )}
-
-                        {/* Entry Detail */}
-                        <View style={s.entryInfo}>
-                          <View style={s.entryTopRow}>
-                            <View style={[s.vtypePill, { backgroundColor: tc + '18' }]}>
-                              <Text style={[s.vtypePillTxt, { color: tc }]}>{entry.type}</Text>
+                    return (
+                      <View key={entry.id}>
+                        <TouchableOpacity
+                          style={[
+                            s.entryRow,
+                            isSel && s.entryRowSelected,
+                            hasBorder
+                              ? { borderLeftWidth: 3, borderLeftColor: sInfo!.borderColor }
+                              : null,
+                          ]}
+                          activeOpacity={0.75}
+                          onPress={() => {
+                            if (multiSelect) {
+                              toggleSelect(entry.id);
+                            } else {
+                              router.push(`/document/${entry.ref}` as any);
+                            }
+                          }}
+                          onLongPress={() => { setMultiSelect(true); toggleSelect(entry.id); }}
+                          delayLongPress={450}
+                        >
+                          {/* Checkbox (multi-select mode) */}
+                          {multiSelect ? (
+                            <View style={[s.checkbox, isSel && s.checkboxActive]}>
+                              {isSel ? <Ionicons name="checkmark" size={12} color={COLORS.white} /> : null}
                             </View>
-                            <Text style={s.refTxt}>{entry.ref}</Text>
-                            {activeTab === 'myentries' && entry.syncStatus === 'pending' && (
-                              <View style={s.pendingBadge}>
-                                <Text style={s.pendingBadgeTxt}>Pending</Text>
-                              </View>
-                            )}
-                            {activeTab === 'myentries' && entry.syncStatus === 'failed' && (
-                              <View style={s.failedBadge}>
-                                <Text style={s.failedBadgeTxt}>Failed</Text>
-                              </View>
-                            )}
-                          </View>
-                          <Text style={s.partyTxt}>{entry.party}</Text>
-                          <Text style={s.descTxt}>{entry.description}</Text>
-                          <Text style={s.entryDateTxt}>{entry.date}</Text>
-                        </View>
+                          ) : null}
 
-                        {/* Amount */}
-                        <View style={s.amtCol}>
-                          <Text style={[s.amtTxt, { color: entry.isCredit ? COLORS.negative : COLORS.positive }]}>
-                            {entry.amount}
-                          </Text>
-                          <Text style={[s.drCrLbl, { color: entry.isCredit ? COLORS.negative : COLORS.positive }]}>
-                            {entry.isCredit ? 'Cr' : 'Dr'}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                      {idx < entries.length - 1 && <View style={s.divider} />}
-                    </View>
-                  );
-                })}
-                  </View>
-                )}
-              </View>
-            );
-          })
-        )}
-        )}
+                          {/* Sync icon — My Entries (tappable for single push) */}
+                          {!multiSelect && activeTab === 'myentries' && sInfo ? (
+                            <TouchableOpacity
+                              style={[s.statusIcon, { backgroundColor: sInfo.color + '18' }]}
+                              onPress={() => {
+                                if (entry.syncStatus !== 'synced') handleSinglePush(entry);
+                              }}
+                              activeOpacity={entry.syncStatus !== 'synced' ? 0.7 : 1}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                              <Ionicons name={sInfo.icon} size={19} color={sInfo.color} />
+                            </TouchableOpacity>
+                          ) : null}
+
+                          {/* Action icon — Day Book */}
+                          {!multiSelect && activeTab === 'daybook' ? (
+                            <View style={[s.statusIcon, { backgroundColor: (ACTION_COLORS[entry.action!] || '#999') + '18' }]}>
+                              <Ionicons
+                                name={
+                                  entry.action === 'Created' ? 'add-circle-outline' :
+                                  entry.action === 'Edited'  ? 'create-outline'     : 'trash-outline'
+                                }
+                                size={19}
+                                color={ACTION_COLORS[entry.action!] || COLORS.textSecondary}
+                              />
+                            </View>
+                          ) : null}
+
+                          {/* Entry detail */}
+                          <View style={s.entryInfo}>
+                            <View style={s.entryTopRow}>
+                              <View style={[s.vtypePill, { backgroundColor: tc + '18' }]}>
+                                <Text style={[s.vtypePillTxt, { color: tc }]}>{entry.type}</Text>
+                              </View>
+                              <Text style={s.refTxt}>{entry.ref}</Text>
+                              {activeTab === 'myentries' && entry.syncStatus === 'pending' ? (
+                                <View style={s.pendingBadge}>
+                                  <Text style={s.pendingBadgeTxt}>Pending</Text>
+                                </View>
+                              ) : null}
+                              {activeTab === 'myentries' && entry.syncStatus === 'failed' ? (
+                                <View style={s.failedBadge}>
+                                  <Text style={s.failedBadgeTxt}>Failed</Text>
+                                </View>
+                              ) : null}
+                            </View>
+                            <Text style={s.partyTxt}>{entry.party}</Text>
+                            <Text style={s.descTxt}>{entry.description}</Text>
+                            <Text style={s.entryDateTxt}>{entry.date}</Text>
+                          </View>
+
+                          {/* Amount */}
+                          <View style={s.amtCol}>
+                            <Text style={[s.amtTxt, { color: entry.isCredit ? COLORS.negative : COLORS.positive }]}>
+                              {entry.amount}
+                            </Text>
+                            <Text style={[s.drCrLbl, { color: entry.isCredit ? COLORS.negative : COLORS.positive }]}>
+                              {entry.isCredit ? 'Cr' : 'Dr'}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                        {idx < entries.length - 1 ? <View style={s.divider} /> : null}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          );
+        })}
       </ScrollView>
 
       {/* ── Bottom Action Bar ──────────────────────────────────────────── */}
