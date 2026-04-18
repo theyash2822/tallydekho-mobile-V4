@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Animated,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -82,9 +82,6 @@ export default function StocksDashboard() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Stock Dashboard</Text>
-        <TouchableOpacity style={styles.searchBtn} onPress={() => {}} activeOpacity={0.7}>
-          <Ionicons name="search-outline" size={20} color={COLORS.textSecondary} />
-        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -152,12 +149,11 @@ export default function StocksDashboard() {
 const styles = StyleSheet.create({
   safe:    { flex: 1, backgroundColor: COLORS.pageBg },
   header:  {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: SPACING.md, paddingVertical: 14,
     backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
   headerTitle: { fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary },
-  searchBtn:   { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   scroll:   { flex: 1 },
   content:  { padding: SPACING.md, gap: 10 },
 
@@ -185,5 +181,5 @@ const styles = StyleSheet.create({
   metricsRow:  { flexDirection: 'row', gap: 16 },
   metricItem:  { flexDirection: 'row', gap: 4, alignItems: 'center' },
   metricLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500' },
-  metricValue: { fontSize: TYPOGRAPHY.sm, color: AMBER, fontWeight: '700' },
+  metricValue: { fontSize: TYPOGRAPHY.sm, color: DARK, fontWeight: '700' },
 });
