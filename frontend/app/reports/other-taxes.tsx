@@ -1,105 +1,135 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import {
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
+import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
-type TaxTab = 'TDS' | 'TCS' | 'Import Duty' | 'Export Duty' | 'Excise' | 'VAT' | 'Cess';
-const TAX_TABS: TaxTab[] = ['TDS', 'TCS', 'Import Duty', 'Export Duty', 'Excise', 'VAT', 'Cess'];
+// ── Tab Config ───────────────────────────────────────────────────────────────
+const TABS = ['TDS', 'TCS', 'Import Duty', 'Export Duty', 'Excise Duty', 'VAT', 'Cess'] as const;
+type TaxTab = typeof TABS[number];
 
-const PERIODS: DropdownOption[] = [
-  { label: 'This Month', value: 'month' },
-  { label: 'Quarterly', value: 'quarter' },
-  { label: 'Half Yearly', value: 'half' },
-  { label: 'Yearly', value: 'year' },
-];
-
-const TAX_DATA: Record<TaxTab, { label: string; value: string; color: string; icon: string }[]> = {
-  TDS: [
-    { label: 'Deducted',     value: '₹1,24,000', color: COLORS.info,     icon: 'remove-circle-outline' },
-    { label: 'Remitted',     value: '₹98,000',   color: COLORS.positive, icon: 'checkmark-circle-outline' },
-    { label: 'Pending Pay',  value: '₹26,000',   color: COLORS.warning,  icon: 'time-outline' },
-    { label: 'Late Fee',     value: '₹0',         color: COLORS.negative, icon: 'warning-outline' },
-    { label: 'Total Challan',value: '8',           color: '#7C3AED',       icon: 'document-outline' },
-    { label: 'Next Due',     value: '7 Jul 25',   color: COLORS.info,     icon: 'calendar-outline' },
+// Stats per tab — 4 cells in a 2×2 grid (null = empty cell)
+const TAB_STATS: Record<TaxTab, { label: string; value: string }[]> = {
+  'TDS': [
+    { label: 'Deducted',    value: '\u20b9182K' },
+    { label: 'Remitted',    value: '\u20b9140K' },
+    { label: 'Pending Pay', value: '\u20b942K'  },
+    { label: 'Late-Fee',    value: '\u20b91.5K' },
   ],
-  TCS: [
-    { label: 'Collected',    value: '₹42,000',   color: COLORS.info,     icon: 'add-circle-outline' },
-    { label: 'Remitted',     value: '₹38,000',   color: COLORS.positive, icon: 'checkmark-circle-outline' },
-    { label: 'Pending',      value: '₹4,000',    color: COLORS.warning,  icon: 'time-outline' },
-    { label: 'Late Fee',     value: '₹0',         color: COLORS.negative, icon: 'warning-outline' },
-    { label: 'Total Challan',value: '3',           color: '#7C3AED',       icon: 'document-outline' },
-    { label: 'Next Due',     value: '7 Jul 25',   color: COLORS.info,     icon: 'calendar-outline' },
+  'TCS': [
+    { label: 'Collected',   value: '\u20b9182K' },
+    { label: 'Remitted',    value: '\u20b9140K' },
+    { label: 'Pending Pay', value: '\u20b942K'  },
+    { label: 'Late-Fee',    value: '\u20b91.5K' },
   ],
   'Import Duty': [
-    { label: 'Assessed',     value: '₹2,80,000', color: COLORS.info,     icon: 'boat-outline' },
-    { label: 'Paid',         value: '₹2,80,000', color: COLORS.positive, icon: 'checkmark-circle-outline' },
-    { label: 'Pending',      value: '₹0',         color: COLORS.warning,  icon: 'time-outline' },
-    { label: 'IGST Paid',    value: '₹50,400',   color: '#7C3AED',       icon: 'receipt-outline' },
-    { label: 'Customs Duty', value: '₹2,29,600', color: COLORS.info,     icon: 'document-outline' },
-    { label: 'Shipments',    value: '6',           color: COLORS.textSecondary, icon: 'cube-outline' },
+    { label: 'Duty Assessed', value: '\u20b9182K' },
+    { label: 'Duty Paid',     value: '\u20b9140K' },
+    { label: 'Pending Duty',  value: '\u20b942K'  },
+    { label: 'Interest',      value: '\u20b91.5K' },
   ],
   'Export Duty': [
-    { label: 'Applicable',   value: '₹18,000',   color: COLORS.info,     icon: 'airplane-outline' },
-    { label: 'Paid',         value: '₹18,000',   color: COLORS.positive, icon: 'checkmark-circle-outline' },
-    { label: 'Refund Clm.',  value: '₹4,200',    color: '#7C3AED',       icon: 'arrow-undo-outline' },
-    { label: 'IGST Refund',  value: '₹8,100',    color: COLORS.positive, icon: 'cash-outline' },
-    { label: 'Shipments',    value: '4',           color: COLORS.textSecondary, icon: 'cube-outline' },
-    { label: 'Next Deadline','value': 'N/A',        color: COLORS.textTertiary, icon: 'calendar-outline' },
+    { label: 'Duty Assessed',    value: '\u20b9182K' },
+    { label: 'Duty Paid',        value: '\u20b9140K' },
+    { label: 'Pending Duty',     value: '\u20b942K'  },
+    { label: 'Refund Awaiting',  value: '\u20b91.5K' },
   ],
-  Excise: [
-    { label: 'Assessable Val', value: '₹8,40,000', color: COLORS.info,    icon: 'flask-outline' },
-    { label: 'Duty Payable',   value: '₹84,000',   color: COLORS.warning, icon: 'time-outline' },
-    { label: 'Duty Paid',      value: '₹84,000',   color: COLORS.positive,icon: 'checkmark-circle-outline' },
-    { label: 'Returns Filed',  value: '2/2',        color: COLORS.positive,icon: 'document-text-outline' },
-    { label: 'Cess',           value: '₹1,680',    color: '#7C3AED',      icon: 'receipt-outline' },
-    { label: 'Next Due',       value: '30 Jun 25', color: COLORS.info,    icon: 'calendar-outline' },
+  'Excise Duty': [
+    { label: 'Duty Accrued', value: '\u20b9182K' },
+    { label: 'Duty Paid',    value: '\u20b9140K' },
+    { label: 'Input Credit', value: '\u20b942K'  },
+    { label: 'Net Payable',  value: '\u20b91.5K' },
   ],
-  VAT: [
-    { label: 'Output VAT',  value: '₹62,000',   color: COLORS.info,     icon: 'trending-up' },
-    { label: 'Input VAT',   value: '₹38,000',   color: '#7C3AED',       icon: 'trending-down' },
-    { label: 'Net VAT',     value: '₹24,000',   color: COLORS.warning,  icon: 'calculator-outline' },
-    { label: 'Paid',        value: '₹20,000',   color: COLORS.positive, icon: 'checkmark-circle-outline' },
-    { label: 'Pending',     value: '₹4,000',    color: COLORS.negative, icon: 'time-outline' },
-    { label: 'Returns',     value: '1/1',        color: COLORS.positive, icon: 'document-text-outline' },
+  'VAT': [
+    { label: 'Output VAT',  value: '\u20b9182K' },
+    { label: 'Input VAT',   value: '\u20b9140K' },
+    { label: 'Net Payable', value: '\u20b942K'  },
+    { label: '',            value: ''           },
   ],
-  Cess: [
-    { label: 'Total Cess',   value: '₹12,000',  color: COLORS.info,     icon: 'layers-outline' },
-    { label: 'GST Cess',     value: '₹8,400',   color: '#7C3AED',       icon: 'receipt-outline' },
-    { label: 'Education Cess', value: '₹2,400', color: COLORS.warning,  icon: 'school-outline' },
-    { label: 'Other Cess',   value: '₹1,200',   color: COLORS.info,     icon: 'add-circle-outline' },
-    { label: 'Paid',         value: '₹12,000',  color: COLORS.positive, icon: 'checkmark-circle-outline' },
-    { label: 'Balance',      value: '₹0',        color: COLORS.textSecondary, icon: 'wallet-outline' },
+  'Cess': [
+    { label: 'Cess Accrued', value: '\u20b9182K' },
+    { label: 'Cess Paid',    value: '\u20b9140K' },
+    { label: 'Pending Cess', value: '\u20b942K'  },
+    { label: 'Interest',     value: '\u20b91.5K' },
   ],
 };
 
+// Late Challans (shared mock)
+const LATE_CHALLANS = [
+  { id: 'INV-993', amount: '\u20b918K',   due: 'Due 05 Jul' },
+  { id: 'INV-918', amount: '\u20b912K',   due: 'Due 09 Jul' },
+  { id: 'INV-321', amount: '\u20b911.2K', due: 'Due 09 Jul' },
+  { id: 'INV-245', amount: '\u20b915.5K', due: 'Due 09 Jul' },
+  { id: 'INV-789', amount: '\u20b99.8K',  due: 'Due 09 Jul' },
+];
+
+// Recent Activity (shared mock)
+const RECENT_ACTIVITY = [
+  { text: '14 IRNs generated',                     time: '10 Jul 14:42' },
+  { text: '9 IRNs retry (success 8)',              time: '10 Jul 14:42' },
+  { text: '9 IRNs Modified (success 3, Failed 6)', time: '10 Jul 14:42' },
+];
+
+// ── Main Screen ───────────────────────────────────────────────────────────────
 export default function OtherTaxesScreen() {
   const router = useRouter();
-  const [period, setPeriod] = useState('month');
-  const [activeTab, setActiveTab] = useState<TaxTab>('TDS');
+  const [activeTab,      setActiveTab]      = useState<TaxTab>('TDS');
+  const [fromDate,       setFromDate]       = useState('');
+  const [toDate,         setToDate]         = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const data = TAX_DATA[activeTab];
+  const isDateActive = fromDate.length > 0 && toDate.length > 0;
+  const stats = TAB_STATS[activeTab];
 
   return (
     <SafeAreaView style={s.safe}>
+
+      {/* Header */}
       <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
+        <TouchableOpacity style={s.iconBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Other Taxes</Text>
-        <TouchableOpacity style={s.exportBtn} activeOpacity={0.7}>
-          <Ionicons name="download-outline" size={20} color={COLORS.brandPrimary} />
+        <TouchableOpacity style={s.iconBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
+          <Ionicons
+            name="calendar-outline" size={20}
+            color={isDateActive ? COLORS.brandPrimary : COLORS.textSecondary}
+          />
         </TouchableOpacity>
       </View>
 
-      {/* Tabs */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabsScroll} contentContainerStyle={s.tabsContent}>
-        {TAX_TABS.map(tab => (
+      {/* Date Strip */}
+      <TouchableOpacity style={s.dateStrip} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
+        <Ionicons name="calendar-outline" size={13} color={isDateActive ? COLORS.brandPrimary : COLORS.textTertiary} />
+        <Text style={[s.dateStripTxt, isDateActive && s.dateStripActive]}>
+          {isDateActive ? `${fromDate}  \u2192  ${toDate}` : 'All Dates'}
+        </Text>
+        {!isDateActive && <Ionicons name="chevron-down" size={11} color={COLORS.textTertiary} />}
+        {isDateActive && (
+          <TouchableOpacity
+            onPress={() => { setFromDate(''); setToDate(''); }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="close-circle" size={16} color={COLORS.brandPrimary} />
+          </TouchableOpacity>
+        )}
+      </TouchableOpacity>
+
+      {/* Tax Tab Bar */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={s.tabBarWrap}
+        contentContainerStyle={s.tabBarContent}
+      >
+        {TABS.map((tab) => (
           <TouchableOpacity
             key={tab}
-            style={[s.tab, activeTab === tab && s.tabActive]}
+            style={[s.tabPill, activeTab === tab && s.tabPillActive]}
             onPress={() => setActiveTab(tab)}
             activeOpacity={0.7}
           >
@@ -108,79 +138,184 @@ export default function OtherTaxesScreen() {
         ))}
       </ScrollView>
 
-      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
-        {/* Period Filter */}
-        <View style={s.filterRow}>
-          <FormDropdown
-            label="Period"
-            value={period}
-            options={PERIODS}
-            onSelect={o => setPeriod(o.value)}
-            placeholder="Select period"
-            containerStyle={{ flex: 1, marginBottom: 0 }}
-          />
-          <View style={s.fyBadge}><Text style={s.fyTxt}>FY 2025-26</Text></View>
-        </View>
-
-        {/* Summary Grid */}
-        <View style={s.card}>
-          <Text style={s.cardTitle}>{activeTab} Summary</Text>
-          <View style={s.grid}>
-            {data.map(item => (
-              <View key={item.label} style={s.gridCell}>
-                <View style={[s.cellIcon, { backgroundColor: item.color + '18' }]}>
-                  <Ionicons name={item.icon as any} size={16} color={item.color} />
-                </View>
-                <Text style={s.cellValue}>{item.value}</Text>
-                <Text style={s.cellLabel}>{item.label}</Text>
-              </View>
-            ))}
+      <ScrollView
+        style={s.scroll}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={s.scrollContent}
+      >
+        {/* Stats 2×2 card */}
+        <View style={s.statsCard}>
+          {/* Row 1 */}
+          <View style={s.statsRow}>
+            <View style={s.statCell}>
+              <Text style={s.statLabel}>{stats[0].label}</Text>
+              <Text style={s.statValue}>{stats[0].value}</Text>
+            </View>
+            <View style={s.statDivV} />
+            <View style={s.statCell}>
+              <Text style={s.statLabel}>{stats[1].label}</Text>
+              <Text style={s.statValue}>{stats[1].value}</Text>
+            </View>
+          </View>
+          {/* Divider */}
+          <View style={s.statDivH} />
+          {/* Row 2 */}
+          <View style={s.statsRow}>
+            <View style={s.statCell}>
+              <Text style={s.statLabel}>{stats[2].label}</Text>
+              <Text style={s.statValue}>{stats[2].value}</Text>
+            </View>
+            <View style={s.statDivV} />
+            <View style={[s.statCell, !stats[3].label && { opacity: 0 }]}>
+              <Text style={s.statLabel}>{stats[3].label}</Text>
+              <Text style={s.statValue}>{stats[3].value}</Text>
+            </View>
           </View>
         </View>
 
-        {/* Status Banner */}
-        <View style={s.statusBanner}>
-          <Ionicons name="checkmark-circle" size={20} color={COLORS.positive} />
-          <Text style={s.statusTxt}>{activeTab} compliance is up to date for this period.</Text>
+        {/* Top 5 Late Challans */}
+        <View style={s.card}>
+          <Text style={s.cardTitle}>Top 5 Late Challans</Text>
+          {LATE_CHALLANS.map((item, idx) => (
+            <View key={item.id} style={[s.challanRow, idx < LATE_CHALLANS.length - 1 && s.challanBorder]}>
+              <Text style={s.challanRank}>{idx + 1}.</Text>
+              <Text style={s.challanId}>{item.id}</Text>
+              <Text style={s.challanAmt}>{item.amount}</Text>
+              <Text style={s.challanDue}>{item.due}</Text>
+            </View>
+          ))}
         </View>
 
-        {/* Share Button */}
-        <TouchableOpacity style={s.shareBtn} activeOpacity={0.8}>
-          <Ionicons name="share-outline" size={18} color={COLORS.white} />
-          <Text style={s.shareTxt}>Share PDF</Text>
-        </TouchableOpacity>
+        {/* Recent Activity */}
+        <View style={s.card}>
+          <Text style={s.cardTitle}>Recent Activity</Text>
+          {RECENT_ACTIVITY.map((item, idx) => (
+            <View key={idx} style={[s.actRow, idx < RECENT_ACTIVITY.length - 1 && s.actBorder]}>
+              <Text style={s.actTxt}>{item.text}</Text>
+              <Text style={s.actTime}>{item.time}</Text>
+            </View>
+          ))}
+        </View>
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: 110 }} />
       </ScrollView>
+
+      {/* Sticky Bottom — Open Register */}
+      <View style={s.bottomBar}>
+        <TouchableOpacity
+          style={s.openRegBtn}
+          onPress={() =>
+            router.push({ pathname: '/reports/other-taxes-register', params: { tab: activeTab } } as any)
+          }
+          activeOpacity={0.85}
+        >
+          <Text style={s.openRegTxt}>Open Register</Text>
+        </TouchableOpacity>
+      </View>
+
+      <DateRangePickerModal
+        visible={showDatePicker}
+        fromDate={fromDate}
+        toDate={toDate}
+        onApply={(f, t) => { if (f && t) { setFromDate(f); setToDate(t); } }}
+        onClose={() => setShowDatePicker(false)}
+      />
     </SafeAreaView>
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: COLORS.pageBg },
-  header:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.sm, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  safe: { flex: 1, backgroundColor: COLORS.pageBg },
+
+  // Header
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: SPACING.xs, paddingVertical: 10,
+    backgroundColor: COLORS.cardBg,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  iconBtn:     { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary },
-  exportBtn:   { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  tabsScroll:  { backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  tabsContent: { paddingHorizontal: SPACING.sm, paddingVertical: 4, gap: 4 },
-  tab:         { paddingHorizontal: 14, paddingVertical: 10, borderRadius: RADIUS.full, borderWidth: 1.5, borderColor: COLORS.borderDefault },
-  tabActive:   { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
-  tabTxt:      { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textSecondary },
-  tabTxtActive:{ color: COLORS.white, fontWeight: '700' },
-  scroll:  { flex: 1 },
-  filterRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, margin: SPACING.md },
-  fyBadge:   { paddingHorizontal: 12, paddingVertical: 10, backgroundColor: COLORS.activeBg, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault },
-  fyTxt:     { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
-  card:      { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, padding: SPACING.md },
-  cardTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginBottom: SPACING.md },
-  grid:      { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  gridCell:  { width: '47%', backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, padding: SPACING.sm, gap: 4, alignItems: 'flex-start' },
-  cellIcon:  { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  cellValue: { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
-  cellLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
-  statusBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.positiveBg, borderRadius: RADIUS.md, padding: SPACING.md },
-  statusTxt:    { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.positive, lineHeight: 20 },
-  shareBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 14 },
-  shareTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+
+  // Date strip
+  dateStrip: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 9, backgroundColor: COLORS.cardBg,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  dateStripTxt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+  dateStripActive: { color: COLORS.brandPrimary },
+
+  // Tab bar
+  tabBarWrap:    { backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  tabBarContent: { flexDirection: 'row', paddingHorizontal: SPACING.sm, paddingVertical: 10, gap: 8 },
+  tabPill: {
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: RADIUS.full, borderWidth: 1.5, borderColor: COLORS.borderDefault,
+    backgroundColor: COLORS.pageBg,
+  },
+  tabPillActive: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.cardBg },
+  tabTxt:        { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+  tabTxtActive:  { color: COLORS.brandPrimary, fontWeight: '700' },
+
+  scroll:        { flex: 1 },
+  scrollContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.md },
+
+  // Stats card (2×2 grid)
+  statsCard: {
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    marginBottom: SPACING.sm, overflow: 'hidden',
+  },
+  statsRow:  { flexDirection: 'row' },
+  statCell:  { flex: 1, paddingHorizontal: SPACING.md, paddingVertical: 16 },
+  statDivV:  { width: 1, backgroundColor: COLORS.borderDefault },
+  statDivH:  { height: 1, backgroundColor: COLORS.borderDefault },
+  statLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500', marginBottom: 6 },
+  statValue: { fontSize: 20, fontWeight: '800', color: COLORS.textPrimary },
+
+  // Generic card
+  card: {
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    padding: SPACING.md, marginBottom: SPACING.sm,
+  },
+  cardTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 12 },
+
+  // Late Challans
+  challanRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 11, gap: 8,
+  },
+  challanBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  challanRank:   { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textTertiary, width: 18 },
+  challanId:     { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  challanAmt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, width: 52, textAlign: 'right' },
+  challanDue:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, width: 68, textAlign: 'right' },
+
+  // Recent Activity
+  actRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 12,
+  },
+  actBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  actTxt:    { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textPrimary },
+  actTime:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+
+  // Bottom sticky bar
+  bottomBar: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    paddingHorizontal: SPACING.md, paddingVertical: 14,
+    paddingBottom: 20,
+    backgroundColor: COLORS.cardBg,
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06, shadowRadius: 6, elevation: 6,
+  },
+  openRegBtn: {
+    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md,
+    paddingVertical: 15, alignItems: 'center',
+  },
+  openRegTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white, letterSpacing: 0.3 },
 });
