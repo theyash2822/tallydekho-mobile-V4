@@ -248,12 +248,27 @@ const s = StyleSheet.create({
   dateStripActive: { color: COLORS.brandPrimary },
 
   // Tab bar
-  tabBarWrap:    { backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  tabBarContent: { flexDirection: 'row', paddingHorizontal: SPACING.sm, paddingVertical: 10, gap: 8 },
+  tabBarWrap: {
+    backgroundColor: COLORS.cardBg,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+    height: 54,
+  },
+  tabBarContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.sm,
+    gap: 8,
+    height: 54,
+  },
   tabPill: {
-    paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: RADIUS.full, borderWidth: 1.5, borderColor: COLORS.borderDefault,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: RADIUS.full,
+    borderWidth: 1.5,
+    borderColor: COLORS.borderDefault,
     backgroundColor: COLORS.pageBg,
+    alignSelf: 'center',
+    flexShrink: 0,
   },
   tabPillActive: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.cardBg },
   tabTxt:        { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
