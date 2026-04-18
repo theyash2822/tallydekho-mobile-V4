@@ -98,23 +98,54 @@ const ACTION_COLORS: Record<string, string> = {
   Created: '#2D7D46', Edited: '#D97706', Deleted: '#C0392B',
 };
 
-// ─── Interactive Bar Chart ────────────────────────────────────────────────────
+// ─── Interactive Bar Chart (with fixed Y-axis + scrollable bars) ─────────────
 function InteractiveBarChart({ data }: { data: { day: number; count: number }[] }) {
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
-  const BAR_W = 20; const GAP = 4; const H = 120;
-  const PAD_B = 18; const PAD_T = 30;
-  const chartH = H - PAD_B - PAD_T;
+  const YAXIS_W = 32;
+  const BAR_W   = 20; const GAP = 4; const H = 140;
+  const PAD_B   = 20; const PAD_T = 30;
+  const chartH  = H - PAD_B - PAD_T;
   const maxCount = Math.max(...data.map(d => d.count), 1);
-  const totalW = (BAR_W + GAP) * data.length;
+  // Round up to nearest 5 for clean Y-axis ticks
+  const niceMax  = Math.ceil(maxCount / 5) * 5 || 5;
+  const barAreaW = (BAR_W + GAP) * data.length;
+  const yTicks   = [0, Math.round(niceMax * 0.5), niceMax];
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <View style={{ width: totalW, height: H }}>
-        <Svg width={totalW} height={H}>
+    <View style={{ flexDirection: 'row', height: H }}>
+      {/* ── Fixed Y-Axis ── */}
+      <Svg width={YAXIS_W} height={H}>
+        {/* Vertical axis line */}
+        <Rect x={YAXIS_W - 1} y={PAD_T - 4} width={1} height={chartH + 6} fill={COLORS.borderStrong} />
+        {yTicks.map(tick => {
+          const y = PAD_T + chartH - (tick / niceMax) * chartH;
+          return (
+            <SvgText key={tick} x={YAXIS_W - 5} y={y + 4} textAnchor="end" fontSize={8} fill={COLORS.textTertiary}>
+              {tick}
+            </SvgText>
+          );
+        })}
+      </Svg>
+
+      {/* ── Scrollable Bar Area ── */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+        <Svg width={barAreaW + 4} height={H}>
+          {/* Horizontal guide lines */}
+          {yTicks.map(tick => {
+            const y = PAD_T + chartH - (tick / niceMax) * chartH;
+            return (
+              <Rect key={tick} x={0} y={y} width={barAreaW} height={0.5}
+                fill={COLORS.borderDefault} opacity={0.9} />
+            );
+          })}
+          {/* X-axis baseline */}
+          <Rect x={0} y={PAD_T + chartH} width={barAreaW} height={1} fill={COLORS.borderStrong} />
+
+          {/* Bars */}
           {data.map((d, i) => {
-            const bh = Math.max((d.count / maxCount) * chartH, 3);
-            const x = i * (BAR_W + GAP);
-            const y = PAD_T + chartH - bh;
+            const bh = Math.max((d.count / niceMax) * chartH, 3);
+            const x  = i * (BAR_W + GAP);
+            const y  = PAD_T + chartH - bh;
             const isActive = activeIdx === i;
             return (
               <G key={i} onPress={() => setActiveIdx(isActive ? null : i)}>
@@ -122,14 +153,16 @@ function InteractiveBarChart({ data }: { data: { day: number; count: number }[] 
                   fill={isActive ? COLORS.textPrimary : AMBER}
                   opacity={isActive ? 1 : 0.85}
                 />
+                {/* X-axis day label */}
                 {(d.day === 1 || d.day % 5 === 0) && (
-                  <SvgText x={x + BAR_W / 2} y={H - 3} textAnchor="middle" fontSize={7} fill={COLORS.textTertiary}>
+                  <SvgText x={x + BAR_W / 2} y={H - 4} textAnchor="middle" fontSize={7} fill={COLORS.textTertiary}>
                     {d.day}
                   </SvgText>
                 )}
+                {/* Tap tooltip */}
                 {isActive && (
                   <G>
-                    <Rect x={Math.max(0, x - 10)} y={2} width={BAR_W + 20} height={24} rx={5} fill={COLORS.textPrimary} />
+                    <Rect x={Math.max(0, x - 8)} y={2} width={BAR_W + 16} height={24} rx={5} fill={COLORS.textPrimary} />
                     <SvgText x={x + BAR_W / 2} y={18} textAnchor="middle" fontSize={11} fill="#FFFFFF" fontWeight="700">
                       {d.count}
                     </SvgText>
@@ -139,8 +172,8 @@ function InteractiveBarChart({ data }: { data: { day: number; count: number }[] 
             );
           })}
         </Svg>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -204,8 +237,9 @@ export default function AuditTrailScreen() {
   const [showVTypeModal, setShowVTypeModal] = useState(false);
   const [showDr,         setShowDr]         = useState(true);
   const [showCr,         setShowCr]         = useState(true);
-  const [multiSelect,    setMultiSelect]    = useState(false);
-  const [selected,       setSelected]       = useState<string[]>([]);
+  const [multiSelect,     setMultiSelect]     = useState(false);
+  const [selected,        setSelected]        = useState<string[]>([]);
+  const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
 
   const isDateActive = fromDate.length > 0 && toDate.length > 0;
   const kpiData   = activeTab === 'myentries' ? KPI_MY_ENTRIES : KPI_DAYBOOK;
@@ -216,8 +250,11 @@ export default function AuditTrailScreen() {
   const filtered = useMemo(() => {
     let arr = allSource;
     if (voucherType !== 'ALL') arr = arr.filter(e => e.type === voucherType);
-    if (!showDr) arr = arr.filter(e => e.isCredit);
-    if (!showCr) arr = arr.filter(e => !e.isCredit);
+    // Dr/Cr: both checked OR both unchecked → show all; only one → filter
+    if (showDr !== showCr) {
+      if (showDr && !showCr) arr = arr.filter(e => !e.isCredit);  // Dr only
+      if (!showDr && showCr) arr = arr.filter(e => e.isCredit);   // Cr only
+    }
     return arr;
   }, [allSource, voucherType, showDr, showCr]);
 
@@ -238,6 +275,13 @@ export default function AuditTrailScreen() {
   const selectAll      = () => setSelected(filtered.map(e => e.id));
 
   const switchTab = (tab: TabType) => { setActiveTab(tab); clearSelection(); setVoucherType('ALL'); };
+
+  const toggleMonth = (month: string) =>
+    setCollapsedMonths(prev => {
+      const next = new Set(prev);
+      if (next.has(month)) next.delete(month); else next.add(month);
+      return next;
+    });
 
   const getSyncInfo = (status?: SyncStatus) => {
     if (status === 'pending') return { icon: 'time-outline'         as const, color: AMBER,             borderColor: AMBER };
@@ -422,17 +466,28 @@ export default function AuditTrailScreen() {
             <Text style={s.emptyTxt}>No entries found</Text>
           </View>
         ) : (
-          grouped.map(([month, entries]) => (
-            <View key={month}>
-              <View style={s.monthHdr}>
-                <Text style={s.monthTxt}>{month}</Text>
-                <View style={s.monthLine} />
-                <View style={s.monthCountBadge}>
-                  <Text style={s.monthCountTxt}>{entries.length}</Text>
-                </View>
-              </View>
+          grouped.map(([month, entries]) => {
+            const isCollapsed = collapsedMonths.has(month);
+            return (
+              <View key={month}>
+                <TouchableOpacity
+                  style={s.monthHdr}
+                  onPress={() => toggleMonth(month)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={s.monthTxt}>{month}</Text>
+                  <View style={s.monthLine} />
+                  <View style={s.monthCountBadge}>
+                    <Text style={s.monthCountTxt}>{entries.length}</Text>
+                  </View>
+                  <Ionicons
+                    name={isCollapsed ? 'chevron-down' : 'chevron-up'}
+                    size={14} color={COLORS.textTertiary}
+                  />
+                </TouchableOpacity>
 
-              <View style={s.monthCard}>
+                {!isCollapsed && (
+                  <View style={s.monthCard}>
                 {entries.map((entry, idx) => {
                   const isSel   = selected.includes(entry.id);
                   const tc      = TYPE_COLORS[entry.type] || COLORS.textSecondary;
@@ -532,9 +587,12 @@ export default function AuditTrailScreen() {
                     </View>
                   );
                 })}
+                  </View>
+                )}
               </View>
-            </View>
-          ))
+            );
+          })
+        )}
         )}
       </ScrollView>
 
@@ -542,10 +600,20 @@ export default function AuditTrailScreen() {
       {showBottomBar && (
         <View style={[s.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           {activeTab === 'myentries' ? (
-            <TouchableOpacity style={s.bottomBtnFull} onPress={handleBulkPush} activeOpacity={0.85}>
-              <Ionicons name="cloud-upload-outline" size={18} color={COLORS.white} />
-              <Text style={s.bottomBtnTxt}>Push {selected.length} to Tally</Text>
-            </TouchableOpacity>
+            <View style={s.bottomBtnPair}>
+              <TouchableOpacity style={s.bottomBtnFull} onPress={handleBulkPush} activeOpacity={0.85}>
+                <Ionicons name="cloud-upload-outline" size={18} color={COLORS.white} />
+                <Text style={s.bottomBtnTxt}>Push {selected.length} to Tally</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.bottomBtnFull, s.bottomBtnOutline]}
+                onPress={handleShare}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="share-outline" size={18} color={COLORS.textPrimary} />
+                <Text style={[s.bottomBtnTxt, { color: COLORS.textPrimary }]}>Share</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             <View style={s.bottomBtnPair}>
               <TouchableOpacity style={s.bottomBtnFull} onPress={handleShare} activeOpacity={0.85}>
