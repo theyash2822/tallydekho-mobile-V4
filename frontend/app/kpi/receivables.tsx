@@ -210,7 +210,7 @@ export default function ReceivablesScreen() {
                   })}
                 >
                   <View style={s.partyIconBox}>
-                    <Ionicons name="business-outline" size={18} color="#A89060" />
+                    <Ionicons name="business-outline" size={18} color={COLORS.textSecondary} />
                   </View>
                   <View style={s.listInfo}>
                     <View style={s.listTopRow}>
@@ -234,7 +234,7 @@ export default function ReceivablesScreen() {
                   style={[s.listRow, idx < OVERDUE_PARTIES.length - 1 && s.listRowBorder]}
                 >
                   <View style={s.partyIconBox}>
-                    <Ionicons name="business-outline" size={18} color="#A89060" />
+                    <Ionicons name="business-outline" size={18} color={COLORS.textSecondary} />
                   </View>
                   <View style={s.listInfo}>
                     <Text style={s.listParty}>{item.party}</Text>
@@ -301,7 +301,7 @@ const s = StyleSheet.create({
   listWrap:      { paddingHorizontal: SPACING.md, paddingBottom: 8 },
   listRow:       { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 10 },
   listRowBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  partyIconBox:  { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F5F0E8', borderWidth: 1, borderColor: '#E8DFC8', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  partyIconBox:  { width: 42, height: 42, borderRadius: 8, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   listInfo:      { flex: 1 },
   listTopRow:    { flexDirection: 'row', alignItems: 'center' },
   listParty:     { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
