@@ -15,10 +15,16 @@ const AMBER_BG = '#FDF9F4';
 const { width: SW } = Dimensions.get('window');
 
 const STATUS_COLOR: Record<string, string> = {
-  paid:        COLORS.positive,
-  unpaid:      COLORS.negative,
-  irm:         COLORS.textTertiary,
-  credit_note: COLORS.warning,
+  paid:        '#2D7D46',
+  unpaid:      '#DC2626',
+  irm:         '#787774',
+  credit_note: '#A89060',
+};
+const STATUS_BG: Record<string, string> = {
+  paid:        '#F0FBF4',
+  unpaid:      '#FFF0F0',
+  irm:         '#F5F5F5',
+  credit_note: '#FDF9F4',
 };
 const STATUS_LABEL: Record<string, string> = {
   paid:        'Paid',
@@ -269,9 +275,11 @@ export default function SalesRegisterScreen() {
                             <View style={[s.statusDot, { backgroundColor: STATUS_COLOR[inv.status] ?? COLORS.textTertiary }]} />
                             <View style={s.invInfo}>
                               <View style={s.invTopRow}>
-                                <Text style={[s.statusLbl, { color: STATUS_COLOR[inv.status] ?? COLORS.textTertiary }]}>
-                                  {STATUS_LABEL[inv.status] ?? inv.status}
-                                </Text>
+                                <View style={[s.statusPillBadge, { backgroundColor: STATUS_BG[inv.status] ?? '#F5F5F5', borderColor: STATUS_COLOR[inv.status] ?? COLORS.textTertiary }]}>
+                                  <Text style={[s.statusPillTxt, { color: STATUS_COLOR[inv.status] ?? COLORS.textTertiary }]}>
+                                    {STATUS_LABEL[inv.status] ?? inv.status}
+                                  </Text>
+                                </View>
                                 <Text style={s.invId}>• {inv.id}</Text>
                               </View>
                               <Text style={s.invParty}>{inv.party}</Text>
@@ -340,7 +348,7 @@ const s = StyleSheet.create({
   headerTitle:  { flex: 1, textAlign: 'center', fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
   selectAllTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.brandPrimary, paddingRight: 4 },
 
-  filterRow:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, zIndex: 20 },
+  filterRow:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, zIndex: 200 },
   datePill:      { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.borderDefault },
   dateTxt:       { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
   statusWrap:    { position: 'relative', zIndex: 100 },
@@ -375,8 +383,13 @@ const s = StyleSheet.create({
   invLeft:    { flexDirection: 'row', alignItems: 'flex-start', gap: 10, flex: 1 },
   statusDot:  { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
   invInfo:    { flex: 1, gap: 3 },
-  invTopRow:  { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  statusLbl:  { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
+  invTopRow:  { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  statusPillBadge: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: RADIUS.full, borderWidth: 1,
+  },
+  statusPillTxt: { fontSize: 10, fontWeight: '700' },
   invId:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
   invParty:   { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   invMeta:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
