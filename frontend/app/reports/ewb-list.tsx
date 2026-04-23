@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
 // ── Mock Data ───────────────────────────────────────────────────────────────
 const EWB_LIST = [
@@ -29,6 +30,9 @@ const STATUS_CFG: Record<string, { bg: string; text: string }> = {
 export default function EWBListScreen() {
   const router = useRouter();
   const [selected, setSelected] = useState<string[]>([]);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [fromDate, setFromDate] = useState('01/07/25');
+  const [toDate,   setToDate]   = useState('31/07/25');
   const selectMode = selected.length > 0;
 
   const toggleSelect = (id: string) =>
@@ -70,6 +74,15 @@ export default function EWBListScreen() {
         ) : (
           <View style={{ width: 44 }} />
         )}
+      </View>
+
+      {/* Date Filter Row */}
+      <View style={s.filterRow}>
+        <TouchableOpacity style={s.datePill} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
+          <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
+          <Text style={s.dateTxt}>{fromDate} – {toDate}</Text>
+          <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listContent}>
@@ -139,6 +152,14 @@ export default function EWBListScreen() {
           </TouchableOpacity>
         </View>
       )}
+      {/* Date Range Modal */}
+      <DateRangePickerModal
+        visible={showDatePicker}
+        fromDate={fromDate}
+        toDate={toDate}
+        onApply={(from, to) => { setFromDate(from); setToDate(to); setShowDatePicker(false); }}
+        onClose={() => setShowDatePicker(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -159,6 +180,20 @@ const s = StyleSheet.create({
   headerTextBtnTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.brandPrimary },
 
   listContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.md },
+
+  filterRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: SPACING.md, paddingVertical: 10,
+    backgroundColor: COLORS.cardBg,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  datePill: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: COLORS.pageBg,
+    borderRadius: RADIUS.full, paddingHorizontal: 14, paddingVertical: 10,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  dateTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
 
   card: {
     backgroundColor: COLORS.cardBg,
