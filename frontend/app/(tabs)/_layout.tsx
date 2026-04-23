@@ -118,6 +118,7 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{ headerShown: false }}
+      sceneContainerStyle={{ backgroundColor: COLORS.pageBg }}
       tabBar={(props: any) => <CustomTabBar {...props} />}
     >
       <Tabs.Screen name="index" />
