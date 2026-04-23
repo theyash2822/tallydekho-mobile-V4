@@ -12,7 +12,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 const { width: SW } = Dimensions.get('window');
-const KPI_CARD_W = SW - SPACING.md * 2;
 import Header from '../../src/components/Header';
 import CashflowCard from '../../src/components/CashflowCard';
 import RecentActivity from '../../src/components/RecentActivity';
@@ -63,7 +62,7 @@ export default function HomeScreen() {
     const t = setInterval(() => {
       setKpiIdx(prev => {
         const next = (prev + 1) % kpiData.length;
-        kpiRef.current?.scrollToIndex({ index: next, animated: true, viewPosition: 0 });
+        kpiRef.current?.scrollToOffset({ offset: next * SW, animated: true });
         return next;
       });
     }, 4000);
@@ -164,30 +163,39 @@ export default function HomeScreen() {
 
   // ── KPI row render ────────────────────────────────────────────────────────
   const renderKPI = ({ item }: any) => (
-    <TouchableOpacity
-      testID={`kpi-card-${item.id}`}
-      style={styles.kpiCard}
-      activeOpacity={0.7}
-      onPress={() => item.route && router.push(item.route as any)}
-    >
-      <View style={styles.kpiIconBox}>
-        <Ionicons name={item.icon} size={22} color={COLORS.textSecondary} />
-      </View>
-      <Text style={styles.kpiLabel} numberOfLines={1}>{item.label}</Text>
-      <Text style={styles.kpiAmount} numberOfLines={1}>{item.amount}</Text>
-      {item.trend && (
-        <View style={[styles.kpiTrendBadge, { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg }]}>
-          <Ionicons
-            name={item.positive ? 'trending-up' : 'trending-down'}
-            size={11}
-            color={item.positive ? COLORS.positive : COLORS.negative}
-          />
-          <Text style={[styles.kpiTrendTxt, { color: item.positive ? COLORS.positive : COLORS.negative }]}>
-            {item.trend}
-          </Text>
+    <View style={styles.kpiItem}>
+      <TouchableOpacity
+        testID={`kpi-card-${item.id}`}
+        style={styles.kpiCard}
+        activeOpacity={0.7}
+        onPress={() => item.route && router.push(item.route as any)}
+      >
+        {/* Left: Icon circle */}
+        <View style={styles.kpiIconBox}>
+          <Ionicons name={item.icon} size={22} color={COLORS.textSecondary} />
         </View>
-      )}
-    </TouchableOpacity>
+
+        {/* Middle: Label + Amount stacked — flex:1 so never clips */}
+        <View style={styles.kpiTextWrap}>
+          <Text style={styles.kpiLabel} numberOfLines={1}>{item.label}</Text>
+          <Text style={styles.kpiAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount}</Text>
+        </View>
+
+        {/* Right: Trend badge */}
+        {item.trend && (
+          <View style={[styles.kpiTrendBadge, { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg }]}>
+            <Ionicons
+              name={item.positive ? 'trending-up' : 'trending-down'}
+              size={11}
+              color={item.positive ? COLORS.positive : COLORS.negative}
+            />
+            <Text style={[styles.kpiTrendTxt, { color: item.positive ? COLORS.positive : COLORS.negative }]}>
+              {item.trend}
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    </View>
   );
 
   const isSearching = searchQuery.trim().length > 0;
@@ -265,10 +273,10 @@ export default function HomeScreen() {
             keyExtractor={i => i.id}
             renderItem={renderKPI}
             showsHorizontalScrollIndicator={false}
-            getItemLayout={(_, index) => ({ length: KPI_CARD_W, offset: KPI_CARD_W * index, index })}
+            getItemLayout={(_, index) => ({ length: SW, offset: SW * index, index })}
             onScrollToIndexFailed={() => {}}
             onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
-              const idx = Math.round(e.nativeEvent.contentOffset.x / KPI_CARD_W);
+              const idx = Math.round(e.nativeEvent.contentOffset.x / SW);
               setKpiIdx(idx);
             }}
             contentContainerStyle={styles.kpiList}
@@ -408,12 +416,14 @@ const styles = StyleSheet.create({
   syncSubtitle: { fontSize: TYPOGRAPHY.xs, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
   kpiSection: { marginTop: SPACING.md },
   kpiList: { paddingHorizontal: 0 },
+  kpiItem: {
+    width: SW,                          // exact page width — fixes carousel snap
+  },
   kpiCard: {
-    width: KPI_CARD_W,
-    flexDirection: 'row', alignItems: 'center', gap: 16,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
     paddingHorizontal: SPACING.md, paddingVertical: 18,
-    marginHorizontal: SPACING.md,
+    marginHorizontal: SPACING.md,       // visual indent inside the page
     borderWidth: 1, borderColor: COLORS.borderDefault,
   },
   kpiIconBox: {
@@ -421,10 +431,14 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.pageBg,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  kpiTextWrap:    { flex: 1, gap: 4 },
-  kpiLabel:       { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
-  kpiAmount:      { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary },
-  kpiTrendBadge:  { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: RADIUS.full },
+  kpiTextWrap: { flex: 1, gap: 4 },      // flex:1 ensures label+amount never clip
+  kpiLabel:   { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
+  kpiAmount:  { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary },
+  kpiTrendBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: RADIUS.full,
+    flexShrink: 0,
+  },
   kpiTrendTxt:    { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
   kpiDots:        { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: 10, marginBottom: 2 },
   kpiDot:         { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
