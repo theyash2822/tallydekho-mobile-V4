@@ -296,7 +296,7 @@ export const FY_DASHBOARD: Record<string, {
   'FY 2024-25': {
     kpi: [
       { id: 'cash',       label: 'Cash In Hand', amount: '₹8,20,000',  icon: 'cash-outline',             route: '/cash' },
-      { id: 'bank',       label: 'Bank Balance', amount: '₹6,40,000',  icon: 'card-outline',             route: '/bank' },
+      { id: 'bank',       label: 'Bank Balance', amount: '₹6,40,000',  icon: 'card-outline',             route: '/kpi/bank-balance' },
       { id: 'receivable', label: 'Receivables',  amount: '₹2,80,000',  icon: 'arrow-down-circle-outline',route: '/receivables' },
       { id: 'payable',    label: 'Payables',     amount: '₹4,12,000',  icon: 'arrow-up-circle-outline',  route: '/payables' },
       { id: 'loans',      label: 'Loans & ODs',  amount: '₹2,10,000',  icon: 'git-merge-outline',        route: '/loans' },
@@ -313,7 +313,7 @@ export const FY_DASHBOARD: Record<string, {
   'FY 2023-24': {
     kpi: [
       { id: 'cash',       label: 'Cash In Hand', amount: '₹6,50,000',  icon: 'cash-outline',             route: '/cash' },
-      { id: 'bank',       label: 'Bank Balance', amount: '₹5,10,000',  icon: 'card-outline',             route: '/bank' },
+      { id: 'bank',       label: 'Bank Balance', amount: '₹5,10,000',  icon: 'card-outline',             route: '/kpi/bank-balance' },
       { id: 'receivable', label: 'Receivables',  amount: '₹2,10,000',  icon: 'arrow-down-circle-outline',route: '/receivables' },
       { id: 'payable',    label: 'Payables',     amount: '₹3,20,000',  icon: 'arrow-up-circle-outline',  route: '/payables' },
       { id: 'loans',      label: 'Loans & ODs',  amount: '₹2,80,000',  icon: 'git-merge-outline',        route: '/loans' },
@@ -330,7 +330,7 @@ export const FY_DASHBOARD: Record<string, {
   'FY 2022-23': {
     kpi: [
       { id: 'cash',       label: 'Cash In Hand', amount: '₹4,80,000',  icon: 'cash-outline',             route: '/cash' },
-      { id: 'bank',       label: 'Bank Balance', amount: '₹3,90,000',  icon: 'card-outline',             route: '/bank' },
+      { id: 'bank',       label: 'Bank Balance', amount: '₹3,90,000',  icon: 'card-outline',             route: '/kpi/bank-balance' },
       { id: 'receivable', label: 'Receivables',  amount: '₹1,60,000',  icon: 'arrow-down-circle-outline',route: '/receivables' },
       { id: 'payable',    label: 'Payables',     amount: '₹2,40,000',  icon: 'arrow-up-circle-outline',  route: '/payables' },
       { id: 'loans',      label: 'Loans & ODs',  amount: '₹3,20,000',  icon: 'git-merge-outline',        route: '/loans' },
