@@ -65,7 +65,6 @@ export default function CashRegisterScreen() {
   const [search,       setSearch]       = useState('');
   const [typeFilter,   setTypeFilter]   = useState<FilterType>('all');
   const [showTypeMenu, setShowTypeMenu] = useState(false);
-  const [monthFilter,  setMonthFilter]  = useState('All');
   const [showDatePick, setShowDatePick] = useState(false);
   const [dateFrom,     setDateFrom]     = useState('31/03/25');
   const [dateTo,       setDateTo]       = useState('23/04/25');
@@ -96,7 +95,6 @@ export default function CashRegisterScreen() {
   };
 
   const filteredGroups = MONTH_GROUPS
-    .filter(g => monthFilter === 'All' || g.id === monthFilter)
     .map(g => ({
       ...g,
       items: g.items.filter(item => {
@@ -165,26 +163,6 @@ export default function CashRegisterScreen() {
             </View>
           )}
         </View>
-      </View>
-
-      {/* ── Month Chip Filter ──────────────────────────────────────────────── */}
-      <View style={s.monthRow}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.monthScroll}>
-          {['All', ...MONTH_GROUPS.map(g => g.id)].map(m => {
-            const label = m === 'All' ? 'All' : MONTH_GROUPS.find(g => g.id === m)?.label.split(' ')[0] ?? m;
-            const isActive = monthFilter === m;
-            return (
-              <TouchableOpacity
-                key={m}
-                style={[s.monthChip, isActive && s.monthChipActive]}
-                onPress={() => setMonthFilter(m)}
-                activeOpacity={0.7}
-              >
-                <Text style={[s.monthChipTxt, isActive && s.monthChipTxtActive]}>{label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
       </View>
 
       {/* Search Bar */}
