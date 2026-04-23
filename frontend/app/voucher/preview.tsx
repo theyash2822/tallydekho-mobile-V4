@@ -7,7 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
-const AMBER = '#A89060';
+const AMBER = '#1A1A1A';
 
 const TYPE_LABELS: Record<string, string> = {
   payment:            'Payment',
