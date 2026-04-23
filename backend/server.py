@@ -46,7 +46,7 @@ DASHBOARD_SEED = {
             {"id": "pay",   "label": "Payables",      "amount": "₹43,100",  "icon": "arrow-up-outline", "trend": "+₹1,800",  "positive": False},
         ],
         "metrics": [
-            {"id": "sales",     "label": "Sales",     "icon": "trending-up",    "amount": "₹1.23L", "change": 12, "positive": True,  "route": "/sales-register"},
+            {"id": "sales",     "label": "Sales",     "icon": "trending-up",    "amount": "₹1.23L", "change": 12, "positive": True,  "route": "/sales"},
             {"id": "expenses",  "label": "Expenses",  "icon": "receipt-outline","amount": "₹45,200","change": 5,  "positive": False},
             {"id": "purchases", "label": "Purchases", "icon": "cart-outline",   "amount": "₹78,400","change": 3,  "positive": True},
         ],
@@ -65,7 +65,7 @@ DASHBOARD_SEED = {
             {"id": "pay",   "label": "Payables",      "amount": "₹89,300",   "icon": "arrow-up-outline", "trend": "+₹8,600",  "positive": False},
         ],
         "metrics": [
-            {"id": "sales",     "label": "Sales",     "icon": "trending-up",    "amount": "₹4.23L", "change": 8,  "positive": True,  "route": "/sales-register"},
+            {"id": "sales",     "label": "Sales",     "icon": "trending-up",    "amount": "₹4.23L", "change": 8,  "positive": True,  "route": "/sales"},
             {"id": "expenses",  "label": "Expenses",  "icon": "receipt-outline","amount": "₹1.45L", "change": 3,  "positive": False},
             {"id": "purchases", "label": "Purchases", "icon": "cart-outline",   "amount": "₹2.18L", "change": 6,  "positive": True},
         ],
@@ -84,7 +84,7 @@ DASHBOARD_SEED = {
             {"id": "pay",   "label": "Payables",      "amount": "₹1,98,400", "icon": "arrow-up-outline", "trend": "+₹24,300", "positive": False},
         ],
         "metrics": [
-            {"id": "sales",     "label": "Sales",     "icon": "trending-up",    "amount": "₹12.45L","change": 15, "positive": True,  "route": "/sales-register"},
+            {"id": "sales",     "label": "Sales",     "icon": "trending-up",    "amount": "₹12.45L","change": 15, "positive": True,  "route": "/sales"},
             {"id": "expenses",  "label": "Expenses",  "icon": "receipt-outline","amount": "₹4.23L", "change": 2,  "positive": False},
             {"id": "purchases", "label": "Purchases", "icon": "cart-outline",   "amount": "₹6.78L", "change": 11, "positive": True},
         ],
@@ -103,7 +103,7 @@ DASHBOARD_SEED = {
             {"id": "pay",   "label": "Payables",      "amount": "₹3,12,600", "icon": "arrow-up-outline", "trend": "+₹54,200",  "positive": False},
         ],
         "metrics": [
-            {"id": "sales",     "label": "Sales",     "icon": "trending-up",    "amount": "₹24.80L","change": 22, "positive": True,  "route": "/sales-register"},
+            {"id": "sales",     "label": "Sales",     "icon": "trending-up",    "amount": "₹24.80L","change": 22, "positive": True,  "route": "/sales"},
             {"id": "expenses",  "label": "Expenses",  "icon": "receipt-outline","amount": "₹8.90L", "change": 5,  "positive": False},
             {"id": "purchases", "label": "Purchases", "icon": "cart-outline",   "amount": "₹13.20L","change": 18, "positive": True},
         ],
