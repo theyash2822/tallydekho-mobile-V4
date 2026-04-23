@@ -40,7 +40,7 @@ export const MOCK_KPI_STRIP = [
 
 export const MOCK_METRICS = [
   { id: 'expenses', label: 'Expenses', amount: '₹1,42,000', change: 12.0, positive: false, icon: 'trending-up-outline', route: '/expenses' },
-  { id: 'sales', label: 'Sales', amount: '₹92,000', change: 5.1, positive: true, icon: 'stats-chart-outline', route: '/sales/register' },
+  { id: 'sales', label: 'Sales', amount: '₹92,000', change: 5.1, positive: true, icon: 'stats-chart-outline', route: '/sales' },
   { id: 'purchases', label: 'Purchases', amount: '₹74,500', change: 8.7, positive: true, icon: 'cart-outline', route: '/purchase/register' },
 ];
 
@@ -305,7 +305,7 @@ export const FY_DASHBOARD: Record<string, {
     ],
     metrics: [
       { id: 'expenses', label: 'Expenses', amount: '₹108.00',  change: 9.2,  positive: false, icon: 'trending-up-outline',  route: null },
-      { id: 'sales',    label: 'Sales',    amount: '₹74,500',  change: 3.8,  positive: true,  icon: 'stats-chart-outline',   route: '/sales/register' },
+      { id: 'sales',    label: 'Sales',    amount: '₹74,500',  change: 3.8,  positive: true,  icon: 'stats-chart-outline',   route: '/sales' },
       { id: 'purchases',label: 'Purchases',amount: '₹60,200',  change: 6.2,  positive: true,  icon: 'cart-outline',          route: '/purchase/register' },
     ],
     cashflow: { netCash: 16800, grossCash: 480.50, netRealisableBalance: 16200, grossProfit: 382000, netProfit: 104000, incomePercentage: 58, updatedAt: 'FY 2024-25' },
@@ -322,7 +322,7 @@ export const FY_DASHBOARD: Record<string, {
     ],
     metrics: [
       { id: 'expenses', label: 'Expenses', amount: '₹85.00',   change: 7.1,  positive: false, icon: 'trending-up-outline',  route: null },
-      { id: 'sales',    label: 'Sales',    amount: '₹58,000',  change: 2.4,  positive: true,  icon: 'stats-chart-outline',   route: '/sales/register' },
+      { id: 'sales',    label: 'Sales',    amount: '₹58,000',  change: 2.4,  positive: true,  icon: 'stats-chart-outline',   route: '/sales' },
       { id: 'purchases',label: 'Purchases',amount: '₹46,500',  change: 4.1,  positive: true,  icon: 'cart-outline',          route: '/purchase/register' },
     ],
     cashflow: { netCash: 12400, grossCash: 366.80, netRealisableBalance: 12000, grossProfit: 298000, netProfit: 82000, incomePercentage: 48, updatedAt: 'FY 2023-24' },
@@ -339,7 +339,7 @@ export const FY_DASHBOARD: Record<string, {
     ],
     metrics: [
       { id: 'expenses', label: 'Expenses', amount: '₹62.00',   change: 5.0,  positive: false, icon: 'trending-up-outline',  route: null },
-      { id: 'sales',    label: 'Sales',    amount: '₹44,500',  change: 1.2,  positive: true,  icon: 'stats-chart-outline',   route: '/sales/register' },
+      { id: 'sales',    label: 'Sales',    amount: '₹44,500',  change: 1.2,  positive: true,  icon: 'stats-chart-outline',   route: '/sales' },
       { id: 'purchases',label: 'Purchases',amount: '₹35,000',  change: 3.0,  positive: true,  icon: 'cart-outline',          route: '/purchase/register' },
     ],
     cashflow: { netCash: 9200, grossCash: 280.40, netRealisableBalance: 8900, grossProfit: 228000, netProfit: 62000, incomePercentage: 40, updatedAt: 'FY 2022-23' },
