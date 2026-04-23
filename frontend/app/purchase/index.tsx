@@ -82,7 +82,7 @@ export default function PurchaseScreen() {
     const t = setInterval(() => {
       setMetricIdx(prev => {
         const next = (prev + 1) % METRIC_CARDS.length;
-        metricRef.current?.scrollToIndex({ index: next, animated: true, viewPosition: 0 });
+        metricRef.current?.scrollToOffset({ offset: next * SW, animated: true });
         return next;
       });
     }, 3000);
@@ -173,22 +173,24 @@ export default function PurchaseScreen() {
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             keyExtractor={c => c.id}
-            getItemLayout={(_, index) => ({ length: CARD_W, offset: CARD_W * index, index })}
+            getItemLayout={(_, index) => ({ length: SW, offset: SW * index, index })}
             onScrollToIndexFailed={() => {}}
             onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
-              const idx = Math.round(e.nativeEvent.contentOffset.x / CARD_W);
+              const idx = Math.round(e.nativeEvent.contentOffset.x / SW);
               setMetricIdx(idx);
             }}
             renderItem={({ item: c }) => (
-              <View style={s.metricCard}>
-                <View style={s.mIcon}>
-                  <Ionicons name={c.icon as any} size={22} color={COLORS.textSecondary} />
-                </View>
-                <Text style={s.mLabel}>{c.label}</Text>
-                <Text style={s.mAmount}>{c.amount}</Text>
-                <View style={[s.pctBadge, { backgroundColor: c.pos ? COLORS.positiveBg : COLORS.negativeBg }]}>
-                  <Ionicons name={c.pos ? 'trending-up' : 'trending-down'} size={11} color={c.pos ? COLORS.positive : COLORS.negative} />
-                  <Text style={[s.pctTxt, { color: c.pos ? COLORS.positive : COLORS.negative }]}>{c.pct}</Text>
+              <View style={s.metricItem}>
+                <View style={s.metricCard}>
+                  <View style={s.mIcon}>
+                    <Ionicons name={c.icon as any} size={22} color={COLORS.textSecondary} />
+                  </View>
+                  <Text style={s.mLabel}>{c.label}</Text>
+                  <Text style={s.mAmount}>{c.amount}</Text>
+                  <View style={[s.pctBadge, { backgroundColor: c.pos ? COLORS.positiveBg : COLORS.negativeBg }]}>
+                    <Ionicons name={c.pos ? 'trending-up' : 'trending-down'} size={11} color={c.pos ? COLORS.positive : COLORS.negative} />
+                    <Text style={[s.pctTxt, { color: c.pos ? COLORS.positive : COLORS.negative }]}>{c.pct}</Text>
+                  </View>
                 </View>
               </View>
             )}
@@ -406,14 +408,14 @@ const s = StyleSheet.create({
 
   // Metric Carousel
   carouselWrap: { paddingTop: SPACING.md },
+  metricItem: { width: SW },
   metricCard: {
-    width: CARD_W,
     flexDirection: 'row', alignItems: 'center', gap: 12,
     backgroundColor: COLORS.cardBg,
     borderRadius: RADIUS.lg,
     paddingHorizontal: SPACING.md, paddingVertical: 16,
     borderWidth: 1, borderColor: COLORS.borderDefault,
-    marginLeft: SPACING.md,
+    marginHorizontal: SPACING.md,
   },
   mIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
   mLabel: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },

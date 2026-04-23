@@ -58,7 +58,7 @@ export default function ExpenseScreen() {
     const t = setInterval(() => {
       setMetricIdx(prev => {
         const next = (prev + 1) % METRIC_CARDS.length;
-        metricRef.current?.scrollToIndex({ index: next, animated: true, viewPosition: 0 });
+        metricRef.current?.scrollToOffset({ offset: next * SW, animated: true });
         return next;
       });
     }, 3000);
@@ -134,21 +134,23 @@ export default function ExpenseScreen() {
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             keyExtractor={c => c.id}
-            getItemLayout={(_, i) => ({ length: CARD_W, offset: CARD_W * i, index: i })}
+            getItemLayout={(_, i) => ({ length: SW, offset: SW * i, index: i })}
             onScrollToIndexFailed={() => {}}
             onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
-              setMetricIdx(Math.round(e.nativeEvent.contentOffset.x / CARD_W));
+              setMetricIdx(Math.round(e.nativeEvent.contentOffset.x / SW));
             }}
             renderItem={({ item: c }) => (
-              <View style={s.metricCard}>
-                <View style={s.mIcon}>
-                  <Ionicons name={c.icon as any} size={22} color={COLORS.textSecondary} />
-                </View>
-                <Text style={s.mLabel}>{c.label}</Text>
-                <Text style={s.mAmount}>{c.amount}</Text>
-                <View style={[s.pctBadge, { backgroundColor: COLORS.negativeBg }]}>
-                  <Ionicons name="trending-up" size={11} color={COLORS.negative} />
-                  <Text style={[s.pctTxt, { color: COLORS.negative }]}>{c.pct}</Text>
+              <View style={s.metricItem}>
+                <View style={s.metricCard}>
+                  <View style={s.mIcon}>
+                    <Ionicons name={c.icon as any} size={22} color={COLORS.textSecondary} />
+                  </View>
+                  <Text style={s.mLabel}>{c.label}</Text>
+                  <Text style={s.mAmount}>{c.amount}</Text>
+                  <View style={[s.pctBadge, { backgroundColor: COLORS.negativeBg }]}>
+                    <Ionicons name="trending-up" size={11} color={COLORS.negative} />
+                    <Text style={[s.pctTxt, { color: COLORS.negative }]}>{c.pct}</Text>
+                  </View>
                 </View>
               </View>
             )}
@@ -282,11 +284,13 @@ const s = StyleSheet.create({
   dropOverlay:{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50 },
 
   carouselWrap: { paddingTop: SPACING.md },
+  metricItem: { width: SW },
   metricCard: {
-    width: CARD_W, flexDirection: 'row', alignItems: 'center', gap: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
     paddingHorizontal: SPACING.md, paddingVertical: 16,
-    borderWidth: 1, borderColor: COLORS.borderDefault, marginLeft: SPACING.md,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    marginHorizontal: SPACING.md,
   },
   mIcon:  { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
   mLabel: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
