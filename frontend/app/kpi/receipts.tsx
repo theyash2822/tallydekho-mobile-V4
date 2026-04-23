@@ -40,8 +40,8 @@ const DAILY = [
 ];
 
 const DONUT_DATA = [
-  { value: 55000,  color: COLORS.brandPrimary, label: 'Cash', pct: '10.3%' },
-  { value: 480000, color: COLORS.textPrimary,  label: 'Bank', pct: '89.7%' },
+  { value: 55000,  color: '#A89060', label: 'Cash', pct: '10.3%' },
+  { value: 480000, color: '#3A3A3A', label: 'Bank', pct: '89.7%' },
 ];
 
 const RECENT_RCP = [
@@ -72,7 +72,8 @@ function DailyChart() {
 
   const linePath = DAILY.map((d, i) => `${i === 0 ? 'M' : 'L'}${getX(i).toFixed(1)},${getY(d.value).toFixed(1)}`).join(' ');
   const areaPath = `${linePath} L${getX(DAILY.length - 1).toFixed(1)},${(PAD_T + CHART_H).toFixed(1)} L${PAD_L.toFixed(1)},${(PAD_T + CHART_H).toFixed(1)} Z`;
-  const yLabels  = [maxV, maxV * 0.75, maxV * 0.5, maxV * 0.25, minV];
+  // Y-axis labels — evenly spaced from maxV (top) to minV (bottom)
+  const yLabels  = Array.from({ length: 5 }, (_, i) => maxV - (i / 4) * (maxV - minV));
 
   const handleTouch = useCallback((lx: number) => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
