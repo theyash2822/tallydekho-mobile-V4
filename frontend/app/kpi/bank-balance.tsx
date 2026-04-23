@@ -211,13 +211,9 @@ export default function BankBalanceScreen() {
                 key={tx.id}
                 style={[s.txRow, idx < activeBank.transactions.length - 1 && s.txBorder]}
               >
-                {/* Icon */}
-                <View style={[s.txIconBox, { backgroundColor: isCr ? COLORS.positiveBg : COLORS.negativeBg }]}>
-                  <Ionicons
-                    name="card-outline"
-                    size={18}
-                    color={isCr ? COLORS.positive : COLORS.negative}
-                  />
+                {/* Icon — neutral for all, only amount carries Dr/Cr color */}
+                <View style={s.txIconBox}>
+                  <Ionicons name="card-outline" size={18} color={COLORS.textSecondary} />
                 </View>
 
                 {/* ID + date */}
@@ -334,6 +330,7 @@ const s = StyleSheet.create({
   txBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   txIconBox: {
     width: 40, height: 40, borderRadius: 20,
+    backgroundColor: COLORS.pageBg,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
   txInfo:  { flex: 1 },
