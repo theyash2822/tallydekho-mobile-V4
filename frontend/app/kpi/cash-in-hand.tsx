@@ -1,212 +1,347 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, FlatList,
+  Dimensions, NativeSyntheticEvent, NativeScrollEvent,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import Svg, { Rect, Text as SvgText, Line } from 'react-native-svg';
+import { LineChart, BarChart } from 'react-native-gifted-charts';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
-const W = Dimensions.get('window').width;
-const CARD_W = W - SPACING.md * 2;
+const { width: SW } = Dimensions.get('window');
 
-const DAILY_DATA = [
-  { day: 'Mon', cash: 42000, receipts: 18000, payments: 12000 },
-  { day: 'Tue', cash: 48000, receipts: 22000, payments: 16000 },
-  { day: 'Wed', cash: 53000, receipts: 19000, payments: 14000 },
-  { day: 'Thu', cash: 58000, receipts: 28000, payments: 23000 },
-  { day: 'Fri', cash: 67000, receipts: 31000, payments: 22000 },
-  { day: 'Sat', cash: 72000, receipts: 25000, payments: 20000 },
-  { day: 'Sun', cash: 78000, receipts: 15000, payments: 9000 },
+// ── Mock Data ───────────────────────────────────────────────────────────────
+const SUMMARY_CARDS = [
+  { id: 's1', icon: 'arrow-up-circle-outline',   label: 'Outflow Today',  amount: '₹2.8 M',    trend: '+12.5%', positive: true  },
+  { id: 's2', icon: 'arrow-down-circle-outline',  label: 'Inflow Today',   amount: '₹95,000',   trend: '+5.5%',  positive: true  },
+  { id: 's3', icon: 'business-outline',           label: 'Bank',           amount: '+₹12K',     trend: '+8.5%',  positive: true  },
+  { id: 's4', icon: 'cash-outline',               label: 'Cash on Hand',   amount: '₹1,07,000', trend: '+58.5%', positive: true  },
 ];
 
-const METRIC_CARDS = [
-  { label: 'Cash on Hand', value: '₹78,000', sub: '+4.2% vs last week', color: '#2D7D46', icon: 'cash-outline' },
-  { label: 'MTD Cash', value: '₹3,42,000', sub: 'Month to date', color: '#2563EB', icon: 'calendar-outline' },
-  { label: 'Inflow Today', value: '₹15,000', sub: 'Total receipts', color: '#059669', icon: 'arrow-down-circle-outline' },
-  { label: 'Outflow Today', value: '₹9,000', sub: 'Total payments', color: '#DC2626', icon: 'arrow-up-circle-outline' },
-  { label: 'Bank Balance', value: '₹8,00,000', sub: 'Linked accounts', color: '#7C3AED', icon: 'card-outline' },
+const DAILY_K = [107,112,98,125,134,128,119,108,132,145,138,121,115,127,139,148,142,131,123,135,148,152,141,129,137,144,153,161,155,143];
+
+const LINE_DATA = DAILY_K.map((v, i) => ({
+  value: v * 1000,
+  label: `${i + 1}`,
+  dataPointText: `₹${v}K`,
+}));
+
+const REC_K  = [95,112,88,126,134,122,99,115,133,145,138,121,106,127,140,148,143,131,118,136,149,153,141,128,138,145,154,162,155,142];
+const PMT_K  = [82,99,75,108,115,103,84,98,115,123,121,98,87,108,118,126,120,112,95,115,127,130,118,108,117,122,131,138,132,121];
+
+const BAR_DATA = REC_K.flatMap((r, i) => [
+  { value: r * 1000,        frontColor: '#A89060', label: `${i + 1}`, spacing: 2,  barWidth: 7 },
+  { value: PMT_K[i] * 1000, frontColor: '#3A3A3A', spacing: 12, barWidth: 7 },
+]);
+
+const Y_LABELS = ['₹0', '₹40K', '₹80K', '₹1.2L', '₹1.6L'];
+
+const RECENT_TXN = [
+  { id: 'r1', type: 'in',  desc: 'Cash Sales',    ref: 'RC-1452',  date: '10 Jul', amount: '₹8,000'  },
+  { id: 'r2', type: 'out', desc: 'Taxi Reimburse', ref: 'PMT-3491', date: '10 Jul', amount: '₹1,200'  },
+  { id: 'r3', type: 'in',  desc: 'Cash Sales',    ref: 'RC-1453',  date: '11 Jul', amount: '₹8,000'  },
+  { id: 'r4', type: 'out', desc: 'Taxi Reimburse', ref: 'PMT-3492', date: '11 Jul', amount: '₹1,200'  },
+  { id: 'r5', type: 'in',  desc: 'Cash Sales',    ref: 'RC-1454',  date: '12 Jul', amount: '₹12,500' },
+  { id: 'r6', type: 'out', desc: 'Office Expense', ref: 'PMT-3493', date: '12 Jul', amount: '₹3,500'  },
 ];
 
-const TRANSACTIONS = [
-  { id: 'T1', title: 'Cash Sales', ref: 'RC-0042', date: '25 May', amount: '₹15,000', type: 'Receipt', color: '#2D7D46' },
-  { id: 'T2', title: 'Office Supplies', ref: 'PY-0031', date: '25 May', amount: '₹3,200', type: 'Payment', color: '#DC2626' },
-  { id: 'T3', title: 'Taxi Reimburse', ref: 'PY-0030', date: '24 May', amount: '₹850', type: 'Payment', color: '#DC2626' },
-  { id: 'T4', title: 'Cash Sales', ref: 'RC-0041', date: '24 May', amount: '₹22,000', type: 'Receipt', color: '#2D7D46' },
-  { id: 'T5', title: 'Petty Cash', ref: 'PY-0029', date: '23 May', amount: '₹1,500', type: 'Payment', color: '#DC2626' },
-  { id: 'T6', title: 'Cash Sales', ref: 'RC-0040', date: '23 May', amount: '₹18,500', type: 'Receipt', color: '#2D7D46' },
-];
-
-const maxCash = Math.max(...DAILY_DATA.map(d => d.cash));
-const maxRP = Math.max(...DAILY_DATA.flatMap(d => [d.receipts, d.payments]));
-
-function CashBalanceChart() {
-  const svgW = CARD_W - SPACING.md * 2;
-  const svgH = 110;
-  const barW = 28;
-  const gap = (svgW - barW * 7) / 8;
-  return (
-    <Svg width={svgW} height={svgH + 20}>
-      {DAILY_DATA.map((d, i) => {
-        const x = gap + i * (barW + gap);
-        const h = (d.cash / maxCash) * svgH;
-        return (
-          <React.Fragment key={d.day}>
-            <Rect x={x} y={svgH - h} width={barW} height={h} rx={4} fill={COLORS.brandPrimary} opacity={0.85} />
-            <SvgText x={x + barW / 2} y={svgH + 14} textAnchor="middle" fontSize={9} fill={COLORS.textTertiary}>{d.day}</SvgText>
-          </React.Fragment>
-        );
-      })}
-    </Svg>
-  );
-}
-
-function RvPChart() {
-  const svgW = CARD_W - SPACING.md * 2;
-  const svgH = 100;
-  const bW = 14;
-  const gap = 4;
-  const groupW = bW * 2 + gap + 12;
-  const padL = 4;
-  return (
-    <Svg width={svgW} height={svgH + 20}>
-      {DAILY_DATA.map((d, i) => {
-        const x = padL + i * groupW;
-        const rH = (d.receipts / maxRP) * svgH;
-        const pH = (d.payments / maxRP) * svgH;
-        return (
-          <React.Fragment key={d.day}>
-            <Rect x={x} y={svgH - rH} width={bW} height={rH} rx={3} fill="#2D7D46" opacity={0.9} />
-            <Rect x={x + bW + gap} y={svgH - pH} width={bW} height={pH} rx={3} fill="#DC2626" opacity={0.9} />
-            <SvgText x={x + bW + gap / 2} y={svgH + 14} textAnchor="middle" fontSize={8.5} fill={COLORS.textTertiary}>{d.day}</SvgText>
-          </React.Fragment>
-        );
-      })}
-    </Svg>
-  );
-}
-
+// ── Component ───────────────────────────────────────────────────────────────
 export default function CashInHandScreen() {
-  const router = useRouter();
-  const [activePeriod, setActivePeriod] = useState('7D');
+  const router  = useRouter();
+  const sumRef  = useRef<FlatList>(null);
+  const [sumIdx,       setSumIdx]       = useState(0);
+  const [showDatePick, setShowDatePick] = useState(false);
+  const [dateFrom,     setDateFrom]     = useState('31/03/25');
+  const [dateTo,       setDateTo]       = useState('23/04/25');
+
+  // Auto-scroll summary carousel every 3s
+  useEffect(() => {
+    const t = setInterval(() => {
+      setSumIdx(prev => {
+        const next = (prev + 1) % SUMMARY_CARDS.length;
+        sumRef.current?.scrollToOffset({ offset: next * SW, animated: true });
+        return next;
+      });
+    }, 3000);
+    return () => clearInterval(t);
+  }, []);
+
+  const fmtRange = () => {
+    const fmt = (s: string) => {
+      const p = s.split('/');
+      if (p.length < 3) return s;
+      const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return `${parseInt(p[0])} ${m[parseInt(p[1]) - 1]}`;
+    };
+    return `${fmt(dateFrom)} \u2013 ${fmt(dateTo)}`;
+  };
+
+  const curBal  = DAILY_K[DAILY_K.length - 1];
+  const prevBal = DAILY_K[DAILY_K.length - 2];
+  const chgAbs  = curBal - prevBal;
+  const chgPct  = ((chgAbs / prevBal) * 100).toFixed(1);
 
   return (
-    <SafeAreaView style={s.safe}>
+    <SafeAreaView style={s.safe} edges={['top']}>
+
+      {/* Header */}
       <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
+        <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
+          <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Cash In Hand</Text>
-        <TouchableOpacity style={s.exportBtn}>
-          <Ionicons name="download-outline" size={20} color={COLORS.brandPrimary} />
+        <Text style={s.headerTitle}>Cash in Hand</Text>
+        <View style={s.headerBtn} />
+      </View>
+
+      {/* Date Range Pill */}
+      <View style={s.filterRow}>
+        <TouchableOpacity style={s.dateChip} onPress={() => setShowDatePick(true)} activeOpacity={0.7}>
+          <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
+          <Text style={s.dateChipTxt}>{fmtRange()}</Text>
+          <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
 
-      {/* Period Filters */}
-      <View style={s.periodRow}>
-        {['7D', '1M', '3M', '6M'].map(p => (
-          <TouchableOpacity key={p} style={[s.periodBtn, activePeriod === p && s.periodActive]} onPress={() => setActivePeriod(p)} activeOpacity={0.7}>
-            <Text style={[s.periodTxt, activePeriod === p && s.periodActiveTxt]}>{p}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
 
-      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
-        {/* Metric Cards */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.metricsScroll} contentContainerStyle={s.metricsContent}>
-          {METRIC_CARDS.map((m, i) => (
-            <View key={i} style={[s.metricCard, { borderTopColor: m.color, borderTopWidth: 3 }]}>
-              <View style={[s.metricIcon, { backgroundColor: m.color + '20' }]}>
-                <Ionicons name={m.icon as any} size={18} color={m.color} />
+        {/* Summary Carousel */}
+        <View style={s.carouselWrap}>
+          <FlatList
+            ref={sumRef}
+            horizontal pagingEnabled
+            data={SUMMARY_CARDS}
+            keyExtractor={i => i.id}
+            showsHorizontalScrollIndicator={false}
+            getItemLayout={(_, idx) => ({ length: SW, offset: SW * idx, index: idx })}
+            onScrollToIndexFailed={() => {}}
+            onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) =>
+              setSumIdx(Math.round(e.nativeEvent.contentOffset.x / SW))}
+            renderItem={({ item }) => (
+              <View style={s.cardItem}>
+                <View style={s.sumCard}>
+                  <View style={s.sumIconBox}>
+                    <Ionicons name={item.icon as any} size={22} color={COLORS.textSecondary} />
+                  </View>
+                  <View style={s.sumTextWrap}>
+                    <Text style={s.sumLabel}>{item.label}</Text>
+                    <Text style={s.sumAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount}</Text>
+                  </View>
+                  <View style={[s.trendBadge, { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg }]}>
+                    <Ionicons
+                      name={item.positive ? 'trending-up' : 'trending-down'}
+                      size={11}
+                      color={item.positive ? COLORS.positive : COLORS.negative}
+                    />
+                    <Text style={[s.trendTxt, { color: item.positive ? COLORS.positive : COLORS.negative }]}>
+                      {item.trend}
+                    </Text>
+                  </View>
+                </View>
               </View>
-              <Text style={s.metricVal}>{m.value}</Text>
-              <Text style={s.metricLabel}>{m.label}</Text>
-              <Text style={[s.metricSub, { color: m.label === 'Outflow Today' ? '#DC2626' : '#2D7D46' }]}>{m.sub}</Text>
-            </View>
-          ))}
-        </ScrollView>
-
-        {/* Daily Cash Balance Chart */}
-        <View style={s.card}>
-          <Text style={s.cardTitle}>Daily Cash Balance</Text>
-          <CashBalanceChart />
-          <View style={s.chartNote}>
-            <Ionicons name="trending-up-outline" size={14} color="#2D7D46" />
-            <Text style={s.chartNoteTxt}>₹78,000 closing balance · +₹6,000 vs yesterday</Text>
+            )}
+          />
+          <View style={s.dots}>
+            {SUMMARY_CARDS.map((_, i) => (
+              <View key={i} style={[s.dot, i === sumIdx && s.dotActive]} />
+            ))}
           </View>
         </View>
 
-        {/* Receipts vs Payments Chart */}
-        <View style={s.card}>
-          <View style={s.cardHeader}>
-            <Text style={s.cardTitle}>Receipts vs Payments</Text>
+        {/* Daily Cash Balance */}
+        <View style={s.chartCard}>
+          <View style={s.chartHeader}>
+            <View>
+              <Text style={s.chartTitle}>Daily Cash Balance</Text>
+              <View style={s.chartMeta}>
+                <Text style={s.chartAmt}>₹{curBal}K</Text>
+                <View style={[s.changeBadge, { backgroundColor: chgAbs >= 0 ? COLORS.positiveBg : COLORS.negativeBg }]}>
+                  <Text style={[s.changeTxt, { color: chgAbs >= 0 ? COLORS.positive : COLORS.negative }]}>
+                    {chgAbs >= 0 ? '+' : ''}{chgAbs}K ({chgPct}%)
+                  </Text>
+                </View>
+              </View>
+            </View>
+            <Text style={s.chartDate}>30 days</Text>
+          </View>
+          <LineChart
+            data={LINE_DATA}
+            areaChart
+            curved
+            color={'#A89060'}
+            thickness={2}
+            startFillColor={'rgba(168,144,96,0.3)'}
+            endFillColor={'rgba(168,144,96,0.05)'}
+            startOpacity={0.9}
+            endOpacity={0.1}
+            initialSpacing={16}
+            spacing={28}
+            maxValue={160000}
+            noOfSections={4}
+            yAxisLabelWidth={52}
+            yAxisLabelTexts={Y_LABELS}
+            yAxisTextStyle={{ color: COLORS.textTertiary, fontSize: 10 }}
+            xAxisLabelTextStyle={{ color: COLORS.textTertiary, fontSize: 9 }}
+            rulesType={'dashed'}
+            rulesColor={COLORS.borderDefault}
+            dataPointsColor={'#A89060'}
+            dataPointsRadius={3}
+            isAnimated
+            focusEnabled
+            showTextOnFocus
+            textShiftY={-10}
+            textColor={COLORS.textPrimary}
+            textFontSize={11}
+            showStripOnFocus
+            stripColor={'rgba(168,144,96,0.5)'}
+            focusedDataPointColor={'#1A1A1A'}
+            focusedDataPointRadius={6}
+            height={180}
+            width={SW - 88}
+          />
+        </View>
+
+        {/* Receipts vs Payments */}
+        <View style={s.chartCard}>
+          <View style={s.chartHeader}>
+            <Text style={s.chartTitle}>Receipts vs Payments</Text>
             <View style={s.legend}>
-              <View style={s.legendRow}><View style={[s.dot, { backgroundColor: '#2D7D46' }]} /><Text style={s.legendTxt}>Receipts</Text></View>
-              <View style={s.legendRow}><View style={[s.dot, { backgroundColor: '#DC2626' }]} /><Text style={s.legendTxt}>Payments</Text></View>
+              <View style={[s.legendDot, { backgroundColor: '#A89060' }]} />
+              <Text style={s.legendTxt}>Receipts</Text>
+              <View style={[s.legendDot, { backgroundColor: '#3A3A3A' }]} />
+              <Text style={s.legendTxt}>Payments</Text>
             </View>
           </View>
-          <RvPChart />
+          <BarChart
+            data={BAR_DATA}
+            width={SW - 88}
+            height={160}
+            maxValue={160000}
+            noOfSections={4}
+            yAxisLabelWidth={52}
+            yAxisLabelTexts={Y_LABELS}
+            yAxisTextStyle={{ color: COLORS.textTertiary, fontSize: 10 }}
+            xAxisLabelTextStyle={{ color: COLORS.textTertiary, fontSize: 9 }}
+            rulesType={'dashed'}
+            rulesColor={COLORS.borderDefault}
+            isAnimated
+            barBorderRadius={2}
+          />
         </View>
 
         {/* Recent Transactions */}
-        <View style={s.card}>
-          <Text style={s.cardTitle}>Recent Transactions</Text>
-          {TRANSACTIONS.map((t, i) => (
-            <View key={t.id} style={[s.txRow, i < TRANSACTIONS.length - 1 && s.txBorder]}>
-              <View style={[s.txIcon, { backgroundColor: t.color + '15' }]}>
-                <Ionicons name={t.type === 'Receipt' ? 'arrow-down' : 'arrow-up'} size={14} color={t.color} />
+        <View style={s.recentCard}>
+          <View style={s.recentHeader}>
+            <Text style={s.chartTitle}>Recent Transactions</Text>
+            <TouchableOpacity
+              style={s.viewAllBtn}
+              onPress={() => router.push('/kpi/cash-register' as any)}
+              activeOpacity={0.7}
+            >
+              <Text style={s.viewAllTxt}>View All</Text>
+              <Ionicons name="chevron-forward" size={14} color={'#A89060'} />
+            </TouchableOpacity>
+          </View>
+          {RECENT_TXN.map((txn, idx) => (
+            <TouchableOpacity
+              key={txn.id}
+              style={[s.txRow, idx < RECENT_TXN.length - 1 && s.txBorder]}
+              activeOpacity={0.7}
+              onPress={() => router.push({
+                pathname: '/voucher/preview' as any,
+                params: {
+                  type: txn.type === 'in' ? 'receipt' : 'payment',
+                  voucherNumber: txn.ref,
+                  date: `${txn.date} 2025`,
+                  mode: 'Cash In Hand',
+                  ...(txn.type === 'in'
+                    ? { receivedFrom: txn.desc }
+                    : { paidTo: txn.desc }),
+                  amount: txn.amount,
+                  narration: '\u2014',
+                },
+              })}
+            >
+              <View style={[s.txIconBox, { backgroundColor: txn.type === 'in' ? COLORS.positiveBg : COLORS.negativeBg }]}>
+                <Ionicons
+                  name={txn.type === 'in' ? 'arrow-down-outline' : 'arrow-up-outline'}
+                  size={16}
+                  color={txn.type === 'in' ? COLORS.positive : COLORS.negative}
+                />
               </View>
               <View style={s.txInfo}>
-                <Text style={s.txTitle}>{t.title}</Text>
-                <Text style={s.txRef}>{t.ref} · {t.date}</Text>
+                <Text style={s.txDesc}>{txn.desc}</Text>
+                <Text style={s.txMeta}>{` ${txn.ref} \u00b7 ${txn.date}`}</Text>
               </View>
-              <View style={s.txRight}>
-                <Text style={[s.txAmount, { color: t.color }]}>{t.type === 'Payment' ? '-' : '+'}{t.amount}</Text>
-                <Text style={[s.txType, { color: t.color }]}>{t.type}</Text>
-              </View>
-            </View>
+              <Text style={[s.txAmt, { color: txn.type === 'in' ? COLORS.positive : COLORS.negative }]}>
+                {txn.type === 'in' ? '+' : '-'}{txn.amount}
+              </Text>
+            </TouchableOpacity>
           ))}
         </View>
-        <View style={{ height: 40 }} />
+
+        <View style={{ height: 100 }} />
       </ScrollView>
+
+      <DateRangePickerModal
+        visible={showDatePick}
+        fromDate={dateFrom}
+        toDate={dateTo}
+        onApply={(f, t) => { setDateFrom(f); setDateTo(t); }}
+        onClose={() => setShowDatePick(false)}
+      />
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.pageBg },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 14, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  backBtn: { width: 40, alignItems: 'flex-start' },
-  headerTitle: { flex: 1, fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
-  exportBtn: { width: 40, alignItems: 'flex-end' },
-  periodRow: { flexDirection: 'row', gap: 8, paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  periodBtn: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: RADIUS.full, backgroundColor: COLORS.pageBg },
-  periodActive: { backgroundColor: COLORS.brandPrimary },
-  periodTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
-  periodActiveTxt: { color: COLORS.white },
-  scroll: { flex: 1 },
-  metricsScroll: { paddingVertical: SPACING.md },
-  metricsContent: { paddingHorizontal: SPACING.md, gap: 10 },
-  metricCard: { width: 140, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, padding: 12, borderWidth: 1, borderColor: COLORS.borderDefault, gap: 4 },
-  metricIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  metricVal: { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary, marginTop: 4 },
-  metricLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
-  metricSub: { fontSize: 10, color: '#2D7D46' },
-  card: { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  cardTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 12 },
-  chartNote: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#F0FBF4', padding: 8, borderRadius: RADIUS.sm },
-  chartNoteTxt: { fontSize: TYPOGRAPHY.xs, color: '#2D7D46', flex: 1 },
-  legend: { flexDirection: 'row', gap: 10 },
-  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  legendTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
-  txRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 10 },
+  safe:   { flex: 1, backgroundColor: COLORS.pageBg },
+  scroll: { paddingTop: SPACING.sm },
+
+  header:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 14, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  headerBtn:   { width: 40 },
+  headerTitle: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
+
+  filterRow:   { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  dateChip:    { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault },
+  dateChipTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+
+  carouselWrap: { marginTop: SPACING.md, marginBottom: SPACING.sm },
+  cardItem:     { width: SW },
+  sumCard:      { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, paddingHorizontal: 16, paddingVertical: 16, marginHorizontal: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
+  sumIconBox:   { width: 48, height: 48, borderRadius: 8, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  sumTextWrap:  { flex: 1, gap: 4 },
+  sumLabel:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  sumAmount:    { fontSize: TYPOGRAPHY.xl, fontWeight: '800', color: COLORS.textPrimary },
+  trendBadge:   { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: RADIUS.full, flexShrink: 0 },
+  trendTxt:     { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
+  dots:         { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: 10 },
+  dot:          { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
+  dotActive:    { width: 16, height: 5, borderRadius: 3, backgroundColor: COLORS.textPrimary },
+
+  chartCard:   { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, paddingTop: SPACING.md, overflow: 'hidden' },
+  chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: SPACING.md, marginBottom: 12 },
+  chartTitle:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  chartMeta:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  chartAmt:    { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
+  changeBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: RADIUS.full },
+  changeTxt:   { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
+  chartDate:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500', marginTop: 2 },
+  legend:      { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendDot:   { width: 8, height: 8, borderRadius: 4 },
+  legendTxt:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginRight: 4 },
+
+  recentCard:   { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, paddingHorizontal: SPACING.md, paddingTop: SPACING.md },
+  recentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  viewAllBtn:   { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  viewAllTxt:   { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: '#A89060' },
+
+  txRow:    { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 10 },
   txBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  txIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  txInfo: { flex: 1 },
-  txTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  txRef: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
-  txRight: { alignItems: 'flex-end' },
-  txAmount: { fontSize: TYPOGRAPHY.sm, fontWeight: '700' },
-  txType: { fontSize: 10, fontWeight: '600', marginTop: 2 },
+  txIconBox:{ width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  txInfo:   { flex: 1 },
+  txDesc:   { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  txMeta:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+  txAmt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '700', flexShrink: 0 },
 });
