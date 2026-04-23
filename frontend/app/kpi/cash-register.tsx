@@ -181,52 +181,59 @@ export default function CashRegisterScreen() {
           filteredGroups.map(group => (
             <View key={group.group} style={s.groupWrap}>
               <Text style={s.groupLabel}>{group.group}</Text>
-              {group.items.map(item => {
-                const isSel = selected.has(item.id);
-                return (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={[s.txRow, isSel && s.txRowSel]}
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      if (selected.size > 0) {
-                        toggleSelect(item.id);
-                      } else {
-                        router.push({
-                          pathname: '/voucher/preview' as any,
-                          params: {
-                            type: item.type,
-                            voucherNumber: group.group,
-                            date: `${item.date} 2025`,
-                            mode: 'Cash In Hand',
-                            paidTo: item.desc,
-                            receivedFrom: item.desc,
-                            amount: item.amount,
-                            narration: '\u2014',
-                          },
-                        });
-                      }
-                    }}
-                    onLongPress={() => toggleSelect(item.id)}
-                  >
-                    <View style={[s.txIconBox, { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg }]}>
-                      <Ionicons
-                        name={item.positive ? 'arrow-down-circle-outline' : 'arrow-up-circle-outline'}
-                        size={20}
-                        color={item.positive ? COLORS.positive : COLORS.negative}
-                      />
+              <View style={s.listCard}>
+                {group.items.map((item, idx) => {
+                  const isSel = selected.has(item.id);
+                  const typeColor = item.type === 'receipt' ? '#2D7D46' : item.type === 'contra' ? '#A89060' : '#DC2626';
+                  const typeBg    = item.type === 'receipt' ? '#F0FBF4' : item.type === 'contra' ? '#FDF9F4' : '#FFF0F0';
+                  const typeLabel = item.type === 'receipt' ? 'Receipt' : item.type === 'contra' ? 'Contra' : 'Payment';
+                  return (
+                    <View key={item.id}>
+                      <TouchableOpacity
+                        style={[s.txRow, isSel && s.txRowSel]}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          if (selected.size > 0) {
+                            toggleSelect(item.id);
+                          } else {
+                            router.push({
+                              pathname: '/voucher/preview' as any,
+                              params: {
+                                type: item.type,
+                                voucherNumber: group.group,
+                                date: `${item.date} 2025`,
+                                mode: 'Cash In Hand',
+                                paidTo: item.desc,
+                                receivedFrom: item.desc,
+                                amount: item.amount,
+                                narration: '\u2014',
+                              },
+                            });
+                          }
+                        }}
+                        onLongPress={() => toggleSelect(item.id)}
+                      >
+                        {/* Status dot */}
+                        <View style={[s.statusDot, { backgroundColor: typeColor }]} />
+                        <View style={s.txInfo}>
+                          <View style={s.txTopRow}>
+                            <View style={[s.typePill, { backgroundColor: typeBg, borderColor: typeColor }]}>
+                              <Text style={[s.typePillTxt, { color: typeColor }]}>{typeLabel}</Text>
+                            </View>
+                          </View>
+                          <Text style={s.txDesc}>{item.desc}</Text>
+                          <Text style={s.txDate}>{item.date}</Text>
+                        </View>
+                        <Text style={[s.txAmt, { color: item.positive ? COLORS.positive : COLORS.negative }]}>
+                          {item.positive ? '+' : '-'}{item.amount}
+                        </Text>
+                        {isSel && <Ionicons name="checkmark-circle" size={20} color={'#A89060'} style={{ marginLeft: 6 }} />}
+                      </TouchableOpacity>
+                      {idx < group.items.length - 1 && <View style={s.txDivider} />}
                     </View>
-                    <View style={s.txInfo}>
-                      <Text style={s.txDesc}>{item.desc}</Text>
-                      <Text style={s.txDate}>{item.date}</Text>
-                    </View>
-                    <Text style={[s.txAmt, { color: item.positive ? COLORS.positive : COLORS.negative }]}>
-                      {item.positive ? '+' : '-'}{item.amount}
-                    </Text>
-                    {isSel && <Ionicons name="checkmark-circle" size={20} color={'#A89060'} style={{ marginLeft: 6 }} />}
-                  </TouchableOpacity>
-                );
-              })}
+                  );
+                })}
+              </View>
             </View>
           ))
         )}
@@ -265,10 +272,10 @@ const s = StyleSheet.create({
   headerBtn:   { width: 40 },
   headerTitle: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
 
-  filterRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  filterRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, zIndex: 200, elevation: 200 },
   dateChip:    { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault },
   dateChipTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  typeWrap:    { position: 'relative' },
+  typeWrap:    { position: 'relative', zIndex: 201 },
   typeChip:    { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg },
   typeChipTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
   typeChipActive:    { backgroundColor: '#1A1A1A', borderColor: '#1A1A1A' },
@@ -296,15 +303,20 @@ const s = StyleSheet.create({
   emptyWrap:  { alignItems: 'center', paddingVertical: 60, gap: 12 },
   emptyTxt:   { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textSecondary },
 
-  groupWrap:  { paddingHorizontal: SPACING.md, marginBottom: SPACING.xs },
-  groupLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4, marginTop: 10 },
-  txRow:      { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 14, borderWidth: 1, borderColor: COLORS.borderDefault },
-  txRowSel:   { borderColor: '#A89060', borderWidth: 1.5 },
-  txIconBox:  { width: 38, height: 38, borderRadius: 8, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  txInfo:     { flex: 1 },
+  groupWrap:  { paddingHorizontal: SPACING.md, marginBottom: SPACING.sm },
+  groupLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6, marginTop: 12 },
+  listCard:   { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
+  txRow:      { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: SPACING.md, paddingVertical: 14 },
+  txRowSel:   { backgroundColor: '#A8906012' },
+  statusDot:  { width: 8, height: 8, borderRadius: 4, flexShrink: 0, marginTop: 2 },
+  txInfo:     { flex: 1, gap: 3 },
+  txTopRow:   { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  typePill:   { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: RADIUS.full, borderWidth: 1 },
+  typePillTxt:{ fontSize: 10, fontWeight: '700' },
   txDesc:     { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  txDate:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
-  txAmt:      { fontSize: TYPOGRAPHY.sm, fontWeight: '700', flexShrink: 0 },
+  txDate:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  txAmt:      { fontSize: TYPOGRAPHY.sm, fontWeight: '800', flexShrink: 0 },
+  txDivider:  { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: SPACING.md },
 
   shareBtnWrap: { paddingHorizontal: SPACING.md, paddingVertical: 12, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
   shareBtn:     { backgroundColor: '#1A1A1A', borderRadius: RADIUS.lg, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },

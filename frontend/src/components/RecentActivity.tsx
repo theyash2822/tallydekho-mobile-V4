@@ -76,31 +76,31 @@ const ActivityItem: React.FC<{ item: Activity }> = ({ item }) => {
   );
 };
 
-const RecentActivity: React.FC<RecentActivityProps> = ({ activities, onSeeAll }) => (
-  <View testID="recent-activity" style={styles.container}>
-    <View style={styles.header}>
-      <Text style={styles.sectionTitle}>Recent Activity</Text>
-      <TouchableOpacity testID="see-all-activity" onPress={onSeeAll} activeOpacity={0.7}>
-        <Text style={styles.seeAll}>See all</Text>
-      </TouchableOpacity>
-    </View>
-    <View style={styles.card}>
-      {activities.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="receipt-outline" size={28} color={COLORS.textTertiary} />
-          <Text style={styles.emptyText}>No recent activity</Text>
-        </View>
-      ) : (
-        activities.map((item, idx) => (
-          <View key={item.id}>
-            <ActivityItem item={item} />
-            {idx < activities.length - 1 && <View style={styles.sep} />}
+const RecentActivity: React.FC<RecentActivityProps> = ({ activities }) => {
+  const displayed = activities.slice(0, 6);
+  return (
+    <View testID="recent-activity" style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.sectionTitle}>Recent Activity</Text>
+      </View>
+      <View style={styles.card}>
+        {displayed.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="receipt-outline" size={28} color={COLORS.textTertiary} />
+            <Text style={styles.emptyText}>No recent activity</Text>
           </View>
-        ))
-      )}
+        ) : (
+          displayed.map((item, idx) => (
+            <View key={item.id}>
+              <ActivityItem item={item} />
+              {idx < displayed.length - 1 && <View style={styles.sep} />}
+            </View>
+          ))
+        )}
+      </View>
     </View>
-  </View>
-);
+  );
+};
 
 const styles = StyleSheet.create({
   container: { marginHorizontal: SPACING.md, marginBottom: SPACING.md },
@@ -123,8 +123,8 @@ const styles = StyleSheet.create({
     width: 34, height: 34, borderRadius: 10,
     alignItems: 'center', justifyContent: 'center',
   },
-  txIconCredit: { backgroundColor: COLORS.positiveBg },
-  txIconDebit:  { backgroundColor: COLORS.negativeBg },
+  txIconCredit: { backgroundColor: COLORS.pageBg },
+  txIconDebit:  { backgroundColor: COLORS.pageBg },
   // Legacy icon/avatar
   iconBox: {
     width: 34, height: 34, borderRadius: 8,

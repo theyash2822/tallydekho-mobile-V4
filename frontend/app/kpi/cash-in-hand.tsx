@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, FlatList,
-  Dimensions, NativeSyntheticEvent, NativeScrollEvent,
+  Dimensions, NativeSyntheticEvent, NativeScrollEvent, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,9 +32,19 @@ const REC_K  = [95,112,88,126,134,122,99,115,133,145,138,121,106,127,140,148,143
 const PMT_K  = [82,99,75,108,115,103,84,98,115,123,121,98,87,108,118,126,120,112,95,115,127,130,118,108,117,122,131,138,132,121];
 
 const BAR_DATA = REC_K.flatMap((r, i) => [
-  { value: r * 1000,        frontColor: '#A89060', label: `${i + 1}`, spacing: 2,  barWidth: 7 },
-  { value: PMT_K[i] * 1000, frontColor: '#3A3A3A', spacing: 12, barWidth: 7 },
+  {
+    value: r * 1000,
+    frontColor: '#A89060',
+    label: (i === 0 || (i + 1) % 5 === 0) ? `${i + 1}` : '',
+    spacing: 3,
+    barWidth: 9,
+  },
+  { value: PMT_K[i] * 1000, frontColor: '#3A3A3A', spacing: 18, barWidth: 9 },
 ]);
+
+// Chart widths for horizontal scroll
+const LINE_CHART_W = 30 * 34;   // 30 days × 34px spacing
+const BAR_CHART_W  = 30 * 39;   // 30 day-pairs × 39px
 
 const Y_LABELS = ['₹0', '₹40K', '₹80K', '₹1.2L', '₹1.6L'];
 
@@ -165,41 +175,43 @@ export default function CashInHandScreen() {
             </View>
             <Text style={s.chartDate}>30 days</Text>
           </View>
-          <LineChart
-            data={LINE_DATA}
-            areaChart
-            curved
-            color={'#A89060'}
-            thickness={2}
-            startFillColor={'rgba(168,144,96,0.3)'}
-            endFillColor={'rgba(168,144,96,0.05)'}
-            startOpacity={0.9}
-            endOpacity={0.1}
-            initialSpacing={16}
-            spacing={28}
-            maxValue={160000}
-            noOfSections={4}
-            yAxisLabelWidth={52}
-            yAxisLabelTexts={Y_LABELS}
-            yAxisTextStyle={{ color: COLORS.textTertiary, fontSize: 10 }}
-            xAxisLabelTextStyle={{ color: COLORS.textTertiary, fontSize: 9 }}
-            rulesType={'dashed'}
-            rulesColor={COLORS.borderDefault}
-            dataPointsColor={'#A89060'}
-            dataPointsRadius={3}
-            isAnimated
-            focusEnabled
-            showTextOnFocus
-            textShiftY={-10}
-            textColor={COLORS.textPrimary}
-            textFontSize={11}
-            showStripOnFocus
-            stripColor={'rgba(168,144,96,0.5)'}
-            focusedDataPointColor={'#1A1A1A'}
-            focusedDataPointRadius={6}
-            height={180}
-            width={SW - 88}
-          />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 16 }}>
+            <LineChart
+              data={LINE_DATA}
+              areaChart
+              curved
+              color={'#A89060'}
+              thickness={2}
+              startFillColor={'rgba(168,144,96,0.3)'}
+              endFillColor={'rgba(168,144,96,0.05)'}
+              startOpacity={0.9}
+              endOpacity={0.1}
+              initialSpacing={16}
+              spacing={34}
+              maxValue={180000}
+              noOfSections={4}
+              yAxisLabelWidth={52}
+              yAxisLabelTexts={Y_LABELS}
+              yAxisTextStyle={{ color: COLORS.textTertiary, fontSize: 10 }}
+              xAxisLabelTextStyle={{ color: COLORS.textTertiary, fontSize: 9 }}
+              rulesType={'dashed'}
+              rulesColor={COLORS.borderDefault}
+              dataPointsColor={'#A89060'}
+              dataPointsRadius={3}
+              isAnimated
+              focusEnabled
+              showTextOnFocus
+              textShiftY={-10}
+              textColor={COLORS.textPrimary}
+              textFontSize={11}
+              showStripOnFocus
+              stripColor={'rgba(168,144,96,0.5)'}
+              focusedDataPointColor={'#1A1A1A'}
+              focusedDataPointRadius={6}
+              height={180}
+              width={LINE_CHART_W}
+            />
+          </ScrollView>
         </View>
 
         {/* Receipts vs Payments */}
@@ -213,21 +225,23 @@ export default function CashInHandScreen() {
               <Text style={s.legendTxt}>Payments</Text>
             </View>
           </View>
-          <BarChart
-            data={BAR_DATA}
-            width={SW - 88}
-            height={160}
-            maxValue={160000}
-            noOfSections={4}
-            yAxisLabelWidth={52}
-            yAxisLabelTexts={Y_LABELS}
-            yAxisTextStyle={{ color: COLORS.textTertiary, fontSize: 10 }}
-            xAxisLabelTextStyle={{ color: COLORS.textTertiary, fontSize: 9 }}
-            rulesType={'dashed'}
-            rulesColor={COLORS.borderDefault}
-            isAnimated
-            barBorderRadius={2}
-          />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 16 }}>
+            <BarChart
+              data={BAR_DATA}
+              width={BAR_CHART_W}
+              height={160}
+              maxValue={180000}
+              noOfSections={4}
+              yAxisLabelWidth={52}
+              yAxisLabelTexts={Y_LABELS}
+              yAxisTextStyle={{ color: COLORS.textTertiary, fontSize: 10 }}
+              xAxisLabelTextStyle={{ color: COLORS.textTertiary, fontSize: 9 }}
+              rulesType={'dashed'}
+              rulesColor={COLORS.borderDefault}
+              isAnimated
+              barBorderRadius={2}
+            />
+          </ScrollView>
         </View>
 
         {/* Recent Transactions */}
@@ -240,7 +254,7 @@ export default function CashInHandScreen() {
               activeOpacity={0.7}
             >
               <Text style={s.viewAllTxt}>View All</Text>
-              <Ionicons name="chevron-forward" size={14} color={'#A89060'} />
+              <Ionicons name="chevron-forward" size={14} color={COLORS.textPrimary} />
             </TouchableOpacity>
           </View>
           {RECENT_TXN.map((txn, idx) => (
@@ -263,7 +277,7 @@ export default function CashInHandScreen() {
                 },
               })}
             >
-              <View style={[s.txIconBox, { backgroundColor: txn.type === 'in' ? COLORS.positiveBg : COLORS.negativeBg }]}>
+              <View style={[s.txIconBox, { backgroundColor: COLORS.pageBg }]}>
                 <Ionicons
                   name={txn.type === 'in' ? 'arrow-down-outline' : 'arrow-up-outline'}
                   size={16}
@@ -320,7 +334,7 @@ const s = StyleSheet.create({
   dot:          { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
   dotActive:    { width: 16, height: 5, borderRadius: 3, backgroundColor: COLORS.textPrimary },
 
-  chartCard:   { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, paddingTop: SPACING.md, overflow: 'hidden' },
+  chartCard:   { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, paddingTop: SPACING.md },
   chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: SPACING.md, marginBottom: 12 },
   chartTitle:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   chartMeta:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
@@ -335,7 +349,7 @@ const s = StyleSheet.create({
   recentCard:   { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, paddingHorizontal: SPACING.md, paddingTop: SPACING.md },
   recentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   viewAllBtn:   { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  viewAllTxt:   { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: '#A89060' },
+  viewAllTxt:   { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary },
 
   txRow:    { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 10 },
   txBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
