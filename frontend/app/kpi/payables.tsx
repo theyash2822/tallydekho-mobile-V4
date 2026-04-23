@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, FlatList,
   Dimensions, NativeSyntheticEvent, NativeScrollEvent,
@@ -48,6 +48,33 @@ export default function PayablesScreen() {
   const [showDatePick, setShowDatePick] = useState(false);
   const [dateFrom,     setDateFrom]     = useState('30/09/24');
   const [dateTo,       setDateTo]       = useState('23/04/25');
+  const [activeChips,  setActiveChips]  = useState<Set<string>>(new Set());
+
+  // Auto-scroll aging carousel every 3s
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setAgingIdx(prev => {
+        const next = (prev + 1) % AGING_CARDS.length;
+        agingRef.current?.scrollToOffset({ offset: next * SW, animated: true });
+        return next;
+      });
+    }, 3000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const toggleChip = (chip: 'overdue' | 'payments') => {
+    setActiveChips(prev => {
+      const next = new Set(prev);
+      if (next.has(chip)) {
+        next.delete(chip);
+        if (chip === 'overdue') setActiveTab('recent');
+      } else {
+        next.add(chip);
+        if (chip === 'overdue') setActiveTab('overdue');
+      }
+      return next;
+    });
+  };
 
   const fmtRange = () => {
     const fmt = (s: string) => {
@@ -80,11 +107,19 @@ export default function PayablesScreen() {
           <Text style={s.dateChipTxt}>{fmtRange()}</Text>
           <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
         </TouchableOpacity>
-        <TouchableOpacity style={s.filterChip} activeOpacity={0.7}>
-          <Text style={s.filterChipTxt}>Overdue</Text>
+        <TouchableOpacity
+          style={[s.filterChip, activeChips.has('overdue') && s.filterChipActive]}
+          onPress={() => toggleChip('overdue')}
+          activeOpacity={0.7}
+        >
+          <Text style={[s.filterChipTxt, activeChips.has('overdue') && s.filterChipActiveTxt]}>Overdue</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={s.filterChip} activeOpacity={0.7}>
-          <Text style={s.filterChipTxt}>Payments</Text>
+        <TouchableOpacity
+          style={[s.filterChip, activeChips.has('payments') && s.filterChipActive]}
+          onPress={() => toggleChip('payments')}
+          activeOpacity={0.7}
+        >
+          <Text style={[s.filterChipTxt, activeChips.has('payments') && s.filterChipActiveTxt]}>Payments</Text>
         </TouchableOpacity>
       </View>
 
@@ -176,12 +211,12 @@ export default function PayablesScreen() {
                   })}
                 >
                   <View style={s.partyIconBox}>
-                    <Ionicons name="business-outline" size={18} color={COLORS.positive} />
+                    <Ionicons name="business-outline" size={18} color="#A89060" />
                   </View>
                   <View style={s.listInfo}>
                     <View style={s.listTopRow}>
                       <Text style={s.listParty}>{item.party}</Text>
-                      <Text style={s.listRef}> \u00b7 {item.ref}</Text>
+                      <Text style={s.listRef}>{` · ${item.ref}`}</Text>
                     </View>
                     <Text style={s.listDate}>{item.date}</Text>
                   </View>
@@ -200,7 +235,7 @@ export default function PayablesScreen() {
                   style={[s.listRow, idx < OVERDUE_PARTIES.length - 1 && s.listRowBorder]}
                 >
                   <View style={s.partyIconBox}>
-                    <Ionicons name="business-outline" size={18} color={COLORS.positive} />
+                    <Ionicons name="business-outline" size={18} color="#A89060" />
                   </View>
                   <View style={s.listInfo}>
                     <Text style={s.listParty}>{item.party}</Text>
@@ -238,8 +273,10 @@ const s = StyleSheet.create({
   filterRow:     { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   dateChip:      { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault },
   dateChipTxt:   { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  filterChip:    { paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg },
-  filterChipTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+  filterChip:        { paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg },
+  filterChipTxt:     { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+  filterChipActive:  { backgroundColor: '#1A1A1A', borderColor: '#1A1A1A' },
+  filterChipActiveTxt: { color: '#FFFFFF' },
 
   agingSection:  { marginTop: SPACING.md, marginBottom: SPACING.sm },
   agingItem:     { width: SW },
@@ -265,7 +302,7 @@ const s = StyleSheet.create({
   listWrap:      { paddingHorizontal: SPACING.md, paddingBottom: 8 },
   listRow:       { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 10 },
   listRowBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  partyIconBox:  { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.positiveBg, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  partyIconBox:  { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F5F0E8', borderWidth: 1, borderColor: '#E8DFC8', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   listInfo:      { flex: 1 },
   listTopRow:    { flexDirection: 'row', alignItems: 'center' },
   listParty:     { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
