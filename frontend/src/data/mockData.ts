@@ -41,7 +41,7 @@ export const MOCK_KPI_STRIP = [
 export const MOCK_METRICS = [
   { id: 'expenses', label: 'Expenses', amount: '₹1,42,000', change: 12.0, positive: false, icon: 'trending-up-outline', route: '/expenses' },
   { id: 'sales', label: 'Sales', amount: '₹92,000', change: 5.1, positive: true, icon: 'stats-chart-outline', route: '/sales' },
-  { id: 'purchases', label: 'Purchases', amount: '₹74,500', change: 8.7, positive: true, icon: 'cart-outline', route: '/purchase/register' },
+  { id: 'purchases', label: 'Purchases', amount: '₹74,500', change: 8.7, positive: true, icon: 'cart-outline', route: '/purchase' },
 ];
 
 export const MOCK_CASHFLOW = {

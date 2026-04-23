@@ -1,240 +1,501 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  Dimensions, FlatList, NativeSyntheticEvent, NativeScrollEvent,
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { MOCK_PURCHASE_REGISTER } from '../../src/data/mockData';
+import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
-const QUICK_LINKS = [
-  { label: 'Register',     icon: 'document-text-outline', route: '/purchase/register',    color: '#2D7D46', bg: '#F0FBF4' },
-  { label: 'Orders',       icon: 'clipboard-outline',     route: '/purchase/order',       color: '#2563EB', bg: '#EFF6FF' },
-  { label: 'Debit Notes',  icon: 'return-up-forward-outline', route: '/purchase/debit-note', color: '#C0392B', bg: '#FDECEA' },
-] as const;
+const AMBER      = '#A89060';
+const AMBER_BG   = '#FDF9F4';
+const BANNER_RED = '#E53935';
+const { width: SW } = Dimensions.get('window');
+const CARD_W   = SW - SPACING.md * 2;
+const BANNER_W = SW - SPACING.md * 2;
 
-const TOP_VENDORS = [
-  { id: 'TV1', name: 'Global Supplies Co.',  gstin: '27AABCG1234F1Z5', total: '₹3,82,000', orders: 10, badge: '🥇', color: '#D97706' },
-  { id: 'TV2', name: 'Prime Distributors',   gstin: '07AADCP9876G2Z1', total: '₹2,61,500', orders: 8,  badge: '🥈', color: '#6B7280' },
-  { id: 'TV3', name: 'ShreeStar Traders',    gstin: '24AABCS3456K4Z2', total: '₹1,88,000', orders: 7,  badge: '🥉', color: '#92400E' },
-  { id: 'TV4', name: 'National Wholesalers', gstin: '07AABCN5678H1Z3', total: '₹1,54,000', orders: 5,  badge: '',    color: '#2563EB' },
-  { id: 'TV5', name: 'Metro Raw Materials',  gstin: '27AABCM2345J3Z9', total: '₹1,12,500', orders: 4,  badge: '',    color: '#2563EB' },
+// ─── Data ────────────────────────────────────────────────────────────────────
+const METRIC_CARDS = [
+  { id: 'today',       label: 'Today',        icon: 'calendar-outline',        amount: '₹92,000',     pct: '+12%', pos: true  },
+  { id: 'mtd',         label: 'MTD',          icon: 'calendar-number-outline', amount: '₹2,45,500',   pct: '+8%',  pos: true  },
+  { id: 'ytd',         label: 'YTD',          icon: 'ribbon-outline',          amount: '₹8,92,750',   pct: '+15%', pos: true  },
+  { id: 'outstanding', label: 'Outstanding',  icon: 'wallet-outline',          amount: '₹12,01,950',  pct: '+11%', pos: true  },
+  { id: 'debit',       label: 'Debit Notes',  icon: 'return-up-forward-outline', amount: '₹18,500',   pct: '+5%',  pos: true  },
+  { id: 'avg',         label: 'Avg Ticket',   icon: 'ticket-outline',          amount: '₹45,200',     pct: '-3%',  pos: false },
 ];
 
-export default function PurchaseHubScreen() {
+const RECENT_INVOICES = [
+  { id: 'CN-00712',  vendor: 'ABC Traders',    date: '01/01/26', time: '09:00 AM', amount: '₹3,200',  status: 'unpaid' },
+  { id: 'INV-30974', vendor: 'PQR Exports',    date: '31/12/25', time: '08:30 AM', amount: '₹42,500', status: 'paid'   },
+  { id: 'INV-30973', vendor: 'Kumar & Sons',   date: '28/12/25', time: '02:00 PM', amount: '₹28,000', status: 'paid'   },
+  { id: 'INV-30972', vendor: 'XYZ Retail',     date: '25/12/25', time: '11:00 AM', amount: '₹15,500', status: 'unpaid' },
+  { id: 'INV-30971', vendor: 'Machinery Corp.',date: '20/12/25', time: '09:30 AM', amount: '₹67,000', status: 'paid'   },
+];
+
+const TOP_VENDORS = [
+  { id: 'TV1', name: 'ABC Traders',     transactions: 15, amount: '₹1,25,000', color: '#2563EB' },
+  { id: 'TV2', name: 'PQR Exports',     transactions: 8,  amount: '₹89,500',   color: '#D97706' },
+  { id: 'TV3', name: 'XYZ Retail',      transactions: 12, amount: '₹67,200',   color: '#059669' },
+  { id: 'TV4', name: 'Kumar & Sons',    transactions: 6,  amount: '₹55,400',   color: '#7C3AED' },
+  { id: 'TV5', name: 'Delhi Suppliers', transactions: 9,  amount: '₹48,200',   color: '#0891B2' },
+];
+
+const BANNERS = [
+  { id: 'b1', bold: '8 invoices', sub: 'pending payment to vendors', action: 'Pay Now' },
+  { id: 'b2', bold: '3 debit notes', sub: 'awaiting settlement', action: 'Settle Now' },
+  { id: 'b3', bold: 'GST ITC pending', sub: 'purchase reconciliation due', action: 'Reconcile' },
+];
+
+const STATUS_COLOR: Record<string, string> = {
+  paid:   '#2D7D46',
+  unpaid: '#DC2626',
+  irm:    '#787774',
+};
+const STATUS_LABEL: Record<string, string> = {
+  paid:   'Paid',
+  unpaid: 'Unpaid',
+  irm:    'IRM',
+};
+
+// ─── Screen ──────────────────────────────────────────────────────────────────
+export default function PurchaseScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [showCreate, setShowCreate] = useState(false);
-  const [activeTab, setActiveTab] = useState<'recent' | 'vendors'>('recent');
-  const recent = MOCK_PURCHASE_REGISTER.invoices.slice(0, 4);
+
+  const [tab,      setTab]      = useState<'recent' | 'vendors'>('recent');
+  const [filter,   setFilter]   = useState('All');
+  const [dropdown, setDropdown] = useState(false);
+
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [fromDate,       setFromDate]       = useState('01/01/25');
+  const [toDate,         setToDate]         = useState('22/04/25');
+
+  const metricRef = useRef<FlatList>(null);
+  const bannerRef = useRef<FlatList>(null);
+  const [metricIdx, setMetricIdx] = useState(0);
+  const [bannerIdx, setBannerIdx] = useState(0);
+
+  // Auto-scroll metric cards every 3s
+  useEffect(() => {
+    const t = setInterval(() => {
+      setMetricIdx(prev => {
+        const next = (prev + 1) % METRIC_CARDS.length;
+        metricRef.current?.scrollToIndex({ index: next, animated: true, viewPosition: 0 });
+        return next;
+      });
+    }, 3000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Auto-scroll banners every 3.5s
+  useEffect(() => {
+    const t = setInterval(() => {
+      setBannerIdx(prev => {
+        const next = (prev + 1) % BANNERS.length;
+        bannerRef.current?.scrollToIndex({ index: next, animated: true, viewPosition: 0 });
+        return next;
+      });
+    }, 3500);
+    return () => clearInterval(t);
+  }, []);
+
+  // Filtered recent list
+  const recent = RECENT_INVOICES.filter(inv => {
+    if (filter === 'Paid')   return inv.status === 'paid';
+    if (filter === 'Unpaid') return inv.status === 'unpaid';
+    return true;
+  }).slice(0, 5);
 
   return (
-    <SafeAreaView style={s.safe}>
+    <SafeAreaView style={s.safe} edges={['top']}>
+
+      {/* ── Header ─────────────────────────────────────────────────── */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top:8,bottom:8,left:8,right:8 }}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={s.backBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Purchase</Text>
-        <TouchableOpacity style={s.headerAddBtn} onPress={() => setShowCreate(true)} activeOpacity={0.7}>
-          <Ionicons name="add" size={22} color={COLORS.textPrimary} />
-        </TouchableOpacity>
+        <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-        {/* Summary */}
-        <View style={s.summaryCard}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.sumLabel}>Today's Purchases</Text>
-            <Text style={s.sumAmount}>₹74,500</Text>
-          </View>
-          <View style={s.sumRight}>
-            <View style={s.sumRow}><Text style={s.sumSubLabel}>MTD</Text><Text style={s.sumSubVal}>₹12,74,560</Text></View>
-            <View style={s.sumRow}><Text style={s.sumSubLabel}>YTD</Text><Text style={s.sumSubVal}>₹58,00,000</Text></View>
-          </View>
-          <View style={s.chip}>
-            <Ionicons name="trending-up" size={12} color="#6EE7A0" />
-            <Text style={s.chipTxt}>+8.7%</Text>
+      {/* ── Filter Row ──────────────────────────────────────────────── */}
+      <View style={s.filterRow}>
+        <TouchableOpacity style={s.datePill} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
+          <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
+          <Text style={s.dateTxt}>{fromDate} – {toDate}</Text>
+          <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
+        </TouchableOpacity>
+
+        <View style={s.statusWrap}>
+          <TouchableOpacity
+            style={[s.statusPill, dropdown && s.statusPillOpen]}
+            onPress={() => setDropdown(v => !v)}
+            activeOpacity={0.7}
+          >
+            <Text style={s.statusTxt}>{filter}</Text>
+            <Ionicons name={dropdown ? 'chevron-up' : 'chevron-down'} size={13} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+          {dropdown && (
+            <View style={s.dropMenu}>
+              {['All', 'Paid', 'Unpaid'].map(opt => (
+                <TouchableOpacity
+                  key={opt}
+                  style={s.dropItem}
+                  activeOpacity={0.7}
+                  onPress={() => { setFilter(opt); setDropdown(false); }}
+                >
+                  <Text style={[s.dropTxt, filter === opt && s.dropTxtActive]}>{opt}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+      </View>
+
+      {dropdown && (
+        <TouchableOpacity style={s.dropOverlay} onPress={() => setDropdown(false)} activeOpacity={1} />
+      )}
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+
+        {/* ── Metric Cards Carousel ─────────────────────────────────── */}
+        <View style={s.carouselWrap}>
+          <FlatList
+            ref={metricRef}
+            data={METRIC_CARDS}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={c => c.id}
+            getItemLayout={(_, index) => ({ length: CARD_W, offset: CARD_W * index, index })}
+            onScrollToIndexFailed={() => {}}
+            onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
+              const idx = Math.round(e.nativeEvent.contentOffset.x / CARD_W);
+              setMetricIdx(idx);
+            }}
+            renderItem={({ item: c }) => (
+              <View style={s.metricCard}>
+                <View style={s.mIcon}>
+                  <Ionicons name={c.icon as any} size={22} color={COLORS.textSecondary} />
+                </View>
+                <Text style={s.mLabel}>{c.label}</Text>
+                <Text style={s.mAmount}>{c.amount}</Text>
+                <View style={[s.pctBadge, { backgroundColor: c.pos ? COLORS.positiveBg : COLORS.negativeBg }]}>
+                  <Ionicons name={c.pos ? 'trending-up' : 'trending-down'} size={11} color={c.pos ? COLORS.positive : COLORS.negative} />
+                  <Text style={[s.pctTxt, { color: c.pos ? COLORS.positive : COLORS.negative }]}>{c.pct}</Text>
+                </View>
+              </View>
+            )}
+          />
+          {/* Carousel Dots */}
+          <View style={s.dotsRow}>
+            {METRIC_CARDS.map((_, i) => (
+              <View key={i} style={[s.dot, i === metricIdx && s.dotActive]} />
+            ))}
           </View>
         </View>
 
-        {/* Quick Access */}
-        <View style={s.secRow}><Text style={s.secTitle}>Quick Access</Text></View>
-        <View style={s.grid}>
-          {QUICK_LINKS.map(link => (
-            <TouchableOpacity key={link.label} style={s.gridCard} onPress={() => router.push(link.route as any)} activeOpacity={0.75}>
-              <View style={[s.gridIcon, { backgroundColor: link.bg }]}>
-                <Ionicons name={link.icon as any} size={22} color={link.color} />
-              </View>
-              <Text style={s.gridLabel}>{link.label}</Text>
+        {/* ── Tabs ─────────────────────────────────────────────────── */}
+        <View style={s.tabRow}>
+          {(['recent', 'vendors'] as const).map(t => (
+            <TouchableOpacity
+              key={t}
+              style={[s.tabBtn, tab === t && s.tabActive]}
+              onPress={() => setTab(t)}
+              activeOpacity={0.7}
+            >
+              <Text style={[s.tabTxt, tab === t && s.tabActiveTxt]}>
+                {t === 'recent' ? 'Recent Purchases' : 'Top Vendors'}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* ---- TABS ---- */}
-        <View style={s.tabRow}>
-          <TouchableOpacity style={[s.tabBtn, activeTab === 'recent' && s.tabActive]} onPress={() => setActiveTab('recent')} activeOpacity={0.7}>
-            <Text style={[s.tabTxt, activeTab === 'recent' && s.tabActiveTxt]}>Recent Purchases</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[s.tabBtn, activeTab === 'vendors' && s.tabActive]} onPress={() => setActiveTab('vendors')} activeOpacity={0.7}>
-            <Text style={[s.tabTxt, activeTab === 'vendors' && s.tabActiveTxt]}>Top Vendors</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Recent Purchases Tab */}
-        {activeTab === 'recent' && (
-          <>
-            <View style={s.secRow}>
-              <Text style={s.secTitle}></Text>
-              <TouchableOpacity onPress={() => router.push('/purchase/register' as any)}>
-                <Text style={s.viewAll}>View All →</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={s.listCard}>
-              {recent.map((inv, idx) => (
-                <View key={inv.id}>
-                  <TouchableOpacity
-                    style={s.listRow}
-                    activeOpacity={0.7}
-                    onPress={() => router.push(`/document/${inv.id}?type=purchase_invoice` as any)}
-                  >
-                    <View style={[s.dot, { backgroundColor: inv.status === 'paid' ? COLORS.positive : inv.status === 'unpaid' ? COLORS.negative : '#9CA3AF' }]} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.listParty}>{inv.vendor}</Text>
-                      <Text style={s.listMeta}>{inv.id} · {inv.date}</Text>
+        {/* ── Recent Purchases ──────────────────────────────────────── */}
+        {tab === 'recent' && (
+          <View style={s.listSection}>
+            {recent.length === 0 ? (
+              <View style={s.emptyBox}>
+                <Ionicons name="cart-outline" size={28} color={COLORS.textTertiary} />
+                <Text style={s.emptyTxt}>No {filter.toLowerCase()} invoices</Text>
+              </View>
+            ) : (
+              recent.map(inv => (
+                <TouchableOpacity
+                  key={inv.id}
+                  style={s.itemCard}
+                  activeOpacity={0.7}
+                  onPress={() => router.push(`/document/${inv.id}?type=purchase_invoice` as any)}
+                >
+                  {/* Status Row */}
+                  <View style={s.itemStatusRow}>
+                    <View style={[s.statusDot, { backgroundColor: STATUS_COLOR[inv.status] ?? '#9CA3AF' }]} />
+                    <Text style={[s.itemStatusTxt, { color: STATUS_COLOR[inv.status] ?? '#9CA3AF' }]}>
+                      {STATUS_LABEL[inv.status] ?? inv.status}
+                    </Text>
+                    <Text style={s.itemBullet}> • </Text>
+                    <Text style={s.itemInvId}>{inv.id}</Text>
+                  </View>
+                  {/* Content Row */}
+                  <View style={s.itemContentRow}>
+                    <View style={s.tallyIcon}>
+                      <Ionicons name="return-down-back-outline" size={16} color={AMBER} />
                     </View>
-                    <View style={s.listRight}>
-                      <Text style={s.listAmt}>{inv.amount}</Text>
-                      <View style={[s.statusBadge, { backgroundColor: inv.status === 'paid' ? '#F0FBF4' : '#FDECEA' }]}>
-                        <Text style={[s.statusTxt, { color: inv.status === 'paid' ? '#2D7D46' : '#DC2626' }]}>{inv.status}</Text>
-                      </View>
+                    <View style={s.itemCenter}>
+                      <Text style={s.itemVendor} numberOfLines={1}>{inv.vendor}</Text>
+                      <Text style={s.itemMeta}>{inv.date} | {inv.time}</Text>
                     </View>
-                  </TouchableOpacity>
-                  {idx < recent.length - 1 && <View style={s.div} />}
-                </View>
-              ))}
-            </View>
-          </>
-        )}
-
-        {/* Top Vendors Tab */}
-        {activeTab === 'vendors' && (
-          <View style={s.listCard}>
-            {TOP_VENDORS.map((vendor, idx) => (
-              <View key={vendor.id}>
-                <TouchableOpacity style={s.partyRow} activeOpacity={0.7}>
-                  <View style={s.rankCol}>
-                    {vendor.badge ? (
-                      <Text style={s.rankBadge}>{vendor.badge}</Text>
-                    ) : (
-                      <Text style={s.rankNum}>#{idx + 1}</Text>
-                    )}
-                  </View>
-                  <View style={[s.partyAvatar, { backgroundColor: vendor.color + '20' }]}>
-                    <Text style={[s.partyAvatarTxt, { color: vendor.color }]}>{vendor.name.charAt(0)}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.partyName}>{vendor.name}</Text>
-                    <Text style={s.partyGstin}>{vendor.gstin}</Text>
-                  </View>
-                  <View style={s.partyRight}>
-                    <Text style={s.partyTotal}>{vendor.total}</Text>
-                    <Text style={s.partyInvoices}>{vendor.orders} orders</Text>
+                    <Text style={s.itemAmt}>{inv.amount}</Text>
                   </View>
                 </TouchableOpacity>
-                {idx < TOP_VENDORS.length - 1 && <View style={s.div} />}
-              </View>
-            ))}
+              ))
+            )}
+            <TouchableOpacity
+              style={s.viewAllBtn}
+              onPress={() => router.push('/purchase/register' as any)}
+              activeOpacity={0.7}
+            >
+              <Text style={s.viewAllTxt}>View All</Text>
+              <Ionicons name="chevron-forward" size={14} color={COLORS.textPrimary} />
+            </TouchableOpacity>
           </View>
         )}
+
+        {/* ── Top Vendors ──────────────────────────────────────────── */}
+        {tab === 'vendors' && (
+          <View style={s.listSection}>
+            {TOP_VENDORS.map(vendor => (
+              <TouchableOpacity
+                key={vendor.id}
+                style={s.vendorCard}
+                activeOpacity={0.7}
+                onPress={() => router.push('/purchase/register' as any)}
+              >
+                <View style={[s.vendorAvatar, { backgroundColor: vendor.color + '22' }]}>
+                  <Text style={[s.vendorAvatarTxt, { color: vendor.color }]}>{vendor.name.charAt(0)}</Text>
+                </View>
+                <View style={s.vendorInfo}>
+                  <Text style={s.vendorName}>{vendor.name}</Text>
+                  <Text style={s.vendorTxn}>{vendor.transactions} transactions</Text>
+                </View>
+                <Text style={s.itemAmt}>{vendor.amount}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={s.viewAllBtn}
+              onPress={() => router.push('/ledger' as any)}
+              activeOpacity={0.7}
+            >
+              <Text style={s.viewAllTxt}>View All</Text>
+              <Ionicons name="chevron-forward" size={14} color={COLORS.textPrimary} />
+            </TouchableOpacity>
+          </View>
+        )}
+
       </ScrollView>
 
-      {/* FAB */}
-      <TouchableOpacity
-        style={[s.fab, { bottom: insets.bottom + 20 }]}
-        onPress={() => setShowCreate(true)}
-        activeOpacity={0.85}
-      >
-        <Ionicons name="add" size={28} color={COLORS.white} />
-      </TouchableOpacity>
-
-      {/* Create Modal */}
-      <Modal visible={showCreate} transparent animationType="slide" onRequestClose={() => setShowCreate(false)}>
-        <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setShowCreate(false)} />
-        <View style={s.sheet}>
-          <View style={s.sheetHandle} />
-          <Text style={s.sheetTitle}>Create New</Text>
-          <TouchableOpacity style={s.createOpt} onPress={() => { setShowCreate(false); router.push('/purchase/create-invoice' as any); }} activeOpacity={0.7}>
-            <View style={[s.createIcon, { backgroundColor: '#F0FBF4' }]}>
-              <Ionicons name="scan-outline" size={22} color="#2D7D46" />
+      {/* ── Sticky Banner Carousel ─────────────────────────────────── */}
+      <View style={[s.bannerWrap, { paddingBottom: insets.bottom > 0 ? insets.bottom : 8 }]}>
+        <FlatList
+          ref={bannerRef}
+          data={BANNERS}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={b => b.id}
+          scrollEnabled={false}
+          snapToInterval={BANNER_W + 10}
+          decelerationRate="fast"
+          getItemLayout={(_, index) => ({ length: BANNER_W + 10, offset: (BANNER_W + 10) * index, index })}
+          onScrollToIndexFailed={() => {}}
+          contentContainerStyle={{ paddingHorizontal: SPACING.md, gap: 10 }}
+          renderItem={({ item: b }) => (
+            <View style={s.bannerCard}>
+              <View style={s.bannerLeft}>
+                <View style={s.bannerIconWrap}>
+                  <Ionicons name="warning-outline" size={15} color={COLORS.white} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.bannerBold} numberOfLines={1}>{b.bold}</Text>
+                  <Text style={s.bannerSub} numberOfLines={1}>{b.sub}</Text>
+                </View>
+              </View>
+              <TouchableOpacity style={s.bannerBtn} activeOpacity={0.85}>
+                <Text style={s.bannerBtnTxt}>{b.action}</Text>
+                <Ionicons name="chevron-forward" size={11} color={BANNER_RED} />
+              </TouchableOpacity>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.createLabel}>Purchase Invoice</Text>
-              <Text style={s.createSub}>Scan bill with OCR or enter details manually</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
-          </TouchableOpacity>
-          <View style={{ height: 24 }} />
+          )}
+        />
+        {/* Banner Dots */}
+        <View style={s.bannerDots}>
+          {BANNERS.map((_, i) => (
+            <View key={i} style={[s.bannerDot, i === bannerIdx && s.bannerDotActive]} />
+          ))}
         </View>
-      </Modal>
+      </View>
+
+      {/* ── Date Range Picker ──────────────────────────────────────── */}
+      <DateRangePickerModal
+        visible={showDatePicker}
+        fromDate={fromDate}
+        toDate={toDate}
+        onApply={(from, to) => { setFromDate(from); setToDate(to); setShowDatePicker(false); }}
+        onClose={() => setShowDatePicker(false)}
+      />
+
     </SafeAreaView>
   );
 }
 
+// ─── Styles ──────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.pageBg },
-  header: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+
+  // Header
+  header: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: COLORS.cardBg,
+    paddingHorizontal: SPACING.md, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
   backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
-  summaryCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.brandPrimary, margin: SPACING.md, borderRadius: RADIUS.lg, padding: SPACING.md, gap: 10 },
-  sumLabel: { fontSize: TYPOGRAPHY.xs, color: 'rgba(255,255,255,0.65)', marginBottom: 4 },
-  sumAmount: { fontSize: TYPOGRAPHY.xl, fontWeight: '700', color: COLORS.white },
-  sumRight: { gap: 3 }, sumRow: { flexDirection: 'row', gap: 6 },
-  sumSubLabel: { fontSize: TYPOGRAPHY.xs, color: 'rgba(255,255,255,0.55)', width: 28 },
-  sumSubVal: { fontSize: TYPOGRAPHY.xs, color: COLORS.white, fontWeight: '600' },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(45,125,70,0.35)', paddingHorizontal: 8, paddingVertical: 5, borderRadius: RADIUS.full },
-  chipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: '#6EE7A0' },
-  secRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: SPACING.md, marginTop: SPACING.md, marginBottom: 10 },
-  secTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-  viewAll: { fontSize: TYPOGRAPHY.sm, color: COLORS.positive, fontWeight: '600' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: SPACING.md, gap: 10 },
-  gridCard: { width: '30.5%', alignItems: 'center', gap: 8, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, paddingVertical: 14, paddingHorizontal: 8, borderWidth: 1, borderColor: COLORS.borderDefault },
-  gridIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  gridLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textPrimary, textAlign: 'center' },
-  listCard: { backgroundColor: COLORS.cardBg, marginHorizontal: SPACING.md, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
-  listRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 14, gap: 10 },
-  dot: { width: 9, height: 9, borderRadius: 5 },
-  listParty: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  listMeta: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
-  listAmt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  div: { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 16 },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
+
+  // Filter Row
+  filterRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: SPACING.md, paddingVertical: 10,
+    backgroundColor: COLORS.cardBg,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+    zIndex: 20,
+  },
+  datePill: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: COLORS.pageBg,
+    borderRadius: RADIUS.full, paddingHorizontal: 14, paddingVertical: 10,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  dateTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
+  statusWrap: { position: 'relative', zIndex: 100 },
+  statusPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: COLORS.pageBg,
+    borderRadius: RADIUS.full, paddingHorizontal: 16, paddingVertical: 10,
+    borderWidth: 1, borderColor: COLORS.borderDefault, minWidth: 88,
+  },
+  statusPillOpen: { borderColor: COLORS.brandPrimary },
+  statusTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
+  dropMenu: {
+    position: 'absolute', top: 46, right: 0,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault,
+    minWidth: 130, zIndex: 200,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12, shadowRadius: 8, elevation: 8,
+  },
+  dropItem: { paddingHorizontal: SPACING.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  dropTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
+  dropTxtActive: { color: COLORS.textPrimary, fontWeight: '700' },
+  dropOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50 },
+
+  // Metric Carousel
+  carouselWrap: { paddingTop: SPACING.md },
+  metricCard: {
+    width: CARD_W,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACING.md, paddingVertical: 16,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    marginLeft: SPACING.md,
+  },
+  mIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
+  mLabel: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
+  mAmount: { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
+  pctBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 5, borderRadius: RADIUS.full },
+  pctTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
+
+  // Carousel Dots
+  dotsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: 10, marginBottom: 4 },
+  dot:       { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
+  dotActive: { width: 16, height: 5, borderRadius: 3, backgroundColor: COLORS.brandPrimary },
+
   // Tabs
-  tabRow: { flexDirection: 'row', marginHorizontal: SPACING.md, marginTop: SPACING.md, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full, padding: 3, borderWidth: 1, borderColor: COLORS.borderDefault },
-  tabBtn: { flex: 1, paddingVertical: 9, alignItems: 'center' as const, borderRadius: RADIUS.full },
-  tabActive: { backgroundColor: COLORS.brandPrimary },
-  tabTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600' as const, color: COLORS.textSecondary },
-  tabActiveTxt: { color: COLORS.white },
-  listRight: { alignItems: 'flex-end' as const, gap: 4 },
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: RADIUS.full },
-  statusTxt: { fontSize: 10, fontWeight: '700' as const },
-  // Top Vendors
-  partyRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 12, gap: 10 },
-  rankCol: { width: 32, alignItems: 'center' as const },
-  rankBadge: { fontSize: 18 },
-  rankNum: { fontSize: TYPOGRAPHY.sm, fontWeight: '700' as const, color: COLORS.textTertiary },
-  partyAvatar: { width: 38, height: 38, borderRadius: 19, alignItems: 'center' as const, justifyContent: 'center' as const },
-  partyAvatarTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '800' as const },
-  partyName: { fontSize: TYPOGRAPHY.sm, fontWeight: '700' as const, color: COLORS.textPrimary },
-  partyGstin: { fontSize: 10, color: COLORS.textTertiary, marginTop: 2 },
-  partyRight: { alignItems: 'flex-end' as const },
-  partyTotal: { fontSize: TYPOGRAPHY.sm, fontWeight: '800' as const, color: COLORS.textPrimary },
-  partyInvoices: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
-  headerAddBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.borderDefault },
-  fab: { position: 'absolute', right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 8px rgba(0, 0, 0, 0.25)', elevation: 8 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
-  sheet: { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12 },
-  sheetHandle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-  sheetTitle: { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary, paddingHorizontal: SPACING.md, marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  createOpt: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: SPACING.md, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  createIcon: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
-  createLabel: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-  createSub: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+  tabRow: {
+    flexDirection: 'row',
+    marginHorizontal: SPACING.md, marginTop: SPACING.md,
+    backgroundColor: COLORS.pageBg,
+    borderRadius: RADIUS.full, padding: 3,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  tabBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: RADIUS.full },
+  tabActive: { backgroundColor: COLORS.cardBg, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2 },
+  tabTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+  tabActiveTxt: { color: COLORS.textPrimary },
+
+  // List Section
+  listSection: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, gap: 8 },
+
+  // Invoice Item Card (Recent Purchases)
+  itemCard: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 12,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    gap: 8,
+  },
+  itemStatusRow:   { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  statusDot:       { width: 8, height: 8, borderRadius: 4 },
+  itemStatusTxt:   { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
+  itemBullet:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  itemInvId:       { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, flex: 1 },
+  itemContentRow:  { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  tallyIcon:       { width: 38, height: 38, borderRadius: 10, backgroundColor: AMBER_BG, alignItems: 'center', justifyContent: 'center' },
+  itemCenter:      { flex: 1 },
+  itemVendor:      { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  itemMeta:        { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 3 },
+  itemAmt:         { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
+
+  // Vendor Card (Top Vendors)
+  vendorCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 14,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  vendorAvatar:    { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  vendorAvatarTxt: { fontSize: TYPOGRAPHY.lg, fontWeight: '800' },
+  vendorInfo:      { flex: 1 },
+  vendorName:      { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  vendorTxn:       { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 3 },
+
+  // View All
+  viewAllBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.full, paddingVertical: 12, paddingHorizontal: 32,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    alignSelf: 'center', marginTop: 4, minWidth: 150,
+  },
+  viewAllTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  emptyBox:   { alignItems: 'center', paddingVertical: 32, gap: 8 },
+  emptyTxt:   { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
+
+  // Banner Carousel
+  bannerWrap:      { backgroundColor: COLORS.pageBg, paddingTop: SPACING.sm },
+  bannerCard:      { width: BANNER_W, backgroundColor: BANNER_RED, borderRadius: RADIUS.lg, paddingHorizontal: SPACING.md, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  bannerLeft:      { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  bannerIconWrap:  { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  bannerBold:      { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white },
+  bannerSub:       { fontSize: 10, color: 'rgba(255,255,255,0.85)', marginTop: 1 },
+  bannerBtn:       { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: COLORS.white, borderRadius: RADIUS.full, paddingHorizontal: 10, paddingVertical: 7, flexShrink: 0 },
+  bannerBtnTxt:    { fontSize: 10, fontWeight: '700', color: BANNER_RED },
+  bannerDots:      { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, paddingTop: 6, paddingBottom: 4 },
+  bannerDot:       { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
+  bannerDotActive: { width: 14, height: 5, borderRadius: 3, backgroundColor: COLORS.brandPrimary },
 });
