@@ -340,7 +340,26 @@ export default function PaymentsScreen() {
           </View>
 
           {filteredPmt.map((p, idx) => (
-            <View key={p.id} style={[s.txRow, idx < filteredPmt.length - 1 && s.txBorder]}>
+            <TouchableOpacity
+              key={p.id}
+              style={[s.txRow, idx < filteredPmt.length - 1 && s.txBorder]}
+              activeOpacity={0.7}
+              onPress={() => router.push({
+                pathname: '/voucher/preview' as any,
+                params: {
+                  type: 'payment',
+                  voucherNumber: p.ref,
+                  date: `${p.date} 2025`,
+                  mode: p.mode === 'Bank'
+                    ? 'Bank \u2014 HDFC CA-1234 \u00b7 Ref No\u2022 UTR 214589763'
+                    : 'Cash In Hand',
+                  paidTo: p.party,
+                  paymentRef: 'IV-87087',
+                  amount: p.amount,
+                  narration: '\u2014',
+                },
+              })}
+            >
               <View style={s.txIconBox}>
                 <Ionicons name="send-outline" size={17} color={COLORS.textSecondary} />
               </View>
@@ -355,7 +374,7 @@ export default function PaymentsScreen() {
                 <Text style={s.txAmt}>{p.amount}</Text>
                 {p.paid && <Ionicons name="checkmark-circle" size={16} color={COLORS.positive} style={{ marginTop: 2 }} />}
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
 

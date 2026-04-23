@@ -309,7 +309,26 @@ export default function ReceiptsScreen() {
           </View>
 
           {filtered.map((r, idx) => (
-            <View key={r.id} style={[s.txRow, idx < filtered.length - 1 && s.txBorder]}>
+            <TouchableOpacity
+              key={r.id}
+              style={[s.txRow, idx < filtered.length - 1 && s.txBorder]}
+              activeOpacity={0.7}
+              onPress={() => router.push({
+                pathname: '/voucher/preview' as any,
+                params: {
+                  type: 'receipt',
+                  voucherNumber: r.ref,
+                  date: `${r.date} 2025`,
+                  mode: r.mode === 'Bank'
+                    ? 'Bank \u2014 HDFC CA-1234 \u00b7 Ref No\u2022 UTR 214589763'
+                    : 'Cash In Hand',
+                  receivedFrom: r.party,
+                  paymentRef: 'IV-87087',
+                  amount: r.amount,
+                  narration: '\u2014',
+                },
+              })}
+            >
               <View style={s.txIconBox}>
                 <Ionicons name="download-outline" size={17} color={COLORS.textSecondary} />
               </View>
@@ -324,7 +343,7 @@ export default function ReceiptsScreen() {
                 <Text style={[s.txAmt, { color: COLORS.positive }]}>{r.amount}</Text>
                 {r.verified && <Ionicons name="checkmark-circle" size={16} color={COLORS.positive} style={{ marginTop: 2 }} />}
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
 

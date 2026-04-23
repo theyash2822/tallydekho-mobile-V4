@@ -219,6 +219,56 @@ async def get_sales_invoices():
     }
 
 
+@api_router.get("/kpi/payables")
+async def get_payables_kpi():
+    return {
+        "aging": [
+            {"id": "total",  "label": "Total Due", "amount": "₹1,25,000", "trend": "+18%", "positive": True},
+            {"id": "b1_30",  "label": "1-30d",     "amount": "₹45,000",   "trend": "+12%", "positive": True},
+            {"id": "b31_60", "label": "31-60d",    "amount": "₹65,000",   "trend": "+25%", "positive": True},
+            {"id": "b61_90", "label": "61-90d",    "amount": "₹55,000",   "trend": "-8%",  "positive": False},
+            {"id": "b90p",   "label": "90+d",      "amount": "₹1,85,000", "trend": "+28%", "positive": True},
+        ],
+        "recent": [
+            {"ref": "RC-1578", "party": "ABC Traders",   "date": "10 Nov", "amount": "₹54,000"},
+            {"ref": "RC-1579", "party": "XYZ Retail",    "date": "12 Dec", "amount": "₹54,000"},
+            {"ref": "RC-1580", "party": "ABC Traders",   "date": "15 Nov", "amount": "₹54,000"},
+            {"ref": "RC-1581", "party": "XYZ Retail",    "date": "18 Dec", "amount": "₹54,000"},
+        ],
+        "overdue_parties": [
+            {"party": "Tech Solutions Ltd", "days": "28d", "amount": "₹1,25 K"},
+            {"party": "Global Suppliers",   "days": "35d", "amount": "₹95 K"},
+            {"party": "Innovation Corp",    "days": "42d", "amount": "₹1,85 K"},
+            {"party": "Quality Imports",    "days": "31d", "amount": "₹75 K"},
+        ],
+    }
+
+
+@api_router.get("/kpi/receivables")
+async def get_receivables_kpi():
+    return {
+        "aging": [
+            {"id": "total",  "label": "Total Due", "amount": "₹75,000",   "trend": "+12%", "positive": True},
+            {"id": "b1_30",  "label": "1-30d",     "amount": "₹28,000",   "trend": "+8%",  "positive": True},
+            {"id": "b31_60", "label": "31-60d",    "amount": "₹22,000",   "trend": "+15%", "positive": True},
+            {"id": "b61_90", "label": "61-90d",    "amount": "₹18,000",   "trend": "-5%",  "positive": False},
+            {"id": "b90p",   "label": "90+d",      "amount": "₹7,000",    "trend": "+20%", "positive": True},
+        ],
+        "recent": [
+            {"ref": "RC-1578", "party": "ABC Traders",  "date": "10 Nov", "amount": "₹54,000"},
+            {"ref": "RC-1579", "party": "XYZ Retail",   "date": "12 Dec", "amount": "₹54,000"},
+            {"ref": "RC-1580", "party": "Metro Infra",  "date": "20 Nov", "amount": "₹42,000"},
+            {"ref": "RC-1581", "party": "AGL Traders",  "date": "22 Dec", "amount": "₹28,500"},
+        ],
+        "overdue_parties": [
+            {"party": "ABC Traders",      "days": "35d", "amount": "₹3,75 K"},
+            {"party": "PQR Exports",      "days": "42d", "amount": "₹3,75 K"},
+            {"party": "XYZ Warehousing",  "days": "28d", "amount": "₹3,75 K"},
+            {"party": "LMN Distributors", "days": "55d", "amount": "₹3,75 K"},
+        ],
+    }
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
