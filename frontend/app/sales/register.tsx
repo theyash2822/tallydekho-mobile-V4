@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Dimensions, Share, Alert,
@@ -27,7 +27,43 @@ const STATUS_LABEL: Record<string, string> = {
   credit_note: 'Credit Note',
 };
 
-const MONTHS = ['Jan 25', 'Feb 25', 'Mar 25', 'Apr 25', 'May 25', 'Jun 25', 'Jul 25', 'Aug 25', 'Sep 25'];
+// ─── Month-grouped mock data ─────────────────────────────────────────────────
+type Invoice = {
+  id: string; party: string; date: string;
+  time: string; amount: string; status: string;
+};
+type MonthGroup = { id: string; label: string; invoices: Invoice[] };
+
+const MONTH_GROUPS: MonthGroup[] = [
+  {
+    id: 'apr25', label: 'Apr 25',
+    invoices: [
+      { id: 'INV-30985', party: 'Raj Enterprises',   date: '28/04/25', time: '11:00 AM', amount: '₹54,000', status: 'paid'   },
+      { id: 'INV-30984', party: 'Metro Systems',      date: '22/04/25', time: '10:30 AM', amount: '₹31,500', status: 'unpaid' },
+      { id: 'INV-30983', party: 'ABC Traders',        date: '15/04/25', time: '09:00 AM', amount: '₹42,500', status: 'paid'   },
+      { id: 'CN-00716',  party: 'Kumar & Sons',       date: '10/04/25', time: '02:00 PM', amount: '₹4,800', status: 'credit_note' },
+    ],
+  },
+  {
+    id: 'mar25', label: 'Mar 25',
+    invoices: [
+      { id: 'INV-30982', party: 'Delhi Distributors', date: '29/03/25', time: '03:00 PM', amount: '₹67,200', status: 'paid'   },
+      { id: 'INV-30981', party: 'Sharma Electronics', date: '20/03/25', time: '11:00 AM', amount: '₹28,800', status: 'unpaid' },
+      { id: 'INV-30980', party: 'PQR Exports',        date: '12/03/25', time: '09:30 AM', amount: '₹19,500', status: 'paid'   },
+    ],
+  },
+  {
+    id: 'feb25', label: 'Feb 25',
+    invoices: [
+      { id: 'INV-30979', party: 'Mumbai Wholesale',   date: '25/02/25', time: '10:00 AM', amount: '₹55,000', status: 'paid'   },
+      { id: 'INV-30978', party: 'Tech Corp',          date: '14/02/25', time: '11:30 AM', amount: '₹32,000', status: 'unpaid' },
+    ],
+  },
+  {
+    id: 'jan25', label: 'Jan 25',
+    invoices: MOCK_SALES_REGISTER.invoices as Invoice[],
+  },
+];
 
 export default function SalesRegisterScreen() {
   const router  = useRouter();
@@ -37,24 +73,31 @@ export default function SalesRegisterScreen() {
   const [search,         setSearch]         = useState('');
   const [statusFilter,   setStatusFilter]   = useState('All');
   const [dropdown,       setDropdown]       = useState(false);
-  const [activeMonth,    setActiveMonth]    = useState('Jan 25');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [fromDate,       setFromDate]       = useState('01/01/25');
-  const [toDate,         setToDate]         = useState('31/01/25');
+  const [toDate,         setToDate]         = useState('30/04/25');
+
+  // Collapsible months — all open by default
+  const [expanded, setExpanded] = useState<Set<string>>(new Set(MONTH_GROUPS.map(g => g.id)));
+  const toggleMonth = (id: string) =>
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
 
   // Multi-select
-  const [selected,    setSelected]    = useState<string[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
   const isSelecting = selected.length > 0;
-
   const toggleSelect = (id: string) =>
     setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
-
-  const selectAll = () => setSelected(filtered.map(inv => inv.id));
+  const allInvoices = MONTH_GROUPS.flatMap(g => g.invoices);
+  const selectAll   = () => setSelected(allInvoices.map(inv => inv.id));
   const clearSelect = () => setSelected([]);
 
   const handleShare = async () => {
-    const items = filtered.filter(inv => selected.includes(inv.id));
-    const lines = items.map(inv => `${inv.id}  ${inv.party}  ${inv.amount}  ${STATUS_LABEL[inv.status]}`);
+    const items = allInvoices.filter(inv => selected.includes(inv.id));
+    const lines = items.map(inv => `${inv.id}  ${inv.party}  ${inv.amount}  ${STATUS_LABEL[inv.status] ?? inv.status}`);
     try {
       await Share.share({ message: `TallyDekho — Sales Register\n${lines.join('\n')}`, title: 'Share Invoices' });
     } catch {
@@ -68,16 +111,23 @@ export default function SalesRegisterScreen() {
     clearSelect();
   };
 
-  const filtered = data.invoices.filter(inv => {
-    const matchSearch  = !search || inv.party.toLowerCase().includes(search.toLowerCase()) || inv.id.toLowerCase().includes(search.toLowerCase());
-    const matchStatus  = statusFilter === 'All' || STATUS_LABEL[inv.status] === statusFilter;
-    return matchSearch && matchStatus;
-  });
+  // Filter helper
+  const filterInvoices = (invoices: Invoice[]) =>
+    invoices.filter(inv => {
+      const matchSearch = !search ||
+        inv.party.toLowerCase().includes(search.toLowerCase()) ||
+        inv.id.toLowerCase().includes(search.toLowerCase());
+      const matchStatus = statusFilter === 'All' || STATUS_LABEL[inv.status] === statusFilter;
+      return matchSearch && matchStatus;
+    });
+
+  // Summary stats across all months
+  const allFiltered = MONTH_GROUPS.flatMap(g => filterInvoices(g.invoices));
 
   return (
     <SafeAreaView style={s.safe}>
 
-      {/* ── Header ─────────────────────────────────────────────── */}
+      {/* ── Header ────────────────────────────────────────────── */}
       {isSelecting ? (
         <View style={s.header}>
           <TouchableOpacity onPress={clearSelect} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -98,7 +148,7 @@ export default function SalesRegisterScreen() {
         </View>
       )}
 
-      {/* ── Filter Row ───────────────────────────────────────────── */}
+      {/* ── Filter Row ──────────────────────────────────────────── */}
       <View style={s.filterRow}>
         <TouchableOpacity style={s.datePill} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
           <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
@@ -133,23 +183,7 @@ export default function SalesRegisterScreen() {
         <TouchableOpacity style={s.dropOverlay} onPress={() => setDropdown(false)} activeOpacity={1} />
       )}
 
-      {/* ── Month Scroller ────────────────────────────────────────── */}
-      <View style={s.monthBar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.monthScroll}>
-          {MONTHS.map(m => (
-            <TouchableOpacity
-              key={m}
-              style={[s.monthPill, activeMonth === m && s.monthPillActive]}
-              onPress={() => setActiveMonth(m)}
-              activeOpacity={0.7}
-            >
-              <Text style={[s.monthTxt, activeMonth === m && s.monthTxtActive]}>{m}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* ── Search Bar ──────────────────────────────────────────── */}
+      {/* ── Search ─────────────────────────────────────────────── */}
       <View style={s.searchBar}>
         <Ionicons name="search" size={16} color={COLORS.textTertiary} />
         <TextInput
@@ -166,17 +200,15 @@ export default function SalesRegisterScreen() {
         )}
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: isSelecting ? 120 : 40 }}
-      >
-        {/* ── Stats 2×2 Grid ───────────────────────────────────────── */}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: isSelecting ? 120 : 40 }}>
+
+        {/* ── Stats 2×2 Grid ──────────────────────────────────────── */}
         <View style={s.statsGrid}>
           {[
             { label: 'Total', value: data.summary.total },
             { label: 'Tax',   value: data.summary.tax   },
             { label: 'AVG',   value: data.summary.avg   },
-            { label: 'Docs',  value: String(data.summary.docs) },
+            { label: 'Docs',  value: String(allFiltered.length) },
           ].map(stat => (
             <View key={stat.label} style={s.statCell}>
               <Text style={s.statValue} numberOfLines={1} adjustsFontSizeToFit>{stat.value}</Text>
@@ -185,78 +217,92 @@ export default function SalesRegisterScreen() {
           ))}
         </View>
 
-        {/* ── Section Header ───────────────────────────────────────── */}
-        <View style={s.sectionHeader}>
-          <Text style={s.sectionTitle}>Sales Invoices</Text>
-          <Text style={s.sectionCount}>{filtered.length} records</Text>
-        </View>
+        {/* ── Collapsible Month Sections ────────────────────────────── */}
+        {MONTH_GROUPS.map(group => {
+          const groupInvoices = filterInvoices(group.invoices);
+          if (groupInvoices.length === 0) return null;
+          const isOpen = expanded.has(group.id);
 
-        {/* ── Invoice List ───────────────────────────────────────────── */}
-        <View style={s.listCard}>
-          {filtered.length === 0 ? (
-            <View style={s.emptyState}>
-              <Ionicons name="search-outline" size={32} color={COLORS.textTertiary} />
-              <Text style={s.emptyTxt}>No invoices found</Text>
-            </View>
-          ) : (
-            filtered.map((inv, idx) => {
-              const isSelected = selected.includes(inv.id);
-              return (
-                <View key={inv.id}>
-                  <TouchableOpacity
-                    style={[s.invRow, isSelected && s.invRowSelected]}
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      if (isSelecting) { toggleSelect(inv.id); }
-                      else { router.push(`/document/${inv.id}?type=sales_invoice` as any); }
-                    }}
-                    onLongPress={() => toggleSelect(inv.id)}
-                    delayLongPress={500}
-                  >
-                    {/* Selection circle */}
-                    {isSelecting && (
-                      <View style={[s.selectCircle, isSelected && s.selectCircleActive]}>
-                        {isSelected && <Ionicons name="checkmark" size={12} color={COLORS.white} />}
-                      </View>
-                    )}
-
-                    {/* Left: status dot + info */}
-                    <View style={s.invLeft}>
-                      <View style={[s.statusDot, { backgroundColor: STATUS_COLOR[inv.status] || COLORS.textTertiary }]} />
-                      <View style={s.invInfo}>
-                        <View style={s.invTopRow}>
-                          <Text style={[s.statusLbl, { color: STATUS_COLOR[inv.status] || COLORS.textTertiary }]}>
-                            {STATUS_LABEL[inv.status] || inv.status}
-                          </Text>
-                          <Text style={s.invId}>• {inv.id}</Text>
-                        </View>
-                        <Text style={s.invParty}>{inv.party}</Text>
-                        <Text style={s.invMeta}>{inv.date} | {inv.time}</Text>
-                      </View>
-                    </View>
-
-                    {/* Right: amount + tally icon */}
-                    <View style={s.invRight}>
-                      <Text style={s.invAmt}>{inv.amount}</Text>
-                      <View style={s.tallyIcon}>
-                        <Ionicons name="return-down-back-outline" size={13} color={AMBER} />
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                  {idx < filtered.length - 1 && <View style={s.divider} />}
+          return (
+            <View key={group.id} style={s.monthSection}>
+              {/* Month Header */}
+              <TouchableOpacity
+                style={s.monthHeader}
+                onPress={() => toggleMonth(group.id)}
+                activeOpacity={0.7}
+              >
+                <View style={s.monthHeaderLeft}>
+                  <View style={s.monthDot} />
+                  <Text style={s.monthLabel}>{group.label}</Text>
+                  <Text style={s.monthCount}>{groupInvoices.length} invoices</Text>
                 </View>
-              );
-            })
-          )}
-        </View>
+                <Ionicons
+                  name={isOpen ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={COLORS.textSecondary}
+                />
+              </TouchableOpacity>
+
+              {/* Invoice Card */}
+              {isOpen && (
+                <View style={s.listCard}>
+                  {groupInvoices.map((inv, idx) => {
+                    const isSelected = selected.includes(inv.id);
+                    return (
+                      <View key={inv.id}>
+                        <TouchableOpacity
+                          style={[s.invRow, isSelected && s.invRowSelected]}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            if (isSelecting) { toggleSelect(inv.id); }
+                            else { router.push(`/document/${inv.id}?type=sales_invoice` as any); }
+                          }}
+                          onLongPress={() => toggleSelect(inv.id)}
+                          delayLongPress={500}
+                        >
+                          {isSelecting && (
+                            <View style={[s.selectCircle, isSelected && s.selectCircleActive]}>
+                              {isSelected && <Ionicons name="checkmark" size={12} color={COLORS.white} />}
+                            </View>
+                          )}
+                          <View style={s.invLeft}>
+                            <View style={[s.statusDot, { backgroundColor: STATUS_COLOR[inv.status] ?? COLORS.textTertiary }]} />
+                            <View style={s.invInfo}>
+                              <View style={s.invTopRow}>
+                                <Text style={[s.statusLbl, { color: STATUS_COLOR[inv.status] ?? COLORS.textTertiary }]}>
+                                  {STATUS_LABEL[inv.status] ?? inv.status}
+                                </Text>
+                                <Text style={s.invId}>• {inv.id}</Text>
+                              </View>
+                              <Text style={s.invParty}>{inv.party}</Text>
+                              <Text style={s.invMeta}>{inv.date} | {inv.time}</Text>
+                            </View>
+                          </View>
+                          <View style={s.invRight}>
+                            <Text style={s.invAmt}>{inv.amount}</Text>
+                            <View style={s.tallyIcon}>
+                              <Ionicons name="return-down-back-outline" size={13} color={AMBER} />
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                        {idx < groupInvoices.length - 1 && <View style={s.divider} />}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          );
+        })}
+
       </ScrollView>
 
-      {/* ── Multi-select Bottom Bar ──────────────────────────────── */}
+      {/* ── Multi-select Bottom Bar ───────────────────────────── */}
       {isSelecting && (
         <View style={[s.actionBar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 16 }]}>
           <View style={s.actionBarLeft}>
             <Text style={s.actionCount}>{selected.length} selected</Text>
-            <TouchableOpacity onPress={clearSelect} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity onPress={clearSelect}>
               <Text style={s.cancelTxt}>Cancel</Text>
             </TouchableOpacity>
           </View>
@@ -273,7 +319,7 @@ export default function SalesRegisterScreen() {
         </View>
       )}
 
-      {/* ── Date Range Modal ───────────────────────────────────────── */}
+      {/* ── Date Picker ────────────────────────────────────────── */}
       <DateRangePickerModal
         visible={showDatePicker}
         fromDate={fromDate}
@@ -281,39 +327,21 @@ export default function SalesRegisterScreen() {
         onApply={(from, to) => { setFromDate(from); setToDate(to); setShowDatePicker(false); }}
         onClose={() => setShowDatePicker(false)}
       />
-
     </SafeAreaView>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Styles ────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.pageBg },
 
-  // Header
-  header: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: COLORS.cardBg,
-    paddingHorizontal: SPACING.md, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   backBtn:      { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
   headerTitle:  { flex: 1, textAlign: 'center', fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
   selectAllTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.brandPrimary, paddingRight: 4 },
 
-  // Filter Row
-  filterRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: SPACING.md, paddingVertical: 10,
-    backgroundColor: COLORS.cardBg,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, zIndex: 20,
-  },
-  datePill: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: COLORS.pageBg,
-    borderRadius: RADIUS.full, paddingHorizontal: 14, paddingVertical: 10,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
+  filterRow:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, zIndex: 20 },
+  datePill:      { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.borderDefault },
   dateTxt:       { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
   statusWrap:    { position: 'relative', zIndex: 100 },
   statusPill:    { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.borderDefault, minWidth: 88 },
@@ -325,31 +353,23 @@ const s = StyleSheet.create({
   dropTxtActive: { color: COLORS.textPrimary, fontWeight: '700' },
   dropOverlay:   { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50 },
 
-  // Month scroller
-  monthBar:    { backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  monthScroll: { paddingHorizontal: SPACING.md, paddingVertical: 10, gap: 8 },
-  monthPill:   { paddingHorizontal: 14, paddingVertical: 7, borderRadius: RADIUS.full, backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault },
-  monthPillActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
-  monthTxt:    { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
-  monthTxtActive: { color: COLORS.white },
-
-  // Search
-  searchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.cardBg, marginHorizontal: SPACING.md, marginTop: SPACING.md, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: COLORS.borderDefault },
+  searchBar:   { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.cardBg, marginHorizontal: SPACING.md, marginTop: SPACING.md, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: COLORS.borderDefault },
   searchInput: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
 
-  // Stats Grid
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: SPACING.md, marginTop: SPACING.md, gap: 10 },
   statCell:  { width: (SW - SPACING.md * 2 - 10) / 2, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, padding: 14, borderWidth: 1, borderColor: COLORS.borderDefault },
   statValue: { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
   statLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 4 },
 
-  // Section Header
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: SPACING.md, marginTop: SPACING.md, marginBottom: SPACING.sm },
-  sectionTitle:  { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-  sectionCount:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  // Month sections
+  monthSection: { marginHorizontal: SPACING.md, marginTop: SPACING.md },
+  monthHeader:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 4 },
+  monthHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  monthDot:     { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.brandPrimary },
+  monthLabel:   { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  monthCount:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500' },
 
-  // Invoice List
-  listCard:   { backgroundColor: COLORS.cardBg, marginHorizontal: SPACING.md, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
+  listCard:   { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
   invRow:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 14, gap: 10 },
   invRowSelected: { backgroundColor: COLORS.brandPrimary + '08' },
   invLeft:    { flexDirection: 'row', alignItems: 'flex-start', gap: 10, flex: 1 },
@@ -364,14 +384,10 @@ const s = StyleSheet.create({
   invAmt:     { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
   tallyIcon:  { width: 28, height: 28, borderRadius: 14, backgroundColor: AMBER_BG, alignItems: 'center', justifyContent: 'center' },
   divider:    { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: SPACING.md },
-  emptyState: { alignItems: 'center', paddingVertical: 40, gap: 8 },
-  emptyTxt:   { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
 
-  // Multi-select
   selectCircle:       { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: COLORS.borderDefault, alignItems: 'center', justifyContent: 'center' },
   selectCircleActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
 
-  // Action Bar
   actionBar:     { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, paddingHorizontal: SPACING.md, paddingTop: 14, shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 10 },
   actionBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 12 },
   actionCount:   { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },

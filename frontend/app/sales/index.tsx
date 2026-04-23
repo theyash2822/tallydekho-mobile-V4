@@ -15,7 +15,7 @@ const AMBER_BG   = '#FDF9F4';
 const BANNER_RED = '#E53935';
 const { width: SW } = Dimensions.get('window');
 const CARD_W  = SW - SPACING.md * 2;
-const BANNER_W = SW;
+const BANNER_W = SW - SPACING.md * 2;
 
 // ─── Data ───────────────────────────────────────────────────────────────────
 const METRIC_CARDS = [
@@ -283,31 +283,33 @@ export default function SalesScreen() {
       </ScrollView>
 
       {/* ── Sticky Banner Carousel ─────────────────────────────────── */}
-      <View style={[s.bannerWrap, { paddingBottom: insets.bottom > 0 ? insets.bottom : 14 }]}>
+      <View style={[s.bannerWrap, { paddingBottom: insets.bottom > 0 ? insets.bottom : 8 }]}>
         <FlatList
           ref={bannerRef}
           data={BANNERS}
           horizontal
-          pagingEnabled
           showsHorizontalScrollIndicator={false}
           keyExtractor={b => b.id}
           scrollEnabled={false}
-          getItemLayout={(_, index) => ({ length: BANNER_W, offset: BANNER_W * index, index })}
+          snapToInterval={BANNER_W + 10}
+          decelerationRate="fast"
+          getItemLayout={(_, index) => ({ length: BANNER_W + 10, offset: (BANNER_W + 10) * index, index })}
           onScrollToIndexFailed={() => {}}
+          contentContainerStyle={{ paddingHorizontal: SPACING.md, gap: 10 }}
           renderItem={({ item: b }) => (
-            <View style={[s.bannerCard, { width: BANNER_W }]}>
+            <View style={s.bannerCard}>
               <View style={s.bannerLeft}>
                 <View style={s.bannerIconWrap}>
-                  <Ionicons name="warning-outline" size={17} color={COLORS.white} />
+                  <Ionicons name="warning-outline" size={15} color={COLORS.white} />
                 </View>
-                <View>
-                  <Text style={s.bannerBold}>{b.bold}</Text>
-                  <Text style={s.bannerSub}>{b.sub}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.bannerBold} numberOfLines={1}>{b.bold}</Text>
+                  <Text style={s.bannerSub} numberOfLines={1}>{b.sub}</Text>
                 </View>
               </View>
               <TouchableOpacity style={s.bannerBtn} activeOpacity={0.85}>
                 <Text style={s.bannerBtnTxt}>{b.action}</Text>
-                <Ionicons name="chevron-forward" size={12} color={BANNER_RED} />
+                <Ionicons name="chevron-forward" size={11} color={BANNER_RED} />
               </TouchableOpacity>
             </View>
           )}
@@ -457,15 +459,15 @@ const s = StyleSheet.create({
   viewAllTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
 
   // Banner Carousel
-  bannerWrap:     { backgroundColor: BANNER_RED, paddingTop: 14 },
-  bannerCard:     { paddingHorizontal: SPACING.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  bannerLeft:     { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  bannerIconWrap: { width: 34, height: 34, borderRadius: 17, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center' },
-  bannerBold:     { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
-  bannerSub:      { fontSize: TYPOGRAPHY.xs, color: 'rgba(255,255,255,0.85)', marginTop: 1 },
-  bannerBtn:      { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: COLORS.white, borderRadius: RADIUS.full, paddingHorizontal: 14, paddingVertical: 10 },
-  bannerBtnTxt:   { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: BANNER_RED },
-  bannerDots:     { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, paddingTop: 8, paddingBottom: 4 },
-  bannerDot:      { width: 5, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.4)' },
-  bannerDotActive:{ width: 14, height: 5, borderRadius: 3, backgroundColor: COLORS.white },
+  bannerWrap:     { backgroundColor: COLORS.pageBg, paddingTop: SPACING.sm },
+  bannerCard:     { width: BANNER_W, backgroundColor: BANNER_RED, borderRadius: RADIUS.lg, paddingHorizontal: SPACING.md, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  bannerLeft:     { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  bannerIconWrap: { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  bannerBold:     { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white },
+  bannerSub:      { fontSize: 10, color: 'rgba(255,255,255,0.85)', marginTop: 1 },
+  bannerBtn:      { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: COLORS.white, borderRadius: RADIUS.full, paddingHorizontal: 10, paddingVertical: 7, flexShrink: 0 },
+  bannerBtnTxt:   { fontSize: 10, fontWeight: '700', color: BANNER_RED },
+  bannerDots:     { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, paddingTop: 6, paddingBottom: 4 },
+  bannerDot:      { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
+  bannerDotActive:{ width: 14, height: 5, borderRadius: 3, backgroundColor: COLORS.brandPrimary },
 });
