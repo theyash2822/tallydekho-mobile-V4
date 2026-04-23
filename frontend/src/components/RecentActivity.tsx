@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 
 // Supports both the legacy mock shape AND the new API shape
@@ -24,7 +25,29 @@ interface RecentActivityProps {
   onSeeAll?: () => void;
 }
 
-const ActivityItem: React.FC<{ item: Activity }> = ({ item }) => {
+// ── Map activity label prefix → voucher type ─────────────────────────────────
+function resolveVoucherType(label: string = ''): string {
+  const l = label.toLowerCase();
+  if (l.startsWith('sales invoice'))    return 'receivable_invoice';
+  if (l.startsWith('purchase invoice')) return 'payable_invoice';
+  if (l.startsWith('purchase order'))   return 'payable_invoice';
+  if (l.startsWith('payment received')) return 'receipt';
+  if (l.startsWith('expense voucher'))  return 'payment';
+  if (l.startsWith('bank transfer'))    return 'journal';
+  if (l.startsWith('credit note'))      return 'credit_note';
+  if (l.startsWith('debit note'))       return 'debit_note';
+  if (l.startsWith('delivery note'))    return 'delivery_note';
+  if (l.startsWith('contra'))           return 'contra';
+  return 'payment';
+}
+
+// Extract voucher number from label like "Sales Invoice #INV-2847"
+function extractVoucherNo(label: string = ''): string {
+  const match = label.match(/#([A-Z0-9\-]+)/i);
+  return match ? match[1] : '';
+}
+
+const ActivityItem: React.FC<{ item: Activity; onPress: () => void }> = ({ item, onPress }) => {
   // Prefer API shape, fall back to legacy shape
   const title  = item.label       ?? item.description ?? '';
   const sub    = item.party       ?? '';
@@ -37,7 +60,12 @@ const ActivityItem: React.FC<{ item: Activity }> = ({ item }) => {
   const initial = (item.party?.[0] ?? item.avatar?.[0] ?? 'T').toUpperCase();
 
   return (
-    <View testID={`activity-item-${item.id}`} style={styles.item}>
+    <TouchableOpacity
+      testID={`activity-item-${item.id}`}
+      style={styles.item}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
       {/* Icon / Avatar */}
       {isCredit || isDebit ? (
         <View style={[styles.txIcon, isCredit ? styles.txIconCredit : styles.txIconDebit]}>
@@ -72,12 +100,38 @@ const ActivityItem: React.FC<{ item: Activity }> = ({ item }) => {
         ) : null}
         <Text style={styles.time}>{timing}</Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
 const RecentActivity: React.FC<RecentActivityProps> = ({ activities }) => {
+  const router = useRouter();
   const displayed = activities.slice(0, 6);
+
+  const handlePress = (item: Activity) => {
+    const label      = item.label ?? item.description ?? '';
+    const voucherType = resolveVoucherType(label);
+    const voucherNumber = extractVoucherNo(label);
+    // Strip sign prefix from amount ("+₹18,400" → "₹18,400")
+    const cleanAmount = (item.amount ?? '').replace(/^[+\-]/, '');
+
+    router.push({
+      pathname: '/voucher/preview' as any,
+      params: {
+        type:          voucherType,
+        voucherNumber: voucherNumber,
+        date:          item.date ?? item.time ?? '',
+        party:         item.party ?? '',
+        paidTo:        item.party ?? '',
+        receivedFrom:  item.party ?? '',
+        customer:      item.party ?? '',
+        supplier:      item.party ?? '',
+        amount:        cleanAmount,
+        narration:     '\u2014',
+      },
+    });
+  };
+
   return (
     <View testID="recent-activity" style={styles.container}>
       <View style={styles.header}>
@@ -92,7 +146,7 @@ const RecentActivity: React.FC<RecentActivityProps> = ({ activities }) => {
         ) : (
           displayed.map((item, idx) => (
             <View key={item.id}>
-              <ActivityItem item={item} />
+              <ActivityItem item={item} onPress={() => handlePress(item)} />
               {idx < displayed.length - 1 && <View style={styles.sep} />}
             </View>
           ))
