@@ -131,6 +131,10 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   tabBar: {
+    position: 'absolute',   // float over content — removes React Nav auto-padding gap
+    bottom: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     backgroundColor: COLORS.navBg,
     paddingTop: 8,

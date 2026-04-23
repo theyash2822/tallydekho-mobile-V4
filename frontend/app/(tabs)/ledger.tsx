@@ -1213,7 +1213,7 @@ const fm = StyleSheet.create({
   sideItemActive: { backgroundColor: COLORS.cardBg },
   sideItemTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary, fontWeight: '500' },
   sideItemTxtActive: { color: COLORS.textPrimary, fontWeight: '700' },
-  content: { flex: 1, paddingTop: 4 },
+  content: { flex: 1, paddingTop: 4, paddingBottom: 110 },
   optRow: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
     paddingHorizontal: 16, paddingVertical: 18,

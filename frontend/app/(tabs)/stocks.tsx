@@ -155,7 +155,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary },
   scroll:   { flex: 1 },
-  content:  { padding: SPACING.md, gap: 10 },
+  content:  { padding: SPACING.md, gap: 10, paddingBottom: 110 },
 
   // Shortcut icons
   shortcutRow: {

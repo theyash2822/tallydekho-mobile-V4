@@ -908,7 +908,7 @@ export default function ReportsScreen() {
 const styles = StyleSheet.create({
   safe:    { flex: 1, backgroundColor: COLORS.pageBg },
   scroll:  { flex: 1 },
-  content: { paddingTop: SPACING.md },
+  content: { paddingTop: SPACING.md, paddingBottom: 110 },
 
   // Page header — mirrors Ledger screen
   header: {
