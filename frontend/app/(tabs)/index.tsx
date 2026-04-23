@@ -66,7 +66,7 @@ export default function HomeScreen() {
         kpiRef.current?.scrollToIndex({ index: next, animated: true, viewPosition: 0 });
         return next;
       });
-    }, 2500);
+    }, 4000);
     return () => clearInterval(t);
   }, [kpiData.length]);
 
@@ -171,24 +171,22 @@ export default function HomeScreen() {
       onPress={() => item.route && router.push(item.route as any)}
     >
       <View style={styles.kpiIconBox}>
-        <Ionicons name={item.icon} size={24} color={COLORS.textSecondary} />
+        <Ionicons name={item.icon} size={22} color={COLORS.textSecondary} />
       </View>
-      <View style={styles.kpiTextWrap}>
-        <Text style={styles.kpiLabel} numberOfLines={1}>{item.label}</Text>
-        <Text style={styles.kpiAmount} numberOfLines={1}>{item.amount}</Text>
-        {item.trend && (
-          <View style={[styles.kpiTrendBadge, { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg }]}>
-            <Ionicons
-              name={item.positive ? 'trending-up' : 'trending-down'}
-              size={11}
-              color={item.positive ? COLORS.positive : COLORS.negative}
-            />
-            <Text style={[styles.kpiTrendTxt, { color: item.positive ? COLORS.positive : COLORS.negative }]}>
-              {item.trend}
-            </Text>
-          </View>
-        )}
-      </View>
+      <Text style={styles.kpiLabel} numberOfLines={1}>{item.label}</Text>
+      <Text style={styles.kpiAmount} numberOfLines={1}>{item.amount}</Text>
+      {item.trend && (
+        <View style={[styles.kpiTrendBadge, { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg }]}>
+          <Ionicons
+            name={item.positive ? 'trending-up' : 'trending-down'}
+            size={11}
+            color={item.positive ? COLORS.positive : COLORS.negative}
+          />
+          <Text style={[styles.kpiTrendTxt, { color: item.positive ? COLORS.positive : COLORS.negative }]}>
+            {item.trend}
+          </Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 

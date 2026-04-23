@@ -40,13 +40,13 @@ class StatusCheckCreate(BaseModel):
 DASHBOARD_SEED = {
     "7D": {
         "kpi_strip": [
-            {"id": "cash",  "label": "Cash In Hand", "amount": "₹24,500",  "icon": "wallet-outline",   "trend": "+₹2,100",  "positive": True},
-            {"id": "bank",  "label": "Bank Balance",  "amount": "₹1,85,300","icon": "card-outline",     "trend": "+₹8,400",  "positive": True},
-            {"id": "recv",  "label": "Receivables",   "amount": "₹67,200",  "icon": "arrow-down-outline","trend": "-₹3,200",  "positive": False},
-            {"id": "pay",      "label": "Payables",   "amount": "₹43,100",   "icon": "arrow-up-outline",   "trend": "+₹1,800",  "positive": False},
-            {"id": "loans",    "label": "Loans & OD", "amount": "₹2,50,000", "icon": "git-merge-outline",  "trend": "+₹5,000",  "positive": False},
-            {"id": "payments", "label": "Payments",   "amount": "₹38,500",   "icon": "send-outline",       "trend": "-₹4,200",  "positive": True},
-            {"id": "receipts", "label": "Receipts",   "amount": "₹52,000",   "icon": "download-outline",   "trend": "+₹8,600",  "positive": True},
+            {"id": "cash",     "label": "Cash In Hand", "amount": "₹24,500",   "icon": "wallet-outline",         "trend": "+8.6%",  "positive": True},
+            {"id": "bank",     "label": "Bank Balance",  "amount": "₹1,85,300", "icon": "card-outline",           "trend": "+4.5%",  "positive": True},
+            {"id": "recv",     "label": "Receivables",   "amount": "₹67,200",   "icon": "arrow-down-circle-outline","trend": "-4.8%", "positive": False},
+            {"id": "pay",      "label": "Payables",      "amount": "₹43,100",   "icon": "arrow-up-circle-outline", "trend": "+4.2%",  "positive": False},
+            {"id": "loans",    "label": "Loans & OD",    "amount": "₹2,50,000", "icon": "briefcase-outline",      "trend": "+2.0%",  "positive": False},
+            {"id": "payments", "label": "Payments",      "amount": "₹38,500",   "icon": "send-outline",           "trend": "-10.9%", "positive": True},
+            {"id": "receipts", "label": "Receipts",      "amount": "₹52,000",   "icon": "checkmark-circle-outline","trend": "+16.5%", "positive": True},
         ],
         "metrics": [
             {"id": "sales",     "label": "Sales",     "icon": "trending-up",    "amount": "₹1.23L", "change": 12, "positive": True,  "route": "/sales"},
@@ -62,13 +62,13 @@ DASHBOARD_SEED = {
     },
     "1M": {
         "kpi_strip": [
-            {"id": "cash",  "label": "Cash In Hand", "amount": "₹32,800",   "icon": "wallet-outline",   "trend": "+₹6,400",  "positive": True},
-            {"id": "bank",  "label": "Bank Balance",  "amount": "₹2,45,600", "icon": "card-outline",     "trend": "+₹23,100", "positive": True},
-            {"id": "recv",  "label": "Receivables",   "amount": "₹1,24,500", "icon": "arrow-down-outline","trend": "+₹14,200", "positive": True},
-            {"id": "pay",      "label": "Payables",   "amount": "₹89,300",    "icon": "arrow-up-outline",   "trend": "+₹8,600",  "positive": False},
-            {"id": "loans",    "label": "Loans & OD", "amount": "₹2,50,000",  "icon": "git-merge-outline",  "trend": "+₹5,000",  "positive": False},
-            {"id": "payments", "label": "Payments",   "amount": "₹1,24,000",  "icon": "send-outline",       "trend": "-₹12,400", "positive": True},
-            {"id": "receipts", "label": "Receipts",   "amount": "₹1,82,000",  "icon": "download-outline",   "trend": "+₹24,600", "positive": True},
+            {"id": "cash",     "label": "Cash In Hand", "amount": "₹32,800",   "icon": "wallet-outline",          "trend": "+19.5%", "positive": True},
+            {"id": "bank",     "label": "Bank Balance",  "amount": "₹2,45,600", "icon": "card-outline",            "trend": "+9.4%",  "positive": True},
+            {"id": "recv",     "label": "Receivables",   "amount": "₹1,24,500", "icon": "arrow-down-circle-outline","trend": "+11.4%", "positive": True},
+            {"id": "pay",      "label": "Payables",      "amount": "₹89,300",   "icon": "arrow-up-circle-outline",  "trend": "+9.6%",  "positive": False},
+            {"id": "loans",    "label": "Loans & OD",    "amount": "₹2,50,000", "icon": "briefcase-outline",       "trend": "+2.0%",  "positive": False},
+            {"id": "payments", "label": "Payments",      "amount": "₹1,24,000", "icon": "send-outline",            "trend": "-10.0%", "positive": True},
+            {"id": "receipts", "label": "Receipts",      "amount": "₹1,82,000", "icon": "checkmark-circle-outline","trend": "+13.5%", "positive": True},
         ],
         "metrics": [
             {"id": "sales",     "label": "Sales",     "icon": "trending-up",    "amount": "₹4.23L", "change": 8,  "positive": True,  "route": "/sales"},
@@ -84,13 +84,13 @@ DASHBOARD_SEED = {
     },
     "3M": {
         "kpi_strip": [
-            {"id": "cash",  "label": "Cash In Hand", "amount": "₹45,200",   "icon": "wallet-outline",   "trend": "+₹12,800", "positive": True},
-            {"id": "bank",  "label": "Bank Balance",  "amount": "₹3,89,700", "icon": "card-outline",     "trend": "+₹68,400", "positive": True},
-            {"id": "recv",  "label": "Receivables",   "amount": "₹2,87,600", "icon": "arrow-down-outline","trend": "+₹42,100", "positive": True},
-            {"id": "pay",      "label": "Payables",   "amount": "₹1,98,400",  "icon": "arrow-up-outline",   "trend": "+₹24,300", "positive": False},
-            {"id": "loans",    "label": "Loans & OD", "amount": "₹2,50,000",  "icon": "git-merge-outline",  "trend": "+₹5,000",  "positive": False},
-            {"id": "payments", "label": "Payments",   "amount": "₹3,45,000",  "icon": "send-outline",       "trend": "-₹32,000", "positive": True},
-            {"id": "receipts", "label": "Receipts",   "amount": "₹4,12,000",  "icon": "download-outline",   "trend": "+₹56,800", "positive": True},
+            {"id": "cash",     "label": "Cash In Hand", "amount": "₹45,200",   "icon": "wallet-outline",          "trend": "+28.3%", "positive": True},
+            {"id": "bank",     "label": "Bank Balance",  "amount": "₹3,89,700", "icon": "card-outline",            "trend": "+17.5%", "positive": True},
+            {"id": "recv",     "label": "Receivables",   "amount": "₹2,87,600", "icon": "arrow-down-circle-outline","trend": "+14.6%", "positive": True},
+            {"id": "pay",      "label": "Payables",      "amount": "₹1,98,400", "icon": "arrow-up-circle-outline",  "trend": "+12.3%", "positive": False},
+            {"id": "loans",    "label": "Loans & OD",    "amount": "₹2,50,000", "icon": "briefcase-outline",       "trend": "+2.0%",  "positive": False},
+            {"id": "payments", "label": "Payments",      "amount": "₹3,45,000", "icon": "send-outline",            "trend": "-9.3%",  "positive": True},
+            {"id": "receipts", "label": "Receipts",      "amount": "₹4,12,000", "icon": "checkmark-circle-outline","trend": "+13.8%", "positive": True},
         ],
         "metrics": [
             {"id": "sales",     "label": "Sales",     "icon": "trending-up",    "amount": "₹12.45L","change": 15, "positive": True,  "route": "/sales"},
@@ -106,13 +106,13 @@ DASHBOARD_SEED = {
     },
     "6M": {
         "kpi_strip": [
-            {"id": "cash",  "label": "Cash In Hand", "amount": "₹67,800",   "icon": "wallet-outline",   "trend": "+₹28,400",  "positive": True},
-            {"id": "bank",  "label": "Bank Balance",  "amount": "₹5,12,300", "icon": "card-outline",     "trend": "+₹1,45,600","positive": True},
-            {"id": "recv",  "label": "Receivables",   "amount": "₹4,45,200", "icon": "arrow-down-outline","trend": "+₹89,300",  "positive": True},
-            {"id": "pay",      "label": "Payables",   "amount": "₹3,12,600",  "icon": "arrow-up-outline",   "trend": "+₹54,200", "positive": False},
-            {"id": "loans",    "label": "Loans & OD", "amount": "₹2,50,000",  "icon": "git-merge-outline",  "trend": "+₹5,000",  "positive": False},
-            {"id": "payments", "label": "Payments",   "amount": "₹6,78,000",  "icon": "send-outline",       "trend": "-₹68,000", "positive": True},
-            {"id": "receipts", "label": "Receipts",   "amount": "₹7,24,000",  "icon": "download-outline",   "trend": "+₹94,000", "positive": True},
+            {"id": "cash",     "label": "Cash In Hand", "amount": "₹67,800",   "icon": "wallet-outline",          "trend": "+41.9%", "positive": True},
+            {"id": "bank",     "label": "Bank Balance",  "amount": "₹5,12,300", "icon": "card-outline",            "trend": "+28.4%", "positive": True},
+            {"id": "recv",     "label": "Receivables",   "amount": "₹4,45,200", "icon": "arrow-down-circle-outline","trend": "+20.1%", "positive": True},
+            {"id": "pay",      "label": "Payables",      "amount": "₹3,12,600", "icon": "arrow-up-circle-outline",  "trend": "+17.3%", "positive": False},
+            {"id": "loans",    "label": "Loans & OD",    "amount": "₹2,50,000", "icon": "briefcase-outline",       "trend": "+2.0%",  "positive": False},
+            {"id": "payments", "label": "Payments",      "amount": "₹6,78,000", "icon": "send-outline",            "trend": "-10.0%", "positive": True},
+            {"id": "receipts", "label": "Receipts",      "amount": "₹7,24,000", "icon": "checkmark-circle-outline","trend": "+13.0%", "positive": True},
         ],
         "metrics": [
             {"id": "sales",     "label": "Sales",     "icon": "trending-up",    "amount": "₹24.80L","change": 22, "positive": True,  "route": "/sales"},
