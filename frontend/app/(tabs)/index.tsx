@@ -420,23 +420,23 @@ const styles = StyleSheet.create({
     width: SW,                          // exact page width — fixes carousel snap
   },
   kpiCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
-    paddingHorizontal: SPACING.md, paddingVertical: 18,
+    paddingHorizontal: 14, paddingVertical: 12,
     marginHorizontal: SPACING.md,       // visual indent inside the page
     borderWidth: 1, borderColor: COLORS.borderDefault,
   },
   kpiIconBox: {
-    width: 52, height: 52, borderRadius: 26,
+    width: 40, height: 40, borderRadius: 20,
     backgroundColor: COLORS.pageBg,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  kpiTextWrap: { flex: 1, gap: 4 },      // flex:1 ensures label+amount never clip
-  kpiLabel:   { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
-  kpiAmount:  { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary },
+  kpiTextWrap: { flex: 1, gap: 2 },      // flex:1 ensures label+amount never clip
+  kpiLabel:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600' },
+  kpiAmount:  { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
   kpiTrendBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 8, paddingVertical: 4, borderRadius: RADIUS.full,
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingHorizontal: 7, paddingVertical: 3, borderRadius: RADIUS.full,
     flexShrink: 0,
   },
   kpiTrendTxt:    { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
