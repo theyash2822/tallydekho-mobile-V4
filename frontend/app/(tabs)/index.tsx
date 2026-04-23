@@ -2,13 +2,17 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   RefreshControl, FlatList, AppState, TextInput,
-  Modal, Animated, KeyboardAvoidingView, Platform,
+  Modal, Animated, KeyboardAvoidingView, Platform, Dimensions,
+  NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+
+const { width: SW } = Dimensions.get('window');
+const KPI_CARD_W = SW - SPACING.md * 2;
 import Header from '../../src/components/Header';
 import CashflowCard from '../../src/components/CashflowCard';
 import RecentActivity from '../../src/components/RecentActivity';
@@ -50,6 +54,21 @@ export default function HomeScreen() {
   const micScale = useRef(new Animated.Value(1)).current;
   const micOpacity = useRef(new Animated.Value(0.7)).current;
   const micTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // KPI Carousel
+  const kpiRef  = useRef<FlatList>(null);
+  const [kpiIdx, setKpiIdx] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setKpiIdx(prev => {
+        const next = (prev + 1) % kpiData.length;
+        kpiRef.current?.scrollToIndex({ index: next, animated: true, viewPosition: 0 });
+        return next;
+      });
+    }, 2500);
+    return () => clearInterval(t);
+  }, [kpiData.length]);
 
   // Filtered activity for search results
   const filteredActivity = useMemo(() => {
@@ -152,10 +171,24 @@ export default function HomeScreen() {
       onPress={() => item.route && router.push(item.route as any)}
     >
       <View style={styles.kpiIconBox}>
-        <Ionicons name={item.icon} size={20} color={COLORS.textSecondary} />
+        <Ionicons name={item.icon} size={24} color={COLORS.textSecondary} />
       </View>
-      <Text style={styles.kpiLabel} numberOfLines={1}>{item.label}</Text>
-      <Text style={styles.kpiAmount} numberOfLines={1}>{item.amount}</Text>
+      <View style={styles.kpiTextWrap}>
+        <Text style={styles.kpiLabel} numberOfLines={1}>{item.label}</Text>
+        <Text style={styles.kpiAmount} numberOfLines={1}>{item.amount}</Text>
+        {item.trend && (
+          <View style={[styles.kpiTrendBadge, { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg }]}>
+            <Ionicons
+              name={item.positive ? 'trending-up' : 'trending-down'}
+              size={11}
+              color={item.positive ? COLORS.positive : COLORS.negative}
+            />
+            <Text style={[styles.kpiTrendTxt, { color: item.positive ? COLORS.positive : COLORS.negative }]}>
+              {item.trend}
+            </Text>
+          </View>
+        )}
+      </View>
     </TouchableOpacity>
   );
 
@@ -224,16 +257,30 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* KPI Horizontal Strip */}
+        {/* KPI Carousel */}
         <View style={styles.kpiSection}>
           <FlatList
+            ref={kpiRef}
             horizontal
+            pagingEnabled
             data={kpiData}
             keyExtractor={i => i.id}
             renderItem={renderKPI}
             showsHorizontalScrollIndicator={false}
+            getItemLayout={(_, index) => ({ length: KPI_CARD_W, offset: KPI_CARD_W * index, index })}
+            onScrollToIndexFailed={() => {}}
+            onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
+              const idx = Math.round(e.nativeEvent.contentOffset.x / KPI_CARD_W);
+              setKpiIdx(idx);
+            }}
             contentContainerStyle={styles.kpiList}
           />
+          {/* Dot Indicators */}
+          <View style={styles.kpiDots}>
+            {kpiData.map((_, i) => (
+              <View key={i} style={[styles.kpiDot, i === kpiIdx && styles.kpiDotActive]} />
+            ))}
+          </View>
         </View>
 
         {/* Time Filters */}
@@ -362,19 +409,28 @@ const styles = StyleSheet.create({
   syncTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
   syncSubtitle: { fontSize: TYPOGRAPHY.xs, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
   kpiSection: { marginTop: SPACING.md },
-  kpiList: { paddingHorizontal: SPACING.md, gap: 10 },
+  kpiList: { paddingHorizontal: 0 },
   kpiCard: {
+    width: KPI_CARD_W,
+    flexDirection: 'row', alignItems: 'center', gap: 16,
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
-    padding: 14, width: 140, gap: 6,
+    paddingHorizontal: SPACING.md, paddingVertical: 18,
+    marginHorizontal: SPACING.md,
     borderWidth: 1, borderColor: COLORS.borderDefault,
-    elevation: 1, boxShadow: '0 0 4px rgba(0, 0, 0, 0.04)',
   },
   kpiIconBox: {
-    width: 34, height: 34, borderRadius: 8,
-    backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center',
+    width: 52, height: 52, borderRadius: 26,
+    backgroundColor: COLORS.pageBg,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  kpiLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500' },
-  kpiAmount: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  kpiTextWrap:    { flex: 1, gap: 4 },
+  kpiLabel:       { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
+  kpiAmount:      { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary },
+  kpiTrendBadge:  { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: RADIUS.full },
+  kpiTrendTxt:    { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
+  kpiDots:        { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: 10, marginBottom: 2 },
+  kpiDot:         { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
+  kpiDotActive:   { width: 16, height: 5, borderRadius: 3, backgroundColor: COLORS.brandPrimary },
   filterWrap: { paddingHorizontal: SPACING.md, marginTop: SPACING.md },
   filterRow: {
     flexDirection: 'row', backgroundColor: COLORS.pageBg,
