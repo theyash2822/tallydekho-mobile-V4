@@ -445,22 +445,6 @@ export default function LoansODsScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
 
-        {/* ── Filter Row ───────────────────────────────────────────────── */}
-        <View style={s.filterRow}>
-          <TouchableOpacity style={s.dateChip} onPress={() => setShowDatePick(true)} activeOpacity={0.7}>
-            <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
-            <Text style={s.dateChipTxt}>{fmtRange()}</Text>
-            <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[s.overdueChip, overdueOn && s.overdueChipActive]}
-            onPress={() => setOverdueOn(v => !v)}
-            activeOpacity={0.7}
-          >
-            <Text style={[s.overdueChipTxt, overdueOn && s.overdueChipTxtActive]}>Overdue</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* ── KPI Carousel ─────────────────────────────────────────────── */}
         <View style={s.kpiSection}>
           <FlatList

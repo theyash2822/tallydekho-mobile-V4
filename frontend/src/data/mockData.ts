@@ -300,8 +300,8 @@ export const FY_DASHBOARD: Record<string, {
       { id: 'receivable', label: 'Receivables',  amount: '₹2,80,000',  icon: 'arrow-down-circle-outline',route: '/receivables' },
       { id: 'payable',    label: 'Payables',     amount: '₹4,12,000',  icon: 'arrow-up-circle-outline',  route: '/payables' },
       { id: 'loans',      label: 'Loans & ODs',  amount: '₹2,10,000',  icon: 'git-merge-outline',        route: '/loans' },
-      { id: 'payments',   label: 'Payments',     amount: '₹1,08,000',  icon: 'send-outline',             route: '/payments' },
-      { id: 'receipts',   label: 'Receipts',     amount: '₹28,500',    icon: 'download-outline',         route: '/receipts' },
+      { id: 'payments',   label: 'Payments',     amount: '₹1,08,000',  icon: 'send-outline',             route: '/kpi/payments' },
+      { id: 'receipts',   label: 'Receipts',     amount: '₹28,500',    icon: 'download-outline',         route: '/kpi/receipts' },
     ],
     metrics: [
       { id: 'sales',    label: 'Sales',    amount: '₹74,500',  change: 3.8,  positive: true,  icon: 'stats-chart-outline', route: '/sales'    },
@@ -317,8 +317,8 @@ export const FY_DASHBOARD: Record<string, {
       { id: 'receivable', label: 'Receivables',  amount: '₹2,10,000',  icon: 'arrow-down-circle-outline',route: '/receivables' },
       { id: 'payable',    label: 'Payables',     amount: '₹3,20,000',  icon: 'arrow-up-circle-outline',  route: '/payables' },
       { id: 'loans',      label: 'Loans & ODs',  amount: '₹2,80,000',  icon: 'git-merge-outline',        route: '/loans' },
-      { id: 'payments',   label: 'Payments',     amount: '₹82,000',    icon: 'send-outline',             route: '/payments' },
-      { id: 'receipts',   label: 'Receipts',     amount: '₹22,000',    icon: 'download-outline',         route: '/receipts' },
+      { id: 'payments',   label: 'Payments',     amount: '₹82,000',    icon: 'send-outline',             route: '/kpi/payments' },
+      { id: 'receipts',   label: 'Receipts',     amount: '₹22,000',    icon: 'download-outline',         route: '/kpi/receipts' },
     ],
     metrics: [
       { id: 'sales',    label: 'Sales',    amount: '₹58,000',  change: 2.4,  positive: true,  icon: 'stats-chart-outline', route: '/sales'    },
@@ -334,8 +334,8 @@ export const FY_DASHBOARD: Record<string, {
       { id: 'receivable', label: 'Receivables',  amount: '₹1,60,000',  icon: 'arrow-down-circle-outline',route: '/receivables' },
       { id: 'payable',    label: 'Payables',     amount: '₹2,40,000',  icon: 'arrow-up-circle-outline',  route: '/payables' },
       { id: 'loans',      label: 'Loans & ODs',  amount: '₹3,20,000',  icon: 'git-merge-outline',        route: '/loans' },
-      { id: 'payments',   label: 'Payments',     amount: '₹62,000',    icon: 'send-outline',             route: '/payments' },
-      { id: 'receipts',   label: 'Receipts',     amount: '₹16,000',    icon: 'download-outline',         route: '/receipts' },
+      { id: 'payments',   label: 'Payments',     amount: '₹62,000',    icon: 'send-outline',             route: '/kpi/payments' },
+      { id: 'receipts',   label: 'Receipts',     amount: '₹16,000',    icon: 'download-outline',         route: '/kpi/receipts' },
     ],
     metrics: [
       { id: 'sales',    label: 'Sales',    amount: '₹44,500',  change: 1.2,  positive: true,  icon: 'stats-chart-outline', route: '/sales'    },
