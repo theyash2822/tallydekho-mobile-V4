@@ -1,21 +1,24 @@
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { MOCK_SALES_REGISTER, MOCK_EWAYBILLS } from '../../src/data/mockData';
+import { MOCK_SALES_REGISTER } from '../../src/data/mockData';
 
-const STATUS_COLORS: Record<string, string> = {
+const AMBER    = '#A89060';
+const AMBER_BG = '#FDF9F4';
+const { width: SW } = Dimensions.get('window');
+
+const STATUS_COLOR: Record<string, string> = {
   paid:        COLORS.positive,
   unpaid:      COLORS.negative,
-  irm:         '#9CA3AF',
+  irm:         COLORS.textTertiary,
   credit_note: COLORS.warning,
 };
-
-const STATUS_LABELS: Record<string, string> = {
+const STATUS_LABEL: Record<string, string> = {
   paid:        'Paid',
   unpaid:      'Unpaid',
   irm:         'IRM',
@@ -24,176 +27,182 @@ const STATUS_LABELS: Record<string, string> = {
 
 export default function SalesRegisterScreen() {
   const router = useRouter();
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All');
-  const data = MOCK_SALES_REGISTER;
+  const data   = MOCK_SALES_REGISTER;
+
+  const [search,   setSearch]   = useState('');
+  const [filter,   setFilter]   = useState('All');
+  const [dropdown, setDropdown] = useState(false);
 
   const filtered = data.invoices.filter(inv => {
-    const matchSearch = !search ||
+    const matchSearch =
+      !search ||
       inv.party.toLowerCase().includes(search.toLowerCase()) ||
       inv.id.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === 'All' || STATUS_LABELS[inv.status] === statusFilter;
+    const matchStatus =
+      filter === 'All' || STATUS_LABEL[inv.status] === filter;
     return matchSearch && matchStatus;
   });
 
   return (
-    <SafeAreaView style={styles.safe}>
-      {/* ── Header ────────────────────────────────────────────────── */}
-      <View style={styles.header}>
+    <SafeAreaView style={s.safe}>
+
+      {/* ── Header ──────────────────────────────────────────────────── */}
+      <View style={s.header}>
         <TouchableOpacity
           onPress={() => router.back()}
-          style={styles.backBtn}
+          style={s.backBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Sales Register</Text>
-        <TouchableOpacity style={styles.headerAction}>
-          <Ionicons name="ellipsis-vertical" size={20} color={COLORS.textPrimary} />
-        </TouchableOpacity>
+        <Text style={s.headerTitle}>Sales Register</Text>
+        <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
-      >
-        {/* ── Filters ───────────────────────────────────────────────── */}
-        <View style={styles.filterRow}>
-          <TouchableOpacity style={[styles.dropdown, { flex: 1.4 }]}>
-            <Ionicons name="calendar-outline" size={13} color={COLORS.textSecondary} />
-            <Text style={styles.dropdownText}>June 25</Text>
-            <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.dropdown}>
-            <Text style={styles.dropdownText}>Status</Text>
-            <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.dropdown}>
-            <Text style={styles.dropdownText}>FY 2025-26</Text>
-            <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
-          </TouchableOpacity>
-        </View>
+      {/* ── Filter Row ──────────────────────────────────────────────── */}
+      <View style={s.filterRow}>
+        {/* Date Range */}
+        <TouchableOpacity style={s.datePill} activeOpacity={0.7}>
+          <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
+          <Text style={s.dateTxt}>30 Sep–22 Apr</Text>
+          <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
+        </TouchableOpacity>
 
-        {/* ── Search ────────────────────────────────────────────────── */}
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={16} color={COLORS.textTertiary} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search invoices, parties..."
-            placeholderTextColor={COLORS.textTertiary}
-            value={search}
-            onChangeText={setSearch}
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-            </TouchableOpacity>
+        {/* Status Dropdown */}
+        <View style={s.statusWrap}>
+          <TouchableOpacity
+            style={[s.statusPill, dropdown && s.statusPillOpen]}
+            onPress={() => setDropdown(v => !v)}
+            activeOpacity={0.7}
+          >
+            <Text style={s.statusTxt}>{filter}</Text>
+            <Ionicons
+              name={dropdown ? 'chevron-up' : 'chevron-down'}
+              size={13}
+              color={COLORS.textSecondary}
+            />
+          </TouchableOpacity>
+
+          {dropdown && (
+            <View style={s.dropMenu}>
+              {['All', 'Paid', 'Unpaid'].map(opt => (
+                <TouchableOpacity
+                  key={opt}
+                  style={s.dropItem}
+                  activeOpacity={0.7}
+                  onPress={() => { setFilter(opt); setDropdown(false); }}
+                >
+                  <Text style={[s.dropTxt, filter === opt && s.dropTxtActive]}>{opt}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           )}
         </View>
+      </View>
 
-        {/* ── Stats Row ─────────────────────────────────────────────── */}
-        <View style={styles.statsRow}>
+      {/* Overlay to close dropdown */}
+      {dropdown && (
+        <TouchableOpacity
+          style={s.dropOverlay}
+          onPress={() => setDropdown(false)}
+          activeOpacity={1}
+        />
+      )}
+
+      {/* ── Search Bar ──────────────────────────────────────────────── */}
+      <View style={s.searchBar}>
+        <Ionicons name="search" size={16} color={COLORS.textTertiary} />
+        <TextInput
+          style={s.searchInput}
+          placeholder="Search invoices, parties..."
+          placeholderTextColor={COLORS.textTertiary}
+          value={search}
+          onChangeText={setSearch}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+
+        {/* ── Stats 2×2 Grid ──────────────────────────────────────────── */}
+        <View style={s.statsGrid}>
           {[
             { label: 'Total', value: data.summary.total },
-            { label: 'Tax',   value: data.summary.tax },
-            { label: 'Avg',   value: data.summary.avg },
+            { label: 'Tax',   value: data.summary.tax   },
+            { label: 'AVG',   value: data.summary.avg   },
             { label: 'Docs',  value: String(data.summary.docs) },
-          ].map(s => (
-            <View key={s.label} style={styles.statCard}>
-              <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>{s.value}</Text>
-              <Text style={styles.statLabel}>{s.label}</Text>
+          ].map(stat => (
+            <View key={stat.label} style={s.statCell}>
+              <Text style={s.statValue} numberOfLines={1} adjustsFontSizeToFit>{stat.value}</Text>
+              <Text style={s.statLabel}>{stat.label}</Text>
             </View>
           ))}
         </View>
 
-        {/* ── E-Way Bills link ──────────────────────────────────────── */}
-        <TouchableOpacity
-          style={styles.ewbBanner}
-          onPress={() => router.push('/sales/ewaybill')}
-          activeOpacity={0.8}
-        >
-          <View style={styles.ewbLeft}>
-            <View style={styles.ewbIconBox}>
-              <Ionicons name="document-text-outline" size={18} color={COLORS.positive} />
-            </View>
-            <View>
-              <Text style={styles.ewbTitle}>E-Way Bills</Text>
-              <Text style={styles.ewbSub}>
-                {MOCK_EWAYBILLS.generated} generated · {MOCK_EWAYBILLS.pending} pending
-              </Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-
-        {/* ── Invoice List ──────────────────────────────────────────── */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Sales Invoices</Text>
-          <TouchableOpacity style={styles.menuBtn}>
-            <Ionicons name="ellipsis-horizontal" size={20} color={COLORS.textSecondary} />
-          </TouchableOpacity>
+        {/* ── Section Header ──────────────────────────────────────────── */}
+        <View style={s.sectionHeader}>
+          <Text style={s.sectionTitle}>Sales Invoices</Text>
+          <Text style={s.sectionCount}>{filtered.length} records</Text>
         </View>
 
-        <View style={styles.invoiceContainer}>
+        {/* ── Invoice List ────────────────────────────────────────────── */}
+        <View style={s.listCard}>
           {filtered.length === 0 ? (
-            <View style={styles.emptyState}>
+            <View style={s.emptyState}>
               <Ionicons name="search-outline" size={32} color={COLORS.textTertiary} />
-              <Text style={styles.emptyText}>No invoices found</Text>
+              <Text style={s.emptyTxt}>No invoices found</Text>
             </View>
           ) : (
             filtered.map((inv, idx) => (
               <View key={inv.id}>
                 <TouchableOpacity
-                  style={styles.invoiceRow}
+                  style={s.invRow}
                   activeOpacity={0.7}
                   onPress={() => router.push(`/document/${inv.id}?type=sales_invoice` as any)}
                 >
-                  {/* Status indicator */}
-                  <View style={styles.invLeft}>
-                    <View
-                      style={[
-                        styles.statusDot,
-                        { backgroundColor: STATUS_COLORS[inv.status] || '#9CA3AF' },
-                      ]}
-                    />
-                    <View style={styles.invInfo}>
-                      <View style={styles.invTopRow}>
-                        <Text
-                          style={[
-                            styles.statusLabel,
-                            { color: STATUS_COLORS[inv.status] || '#9CA3AF' },
-                          ]}
-                        >
-                          {STATUS_LABELS[inv.status] || inv.status}
+                  {/* Left: status dot + info */}
+                  <View style={s.invLeft}>
+                    <View style={[s.statusDot, { backgroundColor: STATUS_COLOR[inv.status] || COLORS.textTertiary }]} />
+                    <View style={s.invInfo}>
+                      <View style={s.invTopRow}>
+                        <Text style={[s.statusLbl, { color: STATUS_COLOR[inv.status] || COLORS.textTertiary }]}>
+                          {STATUS_LABEL[inv.status] || inv.status}
                         </Text>
-                        <Text style={styles.invoiceId}>{inv.id}</Text>
+                        <Text style={s.invId}>• {inv.id}</Text>
                       </View>
-                      <Text style={styles.partyName}>{inv.party}</Text>
-                      <Text style={styles.invMeta}>{inv.date} · {inv.time}</Text>
+                      <Text style={s.invParty}>{inv.party}</Text>
+                      <Text style={s.invMeta}>{inv.date} | {inv.time}</Text>
                     </View>
                   </View>
-                  {/* Amount + Preview */}
-                  <View style={styles.invRight}>
-                    <Text style={styles.invAmount}>{inv.amount}</Text>
-                    <View style={styles.viewBtn}>
-                      <Ionicons name="eye-outline" size={13} color={COLORS.info} />
-                      <Text style={styles.viewBtnText}>Preview</Text>
+
+                  {/* Right: amount + tally icon */}
+                  <View style={s.invRight}>
+                    <Text style={s.invAmt}>{inv.amount}</Text>
+                    <View style={s.tallyIcon}>
+                      <Ionicons name="return-down-back-outline" size={13} color={AMBER} />
                     </View>
                   </View>
                 </TouchableOpacity>
-                {idx < filtered.length - 1 && <View style={styles.divider} />}
+                {idx < filtered.length - 1 && <View style={s.divider} />}
               </View>
             ))
           )}
         </View>
+
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  safe:          { flex: 1, backgroundColor: COLORS.pageBg },
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: COLORS.pageBg },
+
+  // Header
   header: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     backgroundColor: COLORS.cardBg,
@@ -205,93 +214,113 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.pageBg,
     alignItems: 'center', justifyContent: 'center',
   },
-  headerTitle:  { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
-  headerAction: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  scroll:       { flex: 1 },
+  headerTitle: {
+    flex: 1, textAlign: 'center',
+    fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary,
+  },
 
+  // Filter Row
   filterRow: {
-    flexDirection: 'row', gap: 8,
-    paddingHorizontal: SPACING.md, paddingTop: SPACING.md,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: SPACING.md, paddingVertical: 10,
+    backgroundColor: COLORS.cardBg,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+    zIndex: 20,
   },
-  dropdown: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md,
-    paddingHorizontal: 10, paddingVertical: 10,
-    borderWidth: 1, borderColor: COLORS.borderDefault, flex: 1,
+  datePill: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: COLORS.pageBg,
+    borderRadius: RADIUS.full, paddingHorizontal: 14, paddingVertical: 10,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
   },
-  dropdownText: { flex: 1, fontSize: 12, color: COLORS.textSecondary },
+  dateTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
+  statusWrap: { position: 'relative', zIndex: 100 },
+  statusPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: COLORS.pageBg,
+    borderRadius: RADIUS.full, paddingHorizontal: 16, paddingVertical: 10,
+    borderWidth: 1, borderColor: COLORS.borderDefault, minWidth: 88,
+  },
+  statusPillOpen: { borderColor: COLORS.brandPrimary },
+  statusTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
+  dropMenu: {
+    position: 'absolute', top: 46, right: 0,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault,
+    minWidth: 130, zIndex: 200,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12, shadowRadius: 8, elevation: 8,
+  },
+  dropItem: {
+    paddingHorizontal: SPACING.md, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  dropTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
+  dropTxtActive: { color: COLORS.textPrimary, fontWeight: '700' },
+  dropOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50 },
 
+  // Search
   searchBar: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md,
-    marginHorizontal: SPACING.md, marginTop: SPACING.sm,
-    paddingHorizontal: 14, paddingVertical: 12,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  searchInput:  { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
-
-  statsRow:     { flexDirection: 'row', gap: 8, marginHorizontal: SPACING.md, marginTop: SPACING.md },
-  statCard: {
-    flex: 1, backgroundColor: COLORS.cardBg,
-    borderRadius: RADIUS.md, padding: 12, alignItems: 'center',
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  statValue:    { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  statLabel:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 3 },
-
-  ewbBanner: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: COLORS.cardBg,
-    marginHorizontal: SPACING.md, marginTop: SPACING.sm,
-    borderRadius: RADIUS.md, padding: SPACING.md,
+    marginHorizontal: SPACING.md, marginTop: SPACING.md,
+    borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12,
     borderWidth: 1, borderColor: COLORS.borderDefault,
   },
-  ewbLeft:      { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  ewbIconBox: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: COLORS.positiveBg,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  ewbTitle:     { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  ewbSub:       { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+  searchInput: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
 
+  // Stats Grid
+  statsGrid: {
+    flexDirection: 'row', flexWrap: 'wrap',
+    marginHorizontal: SPACING.md, marginTop: SPACING.md,
+    gap: 10,
+  },
+  statCell: {
+    width: (SW - SPACING.md * 2 - 10) / 2,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.md, padding: 14,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  statValue: { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
+  statLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 4 },
+
+  // Section Header
   sectionHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     marginHorizontal: SPACING.md, marginTop: SPACING.md, marginBottom: SPACING.sm,
   },
   sectionTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-  menuBtn:      { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  sectionCount: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
 
-  invoiceContainer: {
+  // Invoice List
+  listCard: {
     backgroundColor: COLORS.cardBg,
     marginHorizontal: SPACING.md,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault,
     overflow: 'hidden',
   },
-  invoiceRow: {
-    flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md, paddingVertical: 14,
-    gap: 12,
+  invRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md, paddingVertical: 14, gap: 10,
   },
-  invLeft:      { flexDirection: 'row', alignItems: 'flex-start', gap: 10, flex: 1 },
-  statusDot:    { width: 9, height: 9, borderRadius: 5, marginTop: 4 },
-  invInfo:      { flex: 1, gap: 3 },
-  invTopRow:    { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  statusLabel:  { fontSize: TYPOGRAPHY.xs, fontWeight: '600' },
-  invoiceId:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
-  partyName:    { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  invMeta:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
-  invRight:     { alignItems: 'flex-end', gap: 8 },
-  invAmount:    { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-  viewBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 10, paddingVertical: 5,
-    backgroundColor: COLORS.infoBg, borderRadius: RADIUS.md,
+  invLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, flex: 1 },
+  statusDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
+  invInfo: { flex: 1, gap: 3 },
+  invTopRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  statusLbl: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
+  invId:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  invParty:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  invMeta:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  invRight:  { alignItems: 'flex-end', gap: 8 },
+  invAmt:    { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
+  tallyIcon: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: AMBER_BG,
+    alignItems: 'center', justifyContent: 'center',
   },
-  viewBtnText: { fontSize: TYPOGRAPHY.xs, color: COLORS.info, fontWeight: '600' },
-  divider:      { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 16 },
+  divider: { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: SPACING.md },
 
-  emptyState:   { alignItems: 'center', paddingVertical: 40, gap: 8 },
-  emptyText:    { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
+  // Empty
+  emptyState: { alignItems: 'center', paddingVertical: 40, gap: 8 },
+  emptyTxt:   { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
 });
