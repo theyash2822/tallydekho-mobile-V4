@@ -1,230 +1,444 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import {
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  Dimensions, PanResponder, FlatList,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Path, Line, Circle, Defs, LinearGradient as SvgGrad, Stop, Text as SvgText } from 'react-native-svg';
+import { PieChart } from 'react-native-gifted-charts';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import Svg, { Rect, Text as SvgText, Path } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
-const W = Dimensions.get('window').width;
-const CARD_W = W - SPACING.md * 2;
+const { width: SW } = Dimensions.get('window');
 
-const KPI_CARDS = [
-  { label: 'Today', value: '₹21,500', sub: '8 payments', icon: 'today-outline', color: '#1A1A1A' },
-  { label: 'MTD', value: '₹3,20,000', sub: 'This month', icon: 'calendar-outline', color: '#2563EB' },
-  { label: 'YTD', value: '₹18,40,000', sub: 'This year', icon: 'bar-chart-outline', color: '#7C3AED' },
-  { label: 'Cash', value: '₹1,36,000', sub: 'Cash payments', icon: 'cash-outline', color: '#2D7D46' },
-  { label: 'Bank', value: '₹17,04,000', sub: 'Bank payments', icon: 'card-outline', color: '#0891B2' },
+// ─── Chart constants ─────────────────────────────────────────────────────────
+const CHART_COLOR  = '#A89060';   // brand amber for payments (outflow)
+const CHART_FILL   = 'rgba(168,144,96,0.15)';
+const PAD_L = 46; const PAD_T = 14; const PAD_B = 24;
+const CHART_W_FULL = SW - 32;
+const CHART_H_SVG  = 160;
+const CHART_W      = CHART_W_FULL - PAD_L - 8;
+const CHART_H      = CHART_H_SVG - PAD_T - PAD_B;
+
+// ─── Mock data ────────────────────────────────────────────────────────────────
+const KPI_DATA = [
+  { id: 'today', icon: 'calendar-outline',   label: 'Today',  amount: '₹87,000',  trend: '+12%',  positive: true  },
+  { id: 'mtd',   icon: 'calendar-outline',   label: 'MTD',    amount: '₹25,000',  trend: '+8%',   positive: true  },
+  { id: 'ytd',   icon: 'stats-chart-outline',label: 'YTD',    amount: '₹35,000',  trend: '+15%',  positive: true  },
+  { id: 'cash',  icon: 'cash-outline',        label: 'Cash',   amount: '₹45,000',  trend: '-5%',   positive: false },
+  { id: 'bank',  icon: 'business-outline',    label: 'Bank',   amount: '₹95,000',  trend: '+22%',  positive: true  },
 ];
 
-const DAILY_DATA = [
-  { day: 'Mon', cash: 8000, bank: 22000 },
-  { day: 'Tue', cash: 12000, bank: 18000 },
-  { day: 'Wed', cash: 5000, bank: 35000 },
-  { day: 'Thu', cash: 9000, bank: 28000 },
-  { day: 'Fri', cash: 14000, bank: 42000 },
-  { day: 'Sat', cash: 7000, bank: 15000 },
-  { day: 'Sun', cash: 3000, bank: 8000 },
+const DAILY = [
+  { day: 'Mon', value: 12000 },
+  { day: 'Tue', value: 28000 },
+  { day: 'Wed', value: 22000 },
+  { day: 'Thu', value: 15800 },
+  { day: 'Fri', value: 35000 },
+  { day: 'Sat', value: 18000 },
+  { day: 'Sun', value: 42000 },
 ];
 
-const PAYMENTS = [
-  { id: 'P1', title: 'Vendor – ABC Suppliers', ref: 'PY-0055', date: '25 May', amount: '₹14,200', method: 'NEFT' },
-  { id: 'P2', title: 'Rent Payment', ref: 'PY-0054', date: '25 May', amount: '₹25,000', method: 'Bank' },
-  { id: 'P3', title: 'Salary Advance', ref: 'PY-0053', date: '24 May', amount: '₹8,000', method: 'Cash' },
-  { id: 'P4', title: 'Utility Bill', ref: 'PY-0052', date: '24 May', amount: '₹3,200', method: 'UPI' },
-  { id: 'P5', title: 'Supplier – Tech Parts', ref: 'PY-0051', date: '23 May', amount: '₹62,000', method: 'RTGS' },
+const DONUT_DATA = [
+  { value: 75000,  color: COLORS.brandPrimary, label: 'Cash', pct: '14.3%' },
+  { value: 450000, color: COLORS.textPrimary,  label: 'Bank', pct: '85.7%' },
 ];
 
-const maxVal = Math.max(...DAILY_DATA.flatMap(d => [d.cash, d.bank]));
+const RECENT_PMT = [
+  { id: 'p1', ref: 'PMT-3010', party: 'AGL Traders',    date: '10 Jul', mode: 'Cash', amount: '₹75,000',  paid: true  },
+  { id: 'p2', ref: 'PMT-3011', party: 'Reliance Supply', date: '08 Jul', mode: 'Bank', amount: '₹1,20,000', paid: true  },
+  { id: 'p3', ref: 'PMT-3012', party: 'City Hardware',   date: '07 Jul', mode: 'Cash', amount: '₹32,500',  paid: false },
+  { id: 'p4', ref: 'PMT-3013', party: 'Metro Steel',     date: '06 Jul', mode: 'Bank', amount: '₹2,00,000', paid: true  },
+];
 
-const METHOD_COLORS: Record<string, string> = {
-  NEFT: '#2563EB', RTGS: '#7C3AED', Cash: '#2D7D46', Bank: '#0891B2', UPI: '#D97706', Cheque: '#DC2626',
-};
+const PERIOD_TABS = ['7D', '1M', '3M', '6M'];
+const TYPE_TABS   = ['All', 'Cash', 'Bank'];
 
-function OutflowChart() {
-  const svgW = CARD_W - SPACING.md * 2;
-  const svgH = 100;
-  const bW = 13;
-  const gap = 4;
-  const groupW = bW * 2 + gap + 12;
-  const padL = 4;
+// ─── Fmt helpers ──────────────────────────────────────────────────────────────
+const fmtK  = (v: number) => v >= 1000 ? `₹${(v / 1000).toFixed(1)}K` : `₹${v}`;
+const fmtAmt = (v: number) => `₹${(v / 1000).toFixed(1)}K`;
+
+// ─── Interactive Line Chart ────────────────────────────────────────────────────
+function DailyChart() {
+  const [activeIdx, setActiveIdx] = useState<number | null>(3); // Thu default
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const vals    = DAILY.map(d => d.value);
+  const minV    = Math.min(...vals);
+  const maxV    = Math.max(...vals);
+  const range   = maxV - minV || 1;
+
+  const getX = (i: number) => PAD_L + (i / (DAILY.length - 1)) * CHART_W;
+  const getY = (v: number) => PAD_T + (1 - (v - minV) / range) * CHART_H;
+
+  // Build path strings
+  const linePath = DAILY.map((d, i) => `${i === 0 ? 'M' : 'L'}${getX(i).toFixed(1)},${getY(d.value).toFixed(1)}`).join(' ');
+  const areaPath = `${linePath} L${getX(DAILY.length - 1).toFixed(1)},${(PAD_T + CHART_H).toFixed(1)} L${PAD_L.toFixed(1)},${(PAD_T + CHART_H).toFixed(1)} Z`;
+
+  // Y-axis labels
+  const yLabels = [maxV, maxV * 0.75, maxV * 0.5, maxV * 0.25, minV];
+
+  const handleTouch = useCallback((lx: number) => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    const idx = Math.round(((lx - PAD_L) / CHART_W) * (DAILY.length - 1));
+    setActiveIdx(Math.max(0, Math.min(DAILY.length - 1, idx)));
+  }, []);
+
+  const pan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder:  () => true,
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderGrant:   (e) => handleTouch(e.nativeEvent.locationX),
+    onPanResponderMove:    (e) => handleTouch(e.nativeEvent.locationX),
+    onPanResponderRelease: () => {
+      hideTimer.current = setTimeout(() => setActiveIdx(null), 3000);
+    },
+  })).current;
+
+  const activeDay  = activeIdx !== null ? DAILY[activeIdx] : DAILY[3];
+  const prevVal    = activeIdx !== null && activeIdx > 0 ? DAILY[activeIdx - 1].value : DAILY[2].value;
+  const change     = activeDay.value - prevVal;
+  const changePct  = ((change / prevVal) * 100).toFixed(1);
+  const changePos  = change >= 0;
+
   return (
-    <Svg width={svgW} height={svgH + 20}>
-      {DAILY_DATA.map((d, i) => {
-        const x = padL + i * groupW;
-        const cH = (d.cash / maxVal) * svgH;
-        const bH = (d.bank / maxVal) * svgH;
-        return (
-          <React.Fragment key={d.day}>
-            <Rect x={x} y={svgH - cH} width={bW} height={cH} rx={3} fill="#2D7D46" opacity={0.9} />
-            <Rect x={x + bW + gap} y={svgH - bH} width={bW} height={bH} rx={3} fill="#2563EB" opacity={0.9} />
-            <SvgText x={x + bW + gap / 2} y={svgH + 14} textAnchor="middle" fontSize={8.5} fill={COLORS.textTertiary}>{d.day}</SvgText>
-          </React.Fragment>
-        );
-      })}
-    </Svg>
+    <View style={ch.card}>
+      {/* Top row */}
+      <View style={ch.topRow}>
+        <View>
+          <Text style={ch.mainVal}>{fmtAmt(activeDay.value)}</Text>
+          <Text style={[ch.changeVal, { color: changePos ? COLORS.positive : COLORS.negative }]}>
+            {changePos ? '+' : ''}{fmtAmt(change)} ({changePct}%)
+          </Text>
+        </View>
+        <View style={ch.dayTag}>
+          <Text style={ch.dayTxt}>{activeDay.day}</Text>
+        </View>
+      </View>
+
+      {/* SVG Chart */}
+      <View {...pan.panHandlers}>
+        <Svg width={CHART_W_FULL} height={CHART_H_SVG}>
+          <Defs>
+            <SvgGrad id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor={CHART_COLOR} stopOpacity="0.35" />
+              <Stop offset="1" stopColor={CHART_COLOR} stopOpacity="0.02" />
+            </SvgGrad>
+          </Defs>
+
+          {/* Y-axis labels */}
+          {yLabels.map((v, i) => {
+            const y = PAD_T + (i / (yLabels.length - 1)) * CHART_H;
+            return (
+              <SvgText key={i} x={PAD_L - 4} y={y + 3} textAnchor="end" fontSize={8} fill={COLORS.textTertiary}>
+                {fmtK(v)}
+              </SvgText>
+            );
+          })}
+
+          {/* X-axis labels */}
+          {DAILY.map((d, i) => (
+            <SvgText key={i} x={getX(i)} y={CHART_H_SVG - 4} textAnchor="middle" fontSize={9} fill={COLORS.textTertiary}>
+              {d.day}
+            </SvgText>
+          ))}
+
+          {/* Grid lines */}
+          {yLabels.map((_, i) => {
+            const y = PAD_T + (i / (yLabels.length - 1)) * CHART_H;
+            return <Line key={i} x1={PAD_L} y1={y} x2={PAD_L + CHART_W} y2={y} stroke={COLORS.borderDefault} strokeWidth={1} />;
+          })}
+
+          {/* Area fill */}
+          <Path d={areaPath} fill="url(#areaGrad)" />
+
+          {/* Line */}
+          <Path d={linePath} stroke={CHART_COLOR} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+
+          {/* Active indicator */}
+          {activeIdx !== null && (
+            <>
+              <Line
+                x1={getX(activeIdx)} y1={PAD_T}
+                x2={getX(activeIdx)} y2={PAD_T + CHART_H}
+                stroke={CHART_COLOR} strokeWidth={1} strokeDasharray="3,3"
+              />
+              <Circle cx={getX(activeIdx)} cy={getY(DAILY[activeIdx].value)} r={6} fill={CHART_COLOR} />
+              <Circle cx={getX(activeIdx)} cy={getY(DAILY[activeIdx].value)} r={3} fill="#fff" />
+            </>
+          )}
+        </Svg>
+      </View>
+
+      <Text style={ch.chartLabel}>Daily Outflow — touch to explore</Text>
+    </View>
   );
 }
 
-export default function PaymentsScreen() {
-  const router = useRouter();
-  const [activePeriod, setActivePeriod] = useState('7D');
-  const [activeCategory, setActiveCategory] = useState('All');
-
-  const cashTotal = 136000;
-  const bankTotal = 1704000;
-  const total = cashTotal + bankTotal;
-  const cashPct = Math.round((cashTotal / total) * 100);
-  const bankPct = 100 - cashPct;
+// ─── Donut Chart Card ─────────────────────────────────────────────────────────
+function DonutCard() {
+  const [selIdx, setSelIdx] = useState<number | null>(null);
+  const totalFmt = '₹5.25L';
 
   return (
-    <SafeAreaView style={s.safe}>
+    <View style={dc.card}>
+      <Text style={dc.title}>Cash vs Bank</Text>
+      <View style={dc.body}>
+        {/* Donut */}
+        <View style={dc.donutWrap}>
+          <PieChart
+            data={DONUT_DATA}
+            donut
+            radius={85}
+            innerRadius={58}
+            innerCircleColor={COLORS.cardBg}
+            strokeColor={COLORS.cardBg}
+            strokeWidth={2}
+            onPress={(_item: any, index: number) => setSelIdx(prev => prev === index ? null : index)}
+            centerLabelComponent={() => (
+              <View style={dc.center}>
+                <Text style={dc.centerAmt}>{totalFmt}</Text>
+                <Text style={dc.centerLbl}>Total</Text>
+              </View>
+            )}
+          />
+        </View>
+
+        {/* Legend */}
+        <View style={dc.legend}>
+          {DONUT_DATA.map((item, i) => (
+            <TouchableOpacity
+              key={i}
+              style={[dc.legendRow, selIdx === i && dc.legendRowActive]}
+              onPress={() => setSelIdx(prev => prev === i ? null : i)}
+              activeOpacity={0.75}
+            >
+              <View style={[dc.legendDot, { backgroundColor: item.color }]} />
+              <View style={dc.legendTxtWrap}>
+                <Text style={dc.legendLabel}>{item.label}</Text>
+                <Text style={dc.legendPct}>{item.pct}</Text>
+              </View>
+              <Text style={dc.legendAmt}>
+                ₹{(item.value / 1000).toFixed(0)}K
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {/* Selected segment detail */}
+      {selIdx !== null && (
+        <View style={[dc.detail, { borderColor: DONUT_DATA[selIdx].color }]}>
+          <View style={[dc.detailDot, { backgroundColor: DONUT_DATA[selIdx].color }]} />
+          <Text style={dc.detailTxt}>
+            {DONUT_DATA[selIdx].label}: ₹{(DONUT_DATA[selIdx].value / 1000).toFixed(0)}K ({DONUT_DATA[selIdx].pct})
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
+export default function PaymentsScreen() {
+  const router     = useRouter();
+  const kpiRef     = useRef<any>(null);
+  const [kpiIdx,   setKpiIdx]   = useState(0);
+  const [period,   setPeriod]   = useState('7D');
+  const [typeTab,  setTypeTab]  = useState('All');
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setKpiIdx(prev => {
+        const next = (prev + 1) % KPI_DATA.length;
+        kpiRef.current?.scrollToOffset({ offset: next * SW, animated: true });
+        return next;
+      });
+    }, 4000);
+    return () => clearInterval(t);
+  }, []);
+
+  const filteredPmt = RECENT_PMT.filter(p => {
+    if (typeTab === 'Cash') return p.mode === 'Cash';
+    if (typeTab === 'Bank') return p.mode === 'Bank';
+    return true;
+  });
+
+  return (
+    <SafeAreaView style={s.safe} edges={['top']}>
+      {/* Header */}
       <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
+        <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
+          <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Payments</Text>
-        <TouchableOpacity style={s.exportBtn}>
-          <Ionicons name="download-outline" size={20} color={COLORS.brandPrimary} />
-        </TouchableOpacity>
+        <View style={s.headerBtn} />
       </View>
 
-      <View style={s.filterRow}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterContent}>
-          {['7D', '1M', '3M', '6M'].map(p => (
-            <TouchableOpacity key={p} style={[s.filterChip, activePeriod === p && s.filterActive]} onPress={() => setActivePeriod(p)} activeOpacity={0.7}>
-              <Text style={[s.filterTxt, activePeriod === p && s.filterActiveTxt]}>{p}</Text>
-            </TouchableOpacity>
-          ))}
-          <View style={s.filterDiv} />
-          {['All', 'Cash', 'Bank'].map(c => (
-            <TouchableOpacity key={c} style={[s.filterChip, activeCategory === c && s.filterActive]} onPress={() => setActiveCategory(c)} activeOpacity={0.7}>
-              <Text style={[s.filterTxt, activeCategory === c && s.filterActiveTxt]}>{c}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* KPI Swipeable Cards */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.kpiScroll} contentContainerStyle={s.kpiContent}>
-          {KPI_CARDS.map((k, i) => (
-            <View key={i} style={[s.kpiCard, { borderTopColor: k.color, borderTopWidth: 3 }]}>
-              <View style={[s.kpiIcon, { backgroundColor: k.color + '15' }]}>
-                <Ionicons name={k.icon as any} size={18} color={k.color} />
-              </View>
-              <Text style={s.kpiVal}>{k.value}</Text>
-              <Text style={s.kpiLabel}>{k.label}</Text>
-              <Text style={s.kpiSub}>{k.sub}</Text>
-            </View>
-          ))}
-        </ScrollView>
-
-        {/* Cash vs Bank Ratio */}
-        <View style={s.card}>
-          <Text style={s.cardTitle}>Cash vs Bank Ratio</Text>
-          <View style={s.ratioRow}>
-            <View style={s.ratioBar}>
-              <View style={[s.ratioFill, { flex: cashPct, backgroundColor: '#2D7D46' }]} />
-              <View style={[s.ratioFill, { flex: bankPct, backgroundColor: '#2563EB' }]} />
-            </View>
-          </View>
-          <View style={s.ratioLegend}>
-            <View style={s.ratioItem}>
-              <View style={[s.ratioDot, { backgroundColor: '#2D7D46' }]} />
-              <Text style={s.ratioLbl}>Cash {cashPct}%</Text>
-              <Text style={s.ratioAmt}>₹1,36,000</Text>
-            </View>
-            <View style={s.ratioItem}>
-              <View style={[s.ratioDot, { backgroundColor: '#2563EB' }]} />
-              <Text style={s.ratioLbl}>Bank {bankPct}%</Text>
-              <Text style={s.ratioAmt}>₹17,04,000</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Daily Outflow Chart */}
-        <View style={s.card}>
-          <View style={s.cardHeader}>
-            <Text style={s.cardTitle}>Daily Outflow</Text>
-            <View style={s.legend}>
-              <View style={s.legendRow}><View style={[s.dot, { backgroundColor: '#2D7D46' }]} /><Text style={s.legendTxt}>Cash</Text></View>
-              <View style={s.legendRow}><View style={[s.dot, { backgroundColor: '#2563EB' }]} /><Text style={s.legendTxt}>Bank</Text></View>
-            </View>
-          </View>
-          <OutflowChart />
-        </View>
-
-        {/* Payments List */}
-        <View style={s.card}>
-          <Text style={s.cardTitle}>Recent Payments</Text>
-          {PAYMENTS.map((p, i) => (
-            <View key={p.id} style={[s.txRow, i < PAYMENTS.length - 1 && s.txBorder]}>
-              <View style={[s.txIcon, { backgroundColor: (METHOD_COLORS[p.method] || '#666') + '15' }]}>
-                <Ionicons name="arrow-up" size={14} color={METHOD_COLORS[p.method] || '#666'} />
-              </View>
-              <View style={s.txInfo}>
-                <Text style={s.txTitle}>{p.title}</Text>
-                <Text style={s.txMeta}>{p.ref} · {p.date}</Text>
-              </View>
-              <View style={s.txRight}>
-                <Text style={[s.txAmt, { color: '#DC2626' }]}>-{p.amount}</Text>
-                <View style={[s.methodBadge, { backgroundColor: (METHOD_COLORS[p.method] || '#666') + '15' }]}>
-                  <Text style={[s.methodTxt, { color: METHOD_COLORS[p.method] || '#666' }]}>{p.method}</Text>
+        {/* KPI Carousel */}
+        <View style={s.kpiSection}>
+          <FlatList
+            ref={kpiRef}
+            horizontal pagingEnabled
+            data={KPI_DATA}
+            keyExtractor={(i: any) => i.id}
+            showsHorizontalScrollIndicator={false}
+            getItemLayout={(_: any, index: number) => ({ length: SW, offset: SW * index, index })}
+            onScrollToIndexFailed={() => {}}
+            onMomentumScrollEnd={(e: any) => setKpiIdx(Math.round(e.nativeEvent.contentOffset.x / SW))}
+            renderItem={({ item }: any) => (
+              <View style={s.kpiItem}>
+                <View style={s.kpiCard}>
+                  <View style={s.kpiIconBox}>
+                    <Ionicons name={item.icon} size={20} color={COLORS.textSecondary} />
+                  </View>
+                  <View style={s.kpiTextWrap}>
+                    <Text style={s.kpiLabel}>{item.label}</Text>
+                    <Text style={s.kpiAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount}</Text>
+                  </View>
+                  <View style={[s.kpiTrendBadge, { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg }]}>
+                    <Ionicons name={item.positive ? 'trending-up' : 'trending-down'} size={11} color={item.positive ? COLORS.positive : COLORS.negative} />
+                    <Text style={[s.kpiTrendTxt, { color: item.positive ? COLORS.positive : COLORS.negative }]}>{item.trend}</Text>
+                  </View>
                 </View>
               </View>
+            )}
+          />
+          <View style={s.dots}>
+            {KPI_DATA.map((_, i) => <View key={i} style={[s.dot, i === kpiIdx && s.dotActive]} />)}
+          </View>
+        </View>
+
+        {/* Line Chart */}
+        <DailyChart />
+
+        {/* Donut Chart */}
+        <DonutCard />
+
+        {/* Recent Payments */}
+        <View style={s.recentCard}>
+          <View style={s.recentHeader}>
+            <Text style={s.recentTitle}>Recent Payment</Text>
+            <View style={s.periodRow}>
+              {PERIOD_TABS.map(p => (
+                <TouchableOpacity key={p} style={[s.periodBtn, period === p && s.periodBtnActive]} onPress={() => setPeriod(p)} activeOpacity={0.7}>
+                  <Text style={[s.periodTxt, period === p && s.periodTxtActive]}>{p}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={s.typeRow}>
+            {TYPE_TABS.map(t => (
+              <TouchableOpacity key={t} style={[s.typeBtn, typeTab === t && s.typeBtnActive]} onPress={() => setTypeTab(t)} activeOpacity={0.7}>
+                <Text style={[s.typeTxt, typeTab === t && s.typeTxtActive]}>{t}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {filteredPmt.map((p, idx) => (
+            <View key={p.id} style={[s.txRow, idx < filteredPmt.length - 1 && s.txBorder]}>
+              <View style={s.txIconBox}>
+                <Ionicons name="send-outline" size={17} color={COLORS.textSecondary} />
+              </View>
+              <View style={s.txInfo}>
+                <View style={s.txTopRow}>
+                  <Text style={s.txMode}>{p.mode}</Text>
+                  <Text style={s.txRef}> · {p.ref}</Text>
+                </View>
+                <Text style={s.txSub}>{p.party} · {p.date}</Text>
+              </View>
+              <View style={s.txRight}>
+                <Text style={s.txAmt}>{p.amount}</Text>
+                {p.paid && <Ionicons name="checkmark-circle" size={16} color={COLORS.positive} style={{ marginTop: 2 }} />}
+              </View>
             </View>
           ))}
         </View>
-        <View style={{ height: 40 }} />
+
+        <View style={{ height: 110 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.pageBg },
+  safe:   { flex: 1, backgroundColor: COLORS.pageBg },
+  scroll: { paddingTop: SPACING.md },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 14, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  backBtn: { width: 40, alignItems: 'flex-start' },
-  headerTitle: { flex: 1, fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
-  exportBtn: { width: 40, alignItems: 'flex-end' },
-  filterRow: { backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  filterContent: { paddingHorizontal: SPACING.md, paddingVertical: 10, gap: 8, alignItems: 'center' },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: RADIUS.full, backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault },
-  filterActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
-  filterTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
-  filterActiveTxt: { color: COLORS.white },
-  filterDiv: { width: 1, height: 20, backgroundColor: COLORS.borderDefault },
-  kpiScroll: { paddingVertical: SPACING.md },
-  kpiContent: { paddingHorizontal: SPACING.md, gap: 10 },
-  kpiCard: { width: 130, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, padding: 12, borderWidth: 1, borderColor: COLORS.borderDefault, gap: 4 },
-  kpiIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  kpiVal: { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary, marginTop: 4 },
-  kpiLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
-  kpiSub: { fontSize: 10, color: COLORS.textTertiary },
-  card: { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  cardTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 12 },
-  ratioRow: { marginBottom: 12 },
-  ratioBar: { flexDirection: 'row', height: 10, borderRadius: 5, overflow: 'hidden' },
-  ratioFill: { height: '100%' },
-  ratioLegend: { flexDirection: 'row', gap: SPACING.lg },
-  ratioItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  ratioDot: { width: 10, height: 10, borderRadius: 5 },
-  ratioLbl: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
-  ratioAmt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary },
-  legend: { flexDirection: 'row', gap: 10 },
-  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  legendTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
-  txRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 10 },
-  txBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  txIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  txInfo: { flex: 1 },
-  txTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  txMeta: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
-  txRight: { alignItems: 'flex-end', gap: 3 },
-  txAmt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700' },
-  methodBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: RADIUS.full },
-  methodTxt: { fontSize: 10, fontWeight: '700' },
+  headerBtn:   { width: 40 },
+  headerTitle: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
+
+  kpiSection:    { marginBottom: SPACING.md },
+  kpiItem:       { width: SW },
+  kpiCard:       { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, paddingHorizontal: 14, paddingVertical: 12, marginHorizontal: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
+  kpiIconBox:    { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
+  kpiTextWrap:   { flex: 1, gap: 2 },
+  kpiLabel:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600' },
+  kpiAmount:     { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
+  kpiTrendBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: RADIUS.full, flexShrink: 0 },
+  kpiTrendTxt:   { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
+
+  dots:      { flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: 10 },
+  dot:       { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
+  dotActive: { width: 16, height: 5, borderRadius: 3, backgroundColor: COLORS.textPrimary },
+
+  recentCard:    { marginHorizontal: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
+  recentHeader:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingTop: 14, paddingBottom: 10 },
+  recentTitle:   { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  periodRow:     { flexDirection: 'row', gap: 4 },
+  periodBtn:     { paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault },
+  periodBtnActive: { backgroundColor: COLORS.textPrimary, borderColor: COLORS.textPrimary },
+  periodTxt:     { fontSize: 11, fontWeight: '600', color: COLORS.textSecondary },
+  periodTxtActive: { color: '#fff' },
+  typeRow:       { flexDirection: 'row', gap: 6, paddingHorizontal: SPACING.md, paddingBottom: 10 },
+  typeBtn:       { paddingHorizontal: 14, paddingVertical: 5, borderRadius: RADIUS.full, backgroundColor: COLORS.pageBg },
+  typeBtnActive: { backgroundColor: COLORS.textPrimary },
+  typeTxt:       { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
+  typeTxtActive: { color: '#fff' },
+  txRow:         { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: SPACING.md, gap: 10 },
+  txBorder:      { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  txIconBox:     { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  txInfo:        { flex: 1 },
+  txTopRow:      { flexDirection: 'row', alignItems: 'center' },
+  txMode:        { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  txRef:         { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
+  txSub:         { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+  txRight:       { alignItems: 'flex-end', gap: 2 },
+  txAmt:         { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+});
+
+const ch = StyleSheet.create({
+  card:      { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, paddingTop: 14, overflow: 'hidden' },
+  topRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: SPACING.md, marginBottom: 8 },
+  mainVal:   { fontSize: TYPOGRAPHY.xl, fontWeight: '800', color: COLORS.textPrimary },
+  changeVal: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', marginTop: 2 },
+  dayTag:    { paddingHorizontal: 10, paddingVertical: 4, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault },
+  dayTxt:    { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary },
+  chartLabel:{ fontSize: 10, color: COLORS.textTertiary, textAlign: 'center', paddingBottom: 8, marginTop: 2 },
+});
+
+const dc = StyleSheet.create({
+  card:        { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, padding: SPACING.md },
+  title:       { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 14 },
+  body:        { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  donutWrap:   { alignItems: 'center', justifyContent: 'center' },
+  center:      { alignItems: 'center' },
+  centerAmt:   { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
+  centerLbl:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+  legend:      { flex: 1, gap: 8 },
+  legendRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, borderRadius: RADIUS.md, backgroundColor: COLORS.pageBg },
+  legendRowActive: { borderWidth: 1.5, borderColor: COLORS.brandPrimary },
+  legendDot:   { width: 12, height: 12, borderRadius: 6, flexShrink: 0 },
+  legendTxtWrap: { flex: 1 },
+  legendLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  legendPct:   { fontSize: 10, color: COLORS.textSecondary },
+  legendAmt:   { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  detail:      { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, padding: 10, borderWidth: 1.5 },
+  detailDot:   { width: 10, height: 10, borderRadius: 5 },
+  detailTxt:   { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
 });
