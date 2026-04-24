@@ -51,9 +51,10 @@ const TREND_DATA: Record<'7D' | '1M' | '3M', { labels: string[]; values: number[
 // ─── CHART COMPONENT (defined outside screen) ─────────────────────────────────
 
 const SCREEN_W = Dimensions.get('window').width;
-const CHART_W  = SCREEN_W - SPACING.md * 2;
+// Subtract scroll content padding (SPACING.md each side) + card padding (SPACING.md each side)
+const CHART_W  = SCREEN_W - SPACING.md * 4;
 const CHART_H  = 160;
-const PAD      = { top: 20, right: 16, bottom: 28, left: 44 };
+const PAD      = { top: 20, right: 12, bottom: 28, left: 44 };
 const INNER_W  = CHART_W - PAD.left - PAD.right;
 const INNER_H  = CHART_H - PAD.top - PAD.bottom;
 
@@ -397,6 +398,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     padding: SPACING.md,
     borderWidth: 1, borderColor: COLORS.borderDefault,
+    overflow: 'hidden',
   },
   chartHeader:  {
     flexDirection: 'row', alignItems: 'center',
