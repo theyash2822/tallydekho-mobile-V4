@@ -7,6 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
 // ── Brand amber (In Transit colour) ───────────────────────────────────────────
 const AMBER    = '#A89060';
@@ -52,20 +53,22 @@ export default function TransferHistoryScreen() {
 
   const [search,       setSearch]       = useState('');
   const [showFilter,   setShowFilter]   = useState(false);
+  const [showDatePick, setShowDatePick] = useState(false);
+  const [pendingReopenFilter, setPendingReopenFilter] = useState(false);
 
   // Applied filters
   const [selSourceWH,  setSelSourceWH]  = useState('');
   const [selDestWH,    setSelDestWH]    = useState('');
   const [selStatuses,  setSelStatuses]  = useState<Set<TxStatus>>(new Set());
-  const [activePeriod, setActivePeriod] = useState<'30D' | '90D' | 'Custom'>('30D');
-  const [customDay,    setCustomDay]    = useState('');
+  const [dateFrom,     setDateFrom]     = useState('01/04/25');
+  const [dateTo,       setDateTo]       = useState('24/04/25');
 
   // Draft filter state
   const [draftSourceWH,   setDraftSourceWH]   = useState('');
   const [draftDestWH,     setDraftDestWH]     = useState('');
   const [draftStatuses,   setDraftStatuses]   = useState<Set<TxStatus>>(new Set());
-  const [draftPeriod,     setDraftPeriod]     = useState<'30D' | '90D' | 'Custom'>('30D');
-  const [draftCustomDay,  setDraftCustomDay]  = useState('');
+  const [draftFrom,       setDraftFrom]       = useState('01/04/25');
+  const [draftTo,         setDraftTo]         = useState('24/04/25');
   const [sourceExpanded,  setSourceExpanded]  = useState(false);
   const [destExpanded,    setDestExpanded]    = useState(false);
 
@@ -73,7 +76,15 @@ export default function TransferHistoryScreen() {
   const [selectedIds,     setSelectedIds]     = useState<Set<string>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
 
-  const activeFilterCount = (selSourceWH ? 1 : 0) + (selDestWH ? 1 : 0) + selStatuses.size + (activePeriod !== '30D' ? 1 : 0);
+  const activeFilterCount = (selSourceWH ? 1 : 0) + (selDestWH ? 1 : 0) + selStatuses.size + (dateFrom ? 1 : 0);
+
+  // ── Date label helper (matches valuation-summary pattern) ─────────────────
+  const fmtDateLabel = (s: string) => {
+    const p = s.split('/');
+    if (p.length < 3) return s;
+    const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${p[0]} ${m[parseInt(p[1]) - 1]} ${p[2]}`;
+  };
 
   const visibleItems = useMemo(() => TRANSFERS.filter(t => {
     if (search && !t.ref.toLowerCase().includes(search.toLowerCase()) &&
@@ -90,8 +101,8 @@ export default function TransferHistoryScreen() {
     setDraftSourceWH(selSourceWH);
     setDraftDestWH(selDestWH);
     setDraftStatuses(new Set(selStatuses));
-    setDraftPeriod(activePeriod);
-    setDraftCustomDay(customDay);
+    setDraftFrom(dateFrom);
+    setDraftTo(dateTo);
     setSourceExpanded(false);
     setDestExpanded(false);
     setShowFilter(true);
@@ -101,8 +112,8 @@ export default function TransferHistoryScreen() {
     setSelSourceWH(draftSourceWH);
     setSelDestWH(draftDestWH);
     setSelStatuses(new Set(draftStatuses));
-    setActivePeriod(draftPeriod);
-    setCustomDay(draftCustomDay);
+    setDateFrom(draftFrom);
+    setDateTo(draftTo);
     setShowFilter(false);
   };
 
@@ -110,10 +121,27 @@ export default function TransferHistoryScreen() {
     setDraftSourceWH('');
     setDraftDestWH('');
     setDraftStatuses(new Set());
-    setDraftPeriod('30D');
-    setDraftCustomDay('');
+    setDraftFrom('01/04/25');
+    setDraftTo('24/04/25');
     setSourceExpanded(false);
     setDestExpanded(false);
+  };
+
+  // ── Date picker handlers (same flow as valuation-summary) ─────────────────
+  const openDatePicker = () => {
+    setShowFilter(false);
+    setPendingReopenFilter(true);
+    setTimeout(() => setShowDatePick(true), 350);
+  };
+
+  const handleDateApply = (f: string, t: string) => {
+    setDraftFrom(f);
+    setDraftTo(t);
+    setShowDatePick(false);
+    if (pendingReopenFilter) {
+      setPendingReopenFilter(false);
+      setTimeout(() => setShowFilter(true), 350);
+    }
   };
 
   // ── Multi-select handlers ─────────────────────────────────────────────────
@@ -285,36 +313,20 @@ export default function TransferHistoryScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
-              {/* Period Selector */}
+              {/* Date Range */}
               <View style={s.filterSection}>
-                <Text style={s.filterSectionTitle}>Period</Text>
-                <View style={s.periodSegment}>
-                  {(['30D', '90D', 'Custom'] as const).map((p, idx) => (
-                    <TouchableOpacity
-                      key={p}
-                      style={[
-                        s.periodBtn,
-                        draftPeriod === p && s.periodBtnActive,
-                        idx === 0 && { borderTopLeftRadius: RADIUS.md, borderBottomLeftRadius: RADIUS.md },
-                        idx === 2 && { borderTopRightRadius: RADIUS.md, borderBottomRightRadius: RADIUS.md, borderRightWidth: 0 },
-                      ]}
-                      onPress={() => setDraftPeriod(p)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[s.periodTxt, draftPeriod === p && s.periodTxtActive]}>{p}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                {draftPeriod === 'Custom' && (
-                  <TextInput
-                    style={s.customDayInput}
-                    placeholder="Enter days (e.g. 45)"
-                    placeholderTextColor={COLORS.textTertiary}
-                    value={draftCustomDay}
-                    onChangeText={setDraftCustomDay}
-                    keyboardType="numeric"
-                  />
-                )}
+                <Text style={s.filterSectionTitle}>Date range</Text>
+                <TouchableOpacity style={s.dateRangeRow} onPress={openDatePicker} activeOpacity={0.8}>
+                  <View style={s.dateField}>
+                    <Ionicons name="calendar-outline" size={14} color={COLORS.brandPrimary} />
+                    <Text style={s.dateFieldTxt}>{fmtDateLabel(draftFrom)}</Text>
+                  </View>
+                  <Ionicons name="arrow-forward" size={14} color={COLORS.textTertiary} />
+                  <View style={s.dateField}>
+                    <Ionicons name="calendar-outline" size={14} color={COLORS.brandPrimary} />
+                    <Text style={s.dateFieldTxt}>{fmtDateLabel(draftTo)}</Text>
+                  </View>
+                </TouchableOpacity>
               </View>
 
               {/* Source WH */}
@@ -438,6 +450,21 @@ export default function TransferHistoryScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ── Date Range Picker (shared component) ─────────────────────────── */}
+      <DateRangePickerModal
+        visible={showDatePick}
+        fromDate={draftFrom}
+        toDate={draftTo}
+        onApply={handleDateApply}
+        onClose={() => {
+          setShowDatePick(false);
+          if (pendingReopenFilter) {
+            setPendingReopenFilter(false);
+            setTimeout(() => setShowFilter(true), 350);
+          }
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -502,12 +529,9 @@ const s = StyleSheet.create({
   filterSectionTitle: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: SPACING.sm },
 
   // Period selector (matches fast-slow.tsx pattern)
-  periodSegment:   { flexDirection: 'row', borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
-  periodBtn:       { flex: 1, paddingVertical: 12, alignItems: 'center', borderRightWidth: 1, borderRightColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg },
-  periodBtnActive: { backgroundColor: COLORS.brandPrimary },
-  periodTxt:       { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
-  periodTxtActive: { color: '#fff', fontWeight: '700' },
-  customDayInput:  { marginTop: 10, paddingHorizontal: 14, paddingVertical: 13, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, backgroundColor: COLORS.pageBg },
+  dateRangeRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 12, borderWidth: 1, borderColor: COLORS.borderDefault },
+  dateField:     { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dateFieldTxt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
 
   dropdownBtn:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 12, borderWidth: 1, borderColor: COLORS.borderDefault },
   dropdownTxt:        { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
