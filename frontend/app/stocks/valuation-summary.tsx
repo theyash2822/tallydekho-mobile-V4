@@ -1,157 +1,394 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  TextInput, Modal,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { PieChart } from 'react-native-gifted-charts';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
+import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
-const GROUPS: DropdownOption[] = [
-  { label: 'All Groups', value: 'all' },
-  { label: 'Electronics', value: 'electronics' },
-  { label: 'Peripherals', value: 'peripherals' },
-  { label: 'Accessories', value: 'accessories' },
+// ── Mock Data ────────────────────────────────────────────────────────────────
+const WAREHOUSES_LIST = ['WH-001 Echo Depot', 'WH-002 Sierra Storage', 'WH-003 Delta Hub', 'WH-004 Zulu Center', 'WH-005 North Terminal'];
+const COSTING_OPTIONS = ['FIFO (First In, First Out)', 'Weighted Average', 'LIFO (Last In, First Out)'];
+
+const PIE_DATA = [
+  { value: 670000, color: '#A89060',  label: 'Echo Depot'     },
+  { value: 320000, color: '#3A3A3A',  label: 'Sierra Storage' },
+  { value: 890000, color: '#7C5C3A',  label: 'Delta Hub'      },
+  { value: 410000, color: '#1A1A1A',  label: 'Zulu Center'    },
 ];
 
-const VALUATION_DATA = [
-  { group: 'Electronics',  items: 8,  qty: 142,  avgRate: '₹84,200', totalValue: '₹1,19,56,400', pct: 48.2 },
-  { group: 'Peripherals',  items: 12, qty: 316,  avgRate: '₹1,840',  totalValue: '₹58,14,400',  pct: 23.4 },
-  { group: 'Accessories',  items: 24, qty: 890,  avgRate: '₹480',    totalValue: '₹42,72,000',  pct: 17.2 },
-  { group: 'Audio',        items: 6,  qty: 74,   avgRate: '₹3,200',  totalValue: '₹23,68,000',  pct: 9.5 },
-  { group: 'Others',       items: 4,  qty: 38,   avgRate: '₹420',    totalValue: '₹15,96,000',  pct: 1.7 },
-];
-
-const VALUATION_METHODS: DropdownOption[] = [
-  { label: 'FIFO (First In, First Out)', value: 'fifo' },
-  { label: 'Weighted Average', value: 'avg' },
-  { label: 'LIFO (Last In, First Out)', value: 'lifo' },
+const WAREHOUSE_CARDS = [
+  { id: 'w1', name: 'Echo Depot',     city: 'New Delhi, India',  value: '₹6.7L',  skus: 1260, ratio: 29, color: '#A89060' },
+  { id: 'w2', name: 'Sierra Storage', city: 'New Delhi, India',  value: '₹3.2L',  skus: 840,  ratio: 14, color: '#3A3A3A' },
+  { id: 'w3', name: 'Delta Hub',      city: 'Mumbai, India',     value: '₹8.9L',  skus: 2100, ratio: 39, color: '#7C5C3A' },
+  { id: 'w4', name: 'Zulu Center',    city: 'Bangalore, India',  value: '₹4.1L',  skus: 980,  ratio: 18, color: '#1A1A1A' },
 ];
 
 export default function ValuationSummaryScreen() {
-  const router = useRouter();
-  const [group, setGroup] = useState('all');
-  const [method, setMethod] = useState('fifo');
+  const router  = useRouter();
+  const insets  = useSafeAreaInsets();
 
-  const filtered = group === 'all' ? VALUATION_DATA : VALUATION_DATA.filter(v => v.group.toLowerCase() === group);
-  const totalValue = '₹2,60,06,800';
-  const totalItems = filtered.reduce((a, v) => a + v.items, 0);
+  // Filter state
+  const [showFilter,          setShowFilter]          = useState(false);
+  const [showDatePick,        setShowDatePick]        = useState(false);
+  const [pendingReopenFilter, setPendingReopenFilter] = useState(false);
+
+  // Applied
+  const [dateFrom,   setDateFrom]   = useState('01/04/25');
+  const [dateTo,     setDateTo]     = useState('24/04/25');
+  const [selWH,      setSelWH]      = useState<Set<string>>(new Set());
+  const [selCosting, setSelCosting] = useState('FIFO (First In, First Out)');
+
+  // Draft
+  const [draftFrom,      setDraftFrom]      = useState('01/04/25');
+  const [draftTo,        setDraftTo]        = useState('24/04/25');
+  const [draftWH,        setDraftWH]        = useState<Set<string>>(new Set());
+  const [draftWHSearch,  setDraftWHSearch]  = useState('');
+  const [draftCosting,   setDraftCosting]   = useState('FIFO (First In, First Out)');
+
+  const activeFilterCount = selWH.size + (selCosting !== 'FIFO (First In, First Out)' ? 1 : 0);
+
+  const openFilter = () => {
+    setDraftFrom(dateFrom); setDraftTo(dateTo);
+    setDraftWH(new Set(selWH)); setDraftWHSearch('');
+    setDraftCosting(selCosting);
+    setShowFilter(true);
+  };
+
+  const applyFilters = () => {
+    setDateFrom(draftFrom); setDateTo(draftTo);
+    setSelWH(new Set(draftWH));
+    setSelCosting(draftCosting);
+    setShowFilter(false);
+  };
+
+  const openDateFromFilter = () => {
+    setShowFilter(false);
+    setPendingReopenFilter(true);
+    setTimeout(() => setShowDatePick(true), 350);
+  };
+
+  const handleDateApply = (f: string, t: string) => {
+    setDraftFrom(f); setDraftTo(t);
+    setShowDatePick(false);
+    if (pendingReopenFilter) {
+      setPendingReopenFilter(false);
+      setTimeout(() => setShowFilter(true), 350);
+    }
+  };
+
+  const fmtDateLabel = (s: string) => {
+    const p = s.split('/');
+    if (p.length < 3) return s;
+    const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${p[0]} ${m[parseInt(p[1])-1]} ${p[2]}`;
+  };
 
   return (
-    <SafeAreaView style={s.safe}>
+    <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
+      {/* Header */}
       <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
+        <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
+          <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Valuation Summary</Text>
-        <TouchableOpacity style={s.exportBtn} activeOpacity={0.7}>
-          <Ionicons name="share-outline" size={18} color={COLORS.brandPrimary} />
+        <TouchableOpacity style={s.headerBtn} onPress={openFilter} activeOpacity={0.7}>
+          <Ionicons name="options-outline" size={22} color={COLORS.textPrimary} />
+          {activeFilterCount > 0 && (
+            <View style={s.filterBadge}><Text style={s.filterBadgeTxt}>{activeFilterCount}</Text></View>
+          )}
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
-        {/* Filters */}
-        <View style={s.filterRow}>
-          <FormDropdown label="Group" value={group} options={GROUPS} onSelect={o => setGroup(o.value)} placeholder="Select group" containerStyle={{ flex: 1, marginBottom: 0 }} />
-          <FormDropdown label="Method" value={method} options={VALUATION_METHODS} onSelect={o => setMethod(o.value)} placeholder="Valuation method" containerStyle={{ flex: 1.3, marginBottom: 0 }} />
-        </View>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
 
-        {/* Total Banner */}
-        <View style={s.totalBanner}>
-          <View>
-            <Text style={s.totalLabel}>Total Stock Value</Text>
-            <Text style={s.totalValue}>{totalValue}</Text>
-          </View>
-          <View style={s.totalRight}>
-            <Text style={s.totalItemsVal}>{totalItems}</Text>
-            <Text style={s.totalItemsLbl}>SKUs</Text>
-          </View>
-        </View>
-
-        {/* Valuation Table */}
-        <View style={s.card}>
-          {/* Table Header */}
-          <View style={[s.tableRow, s.tableHdr]}>
-            <Text style={[s.th, { flex: 2 }]}>Group</Text>
-            <Text style={[s.th, { flex: 0.8, textAlign: 'center' }]}>Items</Text>
-            <Text style={[s.th, { flex: 1, textAlign: 'right' }]}>Qty</Text>
-            <Text style={[s.th, { flex: 1.8, textAlign: 'right' }]}>Total Value</Text>
-            <Text style={[s.th, { flex: 0.8, textAlign: 'right' }]}>%</Text>
-          </View>
-
-          {filtered.map((row, idx) => (
-            <View key={row.group} style={[s.tableRow, idx % 2 === 0 && s.tableRowAlt]}>
-              <View style={{ flex: 2, gap: 3 }}>
-                <Text style={s.groupName}>{row.group}</Text>
-                <Text style={s.avgRate}>Avg: {row.avgRate}</Text>
+        {/* Donut Chart */}
+        <View style={s.chartCard}>
+          <PieChart
+            donut
+            data={PIE_DATA}
+            radius={100}
+            innerRadius={64}
+            centerLabelComponent={() => (
+              <View style={s.chartCenter}>
+                <Ionicons name="business-outline" size={20} color={COLORS.textSecondary} />
+                <Text style={s.chartCenterTxt}>Warehouse</Text>
               </View>
-              <Text style={[s.td, { flex: 0.8, textAlign: 'center' }]}>{row.items}</Text>
-              <Text style={[s.td, { flex: 1, textAlign: 'right' }]}>{row.qty}</Text>
-              <Text style={[s.td, { flex: 1.8, textAlign: 'right', fontWeight: '700', color: COLORS.textPrimary }]}>{row.totalValue}</Text>
-              <View style={{ flex: 0.8, alignItems: 'flex-end' }}>
-                <View style={s.pctBar}>
-                  <View style={[s.pctFill, { width: `${row.pct}%` as any }]} />
-                </View>
-                <Text style={s.pctTxt}>{row.pct}%</Text>
+            )}
+          />
+          {/* Legend */}
+          <View style={s.legend}>
+            {PIE_DATA.map(d => (
+              <View key={d.label} style={s.legendRow}>
+                <View style={[s.legendDot, { backgroundColor: d.color }]} />
+                <Text style={s.legendLabel}>{d.label}</Text>
+                <Text style={s.legendVal}>₹{(d.value / 1000).toFixed(0)}K</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Warehouse Cards */}
+        <Text style={s.sectionLabel}>Warehouse Breakdown</Text>
+        {WAREHOUSE_CARDS.map(w => (
+          <View key={w.id} style={s.whCard}>
+            <View style={s.whCardTop}>
+              <View style={[s.avatar, { backgroundColor: w.color }]}>
+                <Text style={s.avatarTxt}>{w.name.charAt(0)}</Text>
+              </View>
+              <View style={s.whCardInfo}>
+                <Text style={s.whName}>{w.name}</Text>
+                <Text style={s.whCity}>{w.city}</Text>
               </View>
             </View>
-          ))}
+            <View style={s.whDivider} />
+            <View style={s.whStats}>
+              <View style={s.statItem}>
+                <Text style={s.statLbl}>Stock Value</Text>
+                <Text style={s.statVal}>{w.value}</Text>
+              </View>
+              <View style={s.statDivider} />
+              <View style={s.statItem}>
+                <Text style={s.statLbl}>SKUs</Text>
+                <Text style={s.statVal}>{w.skus.toLocaleString()}</Text>
+              </View>
+              <View style={s.statDivider} />
+              <View style={s.statItem}>
+                <Text style={s.statLbl}>Ratio</Text>
+                <Text style={s.statVal}>{w.ratio}%</Text>
+              </View>
+            </View>
+          </View>
+        ))}
 
-          {/* Total Row */}
-          <View style={[s.tableRow, s.totalRow]}>
-            <Text style={[s.totalCell, { flex: 2 }]}>TOTAL</Text>
-            <Text style={[s.totalCell, { flex: 0.8, textAlign: 'center' }]}>{totalItems}</Text>
-            <Text style={[s.totalCell, { flex: 1, textAlign: 'right' }]}>1,460</Text>
-            <Text style={[s.totalCell, { flex: 1.8, textAlign: 'right' }]}>{totalValue}</Text>
-            <Text style={[s.totalCell, { flex: 0.8, textAlign: 'right' }]}>100%</Text>
+        <View style={{ height: 100 }} />
+      </ScrollView>
+
+      {/* Share Button */}
+      <View style={[s.shareWrap, { paddingBottom: insets.bottom || 16 }]}>
+        <TouchableOpacity style={s.shareBtn} activeOpacity={0.8}>
+          <Ionicons name="share-social-outline" size={18} color="#fff" />
+          <Text style={s.shareTxt}>Share</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ── Filter Modal (inlined — no sub-component to prevent remount) ── */}
+      <Modal visible={showFilter} transparent animationType="slide" onRequestClose={() => setShowFilter(false)}>
+        <View style={s.modalOverlay}>
+          <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowFilter(false)} activeOpacity={1} />
+          <View style={[s.modalSheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={s.modalHandle} />
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>Filter</Text>
+              <TouchableOpacity onPress={() => setShowFilter(false)} activeOpacity={0.7}>
+                <Ionicons name="close" size={22} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              {/* Date Range */}
+              <View style={s.filterSection}>
+                <Text style={s.filterSectionTitle}>Date range</Text>
+                <TouchableOpacity style={s.dateRangeRow} onPress={openDateFromFilter} activeOpacity={0.8}>
+                  <View style={s.dateField}>
+                    <Ionicons name="calendar-outline" size={14} color={COLORS.brandPrimary} />
+                    <Text style={s.dateFieldTxt}>{fmtDateLabel(draftFrom)}</Text>
+                  </View>
+                  <Ionicons name="arrow-forward" size={14} color={COLORS.textTertiary} />
+                  <View style={s.dateField}>
+                    <Ionicons name="calendar-outline" size={14} color={COLORS.brandPrimary} />
+                    <Text style={s.dateFieldTxt}>{fmtDateLabel(draftTo)}</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+
+              {/* Warehouse */}
+              <View style={s.filterSection}>
+                <Text style={s.filterSectionTitle}>Warehouse</Text>
+                {draftWH.size > 0 && (
+                  <View style={s.chipWrap}>
+                    {[...draftWH].map(w => (
+                      <TouchableOpacity
+                        key={w} style={s.chip}
+                        onPress={() => setDraftWH(prev => { const n = new Set(prev); n.delete(w); return n; })}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={s.chipTxt}>{w}</Text>
+                        <Ionicons name="close" size={12} color="#fff" />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+                <View style={[s.searchRow, { marginTop: draftWH.size > 0 ? 8 : 0 }]}>
+                  <Ionicons name="search-outline" size={15} color={COLORS.textTertiary} />
+                  <TextInput
+                    style={s.searchTxt}
+                    placeholder="Search warehouse..."
+                    placeholderTextColor={COLORS.textTertiary}
+                    value={draftWHSearch}
+                    onChangeText={setDraftWHSearch}
+                  />
+                  {draftWHSearch.length > 0 && (
+                    <TouchableOpacity onPress={() => setDraftWHSearch('')} activeOpacity={0.7}>
+                      <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {draftWHSearch.length > 0 && (
+                  <View style={s.whList}>
+                    {WAREHOUSES_LIST
+                      .filter(w => w.toLowerCase().includes(draftWHSearch.toLowerCase()))
+                      .map((w, idx, arr) => {
+                        const checked = draftWH.has(w);
+                        return (
+                          <TouchableOpacity
+                            key={w}
+                            style={[s.whRow, idx === arr.length - 1 && { borderBottomWidth: 0 }]}
+                            onPress={() => {
+                              setDraftWH(prev => { const n = new Set(prev); checked ? n.delete(w) : n.add(w); return n; });
+                              if (!checked) setDraftWHSearch('');
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="business-outline" size={15} color={COLORS.textSecondary} />
+                            <Text style={s.whRowTxt}>{w}</Text>
+                            <View style={[s.checkbox, checked && s.checkboxActive]}>
+                              {checked && <Ionicons name="checkmark" size={12} color="#fff" />}
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                  </View>
+                )}
+              </View>
+
+              {/* Costing */}
+              <View style={s.filterSection}>
+                <Text style={s.filterSectionTitle}>Costing</Text>
+                <View style={s.optionList}>
+                  {COSTING_OPTIONS.map((c, idx) => {
+                    const active = draftCosting === c;
+                    return (
+                      <TouchableOpacity
+                        key={c}
+                        style={[s.optionRow, idx === COSTING_OPTIONS.length - 1 && { borderBottomWidth: 0 }]}
+                        onPress={() => setDraftCosting(c)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[s.optionTxt, active && s.optionTxtActive]}>{c}</Text>
+                        <View style={[s.radio, active && s.radioActive]}>
+                          {active && <View style={s.radioInner} />}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+              <View style={{ height: 24 }} />
+            </ScrollView>
+            <View style={s.modalFooter}>
+              <TouchableOpacity style={s.cancelBtn} onPress={() => setShowFilter(false)} activeOpacity={0.7}>
+                <Text style={s.cancelTxt}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.applyBtn} onPress={applyFilters} activeOpacity={0.8}>
+                <Text style={s.applyTxt}>Apply Filters</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
+      </Modal>
 
-        {/* Valuation Method Note */}
-        <View style={s.noteCard}>
-          <Ionicons name="information-circle-outline" size={16} color={COLORS.info} />
-          <Text style={s.noteTxt}>
-            Valuation using <Text style={{ fontWeight: '700' }}>FIFO</Text> method.
-            Stock value reflects purchase cost, excluding overheads and duties.
-          </Text>
-        </View>
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
+      <DateRangePickerModal
+        visible={showDatePick}
+        fromDate={draftFrom}
+        toDate={draftTo}
+        onApply={handleDateApply}
+        onClose={() => {
+          setShowDatePick(false);
+          if (pendingReopenFilter) {
+            setPendingReopenFilter(false);
+            setTimeout(() => setShowFilter(true), 350);
+          }
+        }}
+      />
     </SafeAreaView>
   );
 }
 
+// ── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: COLORS.pageBg },
-  header:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.sm, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary },
-  exportBtn:   { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  scroll: { flex: 1 },
-  filterRow: { flexDirection: 'row', gap: 10, margin: SPACING.md },
-  totalBanner: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginHorizontal: SPACING.md, marginBottom: SPACING.md,
-    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.lg, padding: SPACING.md,
-  },
-  totalLabel: { fontSize: TYPOGRAPHY.xs, color: '#AEACA8', marginBottom: 4 },
-  totalValue: { fontSize: TYPOGRAPHY.xl, fontWeight: '800', color: COLORS.white },
-  totalRight: { alignItems: 'center' },
-  totalItemsVal: { fontSize: TYPOGRAPHY.xxl, fontWeight: '800', color: COLORS.white },
-  totalItemsLbl: { fontSize: TYPOGRAPHY.xs, color: '#AEACA8' },
-  card: { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
-  tableHdr: { backgroundColor: COLORS.pageBg, borderBottomWidth: 1.5, borderBottomColor: COLORS.borderStrong },
-  tableRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.sm, paddingVertical: 12, gap: 4 },
-  tableRowAlt: { backgroundColor: '#FAFAFA' },
-  th: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary, textTransform: 'uppercase' },
-  td: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
-  groupName: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  avgRate:   { fontSize: 10, color: COLORS.textTertiary },
-  pctBar:    { width: 36, height: 4, backgroundColor: COLORS.borderDefault, borderRadius: 2, overflow: 'hidden' },
-  pctFill:   { height: '100%', backgroundColor: COLORS.positive, borderRadius: 2 },
-  pctTxt:    { fontSize: 9, color: COLORS.textTertiary, marginTop: 1 },
-  totalRow:  { backgroundColor: COLORS.activeBg, borderTopWidth: 1.5, borderTopColor: COLORS.borderStrong },
-  totalCell: { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
-  noteCard:  { flexDirection: 'row', gap: 8, marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.infoBg, borderRadius: RADIUS.md, padding: SPACING.md },
-  noteTxt:   { flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.info, lineHeight: 18 },
+  safe:   { flex: 1, backgroundColor: COLORS.pageBg },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.sm, paddingVertical: 12, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  headerBtn:   { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  filterBadge: { position: 'absolute', top: 6, right: 6, width: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center' },
+  filterBadgeTxt: { fontSize: 9, fontWeight: '700', color: '#fff' },
+
+  scroll: { padding: SPACING.md, gap: 12 },
+
+  chartCard:      { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, padding: SPACING.md, alignItems: 'center' },
+  chartCenter:    { alignItems: 'center', gap: 4 },
+  chartCenterTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600' },
+  legend:         { width: '100%', marginTop: SPACING.md, gap: 10 },
+  legendRow:      { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  legendDot:      { width: 12, height: 12, borderRadius: 6, flexShrink: 0 },
+  legendLabel:    { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
+  legendVal:      { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+
+  sectionLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, paddingLeft: 4, marginTop: 4 },
+
+  whCard:    { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, padding: SPACING.md },
+  whCardTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  avatar:    { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  avatarTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: '#fff' },
+  whCardInfo:{ flex: 1 },
+  whName:    { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  whCity:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+  whDivider: { height: 1, backgroundColor: COLORS.borderDefault, marginVertical: SPACING.sm },
+  whStats:   { flexDirection: 'row', alignItems: 'center' },
+  statItem:  { flex: 1, alignItems: 'center', gap: 3 },
+  statLbl:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  statVal:   { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
+  statDivider: { width: 1, height: 32, backgroundColor: COLORS.borderDefault },
+
+  shareWrap: { paddingHorizontal: SPACING.md, paddingTop: 12, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
+  shareBtn:  { backgroundColor: COLORS.textPrimary, borderRadius: RADIUS.lg, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  shareTxt:  { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: '#fff' },
+
+  // Modal
+  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
+  modalSheet:   { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '88%', paddingHorizontal: SPACING.md },
+  modalHandle:  { width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.borderDefault, alignSelf: 'center', marginTop: 10, marginBottom: 8 },
+  modalHeader:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, marginBottom: 8 },
+  modalTitle:   { fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary },
+  filterSection:      { marginBottom: 20 },
+  filterSectionTitle: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 },
+  dateRangeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  dateField:    { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 12, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg },
+  dateFieldTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
+  chipWrap:     { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
+  chip:         { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 7, borderRadius: RADIUS.full, backgroundColor: COLORS.textPrimary },
+  chipTxt:      { fontSize: TYPOGRAPHY.sm, color: '#fff', fontWeight: '600' },
+  searchRow:    { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 12, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg },
+  searchTxt:    { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, padding: 0 },
+  whList:       { borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden', marginTop: 8 },
+  whRow:        { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: SPACING.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
+  whRowTxt:     { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, fontWeight: '500' },
+  checkbox:     { width: 20, height: 20, borderRadius: 4, borderWidth: 1.5, borderColor: COLORS.borderDefault, alignItems: 'center', justifyContent: 'center' },
+  checkboxActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
+  optionList:   { borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
+  optionRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
+  optionTxt:    { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary, flex: 1 },
+  optionTxtActive: { color: COLORS.textPrimary, fontWeight: '700' },
+  radio:        { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: COLORS.borderDefault, alignItems: 'center', justifyContent: 'center' },
+  radioActive:  { borderColor: COLORS.brandPrimary },
+  radioInner:   { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.brandPrimary },
+  modalFooter:  { flexDirection: 'row', gap: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
+  cancelBtn:    { flex: 1, paddingVertical: 16, borderRadius: RADIUS.lg, backgroundColor: COLORS.pageBg, alignItems: 'center' },
+  cancelTxt:    { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  applyBtn:     { flex: 1, paddingVertical: 16, borderRadius: RADIUS.lg, backgroundColor: COLORS.textPrimary, alignItems: 'center' },
+  applyTxt:     { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: '#fff' },
 });
