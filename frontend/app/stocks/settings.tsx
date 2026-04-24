@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Switch, TextInput, Modal, KeyboardAvoidingView, Platform,
-  LayoutAnimation, UIManager, Pressable,
+  TextInput, Modal, KeyboardAvoidingView, Platform,
+  LayoutAnimation, UIManager, Pressable, Animated,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import BrandSwitch from '../../src/components/forms/BrandSwitch';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -96,6 +97,10 @@ export default function StockSettingsScreen() {
   const [expiryDays, setExpiryDays]   = useState('30');
   const [expiryCh, setExpiryCh]       = useState<AlertChannels>({ inApp: true,  email: false, wa: false });
 
+  // ── Toast
+  const toastAnim  = useRef(new Animated.Value(0)).current;
+  const [toastMsg, setToastMsg] = useState('');
+
   // ─── Helpers ────────────────────────────────────────────────────────────────
   const toggleSection = (key: keyof typeof openSections) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -124,6 +129,15 @@ export default function StockSettingsScreen() {
   const removeRack = (i: number) => {
     const r = addForm.racks.filter((_, idx) => idx !== i);
     setAddForm(f => ({ ...f, racks: r.length ? r : [''] }));
+  };
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    Animated.sequence([
+      Animated.timing(toastAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
+      Animated.delay(2000),
+      Animated.timing(toastAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]).start();
   };
 
   const handleAddWarehouse = () => {
@@ -294,7 +308,7 @@ export default function StockSettingsScreen() {
                   {/* Warehouse header row */}
                   <TouchableOpacity style={s.whRow} onPress={() => toggleWh(wh.id)} activeOpacity={0.7}>
                     <View style={s.whIconWrap}>
-                      <Ionicons name="business" size={16} color={AMBER} />
+                      <Ionicons name="business" size={16} color={COLORS.textSecondary} />
                     </View>
                     <View style={s.whInfo}>
                       <Text style={s.whName}>{wh.name}</Text>
@@ -393,12 +407,7 @@ export default function StockSettingsScreen() {
                   <Text style={s.fieldLabel}>Batch / Lot Tracking</Text>
                   <Text style={s.fieldSub}>Track items by batch or lot number</Text>
                 </View>
-                <Switch
-                  value={batchTracking}
-                  onValueChange={setBatchTracking}
-                  trackColor={{ false: COLORS.borderDefault, true: AMBER + '80' }}
-                  thumbColor={batchTracking ? AMBER : '#f4f3f4'}
-                />
+                <BrandSwitch value={batchTracking} onValueChange={setBatchTracking} />
               </View>
 
               <View style={s.divider} />
@@ -409,12 +418,7 @@ export default function StockSettingsScreen() {
                   <Text style={s.fieldLabel}>Expiry-Date Tracking</Text>
                   <Text style={s.fieldSub}>Track expiry dates for stock items</Text>
                 </View>
-                <Switch
-                  value={expiryTracking}
-                  onValueChange={setExpiryTracking}
-                  trackColor={{ false: COLORS.borderDefault, true: AMBER + '80' }}
-                  thumbColor={expiryTracking ? AMBER : '#f4f3f4'}
-                />
+                <BrandSwitch value={expiryTracking} onValueChange={setExpiryTracking} />
               </View>
 
               <View style={s.divider} />
@@ -425,12 +429,7 @@ export default function StockSettingsScreen() {
                   <Text style={s.fieldLabel}>Allow Negative Stock</Text>
                   <Text style={s.fieldSub}>Permit stock quantity to go below zero</Text>
                 </View>
-                <Switch
-                  value={allowNegative}
-                  onValueChange={setAllowNegative}
-                  trackColor={{ false: COLORS.borderDefault, true: AMBER + '80' }}
-                  thumbColor={allowNegative ? AMBER : '#f4f3f4'}
-                />
+                <BrandSwitch value={allowNegative} onValueChange={setAllowNegative} />
               </View>
 
               <View style={s.divider} />
@@ -544,15 +543,14 @@ export default function StockSettingsScreen() {
         <TouchableOpacity style={s.cancelBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Text style={s.cancelBtnText}>Cancel</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={s.saveBtn} activeOpacity={0.8}>
+        <TouchableOpacity style={s.saveBtn} onPress={() => showToast('Settings saved successfully')} activeOpacity={0.8}>
           <Text style={s.saveBtnText}>Save</Text>
         </TouchableOpacity>
       </View>
 
       {/* ══════════════════════════════════════════════
           ADD WAREHOUSE BOTTOM SHEET MODAL
-      ══════════════════════════════════════════════ */}
-      <Modal
+      ══════════════════════════════════════════════ */}      <Modal
         visible={addModalVisible}
         animationType="slide"
         transparent
@@ -709,6 +707,21 @@ export default function StockSettingsScreen() {
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* ── Toast notification */}
+      <Animated.View
+        style={[
+          s.toast,
+          {
+            opacity: toastAnim,
+            transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+          },
+        ]}
+        pointerEvents="none"
+      >
+        <Ionicons name="checkmark-circle" size={18} color="#fff" />
+        <Text style={s.toastText}>{toastMsg}</Text>
+      </Animated.View>
     </SafeAreaView>
   );
 }
@@ -782,7 +795,7 @@ const s = StyleSheet.create({
   whRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 12, gap: 10 },
   whIconWrap: {
     width: 34, height: 34, borderRadius: 8,
-    backgroundColor: AMBER + '18',
+    backgroundColor: COLORS.hoverBg,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
   whInfo:    { flex: 1 },
@@ -926,4 +939,29 @@ const s = StyleSheet.create({
   },
   modalSaveBtnDisabled: { opacity: 0.4 },
   modalSaveText: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: '#fff' },
+
+  // ── Toast
+  toast: {
+    position: 'absolute',
+    bottom: 90,
+    left: SPACING.lg,
+    right: SPACING.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.brandPrimary,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: 13,
+    borderRadius: RADIUS.full,
+    zIndex: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  toastText: {
+    fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: '#fff',
+  },
 });

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, Alert,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import BrandSwitch from '../../src/components/forms/BrandSwitch';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type SelectOption = { label: string; value: string };
@@ -49,12 +50,7 @@ function ToggleRow({ icon, label, sub, value, onChange }: {
           {sub && <Text style={s.rowSub}>{sub}</Text>}
         </View>
       </View>
-      <Switch
-        value={value}
-        onValueChange={onChange}
-        trackColor={{ false: COLORS.borderDefault, true: COLORS.brandPrimary }}
-        thumbColor={COLORS.white}
-      />
+      <BrandSwitch value={value} onValueChange={onChange} />
     </View>
   );
 }
