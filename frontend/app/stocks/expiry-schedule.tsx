@@ -96,6 +96,11 @@ export default function ExpiryScheduleScreen() {
     setShowFilter(false);
   };
 
+  const resetFilters = () => {
+    setDraftWH(new Set()); setDraftWHSearch('');
+    setDraftItemGroup('');
+  };
+
   // ── Selection handlers ────────────────────────────────────────────────────
   const handleLongPress = (id: string) => {
     setIsSelectionMode(true);
@@ -418,8 +423,8 @@ export default function ExpiryScheduleScreen() {
               <View style={{ height: 24 }} />
             </ScrollView>
             <View style={s.modalFooter}>
-              <TouchableOpacity style={s.cancelBtn} onPress={() => setShowFilter(false)} activeOpacity={0.7}>
-                <Text style={s.cancelTxt}>Cancel</Text>
+              <TouchableOpacity style={s.cancelBtn} onPress={resetFilters} activeOpacity={0.7}>
+                <Text style={s.cancelTxt}>Reset</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.applyBtn} onPress={applyFilters} activeOpacity={0.8}>
                 <Text style={s.applyTxt}>Apply Filters</Text>

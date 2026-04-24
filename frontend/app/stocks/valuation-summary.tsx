@@ -102,6 +102,12 @@ export default function ValuationSummaryScreen() {
     setShowFilter(false);
   };
 
+  const resetFilters = () => {
+    setDraftFrom('01/04/25'); setDraftTo('24/04/25');
+    setDraftWH(new Set()); setDraftWHSearch('');
+    setDraftCosting('FIFO (First In, First Out)');
+  };
+
   const openDateFromFilter = () => {
     setShowFilter(false);
     setPendingReopenFilter(true);
@@ -395,8 +401,8 @@ export default function ValuationSummaryScreen() {
               <View style={{ height: 24 }} />
             </ScrollView>
             <View style={s.modalFooter}>
-              <TouchableOpacity style={s.cancelBtn} onPress={() => setShowFilter(false)} activeOpacity={0.7}>
-                <Text style={s.cancelTxt}>Cancel</Text>
+              <TouchableOpacity style={s.cancelBtn} onPress={resetFilters} activeOpacity={0.7}>
+                <Text style={s.cancelTxt}>Reset</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.applyBtn} onPress={applyFilters} activeOpacity={0.8}>
                 <Text style={s.applyTxt}>Apply Filters</Text>

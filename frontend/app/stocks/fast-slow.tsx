@@ -128,6 +128,12 @@ export default function FastSlowMovingScreen() {
     setShowFilter(false);
   };
 
+  const resetFilters = () => {
+    setDraftPeriod('30D'); setDraftCustomDay('');
+    setDraftWH(new Set()); setDraftWHSearch('');
+    setDraftCategory('');
+  };
+
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
 
@@ -507,8 +513,8 @@ export default function FastSlowMovingScreen() {
             </ScrollView>
 
             <View style={s.modalFooter}>
-              <TouchableOpacity style={s.cancelBtn} onPress={() => setShowFilter(false)} activeOpacity={0.7}>
-                <Text style={s.cancelTxt}>Cancel</Text>
+              <TouchableOpacity style={s.cancelBtn} onPress={resetFilters} activeOpacity={0.7}>
+                <Text style={s.cancelTxt}>Reset</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.applyBtn} onPress={applyFilters} activeOpacity={0.8}>
                 <Text style={s.applyTxt}>Apply Filters</Text>

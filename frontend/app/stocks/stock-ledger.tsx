@@ -99,6 +99,13 @@ export default function StockLedgerScreen() {
     setShowFilter(false);
   };
 
+  const resetFilters = () => {
+    setDraftWH(new Set()); setDraftWHSearch('');
+    setDraftItem(''); setDraftBatch('');
+    setDraftVouchers(new Set());
+    setDraftFrom('01/04/24'); setDraftTo('15/12/24');
+  };
+
   // Issue 1 fix: close filter → open date picker → reopen filter on apply
   const openDateFromFilter = () => {
     setShowFilter(false);
@@ -574,8 +581,8 @@ export default function StockLedgerScreen() {
               <View style={{ height: 24 }} />
             </ScrollView>
             <View style={s.modalFooter}>
-              <TouchableOpacity style={s.cancelBtn} onPress={() => setShowFilter(false)} activeOpacity={0.7}>
-                <Text style={s.cancelTxt}>Cancel</Text>
+              <TouchableOpacity style={s.cancelBtn} onPress={resetFilters} activeOpacity={0.7}>
+                <Text style={s.cancelTxt}>Reset</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.applyBtn} onPress={applyFilters} activeOpacity={0.8}>
                 <Text style={s.applyTxt}>Apply Filters</Text>

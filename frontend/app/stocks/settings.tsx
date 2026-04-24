@@ -35,16 +35,14 @@ interface AlertChannels {
 }
 
 interface AddWarehouseForm {
-  name: string;
-  location: string;
   code: string;
-  cycleFreq: string;
-  archiveMonths: string;
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  zipCode: string;
   narration: string;
-  racks: string[];
-  contactName: string;
-  contactMobile: string;
-  contactEmail: string;
+  racks: { id: string; rack: string; label: string }[];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -58,8 +56,8 @@ const UOM_OPTIONS = ['Pieces', 'Kilogram', 'Meters', 'Liters', 'Grams', 'Boxes',
 const CYCLE_OPTIONS = ['Daily', 'Weekly', 'Monthly', 'Quarterly'];
 
 const BLANK_FORM: AddWarehouseForm = {
-  name: '', location: '', code: '', cycleFreq: 'Weekly', archiveMonths: '24',
-  narration: '', racks: [''], contactName: '', contactMobile: '', contactEmail: '',
+  code: '', name: '', phone: '', email: '',
+  address: '', zipCode: '', narration: '', racks: [],
 };
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
@@ -79,10 +77,12 @@ export default function StockSettingsScreen() {
   const [uomOpen, setUomOpen]              = useState(false);
 
   // ── Warehouse
-  const [warehouses, setWarehouses]         = useState<Warehouse[]>(INITIAL_WAREHOUSES);
-  const [expandedWh, setExpandedWh]         = useState<string | null>(null);
+  const [warehouses, setWarehouses]           = useState<Warehouse[]>(INITIAL_WAREHOUSES);
+  const [expandedWh, setExpandedWh]           = useState<string | null>(null);
   const [addModalVisible, setAddModalVisible] = useState(false);
-  const [addForm, setAddForm]               = useState<AddWarehouseForm>(BLANK_FORM);
+  const [addForm, setAddForm]                 = useState<AddWarehouseForm>(BLANK_FORM);
+  const [newRack, setNewRack]                 = useState('');
+  const [newLabel, setNewLabel]               = useState('');
 
   // ── Items
   const [batchTracking, setBatchTracking]   = useState(false);
@@ -120,15 +120,15 @@ export default function StockSettingsScreen() {
     key: keyof AlertChannels,
   ) => setter(prev => ({ ...prev, [key]: !prev[key] }));
 
-  const addRack = () => setAddForm(f => ({ ...f, racks: [...f.racks, ''] }));
-  const updateRack = (i: number, val: string) => {
-    const r = [...addForm.racks]; r[i] = val;
-    setAddForm(f => ({ ...f, racks: r }));
+  const addRack = () => {
+    if (!newRack.trim()) return;
+    setAddForm(f => ({
+      ...f,
+      racks: [...f.racks, { id: Date.now().toString(), rack: newRack.trim(), label: newLabel.trim() }],
+    }));
+    setNewRack(''); setNewLabel('');
   };
-  const removeRack = (i: number) => {
-    const r = addForm.racks.filter((_, idx) => idx !== i);
-    setAddForm(f => ({ ...f, racks: r.length ? r : [''] }));
-  };
+  const removeRack = (id: string) => setAddForm(f => ({ ...f, racks: f.racks.filter(r => r.id !== id) }));
 
   const showToast = (msg: string) => {
     Toast.show({ type: 'success', text1: msg });
@@ -136,18 +136,19 @@ export default function StockSettingsScreen() {
 
   const handleAddWarehouse = () => {
     if (!addForm.name.trim()) return;
+    const loc = [addForm.address.trim(), addForm.zipCode.trim()].filter(Boolean).join(', ') || 'India';
     const newWh: Warehouse = {
       id: `wh${Date.now()}`,
       name: addForm.name.trim(),
-      location: addForm.location.trim() || 'India',
+      location: loc,
       code: addForm.code.trim(),
-      cycleFreq: addForm.cycleFreq,
-      archiveMonths: addForm.archiveMonths || '24',
+      cycleFreq: 'Weekly',
+      archiveMonths: '24',
     };
     setWarehouses(prev => [...prev, newWh]);
     setAddForm(BLANK_FORM);
+    setNewRack(''); setNewLabel('');
     setAddModalVisible(false);
-    // Auto-expand warehouse section
     if (!openSections.warehouse) {
       setOpenSections(prev => ({ ...prev, warehouse: true }));
     }
@@ -578,106 +579,117 @@ export default function StockSettingsScreen() {
                   style={s.modalInput}
                   value={addForm.code}
                   onChangeText={v => setAddForm(f => ({ ...f, code: v }))}
-                  placeholder="e.g. MUM-MAIN"
+                  placeholder="Add Code"
                   placeholderTextColor={COLORS.textTertiary}
                   autoCapitalize="characters"
                 />
 
                 {/* ── Warehouse Name */}
-                <Text style={s.modalLabel}>Warehouse Name <Text style={s.required}>*</Text></Text>
+                <Text style={s.modalLabel}>Name <Text style={s.required}>*</Text></Text>
                 <TextInput
                   style={s.modalInput}
                   value={addForm.name}
                   onChangeText={v => setAddForm(f => ({ ...f, name: v }))}
-                  placeholder="e.g. Mumbai Central"
+                  placeholder="Add Name"
                   placeholderTextColor={COLORS.textTertiary}
                 />
+
+                {/* ── Phone + Email (side by side) */}
+                <View style={s.mRow2}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.modalLabel}>Phone Number</Text>
+                    <TextInput
+                      style={s.modalInput}
+                      value={addForm.phone}
+                      onChangeText={v => setAddForm(f => ({ ...f, phone: v }))}
+                      placeholder="Enter Phone number"
+                      placeholderTextColor={COLORS.textTertiary}
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.modalLabel}>Email</Text>
+                    <TextInput
+                      style={s.modalInput}
+                      value={addForm.email}
+                      onChangeText={v => setAddForm(f => ({ ...f, email: v }))}
+                      placeholder="Enter Email"
+                      placeholderTextColor={COLORS.textTertiary}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                    />
+                  </View>
+                </View>
 
                 {/* ── Address */}
                 <Text style={s.modalLabel}>Address</Text>
                 <TextInput
                   style={[s.modalInput, s.modalInputMulti]}
-                  value={addForm.location}
-                  onChangeText={v => setAddForm(f => ({ ...f, location: v }))}
-                  placeholder="Full address with pincode..."
+                  value={addForm.address}
+                  onChangeText={v => setAddForm(f => ({ ...f, address: v }))}
+                  placeholder="Enter full address"
                   placeholderTextColor={COLORS.textTertiary}
                   multiline
-                  numberOfLines={2}
+                  numberOfLines={3}
                 />
+
+                {/* ── Zip Code */}
+                <Text style={s.modalLabel}>Zip Code</Text>
+                <TextInput
+                  style={s.modalInput}
+                  value={addForm.zipCode}
+                  onChangeText={v => setAddForm(f => ({ ...f, zipCode: v }))}
+                  placeholder="Zip Code"
+                  placeholderTextColor={COLORS.textTertiary}
+                  keyboardType="numeric"
+                />
+
+                {/* ── Racks */}
+                <Text style={s.modalLabel}>Racks</Text>
+                {addForm.racks.map(r => (
+                  <View key={r.id} style={s.rackRow}>
+                    <View style={[s.rackDisplay, { flex: 1 }]}>
+                      <Text style={s.rackVal}>{r.rack}</Text>
+                    </View>
+                    <View style={[s.rackDisplay, { flex: 1 }]}>
+                      <Text style={s.rackVal}>{r.label || '—'}</Text>
+                    </View>
+                    <TouchableOpacity style={s.rackDelBtn} onPress={() => removeRack(r.id)} activeOpacity={0.7}>
+                      <Ionicons name="close" size={16} color={COLORS.negative} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                {/* New rack entry row */}
+                <View style={s.rackRow}>
+                  <TextInput
+                    style={[s.rackEntryInput, { flex: 1 }]}
+                    placeholder="Enter Racks"
+                    placeholderTextColor={COLORS.textTertiary}
+                    value={newRack}
+                    onChangeText={setNewRack}
+                  />
+                  <TextInput
+                    style={[s.rackEntryInput, { flex: 1 }]}
+                    placeholder="Enter Label"
+                    placeholderTextColor={COLORS.textTertiary}
+                    value={newLabel}
+                    onChangeText={setNewLabel}
+                  />
+                  <TouchableOpacity style={s.rackAddBtn} onPress={addRack} activeOpacity={0.7}>
+                    <Ionicons name="add" size={18} color={COLORS.textPrimary} />
+                  </TouchableOpacity>
+                </View>
 
                 {/* ── Narration */}
                 <Text style={s.modalLabel}>Narration</Text>
                 <TextInput
-                  style={s.modalInput}
+                  style={[s.modalInput, s.modalInputMulti]}
                   value={addForm.narration}
                   onChangeText={v => setAddForm(f => ({ ...f, narration: v }))}
-                  placeholder="Optional notes..."
+                  placeholder="Enter Narration"
                   placeholderTextColor={COLORS.textTertiary}
-                />
-
-                {/* ── Cycle-count frequency */}
-                <Text style={s.modalLabel}>Cycle-count Frequency</Text>
-                <View style={[s.cycleOptions, { marginBottom: SPACING.md }]}>
-                  {CYCLE_OPTIONS.map(opt => (
-                    <TouchableOpacity
-                      key={opt}
-                      style={[s.cyclePill, addForm.cycleFreq === opt && s.cyclePillActive]}
-                      onPress={() => setAddForm(f => ({ ...f, cycleFreq: opt }))}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[s.cyclePillText, addForm.cycleFreq === opt && s.cyclePillTextActive]}>{opt}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {/* ── Racks */}
-                <Text style={s.modalLabel}>Racks</Text>
-                {addForm.racks.map((rack, i) => (
-                  <View key={i} style={s.rackRow}>
-                    <TextInput
-                      style={[s.modalInput, s.rackInput]}
-                      value={rack}
-                      onChangeText={v => updateRack(i, v)}
-                      placeholder={`Rack ${i + 1} label`}
-                      placeholderTextColor={COLORS.textTertiary}
-                    />
-                    {addForm.racks.length > 1 && (
-                      <TouchableOpacity onPress={() => removeRack(i)} activeOpacity={0.7} style={s.rackRemoveBtn}>
-                        <Ionicons name="close-circle" size={20} color={COLORS.textTertiary} />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))}
-                <TouchableOpacity style={s.addRackBtn} onPress={addRack} activeOpacity={0.7}>
-                  <Ionicons name="add-outline" size={16} color={AMBER} />
-                  <Text style={s.addRackText}>Add Rack</Text>
-                </TouchableOpacity>
-
-                {/* ── Contact Person */}
-                <Text style={s.modalLabel}>Contact Person</Text>
-                <TextInput
-                  style={s.modalInput}
-                  value={addForm.contactName}
-                  onChangeText={v => setAddForm(f => ({ ...f, contactName: v }))}
-                  placeholder="Name"
-                  placeholderTextColor={COLORS.textTertiary}
-                />
-                <TextInput
-                  style={s.modalInput}
-                  value={addForm.contactMobile}
-                  onChangeText={v => setAddForm(f => ({ ...f, contactMobile: v }))}
-                  placeholder="Mobile number"
-                  placeholderTextColor={COLORS.textTertiary}
-                  keyboardType="phone-pad"
-                />
-                <TextInput
-                  style={s.modalInput}
-                  value={addForm.contactEmail}
-                  onChangeText={v => setAddForm(f => ({ ...f, contactEmail: v }))}
-                  placeholder="Email address"
-                  placeholderTextColor={COLORS.textTertiary}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
+                  multiline
+                  numberOfLines={3}
                 />
 
                 {/* ── Modal Action Buttons */}
@@ -691,7 +703,7 @@ export default function StockSettingsScreen() {
                     activeOpacity={0.8}
                     disabled={!addForm.name.trim()}
                   >
-                    <Text style={s.modalSaveText}>Add Warehouse</Text>
+                    <Text style={s.modalSaveText}>Save</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -893,17 +905,32 @@ const s = StyleSheet.create({
     fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary,
     marginBottom: 4,
   },
-  modalInputMulti: { height: 70, paddingTop: 12, textAlignVertical: 'top' },
+  modalInputMulti: { minHeight: 84, paddingTop: 12, textAlignVertical: 'top' },
 
-  // ── Rack rows
-  rackRow:       { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  rackInput:     { flex: 1, marginBottom: 0 },
-  rackRemoveBtn: { padding: 4 },
-  addRackBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingVertical: 10, paddingHorizontal: 4,
+  // ── Rack rows (matches create-warehouse.tsx pattern)
+  rackRow:       { flexDirection: 'row', gap: 8, marginBottom: 8, alignItems: 'center' },
+  rackDisplay: {
+    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    paddingHorizontal: 12, paddingVertical: 12,
+    backgroundColor: COLORS.cardBg,
   },
-  addRackText: { fontSize: TYPOGRAPHY.sm, color: AMBER, fontWeight: '600' },
+  rackVal:       { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, fontWeight: '600' },
+  rackEntryInput: {
+    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    paddingHorizontal: 12, paddingVertical: 12, fontSize: TYPOGRAPHY.base,
+    color: COLORS.textPrimary, backgroundColor: COLORS.cardBg,
+  },
+  rackDelBtn: {
+    width: 36, height: 44, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.negativeBg, borderRadius: RADIUS.md,
+    borderWidth: 1, borderColor: COLORS.negative + '30',
+  },
+  rackAddBtn: {
+    width: 36, height: 44, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  mRow2: { flexDirection: 'row', gap: 12 },
 
   // ── Modal action buttons
   modalActions: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.lg },
