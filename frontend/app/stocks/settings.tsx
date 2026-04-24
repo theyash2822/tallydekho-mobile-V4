@@ -1,12 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Modal, KeyboardAvoidingView, Platform,
-  LayoutAnimation, UIManager, Pressable, Animated,
+  LayoutAnimation, UIManager, Pressable,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 
@@ -97,9 +98,7 @@ export default function StockSettingsScreen() {
   const [expiryDays, setExpiryDays]   = useState('30');
   const [expiryCh, setExpiryCh]       = useState<AlertChannels>({ inApp: true,  email: false, wa: false });
 
-  // ── Toast
-  const toastAnim  = useRef(new Animated.Value(0)).current;
-  const [toastMsg, setToastMsg] = useState('');
+  // ── Toast handled by react-native-toast-message (global in _layout.tsx)
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
   const toggleSection = (key: keyof typeof openSections) => {
@@ -132,12 +131,7 @@ export default function StockSettingsScreen() {
   };
 
   const showToast = (msg: string) => {
-    setToastMsg(msg);
-    Animated.sequence([
-      Animated.timing(toastAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
-      Animated.delay(2000),
-      Animated.timing(toastAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
-    ]).start();
+    Toast.show({ type: 'success', text1: msg });
   };
 
   const handleAddWarehouse = () => {
@@ -707,21 +701,6 @@ export default function StockSettingsScreen() {
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>
-
-      {/* ── Toast notification */}
-      <Animated.View
-        style={[
-          s.toast,
-          {
-            opacity: toastAnim,
-            transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
-          },
-        ]}
-        pointerEvents="none"
-      >
-        <Ionicons name="checkmark-circle" size={18} color="#fff" />
-        <Text style={s.toastText}>{toastMsg}</Text>
-      </Animated.View>
     </SafeAreaView>
   );
 }
@@ -939,29 +918,4 @@ const s = StyleSheet.create({
   },
   modalSaveBtnDisabled: { opacity: 0.4 },
   modalSaveText: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: '#fff' },
-
-  // ── Toast
-  toast: {
-    position: 'absolute',
-    bottom: 90,
-    left: SPACING.lg,
-    right: SPACING.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: COLORS.brandPrimary,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: 13,
-    borderRadius: RADIUS.full,
-    zIndex: 999,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  toastText: {
-    fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: '#fff',
-  },
 });
