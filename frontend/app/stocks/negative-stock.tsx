@@ -1,144 +1,262 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useState, useMemo } from 'react';
+import {
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
-const NEGATIVE_ITEMS = [
-  { id: 'n1', item: 'Laptop 15" Pro',       group: 'Electronics', qty: -3,   unit: 'Pcs',  value: '₹-2,52,000', reason: 'Over-committed in Sales Order', warehouse: 'Delhi Branch',  lastTx: '15 Jun 25' },
-  { id: 'n2', item: 'USB-C Hub 7-Port',    group: 'Accessories', qty: -12,  unit: 'Pcs',  value: '₹-26,400',   reason: 'Delivery before receipt posted', warehouse: 'Mumbai Main',  lastTx: '14 Jun 25' },
-  { id: 'n3', item: 'Wireless Earbuds',    group: 'Audio',       qty: -5,   unit: 'Pcs',  value: '₹-15,000',   reason: 'Stock adjustment not reconciled', warehouse: 'Pune Godown',  lastTx: '12 Jun 25' },
-  { id: 'n4', item: 'Mouse Pad XL',        group: 'Accessories', qty: -20,  unit: 'Pcs',  value: '₹-4,000',    reason: 'Transfer not received',          warehouse: 'Delhi Branch',  lastTx: '10 Jun 25' },
-  { id: 'n5', item: 'HDMI Cable 2m',       group: 'Accessories', qty: -35,  unit: 'Pcs',  value: '₹-3,500',    reason: 'Sales without stock entry',     warehouse: 'Mumbai Main',  lastTx: '08 Jun 25' },
+const AMBER = '#A89060';
+
+interface NegStockItem {
+  id: string;
+  name: string;
+  sku: string;
+  warehouse: string;
+  batch: string;
+  balanceQty: number;
+  lastMovement: string;
+}
+
+const ITEMS: NegStockItem[] = [
+  { id: 'ns1', name: 'Black JBL',          sku: 'PRD-1002-ABC', warehouse: 'Sierra Storage',  batch: '#B023', balanceQty: -245, lastMovement: '10/10/24' },
+  { id: 'ns2', name: 'Red Headset',         sku: 'PRD-1003-DEF', warehouse: 'Delhi Branch',    batch: '#B024', balanceQty: -112, lastMovement: '15/10/24' },
+  { id: 'ns3', name: 'Blue Speakers',       sku: 'PRD-1004-GHI', warehouse: 'Pune Godown',     batch: '#B025', balanceQty: -78,  lastMovement: '18/10/24' },
+  { id: 'ns4', name: 'Wireless Mouse',      sku: 'PRD-2001-JKL', warehouse: 'Mumbai HQ',       batch: '#B026', balanceQty: -45,  lastMovement: '20/10/24' },
+  { id: 'ns5', name: 'Laptop Charger',      sku: 'PRD-2002-MNO', warehouse: 'Chennai Depot',   batch: '#B027', balanceQty: -32,  lastMovement: '22/10/24' },
+  { id: 'ns6', name: 'USB-C Cable',         sku: 'PRD-2003-PQR', warehouse: 'Jaipur Depot',    batch: '#B028', balanceQty: -189, lastMovement: '25/10/24' },
+  { id: 'ns7', name: 'Power Bank 20K',      sku: 'PRD-3001-STU', warehouse: 'Hyderabad Hub',   batch: '#B029', balanceQty: -67,  lastMovement: '28/10/24' },
+  { id: 'ns8', name: 'Smart Watch Strap',   sku: 'PRD-3002-VWX', warehouse: 'Kolkata WH',      batch: '#B030', balanceQty: -23,  lastMovement: '01/11/24' },
 ];
 
 export default function NegativeStockScreen() {
   const router = useRouter();
-  const [search, setSearch] = useState('');
+  const insets = useSafeAreaInsets();
 
-  const filtered = NEGATIVE_ITEMS.filter(item =>
-    !search ||
-    item.item.toLowerCase().includes(search.toLowerCase()) ||
-    item.warehouse.toLowerCase().includes(search.toLowerCase())
+  const [search,       setSearch]       = useState('');
+  const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set());
+  const [isSelMode,    setIsSelMode]    = useState(false);
+
+  const visibleItems = useMemo(() =>
+    ITEMS.filter(it => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      return it.name.toLowerCase().includes(q) ||
+             it.sku.toLowerCase().includes(q)  ||
+             it.warehouse.toLowerCase().includes(q);
+    }),
+    [search]
   );
 
-  const totalNegValue = '₹-3,00,900';
+  // ── Multi-select ───────────────────────────────────────────────────────
+  const handleLongPress = (id: string) => {
+    setIsSelMode(true);
+    setSelectedIds(new Set([id]));
+  };
+
+  const handlePress = (id: string) => {
+    if (!isSelMode) return;
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+        if (next.size === 0) setIsSelMode(false);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const cancelSelection = () => { setSelectedIds(new Set()); setIsSelMode(false); };
+  const selectAll       = () => { setSelectedIds(new Set(visibleItems.map(i => i.id))); setIsSelMode(true); };
 
   return (
-    <SafeAreaView style={s.safe}>
+    <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
+      {/* ── Header */}
       <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
+        <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
+          <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Negative Stock</Text>
-        <TouchableOpacity style={s.exportBtn} activeOpacity={0.7}>
-          <Ionicons name="share-outline" size={18} color={COLORS.brandPrimary} />
-        </TouchableOpacity>
+        <Text style={s.headerTitle}>Negative Stock Exceptions</Text>
+        <View style={{ width: 44 }} />
       </View>
 
-      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
-        {/* Alert Banner */}
-        <View style={s.alertBanner}>
-          <Ionicons name="warning" size={20} color={COLORS.negative} />
-          <View style={s.alertInfo}>
-            <Text style={s.alertTitle}>{NEGATIVE_ITEMS.length} Items with Negative Stock</Text>
-            <Text style={s.alertSub}>Total negative value: {totalNegValue}</Text>
-          </View>
+      {/* ── Selection Banner */}
+      {isSelMode && (
+        <View style={s.selBanner}>
+          <TouchableOpacity onPress={cancelSelection} style={s.selBannerBtn} activeOpacity={0.7}>
+            <Ionicons name="close" size={18} color={COLORS.textPrimary} />
+            <Text style={s.selBannerCancel}>Cancel</Text>
+          </TouchableOpacity>
+          <Text style={s.selBannerCount}>{selectedIds.size} selected</Text>
+          <TouchableOpacity onPress={selectAll} style={s.selBannerBtn} activeOpacity={0.7}>
+            <Text style={s.selBannerAll}>All</Text>
+          </TouchableOpacity>
         </View>
+      )}
 
-        {/* Search */}
+      {/* ── Search */}
+      {!isSelMode && (
         <View style={s.searchBox}>
-          <Ionicons name="search" size={16} color={COLORS.textTertiary} />
-          <TextInput style={s.searchIn} placeholder="Search item or warehouse..." placeholderTextColor={COLORS.textTertiary} value={search} onChangeText={setSearch} />
-        </View>
-
-        {/* Items List */}
-        <View style={s.card}>
-          {filtered.length === 0 ? (
-            <View style={s.empty}>
-              <Ionicons name="checkmark-circle-outline" size={40} color={COLORS.positive} />
-              <Text style={s.emptyTxt}>No negative stock found</Text>
-            </View>
-          ) : (
-            filtered.map((item, idx) => (
-              <View key={item.id} style={[s.itemRow, idx < filtered.length - 1 && s.itemBorder]}>
-                <View style={s.itemIcon}>
-                  <Ionicons name="warning-outline" size={20} color={COLORS.negative} />
-                </View>
-                <View style={s.itemInfo}>
-                  <View style={s.itemTop}>
-                    <Text style={s.itemName}>{item.item}</Text>
-                    <Text style={[s.itemQty]}>{item.qty} {item.unit}</Text>
-                  </View>
-                  <Text style={s.itemGroup}>{item.group} · {item.warehouse}</Text>
-                  <Text style={s.itemReason}>{item.reason}</Text>
-                  <View style={s.itemBottom}>
-                    <Text style={s.itemDate}>Last Tx: {item.lastTx}</Text>
-                    <Text style={s.itemValue}>{item.value}</Text>
-                  </View>
-                </View>
-              </View>
-            ))
+          <Ionicons name="search-outline" size={16} color={COLORS.textTertiary} />
+          <TextInput
+            style={s.searchInput}
+            placeholder="Search products, warehouse..."
+            placeholderTextColor={COLORS.textTertiary}
+            value={search}
+            onChangeText={setSearch}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch('')} activeOpacity={0.7}>
+              <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
+            </TouchableOpacity>
           )}
         </View>
+      )}
 
-        {/* How to Fix */}
-        <View style={s.howToCard}>
-          <View style={s.howToHdr}>
-            <Ionicons name="bulb-outline" size={18} color={COLORS.warning} />
-            <Text style={s.howToTitle}>How to Fix</Text>
-          </View>
-          {[
-            'Post pending purchase receipts for missing items',
-            'Reconcile stock adjustments with physical count',
-            'Review and correct sales orders vs available stock',
-          ].map((tip, i) => (
-            <View key={i} style={s.tipRow}>
-              <Text style={s.tipNum}>{i + 1}.</Text>
-              <Text style={s.tipTxt}>{tip}</Text>
-            </View>
-          ))}
+      {/* ── Hint */}
+      {!isSelMode && visibleItems.length > 0 && (
+        <View style={s.hintRow}>
+          <Ionicons name="hand-left-outline" size={13} color={COLORS.textTertiary} />
+          <Text style={s.hintTxt}>Long press to select items</Text>
         </View>
+      )}
 
-        <View style={{ height: 40 }} />
+      {/* ── Item List */}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.list}>
+        {visibleItems.length === 0 ? (
+          <View style={s.empty}>
+            <Ionicons name="alert-circle-outline" size={48} color={COLORS.borderDefault} />
+            <Text style={s.emptyTxt}>No negative stock found</Text>
+          </View>
+        ) : (
+          visibleItems.map(item => {
+            const isSel = selectedIds.has(item.id);
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={[s.card, isSel && s.cardSel]}
+                onPress={() => handlePress(item.id)}
+                onLongPress={() => handleLongPress(item.id)}
+                delayLongPress={350}
+                activeOpacity={0.85}
+              >
+                {/* Avatar circle */}
+                <View style={[s.avatar, isSel && s.avatarSel]}>
+                  {isSel
+                    ? <Ionicons name="checkmark" size={18} color="#fff" />
+                    : <Ionicons name="cube-outline" size={20} color="#fff" />
+                  }
+                </View>
+
+                {/* Card content */}
+                <View style={s.cardContent}>
+                  {/* Name + SKU */}
+                  <Text style={s.itemName}>{item.name}</Text>
+                  <Text style={s.itemSku}>{item.sku}</Text>
+
+                  <View style={s.divider} />
+
+                  {/* Row 1: Warehouse + Batch */}
+                  <View style={s.infoRow}>
+                    <View style={s.infoGroup}>
+                      <Text style={s.infoLabel}>Warehouse</Text>
+                      <Text style={s.infoValue}>{item.warehouse}</Text>
+                    </View>
+                    <View style={s.infoGroup}>
+                      <Text style={s.infoLabel}>Batch</Text>
+                      <Text style={s.infoValue}>{item.batch}</Text>
+                    </View>
+                  </View>
+
+                  {/* Row 2: Balance Qty (red) + Last Movement */}
+                  <View style={s.infoRow}>
+                    <View style={s.infoGroup}>
+                      <Text style={s.infoLabel}>Balance Qty</Text>
+                      <Text style={[s.infoValue, s.negQty]}>{item.balanceQty}</Text>
+                    </View>
+                    <View style={s.infoGroup}>
+                      <Text style={s.infoLabel}>Last Movement</Text>
+                      <Text style={s.infoValue}>{item.lastMovement}</Text>
+                    </View>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            );
+          })
+        )}
+        <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* ── Conditional Share Bar */}
+      {isSelMode && selectedIds.size > 0 && (
+        <View style={[s.shareBar, { paddingBottom: insets.bottom || 16 }]}>
+          <TouchableOpacity style={s.cancelSelFooter} onPress={cancelSelection} activeOpacity={0.7}>
+            <Ionicons name="close-circle" size={20} color={COLORS.textSecondary} />
+            <Text style={s.cancelSelFooterTxt}>Deselect</Text>
+          </TouchableOpacity>
+          <Text style={s.shareBarCount}>
+            {selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''}
+          </Text>
+          <TouchableOpacity style={s.shareBtnView} activeOpacity={0.8}>
+            <Ionicons name="share-social-outline" size={18} color="#fff" />
+            <Text style={s.shareTxt}>Share</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: COLORS.pageBg },
-  header:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.sm, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary },
-  exportBtn:   { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  scroll: { flex: 1 },
-  alertBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, margin: SPACING.md, backgroundColor: COLORS.negativeBg, borderRadius: RADIUS.lg, padding: SPACING.md, borderWidth: 1, borderColor: '#FCA5A5' },
-  alertInfo:  { flex: 1 },
-  alertTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.negative },
-  alertSub:   { fontSize: TYPOGRAPHY.xs, color: '#9B1C1C', marginTop: 2 },
-  searchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, padding: 12, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault },
-  searchIn:  { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
-  card: { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
-  empty: { alignItems: 'center', paddingVertical: 32, gap: 10 },
+  safe:        { flex: 1, backgroundColor: COLORS.pageBg },
+  header:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.sm, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  headerBtn:   { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
+
+  selBanner:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.activeBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  selBannerBtn:    { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  selBannerCancel: { fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
+  selBannerCount:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  selBannerAll:    { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.brandPrimary },
+
+  searchBox:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: SPACING.md, marginTop: SPACING.md, marginBottom: SPACING.xs, backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md, paddingVertical: 12, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault },
+  searchInput: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
+
+  hintRow: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: SPACING.md, paddingTop: 4, paddingBottom: 6 },
+  hintTxt: { fontSize: 11, color: COLORS.textTertiary },
+
+  list: { paddingHorizontal: SPACING.md, paddingTop: SPACING.xs },
+
+  // Cards
+  card:    { flexDirection: 'row', gap: 12, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, padding: SPACING.md, marginBottom: SPACING.md },
+  cardSel: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.activeBg },
+
+  avatar:    { width: 44, height: 44, borderRadius: 22, backgroundColor: AMBER, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 },
+  avatarSel: { backgroundColor: COLORS.brandPrimary },
+
+  cardContent: { flex: 1 },
+  itemName:    { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  itemSku:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+  divider:     { height: 1, backgroundColor: COLORS.borderDefault, marginVertical: SPACING.sm },
+
+  infoRow:   { flexDirection: 'row', marginBottom: 4 },
+  infoGroup: { flex: 1 },
+  infoLabel: { fontSize: 11, color: COLORS.textTertiary },
+  infoValue: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary, marginTop: 2 },
+  negQty:    { color: COLORS.negative },
+
+  empty:    { alignItems: 'center', paddingVertical: 60, gap: 12 },
   emptyTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
-  itemRow:    { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: SPACING.md, paddingVertical: 14, gap: 12 },
-  itemBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  itemIcon:   { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.negativeBg, alignItems: 'center', justifyContent: 'center' },
-  itemInfo:   { flex: 1, gap: 3 },
-  itemTop:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  itemName:   { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  itemQty:    { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.negative },
-  itemGroup:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
-  itemReason: { fontSize: TYPOGRAPHY.xs, color: COLORS.warning, fontStyle: 'italic' },
-  itemBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  itemDate:   { fontSize: 10, color: COLORS.textTertiary },
-  itemValue:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.negative },
-  howToCard: { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.warningBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: '#FDE68A', padding: SPACING.md },
-  howToHdr:  { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SPACING.sm },
-  howToTitle:{ fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.warning },
-  tipRow:    { flexDirection: 'row', gap: 8, paddingVertical: 4 },
-  tipNum:    { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.warning },
-  tipTxt:    { flex: 1, fontSize: TYPOGRAPHY.sm, color: '#92400E', lineHeight: 20 },
+
+  // Share bar
+  shareBar:           { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingTop: SPACING.md, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
+  cancelSelFooter:    { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  cancelSelFooterTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  shareBarCount:      { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  shareBtnView:       { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.brandPrimary, paddingHorizontal: SPACING.md, paddingVertical: 10, borderRadius: RADIUS.full },
+  shareTxt:           { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: '#fff' },
 });

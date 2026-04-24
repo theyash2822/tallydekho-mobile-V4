@@ -1,141 +1,332 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
-const DATES = ['01 Jun 25', '15 Jun 25', '01 May 25', '31 Mar 25', '01 Apr 25'];
+const AMBER    = '#A89060';
+const AMBER_BG = '#A8906018';
 
-const SNAPSHOT_DATA = [
-  { item: 'Laptop 15" Pro',       group: 'Electronics', qty: 47,  unit: 'Pcs', value: '₹39,68,000', rate: '₹84,000' },
-  { item: 'Wireless Mouse',       group: 'Peripherals', qty: 186, unit: 'Pcs', value: '₹3,53,400',  rate: '₹1,900'  },
-  { item: 'USB-C Hub',            group: 'Accessories', qty: 240, unit: 'Pcs', value: '₹5,28,000',  rate: '₹2,200'  },
-  { item: 'Mechanical Keyboard',  group: 'Peripherals', qty: 68,  unit: 'Pcs', value: '₹46,92,000', rate: '₹69,000' },
-  { item: 'Monitor 27"',          group: 'Electronics', qty: 22,  unit: 'Pcs', value: '₹32,34,000', rate: '₹1,47,000' },
-  { item: 'Headphones BT',        group: 'Audio',       qty: 74,  unit: 'Pcs', value: '₹22,20,000', rate: '₹3,000'  },
-];
+type ValuationType = 'Average' | 'Opening' | 'Closing' | 'Peak';
+
+interface SnapshotRow {
+  id: string; rank: number; warehouse: string; value: string; pct: string;
+}
+
+interface SnapshotData {
+  rows: SnapshotRow[];
+  grandValue: string;
+  grandPct: string;
+}
+
+const SNAPSHOT_DATA: Record<ValuationType, SnapshotData> = {
+  Average: {
+    rows: [
+      { id: 'r1', rank: 1, warehouse: 'Jaipur - Main Depot', value: '32.10 L', pct: '48%' },
+      { id: 'r2', rank: 2, warehouse: 'Delhi Depot',         value: '22.30 L', pct: '33%' },
+      { id: 'r3', rank: 3, warehouse: 'Mumbai Satellite',    value: '11.60 L', pct: '19%' },
+    ],
+    grandValue: '66.00 L', grandPct: '100%',
+  },
+  Opening: {
+    rows: [
+      { id: 'r1', rank: 1, warehouse: 'Mumbai Satellite',    value: '35.20 L', pct: '42%' },
+      { id: 'r2', rank: 2, warehouse: 'Delhi Depot',         value: '28.50 L', pct: '34%' },
+      { id: 'r3', rank: 3, warehouse: 'Jaipur - Main Depot', value: '20.10 L', pct: '24%' },
+    ],
+    grandValue: '83.80 L', grandPct: '100%',
+  },
+  Closing: {
+    rows: [
+      { id: 'r1', rank: 1, warehouse: 'Delhi Depot',         value: '29.80 L', pct: '45%' },
+      { id: 'r2', rank: 2, warehouse: 'Jaipur - Main Depot', value: '21.50 L', pct: '33%' },
+      { id: 'r3', rank: 3, warehouse: 'Mumbai Satellite',    value: '14.20 L', pct: '22%' },
+    ],
+    grandValue: '65.50 L', grandPct: '100%',
+  },
+  Peak: {
+    rows: [
+      { id: 'r1', rank: 1, warehouse: 'Jaipur - Main Depot', value: '42.60 L', pct: '46%' },
+      { id: 'r2', rank: 2, warehouse: 'Mumbai Satellite',    value: '28.90 L', pct: '31%' },
+      { id: 'r3', rank: 3, warehouse: 'Delhi Depot',         value: '21.30 L', pct: '23%' },
+    ],
+    grandValue: '92.80 L', grandPct: '100%',
+  },
+};
+
+const VALUATION_TYPES: ValuationType[] = ['Average', 'Opening', 'Closing', 'Peak'];
 
 export default function StockSnapshotScreen() {
-  const router = useRouter();
-  const [selectedDate, setSelectedDate] = useState(DATES[1]);
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const router  = useRouter();
+  const insets  = useSafeAreaInsets();
 
-  const totalValue = '₹1,49,95,400';
-  const totalItems = SNAPSHOT_DATA.length;
+  const [valuation,    setValuation]    = useState<ValuationType>('Average');
+  const [showValDrop,  setShowValDrop]  = useState(false);
+  const [dateFrom,     setDateFrom]     = useState('');
+  const [dateTo,       setDateTo]       = useState('');
+  const [showDatePick, setShowDatePick] = useState(false);
+  const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set());
+  const [isSelMode,    setIsSelMode]    = useState(false);
+
+  const data      = SNAPSHOT_DATA[valuation];
+  const dateLabel = dateFrom && dateTo ? `${dateFrom} — ${dateTo}` : 'Today';
+
+  // ── Multi-select ───────────────────────────────────────────────────────
+  const handleLongPress = (id: string) => {
+    setShowValDrop(false);
+    setIsSelMode(true);
+    setSelectedIds(new Set([id]));
+  };
+
+  const handlePress = (id: string) => {
+    if (!isSelMode) return;
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+        if (next.size === 0) setIsSelMode(false);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const cancelSelection = () => { setSelectedIds(new Set()); setIsSelMode(false); };
+  const selectAll       = () => { setSelectedIds(new Set(data.rows.map(r => r.id))); setIsSelMode(true); };
+
+  // ── Date picker ────────────────────────────────────────────────────────
+  const handleDateApply = (f: string, t: string) => {
+    setDateFrom(f);
+    setDateTo(t);
+    setShowDatePick(false);
+  };
 
   return (
-    <SafeAreaView style={s.safe}>
+    <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
+      {/* ── Header */}
       <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
+        <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
+          <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Stock Snapshot</Text>
-        <TouchableOpacity style={s.exportBtn} onPress={() => Alert.alert('Export', 'Exporting snapshot...')} activeOpacity={0.7}>
-          <Ionicons name="share-outline" size={18} color={COLORS.brandPrimary} />
-        </TouchableOpacity>
+        <View style={{ width: 44 }} />
       </View>
 
-      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
-        {/* Date Picker */}
-        <View style={s.datePicker}>
-          <View style={s.dateLeft}>
-            <Ionicons name="calendar-outline" size={18} color={COLORS.info} />
-            <Text style={s.dateLabel}>As of Date</Text>
-          </View>
-          <TouchableOpacity style={s.dateBtn} onPress={() => setShowDatePicker(!showDatePicker)} activeOpacity={0.7}>
-            <Text style={s.dateBtnTxt}>{selectedDate}</Text>
-            <Ionicons name={showDatePicker ? 'chevron-up' : 'chevron-down'} size={14} color={COLORS.textTertiary} />
+      {/* ── Selection Banner */}
+      {isSelMode && (
+        <View style={s.selBanner}>
+          <TouchableOpacity onPress={cancelSelection} style={s.selBannerBtn} activeOpacity={0.7}>
+            <Ionicons name="close" size={18} color={COLORS.textPrimary} />
+            <Text style={s.selBannerCancel}>Cancel</Text>
+          </TouchableOpacity>
+          <Text style={s.selBannerCount}>{selectedIds.size} selected</Text>
+          <TouchableOpacity onPress={selectAll} style={s.selBannerBtn} activeOpacity={0.7}>
+            <Text style={s.selBannerAll}>All</Text>
           </TouchableOpacity>
         </View>
+      )}
 
-        {showDatePicker && (
-          <View style={s.dateDropdown}>
-            {DATES.map(d => (
-              <TouchableOpacity key={d} style={s.dateOption} onPress={() => { setSelectedDate(d); setShowDatePicker(false); }} activeOpacity={0.7}>
-                <Text style={[s.dateOptionTxt, d === selectedDate && s.dateOptionActive]}>{d}</Text>
-                {d === selectedDate && <Ionicons name="checkmark" size={16} color={COLORS.positive} />}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ flexGrow: 1 }}
+      >
+        {/* ── Controls Row */}
+        {!isSelMode && (
+          <View style={s.controlsRow}>
+            {/* Date Pill */}
+            <TouchableOpacity
+              style={s.controlPill}
+              onPress={() => { setShowValDrop(false); setShowDatePick(true); }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
+              <Text style={s.controlPillTxt} numberOfLines={1}>{dateLabel}</Text>
+              <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+
+            {/* Valuation Pill */}
+            <TouchableOpacity
+              style={s.controlPill}
+              onPress={() => setShowValDrop(p => !p)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="layers-outline" size={14} color={COLORS.textSecondary} />
+              <Text style={[s.controlPillTxt, { color: AMBER }]}>{valuation}</Text>
+              <Ionicons
+                name={showValDrop ? 'chevron-up' : 'chevron-down'}
+                size={14}
+                color={COLORS.textSecondary}
+              />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ── Valuation Dropdown */}
+        {showValDrop && (
+          <View style={s.valDropdown}>
+            {VALUATION_TYPES.map((v, idx) => (
+              <TouchableOpacity
+                key={v}
+                style={[s.valDropItem, idx === VALUATION_TYPES.length - 1 && { borderBottomWidth: 0 }]}
+                onPress={() => { setValuation(v); setShowValDrop(false); }}
+                activeOpacity={0.7}
+              >
+                <Text style={[s.valDropTxt, valuation === v && s.valDropTxtActive]}>{v}</Text>
+                {valuation === v && <Ionicons name="checkmark" size={16} color={AMBER} />}
               </TouchableOpacity>
             ))}
           </View>
         )}
 
-        {/* Total Banner */}
-        <View style={s.banner}>
-          <View>
-            <Text style={s.bannerSub}>Total Stock Value on {selectedDate}</Text>
-            <Text style={s.bannerValue}>{totalValue}</Text>
+        {/* ── Hint */}
+        {!isSelMode && (
+          <View style={s.hintRow}>
+            <Ionicons name="hand-left-outline" size={13} color={COLORS.textTertiary} />
+            <Text style={s.hintTxt}>Long press to select rows</Text>
           </View>
-          <View style={s.bannerRight}>
-            <Text style={s.bannerCount}>{totalItems}</Text>
-            <Text style={s.bannerCountLbl}>Items</Text>
+        )}
+
+        {/* ── Table */}
+        <View style={s.tableCard}>
+          {/* Header row */}
+          <View style={[s.tableRow, s.tableHeader]}>
+            <Text style={[s.colIdx, s.hdrTxt]}>#</Text>
+            <Text style={[s.colWarehouse, s.hdrTxt]}>Warehouse</Text>
+            <Text style={[s.colValue, s.hdrTxt]}>Value (₹)</Text>
+            <Text style={[s.colPct, s.hdrTxt]}>% Portfolio</Text>
+          </View>
+
+          {/* Data rows */}
+          {data.rows.map((row, idx) => {
+            const isSel = selectedIds.has(row.id);
+            return (
+              <TouchableOpacity
+                key={row.id}
+                style={[
+                  s.tableRow,
+                  idx % 2 === 1 && s.tableRowAlt,
+                  isSel && s.tableRowSel,
+                ]}
+                onPress={() => handlePress(row.id)}
+                onLongPress={() => handleLongPress(row.id)}
+                delayLongPress={350}
+                activeOpacity={0.85}
+              >
+                <View style={[s.colIdx, { alignItems: 'center', justifyContent: 'center' }]}>
+                  {isSel ? (
+                    <View style={s.checkCircle}>
+                      <Ionicons name="checkmark" size={12} color="#fff" />
+                    </View>
+                  ) : (
+                    <Text style={s.rankTxt}>{row.rank}</Text>
+                  )}
+                </View>
+                <Text style={[s.colWarehouse, s.dataTxt]}>{row.warehouse}</Text>
+                <Text style={[s.colValue, s.dataTxt]}>{row.value}</Text>
+                <Text style={[s.colPct, s.dataTxt]}>{row.pct}</Text>
+              </TouchableOpacity>
+            );
+          })}
+
+          {/* Grand Total */}
+          <View style={[s.tableRow, s.grandRow]}>
+            <Text style={[s.colIdx, s.grandTxt]}>-</Text>
+            <Text style={[s.colWarehouse, s.grandTxt]}>Grand Total</Text>
+            <Text style={[s.colValue, s.grandTxt]}>{data.grandValue}</Text>
+            <Text style={[s.colPct, s.grandTxt]}>{data.grandPct}</Text>
           </View>
         </View>
 
-        {/* Snapshot Table */}
-        <View style={s.card}>
-          <View style={[s.tableRow, s.tableHdr]}>
-            <Text style={[s.th, { flex: 2 }]}>Item</Text>
-            <Text style={[s.th, { flex: 0.8, textAlign: 'center' }]}>Qty</Text>
-            <Text style={[s.th, { flex: 1, textAlign: 'right' }]}>Rate</Text>
-            <Text style={[s.th, { flex: 1.5, textAlign: 'right' }]}>Value</Text>
-          </View>
-          {SNAPSHOT_DATA.map((item, idx) => (
-            <View key={item.item} style={[s.tableRow, idx % 2 === 0 && s.tableRowAlt]}>
-              <View style={{ flex: 2, gap: 2 }}>
-                <Text style={s.itemName} numberOfLines={1}>{item.item}</Text>
-                <Text style={s.itemGroup}>{item.group}</Text>
-              </View>
-              <Text style={[s.td, { flex: 0.8, textAlign: 'center' }]}>{item.qty} {item.unit}</Text>
-              <Text style={[s.td, { flex: 1, textAlign: 'right' }]}>{item.rate}</Text>
-              <Text style={[s.td, { flex: 1.5, textAlign: 'right', fontWeight: '700', color: COLORS.textPrimary }]}>{item.value}</Text>
-            </View>
-          ))}
-          {/* Total Row */}
-          <View style={[s.tableRow, s.totalRow]}>
-            <Text style={[s.totalCell, { flex: 2 }]}>TOTAL</Text>
-            <Text style={[s.totalCell, { flex: 0.8, textAlign: 'center' }]}>-</Text>
-            <Text style={[s.totalCell, { flex: 1, textAlign: 'right' }]}>-</Text>
-            <Text style={[s.totalCell, { flex: 1.5, textAlign: 'right' }]}>{totalValue}</Text>
-          </View>
-        </View>
-
-        <View style={{ height: 40 }} />
+        <View style={{ height: 80 }} />
       </ScrollView>
+
+      {/* ── Conditional Share Bar */}
+      {isSelMode && selectedIds.size > 0 && (
+        <View style={[s.shareBar, { paddingBottom: insets.bottom || 16 }]}>
+          <TouchableOpacity style={s.cancelSelFooter} onPress={cancelSelection} activeOpacity={0.7}>
+            <Ionicons name="close-circle" size={20} color={COLORS.textSecondary} />
+            <Text style={s.cancelSelFooterTxt}>Deselect</Text>
+          </TouchableOpacity>
+          <Text style={s.shareBarCount}>
+            {selectedIds.size} row{selectedIds.size !== 1 ? 's' : ''}
+          </Text>
+          <TouchableOpacity style={s.shareBtnView} activeOpacity={0.8}>
+            <Ionicons name="share-social-outline" size={18} color="#fff" />
+            <Text style={s.shareTxt}>Share</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── Date Range Picker */}
+      <DateRangePickerModal
+        visible={showDatePick}
+        fromDate={dateFrom}
+        toDate={dateTo}
+        onApply={handleDateApply}
+        onClose={() => setShowDatePick(false)}
+      />
     </SafeAreaView>
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: COLORS.pageBg },
-  header:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.sm, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary },
-  exportBtn:   { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  scroll:  { flex: 1 },
-  datePicker: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', margin: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, padding: SPACING.md },
-  dateLeft:   { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  dateLabel:  { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
-  dateBtn:    { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: COLORS.borderDefault },
-  dateBtnTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  dateDropdown: { marginHorizontal: SPACING.md, marginTop: -SPACING.sm, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden', marginBottom: SPACING.sm },
-  dateOption:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  dateOptionTxt:{ fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
-  dateOptionActive: { color: COLORS.positive, fontWeight: '700' },
-  banner:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.lg, padding: SPACING.md },
-  bannerSub:   { fontSize: TYPOGRAPHY.xs, color: '#AEACA8', marginBottom: 4 },
-  bannerValue: { fontSize: TYPOGRAPHY.xl, fontWeight: '800', color: COLORS.white },
-  bannerRight: { alignItems: 'center' },
-  bannerCount: { fontSize: TYPOGRAPHY.xxl, fontWeight: '800', color: COLORS.white },
-  bannerCountLbl: { fontSize: TYPOGRAPHY.xs, color: '#AEACA8' },
-  card:    { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
-  tableHdr: { backgroundColor: COLORS.pageBg, borderBottomWidth: 1.5, borderBottomColor: COLORS.borderStrong },
-  tableRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.sm, paddingVertical: 12, gap: 4 },
-  tableRowAlt: { backgroundColor: '#FAFAFA' },
-  th: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary, textTransform: 'uppercase' },
-  td: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
-  itemName:  { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  itemGroup: { fontSize: 10, color: COLORS.textTertiary },
-  totalRow:  { backgroundColor: COLORS.activeBg, borderTopWidth: 1.5, borderTopColor: COLORS.borderStrong },
-  totalCell: { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
+  safe:        { flex: 1, backgroundColor: COLORS.pageBg },
+  header:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.sm, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  headerBtn:   { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
+
+  selBanner:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.activeBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  selBannerBtn:    { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  selBannerCancel: { fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
+  selBannerCount:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  selBannerAll:    { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.brandPrimary },
+
+  // Controls
+  controlsRow:    { flexDirection: 'row', gap: SPACING.sm, paddingHorizontal: SPACING.md, paddingTop: SPACING.md, paddingBottom: SPACING.xs },
+  controlPill:    { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.full, paddingHorizontal: SPACING.md, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.borderDefault },
+  controlPillTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+
+  // Valuation dropdown
+  valDropdown:    { marginHorizontal: SPACING.md, marginBottom: SPACING.sm, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
+  valDropItem:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  valDropTxt:     { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
+  valDropTxtActive:{ color: AMBER, fontWeight: '700' },
+
+  hintRow: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: SPACING.md, paddingTop: 2, paddingBottom: 8 },
+  hintTxt: { fontSize: 11, color: COLORS.textTertiary },
+
+  // Table
+  tableCard:    { marginHorizontal: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
+  tableRow:     { flexDirection: 'row', alignItems: 'center', paddingVertical: 13, paddingHorizontal: SPACING.sm, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  tableHeader:  { backgroundColor: COLORS.activeBg },
+  tableRowAlt:  { backgroundColor: COLORS.pageBg },
+  tableRowSel:  { backgroundColor: AMBER_BG },
+
+  colIdx:      { width: 30 },
+  colWarehouse:{ flex: 1, paddingRight: 4 },
+  colValue:    { width: 76, textAlign: 'right' },
+  colPct:      { width: 72, textAlign: 'right' },
+
+  hdrTxt:     { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: 0.3 },
+  rankTxt:    { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
+  dataTxt:    { fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
+  checkCircle:{ width: 20, height: 20, borderRadius: 10, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center' },
+
+  grandRow:  { backgroundColor: COLORS.activeBg, borderBottomWidth: 0 },
+  grandTxt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+
+  // Share bar
+  shareBar:           { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingTop: SPACING.md, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
+  cancelSelFooter:    { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  cancelSelFooterTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  shareBarCount:      { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  shareBtnView:       { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.brandPrimary, paddingHorizontal: SPACING.md, paddingVertical: 10, borderRadius: RADIUS.full },
+  shareTxt:           { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: '#fff' },
 });
