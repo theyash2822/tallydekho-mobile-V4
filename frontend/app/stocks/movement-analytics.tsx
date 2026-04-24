@@ -165,15 +165,18 @@ function SalesLineChart({ values, labels }: ChartProps) {
           />
         ))}
 
-        {/* X-axis labels */}
-        {labels.map((l, i) => (
-          <SvgText
-            key={i} x={pts[i].x} y={CHART_H - 4}
-            textAnchor="middle" fontSize="9" fill={COLORS.textTertiary}
-          >
-            {l}
-          </SvgText>
-        ))}
+        {/* X-axis labels — first uses "start", last uses "end" so no overflow */}
+        {labels.map((l, i) => {
+          const anchor = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle';
+          return (
+            <SvgText
+              key={i} x={pts[i].x} y={CHART_H - 4}
+              textAnchor={anchor} fontSize="9" fill={COLORS.textTertiary}
+            >
+              {l}
+            </SvgText>
+          );
+        })}
 
         {/* Cursor overlay */}
         {cursor && (

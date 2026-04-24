@@ -261,7 +261,7 @@ export default function CreatePurchaseOrderScreen() {
           <SearchableDropdown label="Purchase Ledger" required placeholder="Search ledger account..." options={PURCHASE_LEDGERS} value={ledger} onSelect={o=>setLedger(o.value)} icon="book-outline" />
 
           <View style={s.card}>
-            <View style={s.cardHdr}><Ionicons name="bag-outline" size={18} color={COLORS.positive} /><Text style={s.cardTitle}>Order Details</Text></View>
+            <View style={s.cardHdr}><Ionicons name="bag-outline" size={18} color={COLORS.brandPrimary} /><Text style={s.cardTitle}>Order Details</Text></View>
             <View style={s.row2}>
               <View style={{flex:1}}>
                 <Text style={s.fLabel}>PO No.</Text>
@@ -295,7 +295,7 @@ export default function CreatePurchaseOrderScreen() {
             <ItemRow key={item.id} item={item} onUpdate={updateItem} onRemove={removeItem} onModal={setActiveModal} />
           ))}
           <TouchableOpacity style={s.addBtn} onPress={()=>setItems(p=>[...p,newItem()])} activeOpacity={0.7}>
-            <Ionicons name="add-circle-outline" size={18} color={COLORS.positive} />
+            <Ionicons name="add-circle-outline" size={18} color={COLORS.brandPrimary} />
             <Text style={s.addTxt}>Add Product</Text>
           </TouchableOpacity>
 
@@ -392,8 +392,8 @@ const s = StyleSheet.create({
   header:{flexDirection:'row',alignItems:'center',gap:8,backgroundColor:COLORS.cardBg,paddingHorizontal:SPACING.md,paddingVertical:14,borderBottomWidth:1,borderBottomColor:COLORS.borderDefault},
   backBtn:{width:36,height:36,borderRadius:18,backgroundColor:COLORS.pageBg,alignItems:'center',justifyContent:'center'},
   headerTitle:{flex:1,fontSize:TYPOGRAPHY.md,fontWeight:'700',color:COLORS.textPrimary},
-  badge:{backgroundColor:COLORS.positiveBg,paddingHorizontal:8,paddingVertical:4,borderRadius:RADIUS.full},
-  badgeTxt:{fontSize:TYPOGRAPHY.xs,fontWeight:'700',color:COLORS.positive},
+  badge:{backgroundColor:COLORS.activeBg,paddingHorizontal:8,paddingVertical:4,borderRadius:RADIUS.full},
+  badgeTxt:{fontSize:TYPOGRAPHY.xs,fontWeight:'700',color:COLORS.brandPrimary},
   scroll:{padding:SPACING.md,paddingBottom:8},
   card:{backgroundColor:COLORS.cardBg,borderRadius:RADIUS.lg,padding:SPACING.md,marginBottom:SPACING.md,borderWidth:1,borderColor:COLORS.borderDefault},
   cardHdr:{flexDirection:'row',alignItems:'center',gap:8,marginBottom:SPACING.md},
@@ -411,8 +411,8 @@ const s = StyleSheet.create({
   secTitle:{flex:1,fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.textPrimary},
   countBadge:{backgroundColor:COLORS.brandPrimary,width:22,height:22,borderRadius:11,alignItems:'center',justifyContent:'center'},
   countTxt:{fontSize:TYPOGRAPHY.xs,fontWeight:'700',color:'#fff'},
-  addBtn:{flexDirection:'row',alignItems:'center',justifyContent:'center',gap:8,backgroundColor:COLORS.positiveBg,borderRadius:RADIUS.md,paddingVertical:14,marginBottom:SPACING.md,borderWidth:1,borderColor:COLORS.positive+'40',borderStyle:'dashed'},
-  addTxt:{fontSize:TYPOGRAPHY.base,fontWeight:'600',color:COLORS.positive},
+  addBtn:{flexDirection:'row',alignItems:'center',justifyContent:'center',gap:8,backgroundColor:COLORS.pageBg,borderRadius:RADIUS.md,paddingVertical:14,marginBottom:SPACING.md,borderWidth:1,borderColor:COLORS.borderStrong,borderStyle:'dashed'},
+  addTxt:{fontSize:TYPOGRAPHY.base,fontWeight:'600',color:COLORS.textPrimary},
   sumCard:{backgroundColor:COLORS.cardBg,borderRadius:RADIUS.lg,padding:SPACING.md,marginBottom:SPACING.md,borderWidth:1,borderColor:COLORS.borderDefault},
   sumTitle:{fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.textPrimary,marginBottom:SPACING.md},
   sumRow:{flexDirection:'row',justifyContent:'space-between',marginBottom:10},
@@ -420,11 +420,11 @@ const s = StyleSheet.create({
   sumV:{fontSize:TYPOGRAPHY.sm,fontWeight:'600',color:COLORS.textPrimary},
   sumDiv:{height:1,backgroundColor:COLORS.borderDefault,marginBottom:12},
   sumGL:{fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.textPrimary},
-  sumGV:{fontSize:TYPOGRAPHY.lg,fontWeight:'800',color:COLORS.positive},
+  sumGV:{fontSize:TYPOGRAPHY.lg,fontWeight:'800',color:COLORS.brandPrimary},
   footer:{flexDirection:'row',gap:12,paddingHorizontal:SPACING.md,paddingTop:SPACING.md,borderTopWidth:1,borderTopColor:COLORS.borderDefault,backgroundColor:COLORS.cardBg},
   draftBtn:{flex:1,flexDirection:'row',gap:6,paddingVertical:14,borderRadius:RADIUS.md,borderWidth:1.5,borderColor:COLORS.borderDefault,alignItems:'center',justifyContent:'center'},
   draftTxt:{fontSize:TYPOGRAPHY.base,fontWeight:'600',color:COLORS.textSecondary},
-  submitBtn:{flex:2,flexDirection:'row',gap:8,paddingVertical:14,borderRadius:RADIUS.md,backgroundColor:COLORS.positive,alignItems:'center',justifyContent:'center'},
+  submitBtn:{flex:2,flexDirection:'row',gap:8,paddingVertical:14,borderRadius:RADIUS.md,backgroundColor:COLORS.brandPrimary,alignItems:'center',justifyContent:'center'},
   submitTxt:{fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.white},
 });
 const m = StyleSheet.create({
@@ -461,7 +461,7 @@ const ir = StyleSheet.create({
   unitBtn:{flexDirection:'row',alignItems:'center',gap:3,backgroundColor:COLORS.pageBg,borderRadius:RADIUS.sm,paddingHorizontal:8,paddingVertical:9,borderWidth:1,borderColor:COLORS.borderDefault,alignSelf:'flex-end',minHeight:38},
   unitTxt:{fontSize:TYPOGRAPHY.xs,fontWeight:'700',color:COLORS.textPrimary},
   discRow:{flex:1,flexDirection:'row',alignItems:'center',gap:4,backgroundColor:COLORS.pageBg,borderRadius:RADIUS.sm,borderWidth:1,borderColor:COLORS.borderDefault,paddingHorizontal:6,paddingVertical:4,minHeight:38},
-  discType:{backgroundColor:COLORS.positive,paddingHorizontal:6,paddingVertical:4,borderRadius:4},
+  discType:{backgroundColor:COLORS.brandPrimary,paddingHorizontal:6,paddingVertical:4,borderRadius:4},
   discTypeTxt:{fontSize:TYPOGRAPHY.xs,fontWeight:'800',color:'#fff',width:16,textAlign:'center'},
   discInput:{flex:1,fontSize:TYPOGRAPHY.sm,color:COLORS.textPrimary,textAlign:'center',paddingVertical:2},
   dl:{fontSize:TYPOGRAPHY.xs,color:COLORS.textTertiary},
@@ -476,7 +476,7 @@ const bs = StyleSheet.create({
   header:{flexDirection:'row',alignItems:'center',paddingHorizontal:SPACING.md,paddingVertical:14,backgroundColor:COLORS.cardBg,borderBottomWidth:1,borderBottomColor:COLORS.borderDefault},
   closeBtn:{width:40,height:40,alignItems:'center',justifyContent:'center'},
   title:{flex:1,fontSize:TYPOGRAPHY.md,fontWeight:'700',color:COLORS.textPrimary,textAlign:'center'},
-  rescanBtn:{paddingHorizontal:12,paddingVertical:8,backgroundColor:COLORS.positive,borderRadius:RADIUS.md},
+  rescanBtn:{paddingHorizontal:12,paddingVertical:8,backgroundColor:COLORS.brandPrimary,borderRadius:RADIUS.md},
   rescanText:{fontSize:TYPOGRAPHY.sm,fontWeight:'700',color:COLORS.white},
   camera:{flex:1},
   overlay:{position:'absolute',bottom:0,left:0,right:0,alignItems:'center',paddingBottom:60},
@@ -484,6 +484,6 @@ const bs = StyleSheet.create({
   hint:{fontSize:TYPOGRAPHY.sm,color:COLORS.white,fontWeight:'600'},
   permWrap:{flex:1,alignItems:'center',justifyContent:'center',gap:16,padding:SPACING.xl,backgroundColor:COLORS.pageBg},
   permText:{fontSize:TYPOGRAPHY.base,color:COLORS.textSecondary,textAlign:'center',lineHeight:22},
-  permBtn:{backgroundColor:COLORS.positive,paddingHorizontal:24,paddingVertical:14,borderRadius:RADIUS.md},
+  permBtn:{backgroundColor:COLORS.brandPrimary,paddingHorizontal:24,paddingVertical:14,borderRadius:RADIUS.md},
   permBtnText:{fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.white},
 });

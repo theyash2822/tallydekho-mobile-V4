@@ -17,10 +17,10 @@ const REORDER_ITEMS = [
 ];
 
 const PRIORITY_CONFIG = {
-  critical: { label: 'Critical', color: '#DC2626', bg: '#FEF2F2' },
-  high:     { label: 'High',     color: '#D97706', bg: '#FFFBEB' },
-  medium:   { label: 'Medium',   color: '#2563EB', bg: '#EFF6FF' },
-  low:      { label: 'Low',      color: '#6B7280', bg: '#F3F4F6' },
+  critical: { label: 'Critical', color: '#DC2626', bg: '#FEF2F2', barColor: '#DC2626'  },
+  high:     { label: 'High',     color: '#A89060', bg: '#F8F4EE', barColor: '#1A1A1A'  },
+  medium:   { label: 'Medium',   color: '#2563EB', bg: '#EFF6FF', barColor: '#2563EB'  },
+  low:      { label: 'Low',      color: '#6B7280', bg: '#F3F4F6', barColor: '#AEACA8'  },
 };
 
 type Priority = keyof typeof PRIORITY_CONFIG;
@@ -55,7 +55,7 @@ export default function ReorderQueueScreen() {
       <View style={styles.summaryRow}>
         {[
           { label: 'Critical', count: REORDER_ITEMS.filter(i => i.priority === 'critical').length, color: '#DC2626' },
-          { label: 'High',     count: REORDER_ITEMS.filter(i => i.priority === 'high').length,     color: '#D97706' },
+          { label: 'High',     count: REORDER_ITEMS.filter(i => i.priority === 'high').length,     color: '#A89060' },
           { label: 'Medium',   count: REORDER_ITEMS.filter(i => i.priority === 'medium').length,   color: '#2563EB' },
           { label: 'Total',    count: REORDER_ITEMS.length,                                        color: COLORS.textPrimary },
         ].map(s => (
@@ -108,7 +108,7 @@ export default function ReorderQueueScreen() {
                 <View style={styles.progressTrack}>
                   <View style={[styles.progressFill, {
                     width: `${Math.min(progressPct, 100)}%` as any,
-                    backgroundColor: item.current === 0 ? '#DC2626' : '#D97706',
+                    backgroundColor: item.current === 0 ? '#DC2626' : p.barColor,
                   }]} />
                 </View>
               </View>
