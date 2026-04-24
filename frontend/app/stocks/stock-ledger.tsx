@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Modal, Pressable, Platform,
+  TextInput, Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ViewMode = 'chronological' | 'byItem' | 'byDocument';
 type TxnType  = 'Sales' | 'Purchase' | 'Transfer' | 'Adjustment' | 'Opening';
+type VoucherType = 'Sales Invoice' | 'Purchase Invoice' | 'Credit Note' | 'Debit Note';
 
 interface TxEntry {
   id: string; sku: string; item: string; batch: string;
@@ -25,6 +26,7 @@ interface TxEntry {
 // ── Mock Data ─────────────────────────────────────────────────────────────────
 const WAREHOUSES = ['WH-001 Main', 'WH-002 Echo Depot', 'WH-003 Sierra Storage'];
 const TXN_TYPES: TxnType[] = ['Sales', 'Purchase', 'Transfer', 'Adjustment', 'Opening'];
+const VOUCHER_TYPES: VoucherType[] = ['Sales Invoice', 'Purchase Invoice', 'Credit Note', 'Debit Note'];
 
 const MOCK_TXN: TxEntry[] = [
   { id: 't1',  sku: 'SKU-2987', item: 'Black JBL',       batch: '#BS-2407', txnId: 'TXN-10231', docRef: 'INV-8881', docType: 'Sales Invoice',   date: 'Dec 15, 2024', time: '14:23', qty: -50,  unitCost: '₹275',   balance: '₹12,000', value: '₹13,750',  warehouse: 'WH-002', postedBy: 'Rina Kusuma', note: '-',             type: 'Sales'    },
@@ -54,8 +56,9 @@ export default function StockLedgerScreen() {
   const [selected,    setSelected]    = useState<Set<string>>(new Set());
 
   // Filter modal
-  const [showFilter,  setShowFilter]  = useState(false);
-  const [showDatePick,setShowDatePick]= useState(false);
+  const [showFilter,         setShowFilter]         = useState(false);
+  const [showDatePick,       setShowDatePick]        = useState(false);
+  const [pendingReopenFilter,setPendingReopenFilter] = useState(false);
 
   // Applied filters
   const [dateFrom,    setDateFrom]    = useState('01/04/24');
@@ -63,22 +66,22 @@ export default function StockLedgerScreen() {
   const [selWH,       setSelWH]       = useState<Set<string>>(new Set());
   const [itemSearch,  setItemSearch]  = useState('');
   const [batchSearch, setBatchSearch] = useState('');
-  const [selTypes,    setSelTypes]    = useState<Set<TxnType>>(new Set());
+  const [selVouchers, setSelVouchers] = useState<Set<VoucherType>>(new Set());
 
   // Draft filters (inside modal before Apply)
-  const [draftWH,    setDraftWH]    = useState<Set<string>>(new Set());
-  const [draftItem,  setDraftItem]  = useState('');
-  const [draftBatch, setDraftBatch] = useState('');
-  const [draftTypes, setDraftTypes] = useState<Set<TxnType>>(new Set());
-  const [draftFrom,  setDraftFrom]  = useState('01/04/24');
-  const [draftTo,    setDraftTo]    = useState('15/12/24');
+  const [draftWH,      setDraftWH]      = useState<Set<string>>(new Set());
+  const [draftItem,    setDraftItem]    = useState('');
+  const [draftBatch,   setDraftBatch]   = useState('');
+  const [draftVouchers,setDraftVouchers]= useState<Set<VoucherType>>(new Set());
+  const [draftFrom,    setDraftFrom]    = useState('01/04/24');
+  const [draftTo,      setDraftTo]      = useState('15/12/24');
 
   // Open filter → copy applied → draft
   const openFilter = () => {
     setDraftWH(new Set(selWH));
     setDraftItem(itemSearch);
     setDraftBatch(batchSearch);
-    setDraftTypes(new Set(selTypes));
+    setDraftVouchers(new Set(selVouchers));
     setDraftFrom(dateFrom);
     setDraftTo(dateTo);
     setShowFilter(true);
@@ -88,10 +91,27 @@ export default function StockLedgerScreen() {
     setSelWH(new Set(draftWH));
     setItemSearch(draftItem);
     setBatchSearch(draftBatch);
-    setSelTypes(new Set(draftTypes));
+    setSelVouchers(new Set(draftVouchers));
     setDateFrom(draftFrom);
     setDateTo(draftTo);
     setShowFilter(false);
+  };
+
+  // Issue 1 fix: close filter → open date picker → reopen filter on apply
+  const openDateFromFilter = () => {
+    setShowFilter(false);
+    setPendingReopenFilter(true);
+    setTimeout(() => setShowDatePick(true), 350);
+  };
+
+  const handleDateApply = (f: string, t: string) => {
+    setDraftFrom(f);
+    setDraftTo(t);
+    setShowDatePick(false);
+    if (pendingReopenFilter) {
+      setPendingReopenFilter(false);
+      setTimeout(() => setShowFilter(true), 350);
+    }
   };
 
   const toggleExpand = (id: string) => {
@@ -119,7 +139,7 @@ export default function StockLedgerScreen() {
   }), [selWH, selTypes, itemSearch, batchSearch]);
 
   const activeFilterCount =
-    selWH.size + selTypes.size +
+    selWH.size + selVouchers.size +
     (itemSearch ? 1 : 0) + (batchSearch ? 1 : 0);
 
   // ── Grouped data ────────────────────────────────────────────────────────────
@@ -308,11 +328,13 @@ export default function StockLedgerScreen() {
   // ── Filter Modal ─────────────────────────────────────────────────────────────
   const FilterModal = () => (
     <Modal visible={showFilter} transparent animationType="slide" onRequestClose={() => setShowFilter(false)}>
-      <Pressable style={s.modalOverlay} onPress={() => setShowFilter(false)}>
-        <Pressable style={[s.modalSheet, { paddingBottom: insets.bottom + 16 }]} onPress={e => e.stopPropagation()}>
-          {/* Handle */}
+      <View style={s.modalOverlay}>
+        {/* Issue 2 & 3 fix: backdrop is a separate TouchableOpacity above the sheet */}
+        <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowFilter(false)} activeOpacity={1} />
+
+        {/* Sheet — NOT inside backdrop TouchableOpacity */}
+        <View style={[s.modalSheet, { paddingBottom: insets.bottom + 16 }]}>
           <View style={s.modalHandle} />
-          {/* Title */}
           <View style={s.modalHeader}>
             <Text style={s.modalTitle}>Filter</Text>
             <TouchableOpacity onPress={() => setShowFilter(false)} activeOpacity={0.7}>
@@ -320,24 +342,25 @@ export default function StockLedgerScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-            {/* Date Range */}
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+
+            {/* ── Date Range (Issue 1 fix: 2 inline boxes, tap → close filter → open DateRangePicker) ── */}
             <View style={s.filterSection}>
               <Text style={s.filterSectionTitle}>Date range</Text>
-              <TouchableOpacity style={s.dateRangeRow} onPress={() => setShowDatePick(true)} activeOpacity={0.7}>
+              <TouchableOpacity style={s.dateRangeRow} onPress={openDateFromFilter} activeOpacity={0.8}>
                 <View style={s.dateField}>
-                  <Ionicons name="calendar-outline" size={14} color={COLORS.textTertiary} />
+                  <Ionicons name="calendar-outline" size={14} color={COLORS.brandPrimary} />
                   <Text style={s.dateFieldTxt}>{fmtDateLabel(draftFrom)}</Text>
                 </View>
-                <Text style={s.dateTo}>To</Text>
+                <Ionicons name="arrow-forward" size={14} color={COLORS.textTertiary} />
                 <View style={s.dateField}>
-                  <Ionicons name="calendar-outline" size={14} color={COLORS.textTertiary} />
+                  <Ionicons name="calendar-outline" size={14} color={COLORS.brandPrimary} />
                   <Text style={s.dateFieldTxt}>{fmtDateLabel(draftTo)}</Text>
                 </View>
               </TouchableOpacity>
             </View>
 
-            {/* Warehouse */}
+            {/* ── Warehouse ── */}
             <View style={s.filterSection}>
               <Text style={s.filterSectionTitle}>Warehouse</Text>
               <View style={s.chipWrap}>
@@ -348,9 +371,11 @@ export default function StockLedgerScreen() {
                       key={w}
                       style={[s.filterChip, active && s.filterChipActive]}
                       onPress={() => {
-                        const n = new Set(draftWH);
-                        active ? n.delete(w) : n.add(w);
-                        setDraftWH(n);
+                        setDraftWH(prev => {
+                          const n = new Set(prev);
+                          active ? n.delete(w) : n.add(w);
+                          return n;
+                        });
                       }}
                       activeOpacity={0.7}
                     >
@@ -362,7 +387,7 @@ export default function StockLedgerScreen() {
               </View>
             </View>
 
-            {/* Item / SKU Search */}
+            {/* ── Item / SKU ── */}
             <View style={s.filterSection}>
               <Text style={s.filterSectionTitle}>Item / SKU</Text>
               <View style={s.searchInput}>
@@ -377,14 +402,14 @@ export default function StockLedgerScreen() {
               </View>
             </View>
 
-            {/* Batch / Serial */}
+            {/* ── Batch / Serial ── */}
             <View style={s.filterSection}>
               <Text style={s.filterSectionTitle}>Batch / Serial</Text>
               <View style={s.searchInput}>
                 <Ionicons name="search-outline" size={15} color={COLORS.textTertiary} />
                 <TextInput
                   style={s.searchTxt}
-                  placeholder="Search product"
+                  placeholder="Search batch or serial"
                   placeholderTextColor={COLORS.textTertiary}
                   value={draftBatch}
                   onChangeText={setDraftBatch}
@@ -392,24 +417,26 @@ export default function StockLedgerScreen() {
               </View>
             </View>
 
-            {/* Txn Type */}
+            {/* ── Transaction type (Issue 4: renamed + 4 voucher types) ── */}
             <View style={s.filterSection}>
-              <Text style={s.filterSectionTitle}>Txn type</Text>
+              <Text style={s.filterSectionTitle}>Transaction type</Text>
               <View style={s.typeList}>
-                {TXN_TYPES.map(t => {
-                  const active = draftTypes.has(t);
+                {VOUCHER_TYPES.map((v, idx) => {
+                  const active = draftVouchers.has(v);
                   return (
                     <TouchableOpacity
-                      key={t}
-                      style={s.typeRow}
+                      key={v}
+                      style={[s.typeRow, idx === VOUCHER_TYPES.length - 1 && { borderBottomWidth: 0 }]}
                       onPress={() => {
-                        const n = new Set(draftTypes);
-                        active ? n.delete(t) : n.add(t);
-                        setDraftTypes(n);
+                        setDraftVouchers(prev => {
+                          const n = new Set(prev);
+                          active ? n.delete(v) : n.add(v);
+                          return n;
+                        });
                       }}
                       activeOpacity={0.7}
                     >
-                      <Text style={[s.typeRowTxt, active && s.typeRowTxtActive]}>{t}</Text>
+                      <Text style={[s.typeRowTxt, active && s.typeRowTxtActive]}>{v}</Text>
                       <View style={[s.checkbox, active && s.checkboxActive]}>
                         {active && <Ionicons name="checkmark" size={12} color="#fff" />}
                       </View>
@@ -418,6 +445,7 @@ export default function StockLedgerScreen() {
                 })}
               </View>
             </View>
+
             <View style={{ height: 24 }} />
           </ScrollView>
 
@@ -430,16 +458,8 @@ export default function StockLedgerScreen() {
               <Text style={s.applyTxt}>Apply Filters</Text>
             </TouchableOpacity>
           </View>
-        </Pressable>
-      </Pressable>
-
-      <DateRangePickerModal
-        visible={showDatePick}
-        fromDate={draftFrom}
-        toDate={draftTo}
-        onApply={(f, t) => { setDraftFrom(f); setDraftTo(t); }}
-        onClose={() => setShowDatePick(false)}
-      />
+        </View>
+      </View>
     </Modal>
   );
 
@@ -543,6 +563,21 @@ export default function StockLedgerScreen() {
       )}
 
       <FilterModal />
+
+      {/* DateRangePicker lives OUTSIDE the filter modal to avoid Modal nesting issues */}
+      <DateRangePickerModal
+        visible={showDatePick}
+        fromDate={draftFrom}
+        toDate={draftTo}
+        onApply={handleDateApply}
+        onClose={() => {
+          setShowDatePick(false);
+          if (pendingReopenFilter) {
+            setPendingReopenFilter(false);
+            setTimeout(() => setShowFilter(true), 350);
+          }
+        }}
+      />
     </SafeAreaView>
   );
 }
