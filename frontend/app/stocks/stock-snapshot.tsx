@@ -156,8 +156,8 @@ export default function StockSnapshotScreen() {
               onPress={() => setShowValDrop(p => !p)}
               activeOpacity={0.8}
             >
-              <Ionicons name="layers-outline" size={14} color={COLORS.textSecondary} />
-              <Text style={[s.controlPillTxt, { color: AMBER }]}>{valuation}</Text>
+              <Ionicons name="layers-outline" size={14} color={COLORS.textPrimary} />
+              <Text style={s.controlPillTxt}>{valuation}</Text>
               <Ionicons
                 name={showValDrop ? 'chevron-up' : 'chevron-down'}
                 size={14}
@@ -178,7 +178,7 @@ export default function StockSnapshotScreen() {
                 activeOpacity={0.7}
               >
                 <Text style={[s.valDropTxt, valuation === v && s.valDropTxtActive]}>{v}</Text>
-                {valuation === v && <Ionicons name="checkmark" size={16} color={AMBER} />}
+                {valuation === v && <Ionicons name="checkmark" size={16} color={COLORS.textPrimary} />}
               </TouchableOpacity>
             ))}
           </View>
@@ -297,7 +297,7 @@ const s = StyleSheet.create({
   valDropdown:    { marginHorizontal: SPACING.md, marginBottom: SPACING.sm, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
   valDropItem:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   valDropTxt:     { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
-  valDropTxtActive:{ color: AMBER, fontWeight: '700' },
+  valDropTxtActive:{ color: COLORS.textPrimary, fontWeight: '700' },
 
   hintRow: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: SPACING.md, paddingTop: 2, paddingBottom: 8 },
   hintTxt: { fontSize: 11, color: COLORS.textTertiary },
