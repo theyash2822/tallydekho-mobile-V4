@@ -325,144 +325,6 @@ export default function StockLedgerScreen() {
     );
   };
 
-  // ── Filter Modal ─────────────────────────────────────────────────────────────
-  const FilterModal = () => (
-    <Modal visible={showFilter} transparent animationType="slide" onRequestClose={() => setShowFilter(false)}>
-      <View style={s.modalOverlay}>
-        {/* Issue 2 & 3 fix: backdrop is a separate TouchableOpacity above the sheet */}
-        <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowFilter(false)} activeOpacity={1} />
-
-        {/* Sheet — NOT inside backdrop TouchableOpacity */}
-        <View style={[s.modalSheet, { paddingBottom: insets.bottom + 16 }]}>
-          <View style={s.modalHandle} />
-          <View style={s.modalHeader}>
-            <Text style={s.modalTitle}>Filter</Text>
-            <TouchableOpacity onPress={() => setShowFilter(false)} activeOpacity={0.7}>
-              <Ionicons name="close" size={22} color={COLORS.textPrimary} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-
-            {/* ── Date Range (Issue 1 fix: 2 inline boxes, tap → close filter → open DateRangePicker) ── */}
-            <View style={s.filterSection}>
-              <Text style={s.filterSectionTitle}>Date range</Text>
-              <TouchableOpacity style={s.dateRangeRow} onPress={openDateFromFilter} activeOpacity={0.8}>
-                <View style={s.dateField}>
-                  <Ionicons name="calendar-outline" size={14} color={COLORS.brandPrimary} />
-                  <Text style={s.dateFieldTxt}>{fmtDateLabel(draftFrom)}</Text>
-                </View>
-                <Ionicons name="arrow-forward" size={14} color={COLORS.textTertiary} />
-                <View style={s.dateField}>
-                  <Ionicons name="calendar-outline" size={14} color={COLORS.brandPrimary} />
-                  <Text style={s.dateFieldTxt}>{fmtDateLabel(draftTo)}</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            {/* ── Warehouse ── */}
-            <View style={s.filterSection}>
-              <Text style={s.filterSectionTitle}>Warehouse</Text>
-              <View style={s.chipWrap}>
-                {WAREHOUSES.map(w => {
-                  const active = draftWH.has(w);
-                  return (
-                    <TouchableOpacity
-                      key={w}
-                      style={[s.filterChip, active && s.filterChipActive]}
-                      onPress={() => {
-                        setDraftWH(prev => {
-                          const n = new Set(prev);
-                          active ? n.delete(w) : n.add(w);
-                          return n;
-                        });
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[s.filterChipTxt, active && s.filterChipTxtActive]}>{w}</Text>
-                      {active && <Ionicons name="close" size={12} color="#fff" />}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-
-            {/* ── Item / SKU ── */}
-            <View style={s.filterSection}>
-              <Text style={s.filterSectionTitle}>Item / SKU</Text>
-              <View style={s.searchInput}>
-                <Ionicons name="search-outline" size={15} color={COLORS.textTertiary} />
-                <TextInput
-                  style={s.searchTxt}
-                  placeholder="Search product"
-                  placeholderTextColor={COLORS.textTertiary}
-                  value={draftItem}
-                  onChangeText={setDraftItem}
-                />
-              </View>
-            </View>
-
-            {/* ── Batch / Serial ── */}
-            <View style={s.filterSection}>
-              <Text style={s.filterSectionTitle}>Batch / Serial</Text>
-              <View style={s.searchInput}>
-                <Ionicons name="search-outline" size={15} color={COLORS.textTertiary} />
-                <TextInput
-                  style={s.searchTxt}
-                  placeholder="Search batch or serial"
-                  placeholderTextColor={COLORS.textTertiary}
-                  value={draftBatch}
-                  onChangeText={setDraftBatch}
-                />
-              </View>
-            </View>
-
-            {/* ── Transaction type (Issue 4: renamed + 4 voucher types) ── */}
-            <View style={s.filterSection}>
-              <Text style={s.filterSectionTitle}>Transaction type</Text>
-              <View style={s.typeList}>
-                {VOUCHER_TYPES.map((v, idx) => {
-                  const active = draftVouchers.has(v);
-                  return (
-                    <TouchableOpacity
-                      key={v}
-                      style={[s.typeRow, idx === VOUCHER_TYPES.length - 1 && { borderBottomWidth: 0 }]}
-                      onPress={() => {
-                        setDraftVouchers(prev => {
-                          const n = new Set(prev);
-                          active ? n.delete(v) : n.add(v);
-                          return n;
-                        });
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[s.typeRowTxt, active && s.typeRowTxtActive]}>{v}</Text>
-                      <View style={[s.checkbox, active && s.checkboxActive]}>
-                        {active && <Ionicons name="checkmark" size={12} color="#fff" />}
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-
-            <View style={{ height: 24 }} />
-          </ScrollView>
-
-          {/* Buttons */}
-          <View style={s.modalFooter}>
-            <TouchableOpacity style={s.cancelBtn} onPress={() => setShowFilter(false)} activeOpacity={0.7}>
-              <Text style={s.cancelTxt}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.applyBtn} onPress={applyFilters} activeOpacity={0.8}>
-              <Text style={s.applyTxt}>Apply Filters</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-
   // ── Main Render ───────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
@@ -562,9 +424,119 @@ export default function StockLedgerScreen() {
         </View>
       )}
 
-      <FilterModal />
+      {/* Filter Modal — inlined (NOT a sub-component) to prevent remount on re-render */}
+      <Modal visible={showFilter} transparent animationType="slide" onRequestClose={() => setShowFilter(false)}>
+        <View style={s.modalOverlay}>
+          <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowFilter(false)} activeOpacity={1} />
+          <View style={[s.modalSheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={s.modalHandle} />
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>Filter</Text>
+              <TouchableOpacity onPress={() => setShowFilter(false)} activeOpacity={0.7}>
+                <Ionicons name="close" size={22} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              {/* Date Range */}
+              <View style={s.filterSection}>
+                <Text style={s.filterSectionTitle}>Date range</Text>
+                <TouchableOpacity style={s.dateRangeRow} onPress={openDateFromFilter} activeOpacity={0.8}>
+                  <View style={s.dateField}>
+                    <Ionicons name="calendar-outline" size={14} color={COLORS.brandPrimary} />
+                    <Text style={s.dateFieldTxt}>{fmtDateLabel(draftFrom)}</Text>
+                  </View>
+                  <Ionicons name="arrow-forward" size={14} color={COLORS.textTertiary} />
+                  <View style={s.dateField}>
+                    <Ionicons name="calendar-outline" size={14} color={COLORS.brandPrimary} />
+                    <Text style={s.dateFieldTxt}>{fmtDateLabel(draftTo)}</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+              {/* Warehouse */}
+              <View style={s.filterSection}>
+                <Text style={s.filterSectionTitle}>Warehouse</Text>
+                <View style={s.chipWrap}>
+                  {WAREHOUSES.map(w => {
+                    const active = draftWH.has(w);
+                    return (
+                      <TouchableOpacity
+                        key={w}
+                        style={[s.filterChip, active && s.filterChipActive]}
+                        onPress={() => setDraftWH(prev => { const n = new Set(prev); active ? n.delete(w) : n.add(w); return n; })}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[s.filterChipTxt, active && s.filterChipTxtActive]}>{w}</Text>
+                        {active && <Ionicons name="close" size={12} color="#fff" />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+              {/* Item / SKU */}
+              <View style={s.filterSection}>
+                <Text style={s.filterSectionTitle}>Item / SKU</Text>
+                <View style={s.searchInput}>
+                  <Ionicons name="search-outline" size={15} color={COLORS.textTertiary} />
+                  <TextInput
+                    style={s.searchTxt}
+                    placeholder="Search product"
+                    placeholderTextColor={COLORS.textTertiary}
+                    value={draftItem}
+                    onChangeText={setDraftItem}
+                  />
+                </View>
+              </View>
+              {/* Batch / Serial */}
+              <View style={s.filterSection}>
+                <Text style={s.filterSectionTitle}>Batch / Serial</Text>
+                <View style={s.searchInput}>
+                  <Ionicons name="search-outline" size={15} color={COLORS.textTertiary} />
+                  <TextInput
+                    style={s.searchTxt}
+                    placeholder="Search batch or serial"
+                    placeholderTextColor={COLORS.textTertiary}
+                    value={draftBatch}
+                    onChangeText={setDraftBatch}
+                  />
+                </View>
+              </View>
+              {/* Transaction type */}
+              <View style={s.filterSection}>
+                <Text style={s.filterSectionTitle}>Transaction type</Text>
+                <View style={s.typeList}>
+                  {VOUCHER_TYPES.map((v, idx) => {
+                    const active = draftVouchers.has(v);
+                    return (
+                      <TouchableOpacity
+                        key={v}
+                        style={[s.typeRow, idx === VOUCHER_TYPES.length - 1 && { borderBottomWidth: 0 }]}
+                        onPress={() => setDraftVouchers(prev => { const n = new Set(prev); active ? n.delete(v) : n.add(v); return n; })}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[s.typeRowTxt, active && s.typeRowTxtActive]}>{v}</Text>
+                        <View style={[s.checkbox, active && s.checkboxActive]}>
+                          {active && <Ionicons name="checkmark" size={12} color="#fff" />}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+              <View style={{ height: 24 }} />
+            </ScrollView>
+            <View style={s.modalFooter}>
+              <TouchableOpacity style={s.cancelBtn} onPress={() => setShowFilter(false)} activeOpacity={0.7}>
+                <Text style={s.cancelTxt}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.applyBtn} onPress={applyFilters} activeOpacity={0.8}>
+                <Text style={s.applyTxt}>Apply Filters</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
-      {/* DateRangePicker lives OUTSIDE the filter modal to avoid Modal nesting issues */}
+      {/* DateRangePicker — outside filter modal, no nesting */}
       <DateRangePickerModal
         visible={showDatePick}
         fromDate={draftFrom}
