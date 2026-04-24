@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -120,17 +120,10 @@ export default function ReorderQueueScreen() {
                 <TouchableOpacity
                   style={styles.reorderBtn}
                   activeOpacity={0.8}
-                  onPress={() => Alert.alert(
-                    'Create Purchase Order',
-                    `Order ${item.suggest} units of ${item.name}?`,
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Create PO', style: 'default', onPress: () => {} },
-                    ],
-                  )}
+                  onPress={() => router.push('/purchase/create-order')}
                 >
-                  <Ionicons name="refresh-outline" size={13} color={COLORS.white} />
-                  <Text style={styles.reorderBtnText}>Reorder</Text>
+                  <Ionicons name="cart-outline" size={13} color={COLORS.white} />
+                  <Text style={styles.reorderBtnText}>Add to PO</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -191,6 +184,6 @@ const styles = StyleSheet.create({
 
   cardActions:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   suggText:       { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
-  reorderBtn:     { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#059669', paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.md },
+  reorderBtn:     { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.brandPrimary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.md },
   reorderBtnText: { fontSize: TYPOGRAPHY.xs, color: COLORS.white, fontWeight: '700' },
 });
