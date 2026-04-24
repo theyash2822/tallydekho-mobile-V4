@@ -458,24 +458,7 @@ export default function StockLedgerScreen() {
               <View style={s.filterSection}>
                 <Text style={s.filterSectionTitle}>Warehouse</Text>
 
-                {/* Search bar */}
-                <View style={s.searchInput}>
-                  <Ionicons name="search-outline" size={15} color={COLORS.textTertiary} />
-                  <TextInput
-                    style={s.searchTxt}
-                    placeholder="Search warehouse..."
-                    placeholderTextColor={COLORS.textTertiary}
-                    value={draftWHSearch}
-                    onChangeText={setDraftWHSearch}
-                  />
-                  {draftWHSearch.length > 0 && (
-                    <TouchableOpacity onPress={() => setDraftWHSearch('')} activeOpacity={0.7}>
-                      <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {/* Selected chips row */}
+                {/* Selected chips */}
                 {draftWH.size > 0 && (
                   <View style={s.chipWrap}>
                     {[...draftWH].map(w => (
@@ -492,27 +475,51 @@ export default function StockLedgerScreen() {
                   </View>
                 )}
 
-                {/* Filtered dropdown list */}
-                <View style={s.whList}>
-                  {WAREHOUSES
-                    .filter(w =>
-                      !draftWH.has(w) &&
-                      w.toLowerCase().includes(draftWHSearch.toLowerCase())
-                    )
-                    .map((w, idx, arr) => (
-                      <TouchableOpacity
-                        key={w}
-                        style={[s.whRow, idx === arr.length - 1 && { borderBottomWidth: 0 }]}
-                        onPress={() => setDraftWH(prev => { const n = new Set(prev); n.add(w); setDraftWHSearch(''); return n; })}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="business-outline" size={15} color={COLORS.textSecondary} />
-                        <Text style={s.whRowTxt}>{w}</Text>
-                        <Ionicons name="add-circle-outline" size={18} color={COLORS.brandPrimary} />
-                      </TouchableOpacity>
-                    ))
-                  }
+                {/* Search bar */}
+                <View style={[s.searchInput, { marginTop: draftWH.size > 0 ? 8 : 0 }]}>
+                  <Ionicons name="search-outline" size={15} color={COLORS.textTertiary} />
+                  <TextInput
+                    style={s.searchTxt}
+                    placeholder="Search warehouse..."
+                    placeholderTextColor={COLORS.textTertiary}
+                    value={draftWHSearch}
+                    onChangeText={setDraftWHSearch}
+                  />
+                  {draftWHSearch.length > 0 && (
+                    <TouchableOpacity onPress={() => setDraftWHSearch('')} activeOpacity={0.7}>
+                      <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
+                    </TouchableOpacity>
+                  )}
                 </View>
+
+                {/* Results — only visible when typing */}
+                {draftWHSearch.length > 0 && (
+                  <View style={s.whList}>
+                    {WAREHOUSES
+                      .filter(w => w.toLowerCase().includes(draftWHSearch.toLowerCase()))
+                      .map((w, idx, arr) => {
+                        const checked = draftWH.has(w);
+                        return (
+                          <TouchableOpacity
+                            key={w}
+                            style={[s.whRow, idx === arr.length - 1 && { borderBottomWidth: 0 }]}
+                            onPress={() => {
+                              setDraftWH(prev => { const n = new Set(prev); checked ? n.delete(w) : n.add(w); return n; });
+                              if (!checked) setDraftWHSearch(''); // clear search after adding
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="business-outline" size={15} color={COLORS.textSecondary} />
+                            <Text style={s.whRowTxt}>{w}</Text>
+                            <View style={[s.checkbox, checked && s.checkboxActive]}>
+                              {checked && <Ionicons name="checkmark" size={12} color="#fff" />}
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })
+                    }
+                  </View>
+                )}
               </View>
               {/* Item / SKU */}
               <View style={s.filterSection}>
