@@ -7,33 +7,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import { STOCK_ITEMS } from './total-stock';
 
-// ─── MOCK DATA ──────────────────────────────────────────────────────────────
+// On-hand stock is a subset — apply a small reduction to simulate committed/reserved units
+const ON_HAND_ITEMS = STOCK_ITEMS.map(i => ({
+  ...i,
+  qty: Math.max(1, Math.floor(i.qty * 0.88)), // ~12% committed/reserved
+}));
 
-export const STOCK_ITEMS = [
-  { id: 'SI01', name: 'Black JBL Speaker',      sku: 'PRD-1002-ABC', category: 'Audio',       qty: 85,  value: '₹4,200',   icon: 'musical-notes-outline', iconColor: '#7C3AED', iconBg: '#F3F0FF' },
-  { id: 'SI02', name: 'USB-C Cable 3A',          sku: 'USB-3A-1M',   category: 'Accessories', qty: 320, value: '₹450',     icon: 'hardware-chip-outline', iconColor: '#2563EB', iconBg: '#EFF6FF' },
-  { id: 'SI03', name: 'Wireless Mouse M220',     sku: 'LOG-M220',    category: 'Peripherals', qty: 64,  value: '₹2,800',   icon: 'game-controller-outline', iconColor: '#059669', iconBg: '#ECFDF5' },
-  { id: 'SI04', name: 'HDMI Cable 1.5m',         sku: 'HDM-1.5',     category: 'Accessories', qty: 140, value: '₹780',     icon: 'git-branch-outline',    iconColor: '#D97706', iconBg: '#FFFBEB' },
-  { id: 'SI05', name: 'Laptop Stand Adjustable', sku: 'LST-ADJ01',   category: 'Furniture',   qty: 28,  value: '₹5,400',   icon: 'laptop-outline',        iconColor: '#1A1A1A', iconBg: '#E8E7E1' },
-  { id: 'SI06', name: 'Mechanical Keyboard',     sku: 'LOG-MK235',   category: 'Peripherals', qty: 42,  value: '₹6,900',   icon: 'keypad-outline',        iconColor: '#DC2626', iconBg: '#FEF2F2' },
-  { id: 'SI07', name: 'Power Bank 20000mAh',     sku: 'AMZ-PB20K',   category: 'Mobiles',     qty: 95,  value: '₹1,800',   icon: 'battery-charging-outline', iconColor: '#2563EB', iconBg: '#EFF6FF' },
-  { id: 'SI08', name: 'Monitor 27" IPS',         sku: 'BNQ-27IPS',   category: 'Electronics', qty: 12,  value: '₹21,000',  icon: 'tv-outline',            iconColor: '#1A1A1A', iconBg: '#E8E7E1' },
-  { id: 'SI09', name: 'TWS Earbuds Pro',          sku: 'TWS-PRO-01',  category: 'Audio',       qty: 58,  value: '₹2,200',   icon: 'headset-outline',       iconColor: '#7C3AED', iconBg: '#F3F0FF' },
-  { id: 'SI10', name: 'Type-C Hub 7-in-1',        sku: 'USB-C71',     category: 'Accessories', qty: 76,  value: '₹1,600',   icon: 'git-merge-outline',     iconColor: '#059669', iconBg: '#ECFDF5' },
-];
+// ─── ITEM CARD (outside screen) ───────────────────────────────────────────────────
 
-const CATEGORY_COLORS: Record<string, string> = {
-  Audio: '#7C3AED', Accessories: '#2563EB', Peripherals: '#059669',
-  Furniture: '#1A1A1A', Mobiles: '#D97706', Electronics: '#DC2626',
-};
-
-// ─── STOCK ITEM CARD (outside screen) ───────────────────────────────────────────
-
-function StockCard({
+function OnHandCard({
   item, onPress,
 }: {
-  item: typeof STOCK_ITEMS[0]; onPress: () => void;
+  item: typeof ON_HAND_ITEMS[0]; onPress: () => void;
 }) {
   return (
     <TouchableOpacity style={sc.card} onPress={onPress} activeOpacity={0.8}>
@@ -46,8 +33,8 @@ function StockCard({
       </View>
       <View style={sc.right}>
         <Text style={sc.value}>{item.value}</Text>
-        <View style={sc.qtyBadge}>
-          <Text style={sc.qtyTxt}>{item.qty} units</Text>
+        <View style={[sc.qtyBadge, item.qty <= 10 && sc.qtyLow]}>
+          <Text style={[sc.qtyTxt, item.qty <= 10 && sc.qtyLowTxt]}>{item.qty} on hand</Text>
         </View>
       </View>
       <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} style={{ marginLeft: 4 }} />
@@ -63,30 +50,31 @@ const sc = StyleSheet.create({
   right:    { alignItems: 'flex-end', gap: 4 },
   value:    { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   qtyBadge: { backgroundColor: COLORS.pageBg, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: COLORS.borderDefault },
+  qtyLow:   { backgroundColor: COLORS.negativeBg, borderColor: COLORS.negative + '40' },
   qtyTxt:   { fontSize: 10, fontWeight: '600', color: COLORS.textSecondary },
+  qtyLowTxt:{ color: COLORS.negative },
 });
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 
-export default function TotalStockScreen() {
+export default function OnHandStockScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ whId?: string }>();
-  const whId   = params.whId || 'WH01';
 
   const [query,    setQuery]    = useState('');
   const [calOpen,  setCalOpen]  = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo,   setDateTo]   = useState('');
 
-  const filtered = STOCK_ITEMS.filter(
+  const filtered = ON_HAND_ITEMS.filter(
     i =>
       i.name.toLowerCase().includes(query.toLowerCase()) ||
       i.sku.toLowerCase().includes(query.toLowerCase()),
   );
 
-  const totalQty   = STOCK_ITEMS.reduce((s, i) => s + i.qty, 0);
-  const totalSkus  = STOCK_ITEMS.length;
-  const dateLabel  = dateFrom && dateTo ? `${dateFrom} – ${dateTo}` : 'All Time';
+  const totalQty  = ON_HAND_ITEMS.reduce((s, i) => s + i.qty, 0);
+  const lowStock  = ON_HAND_ITEMS.filter(i => i.qty <= 10).length;
+  const dateLabel = dateFrom && dateTo ? `${dateFrom} – ${dateTo}` : 'All Time';
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -95,7 +83,7 @@ export default function TotalStockScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Total Stock</Text>
+        <Text style={styles.headerTitle}>On Hand Stock</Text>
         <TouchableOpacity
           style={styles.calBtn}
           onPress={() => setCalOpen(true)}
@@ -119,18 +107,18 @@ export default function TotalStockScreen() {
       {/* Summary strip */}
       <View style={styles.summaryRow}>
         {[
-          { label: 'No. of SKUs', value: `${totalSkus}` },
+          { label: 'No. of SKUs', value: `${ON_HAND_ITEMS.length}` },
           { label: 'Quantity',    value: totalQty.toLocaleString('en-IN') },
-          { label: 'Value (INR)', value: '₹83,150' },
+          { label: 'Low Stock',   value: `${lowStock}`, warn: lowStock > 0 },
         ].map((s, i) => (
           <View key={i} style={styles.summaryItem}>
-            <Text style={styles.summaryVal}>{s.value}</Text>
+            <Text style={[styles.summaryVal, s.warn && { color: COLORS.negative }]}>{s.value}</Text>
             <Text style={styles.summaryLabel}>{s.label}</Text>
           </View>
         ))}
       </View>
 
-      {/* Search bar */}
+      {/* Search */}
       <View style={styles.searchWrap}>
         <Ionicons name="search-outline" size={16} color={COLORS.textTertiary} />
         <TextInput
@@ -154,7 +142,7 @@ export default function TotalStockScreen() {
       >
         <Text style={styles.sectionLabel}>{filtered.length} items</Text>
         {filtered.map(item => (
-          <StockCard
+          <OnHandCard
             key={item.id}
             item={item}
             onPress={() => router.push(`/stocks/item-detail?id=${item.id}` as any)}
