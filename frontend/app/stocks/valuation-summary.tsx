@@ -35,6 +35,39 @@ export default function ValuationSummaryScreen() {
   // Chart interaction
   const [selectedSlice, setSelectedSlice] = useState<number | null>(null);
 
+  // Multi-select
+  const [selectedIds,     setSelectedIds]     = useState<Set<string>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+
+  const handleLongPress = (id: string) => {
+    setIsSelectionMode(true);
+    setSelectedIds(new Set([id]));
+  };
+
+  const handleCardPress = (id: string) => {
+    if (!isSelectionMode) return;
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+        if (next.size === 0) setIsSelectionMode(false);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const cancelSelection = () => {
+    setSelectedIds(new Set());
+    setIsSelectionMode(false);
+  };
+
+  const selectAll = () => {
+    setSelectedIds(new Set(WAREHOUSE_CARDS.map(w => w.id)));
+    setIsSelectionMode(true);
+  };
+
   // Filter state
   const [showFilter,          setShowFilter]          = useState(false);
   const [showDatePick,        setShowDatePick]        = useState(false);
@@ -107,6 +140,20 @@ export default function ValuationSummaryScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Selection Mode Banner */}
+      {isSelectionMode && (
+        <View style={s.selBanner}>
+          <TouchableOpacity onPress={cancelSelection} activeOpacity={0.7} style={s.selBannerBtn}>
+            <Ionicons name="close" size={18} color={COLORS.textPrimary} />
+            <Text style={s.selBannerCancel}>Cancel</Text>
+          </TouchableOpacity>
+          <Text style={s.selBannerCount}>{selectedIds.size} selected</Text>
+          <TouchableOpacity onPress={selectAll} activeOpacity={0.7} style={s.selBannerBtn}>
+            <Text style={s.selBannerAll}>All</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
 
         {/* Donut Chart */}
@@ -163,47 +210,76 @@ export default function ValuationSummaryScreen() {
 
         {/* Warehouse Cards */}
         <Text style={s.sectionLabel}>Warehouse Breakdown</Text>
-        {WAREHOUSE_CARDS.map(w => (
-          <View key={w.id} style={s.whCard}>
-            <View style={s.whCardTop}>
-              <View style={[s.avatar, { backgroundColor: w.color }]}>
-                <Text style={s.avatarTxt}>{w.name.charAt(0)}</Text>
-              </View>
-              <View style={s.whCardInfo}>
-                <Text style={s.whName}>{w.name}</Text>
-                <Text style={s.whCity}>{w.city}</Text>
-              </View>
-            </View>
-            <View style={s.whDivider} />
-            <View style={s.whStats}>
-              <View style={s.statItem}>
-                <Text style={s.statLbl}>Stock Value</Text>
-                <Text style={s.statVal}>{w.value}</Text>
-              </View>
-              <View style={s.statDivider} />
-              <View style={s.statItem}>
-                <Text style={s.statLbl}>SKUs</Text>
-                <Text style={s.statVal}>{w.skus.toLocaleString()}</Text>
-              </View>
-              <View style={s.statDivider} />
-              <View style={s.statItem}>
-                <Text style={s.statLbl}>Ratio</Text>
-                <Text style={s.statVal}>{w.ratio}%</Text>
-              </View>
-            </View>
+
+        {/* Long press hint */}
+        {!isSelectionMode && (
+          <View style={s.hintRow}>
+            <Ionicons name="hand-left-outline" size={13} color={COLORS.textTertiary} />
+            <Text style={s.hintTxt}>Long press a card to select</Text>
           </View>
-        ))}
+        )}
+
+        {WAREHOUSE_CARDS.map(w => {
+          const isSel = selectedIds.has(w.id);
+          return (
+            <TouchableOpacity
+              key={w.id}
+              style={[s.whCard, isSel && s.whCardSel]}
+              onPress={() => handleCardPress(w.id)}
+              onLongPress={() => handleLongPress(w.id)}
+              delayLongPress={350}
+              activeOpacity={0.8}
+            >
+              <View style={s.whCardTop}>
+                <View style={[s.avatar, { backgroundColor: isSel ? '#A89060' : w.color }]}>
+                  {isSel
+                    ? <Ionicons name="checkmark" size={20} color="#fff" />
+                    : <Text style={s.avatarTxt}>{w.name.charAt(0)}</Text>
+                  }
+                </View>
+                <View style={s.whCardInfo}>
+                  <Text style={s.whName}>{w.name}</Text>
+                  <Text style={s.whCity}>{w.city}</Text>
+                </View>
+              </View>
+              <View style={s.whDivider} />
+              <View style={s.whStats}>
+                <View style={s.statItem}>
+                  <Text style={s.statLbl}>Stock Value</Text>
+                  <Text style={s.statVal}>{w.value}</Text>
+                </View>
+                <View style={s.statDivider} />
+                <View style={s.statItem}>
+                  <Text style={s.statLbl}>SKUs</Text>
+                  <Text style={s.statVal}>{w.skus.toLocaleString()}</Text>
+                </View>
+                <View style={s.statDivider} />
+                <View style={s.statItem}>
+                  <Text style={s.statLbl}>Ratio</Text>
+                  <Text style={s.statVal}>{w.ratio}%</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
 
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Share Button */}
-      <View style={[s.shareWrap, { paddingBottom: insets.bottom || 16 }]}>
-        <TouchableOpacity style={s.shareBtn} activeOpacity={0.8}>
-          <Ionicons name="share-social-outline" size={18} color="#fff" />
-          <Text style={s.shareTxt}>Share</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Share Bar — only visible when items are selected */}
+      {isSelectionMode && selectedIds.size > 0 && (
+        <View style={[s.shareBar, { paddingBottom: insets.bottom || 16 }]}>
+          <TouchableOpacity style={s.cancelSelFooter} onPress={cancelSelection} activeOpacity={0.7}>
+            <Ionicons name="close-circle" size={20} color={COLORS.textSecondary} />
+            <Text style={s.cancelSelFooterTxt}>Deselect</Text>
+          </TouchableOpacity>
+          <Text style={s.shareBarCount}>{selectedIds.size} warehouse{selectedIds.size !== 1 ? 's' : ''}</Text>
+          <TouchableOpacity style={s.shareBtn} activeOpacity={0.8}>
+            <Ionicons name="share-social-outline" size={18} color="#fff" />
+            <Text style={s.shareTxt}>Share</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── Filter Modal (inlined — no sub-component to prevent remount) ── */}
       <Modal visible={showFilter} transparent animationType="slide" onRequestClose={() => setShowFilter(false)}>
@@ -356,6 +432,17 @@ const s = StyleSheet.create({
   filterBadge: { position: 'absolute', top: 6, right: 6, width: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center' },
   filterBadgeTxt: { fontSize: 9, fontWeight: '700', color: '#fff' },
 
+  // Selection banner
+  selBanner:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.activeBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  selBannerBtn:    { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  selBannerCancel: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  selBannerCount:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  selBannerAll:    { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.brandPrimary },
+
+  // Hint
+  hintRow: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 5 },
+  hintTxt: { fontSize: 11, color: COLORS.textTertiary },
+
   scroll: { padding: SPACING.md, gap: 12 },
 
   chartCard:       { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, padding: SPACING.md, alignItems: 'center' },
@@ -374,6 +461,7 @@ const s = StyleSheet.create({
   sectionLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, paddingLeft: 4, marginTop: 4 },
 
   whCard:    { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, padding: SPACING.md },
+  whCardSel: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.activeBg },
   whCardTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar:    { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   avatarTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: '#fff' },
@@ -387,9 +475,13 @@ const s = StyleSheet.create({
   statVal:   { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
   statDivider: { width: 1, height: 32, backgroundColor: COLORS.borderDefault },
 
-  shareWrap: { paddingHorizontal: SPACING.md, paddingTop: 12, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
-  shareBtn:  { backgroundColor: COLORS.textPrimary, borderRadius: RADIUS.lg, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  shareTxt:  { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: '#fff' },
+  // Share bar (conditional on selection)
+  shareBar:           { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingTop: 12, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, gap: 12 },
+  cancelSelFooter:    { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  cancelSelFooterTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
+  shareBarCount:      { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
+  shareBtn:           { backgroundColor: COLORS.textPrimary, borderRadius: RADIUS.lg, paddingVertical: 14, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  shareTxt:           { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: '#fff' },
 
   // Modal
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
