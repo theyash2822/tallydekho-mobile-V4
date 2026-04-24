@@ -69,16 +69,18 @@ export default function StockLedgerScreen() {
   const [selVouchers, setSelVouchers] = useState<Set<VoucherType>>(new Set());
 
   // Draft filters (inside modal before Apply)
-  const [draftWH,      setDraftWH]      = useState<Set<string>>(new Set());
-  const [draftItem,    setDraftItem]    = useState('');
-  const [draftBatch,   setDraftBatch]   = useState('');
-  const [draftVouchers,setDraftVouchers]= useState<Set<VoucherType>>(new Set());
+  const [draftWH,       setDraftWH]       = useState<Set<string>>(new Set());
+  const [draftWHSearch, setDraftWHSearch] = useState('');
+  const [draftItem,     setDraftItem]     = useState('');
+  const [draftBatch,    setDraftBatch]    = useState('');
+  const [draftVouchers, setDraftVouchers] = useState<Set<VoucherType>>(new Set());
   const [draftFrom,    setDraftFrom]    = useState('01/04/24');
   const [draftTo,      setDraftTo]      = useState('15/12/24');
 
   // Open filter → copy applied → draft
   const openFilter = () => {
     setDraftWH(new Set(selWH));
+    setDraftWHSearch('');
     setDraftItem(itemSearch);
     setDraftBatch(batchSearch);
     setDraftVouchers(new Set(selVouchers));
@@ -455,21 +457,61 @@ export default function StockLedgerScreen() {
               {/* Warehouse */}
               <View style={s.filterSection}>
                 <Text style={s.filterSectionTitle}>Warehouse</Text>
-                <View style={s.chipWrap}>
-                  {WAREHOUSES.map(w => {
-                    const active = draftWH.has(w);
-                    return (
+
+                {/* Search bar */}
+                <View style={s.searchInput}>
+                  <Ionicons name="search-outline" size={15} color={COLORS.textTertiary} />
+                  <TextInput
+                    style={s.searchTxt}
+                    placeholder="Search warehouse..."
+                    placeholderTextColor={COLORS.textTertiary}
+                    value={draftWHSearch}
+                    onChangeText={setDraftWHSearch}
+                  />
+                  {draftWHSearch.length > 0 && (
+                    <TouchableOpacity onPress={() => setDraftWHSearch('')} activeOpacity={0.7}>
+                      <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Selected chips row */}
+                {draftWH.size > 0 && (
+                  <View style={s.chipWrap}>
+                    {[...draftWH].map(w => (
                       <TouchableOpacity
                         key={w}
-                        style={[s.filterChip, active && s.filterChipActive]}
-                        onPress={() => setDraftWH(prev => { const n = new Set(prev); active ? n.delete(w) : n.add(w); return n; })}
+                        style={s.filterChipActive}
+                        onPress={() => setDraftWH(prev => { const n = new Set(prev); n.delete(w); return n; })}
                         activeOpacity={0.7}
                       >
-                        <Text style={[s.filterChipTxt, active && s.filterChipTxtActive]}>{w}</Text>
-                        {active && <Ionicons name="close" size={12} color="#fff" />}
+                        <Text style={s.filterChipTxtActive}>{w}</Text>
+                        <Ionicons name="close" size={12} color="#fff" />
                       </TouchableOpacity>
-                    );
-                  })}
+                    ))}
+                  </View>
+                )}
+
+                {/* Filtered dropdown list */}
+                <View style={s.whList}>
+                  {WAREHOUSES
+                    .filter(w =>
+                      !draftWH.has(w) &&
+                      w.toLowerCase().includes(draftWHSearch.toLowerCase())
+                    )
+                    .map((w, idx, arr) => (
+                      <TouchableOpacity
+                        key={w}
+                        style={[s.whRow, idx === arr.length - 1 && { borderBottomWidth: 0 }]}
+                        onPress={() => setDraftWH(prev => { const n = new Set(prev); n.add(w); setDraftWHSearch(''); return n; })}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="business-outline" size={15} color={COLORS.textSecondary} />
+                        <Text style={s.whRowTxt}>{w}</Text>
+                        <Ionicons name="add-circle-outline" size={18} color={COLORS.brandPrimary} />
+                      </TouchableOpacity>
+                    ))
+                  }
                 </View>
               </View>
               {/* Item / SKU */}
@@ -645,11 +687,16 @@ const s = StyleSheet.create({
   dateFieldTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
   dateTo:       { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
 
-  chipWrap:        { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chipWrap:        { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   filterChip:      { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg },
-  filterChipActive:{ backgroundColor: COLORS.textPrimary, borderColor: COLORS.textPrimary },
+  filterChipActive:{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: RADIUS.full, backgroundColor: COLORS.textPrimary, borderWidth: 0 },
   filterChipTxt:   { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textSecondary },
-  filterChipTxtActive: { color: '#fff', fontWeight: '600' },
+  filterChipTxtActive: { fontSize: TYPOGRAPHY.sm, color: '#fff', fontWeight: '600' },
+
+  // Warehouse search list
+  whList:   { borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden', marginTop: 8 },
+  whRow:    { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: SPACING.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
+  whRowTxt: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, fontWeight: '500' },
 
   searchInput: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 12, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg },
   searchTxt:   { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, padding: 0 },
