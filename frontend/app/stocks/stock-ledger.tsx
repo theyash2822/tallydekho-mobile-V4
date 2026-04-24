@@ -131,12 +131,12 @@ export default function StockLedgerScreen() {
 
   // Filtered transactions
   const filtered = useMemo(() => MOCK_TXN.filter(t => {
-    if (selWH.size    > 0 && ![...selWH].some(w => t.warehouse.includes(w.split(' ')[0])))   return false;
-    if (selTypes.size > 0 && !selTypes.has(t.type))       return false;
-    if (itemSearch && !t.item.toLowerCase().includes(itemSearch.toLowerCase())) return false;
-    if (batchSearch && !t.batch.toLowerCase().includes(batchSearch.toLowerCase())) return false;
+    if (selWH.size       > 0 && ![...selWH].some(w => t.warehouse.includes(w.split(' ')[0]))) return false;
+    if (selVouchers.size > 0 && !selVouchers.has(t.docType as VoucherType))                  return false;
+    if (itemSearch  && !t.item.toLowerCase().includes(itemSearch.toLowerCase()))              return false;
+    if (batchSearch && !t.batch.toLowerCase().includes(batchSearch.toLowerCase()))            return false;
     return true;
-  }), [selWH, selTypes, itemSearch, batchSearch]);
+  }), [selWH, selVouchers, itemSearch, batchSearch]);
 
   const activeFilterCount =
     selWH.size + selVouchers.size +
