@@ -32,6 +32,9 @@ export default function ValuationSummaryScreen() {
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
 
+  // Chart interaction
+  const [selectedSlice, setSelectedSlice] = useState<number | null>(null);
+
   // Filter state
   const [showFilter,          setShowFilter]          = useState(false);
   const [showDatePick,        setShowDatePick]        = useState(false);
@@ -113,21 +116,47 @@ export default function ValuationSummaryScreen() {
             data={PIE_DATA}
             radius={100}
             innerRadius={64}
-            centerLabelComponent={() => (
-              <View style={s.chartCenter}>
-                <Ionicons name="business-outline" size={20} color={COLORS.textSecondary} />
-                <Text style={s.chartCenterTxt}>Warehouse</Text>
-              </View>
-            )}
+            focusOnPress
+            selectedIndex={selectedSlice ?? undefined}
+            onPress={(_item: any, index: number) => {
+              setSelectedSlice(prev => (prev === index ? null : index));
+            }}
+            centerLabelComponent={() => {
+              const slice = selectedSlice !== null ? PIE_DATA[selectedSlice] : null;
+              if (slice) {
+                return (
+                  <View style={s.chartCenter}>
+                    <Text style={[s.chartCenterName, { color: slice.color === '#1A1A1A' ? COLORS.textSecondary : slice.color }]}
+                      numberOfLines={2}>
+                      {slice.label}
+                    </Text>
+                    <Text style={s.chartCenterVal}>₹{(slice.value / 1000).toFixed(0)}K</Text>
+                  </View>
+                );
+              }
+              return (
+                <View style={s.chartCenter}>
+                  <Ionicons name="business-outline" size={20} color={COLORS.textSecondary} />
+                  <Text style={s.chartCenterTxt}>Warehouse</Text>
+                </View>
+              );
+            }}
           />
+          {/* Tap hint */}
+          <Text style={s.chartHint}>Tap a segment to see details</Text>
           {/* Legend */}
           <View style={s.legend}>
-            {PIE_DATA.map(d => (
-              <View key={d.label} style={s.legendRow}>
-                <View style={[s.legendDot, { backgroundColor: d.color }]} />
-                <Text style={s.legendLabel}>{d.label}</Text>
-                <Text style={s.legendVal}>₹{(d.value / 1000).toFixed(0)}K</Text>
-              </View>
+            {PIE_DATA.map((d, idx) => (
+              <TouchableOpacity
+                key={d.label}
+                style={[s.legendRow, selectedSlice === idx && s.legendRowActive]}
+                onPress={() => setSelectedSlice(prev => (prev === idx ? null : idx))}
+                activeOpacity={0.7}
+              >
+                <View style={[s.legendDot, { backgroundColor: d.color }, selectedSlice === idx && { width: 16, height: 16, borderRadius: 8 }]} />
+                <Text style={[s.legendLabel, selectedSlice === idx && { fontWeight: '700', color: COLORS.textPrimary }]}>{d.label}</Text>
+                <Text style={[s.legendVal, selectedSlice === idx && { color: d.color === '#1A1A1A' ? COLORS.textPrimary : d.color }]}>₹{(d.value / 1000).toFixed(0)}K</Text>
+              </TouchableOpacity>
             ))}
           </View>
         </View>
@@ -329,14 +358,18 @@ const s = StyleSheet.create({
 
   scroll: { padding: SPACING.md, gap: 12 },
 
-  chartCard:      { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, padding: SPACING.md, alignItems: 'center' },
-  chartCenter:    { alignItems: 'center', gap: 4 },
-  chartCenterTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600' },
-  legend:         { width: '100%', marginTop: SPACING.md, gap: 10 },
-  legendRow:      { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  legendDot:      { width: 12, height: 12, borderRadius: 6, flexShrink: 0 },
-  legendLabel:    { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
-  legendVal:      { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  chartCard:       { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, padding: SPACING.md, alignItems: 'center' },
+  chartCenter:     { alignItems: 'center', gap: 3, width: 110 },
+  chartCenterTxt:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600' },
+  chartCenterName: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', textAlign: 'center' },
+  chartCenterVal:  { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
+  chartHint:       { fontSize: 10, color: COLORS.textTertiary, marginTop: 6, marginBottom: 2 },
+  legend:          { width: '100%', marginTop: SPACING.sm, gap: 8 },
+  legendRow:       { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 6, paddingVertical: 4, borderRadius: RADIUS.sm },
+  legendRowActive: { backgroundColor: COLORS.pageBg },
+  legendDot:       { width: 12, height: 12, borderRadius: 6, flexShrink: 0 },
+  legendLabel:     { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '500' },
+  legendVal:       { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
 
   sectionLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, paddingLeft: 4, marginTop: 4 },
 

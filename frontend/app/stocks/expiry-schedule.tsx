@@ -23,28 +23,28 @@ const ITEM_GROUPS     = ['Electronics', 'Peripherals', 'Accessories', 'Audio & V
 
 const EXPIRY_ITEMS: ExpiryItem[] = [
   // ── 0-30 Day ───────────────────────────────────────────────────────────────
-  { id: 'e01', item: 'Black JBL',        code: 'PRD-1002-ABC', batch: 'KL98-A12', expiryDate: '11/12/25', qty: 87,  value: '₹1,12,800', daysLeft: 3,  warehouse: 'Sierra Storage', tab: '0-30' },
-  { id: 'e02', item: 'Red Headset',      code: 'PRD-1003-DEF', batch: 'KL98-A13', expiryDate: '13/12/25', qty: 45,  value: '₹67,500',   daysLeft: 7,  warehouse: 'Echo Depot',     tab: '0-30' },
-  { id: 'e03', item: 'Blue Speaker',     code: 'PRD-1004-GHI', batch: 'KL98-A14', expiryDate: '18/12/25', qty: 110, value: '₹88,000',   daysLeft: 12, warehouse: 'Sierra Storage', tab: '0-30' },
-  { id: 'e04', item: 'Silver Earphones', code: 'PRD-1005-JKL', batch: 'KL98-A15', expiryDate: '20/12/25', qty: 200, value: '₹60,000',   daysLeft: 14, warehouse: 'Delta Hub',      tab: '0-30' },
-  { id: 'e05', item: 'Gold Mic Stand',   code: 'PRD-1006-MNO', batch: 'KL98-A16', expiryDate: '25/12/25', qty: 34,  value: '₹51,000',   daysLeft: 20, warehouse: 'Echo Depot',     tab: '0-30' },
-  { id: 'e06', item: 'White Earbuds',    code: 'PRD-1007-PQR', batch: 'KL98-A17', expiryDate: '30/12/25', qty: 75,  value: '₹1,12,500', daysLeft: 28, warehouse: 'Sierra Storage', tab: '0-30' },
+  { id: 'e01', item: 'Black JBL',        code: 'PRD-1002-ABC', batch: 'KL98-A12', expiryDate: '11/12/25', qty: 87,  value: '₹1,12,800', daysLeft: 3,   warehouse: 'Sierra Storage', tab: '0-30' },
+  { id: 'e02', item: 'Red Headset',      code: 'PRD-1003-DEF', batch: 'KL98-A13', expiryDate: '13/12/25', qty: 45,  value: '₹67,500',   daysLeft: 7,   warehouse: 'Echo Depot',     tab: '0-30' },
+  { id: 'e03', item: 'Blue Speaker',     code: 'PRD-1004-GHI', batch: 'KL98-A14', expiryDate: '18/12/25', qty: 110, value: '₹88,000',   daysLeft: 12,  warehouse: 'Sierra Storage', tab: '0-30' },
+  { id: 'e04', item: 'Silver Earphones', code: 'PRD-1005-JKL', batch: 'KL98-A15', expiryDate: '20/12/25', qty: 200, value: '₹60,000',   daysLeft: 14,  warehouse: 'Delta Hub',      tab: '0-30' },
+  { id: 'e05', item: 'Gold Mic Stand',   code: 'PRD-1006-MNO', batch: 'KL98-A16', expiryDate: '25/12/25', qty: 34,  value: '₹51,000',   daysLeft: 20,  warehouse: 'Echo Depot',     tab: '0-30' },
+  { id: 'e06', item: 'White Earbuds',    code: 'PRD-1007-PQR', batch: 'KL98-A17', expiryDate: '30/12/25', qty: 75,  value: '₹1,12,500', daysLeft: 28,  warehouse: 'Sierra Storage', tab: '0-30' },
 
   // ── 31-60 Day ──────────────────────────────────────────────────────────────
-  { id: 'e07', item: 'Purple AirPods',   code: 'PRD-1008-STU', batch: 'KL98-A18', expiryDate: '12/10/25', qty: 89,  value: '₹1,33,500', daysLeft: 31, warehouse: 'Sierra Storage', tab: '31-60' },
-  { id: 'e08', item: 'Orange Watch',     code: 'PRD-1009-VWX', batch: 'KL98-A19', expiryDate: '12/15/25', qty: 56,  value: '₹84,000',   daysLeft: 36, warehouse: 'Echo Depot',     tab: '31-60' },
-  { id: 'e09', item: 'Pink Camera',      code: 'PRD-1010-YZA', batch: 'KL98-A20', expiryDate: '12/20/25', qty: 78,  value: '₹1,17,000', daysLeft: 41, warehouse: 'Sierra Storage', tab: '31-60' },
-  { id: 'e10', item: 'Brown Keyboard',   code: 'PRD-1011-BCD', batch: 'KL98-A21', expiryDate: '12/25/25', qty: 42,  value: '₹63,000',   daysLeft: 46, warehouse: 'Echo Depot',     tab: '31-60' },
-  { id: 'e11', item: 'Cyan Tablet',      code: 'PRD-1012-EFG', batch: 'KL98-A22', expiryDate: '12/28/25', qty: 15,  value: '₹1,87,500', daysLeft: 52, warehouse: 'Delta Hub',      tab: '31-60' },
-  { id: 'e12', item: 'Black Router',     code: 'PRD-1013-HIJ', batch: 'KL98-A23', expiryDate: '01/05/26', qty: 60,  value: '₹90,000',   daysLeft: 57, warehouse: 'Zulu Center',    tab: '31-60' },
+  { id: 'e07', item: 'Purple AirPods',   code: 'PRD-1008-STU', batch: 'KL98-A18', expiryDate: '12/10/25', qty: 89,  value: '₹1,33,500', daysLeft: 31,  warehouse: 'Sierra Storage', tab: '31-60' },
+  { id: 'e08', item: 'Orange Watch',     code: 'PRD-1009-VWX', batch: 'KL98-A19', expiryDate: '12/15/25', qty: 56,  value: '₹84,000',   daysLeft: 36,  warehouse: 'Echo Depot',     tab: '31-60' },
+  { id: 'e09', item: 'Pink Camera',      code: 'PRD-1010-YZA', batch: 'KL98-A20', expiryDate: '12/20/25', qty: 78,  value: '₹1,17,000', daysLeft: 41,  warehouse: 'Sierra Storage', tab: '31-60' },
+  { id: 'e10', item: 'Brown Keyboard',   code: 'PRD-1011-BCD', batch: 'KL98-A21', expiryDate: '12/25/25', qty: 42,  value: '₹63,000',   daysLeft: 46,  warehouse: 'Echo Depot',     tab: '31-60' },
+  { id: 'e11', item: 'Cyan Tablet',      code: 'PRD-1012-EFG', batch: 'KL98-A22', expiryDate: '12/28/25', qty: 15,  value: '₹1,87,500', daysLeft: 52,  warehouse: 'Delta Hub',      tab: '31-60' },
+  { id: 'e12', item: 'Black Router',     code: 'PRD-1013-HIJ', batch: 'KL98-A23', expiryDate: '01/05/26', qty: 60,  value: '₹90,000',   daysLeft: 57,  warehouse: 'Zulu Center',    tab: '31-60' },
 
   // ── >60 Day ────────────────────────────────────────────────────────────────
-  { id: 'e13', item: 'Magenta Speaker',  code: 'PRD-1014-KLM', batch: 'KL98-A24', expiryDate: '01/10/26', qty: 63,  value: '₹94,500',   daysLeft: 62, warehouse: 'Sierra Storage', tab: '>60' },
-  { id: 'e14', item: 'Teal Headphones',  code: 'PRD-1015-NOP', batch: 'KL98-A25', expiryDate: '01/15/26', qty: 28,  value: '₹42,000',   daysLeft: 67, warehouse: 'Echo Depot',     tab: '>60' },
-  { id: 'e15', item: 'Lime Microphone',  code: 'PRD-1016-QRS', batch: 'KL98-A26', expiryDate: '01/20/26', qty: 37,  value: '₹55,500',   daysLeft: 72, warehouse: 'Sierra Storage', tab: '>60' },
-  { id: 'e16', item: 'Indigo Webcam',    code: 'PRD-1017-TUV', batch: 'KL98-A27', expiryDate: '02/01/26', qty: 50,  value: '₹75,000',   daysLeft: 84, warehouse: 'Echo Depot',     tab: '>60' },
-  { id: 'e17', item: 'Violet Drone',     code: 'PRD-1018-WXY', batch: 'KL98-A28', expiryDate: '02/15/26', qty: 8,   value: '₹2,40,000', daysLeft: 97, warehouse: 'Delta Hub',      tab: '>60' },
-  { id: 'e18', item: 'Amber Projector',  code: 'PRD-1019-ZAB', batch: 'KL98-A29', expiryDate: '03/01/26', qty: 12,  value: '₹1,80,000', daysLeft: 110, warehouse: 'Zulu Center',   tab: '>60' },
+  { id: 'e13', item: 'Magenta Speaker',  code: 'PRD-1014-KLM', batch: 'KL98-A24', expiryDate: '01/10/26', qty: 63,  value: '₹94,500',   daysLeft: 62,  warehouse: 'Sierra Storage', tab: '>60' },
+  { id: 'e14', item: 'Teal Headphones',  code: 'PRD-1015-NOP', batch: 'KL98-A25', expiryDate: '01/15/26', qty: 28,  value: '₹42,000',   daysLeft: 67,  warehouse: 'Echo Depot',     tab: '>60' },
+  { id: 'e15', item: 'Lime Microphone',  code: 'PRD-1016-QRS', batch: 'KL98-A26', expiryDate: '01/20/26', qty: 37,  value: '₹55,500',   daysLeft: 72,  warehouse: 'Sierra Storage', tab: '>60' },
+  { id: 'e16', item: 'Indigo Webcam',    code: 'PRD-1017-TUV', batch: 'KL98-A27', expiryDate: '02/01/26', qty: 50,  value: '₹75,000',   daysLeft: 84,  warehouse: 'Echo Depot',     tab: '>60' },
+  { id: 'e17', item: 'Violet Drone',     code: 'PRD-1018-WXY', batch: 'KL98-A28', expiryDate: '02/15/26', qty: 8,   value: '₹2,40,000', daysLeft: 97,  warehouse: 'Delta Hub',      tab: '>60' },
+  { id: 'e18', item: 'Amber Projector',  code: 'PRD-1019-ZAB', batch: 'KL98-A29', expiryDate: '03/01/26', qty: 12,  value: '₹1,80,000', daysLeft: 110, warehouse: 'Zulu Center',    tab: '>60' },
 
   // ── Expired ────────────────────────────────────────────────────────────────
   { id: 'e19', item: 'Expired Laptop',   code: 'PRD-1020-CDE', batch: 'KL98-A30', expiryDate: '10/15/25', qty: 12,  value: '₹18,000',   daysLeft: null, warehouse: 'Sierra Storage', tab: 'expired' },
@@ -67,16 +67,22 @@ export default function ExpiryScheduleScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [activeTab,           setActiveTab]           = useState<DayTab>('0-30');
-  const [activeWHChips,       setActiveWHChips]       = useState<Set<string>>(new Set());
-  const [showFilter,          setShowFilter]          = useState(false);
-  const [draftWH,             setDraftWH]             = useState<Set<string>>(new Set());
-  const [draftWHSearch,       setDraftWHSearch]       = useState('');
-  const [draftItemGroup,      setDraftItemGroup]      = useState('');
-  const [selItemGroup,        setSelItemGroup]        = useState('');
+  // Tab & filter
+  const [activeTab,      setActiveTab]      = useState<DayTab>('0-30');
+  const [activeWHChips,  setActiveWHChips]  = useState<Set<string>>(new Set());
+  const [showFilter,     setShowFilter]     = useState(false);
+  const [draftWH,        setDraftWH]        = useState<Set<string>>(new Set());
+  const [draftWHSearch,  setDraftWHSearch]  = useState('');
+  const [draftItemGroup, setDraftItemGroup] = useState('');
+  const [selItemGroup,   setSelItemGroup]   = useState('');
+
+  // ── Multi-select ──────────────────────────────────────────────────────────
+  const [selectedIds,     setSelectedIds]     = useState<Set<string>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   const activeFilterCount = activeWHChips.size + (selItemGroup ? 1 : 0);
 
+  // ── Filter handlers ───────────────────────────────────────────────────────
   const openFilter = () => {
     setDraftWH(new Set(activeWHChips));
     setDraftWHSearch('');
@@ -90,7 +96,38 @@ export default function ExpiryScheduleScreen() {
     setShowFilter(false);
   };
 
-  // Filter items for current tab
+  // ── Selection handlers ────────────────────────────────────────────────────
+  const handleLongPress = (id: string) => {
+    setIsSelectionMode(true);
+    setSelectedIds(new Set([id]));
+  };
+
+  const handleItemPress = (id: string) => {
+    if (!isSelectionMode) return;
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+        if (next.size === 0) setIsSelectionMode(false);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const cancelSelection = () => {
+    setSelectedIds(new Set());
+    setIsSelectionMode(false);
+  };
+
+  const selectAll = () => {
+    const allIds = new Set(visibleItems.map(i => i.id));
+    setSelectedIds(allIds);
+    setIsSelectionMode(true);
+  };
+
+  // ── Filter items for current tab ──────────────────────────────────────────
   const visibleItems = useMemo(() =>
     EXPIRY_ITEMS.filter(item => {
       if (item.tab !== activeTab) return false;
@@ -127,10 +164,23 @@ export default function ExpiryScheduleScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Selection Mode Banner */}
+      {isSelectionMode && (
+        <View style={s.selBanner}>
+          <TouchableOpacity onPress={cancelSelection} activeOpacity={0.7} style={s.selBannerBtn}>
+            <Ionicons name="close" size={18} color={COLORS.textPrimary} />
+            <Text style={s.selBannerCancel}>Cancel</Text>
+          </TouchableOpacity>
+          <Text style={s.selBannerCount}>{selectedIds.size} selected</Text>
+          <TouchableOpacity onPress={selectAll} activeOpacity={0.7} style={s.selBannerBtn}>
+            <Text style={s.selBannerAll}>All</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Warehouse Filter chips row */}
-      <View style={s.whFilterRow}>
-        <Text style={s.whFilterLabel}>Warehouse Filter</Text>
-        {activeWHChips.size > 0 && (
+      {!isSelectionMode && activeWHChips.size > 0 && (
+        <View style={s.whFilterRow}>
           <View style={s.chipWrap}>
             {[...activeWHChips].map(w => (
               <TouchableOpacity
@@ -145,8 +195,8 @@ export default function ExpiryScheduleScreen() {
               </TouchableOpacity>
             ))}
           </View>
-        )}
-      </View>
+        </View>
+      )}
 
       {/* Day Range Tabs */}
       <View style={s.tabRow}>
@@ -154,13 +204,21 @@ export default function ExpiryScheduleScreen() {
           <TouchableOpacity
             key={tab.key}
             style={[s.tab, activeTab === tab.key && s.tabActive]}
-            onPress={() => setActiveTab(tab.key)}
+            onPress={() => { setActiveTab(tab.key); cancelSelection(); }}
             activeOpacity={0.7}
           >
             <Text style={[s.tabTxt, activeTab === tab.key && s.tabTxtActive]}>{tab.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* Hint: Long press to select */}
+      {!isSelectionMode && visibleItems.length > 0 && (
+        <View style={s.hintRow}>
+          <Ionicons name="hand-left-outline" size={13} color={COLORS.textTertiary} />
+          <Text style={s.hintTxt}>Long press to select items</Text>
+        </View>
+      )}
 
       {/* Items List */}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.list}>
@@ -170,70 +228,86 @@ export default function ExpiryScheduleScreen() {
             <Text style={s.emptyTxt}>No items in this range</Text>
           </View>
         ) : (
-          visibleItems.map(item => (
-            <View key={item.id}>
-              {/* Warehouse Label */}
-              <View style={s.warehouseHeader}>
-                <Ionicons name="home-outline" size={14} color={COLORS.textTertiary} />
-                <Text style={s.warehouseLabel}>{item.warehouse}</Text>
-              </View>
-
-              {/* Item Card */}
-              <View style={s.itemCard}>
-                {/* Avatar + Name */}
-                <View style={s.itemTop}>
-                  <View style={s.avatar}>
-                    <Ionicons name="cube-outline" size={22} color="#fff" />
-                  </View>
-                  <View style={s.itemMeta}>
-                    <Text style={s.itemName}>{item.item}</Text>
-                    <Text style={s.itemCode}>{item.code}</Text>
-                  </View>
+          visibleItems.map(item => {
+            const isSel = selectedIds.has(item.id);
+            return (
+              <View key={item.id}>
+                {/* Warehouse Label */}
+                <View style={s.warehouseHeader}>
+                  <Ionicons name="home-outline" size={14} color={COLORS.textTertiary} />
+                  <Text style={s.warehouseLabel}>{item.warehouse}</Text>
                 </View>
 
-                {/* Data Grid */}
-                <View style={s.gridRow}>
-                  <View style={s.gridItem}>
-                    <Text style={s.gridLbl}>Batch/Lot</Text>
-                    <Text style={s.gridVal}>{item.batch}</Text>
+                {/* Item Card */}
+                <TouchableOpacity
+                  style={[s.itemCard, isSel && s.itemCardSel]}
+                  onPress={() => handleItemPress(item.id)}
+                  onLongPress={() => handleLongPress(item.id)}
+                  delayLongPress={350}
+                  activeOpacity={0.8}
+                >
+                  {/* Avatar — letter style matching ledger */}
+                  <View style={s.itemTop}>
+                    <View style={[s.avatar, isSel && s.avatarSel]}>
+                      {isSel
+                        ? <Ionicons name="checkmark" size={20} color="#fff" />
+                        : <Text style={s.avatarTxt}>{item.item.charAt(0).toUpperCase()}</Text>
+                      }
+                    </View>
+                    <View style={s.itemMeta}>
+                      <Text style={s.itemName}>{item.item}</Text>
+                      <Text style={s.itemCode}>{item.code}</Text>
+                    </View>
+                    {/* Days-left badge (top right) */}
+                    <View style={[s.daysBadge, { backgroundColor: daysLeftColor(item) + '18' }]}>
+                      <Text style={[s.daysBadgeTxt, { color: daysLeftColor(item) }]}>
+                        {daysLeftText(item)}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={s.gridItem}>
-                    <Text style={s.gridLbl}>Expiry Date</Text>
-                    <Text style={s.gridVal}>{item.expiryDate}</Text>
+
+                  {/* Data Grid */}
+                  <View style={s.divider} />
+                  <View style={s.gridRow}>
+                    <View style={s.gridItem}>
+                      <Text style={s.gridLbl}>Batch/Lot</Text>
+                      <Text style={s.gridVal}>{item.batch}</Text>
+                    </View>
+                    <View style={s.gridItem}>
+                      <Text style={s.gridLbl}>Expiry Date</Text>
+                      <Text style={s.gridVal}>{item.expiryDate}</Text>
+                    </View>
+                    <View style={s.gridItem}>
+                      <Text style={s.gridLbl}>QTY</Text>
+                      <Text style={s.gridVal}>{item.qty}</Text>
+                    </View>
+                    <View style={s.gridItem}>
+                      <Text style={s.gridLbl}>Value</Text>
+                      <Text style={s.gridVal}>{item.value}</Text>
+                    </View>
                   </View>
-                </View>
-                <View style={s.gridRow}>
-                  <View style={s.gridItem}>
-                    <Text style={s.gridLbl}>QTY</Text>
-                    <Text style={s.gridVal}>{item.qty}</Text>
-                  </View>
-                  <View style={s.gridItem}>
-                    <Text style={s.gridLbl}>Value</Text>
-                    <Text style={s.gridVal}>{item.value}</Text>
-                  </View>
-                </View>
-                <View style={s.gridRow}>
-                  <View style={s.gridItem}>
-                    <Text style={s.gridLbl}>Day Left</Text>
-                    <Text style={[s.gridVal, { color: daysLeftColor(item), fontWeight: '800' }]}>
-                      {daysLeftText(item)}
-                    </Text>
-                  </View>
-                </View>
+                </TouchableOpacity>
               </View>
-            </View>
-          ))
+            );
+          })
         )}
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Share Button */}
-      <View style={[s.shareWrap, { paddingBottom: insets.bottom || 16 }]}>
-        <TouchableOpacity style={s.shareBtn} activeOpacity={0.8}>
-          <Ionicons name="share-social-outline" size={18} color="#fff" />
-          <Text style={s.shareTxt}>Share</Text>
-        </TouchableOpacity>
-      </View>
+      {/* ── Share Bar (only visible when items are selected) ── */}
+      {isSelectionMode && selectedIds.size > 0 && (
+        <View style={[s.shareBar, { paddingBottom: insets.bottom || 16 }]}>
+          <TouchableOpacity style={s.cancelSelFooter} onPress={cancelSelection} activeOpacity={0.7}>
+            <Ionicons name="close-circle" size={20} color={COLORS.textSecondary} />
+            <Text style={s.cancelSelFooterTxt}>Deselect</Text>
+          </TouchableOpacity>
+          <Text style={s.shareBarCount}>{selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''}</Text>
+          <TouchableOpacity style={s.shareBtn} activeOpacity={0.8}>
+            <Ionicons name="share-social-outline" size={18} color="#fff" />
+            <Text style={s.shareTxt}>Share</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── Filter Modal (inlined — no sub-component) ── */}
       <Modal visible={showFilter} transparent animationType="slide" onRequestClose={() => setShowFilter(false)}>
@@ -314,7 +388,7 @@ export default function ExpiryScheduleScreen() {
                 <Text style={s.filterSectionTitle}>Item Group</Text>
                 <View style={s.optionList}>
                   <TouchableOpacity
-                    style={[s.optionRow, { borderBottomWidth: draftItemGroup ? 1 : 0 }]}
+                    style={[s.optionRow]}
                     onPress={() => setDraftItemGroup('')}
                     activeOpacity={0.7}
                   >
@@ -367,16 +441,26 @@ const s = StyleSheet.create({
   filterBadge:    { position: 'absolute', top: 6, right: 6, width: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center' },
   filterBadgeTxt: { fontSize: 9, fontWeight: '700', color: '#fff' },
 
+  // Selection banner
+  selBanner:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.activeBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  selBannerBtn:    { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  selBannerCancel: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  selBannerCount:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  selBannerAll:    { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.brandPrimary },
+
+  // Hint
+  hintRow: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: SPACING.md, paddingVertical: 7, backgroundColor: COLORS.pageBg },
+  hintTxt: { fontSize: 11, color: COLORS.textTertiary },
+
   whFilterRow:  { backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  whFilterLabel:{ fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 6 },
   chipWrap:     { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   whChip:       { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: RADIUS.full, backgroundColor: COLORS.textPrimary },
   whChipTxt:    { fontSize: TYPOGRAPHY.xs, color: '#fff', fontWeight: '600' },
 
-  tabRow: { flexDirection: 'row', backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, paddingHorizontal: SPACING.md, paddingVertical: 8, gap: 6 },
-  tab:    { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg },
-  tabActive: { backgroundColor: COLORS.textPrimary, borderColor: COLORS.textPrimary },
-  tabTxt:    { fontSize: 11, fontWeight: '600', color: COLORS.textSecondary },
+  tabRow:     { flexDirection: 'row', backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, paddingHorizontal: SPACING.md, paddingVertical: 8, gap: 6 },
+  tab:        { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg },
+  tabActive:  { backgroundColor: COLORS.textPrimary, borderColor: COLORS.textPrimary },
+  tabTxt:     { fontSize: 11, fontWeight: '600', color: COLORS.textSecondary },
   tabTxtActive: { color: '#fff' },
 
   list: { padding: SPACING.md, gap: 4 },
@@ -384,21 +468,38 @@ const s = StyleSheet.create({
   warehouseHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4, paddingTop: 10, paddingBottom: 5 },
   warehouseLabel:  { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '500' },
 
-  itemCard: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, padding: SPACING.md, marginBottom: 4 },
-  itemTop:  { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
-  avatar:   { width: 52, height: 52, borderRadius: 26, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  itemMeta: { flex: 1 },
-  itemName: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-  itemCode: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+  // Item card
+  itemCard:    { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, padding: SPACING.md, marginBottom: 4 },
+  itemCardSel: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.activeBg },
 
-  gridRow:  { flexDirection: 'row', marginBottom: 8 },
-  gridItem: { flex: 1, gap: 3 },
+  // Avatar — letter-style matching stock-ledger
+  itemTop:   { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 0 },
+  avatar:    { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  avatarSel: { backgroundColor: '#A89060' },
+  avatarTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: '#fff' },
+
+  itemMeta:  { flex: 1 },
+  itemName:  { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  itemCode:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+
+  // Days-left badge
+  daysBadge:    { paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.full },
+  daysBadgeTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
+
+  divider:  { height: 1, backgroundColor: COLORS.borderDefault, marginVertical: SPACING.sm },
+
+  gridRow:  { flexDirection: 'row' },
+  gridItem: { flex: 1, gap: 3, paddingHorizontal: 2 },
   gridLbl:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
   gridVal:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
 
-  shareWrap: { paddingHorizontal: SPACING.md, paddingTop: 12, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
-  shareBtn:  { backgroundColor: COLORS.textPrimary, borderRadius: RADIUS.lg, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  shareTxt:  { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: '#fff' },
+  // Share bar (conditional on selection)
+  shareBar:         { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingTop: 12, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, gap: 12 },
+  cancelSelFooter:  { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  cancelSelFooterTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
+  shareBarCount:    { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
+  shareBtn:         { backgroundColor: COLORS.textPrimary, borderRadius: RADIUS.lg, paddingVertical: 14, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  shareTxt:         { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: '#fff' },
 
   empty:    { alignItems: 'center', paddingVertical: 60, gap: 12 },
   emptyTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textSecondary },
