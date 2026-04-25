@@ -36,10 +36,14 @@ export function InlineDropdownField({
   required?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [fieldH, setFieldH] = useState(76); // label + trigger combined height
   const selected = options.find(o => o.id === value);
 
   return (
-    <View style={idd.wrap}>
+    <View
+      style={[idd.wrap, open && idd.wrapOpen]}
+      onLayout={e => setFieldH(e.nativeEvent.layout.height)}
+    >
       <Text style={idd.label}>
         {label}{required ? <Text style={idd.star}> *</Text> : null}
       </Text>
@@ -55,7 +59,7 @@ export function InlineDropdownField({
         <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textTertiary} />
       </TouchableOpacity>
       {open ? (
-        <View style={idd.menu}>
+        <View style={[idd.menu, { position: 'absolute', top: fieldH + 4, left: 0, right: 0, zIndex: 1000, elevation: 1000 }]}>
           {options.map((opt, idx) => (
             <TouchableOpacity
               key={opt.id}
@@ -79,13 +83,15 @@ export function InlineDropdownField({
 
 const idd = StyleSheet.create({
   wrap:           { flex: 1, marginBottom: SPACING.md },
+  wrapOpen:       { zIndex: 999, elevation: 999 },
   label:          { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
   star:           { color: COLORS.negative },
   trigger:        { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48 },
   triggerOpen:    { borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
   triggerTxt:     { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, marginRight: 4 },
   placeholder:    { color: COLORS.textTertiary },
-  menu:           { backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, marginTop: 4, overflow: 'hidden' },
+  menu:           { backgroundColor: COLORS.cardBg, borderWidth: 1.5, borderColor: COLORS.brandPrimary, borderRadius: RADIUS.md, overflow: 'hidden',
+                    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8 },
   menuItem:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 13 },
   menuItemBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   menuItemActive: { backgroundColor: COLORS.pageBg },
