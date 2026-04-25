@@ -35,7 +35,7 @@ function RingChart({ pct, size = 72 }: { pct: number; size?: number }) {
         cx={cx} cy={cy} r={r}
         fill="none" stroke={COLORS.borderDefault} strokeWidth={11}
       />
-      {/* Progress arc */}
+      {/* Progress arc — transform string works reliably on both web & native */}
       <Circle
         cx={cx} cy={cy} r={r}
         fill="none"
@@ -44,19 +44,18 @@ function RingChart({ pct, size = 72 }: { pct: number; size?: number }) {
         strokeDasharray={`${circ} ${circ}`}
         strokeDashoffset={off}
         strokeLinecap="round"
-        rotation="-90"
-        origin={`${cx},${cy}`}
+        transform={`rotate(-90, ${cx}, ${cy})`}
       />
-      {/* Center label */}
+      {/* Percentage — vertically centred inside the ring */}
       <SvgText
-        x={cx} y={cy - 3}
-        textAnchor="middle" fontSize="12" fontWeight="700"
+        x={cx} y={cy + 2}
+        textAnchor="middle" fontSize="15" fontWeight="800"
         fill={COLORS.textPrimary}
       >
         {pct}%
       </SvgText>
       <SvgText
-        x={cx} y={cy + 10}
+        x={cx} y={cy + 14}
         textAnchor="middle" fontSize="8"
         fill={COLORS.textTertiary}
       >
