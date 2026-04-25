@@ -149,9 +149,6 @@ export default function ItemDetailScreen() {
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Product hero */}
         <View style={styles.heroCard}>
-          <View style={[styles.heroIcon, { backgroundColor: stockItem.iconBg }]}>
-            <Ionicons name={stockItem.icon as any} size={36} color={stockItem.iconColor} />
-          </View>
           <Text style={styles.heroName}>{stockItem.name}</Text>
           <Text style={styles.heroSku}>{stockItem.sku}</Text>
           {/* Barcode */}

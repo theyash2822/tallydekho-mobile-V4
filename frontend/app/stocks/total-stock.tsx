@@ -286,12 +286,12 @@ export default function TotalStockScreen() {
         <View style={styles.headerRight}>
           {/* Filter / Sort icon */}
           <TouchableOpacity style={styles.iconBtn} onPress={() => setFilterOpen(true)} activeOpacity={0.7}>
-            <Ionicons name="funnel-outline" size={20} color={activeFilterCount > 0 ? '#A89060' : COLORS.textPrimary} />
+            <Ionicons name="funnel-outline" size={22} color={activeFilterCount > 0 ? '#A89060' : COLORS.textPrimary} />
             {activeFilterCount > 0 && <View style={styles.badge}><Text style={styles.badgeTxt}>{activeFilterCount}</Text></View>}
           </TouchableOpacity>
           {/* Plus icon → popover */}
           <TouchableOpacity style={styles.iconBtn} onPress={() => setMenuOpen(v => !v)} activeOpacity={0.7}>
-            <Ionicons name="add" size={24} color={COLORS.textPrimary} />
+            <Ionicons name="add" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
         </View>
       </View>
