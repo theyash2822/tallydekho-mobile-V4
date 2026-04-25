@@ -269,6 +269,151 @@ async def get_receivables_kpi():
     }
 
 
+# ─── Auth Routes ───────────────────────────────────────────────────────────────
+class OTPRequest(BaseModel):
+    phone: str
+
+class OTPVerifyRequest(BaseModel):
+    phone: str
+    otp: str
+
+class RegisterRequest(BaseModel):
+    name: str
+    language: str
+    phone: str
+
+@api_router.post("/auth/send-otp")
+async def send_otp(body: OTPRequest):
+    return {"success": True, "message": "OTP sent successfully"}
+
+@api_router.post("/auth/verify-otp")
+async def verify_otp(body: OTPVerifyRequest):
+    return {"success": True, "token": "mock_token_123", "isNewUser": True}
+
+@api_router.post("/auth/register")
+async def register_user(body: RegisterRequest):
+    return {
+        "success": True,
+        "token": "mock_token_123",
+        "user": {"id": "user_001", "name": body.name, "phone": body.phone, "language": body.language}
+    }
+
+
+# ─── Stocks Routes ─────────────────────────────────────────────────────────────
+STOCKS_DATA = {
+    "totalValue": "₹6,06,210",
+    "totalSKUs": 56,
+    "totalWarehouses": 3,
+    "lowStockCount": 8,
+    "items": [
+        {"id": "SI01", "name": "Black JBL Speaker",      "sku": "PRD-1002-ABC", "price": "₹4,200",  "stock": 85,  "status": "in_stock",    "warehouse": "WH01 – Mumbai"},
+        {"id": "SI02", "name": "USB-C Cable 3A",          "sku": "USB-3A-1M",   "price": "₹450",    "stock": 320, "status": "in_stock",    "warehouse": "WH01 – Mumbai"},
+        {"id": "SI03", "name": "Wireless Mouse M220",     "sku": "LOG-M220",    "price": "₹2,800",  "stock": 64,  "status": "in_stock",    "warehouse": "WH02 – Delhi"},
+        {"id": "SI04", "name": "HDMI Cable 1.5m",         "sku": "HDM-1.5",     "price": "₹780",    "stock": 140, "status": "in_stock",    "warehouse": "WH02 – Delhi"},
+        {"id": "SI05", "name": "Laptop Stand Adjustable", "sku": "LST-ADJ01",   "price": "₹5,400",  "stock": 28,  "status": "low_stock",   "warehouse": "WH01 – Mumbai"},
+        {"id": "SI06", "name": "Mechanical Keyboard",     "sku": "LOG-MK235",   "price": "₹6,900",  "stock": 42,  "status": "in_stock",    "warehouse": "WH03 – Bangalore"},
+        {"id": "SI07", "name": "Power Bank 20000mAh",     "sku": "AMZ-PB20K",   "price": "₹1,800",  "stock": 95,  "status": "in_stock",    "warehouse": "WH03 – Bangalore"},
+        {"id": "SI08", "name": "Monitor 27\" IPS",        "sku": "BNQ-27IPS",   "price": "₹21,000", "stock": 12,  "status": "low_stock",   "warehouse": "WH01 – Mumbai"},
+        {"id": "SI09", "name": "TWS Earbuds Pro",         "sku": "TWS-PRO-01",  "price": "₹2,200",  "stock": 58,  "status": "in_stock",    "warehouse": "WH02 – Delhi"},
+        {"id": "SI10", "name": "Type-C Hub 7-in-1",       "sku": "USB-C71",     "price": "₹1,600",  "stock": 76,  "status": "in_stock",    "warehouse": "WH04 – Hyderabad"},
+    ],
+}
+
+@api_router.get("/stocks")
+async def get_stocks():
+    return STOCKS_DATA
+
+
+# ─── Ledger Routes ─────────────────────────────────────────────────────────────
+LEDGERS_DATA = [
+    {"id": "LED001", "name": "Indian Export House", "group": "Sundry Creditor",  "balance": "₹34,000", "type": "credit", "nature": "Liabilities", "phone": "9876543210", "lastUpdated": "08/28"},
+    {"id": "LED002", "name": "Raj Enterprises",     "group": "Sundry Debtor",    "balance": "₹12,500", "type": "debit",  "nature": "Assets",      "phone": "9845012345", "lastUpdated": "08/25"},
+    {"id": "LED003", "name": "Cash",                "group": "Cash-in-hand",     "balance": "₹0",      "type": "debit",  "nature": "Assets",      "phone": "",           "lastUpdated": "08/22"},
+    {"id": "LED004", "name": "ABC Traders",         "group": "Sundry Creditor",  "balance": "₹34,000", "type": "credit", "nature": "Liabilities", "phone": "9811223344", "lastUpdated": "08/20"},
+    {"id": "LED005", "name": "Kumar & Sons",        "group": "Sundry Debtor",    "balance": "₹8,000",  "type": "debit",  "nature": "Assets",      "phone": "9900112233", "lastUpdated": "08/18"},
+    {"id": "LED006", "name": "Sharma Electronics",  "group": "Capital Account",  "balance": "₹0",      "type": "credit", "nature": "Liabilities", "phone": "9712345678", "lastUpdated": "08/17"},
+    {"id": "LED007", "name": "Delhi Suppliers",     "group": "Sundry Creditor",  "balance": "₹22,000", "type": "credit", "nature": "Liabilities", "phone": "9988776655", "lastUpdated": "08/10"},
+    {"id": "LED008", "name": "Sales Revenue",       "group": "Sales Accounts",   "balance": "₹92,000", "type": "credit", "nature": "Income",      "phone": "",           "lastUpdated": "08/08"},
+    {"id": "LED009", "name": "Office Expenses",     "group": "Indirect Expenses","balance": "₹14,200", "type": "debit",  "nature": "Expense",     "phone": "",           "lastUpdated": "08/05"},
+    {"id": "LED010", "name": "Mehta Enterprises",   "group": "Sundry Debtor",    "balance": "₹18,400", "type": "debit",  "nature": "Assets",      "phone": "9001122334", "lastUpdated": "08/03"},
+    {"id": "LED011", "name": "PQR Exports",         "group": "Sundry Creditor",  "balance": "₹28,000", "type": "credit", "nature": "Liabilities", "phone": "9112233445", "lastUpdated": "08/01"},
+    {"id": "LED012", "name": "HDFC Bank",           "group": "Bank Accounts",    "balance": "₹1,85,300","type":"debit",  "nature": "Assets",      "phone": "",           "lastUpdated": "07/31"},
+]
+
+@api_router.get("/ledgers")
+async def get_ledgers():
+    return LEDGERS_DATA
+
+
+# ─── Notifications Routes ──────────────────────────────────────────────────────
+NOTIFICATIONS_DATA = [
+    {"id": "N001", "type": "warning", "title": "Budget Overspend Warning",   "message": "Budget Alert: You've exceeded your monthly marketing budget by ₹2,000. Tap to adjust your plan!", "time": "5 mins.", "actionLabel": "Adjust plan"},
+    {"id": "N002", "type": "urgent",  "title": "Daily Summary Alert",        "message": "Your daily financial summary is ready! Tap to review today's income, expenses, and cash flow insights.", "time": "12:02 PM", "actionLabel": None},
+    {"id": "N003", "type": "info",    "title": "Goal Progress Update",       "message": "Great news! You're 75% closer to your savings goal for this month. Keep up the momentum!", "time": "Jan 20, 2025", "actionLabel": None},
+    {"id": "N004", "type": "warning", "title": "Low Stock Alert",            "message": "8 items are running low on stock. Reorder soon to avoid stockouts.", "time": "2h ago", "actionLabel": "View items"},
+    {"id": "N005", "type": "info",    "title": "GST Filing Reminder",        "message": "GSTR-1 filing due in 3 days. Ensure all invoices are reconciled.", "time": "Yesterday", "actionLabel": "File now"},
+]
+
+@api_router.get("/notifications")
+async def get_notifications():
+    return NOTIFICATIONS_DATA
+
+
+# ─── Reports Routes ────────────────────────────────────────────────────────────
+REPORTS_SUMMARY = {
+    "salesSummary": {
+        "today": "₹92,000", "mtd": "₹1.27M", "ytd": "₹7.4M",
+        "avgTicket": "₹14,350", "creditNotes": 3, "outstanding": "₹812K"
+    },
+    "ewayBills": {"generated": 265, "pending": 33, "errors": 9, "expiring": 12},
+    "gst": {
+        "igst": "₹1,82,000", "cgst": "₹90,000", "sgst": "₹90,000",
+        "totalTaxCollected": "₹3,62,000"
+    },
+}
+
+FINANCIAL_MONTHLY = {
+    "months":   ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"],
+    "revenue":  [450000, 520000, 480000, 610000, 580000, 640000, 720000, 680000, 750000, 820000, 790000, 950000],
+    "expenses": [380000, 420000, 410000, 490000, 460000, 510000, 580000, 545000, 600000, 660000, 630000, 720000],
+}
+
+FINANCIAL_REPORT_DATA = {
+    "profitLoss": {
+        "revenue": "₹12,74,560",
+        "expenses": "₹9,42,800",
+        "netProfit": "₹3,31,760",
+        "grossProfit": "₹4,68,000",
+        "margin": 26.0,
+    },
+    "balanceSheet": {
+        "totalAssets": "₹28,45,000",
+        "totalLiabilities": "₹12,80,000",
+        "equity": "₹15,65,000",
+    },
+    "trialBalance": {
+        "totalDebit": "₹41,25,000",
+        "totalCredit": "₹41,25,000",
+        "balanced": True,
+    },
+}
+
+@api_router.get("/reports")
+async def get_reports():
+    return REPORTS_SUMMARY
+
+@api_router.get("/reports/financial")
+async def get_financial_data():
+    return FINANCIAL_MONTHLY
+
+@api_router.get("/reports/financial-report")
+async def get_financial_report(
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date: Optional[str] = Query(None, alias="to"),
+):
+    return FINANCIAL_REPORT_DATA
+
+
 # Include the router in the main app
 app.include_router(api_router)
 

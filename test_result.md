@@ -120,17 +120,89 @@ user_problem_statement: |
   - Design system: pageBg #F5F4EF, white cards, #1A1A1A text
 
 backend:
-  - task: "NA - App is fully mocked frontend"
-    implemented: false
-    working: "NA"
-    file: "N/A"
+  - task: "Auth API endpoints (send-otp, verify-otp, register)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
     stuck_count: 0
-    priority: "low"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Added POST /api/auth/send-otp, POST /api/auth/verify-otp, POST /api/auth/register. All return correct mock responses matching frontend api.ts fallbacks. Verified via curl."
+
+  - task: "Stocks API endpoint"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Added GET /api/stocks - returns totalSKUs=56, 10 items with name/sku/price/stock/status/warehouse fields. Verified via curl."
+
+  - task: "Ledgers API endpoint"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Added GET /api/ledgers - returns 12 ledger records with id/name/group/balance/type/nature/phone/lastUpdated. Verified via curl."
+
+  - task: "Reports API endpoints (reports, financial, financial-report)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Added GET /api/reports (summary), GET /api/reports/financial (12-month chart data), GET /api/reports/financial-report (P&L/Balance Sheet/Trial Balance). Verified via curl."
+
+  - task: "Notifications API endpoint"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Added GET /api/notifications - returns 5 notification items with type/title/message/time/actionLabel. Verified via curl."
+
+  - task: "Dashboard API endpoints (kpi-strip, metrics, cashflow, recent-activity, search)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
     needs_retesting: false
     status_history:
-      - working: "NA"
+      - working: true
         agent: "main"
-        comment: "No backend required - all data is mocked in frontend/src/data/mockData.ts"
+        comment: "Existing: GET /api/dashboard/kpi-strip, /metrics, /cashflow all support 7D/1M/3M/6M periods. GET /api/dashboard/recent-activity and /search also working. KPI routes /api/kpi/payables and /api/kpi/receivables working."
+
+  - task: "Sales invoices API endpoint"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Existing: GET /api/sales/invoices returns 14 invoices with pending_irn_count."
 
 frontend:
   - task: "Auth Screen (WhatsApp OTP Login)"
@@ -345,21 +417,21 @@ frontend:
 
 metadata:
   created_by: "main_agent"
-  version: "1.0"
-  test_sequence: 1
+  version: "1.1"
+  test_sequence: 2
   run_ui: true
 
 test_plan:
   current_focus:
-    - "AsyncStorage web compatibility fix"
+    - "Auth API endpoints (send-otp, verify-otp, register)"
+    - "Stocks API endpoint"
+    - "Ledgers API endpoint"
+    - "Reports API endpoints (reports, financial, financial-report)"
+    - "Notifications API endpoint"
+    - "Auth Screen (WhatsApp OTP Login)"
     - "Home Dashboard with Modules section"
-    - "QuickActions FAB Modal with navigation"
-    - "Sales module screens"
-    - "Purchase module screens"
-    - "Vouchers module screens"
-    - "Settings screen"
-  stuck_tasks:
-    - "AsyncStorage web compatibility fix"
+    - "Total Stock Interactive Features (Swipeable, Multi-Select, 4 Modals, Multi-Select Filters)"
+  stuck_tasks: []
   test_all: true
   test_priority: "high_first"
 
@@ -442,3 +514,27 @@ agent_communication:
       KNOWN ISSUE: Screenshot tool shows blank screen after auth navigation - need testing agent to verify this.
       
       All screens use: pageBg #F5F4EF, white cards, #1A1A1A text
+
+
+  - agent: "main"
+    message: |
+      FULL AUDIT COMPLETE - ALL MISSING BACKEND ENDPOINTS NOW ADDED
+      
+      WHAT WAS DONE:
+      Full code audit of 100+ files. Added 9 missing API endpoints that were referenced in api.ts but returned 404:
+        - POST /api/auth/send-otp
+        - POST /api/auth/verify-otp
+        - POST /api/auth/register
+        - GET /api/stocks
+        - GET /api/ledgers
+        - GET /api/reports
+        - GET /api/reports/financial
+        - GET /api/reports/financial-report
+        - GET /api/notifications
+      All verified working via curl (HTTP 200). Backend lint: all checks passed.
+      
+      PLEASE TEST ALL BACKEND ENDPOINTS:
+      Backend URL: http://localhost:8001
+      Test each endpoint listed above plus all existing dashboard/kpi/sales endpoints.
+      
+      AUTH CREDENTIALS: any 10-digit phone (e.g. 9876543210), any OTP (e.g. 1234)
