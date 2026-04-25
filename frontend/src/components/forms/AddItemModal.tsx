@@ -135,20 +135,20 @@ export function AddItemModal({
               icon="home-outline"
             />
 
-            {/* Quantity + Default Sale Price (side-by-side) */}
+            {/* Quantity + Sale Price (side-by-side) */}
             <View style={ms.row}>
               <InlineField
-                label="Quantity"
+                label="Opening Qty"
                 value={qty}
                 onChange={setQty}
-                placeholder="—"
+                placeholder="0"
                 keyboardType="numeric"
               />
               <CurrencyField
-                label="Default Sale Price"
+                label="Sale Price"
                 value={salePrice}
                 onChange={setSalePrice}
-                placeholder="₹ —"
+                placeholder="₹ 0.00"
               />
             </View>
 

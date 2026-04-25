@@ -310,6 +310,6 @@ const currf = StyleSheet.create({
   row:        { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, minHeight: 48, overflow: 'hidden' },
   rowFocused: { borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
   input:      { flex: 1, paddingHorizontal: 14, paddingVertical: 12, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
-  badge:      { paddingHorizontal: 12, backgroundColor: COLORS.pageBg, borderLeftWidth: 1, borderLeftColor: COLORS.borderDefault, height: '100%', justifyContent: 'center' },
+  badge:      { paddingHorizontal: 12, paddingVertical: 12, backgroundColor: COLORS.pageBg, borderLeftWidth: 1, borderLeftColor: COLORS.borderDefault, alignSelf: 'stretch', justifyContent: 'center', alignItems: 'center' },
   badgeTxt:   { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary },
 });
