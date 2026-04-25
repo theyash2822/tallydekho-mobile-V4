@@ -295,6 +295,30 @@ frontend:
         agent: "main"
         comment: "All stocks sub-screens created including: total-stock, warehouses, warehouse-detail, reorder-queue, aged-items, movement-analytics, expiry-schedule, transfer-history, stock-snapshot, stock-ledger, valuation-summary, negative-stock, barcodes, reports, settings. Needs visual verification."
 
+  - task: "Total Stock Interactive Features (Swipeable, Multi-Select, 4 Modals, Multi-Select Filters)"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/stocks/total-stock.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Completely overhauled total-stock.tsx with 6 major interactive features:
+          1. SWIPEABLE ROWS: react-native-gesture-handler Swipeable - swipe LEFT reveals Edit Stock (amber), swipe RIGHT reveals Stock Transfer (dark).
+          2. LONG-PRESS MULTI-SELECT: Long press activates multi-select mode with checkboxes, dark action bar at top shows count, PDF export, and Bulk Transfer.
+          3. SELECT ALL / DESELECT ALL: In multi-select mode, header shows 'Select All' button.
+          4. FILTER MODAL (multi-select): Options-icon opens FilterModal with multi-select chip groups for Warehouse, Category, Group. Active filters shown as removable amber chips.
+          5. FAB (+): Dark circular FAB opens AddItemModal.
+          6. FOUR MODALS with Toast on submit:
+             - AddItemModal (name, sku, category, group, warehouse, qty, unit, purchase rate, selling price)
+             - EditStockModal (current qty display, add/remove toggle, adjustment qty, reason chips, notes)
+             - StockTransferModal (item display, from warehouse read-only, to warehouse select, qty, notes)
+             - BulkTransferModal (item count info banner, from/to warehouse select, notes)
+          All items use uniform #1A1A1A cube-outline icon on #E8E7E1 bg. Toast.show called on every modal submit.
+
   - task: "Daybook screen (Day Book + My Entries with filters and multi-select)"
     implemented: true
     working: "NA"
@@ -340,6 +364,29 @@ test_plan:
   test_priority: "high_first"
 
 agent_communication:
+  - agent: "main"
+    message: |
+      TOTAL STOCK INTERACTIVE FEATURES BUILT - PLEASE TEST:
+
+      Navigate to: Stocks tab → Total Stock screen (or URL: /stocks/total-stock)
+
+      FEATURES TO TEST:
+      1. SCREEN LOADS: 10 items with cube icon on grey bg, summary KPI strip (10 SKUs, 920 qty, ₹83,150), search bar, FAB (+) button
+      2. FILTER MODAL: Tap options icon (top right, next to calendar). Filter bottom sheet opens with Warehouse, Category, Group chip selectors. Select some, Apply. Active chips appear below header. Tap chip to remove filter.
+      3. SWIPEABLE - EDIT STOCK (swipe LEFT): Swipe an item left → amber "Edit Stock" action revealed. Tap it → Edit Stock modal opens with item name, current qty, add/remove toggle, reason chips, notes.
+      4. SWIPEABLE - TRANSFER (swipe RIGHT): Swipe an item right → dark "Transfer" action revealed. Tap it → Stock Transfer modal opens with item info, from warehouse (read-only), To Warehouse chip select, qty, notes.
+      5. LONG PRESS MULTI-SELECT: Long press any item (400ms) → dark action bar appears at top showing "1 selected", PDF and Transfer buttons. Tap more items to select them. "Select All" link appears.
+      6. MULTI-SELECT - PDF: With items selected, tap "PDF" button → success toast "X items exported as PDF."
+      7. MULTI-SELECT - BULK TRANSFER: With items selected, tap "Transfer" → Bulk Transfer modal opens with item count info banner, From/To warehouse selectors.
+      8. FAB - ADD ITEM: Tap (+) FAB → Add Item modal with fields: Name, SKU, Category (chip), Group (chip), Warehouse (chip), Qty/Unit, Purchase Rate, Selling Price. Submit → success toast.
+      9. ALL MODALS: Cancel button works, overlay tap closes modal, Toast.show() fires on successful submit.
+      10. ITEM TAP (navigation): Single tap any item → navigates to /stocks/item-detail screen.
+
+      AUTH FLOW:
+      - Enter any 10-digit phone, click Send OTP
+      - Enter any 4-digit OTP, click Verify
+      - If register screen appears, fill name and submit
+
   - agent: "main"
     message: |
       NEW SCREENS ADDED - PLEASE TEST VISUALLY:
