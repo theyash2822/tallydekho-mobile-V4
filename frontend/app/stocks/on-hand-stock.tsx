@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
-import { STOCK_ITEMS } from './total-stock';
+import { STOCK_ITEMS } from '../../src/data/stockData';
 
 // On-hand stock is a subset — apply a small reduction to simulate committed/reserved units
 const ON_HAND_ITEMS = STOCK_ITEMS.map(i => ({

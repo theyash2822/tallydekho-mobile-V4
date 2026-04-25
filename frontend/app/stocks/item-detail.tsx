@@ -8,7 +8,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import Svg, { Rect, Text as SvgText } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
-import { STOCK_ITEMS } from './total-stock';
+import { STOCK_ITEMS } from '../../src/data/stockData';
 
 // ─── DETAILED ITEM DATA ───────────────────────────────────────────────────────────
 
