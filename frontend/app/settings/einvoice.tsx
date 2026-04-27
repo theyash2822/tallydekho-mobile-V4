@@ -51,7 +51,7 @@ export default function EInvoiceScreen() {
         )}
         <View style={s.card}>
           <View style={s.cardHdr}><Ionicons name="server-outline" size={18} color={COLORS.info} /><Text style={s.cardTitle}>IRP Provider</Text></View>
-          <FormDropdown label="Provider" value={provider} options={PROVIDERS} onSelect={o=>setProvider(o.value)} placeholder="Select IRP" containerStyle={{marginBottom:0}} />
+          <FormDropdown label="Provider" value={provider} options={PROVIDERS} onSelect={o=>{ setProvider(o.value); markDirty(); }} placeholder="Select IRP" containerStyle={{marginBottom:0}} />
         </View>
         <View style={s.card}>
           <View style={s.cardHdr}><Ionicons name="key-outline" size={18} color={'#7C3AED'} /><Text style={s.cardTitle}>Credentials</Text></View>
@@ -64,7 +64,7 @@ export default function EInvoiceScreen() {
             <View key={f.l} style={s.field}>
               <Text style={s.fLabel}>{f.l}</Text>
               <View style={s.fRow}>
-                <TextInput style={s.fInput} value={f.v} onChangeText={f.set} placeholder={f.ph} secureTextEntry={f.sec && !showPass}
+                <TextInput style={s.fInput} value={f.v} onChangeText={v => { f.set(v); markDirty(); }} placeholder={f.ph} secureTextEntry={f.sec && !showPass}
                   placeholderTextColor={COLORS.textTertiary} autoCapitalize="none" />
                 {f.sec && <TouchableOpacity onPress={()=>setShowPass(p=>!p)} style={s.eyeBtn}>
                   <Ionicons name={showPass?'eye-off-outline':'eye-outline'} size={18} color={COLORS.textSecondary} />

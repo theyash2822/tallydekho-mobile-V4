@@ -134,6 +134,7 @@ export default function CompanyScreen() {
     });
     if (!result.canceled && result.assets[0]) {
       setLogoUri(result.assets[0].uri);
+      markDirty();
     }
   };
 
@@ -342,7 +343,7 @@ export default function CompanyScreen() {
       <MonthPickerSheet
         visible={showMonthPicker}
         selected={fyStartMonth}
-        onSelect={setFyStartMonth}
+        onSelect={(m) => { setFyStartMonth(m); markDirty(); }}
         onClose={() => setShowMonthPicker(false)}
       />
     </SafeAreaView>

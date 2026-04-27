@@ -344,7 +344,7 @@ export default function NotificationChannelsScreen() {
               </View>
               <CustomToggle
                 value={enabled[ch.id]}
-                onChange={v => setEnabled(prev => ({ ...prev, [ch.id]: v }))}
+                onChange={v => { setEnabled(prev => ({ ...prev, [ch.id]: v })); markDirty(); }}
               />
             </View>
           ))}
@@ -357,7 +357,7 @@ export default function NotificationChannelsScreen() {
               <Ionicons name="moon-outline" size={18} color={COLORS.textSecondary} />
               <Text style={s.cardTitle}>Quiet Hours</Text>
             </View>
-            <CustomToggle value={quietHours} onChange={setQuietHours} />
+            <CustomToggle value={quietHours} onChange={v => { setQuietHours(v); markDirty(); }} />
           </View>
 
           {quietHours && (
@@ -405,7 +405,7 @@ export default function NotificationChannelsScreen() {
                   <TouchableOpacity
                     key={d.label}
                     style={[s.dayBox, d.val && s.dayBoxActive]}
-                    onPress={() => d.set(!d.val)}
+                    onPress={() => { d.set(!d.val); markDirty(); }}
                     activeOpacity={0.7}
                   >
                     <Text style={[s.dayTxt, d.val && s.dayTxtActive]}>{d.label}</Text>
@@ -429,14 +429,14 @@ export default function NotificationChannelsScreen() {
         label="Select Start Time"
         initialTime={startTime}
         onClose={() => setShowStartPicker(false)}
-        onConfirm={(t) => { setStartTime(t); setShowStartPicker(false); }}
+        onConfirm={(t) => { setStartTime(t); setShowStartPicker(false); markDirty(); }}
       />
       <TimePickerSheet
         visible={showEndPicker}
         label="Select End Time"
         initialTime={endTime}
         onClose={() => setShowEndPicker(false)}
-        onConfirm={(t) => { setEndTime(t); setShowEndPicker(false); }}
+        onConfirm={(t) => { setEndTime(t); setShowEndPicker(false); markDirty(); }}
       />
     </SafeAreaView>
   );

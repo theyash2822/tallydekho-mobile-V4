@@ -638,6 +638,7 @@ export default function ProfileScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <ScrollView
           style={ps.scroll}
@@ -845,7 +846,7 @@ function SectionLabel({ title }: { title: string }) {
 const ps = StyleSheet.create({
   safe:          { flex: 1, backgroundColor: COLORS.pageBg },
   scroll:        { flex: 1 },
-  scrollContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm },
+  scrollContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, paddingBottom: 180 },
 
   // ── Header ────────────────────────────────────────────────────────────────
   header: {
