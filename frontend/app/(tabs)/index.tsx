@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../../src/context/AuthContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import ShimmerPlaceholder, { KPICardSkeleton, MetricCardSkeleton, ActivityRowSkeleton, CardSkeleton } from '../../src/components/ShimmerPlaceholder';
 
@@ -38,6 +39,7 @@ const MOCK_VOICE_SEARCHES = ['Sales Invoice', 'Mehta Enterprises', 'Payment Rece
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { isPaired } = useAuth();
   const [activeFY, setActiveFY] = useState(MOCK_USER.fyYear);
   const [activeFilter, setActiveFilter] = useState<TimeFilter>('7D');
   const [kpiData, setKpiData] = useState(MOCK_KPI_STRIP);
@@ -45,7 +47,8 @@ export default function HomeScreen() {
   const [cashflow, setCashflow] = useState(MOCK_CASHFLOW);
   const [activity, setActivity] = useState(MOCK_RECENT_ACTIVITY);
   const [refreshing, setRefreshing] = useState(false);
-  const [isTallyPaired, setIsTallyPaired] = useState(false);
+  // isPaired comes from AuthContext — no local state needed
+  const isTallyPaired = isPaired;
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -83,24 +86,12 @@ export default function HomeScreen() {
     );
   }, [searchQuery, activity]);
 
-  // ── Tally pairing check ──────────────────────────────────────────────────
-  const checkPaired = useCallback(async () => {
-    const [val, scrollPref] = await Promise.all([
-      AsyncStorage.getItem('isTallyPaired'),
-      AsyncStorage.getItem('autoScrollCarousel'),
-    ]);
-    setIsTallyPaired(val === 'true');
-    // Default is ON (null means not yet set → auto-scroll enabled)
-    setAutoScrollCarousel(scrollPref === null ? true : scrollPref !== 'false');
-  }, []);
-
+  // ── Auto-scroll preference ──────────────────────────────────────────────
   useEffect(() => {
-    checkPaired();
-    const sub = AppState.addEventListener('change', state => {
-      if (state === 'active') checkPaired();
+    AsyncStorage.getItem('autoScrollCarousel').then(val => {
+      setAutoScrollCarousel(val === null ? true : val !== 'false');
     });
-    return () => sub.remove();
-  }, [checkPaired]);
+  }, []);
 
   // ── Data loading ─────────────────────────────────────────────────────────
   const [isLoading, setIsLoading] = useState(true);

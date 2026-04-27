@@ -27,9 +27,16 @@ export default function TallySyncScreen() {
     if (!pairKey.trim()) return;
     setStep('syncing');
     setError('');
-    // Show progress while API call happens
     setProgress(20);
     try {
+      // Ensure token is in AsyncStorage before making the call
+      const storedToken = await AsyncStorage.getItem('auth_token');
+      console.log('[TallySync] Token present:', !!storedToken, storedToken?.slice(0,20));
+      if (!storedToken) {
+        setStep('input');
+        setError('Session expired. Please login again.');
+        return;
+      }
       const res = await pairWithTally(pairKey.trim());
       setProgress(80);
       if (res?.success && res?.data?.is_paired) {
