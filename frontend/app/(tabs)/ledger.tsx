@@ -11,6 +11,7 @@ import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getLedgers } from '../../src/services/api';
+import { useAuth } from '../../src/context/AuthContext';
 import { MOCK_LEDGERS } from '../../src/data/mockData';
 import FilterBottomSheet, { FilterRadioRow } from '../../src/components/FilterBottomSheet';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
@@ -396,6 +397,8 @@ function FilterModal({ visible, onClose, activeNature, onApply }: FilterModalPro
 // ─── Main Ledger Screen ───────────────────────────────────────────────────────
 export default function LedgerScreen() {
   const router = useRouter();
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
   const filterBtnRef = useRef<TouchableOpacity>(null);
   const [data, setData] = useState<LedgerItem[]>(MOCK_LEDGERS);
   const [search, setSearch] = useState('');
@@ -452,17 +455,30 @@ export default function LedgerScreen() {
 
   const [isLoading, setIsLoading] = useState(true);
 
+  const loadLedgers = async () => {
+    const res = await getLedgers(companyGuid, { search }) as any;
+    const rows = res?.data ?? res ?? MOCK_LEDGERS;
+    // Normalize to LedgerItem shape
+    setData(Array.isArray(rows) ? rows.map((r: any) => ({
+      id: r.guid || r.id || String(r.id),
+      name: r.name,
+      group: r.parent || r.group || '',
+      balance: r.closing_balance != null ? `₹${Math.abs(+r.closing_balance).toLocaleString('en-IN')}` : (r.balance || '₹0'),
+      type: (+r.closing_balance || 0) >= 0 ? 'debit' : 'credit',
+      nature: r.nature || '',
+      phone: r.mobile || r.phone || '',
+      lastUpdated: r.updated_at || r.alter_date || '',
+    })) : MOCK_LEDGERS);
+  };
+
   useEffect(() => {
     setIsLoading(true);
-    getLedgers()
-      .then((d: any) => setData(d))
-      .finally(() => setIsLoading(false));
-  }, []);
+    loadLedgers().finally(() => setIsLoading(false));
+  }, [companyGuid]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    const d = await getLedgers() as any;
-    setData(d);
+    await loadLedgers();
     setRefreshing(false);
   };
 

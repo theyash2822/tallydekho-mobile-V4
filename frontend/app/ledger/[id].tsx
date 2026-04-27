@@ -10,6 +10,8 @@ import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_LEDGERS } from '../../src/data/mockData';
 import { TX_TO_DOC_TYPE } from '../../src/utils/documentHelpers';
+import { useAuth } from '../../src/context/AuthContext';
+import { getLedgerDetail } from '../../src/services/api';
 import DateRangePickerModal, { parseDMY } from '../../src/components/DateRangePickerModal';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -214,6 +216,28 @@ function LedgerInfoModal({ visible, onClose }: { visible: boolean; onClose: () =
 export default function LedgerDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
+  const [liveLedger, setLiveLedger] = useState<any>(null);
+  const [liveTxns, setLiveTxns] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!companyGuid || !id) return;
+    getLedgerDetail(companyGuid, id as string).then((res: any) => {
+      if (res?.data?.ledger) setLiveLedger(res.data.ledger);
+      if (res?.data?.transactions) {
+        setLiveTxns(res.data.transactions.map((t: any, i: number) => ({
+          id: String(t.id || i),
+          date: t.date || '',
+          voucher: t.voucher_number || '',
+          type: t.voucher_type || '',
+          amount: `₹${Math.abs(+t.amount||0).toLocaleString('en-IN')}`,
+          isDebit: (+t.amount||0) >= 0,
+        })));
+      }
+    }).catch(() => {});
+  }, [companyGuid, id]);
+
   const [showDrOnly, setShowDrOnly] = useState(false);
   const [showCrOnly, setShowCrOnly] = useState(false);
   const [showInfo,   setShowInfo]   = useState(false);
@@ -249,13 +273,15 @@ export default function LedgerDetailScreen() {
     cancelTxnSelect();
   };
 
-  const ledger = MOCK_LEDGERS?.find((l: any) => l.id === id) ||
+  const ledger = liveLedger ||
+    MOCK_LEDGERS?.find((l: any) => l.id === id) ||
     { id: id || 'L001', name: 'Alliance Trading Co.', group: 'Sundry Debtors', balance: '₹37,500 Dr' };
 
   const isDateActive = fromDate.length > 0 && toDate.length > 0;
 
   // Apply Dr/Cr + search + date range filters
-  const txns = MOCK_TRANSACTIONS.filter(t => {
+  const SOURCE_TXNS = liveTxns.length > 0 ? liveTxns : MOCK_TRANSACTIONS;
+  const txns = SOURCE_TXNS.filter((t: any) => {
     if (showDrOnly && !t.isDebit) return false;
     if (showCrOnly &&  t.isDebit) return false;
     if (searchQuery.trim()) {

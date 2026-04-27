@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_RECEIPT_VOUCHERS } from '../../src/data/mockData';
+import { useAuth } from '../../src/context/AuthContext';
+import { getVouchers } from '../../src/services/api';
 
 const MC: Record<string,string> = { NEFT:'#2563EB', RTGS:'#7C3AED', Cash:COLORS.positive, Cheque:COLORS.warning };
 const SC: Record<string,string> = { received:COLORS.positive, pending:COLORS.warning };
@@ -12,9 +14,22 @@ const SL: Record<string,string> = { received:'Received', pending:'Pending' };
 
 export default function ReceiptVouchersScreen() {
   const router = useRouter();
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
   const [search, setSearch] = useState('');
+  const [liveItems, setLiveItems] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!companyGuid) return;
+    getVouchers(companyGuid, 'receipt').then((res: any) => {
+      const rows = res?.data ?? [];
+      setLiveItems(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), party: r.party_name||'', date: r.date||'', time: '', amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`, method: 'Cash', status: 'cleared' })));
+    }).catch(() => {});
+  }, [companyGuid]);
+
   const data = MOCK_RECEIPT_VOUCHERS;
-  const filtered = data.items.filter(i => !search || i.party.toLowerCase().includes(search.toLowerCase()) || i.id.toLowerCase().includes(search.toLowerCase()));
+  const allItems = liveItems.length > 0 ? liveItems : data.items;
+  const filtered = allItems.filter((i: any) => !search || (i.party||'').toLowerCase().includes(search.toLowerCase()) || (i.id||'').toLowerCase().includes(search.toLowerCase()));
 
   return (
     <SafeAreaView style={s.safe}>

@@ -39,7 +39,8 @@ const MOCK_VOICE_SEARCHES = ['Sales Invoice', 'Mehta Enterprises', 'Payment Rece
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { isPaired } = useAuth();
+  const { isPaired, company } = useAuth();
+  const companyGuid = company?.guid;
   const [activeFY, setActiveFY] = useState(MOCK_USER.fyYear);
   const [activeFilter, setActiveFilter] = useState<TimeFilter>('7D');
   const [kpiData, setKpiData] = useState(MOCK_KPI_STRIP);
@@ -108,10 +109,10 @@ export default function HomeScreen() {
     setIsLoading(true);
     try {
       const [kpi, met, cf, act] = await Promise.all([
-        getKPIStrip(activeFilter),
-        getMetrics(activeFilter),
-        getCashflow(activeFilter),
-        getRecentActivity(),
+        getKPIStrip(companyGuid, activeFilter),
+        getMetrics(companyGuid, activeFilter),
+        getCashflow(companyGuid, activeFilter),
+        getRecentActivity(companyGuid),
       ]);
       if (activeFY === 'FY 2025-26') {
         setKpiData(kpi as any);
@@ -218,7 +219,7 @@ export default function HomeScreen() {
     <SafeAreaView testID="home-screen" style={styles.safe}>
       {/* Header */}
       <Header
-        companyName={MOCK_USER.company}
+        companyName={company?.name ?? 'My Company'}
         fyYear={activeFY}
         notificationCount={1}
         userName={MOCK_USER.name}

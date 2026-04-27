@@ -1,16 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_CONTRA_VOUCHERS } from '../../src/data/mockData';
+import { useAuth } from '../../src/context/AuthContext';
+import { getVouchers } from '../../src/services/api';
 
 export default function ContraVouchersScreen() {
   const router = useRouter();
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
   const [search, setSearch] = useState('');
+  const [liveItems, setLiveItems] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!companyGuid) return;
+    getVouchers(companyGuid, 'contra').then((res: any) => {
+      const rows = res?.data ?? [];
+      setLiveItems(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), narration: r.narration||'', date: r.date||'', amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`, status: 'posted' })));
+    }).catch(() => {});
+  }, [companyGuid]);
+
   const data = MOCK_CONTRA_VOUCHERS;
-  const filtered = data.items.filter(i => !search || i.narration.toLowerCase().includes(search.toLowerCase()) || i.id.toLowerCase().includes(search.toLowerCase()));
+  const allItems = liveItems.length > 0 ? liveItems : data.items;
+  const filtered = allItems.filter((i: any) => !search || (i.narration||'').toLowerCase().includes(search.toLowerCase()) || (i.id||'').toLowerCase().includes(search.toLowerCase()));
 
   return (
     <SafeAreaView style={s.safe}>

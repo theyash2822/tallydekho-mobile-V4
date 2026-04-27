@@ -50,6 +50,15 @@ const get = <T>(endpoint: string, auth = true) => request<T>('GET', endpoint, un
 const post = <T>(endpoint: string, body: object, auth = true) => request<T>('POST', endpoint, body, auth);
 const patch = <T>(endpoint: string, body: object) => request<T>('PATCH', endpoint, body);
 
+// Helper: append companyGuid to query string
+const withCompany = (endpoint: string, companyGuid?: string, extra?: Record<string, string>) => {
+  const params = new URLSearchParams();
+  if (companyGuid) params.set('companyGuid', companyGuid);
+  if (extra) Object.entries(extra).forEach(([k, v]) => v && params.set(k, v));
+  const qs = params.toString();
+  return qs ? `${endpoint}?${qs}` : endpoint;
+};
+
 // ── Fallback wrapper ─────────────────────────────────────────
 async function withFallback<T>(apiCall: () => Promise<T>, fallback: T): Promise<T> {
   try { return await apiCall(); }
@@ -129,42 +138,42 @@ export const getCompanies = () => get<any>('/companies');
 // DASHBOARD
 // ══════════════════════════════════════════════════════════════
 
-export const getKPIStrip = (period = '7D') =>
-  withFallback(() => get(`/dashboard/kpi-strip?period=${period}`), MOCK_KPI_STRIP);
+export const getKPIStrip = (companyGuid?: string, period = '7D') =>
+  withFallback(() => get(withCompany('/dashboard/kpi-strip', companyGuid, { period })), MOCK_KPI_STRIP);
 
-export const getMetrics = (period = '7D') =>
-  withFallback(() => get(`/dashboard/metrics?period=${period}`), MOCK_METRICS);
+export const getMetrics = (companyGuid?: string, period = '7D') =>
+  withFallback(() => get(withCompany('/dashboard/metrics', companyGuid, { period })), MOCK_METRICS);
 
-export const getCashflow = (period = '7D') =>
-  withFallback(() => get(`/dashboard/cashflow?period=${period}`), MOCK_CASHFLOW);
+export const getCashflow = (companyGuid?: string, period = '7D') =>
+  withFallback(() => get(withCompany('/dashboard/cashflow', companyGuid, { period })), MOCK_CASHFLOW);
 
-export const getRecentActivity = () =>
-  withFallback(() => get('/dashboard/recent-activity'), MOCK_RECENT_ACTIVITY);
+export const getRecentActivity = (companyGuid?: string) =>
+  withFallback(() => get(withCompany('/dashboard/recent-activity', companyGuid)), MOCK_RECENT_ACTIVITY);
 
-export const searchDashboard = (q: string) =>
-  withFallback(() => get(`/dashboard/search?q=${encodeURIComponent(q)}`), []);
+export const searchDashboard = (q: string, companyGuid?: string) =>
+  withFallback(() => get(withCompany('/dashboard/search', companyGuid, { q })), []);
 
 // ══════════════════════════════════════════════════════════════
 // SALES
 // ══════════════════════════════════════════════════════════════
 
-export const getSalesInvoices = (params?: { status?: string; search?: string; page?: number; from?: string; to?: string }) =>
-  withFallback(() => get(`/sales/invoices${params ? '?' + new URLSearchParams(params as any).toString() : ''}`), { data: { invoices: [], summary: { total_docs: 0 } } });
+export const getSalesInvoices = (companyGuid?: string, params?: { status?: string; search?: string; page?: string; from?: string; to?: string }) =>
+  withFallback(() => get(withCompany('/sales/invoices', companyGuid, params as any)), { data: [], meta: { total: 0 } });
 
-export const getSalesOrders = (params?: any) =>
-  withFallback(() => get(`/sales/orders${params ? '?' + new URLSearchParams(params).toString() : ''}`), { data: [] });
+export const getSalesOrders = (companyGuid?: string, params?: any) =>
+  withFallback(() => get(withCompany('/sales/orders', companyGuid, params)), { data: [], meta: { total: 0 } });
 
-export const getSalesQuotations = (params?: any) =>
-  withFallback(() => get(`/sales/quotations${params ? '?' + new URLSearchParams(params).toString() : ''}`), { data: [] });
+export const getSalesQuotations = (companyGuid?: string, params?: any) =>
+  withFallback(() => get(withCompany('/sales/quotations', companyGuid, params)), { data: [], meta: { total: 0 } });
 
-export const getCreditNotes = (params?: any) =>
-  withFallback(() => get(`/sales/credit-notes${params ? '?' + new URLSearchParams(params).toString() : ''}`), { data: [] });
+export const getCreditNotes = (companyGuid?: string, params?: any) =>
+  withFallback(() => get(withCompany('/sales/credit-notes', companyGuid, params)), { data: [], meta: { total: 0 } });
 
-export const getDeliveryNotes = (params?: any) =>
-  withFallback(() => get(`/sales/delivery-notes${params ? '?' + new URLSearchParams(params).toString() : ''}`), { data: [] });
+export const getDeliveryNotes = (companyGuid?: string, params?: any) =>
+  withFallback(() => get(withCompany('/sales/delivery-notes', companyGuid, params)), { data: [], meta: { total: 0 } });
 
-export const getEWayBills = (params?: any) =>
-  withFallback(() => get(`/sales/ewaybills${params ? '?' + new URLSearchParams(params).toString() : ''}`), { data: [] });
+export const getEWayBills = (companyGuid?: string, params?: any) =>
+  withFallback(() => get(withCompany('/sales/ewaybills', companyGuid, params)), { data: [], meta: { total: 0 } });
 
 export const createSalesInvoice = (payload: any) => post('/sales/invoices', payload);
 export const createSalesOrder = (payload: any) => post('/sales/orders', payload);
@@ -176,14 +185,14 @@ export const createDeliveryNote = (payload: any) => post('/sales/delivery-notes'
 // PURCHASE
 // ══════════════════════════════════════════════════════════════
 
-export const getPurchaseInvoices = (params?: any) =>
-  withFallback(() => get(`/purchase/invoices${params ? '?' + new URLSearchParams(params).toString() : ''}`), { data: [] });
+export const getPurchaseInvoices = (companyGuid?: string, params?: any) =>
+  withFallback(() => get(withCompany('/purchase/invoices', companyGuid, params)), { data: [], meta: { total: 0 } });
 
-export const getPurchaseOrders = (params?: any) =>
-  withFallback(() => get(`/purchase/orders${params ? '?' + new URLSearchParams(params).toString() : ''}`), { data: [] });
+export const getPurchaseOrders = (companyGuid?: string, params?: any) =>
+  withFallback(() => get(withCompany('/purchase/orders', companyGuid, params)), { data: [], meta: { total: 0 } });
 
-export const getDebitNotes = (params?: any) =>
-  withFallback(() => get(`/purchase/debit-notes${params ? '?' + new URLSearchParams(params).toString() : ''}`), { data: [] });
+export const getDebitNotes = (companyGuid?: string, params?: any) =>
+  withFallback(() => get(withCompany('/purchase/debit-notes', companyGuid, params)), { data: [], meta: { total: 0 } });
 
 export const createPurchaseInvoice = (payload: any) => post('/purchase/invoices', payload);
 export const createPurchaseOrder = (payload: any) => post('/purchase/orders', payload);
@@ -193,8 +202,8 @@ export const createDebitNote = (payload: any) => post('/purchase/debit-notes', p
 // VOUCHERS
 // ══════════════════════════════════════════════════════════════
 
-export const getVouchers = (type?: string, params?: any) =>
-  withFallback(() => get(`/vouchers${type ? `?type=${type}` : ''}${params ? '&' + new URLSearchParams(params).toString() : ''}`), { data: [] });
+export const getVouchers = (companyGuid?: string, type?: string, params?: any) =>
+  withFallback(() => get(withCompany('/vouchers', companyGuid, { ...(type ? { type } : {}), ...params })), { data: [], meta: { total: 0 } });
 
 export const createPaymentVoucher = (payload: any) => post('/vouchers/payment', payload);
 export const createReceiptVoucher = (payload: any) => post('/vouchers/receipt', payload);
@@ -205,11 +214,11 @@ export const createContraVoucher = (payload: any) => post('/vouchers/contra', pa
 // LEDGERS
 // ══════════════════════════════════════════════════════════════
 
-export const getLedgers = (params?: { group?: string; nature?: string; search?: string; page?: number }) =>
-  withFallback(() => get(`/ledgers${params ? '?' + new URLSearchParams(params as any).toString() : ''}`), { data: MOCK_LEDGERS });
+export const getLedgers = (companyGuid?: string, params?: { group?: string; nature?: string; search?: string; page?: string }) =>
+  withFallback(() => get(withCompany('/ledgers', companyGuid, params as any)), { data: MOCK_LEDGERS, meta: { total: 0 } });
 
-export const getLedgerDetail = (id: string, params?: { from?: string; to?: string }) =>
-  withFallback(() => get(`/ledgers/${id}${params ? '?' + new URLSearchParams(params).toString() : ''}`), null);
+export const getLedgerDetail = (companyGuid?: string, id?: string, params?: { from?: string; to?: string }) =>
+  withFallback(() => get(withCompany(`/ledgers/${id}`, companyGuid, params)), null);
 
 export const createLedger = (payload: any) => post('/ledgers', payload);
 
@@ -217,14 +226,17 @@ export const createLedger = (payload: any) => post('/ledgers', payload);
 // STOCKS
 // ══════════════════════════════════════════════════════════════
 
-export const getStocks = (params?: any) =>
-  withFallback(() => get(`/stocks/items${params ? '?' + new URLSearchParams(params).toString() : ''}`), { data: MOCK_STOCKS });
+export const getStocks = (companyGuid?: string, params?: any) =>
+  withFallback(() => get(withCompany('/stocks/items', companyGuid, params)), { data: { summary: {}, items: MOCK_STOCKS } });
 
-export const getStockItem = (id: string) =>
-  withFallback(() => get(`/stocks/items/${id}`), null);
+export const getStockItem = (companyGuid?: string, id?: string) =>
+  withFallback(() => get(withCompany(`/stocks/items/${id}`, companyGuid)), null);
 
-export const getWarehouses = () =>
-  withFallback(() => get('/stocks/warehouses'), { data: [] });
+export const getWarehouses = (companyGuid?: string) =>
+  withFallback(() => get(withCompany('/stocks/warehouses', companyGuid)), { data: [] });
+
+export const getParties = (companyGuid?: string, params?: { search?: string; type?: string }) =>
+  withFallback(() => get(withCompany('/parties', companyGuid, params)), { data: [] });
 
 export const createStockItem = (payload: any) => post('/stocks/items', payload);
 export const createWarehouse = (payload: any) => post('/stocks/warehouses', payload);
@@ -235,31 +247,33 @@ export const createStockTransfer = (payload: any) => post('/stocks/transfers', p
 // REPORTS
 // ══════════════════════════════════════════════════════════════
 
-export const getReports = () =>
-  withFallback(() => get('/reports/financial'), { data: MOCK_REPORTS });
+export const getReports = (companyGuid?: string) =>
+  withFallback(() => get(withCompany('/reports/financial', companyGuid)), { data: MOCK_REPORTS });
 
-export const getFinancialReport = (from?: string, to?: string) =>
-  withFallback(() => get(`/reports/financial-report${from && to ? `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` : ''}`), null);
-
-export const getFinancialData = () =>
+export const getFinancialData = (companyGuid?: string) =>
   withFallback(
-    () => get<{ months: string[]; revenue: number[]; expenses: number[] }>('/reports/financial'),
+    () => get<any>(withCompany('/reports/financial', companyGuid)),
     {
-      months:   ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'],
-      revenue:  [450000,520000,480000,610000,580000,640000,720000,680000,750000,820000,790000,950000],
-      expenses: [380000,420000,410000,490000,460000,510000,580000,545000,600000,660000,630000,720000],
+      data: {
+        months:   ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'],
+        revenue:  [450000,520000,480000,610000,580000,640000,720000,680000,750000,820000,790000,950000],
+        expenses: [380000,420000,410000,490000,460000,510000,580000,545000,600000,660000,630000,720000],
+      }
     }
   );
 
-export const getGSTReport = (params?: any) =>
-  withFallback(() => get(`/reports/gst${params ? '?' + new URLSearchParams(params).toString() : ''}`), null);
+export const getFinancialReport = (companyGuid?: string, from?: string, to?: string) =>
+  withFallback(() => get(withCompany('/reports/financial-report', companyGuid, from && to ? { from, to } : {})), null);
+
+export const getGSTReport = (companyGuid?: string) =>
+  withFallback(() => get(withCompany('/reports/gst', companyGuid)), null);
 
 // ══════════════════════════════════════════════════════════════
 // NOTIFICATIONS
 // ══════════════════════════════════════════════════════════════
 
-export const getNotifications = () =>
-  withFallback(() => get('/notifications'), { data: MOCK_NOTIFICATIONS });
+export const getNotifications = (companyGuid?: string) =>
+  withFallback(() => get(withCompany('/notifications', companyGuid)), { data: MOCK_NOTIFICATIONS });
 
 export const markNotificationRead = (id: string) =>
   patch(`/notifications/${id}/read`, {});

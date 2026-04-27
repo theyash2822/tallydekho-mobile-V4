@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Dimensions, Share, Alert,
@@ -8,6 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_PURCHASE_REGISTER } from '../../src/data/mockData';
+import { useAuth } from '../../src/context/AuthContext';
+import { getPurchaseInvoices } from '../../src/services/api';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
 const AMBER    = '#A89060';
@@ -74,7 +76,26 @@ const MONTH_GROUPS: MonthGroup[] = [
 export default function PurchaseRegisterScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const data   = MOCK_PURCHASE_REGISTER;
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
+  const [liveInvoices, setLiveInvoices] = useState<PurchaseInvoice[]>([]);
+
+  const data = MOCK_PURCHASE_REGISTER;
+
+  useEffect(() => {
+    if (!companyGuid) return;
+    getPurchaseInvoices(companyGuid).then((res: any) => {
+      const rows = res?.data ?? [];
+      setLiveInvoices(rows.map((r: any) => ({
+        id: r.voucher_number || String(r.id),
+        vendor: r.party_name || '',
+        date: r.date || '',
+        time: '',
+        amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`,
+        status: r.is_cancelled ? 'unpaid' : 'paid',
+      })));
+    }).catch(() => {});
+  }, [companyGuid]);
 
   const [search,         setSearch]         = useState('');
   const [statusFilter,   setStatusFilter]   = useState('All');

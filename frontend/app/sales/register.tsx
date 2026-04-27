@@ -8,6 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_SALES_REGISTER } from '../../src/data/mockData';
+import { useAuth } from '../../src/context/AuthContext';
+import { getSalesInvoices } from '../../src/services/api';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
 const AMBER    = '#A89060';
@@ -74,7 +76,8 @@ const MONTH_GROUPS: MonthGroup[] = [
 export default function SalesRegisterScreen() {
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
-  const data    = MOCK_SALES_REGISTER;
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
 
   const [search,         setSearch]         = useState('');
   const [statusFilter,   setStatusFilter]   = useState('All');
@@ -82,6 +85,26 @@ export default function SalesRegisterScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [fromDate,       setFromDate]       = useState('01/01/25');
   const [toDate,         setToDate]         = useState('30/04/25');
+  const [liveInvoices, setLiveInvoices]     = useState<Invoice[]>([]);
+  const [loadingData, setLoadingData]       = useState(false);
+
+  const data = MOCK_SALES_REGISTER;
+
+  useEffect(() => {
+    if (!companyGuid) return;
+    setLoadingData(true);
+    getSalesInvoices(companyGuid, { search }).then((res: any) => {
+      const rows = res?.data ?? [];
+      setLiveInvoices(rows.map((r: any) => ({
+        id: r.voucher_number || String(r.id),
+        party: r.party_name || '',
+        date: r.date || '',
+        time: '',
+        amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`,
+        status: r.is_cancelled ? 'unpaid' : 'paid',
+      })));
+    }).catch(() => {}).finally(() => setLoadingData(false));
+  }, [companyGuid, search]);
 
   // Collapsible months — all open by default
   const [expanded, setExpanded] = useState<Set<string>>(new Set(MONTH_GROUPS.map(g => g.id)));

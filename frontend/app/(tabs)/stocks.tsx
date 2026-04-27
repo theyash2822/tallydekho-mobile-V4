@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
@@ -7,6 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_STOCK_DASHBOARD } from '../../src/data/mockData';
+import { useAuth } from '../../src/context/AuthContext';
+import { getStocks } from '../../src/services/api';
 
 const DARK = '#1A1A1A';
 
@@ -67,7 +69,24 @@ const WIDGET_TILES = [
 
 export default function StocksDashboard() {
   const router = useRouter();
-  const data = MOCK_STOCK_DASHBOARD;
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
+  const [stockSummary, setStockSummary] = useState(MOCK_STOCK_DASHBOARD);
+
+  useEffect(() => {
+    if (!companyGuid) return;
+    getStocks(companyGuid).then((res: any) => {
+      const s = res?.data?.summary;
+      if (s) setStockSummary(prev => ({
+        ...prev,
+        totalValue: s.total_value ?? prev.totalValue,
+        totalSKUs: s.total_skus ?? prev.totalSKUs,
+        lowStockCount: s.low_stock_count ?? prev.lowStockCount,
+      }));
+    }).catch(() => {});
+  }, [companyGuid]);
+
+  const data = stockSummary;
 
   return (
     <SafeAreaView style={styles.safe}>

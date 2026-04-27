@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_REPORTS } from '../../src/data/mockData';
 import { getFinancialData } from '../../src/services/api';
+import { useAuth } from '../../src/context/AuthContext';
 import { FinancialChartSkeleton } from '../../src/components/Skeleton';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -830,6 +831,8 @@ const sc = StyleSheet.create({
 // ══════════════════════════════════════════════════════════════════════════════
 export default function ReportsScreen() {
   const router = useRouter();
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
 
   // Financial chart data — fetched from API (falls back to mock data)
   const [finData, setFinData] = useState<{
@@ -840,11 +843,12 @@ export default function ReportsScreen() {
   const [finLoading, setFinLoading] = useState(true);
 
   useEffect(() => {
-    getFinancialData().then((d) => {
-      setFinData(d);
+    getFinancialData(companyGuid).then((res: any) => {
+      const d = res?.data ?? res;
+      if (d?.months) setFinData(d);
       setFinLoading(false);
     }).catch(() => setFinLoading(false));
-  }, []);
+  }, [companyGuid]);
 
   return (
     <SafeAreaView testID="reports-screen" style={styles.safe}>
