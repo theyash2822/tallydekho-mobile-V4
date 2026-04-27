@@ -417,20 +417,18 @@ frontend:
 
 metadata:
   created_by: "main_agent"
-  version: "1.1"
-  test_sequence: 2
+  version: "1.3"
+  test_sequence: 3
   run_ui: true
 
 test_plan:
   current_focus:
-    - "Auth API endpoints (send-otp, verify-otp, register)"
-    - "Stocks API endpoint"
-    - "Ledgers API endpoint"
-    - "Reports API endpoints (reports, financial, financial-report)"
-    - "Notifications API endpoint"
-    - "Auth Screen (WhatsApp OTP Login)"
-    - "Home Dashboard with Modules section"
-    - "Total Stock Interactive Features (Swipeable, Multi-Select, 4 Modals, Multi-Select Filters)"
+    - "Ledger Details Layout (fixed header + scrollable list)"
+    - "Carousel Auto-Scroll Toggle (preferences → home)"
+    - "FilterBottomSheet abstraction - ledger filter, stocks filter"
+    - "Ledger CreateModal + InfoModal crash fixes"
+    - "Settings Tally-Sync crash fix (KeyboardAvoidingView)"
+    - "Reports Audit Trail crash fix (Alert)"
   stuck_tasks: []
   test_all: true
   test_priority: "high_first"
@@ -438,103 +436,35 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: |
-      TOTAL STOCK INTERACTIVE FEATURES BUILT - PLEASE TEST:
+      COMPREHENSIVE APP AUDIT COMPLETE — FULL TEST REQUESTED
 
-      Navigate to: Stocks tab → Total Stock screen (or URL: /stocks/total-stock)
+      CRITICAL FIXES (import regressions):
+      1. app/settings/tally-sync.tsx — Added KeyboardAvoidingView, Platform to RN imports (was crashing with "KeyboardAvoidingView is not defined")
+      2. app/reports/audit-trail.tsx — Added Alert to RN imports (was crashing with "Alert is not defined")
+      3. app/ledger/[id].tsx — Added Modal to RN imports (was crashing with "Modal is not defined" in LedgerInfoModal)
 
-      FEATURES TO TEST:
-      1. SCREEN LOADS: 10 items with cube icon on grey bg, summary KPI strip (10 SKUs, 920 qty, ₹83,150), search bar, FAB (+) button
-      2. FILTER MODAL: Tap options icon (top right, next to calendar). Filter bottom sheet opens with Warehouse, Category, Group chip selectors. Select some, Apply. Active chips appear below header. Tap chip to remove filter.
-      3. SWIPEABLE - EDIT STOCK (swipe LEFT): Swipe an item left → amber "Edit Stock" action revealed. Tap it → Edit Stock modal opens with item name, current qty, add/remove toggle, reason chips, notes.
-      4. SWIPEABLE - TRANSFER (swipe RIGHT): Swipe an item right → dark "Transfer" action revealed. Tap it → Stock Transfer modal opens with item info, from warehouse (read-only), To Warehouse chip select, qty, notes.
-      5. LONG PRESS MULTI-SELECT: Long press any item (400ms) → dark action bar appears at top showing "1 selected", PDF and Transfer buttons. Tap more items to select them. "Select All" link appears.
-      6. MULTI-SELECT - PDF: With items selected, tap "PDF" button → success toast "X items exported as PDF."
-      7. MULTI-SELECT - BULK TRANSFER: With items selected, tap "Transfer" → Bulk Transfer modal opens with item count info banner, From/To warehouse selectors.
-      8. FAB - ADD ITEM: Tap (+) FAB → Add Item modal with fields: Name, SKU, Category (chip), Group (chip), Warehouse (chip), Qty/Unit, Purchase Rate, Selling Price. Submit → success toast.
-      9. ALL MODALS: Cancel button works, overlay tap closes modal, Toast.show() fires on successful submit.
-      10. ITEM TAP (navigation): Single tap any item → navigates to /stocks/item-detail screen.
+      NEW FEATURES:
+      4. Ledger Details (/ledger/[id]) — Fixed layout: chart + controls row (search/date/Dr/Cr) are now FIXED at top, transaction list scrolls independently. Three missing StyleSheet keys added: stickyTop, controlRow, txnScroll.
+      5. Settings Preferences (/settings/preferences) — New "Home Screen" section with "Auto-Scroll Carousel" toggle. Persisted via AsyncStorage.
+      6. Home Screen (/tabs/index) — KPI carousel setInterval is now conditional on autoScrollCarousel AsyncStorage value. Reads the value whenever screen becomes active.
+      7. Ledger List (/tabs/ledger) — + button now opens CreateLedgerModal directly as an inline modal (previously wired to TypeSheet which navigated away).
+      8. FilterBottomSheet abstraction — New shared component at src/components/FilterBottomSheet.tsx (exports FilterBottomSheet, FilterRadioRow, FilterChipGroup). Used by (tabs)/ledger.tsx and stocks/total-stock.tsx filter modals.
 
-      AUTH FLOW:
-      - Enter any 10-digit phone, click Send OTP
-      - Enter any 4-digit OTP, click Verify
-      - If register screen appears, fill name and submit
+      APP AUDIT RESULT (Python multi-line import check):
+      ✅ Only 2 files had truly missing imports — both now fixed.
+      ✅ Backend: 16 endpoints all returning HTTP 200.
+      ✅ iOS bundle: 1979 modules, no bundle errors.
 
-  - agent: "main"
-    message: |
-      NEW SCREENS ADDED - PLEASE TEST VISUALLY:
-      
-      All newly scaffolded screens have been verified for code quality and are ready for visual testing.
-      
       AUTH FLOW for testing:
-      - Go to http://localhost:3000
-      - Enter any 10-digit number (e.g. 9876543210)
-      - Click Send OTP, enter any 6 digits
-      - Click Verify → should reach Home screen with tabs
-      
-      KEY SCREENS TO VERIFY (navigate by clicking in the UI):
-      1. Reports tab → clicks on Financial, Compliance, Audit Trail, AI Insights cards
-      2. Compliance → then click GST, EWB, EInvoice, Other Taxes cards
-      3. Stocks tab → click on each widget tile (Total Stock, Warehouses, Reorder Queue, Aged Items, Fast-Moving, Report, Barcode)
-      4. Settings → navigate from Home Modules → Settings → expand accordion → click sub-items
-      5. Daybook → navigate from Ledger tab or via direct URL /daybook
-      
-      EXPECTED BEHAVIOR:
-      - All screens should render correctly with no white screens
-      - Consistent design: pageBg #F5F4EF, white cards, #1A1A1A text
-      - Back arrow should work on all sub-screens
-      - Filter chips should toggle correctly
-      
-  - agent: "main"
-    message: |
-      Previous testing context - I've made the following changes that need testing:
-      
-      1. CRITICAL FIX: AsyncStorage was hanging on web - fixed in AuthContext.tsx with localStorage fallback
-      2. QuickActionsModal - added useRouter so items navigate when pressed
-      3. Header - added avatar button (A) that navigates to /settings
-      4. Home screen - added MODULE_CARDS section (Sales, Purchase, Vouchers, Settings)
-      5. RootNavigation - updated to handle all auth routing cases
-      
-      AUTH FLOW for testing:
-      - Go to http://localhost:3000
-      - Enter any 10-digit number (e.g. 9876543210)
-      - Click Send OTP
-      - On OTP screen, enter any 6 digits
-      - Click Verify
-      - If register screen appears, fill name and submit
-      - This should navigate to the Home screen with tabs
-      
-      KEY THINGS TO VERIFY:
-      1. Does the auth flow complete and navigate to Home screen?
-      2. Does the Home screen show the Modules section (4 cards: Sales, Purchase, Vouchers, Settings)?
-      3. Does clicking the FAB (+) open the Quick Actions modal?
-      4. Does clicking items in the Quick Actions modal navigate to the correct screens?
-      5. Do all Sales/Purchase/Voucher/Settings screens render without errors?
-      6. Does the Header's avatar button navigate to Settings?
-      
-      KNOWN ISSUE: Screenshot tool shows blank screen after auth navigation - need testing agent to verify this.
-      
-      All screens use: pageBg #F5F4EF, white cards, #1A1A1A text
+      - Enter any 10-digit phone (9876543210), click Send OTP
+      - Enter any OTP (123456), click Verify → Home screen with tabs
 
-
-  - agent: "main"
-    message: |
-      FULL AUDIT COMPLETE - ALL MISSING BACKEND ENDPOINTS NOW ADDED
-      
-      WHAT WAS DONE:
-      Full code audit of 100+ files. Added 9 missing API endpoints that were referenced in api.ts but returned 404:
-        - POST /api/auth/send-otp
-        - POST /api/auth/verify-otp
-        - POST /api/auth/register
-        - GET /api/stocks
-        - GET /api/ledgers
-        - GET /api/reports
-        - GET /api/reports/financial
-        - GET /api/reports/financial-report
-        - GET /api/notifications
-      All verified working via curl (HTTP 200). Backend lint: all checks passed.
-      
-      PLEASE TEST ALL BACKEND ENDPOINTS:
-      Backend URL: http://localhost:8001
-      Test each endpoint listed above plus all existing dashboard/kpi/sales endpoints.
-      
-      AUTH CREDENTIALS: any 10-digit phone (e.g. 9876543210), any OTP (e.g. 1234)
+      SCREENS TO FOCUS TEST ON:
+      1. Settings → Integrations → TallyPrime → should load without crash
+      2. Reports → Audit Trail → should load without crash
+      3. Ledger tab → tap ℹ on a ledger detail → LedgerInfoModal should open
+      4. Ledger tab → tap + button → CreateLedgerModal should slide up (NOT navigate away)
+      5. Ledger tab → tap Filter icon → FilterModal (using FilterBottomSheet) should open
+      6. Ledger Detail → chart fixed at top, transaction list scrolls independently
+      7. Settings → Preferences → scroll to bottom → "Home Screen" section with toggle visible
+      8. Stocks → Total Stock → tap Filter → FilterBottomSheet with chip groups opens
