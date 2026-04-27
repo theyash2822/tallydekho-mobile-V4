@@ -16,7 +16,7 @@ type SyncStep = 'prompt' | 'input' | 'syncing' | 'done';
 
 export default function TallySyncScreen() {
   const router = useRouter();
-  const { setCompany, setIsPaired } = useAuth();
+  const { signIn, setCompany, setIsPaired } = useAuth();
   const [step, setStep] = useState<SyncStep>('prompt');
   const [pairKey, setPairKey] = useState('');
   const [progress, setProgress] = useState(0);
@@ -37,6 +37,9 @@ export default function TallySyncScreen() {
         if (res.data.company) {
           await setCompany({ guid: res.data.company.guid, name: res.data.company.name, gstin: res.data.company.gstin ?? undefined });
         }
+        // Now mark as authenticated — this triggers _layout to go to (tabs)
+        const token = await AsyncStorage.getItem('auth_token');
+        if (token) await signIn(token);
         setProgress(100);
         await new Promise(r => setTimeout(r, 400));
         router.replace('/(tabs)');
@@ -51,6 +54,9 @@ export default function TallySyncScreen() {
   };
 
   const handleSkip = async () => {
+    // Mark authenticated on skip too
+    const token = await AsyncStorage.getItem('auth_token');
+    if (token) await signIn(token);
     router.replace('/(tabs)');
   };
 

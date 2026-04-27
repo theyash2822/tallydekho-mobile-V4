@@ -17,7 +17,7 @@ import {
   MOCK_NOTIFICATIONS,
 } from '../data/mockData';
 
-const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.246:3001';
+const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.241:3001';
 
 // ── Token helpers ────────────────────────────────────────────
 const getToken = async (): Promise<string | null> => {

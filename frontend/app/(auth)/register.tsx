@@ -44,8 +44,10 @@ export default function RegisterScreen() {
     try {
       const res = await registerUser({ name: name.trim(), email: email.trim(), language });
       if (res?.success && res?.data?.access_token) {
-        // Update token with fresh one from register response
-        await signIn(res.data.access_token, { name: res.data.user.name, mobile: res.data.user.phone });
+        // Store token but do NOT call signIn() here — that would set isAuthenticated=true
+        // and _layout.tsx would redirect to (tabs) before we reach tally-sync
+        await AsyncStorage.setItem('auth_token', res.data.access_token);
+        await AsyncStorage.setItem('user_data', JSON.stringify({ name: res.data.user.name, mobile: res.data.user.phone }));
         router.replace('/(auth)/tally-sync');
       } else {
         setError('Registration failed. Please retry.');
