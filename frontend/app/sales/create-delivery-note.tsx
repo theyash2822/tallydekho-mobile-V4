@@ -1,13 +1,15 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput, Modal,
+  KeyboardAvoidingView, Platform, Alert, TextInput, Modal, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
+import { createDeliveryNote } from '../../src/services/api';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
@@ -102,7 +104,9 @@ function DeliveryItemRow({ item, onUpdate, onRemove, onModal }: {
 export default function CreateDeliveryNoteScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { company, isPaired } = useAuth();
   const [entryType, setEntryType] = useState<EntryType>('regular');
+  const [submitting, setSubmitting] = useState(false);
   const [dnNo] = useState('DN-00235');
   const [date, setDate] = useState(todayStr());
   const [dispatchDate, setDispatchDate] = useState('');
@@ -122,14 +126,25 @@ export default function CreateDeliveryNoteScreen() {
   const updateItem = useCallback((id:string,f:keyof DNItem,v:string)=>setItems(prev=>prev.map(i=>i.id===id?{...i,[f]:v}:i)),[]);
   const removeItem = useCallback((id:string)=>setItems(prev=>prev.length>1?prev.filter(i=>i.id!==id):prev),[]);
 
-  const handleSubmit = useCallback(()=>{
-    Toast.show({
-      type: 'success',
-      text1: 'Delivery Note Created',
-      text2: `Delivery Note ${dnNo} issued successfully.`,
-    });
-    setTimeout(() => router.back(), 1000);
-  },[dnNo,router]);
+  const handleSubmit = useCallback(async ()=>{
+    if (!isPaired) { Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' }); return; }
+    try {
+      setSubmitting(true);
+      await createDeliveryNote({
+        company_guid: company?.guid, party, date,
+        dispatch_date: dispatchDate || undefined,
+        linked_ref: linkedRef || undefined,
+        dispatch_method: dispatchMethod || undefined,
+        tracking_no: trackingNo || undefined,
+        items: items.map(i=>({ stock_item: i.product, qty: parseFloat(i.qty)||0, unit: i.unit, warehouse: i.warehouse||undefined })),
+        narration: narration || undefined,
+      });
+      Toast.show({ type: 'success', text1: 'Delivery Note Created', text2: `${dnNo} sent to Tally.` });
+      setTimeout(()=>router.back(),1000);
+    } catch(err:any) {
+      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message||'Could not submit.' });
+    } finally { setSubmitting(false); }
+  },[isPaired,company?.guid,party,date,dispatchDate,linkedRef,dispatchMethod,trackingNo,items,narration,dnNo,router]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -213,9 +228,9 @@ export default function CreateDeliveryNoteScreen() {
         </ScrollView>
 
         <View style={[s.footer,{paddingBottom:Math.max(insets.bottom,12)}]}>
-          <TouchableOpacity style={s.submitBtn} onPress={handleSubmit} activeOpacity={0.7}>
-            <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />
-            <Text style={s.submitTxt}>Issue Delivery Note</Text>
+          <TouchableOpacity style={[s.submitBtn,submitting&&{opacity:0.6}]} onPress={handleSubmit} activeOpacity={0.7} disabled={submitting}>
+            {submitting?<ActivityIndicator size="small" color={COLORS.white}/>:<Ionicons name="checkmark-circle" size={18} color={COLORS.white}/>}
+            <Text style={s.submitTxt}>{submitting?'Submitting...':'Issue Delivery Note'}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

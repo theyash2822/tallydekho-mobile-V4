@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput, Modal,
+  KeyboardAvoidingView, Platform, Alert, TextInput, Modal, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,8 @@ import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
+import { createCreditNote } from '../../src/services/api';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
@@ -202,10 +204,12 @@ function ItemRow({ item, onUpdate, onRemove, onModal }: {
 export default function CreateCreditNoteScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { company, isPaired } = useAuth();
   const [entryType, setEntryType] = useState<EntryType>('regular');
   const [cnNo] = useState('CN-00713');
   const [date, setDate] = useState(todayStr());
   const [party, setParty] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [linkedInvoice, setLinkedInvoice] = useState('');
   const [narration, setNarration] = useState('');
   const [items, setItems] = useState<CItem[]>([newItem()]);
@@ -221,10 +225,22 @@ export default function CreateCreditNoteScreen() {
     return { gross, disc, tax, total: gross-disc+tax };
   },[items]);
 
-  const handleSubmit = useCallback(()=>{
-    Toast.show({ type: 'success', text1: 'Credit Note Issued', text2: `Credit Note ${cnNo} issued successfully.` });
-    setTimeout(() => router.back(), 1000);
-  },[cnNo,router]);
+  const handleSubmit = useCallback(async ()=>{
+    if (!isPaired) { Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' }); return; }
+    try {
+      setSubmitting(true);
+      await createCreditNote({
+        company_guid: company?.guid, party, date,
+        linked_invoice: linkedInvoice || undefined,
+        items: items.map(i=>({ stock_item: i.product, qty: parseFloat(i.qty)||0, rate: parseFloat(i.rate)||0, unit: i.unit, discount: parseFloat(i.disc)||0, tax_rate: parseFloat(i.taxRate)||0 })),
+        narration: narration || undefined,
+      });
+      Toast.show({ type: 'success', text1: 'Credit Note Issued', text2: `${cnNo} sent to Tally.` });
+      setTimeout(()=>router.back(),1000);
+    } catch(err:any) {
+      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message||'Could not submit.' });
+    } finally { setSubmitting(false); }
+  },[isPaired,company?.guid,party,date,linkedInvoice,items,narration,cnNo,router]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -283,9 +299,9 @@ export default function CreateCreditNoteScreen() {
         </ScrollView>
 
         <View style={[s.footer,{paddingBottom:Math.max(insets.bottom,12)}]}>
-          <TouchableOpacity style={s.submitBtn} onPress={handleSubmit} activeOpacity={0.7}>
-            <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />
-            <Text style={s.submitTxt}>Issue Credit Note</Text>
+          <TouchableOpacity style={[s.submitBtn,submitting&&{opacity:0.6}]} onPress={handleSubmit} activeOpacity={0.7} disabled={submitting}>
+            {submitting?<ActivityIndicator size="small" color={COLORS.white}/>:<Ionicons name="checkmark-circle" size={18} color={COLORS.white}/>}
+            <Text style={s.submitTxt}>{submitting?'Submitting...':'Issue Credit Note'}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

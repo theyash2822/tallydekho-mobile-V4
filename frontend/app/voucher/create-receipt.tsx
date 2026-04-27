@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, KeyboardAvoidingView, Platform, Alert,
+  TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,8 @@ import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import { useAuth } from '../../src/context/AuthContext';
+import { createReceiptVoucher } from '../../src/services/api';
 
 const METHODS = ['Cash', 'Bank', 'Cheque', 'NEFT', 'RTGS', 'UPI'];
 const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -16,6 +18,7 @@ const voucherNo = 'RC-' + String(Math.floor(1000 + Math.random() * 9000));
 
 export default function CreateReceiptVoucher() {
   const router = useRouter();
+  const { company, isPaired } = useAuth();
   const [entryType, setEntryType] = useState<EntryType>('regular');
   const [party, setParty] = useState('');
   const [invoice, setInvoice] = useState('');
@@ -24,18 +27,38 @@ export default function CreateReceiptVoucher() {
   const [bank, setBank] = useState('');
   const [ref, setRef] = useState('');
   const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const showBank = method !== 'Cash';
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!party.trim()) { Alert.alert('Required', 'Please enter party name'); return; }
     if (!amount.trim()) { Alert.alert('Required', 'Please enter amount'); return; }
-    Toast.show({ type: 'success', text1: 'Voucher Posted', text2: `Receipt Voucher ${voucherNo} posted successfully.` });
-    setTimeout(() => router.replace('/document/PV-2089?type=receipt_voucher' as any), 800);
+    if (!isPaired) { Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' }); return; }
+    try {
+      setSubmitting(true);
+      await createReceiptVoucher({
+        company_guid: company?.guid,
+        party,
+        amount: parseFloat(amount) || 0,
+        payment_method: method,
+        bank_account: bank || undefined,
+        reference: ref || undefined,
+        narration: notes || undefined,
+        linked_invoice: invoice || undefined,
+        voucher_type: entryType,
+      });
+      Toast.show({ type: 'success', text1: 'Voucher Posted', text2: `Receipt Voucher ${voucherNo} posted to Tally.` });
+      setTimeout(() => router.back(), 800);
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message || 'Could not submit. Check Tally connection.' });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleSaveOptional = () => {
-    Toast.show({ type: 'success', text1: 'Draft Saved', text2: 'Receipt Voucher saved as optional.' });
+    Toast.show({ type: 'info', text1: 'Draft Saved', text2: 'Receipt Voucher saved as optional.' });
     setTimeout(() => router.back(), 1000);
   };
 
@@ -146,9 +169,9 @@ export default function CreateReceiptVoucher() {
             <TouchableOpacity style={s.btnSecondary} onPress={handleSaveOptional} activeOpacity={0.8}>
               <Text style={s.btnSecTxt}>Save as Optional</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={s.btnPrimary} onPress={handleSubmit} activeOpacity={0.8}>
-              <Ionicons name="send" size={16} color={COLORS.white} />
-              <Text style={s.btnPriTxt}>Submit Receipt</Text>
+            <TouchableOpacity style={[s.btnPrimary, submitting && { opacity: 0.6 }]} onPress={handleSubmit} activeOpacity={0.8} disabled={submitting}>
+              {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="send" size={16} color={COLORS.white} />}
+              <Text style={s.btnPriTxt}>{submitting ? 'Submitting...' : 'Submit Receipt'}</Text>
             </TouchableOpacity>
           </View>
           <View style={{ height: 32 }} />

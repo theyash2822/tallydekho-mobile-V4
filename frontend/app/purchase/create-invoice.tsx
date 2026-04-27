@@ -9,6 +9,8 @@ import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
+import { createPurchaseInvoice } from '../../src/services/api';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
@@ -234,7 +236,8 @@ function ItemRow({ item, onUpdate, onRemove, onModal }: {
 export default function CreatePurchaseInvoiceScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-
+  const { company, isPaired } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
   const [ocrStatus, setOcrStatus] = useState<OcrStatus>('idle');
   const [showCamera, setShowCamera] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
@@ -291,10 +294,27 @@ export default function CreatePurchaseInvoiceScreen() {
     setShowCamera(true);
   },[permission, requestPermission]);
 
-  const handleSubmit = useCallback((draft:boolean)=>{
-    Toast.show({ type: 'success', text1: draft ? 'Draft Saved' : 'Invoice Submitted', text2: draft ? `${invNo} saved as draft.` : `Purchase invoice ${invNo} submitted successfully.` });
-    setTimeout(() => router.back(), 1000);
-  },[invNo,router]);
+  const handleSubmit = useCallback(async (draft:boolean)=>{
+    if (!isPaired) { Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' }); return; }
+    try {
+      setSubmitting(true);
+      await createPurchaseInvoice({
+        company_guid: company?.guid,
+        vendor, date, ledger_account: ledger,
+        vendor_invoice_no: vendorInvNo || undefined,
+        vendor_invoice_date: vendorInvDate || undefined,
+        payment_terms: payTerms,
+        ref_no: purchaseRefNo || undefined,
+        items: items.map(i=>({ stock_item: i.product, qty: parseFloat(i.qty)||0, rate: parseFloat(i.rate)||0, unit: i.unit, discount: parseFloat(i.disc)||0, tax_rate: parseFloat(i.taxRate)||0 })),
+        narration: narration || undefined,
+        is_draft: draft,
+      });
+      Toast.show({ type: 'success', text1: draft ? 'Draft Saved' : 'Invoice Submitted', text2: draft ? `${invNo} saved as draft.` : `Purchase invoice ${invNo} sent to Tally.` });
+      setTimeout(()=>router.back(),1000);
+    } catch(err:any) {
+      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message||'Could not submit.' });
+    } finally { setSubmitting(false); }
+  },[isPaired,company?.guid,vendor,date,ledger,vendorInvNo,vendorInvDate,payTerms,purchaseRefNo,items,narration,invNo,router]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -459,12 +479,12 @@ export default function CreatePurchaseInvoiceScreen() {
         </ScrollView>
 
         <View style={[s.footer,{paddingBottom:Math.max(insets.bottom,12)}]}>
-          <TouchableOpacity style={s.draftBtn} onPress={()=>handleSubmit(true)} activeOpacity={0.7}>
+          <TouchableOpacity style={[s.draftBtn,submitting&&{opacity:0.5}]} onPress={()=>handleSubmit(true)} activeOpacity={0.7} disabled={submitting}>
             <Text style={s.draftTxt}>Save Draft</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.submitBtn} onPress={()=>handleSubmit(false)} activeOpacity={0.7}>
-            <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />
-            <Text style={s.submitTxt}>Submit Invoice</Text>
+          <TouchableOpacity style={[s.submitBtn,submitting&&{opacity:0.6}]} onPress={()=>handleSubmit(false)} activeOpacity={0.7} disabled={submitting}>
+            {submitting?<ActivityIndicator size="small" color={COLORS.white}/>:<Ionicons name="checkmark-circle" size={18} color={COLORS.white}/>}
+            <Text style={s.submitTxt}>{submitting?'Submitting...':'Submit Invoice'}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

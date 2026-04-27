@@ -16,7 +16,7 @@ import { toastConfig } from '../src/utils/toastConfig';
 SplashScreen.preventAutoHideAsync();
 
 function RootNavigation() {
-  const { isAuthenticated, isLoading, company, setCompany, setIsPaired, user, signIn } = useAuth();
+  const { isAuthenticated, isLoading, company, setCompany, setIsPaired, setUser, user, signIn } = useAuth();
   const router = useRouter();
   const segments = useSegments();
 
@@ -26,7 +26,8 @@ function RootNavigation() {
     getMe().then((res: any) => {
       const d = res?.data ?? res;
       if (d?.company?.guid) setCompany({ guid: d.company.guid, name: d.company.name, gstin: d.company.gstin });
-      if (d?.is_paired) setIsPaired(true);
+      if (typeof d?.is_paired === 'boolean') setIsPaired(d.is_paired);
+      if (d?.name || d?.phone) setUser({ id: d.id, name: d.name, phone: d.phone, email: d.email, language: d.language });
     }).catch(() => {});
   }, [isAuthenticated, company?.guid]);
 

@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput,
+  KeyboardAvoidingView, Platform, Alert, TextInput, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
+import { createWarehouse } from '../../src/services/api';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 
 interface RackRow { id: string; rack: string; label: string; }
@@ -30,6 +33,8 @@ function ThemedInput({
 export default function CreateWarehouseScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { company, isPaired } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
   const [entryType, setEntryType] = useState<EntryType>('regular');
 
   const [code, setCode] = useState('');
@@ -52,9 +57,25 @@ export default function CreateWarehouseScreen() {
 
   const removeRack = (id: string) => setRacks(prev => prev.filter(r => r.id !== id));
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!name.trim()) { Alert.alert('Required', 'Warehouse name is required.'); return; }
-    Alert.alert('✓ Warehouse Saved', `"${name}" has been created.`, [{ text: 'OK', onPress: () => router.back() }]);
+    if (!isPaired) { Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' }); return; }
+    try {
+      setSubmitting(true);
+      await createWarehouse({
+        company_guid: company?.guid,
+        name, code: code || undefined,
+        address: address || undefined,
+        phone: phone || undefined,
+        email: email || undefined,
+        zip_code: zipCode || undefined,
+        narration: narration || undefined,
+      });
+      Toast.show({ type: 'success', text1: 'Warehouse Created', text2: `"${name}" added to Tally.` });
+      setTimeout(()=>router.back(),1000);
+    } catch(err:any) {
+      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message||'Could not create warehouse.' });
+    } finally { setSubmitting(false); }
   };
 
   return (
@@ -155,8 +176,9 @@ export default function CreateWarehouseScreen() {
         </ScrollView>
 
         <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-          <TouchableOpacity style={s.saveBtn} onPress={handleSave} activeOpacity={0.85}>
-            <Text style={s.saveBtnTxt}>Save</Text>
+          <TouchableOpacity style={[s.saveBtn,submitting&&{opacity:0.6}]} onPress={handleSave} activeOpacity={0.85} disabled={submitting}>
+            {submitting&&<ActivityIndicator size="small" color={COLORS.white} style={{marginRight:8}}/>}
+            <Text style={s.saveBtnTxt}>{submitting?'Saving...':'Save'}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

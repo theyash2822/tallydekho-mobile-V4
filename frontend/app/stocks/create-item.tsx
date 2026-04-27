@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput, Modal,
+  KeyboardAvoidingView, Platform, Alert, TextInput, Modal, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
+import { createStockItem } from '../../src/services/api';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import FormDropdown from '../../src/components/forms/FormDropdown';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
@@ -55,6 +57,8 @@ function InrInput({ value, onChange, placeholder }: { value: string; onChange: (
 export default function CreateStockItemScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { company, isPaired } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
   const [entryType, setEntryType] = useState<EntryType>('regular');
 
   const [group, setGroup] = useState('');
@@ -72,14 +76,29 @@ export default function CreateStockItemScreen() {
   const [bcSku, setBcSku] = useState(false);
   const [bcSalePrice, setBcSalePrice] = useState(false);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!productName.trim()) { Alert.alert('Required', 'Product name is required.'); return; }
-    Toast.show({
-      type: 'success',
-      text1: 'Item Saved',
-      text2: `"${productName}" has been added to inventory.`,
-    });
-    setTimeout(() => router.back(), 1000);
+    if (!isPaired) { Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' }); return; }
+    try {
+      setSubmitting(true);
+      await createStockItem({
+        company_guid: company?.guid,
+        name: productName,
+        group: group || undefined,
+        unit: unit || undefined,
+        tax_rate: parseFloat(taxRate) || 0,
+        purchase_price: parseFloat(purchasePrice) || 0,
+        sale_price: parseFloat(salePrice) || 0,
+        opening_qty: parseFloat(quantity) || 0,
+        warehouse: warehouse || undefined,
+        batch_no: batchNo || undefined,
+        expiry_date: expiryDate || undefined,
+      });
+      Toast.show({ type: 'success', text1: 'Item Saved', text2: `"${productName}" added to Tally.` });
+      setTimeout(()=>router.back(),1000);
+    } catch(err:any) {
+      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message||'Could not save item.' });
+    } finally { setSubmitting(false); }
   };
 
   return (
@@ -208,8 +227,9 @@ export default function CreateStockItemScreen() {
         </ScrollView>
 
         <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-          <TouchableOpacity style={s.saveBtn} onPress={handleSave} activeOpacity={0.85}>
-            <Text style={s.saveBtnTxt}>Save</Text>
+          <TouchableOpacity style={[s.saveBtn,submitting&&{opacity:0.6}]} onPress={handleSave} activeOpacity={0.85} disabled={submitting}>
+            {submitting&&<ActivityIndicator size="small" color={COLORS.white} style={{marginRight:8}}/>}
+            <Text style={s.saveBtnTxt}>{submitting?'Saving...':'Save'}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

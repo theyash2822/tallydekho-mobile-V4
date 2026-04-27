@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput, Modal, TextInputProps,
+  KeyboardAvoidingView, Platform, Alert, TextInput, Modal, TextInputProps, ActivityIndicator,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
+import { getParties, getLedgers, createSalesInvoice } from '../../src/services/api';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
@@ -751,6 +753,7 @@ const PAY_MODES: DropdownOption[] = [
 export default function CreateSalesInvoiceScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { company, isPaired } = useAuth();
 
   const [entryType, setEntryType] = useState<EntryType>('regular');
   const [ledger, setLedger] = useState('credit_sales');
@@ -758,6 +761,18 @@ export default function CreateSalesInvoiceScreen() {
   const [date, setDate] = useState(todayStr());
   const [party, setParty] = useState('');
   const [parties, setParties] = useState<DropdownOption[]>(PARTIES);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Load real parties from API
+  useEffect(() => {
+    if (!company?.guid) return;
+    getParties(company.guid).then((res: any) => {
+      const list = res?.data || [];
+      if (list.length > 0) {
+        setParties(list.map((p: any) => ({ label: p.name, value: p.guid || p.id?.toString() || p.name })));
+      }
+    }).catch(() => {});
+  }, [company?.guid]);
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [payTerms, setPayTerms] = useState('due_on_receipt');
   const [customDays, setCustomDays] = useState('');
@@ -806,14 +821,47 @@ export default function CreateSalesInvoiceScreen() {
     return 'partial';
   }, [collectPayNow, payNowAmount, totals.grand]);
 
-  const handleSubmit = useCallback(() => {
-    Toast.show({
-      type: 'success',
-      text1: 'Invoice Submitted',
-      text2: `Invoice ${invoiceNo} submitted successfully.`,
-    });
-    setTimeout(() => router.back(), 1000);
-  }, [invoiceNo, router]);
+  const handleSubmit = useCallback(async (isDraft = false) => {
+    if (!isPaired) {
+      Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' });
+      return;
+    }
+    try {
+      setSubmitting(true);
+      await createSalesInvoice({
+        company_guid: company?.guid,
+        party,
+        date,
+        ledger_account: ledger,
+        payment_terms: payTerms,
+        due_date: dueDate || undefined,
+        ref_no: refNo || undefined,
+        items: items.map(item => ({
+          stock_item: item.product,
+          warehouse: item.warehouse,
+          qty: parseFloat(item.qty) || 0,
+          unit: item.unit,
+          rate: parseFloat(item.rate) || 0,
+          discount: parseFloat(item.disc) || 0,
+          tax_rate: parseFloat(item.taxRate) || 0,
+        })),
+        narration: narration || undefined,
+        terms: termsText || undefined,
+        collect_payment: collectPayNow ? {
+          mode: payNowMode,
+          amount: parseFloat(payNowAmount) || 0,
+          reference: payNowRef || undefined,
+        } : undefined,
+        is_draft: isDraft,
+      });
+      Toast.show({ type: 'success', text1: isDraft ? 'Draft Saved' : 'Invoice Submitted', text2: `Invoice ${invoiceNo} ${isDraft ? 'saved as draft' : 'submitted to Tally'}.` });
+      setTimeout(() => router.back(), 1000);
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message || 'Could not submit. Check Tally connection.' });
+    } finally {
+      setSubmitting(false);
+    }
+  }, [isPaired, company?.guid, party, date, ledger, payTerms, dueDate, refNo, items, narration, termsText, collectPayNow, payNowMode, payNowAmount, payNowRef, invoiceNo, router]);
 
   const closeModal = useCallback(() => setActiveModal(null), []);
 
@@ -1114,12 +1162,12 @@ export default function CreateSalesInvoiceScreen() {
 
         {/* Footer Buttons */}
         <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-          <TouchableOpacity style={s.draftBtn} onPress={() => handleSubmit(true)} activeOpacity={0.7}>
+          <TouchableOpacity style={[s.draftBtn, submitting && { opacity: 0.5 }]} onPress={() => handleSubmit(true)} activeOpacity={0.7} disabled={submitting}>
             <Text style={s.draftTxt}>Save Draft</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.submitBtn} onPress={() => handleSubmit(false)} activeOpacity={0.7}>
-            <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />
-            <Text style={s.submitTxt}>Submit Invoice</Text>
+          <TouchableOpacity style={[s.submitBtn, submitting && { opacity: 0.6 }]} onPress={() => handleSubmit(false)} activeOpacity={0.7} disabled={submitting}>
+            {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />}
+            <Text style={s.submitTxt}>{submitting ? 'Submitting...' : 'Submit Invoice'}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

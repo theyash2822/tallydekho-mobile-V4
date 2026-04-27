@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput, Modal,
+  KeyboardAvoidingView, Platform, Alert, TextInput, Modal, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,8 @@ import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
+import { createPurchaseOrder } from '../../src/services/api';
 import FormField from '../../src/components/forms/FormField';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
@@ -238,10 +240,26 @@ export default function CreatePurchaseOrderScreen() {
     return { gross, discTotal, taxTotal, cgst:taxTotal/2, sgst:taxTotal/2, logisticsTotal, grand };
   },[items,logisticsTotal]);
 
-  const handleSubmit = useCallback((draft:boolean)=>{
-    Toast.show({ type: 'success', text1: draft ? 'Draft Saved' : 'PO Created', text2: draft ? `${poNo} saved as draft.` : `Purchase Order ${poNo} sent to vendor.` });
-    setTimeout(() => router.back(), 1000);
-  },[poNo,router]);
+  const { company, isPaired } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
+  const handleSubmit = useCallback(async (draft:boolean)=>{
+    if (!isPaired) { Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' }); return; }
+    try {
+      setSubmitting(true);
+      await createPurchaseOrder({
+        company_guid: company?.guid, vendor, date,
+        delivery_date: dueDate || undefined,
+        ref_no: refNo || undefined,
+        items: items.map(i=>({ stock_item: i.product, qty: parseFloat(i.qty)||0, rate: parseFloat(i.rate)||0, unit: i.unit, discount: parseFloat(i.disc)||0, tax_rate: parseFloat(i.taxRate)||0 })),
+        narration: narration || undefined,
+        is_draft: draft,
+      });
+      Toast.show({ type: 'success', text1: draft ? 'Draft Saved' : 'PO Created', text2: draft ? `${poNo} saved as draft.` : `Purchase Order ${poNo} sent to Tally.` });
+      setTimeout(()=>router.back(),1000);
+    } catch(err:any) {
+      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message||'Could not submit.' });
+    } finally { setSubmitting(false); }
+  },[isPaired,company?.guid,vendor,date,items,narration,poNo,router]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -321,13 +339,13 @@ export default function CreatePurchaseOrderScreen() {
         </ScrollView>
 
         <View style={[s.footer,{paddingBottom:Math.max(insets.bottom,12)}]}>
-          <TouchableOpacity style={s.draftBtn} onPress={()=>handleSubmit(true)} activeOpacity={0.7}>
+          <TouchableOpacity style={[s.draftBtn,submitting&&{opacity:0.5}]} onPress={()=>handleSubmit(true)} activeOpacity={0.7} disabled={submitting}>
             <Ionicons name="document-outline" size={16} color={COLORS.textSecondary} />
             <Text style={s.draftTxt}>Save Draft</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.submitBtn} onPress={()=>handleSubmit(false)} activeOpacity={0.7}>
-            <Ionicons name="send-outline" size={16} color={COLORS.white} />
-            <Text style={s.submitTxt}>Send to Vendor</Text>
+          <TouchableOpacity style={[s.submitBtn,submitting&&{opacity:0.6}]} onPress={()=>handleSubmit(false)} activeOpacity={0.7} disabled={submitting}>
+            {submitting?<ActivityIndicator size="small" color={COLORS.white}/>:<Ionicons name="send-outline" size={16} color={COLORS.white}/>}
+            <Text style={s.submitTxt}>{submitting?'Submitting...':'Send to Vendor'}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

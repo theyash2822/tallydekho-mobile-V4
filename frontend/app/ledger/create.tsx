@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput, TextInputProps,
+  KeyboardAvoidingView, Platform, Alert, TextInput, TextInputProps, ActivityIndicator,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
+import { createLedger } from '../../src/services/api';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import FormDropdown from '../../src/components/forms/FormDropdown';
 import SearchableDropdown from '../../src/components/forms/SearchableDropdown';
@@ -120,6 +122,8 @@ export default function CreateLedgerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ type?: string }>();
+  const { company, isPaired } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
   const [entryType, setEntryType] = useState<EntryType>('regular');
 
   const lType = (
@@ -173,21 +177,24 @@ export default function CreateLedgerScreen() {
     g.toLowerCase().includes(groupSearch.toLowerCase())
   );
 
-  const handleSave = () => {
-    if (!name.trim()) {
-      Alert.alert('Required', 'Ledger name is required.');
-      return;
-    }
-    if (isDuties && !dutyType) {
-      Alert.alert('Required', 'Please select a duty/tax type.');
-      return;
-    }
-    Toast.show({
-      type: 'success',
-      text1: 'Ledger Created',
-      text2: `"${name}" has been added successfully.`,
-    });
-    setTimeout(() => router.back(), 1200);
+  const handleSave = async () => {
+    if (!name.trim()) { Alert.alert('Required', 'Ledger name is required.'); return; }
+    if (isDuties && !dutyType) { Alert.alert('Required', 'Please select a duty/tax type.'); return; }
+    if (!isPaired) { Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' }); return; }
+    try {
+      setSubmitting(true);
+      await createLedger({
+        company_guid: company?.guid,
+        name, ledger_type: lType,
+        opening_balance: parseFloat(openBalance) || 0,
+        is_credit: isCr,
+        group: cfg.group || groupSearch || undefined,
+      });
+      Toast.show({ type: 'success', text1: 'Ledger Created', text2: `"${name}" added to Tally.` });
+      setTimeout(() => router.back(), 1200);
+    } catch(err:any) {
+      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message||'Could not create ledger.' });
+    } finally { setSubmitting(false); }
   };
 
   return (
@@ -391,8 +398,9 @@ export default function CreateLedgerScreen() {
 
         {/* ── Save Button ── */}
         <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-          <TouchableOpacity style={s.saveBtn} onPress={handleSave} activeOpacity={0.85}>
-            <Text style={s.saveBtnText}>Save Ledger</Text>
+          <TouchableOpacity style={[s.saveBtn,submitting&&{opacity:0.6}]} onPress={handleSave} activeOpacity={0.85} disabled={submitting}>
+            {submitting&&<ActivityIndicator size="small" color={COLORS.white} style={{marginRight:8}}/>}
+            <Text style={s.saveBtnText}>{submitting?'Saving...':'Save Ledger'}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

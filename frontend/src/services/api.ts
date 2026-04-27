@@ -29,13 +29,14 @@ async function request<T>(
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   endpoint: string,
   body?: object,
-  requiresAuth = true
+  requiresAuth = true,
+  basePrefix: 'api' | 'tally' = 'api'
 ): Promise<T> {
   const token = requiresAuth ? await getToken() : null;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE_URL}/api${endpoint}`, {
+  const res = await fetch(`${BASE_URL}/${basePrefix}${endpoint}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
@@ -49,6 +50,7 @@ async function request<T>(
 const get = <T>(endpoint: string, auth = true) => request<T>('GET', endpoint, undefined, auth);
 const post = <T>(endpoint: string, body: object, auth = true) => request<T>('POST', endpoint, body, auth);
 const patch = <T>(endpoint: string, body: object) => request<T>('PATCH', endpoint, body);
+const tallyPost = <T>(endpoint: string, body: object) => request<T>('POST', endpoint, body, true, 'tally');
 
 // Helper: append companyGuid to query string
 const withCompany = (endpoint: string, companyGuid?: string, extra?: Record<string, string>) => {
@@ -177,11 +179,11 @@ export const getDeliveryNotes = (companyGuid?: string, params?: any) =>
 export const getEWayBills = (companyGuid?: string, params?: any) =>
   withFallback(() => get(withCompany('/sales/ewaybills', companyGuid, params)), { data: [], meta: { total: 0 } });
 
-export const createSalesInvoice = (payload: any) => post('/sales/invoices', payload);
-export const createSalesOrder = (payload: any) => post('/sales/orders', payload);
-export const createQuotation = (payload: any) => post('/sales/quotations', payload);
-export const createCreditNote = (payload: any) => post('/sales/credit-notes', payload);
-export const createDeliveryNote = (payload: any) => post('/sales/delivery-notes', payload);
+export const createSalesInvoice = (payload: any) => tallyPost('/voucher/sales', payload);
+export const createSalesOrder = (payload: any) => tallyPost('/voucher/sales-order', payload);
+export const createQuotation = (payload: any) => tallyPost('/voucher/sales-order', payload);
+export const createCreditNote = (payload: any) => tallyPost('/voucher/credit-note', payload);
+export const createDeliveryNote = (payload: any) => tallyPost('/voucher/delivery-note', payload);
 
 // ══════════════════════════════════════════════════════════════
 // PURCHASE
@@ -196,9 +198,9 @@ export const getPurchaseOrders = (companyGuid?: string, params?: any) =>
 export const getDebitNotes = (companyGuid?: string, params?: any) =>
   withFallback(() => get(withCompany('/purchase/debit-notes', companyGuid, params)), { data: [], meta: { total: 0 } });
 
-export const createPurchaseInvoice = (payload: any) => post('/purchase/invoices', payload);
-export const createPurchaseOrder = (payload: any) => post('/purchase/orders', payload);
-export const createDebitNote = (payload: any) => post('/purchase/debit-notes', payload);
+export const createPurchaseInvoice = (payload: any) => tallyPost('/voucher/purchase', payload);
+export const createPurchaseOrder = (payload: any) => tallyPost('/voucher/purchase-order', payload);
+export const createDebitNote = (payload: any) => tallyPost('/voucher/debit-note', payload);
 
 // ══════════════════════════════════════════════════════════════
 // VOUCHERS
@@ -207,10 +209,10 @@ export const createDebitNote = (payload: any) => post('/purchase/debit-notes', p
 export const getVouchers = (companyGuid?: string, type?: string, params?: any) =>
   withFallback(() => get(withCompany('/vouchers', companyGuid, { ...(type ? { type } : {}), ...params })), { data: [], meta: { total: 0 } });
 
-export const createPaymentVoucher = (payload: any) => post('/vouchers/payment', payload);
-export const createReceiptVoucher = (payload: any) => post('/vouchers/receipt', payload);
-export const createJournalVoucher = (payload: any) => post('/vouchers/journal', payload);
-export const createContraVoucher = (payload: any) => post('/vouchers/contra', payload);
+export const createPaymentVoucher = (payload: any) => tallyPost('/voucher/payment', payload);
+export const createReceiptVoucher = (payload: any) => tallyPost('/voucher/receipt', payload);
+export const createJournalVoucher = (payload: any) => tallyPost('/voucher/journal', payload);
+export const createContraVoucher = (payload: any) => tallyPost('/voucher/contra', payload);
 
 // ══════════════════════════════════════════════════════════════
 // LEDGERS
@@ -222,7 +224,7 @@ export const getLedgers = (companyGuid?: string, params?: { group?: string; natu
 export const getLedgerDetail = (companyGuid?: string, id?: string, params?: { from?: string; to?: string }) =>
   withFallback(() => get(withCompany(`/ledgers/${id}`, companyGuid, params)), null);
 
-export const createLedger = (payload: any) => post('/ledgers', payload);
+export const createLedger = (payload: any) => tallyPost('/master/party', payload);
 
 // ══════════════════════════════════════════════════════════════
 // STOCKS
@@ -240,10 +242,12 @@ export const getWarehouses = (companyGuid?: string) =>
 export const getParties = (companyGuid?: string, params?: { search?: string; type?: string }) =>
   withFallback(() => get(withCompany('/parties', companyGuid, params)), { data: [] });
 
-export const createStockItem = (payload: any) => post('/stocks/items', payload);
-export const createWarehouse = (payload: any) => post('/stocks/warehouses', payload);
-export const createStockAdjustment = (payload: any) => post('/stocks/adjustments', payload);
-export const createStockTransfer = (payload: any) => post('/stocks/transfers', payload);
+export const createStockItem = (payload: any) => tallyPost('/master/stock-item', payload);
+export const createWarehouse = (payload: any) => tallyPost('/master/warehouse', payload);
+export const createStockAdjustment = (payload: any) => tallyPost('/voucher/sales', payload); // TODO: map to correct tally endpoint
+export const createStockTransfer = (payload: any) => tallyPost('/voucher/sales', payload); // TODO: map to correct tally endpoint
+export const cancelVoucher = (payload: any) => tallyPost('/voucher/cancel', payload);
+export const createParty = (payload: any) => tallyPost('/master/party', payload);
 
 // ══════════════════════════════════════════════════════════════
 // REPORTS
@@ -332,3 +336,15 @@ export const getCompanyCapabilities = (companyGuid?: string) =>
   withFallback(() => get(withCompany('/company/capabilities', companyGuid)), {
     data: { country: 'IN', features: { gst: true, einvoice: true, ewaybill: true, tds: true, multi_currency: false, tally_sync: true } }
   });
+
+// ══════════════════════════════════════════════════════════════
+// AUDIT TRAIL + SEARCH
+// ══════════════════════════════════════════════════════════════
+
+export const getAuditTrail = (companyGuid?: string) =>
+  withFallback(() => get(withCompany('/audit-trail', companyGuid)), { data: [] });
+
+export const retryAuditEntry = (id: string) =>
+  withFallback(() => post(`/audit-trail/${id}/retry`, {}), {});
+
+// searchDashboard already declared above

@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput, Modal,
+  KeyboardAvoidingView, Platform, Alert, TextInput, Modal, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,8 @@ import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
+import { getParties, createSalesOrder } from '../../src/services/api';
 import FormField from '../../src/components/forms/FormField';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
@@ -241,6 +243,7 @@ function DateInput({ label, value, onChange, required, title }: {
 export default function CreateSalesOrderScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { company, isPaired } = useAuth();
   const [entryType, setEntryType] = useState<EntryType>('regular');
   const [orderNo] = useState('SO-00246');
   const [date, setDate] = useState(todayStr());
@@ -248,6 +251,14 @@ export default function CreateSalesOrderScreen() {
   const [ledger, setLedger] = useState('sales');
   const [party, setParty] = useState('');
   const [refNo, setRefNo] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!company?.guid) return;
+    getParties(company.guid).then((res: any) => {
+      // parties loaded for future searchable dropdown enhancement
+    }).catch(() => {});
+  }, [company?.guid]);
   const [items, setItems] = useState<OItem[]>([newItem()]);
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
   const [logTaxRate, setLogTaxRate] = useState('0');
@@ -270,10 +281,22 @@ export default function CreateSalesOrderScreen() {
 
   const closeModal = useCallback(() => setActiveModal(null), []);
 
-  const handleSubmit = useCallback(() => {
-    Toast.show({ type: 'success', text1: 'Order Created', text2: `Sales Order ${orderNo} created successfully.` });
-    setTimeout(() => router.back(), 1000);
-  }, [orderNo, router]);
+  const handleSubmit = useCallback(async () => {
+    if (!isPaired) { Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' }); return; }
+    try {
+      setSubmitting(true);
+      await createSalesOrder({
+        company_guid: company?.guid,
+        party, date, due_date: dueDate || undefined, ledger_account: ledger, ref_no: refNo || undefined,
+        items: items.map(i => ({ stock_item: i.product, qty: parseFloat(i.qty)||0, rate: parseFloat(i.rate)||0, unit: i.unit, discount: parseFloat(i.disc)||0, tax_rate: parseFloat(i.taxRate)||0 })),
+        narration: narration || undefined,
+      });
+      Toast.show({ type: 'success', text1: 'Order Created', text2: `Sales Order ${orderNo} created in Tally.` });
+      setTimeout(() => router.back(), 1000);
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message || 'Could not submit.' });
+    } finally { setSubmitting(false); }
+  }, [isPaired, company?.guid, party, date, dueDate, ledger, refNo, items, narration, orderNo, router]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -367,9 +390,9 @@ export default function CreateSalesOrderScreen() {
         </ScrollView>
 
         <View style={[s.footer,{paddingBottom:Math.max(insets.bottom,12)}]}>
-          <TouchableOpacity style={s.submitBtn} onPress={handleSubmit} activeOpacity={0.7}>
-            <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />
-            <Text style={s.submitTxt}>Create Sales Order</Text>
+          <TouchableOpacity style={[s.submitBtn, submitting && {opacity:0.6}]} onPress={handleSubmit} activeOpacity={0.7} disabled={submitting}>
+            {submitting ? <ActivityIndicator size="small" color={COLORS.white}/> : <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />}
+            <Text style={s.submitTxt}>{submitting ? 'Submitting...' : 'Create Sales Order'}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
