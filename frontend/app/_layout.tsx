@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
+import { getMe } from '../src/services/api';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
@@ -15,9 +16,19 @@ import { toastConfig } from '../src/utils/toastConfig';
 SplashScreen.preventAutoHideAsync();
 
 function RootNavigation() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, company, setCompany, setIsPaired, user, signIn } = useAuth();
   const router = useRouter();
   const segments = useSegments();
+
+  // Bootstrap: if authenticated but no company, fetch /api/auth/me to restore state
+  useEffect(() => {
+    if (!isAuthenticated || company?.guid) return;
+    getMe().then((res: any) => {
+      const d = res?.data ?? res;
+      if (d?.company?.guid) setCompany({ guid: d.company.guid, name: d.company.name, gstin: d.company.gstin });
+      if (d?.is_paired) setIsPaired(true);
+    }).catch(() => {});
+  }, [isAuthenticated, company?.guid]);
 
   useEffect(() => {
     if (isLoading) return;
