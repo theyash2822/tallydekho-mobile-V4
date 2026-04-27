@@ -73,7 +73,7 @@ export default function StockSettingsScreen() {
   // ── General
   const [reorderBuffer, setReorderBuffer] = useState('7');
   const [archiveLedger, setArchiveLedger]  = useState('24');
-  const [defaultUom, setDefaultUom]        = useState('Pieces');
+  const [defaultUom, setDefaultUom]        = useState<string[]>(['Pieces']);
   const [uomOpen, setUomOpen]              = useState(false);
 
   // ── Warehouse
@@ -103,7 +103,15 @@ export default function StockSettingsScreen() {
   // ─── Helpers ────────────────────────────────────────────────────────────────
   const toggleSection = (key: keyof typeof openSections) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
+    setOpenSections(prev => {
+      const isCurrentlyOpen = prev[key];
+      // Close all, then open the tapped one only if it was closed
+      const allClosed = (Object.keys(prev) as (keyof typeof openSections)[]).reduce(
+        (acc, k) => ({ ...acc, [k]: false }),
+        {} as typeof openSections,
+      );
+      return { ...allClosed, [key]: !isCurrentlyOpen };
+    });
   };
 
   const toggleWh = (id: string) => {
@@ -190,6 +198,11 @@ export default function StockSettingsScreen() {
   // ─── JSX ───────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={0}
+      >
       {/* ── Header */}
       <View style={s.header}>
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
@@ -204,6 +217,7 @@ export default function StockSettingsScreen() {
         contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
       >
 
         {/* ══════════════════════════════════════════════
@@ -254,28 +268,41 @@ export default function StockSettingsScreen() {
 
               <View style={s.divider} />
 
-              {/* Default UoM */}
-              <TouchableOpacity style={s.fieldRow} onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setUomOpen(v => !v); }} activeOpacity={0.7}>
+              {/* Default UoM — multi-select */}
+              <TouchableOpacity
+                style={s.fieldRow}
+                onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setUomOpen(v => !v); }}
+                activeOpacity={0.7}
+              >
                 <Text style={s.fieldLabel}>Default UoM</Text>
                 <View style={s.dropdownTrigger}>
-                  <Text style={s.dropdownValue}>{defaultUom}</Text>
+                  <Text style={s.dropdownValue}>
+                    {defaultUom.length === 0 ? 'None' : defaultUom.length === 1 ? defaultUom[0] : `${defaultUom.length} selected`}
+                  </Text>
                   <Ionicons name={uomOpen ? 'chevron-up' : 'chevron-down'} size={14} color={COLORS.textTertiary} />
                 </View>
               </TouchableOpacity>
 
               {uomOpen && (
                 <View style={s.uomList}>
-                  {UOM_OPTIONS.map(uom => (
-                    <TouchableOpacity
-                      key={uom}
-                      style={s.uomRow}
-                      onPress={() => { setDefaultUom(uom); setUomOpen(false); }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[s.uomText, defaultUom === uom && s.uomTextActive]}>{uom}</Text>
-                      {defaultUom === uom && <Ionicons name="checkmark" size={16} color={AMBER} />}
-                    </TouchableOpacity>
-                  ))}
+                  {UOM_OPTIONS.map(uom => {
+                    const selected = defaultUom.includes(uom);
+                    return (
+                      <TouchableOpacity
+                        key={uom}
+                        style={s.uomRow}
+                        onPress={() => {
+                          setDefaultUom(prev =>
+                            prev.includes(uom) ? prev.filter(u => u !== uom) : [...prev, uom]
+                          );
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[s.uomText, selected && s.uomTextActive]}>{uom}</Text>
+                        {selected && <Ionicons name="checkmark" size={16} color={AMBER} />}
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               )}
             </View>
@@ -542,6 +569,7 @@ export default function StockSettingsScreen() {
           <Text style={s.saveBtnText}>Save</Text>
         </TouchableOpacity>
       </View>
+      </KeyboardAvoidingView>
 
       {/* ══════════════════════════════════════════════
           ADD WAREHOUSE BOTTOM SHEET MODAL
@@ -737,7 +765,7 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.cardBg,
     borderRadius: RADIUS.lg,
     borderWidth: 1, borderColor: COLORS.borderDefault,
-    overflow: 'hidden',
+    // overflow: 'hidden' removed — causes Android LayoutAnimation rendering glitches
   },
   cardGap: { marginTop: SPACING.sm },
 

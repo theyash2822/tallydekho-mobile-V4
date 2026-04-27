@@ -318,7 +318,7 @@ export default function ExpiryScheduleScreen() {
       <Modal visible={showFilter} transparent animationType="slide" onRequestClose={() => setShowFilter(false)}>
         <View style={s.modalOverlay}>
           <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowFilter(false)} activeOpacity={1} />
-          <View style={[s.modalSheet, { paddingBottom: insets.bottom + 16 }]}>
+          <View style={[s.modalSheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
             <View style={s.modalHandle} />
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>Filter</Text>

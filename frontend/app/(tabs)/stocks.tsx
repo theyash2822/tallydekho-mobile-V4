@@ -63,14 +63,6 @@ const WIDGET_TILES = [
       { label: 'Items', value: String(d.fastMovingCount) },
     ],
   },
-  {
-    id: 'reorder', title: 'Reorder Queue',
-    icon: 'reload-circle-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
-    route: '/stocks/reorder-queue',
-    getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
-      { label: 'Items', value: String(d.reorderQueueCount) },
-    ],
-  },
 ];
 
 export default function StocksDashboard() {
