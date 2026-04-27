@@ -171,6 +171,7 @@ export default function LanguageRegionScreen() {
   const [timezone,   setTimezone]   = useState('UTC+05:30 · Asia/Kolkata');
   const [weekday,    setWeekday]    = useState('Monday');
   const [picker,     setPicker]     = useState<ActivePicker>(null);
+  const [isDirty,    setIsDirty]    = useState(false);
 
   const langObj   = LANGUAGES.find(l => l.value === lang);
   const tzOptions = COUNTRY_TZ[country] || [];
@@ -256,15 +257,15 @@ export default function LanguageRegionScreen() {
 
         {/* ── Save ── */}
         {isDirty && (
-        <TouchableOpacity style={s.saveBtn} onPress={() => { handleSave(); setIsDirty(false); }} activeOpacity={0.85}>
-          <Text style={s.saveTxt}>Save Changes</Text>
-        </TouchableOpacity>
+          <TouchableOpacity style={s.saveBtn} onPress={() => { handleSave(); setIsDirty(false); }} activeOpacity={0.85}>
+            <Text style={s.saveTxt}>Save Changes</Text>
+          </TouchableOpacity>
         )}
 
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* ── Bottom Sheet Pickers (siblings at root, never nested) ── */}
+      {/* ── Bottom Sheet Pickers ── */}
       <PickerSheet
         visible={picker === 'language'}
         title="Select Language"

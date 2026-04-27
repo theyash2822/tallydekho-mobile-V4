@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import ShimmerPlaceholder, { KPICardSkeleton, MetricCardSkeleton, ActivityRowSkeleton, CardSkeleton } from '../../src/components/ShimmerPlaceholder';
 
 const { width: SW } = Dimensions.get('window');
 import Header from '../../src/components/Header';
@@ -102,6 +103,8 @@ export default function HomeScreen() {
   }, [checkPaired]);
 
   // ── Data loading ─────────────────────────────────────────────────────────
+  const [isLoading, setIsLoading] = useState(true);
+
   const handleFYChange = useCallback((fy: string) => {
     setActiveFY(fy);
     const fyData = FY_DASHBOARD[fy] || FY_DASHBOARD['FY 2025-26'];
@@ -111,18 +114,23 @@ export default function HomeScreen() {
   }, []);
 
   const loadData = useCallback(async () => {
-    const [kpi, met, cf, act] = await Promise.all([
-      getKPIStrip(activeFilter),
-      getMetrics(activeFilter),
-      getCashflow(activeFilter),
-      getRecentActivity(),
-    ]);
-    if (activeFY === 'FY 2025-26') {
-      setKpiData(kpi as any);
-      setMetrics(met as any);
-      setCashflow(cf as any);
+    setIsLoading(true);
+    try {
+      const [kpi, met, cf, act] = await Promise.all([
+        getKPIStrip(activeFilter),
+        getMetrics(activeFilter),
+        getCashflow(activeFilter),
+        getRecentActivity(),
+      ]);
+      if (activeFY === 'FY 2025-26') {
+        setKpiData(kpi as any);
+        setMetrics(met as any);
+        setCashflow(cf as any);
+      }
+      setActivity(act as any);
+    } finally {
+      setIsLoading(false);
     }
-    setActivity(act as any);
   }, [activeFilter, activeFY]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -280,28 +288,36 @@ export default function HomeScreen() {
 
         {/* KPI Carousel */}
         <View style={styles.kpiSection}>
-          <FlatList
-            ref={kpiRef}
-            horizontal
-            pagingEnabled
-            data={kpiData}
-            keyExtractor={i => i.id}
-            renderItem={renderKPI}
-            showsHorizontalScrollIndicator={false}
-            getItemLayout={(_, index) => ({ length: SW, offset: SW * index, index })}
-            onScrollToIndexFailed={() => {}}
-            onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
-              const idx = Math.round(e.nativeEvent.contentOffset.x / SW);
-              setKpiIdx(idx);
-            }}
-            contentContainerStyle={styles.kpiList}
-          />
+          {isLoading ? (
+            <View style={{ flexDirection: 'row', paddingHorizontal: SPACING.md, gap: 12 }}>
+              {[0, 1, 2].map(i => <KPICardSkeleton key={i} />)}
+            </View>
+          ) : (
+            <FlatList
+              ref={kpiRef}
+              horizontal
+              pagingEnabled
+              data={kpiData}
+              keyExtractor={i => i.id}
+              renderItem={renderKPI}
+              showsHorizontalScrollIndicator={false}
+              getItemLayout={(_, index) => ({ length: SW, offset: SW * index, index })}
+              onScrollToIndexFailed={() => {}}
+              onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
+                const idx = Math.round(e.nativeEvent.contentOffset.x / SW);
+                setKpiIdx(idx);
+              }}
+              contentContainerStyle={styles.kpiList}
+            />
+          )}
           {/* Dot Indicators */}
-          <View style={styles.kpiDots}>
-            {kpiData.map((_, i) => (
-              <View key={i} style={[styles.kpiDot, i === kpiIdx && styles.kpiDotActive]} />
-            ))}
-          </View>
+          {!isLoading && (
+            <View style={styles.kpiDots}>
+              {kpiData.map((_, i) => (
+                <View key={i} style={[styles.kpiDot, i === kpiIdx && styles.kpiDotActive]} />
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Time Filters */}
@@ -325,50 +341,77 @@ export default function HomeScreen() {
 
         {/* Metrics Card */}
         <View style={styles.metricsCard}>
-          {metrics.map((item, idx) => (
-            <View key={item.id}>
-              <TouchableOpacity
-                testID={`metric-row-${item.id}`}
-                style={styles.metricRow}
-                activeOpacity={0.7}
-                onPress={() => (item as any).route && router.push((item as any).route)}
-              >
-                <View style={styles.metricLeft}>
-                  <View style={styles.metricIconBox}>
-                    <Ionicons name={item.icon as any} size={18} color={COLORS.textSecondary} />
+          {isLoading ? (
+            <>
+              {[0, 1, 2, 3].map(i => (
+                <View key={i}>
+                  <View style={[styles.metricRow, { gap: 12 }]}>
+                    <ShimmerPlaceholder width={32} height={32} borderRadius={8} />
+                    <View style={{ flex: 1, gap: 6 }}>
+                      <ShimmerPlaceholder width="55%" height={11} borderRadius={5} />
+                      <ShimmerPlaceholder width="75%" height={14} borderRadius={6} />
+                    </View>
+                    <ShimmerPlaceholder width={64} height={20} borderRadius={8} />
                   </View>
-                  <Text style={styles.metricLabel}>{item.label}</Text>
+                  {i < 3 && <View style={styles.metricSep} />}
                 </View>
-                <View style={styles.metricRight}>
-                  <Text style={styles.metricAmount}>{item.amount}</Text>
-                  <View style={[
-                    styles.changeBadge,
-                    { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg }
-                  ]}>
-                    <Ionicons
-                      name={item.positive ? 'trending-up' : 'trending-down'}
-                      size={11}
-                      color={item.positive ? COLORS.positive : COLORS.negative}
-                    />
-                    <Text style={[
-                      styles.changeText,
-                      { color: item.positive ? COLORS.positive : COLORS.negative }
+              ))}
+            </>
+          ) : (
+            metrics.map((item, idx) => (
+              <View key={item.id}>
+                <TouchableOpacity
+                  testID={`metric-row-${item.id}`}
+                  style={styles.metricRow}
+                  activeOpacity={0.7}
+                  onPress={() => (item as any).route && router.push((item as any).route)}
+                >
+                  <View style={styles.metricLeft}>
+                    <View style={styles.metricIconBox}>
+                      <Ionicons name={item.icon as any} size={18} color={COLORS.textSecondary} />
+                    </View>
+                    <Text style={styles.metricLabel}>{item.label}</Text>
+                  </View>
+                  <View style={styles.metricRight}>
+                    <Text style={styles.metricAmount}>{item.amount}</Text>
+                    <View style={[
+                      styles.changeBadge,
+                      { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg }
                     ]}>
-                      {item.change}%
-                    </Text>
+                      <Ionicons
+                        name={item.positive ? 'trending-up' : 'trending-down'}
+                        size={11}
+                        color={item.positive ? COLORS.positive : COLORS.negative}
+                      />
+                      <Text style={[
+                        styles.changeText,
+                        { color: item.positive ? COLORS.positive : COLORS.negative }
+                      ]}>
+                        {item.change}%
+                      </Text>
+                    </View>
                   </View>
-                </View>
-              </TouchableOpacity>
-              {idx < metrics.length - 1 && <View style={styles.metricSep} />}
-            </View>
-          ))}
+                </TouchableOpacity>
+                {idx < metrics.length - 1 && <View style={styles.metricSep} />}
+              </View>
+            ))
+          )}
         </View>
 
         {/* Cashflow Card */}
-        <CashflowCard {...cashflow} />
+        {isLoading
+          ? <CardSkeleton height={200} />
+          : <CashflowCard {...cashflow} />
+        }
 
         {/* Recent Activity — filtered when searching */}
-        <RecentActivity activities={isSearching ? filteredActivity : activity} />
+        {isLoading ? (
+          <View style={styles.metricsCard}>
+            {[0, 1, 2, 3, 4].map(i => <ActivityRowSkeleton key={i} />)}
+          </View>
+        ) : (
+          <RecentActivity activities={isSearching ? filteredActivity : activity} />
+        )}
 
         {isSearching && filteredActivity.length === 0 && (
           <View style={styles.emptySearch}>

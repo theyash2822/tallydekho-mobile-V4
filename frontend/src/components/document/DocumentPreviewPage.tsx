@@ -47,7 +47,11 @@ function DocNavBar({ title, onBack }: { title: string; onBack: () => void }) {
 // DocHeader — company letterhead + document type badge + number + date
 // ─────────────────────────────────────────────────────────────────────────────
 function DocHeader({ doc }: { doc: VoucherDocument }) {
-  const cfg = DOC_TYPE_CONFIG[doc.documentType];
+  const cfg = DOC_TYPE_CONFIG[doc.documentType] ?? {
+    label: String(doc.documentType).replace(/_/g, ' '),
+    color: '#374151',
+    bg: '#F3F4F6',
+  };
   return (
     <View style={ds.card}>
       {/* Document type badge */}

@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Modal, Animated,
+  Modal, Animated, Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { MOCK_USER } from '../../src/data/mockData';
@@ -19,6 +20,9 @@ interface SubItem {
   route?: string;
   badge?: string;
   badgeColor?: string;
+  /** If set, renders a Switch instead of chevron; value stored in AsyncStorage */
+  toggleKey?: string;
+  toggleDefault?: boolean;
 }
 
 interface Section {
@@ -47,6 +51,7 @@ const SECTIONS: Section[] = [
       { id: 'language', label: 'Language & Region', icon: 'language-outline', route: '/settings/language' },
       { id: 'currency', label: 'Currency & Number Format', icon: 'cash-outline', route: '/settings/currency' },
       { id: 'voucher', label: 'Voucher Configuration', icon: 'document-text-outline', route: '/settings/voucher-config' },
+      { id: 'kpi_scroll', label: 'KPI Auto-Scroll', icon: 'play-circle-outline', toggleKey: 'autoScrollCarousel', toggleDefault: true },
     ],
   },
   {
@@ -186,10 +191,31 @@ export default function SettingsScreen() {
   const { signOut } = useAuth();
   const [expanded, setExpanded] = useState<SectionId | null>('account');
   const [showLogoutSheet, setShowLogoutSheet] = useState(false);
+  // Stores all toggle values keyed by toggleKey
+  const [toggles, setToggles] = useState<Record<string, boolean>>({});
+
+  // Load all toggle defaults + persisted values from AsyncStorage on mount
+  useEffect(() => {
+    const keys: { key: string; def: boolean }[] = [];
+    SECTIONS.forEach(s => s.subItems.forEach(item => {
+      if (item.toggleKey) keys.push({ key: item.toggleKey, def: item.toggleDefault ?? true });
+    }));
+    Promise.all(keys.map(({ key, def }) =>
+      AsyncStorage.getItem(key).then(val => ({ key, value: val === null ? def : val !== 'false' }))
+    )).then(results => {
+      const map: Record<string, boolean> = {};
+      results.forEach(r => { map[r.key] = r.value; });
+      setToggles(map);
+    });
+  }, []);
 
   const toggle = (id: SectionId) => setExpanded(prev => prev === id ? null : id);
-
   const handleLogout = () => setShowLogoutSheet(true);
+
+  const handleToggle = (toggleKey: string, value: boolean) => {
+    setToggles(prev => ({ ...prev, [toggleKey]: value }));
+    AsyncStorage.setItem(toggleKey, String(value));
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -203,7 +229,7 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Profile mini card — static display only; edit via Account & Organization → Profile */}
+        {/* Profile mini card */}
         <View style={styles.profileCard}>
           <View style={styles.avatarLarge}>
             <Text style={styles.avatarLargeText}>{MOCK_USER.name[0]}</Text>
@@ -240,29 +266,46 @@ export default function SettingsScreen() {
                 {/* Sub-items */}
                 {isOpen && (
                   <View style={styles.subItems}>
-                    {section.subItems.map((sub, idx) => (
-                      <TouchableOpacity
-                        key={sub.id}
-                        style={[styles.subItem, idx < section.subItems.length - 1 && styles.subItemBorder]}
-                        onPress={() => sub.route ? router.push(sub.route as any) : {}}
-                        activeOpacity={0.75}
-                      >
-                        <View style={styles.subLeft}>
-                          <View style={styles.subIconBox}>
-                            <Ionicons name={sub.icon as any} size={16} color={COLORS.textSecondary} />
-                          </View>
-                          <Text style={styles.subLabel}>{sub.label}</Text>
-                        </View>
-                        <View style={styles.subRight}>
-                          {sub.badge && (
-                            <View style={[styles.badge, { backgroundColor: sub.badgeColor + '20' }]}>
-                              <Text style={[styles.badgeText, { color: sub.badgeColor }]}>{sub.badge}</Text>
+                    {section.subItems.map((sub, idx) => {
+                      const isToggleItem = !!sub.toggleKey;
+                      const toggleVal = sub.toggleKey ? (toggles[sub.toggleKey] ?? sub.toggleDefault ?? true) : false;
+                      return (
+                        <TouchableOpacity
+                          key={sub.id}
+                          style={[styles.subItem, idx < section.subItems.length - 1 && styles.subItemBorder]}
+                          onPress={() => {
+                            if (isToggleItem && sub.toggleKey) handleToggle(sub.toggleKey, !toggleVal);
+                            else if (sub.route) router.push(sub.route as any);
+                          }}
+                          activeOpacity={isToggleItem ? 1 : 0.75}
+                        >
+                          <View style={styles.subLeft}>
+                            <View style={styles.subIconBox}>
+                              <Ionicons name={sub.icon as any} size={16} color={COLORS.textSecondary} />
                             </View>
-                          )}
-                          <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
-                        </View>
-                      </TouchableOpacity>
-                    ))}
+                            <Text style={styles.subLabel}>{sub.label}</Text>
+                          </View>
+                          <View style={styles.subRight}>
+                            {sub.badge && (
+                              <View style={[styles.badge, { backgroundColor: sub.badgeColor + '20' }]}>
+                                <Text style={[styles.badgeText, { color: sub.badgeColor }]}>{sub.badge}</Text>
+                              </View>
+                            )}
+                            {isToggleItem ? (
+                              <Switch
+                                value={toggleVal}
+                                onValueChange={v => sub.toggleKey && handleToggle(sub.toggleKey, v)}
+                                trackColor={{ false: COLORS.borderStrong, true: COLORS.brandPrimary }}
+                                thumbColor={COLORS.white}
+                                style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
+                              />
+                            ) : (
+                              <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
+                            )}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
                 )}
               </View>

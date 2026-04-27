@@ -13,6 +13,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { getLedgers } from '../../src/services/api';
 import { MOCK_LEDGERS } from '../../src/data/mockData';
 import FilterBottomSheet, { FilterRadioRow } from '../../src/components/FilterBottomSheet';
+import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 
 type FilterType = 'All' | 'Debit' | 'Credit';
 type NatureType = 'All' | 'Assets' | 'Liabilities' | 'Income' | 'Expense';
@@ -449,7 +450,14 @@ export default function LedgerScreen() {
     }
   };
 
-  useEffect(() => { getLedgers().then((d: any) => setData(d)); }, []);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    setIsLoading(true);
+    getLedgers()
+      .then((d: any) => setData(d))
+      .finally(() => setIsLoading(false));
+  }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -696,7 +704,9 @@ export default function LedgerScreen() {
         }
       >
         <View style={styles.list}>
-          {filtered.map(item => {
+          {isLoading
+            ? Array.from({ length: 8 }).map((_, i) => <LedgerRowSkeleton key={i} />)
+            : filtered.map(item => {
             const hasPhone = !!(item.phone);
             const isSelected = selected.includes(item.id);
 

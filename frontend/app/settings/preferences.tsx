@@ -282,21 +282,6 @@ export default function PreferencesScreen() {
           />
         </View>
 
-        {/* ─── Home Screen ───────────────────────────────────── */}
-        <SectionHeader icon="home-outline" title="Home Screen" color="#9333EA" bg="#F5F3FF" />
-        <View style={s.card}>
-          <ToggleRow
-            icon="play-circle-outline"
-            label="Auto-Scroll Carousel"
-            sub="KPI cards slide automatically every 4s"
-            value={autoScrollCarousel}
-            onChange={v => {
-              setAutoScrollCarousel(v);
-              AsyncStorage.setItem('autoScrollCarousel', String(v));
-              markDirty();
-            }}
-          />
-        </View>
 
         <View style={{ height: 40 }} />
       </ScrollView>
