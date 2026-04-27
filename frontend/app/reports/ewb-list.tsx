@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Share, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import { useAuth } from '../../src/context/AuthContext';
+import { getEWBList } from '../../src/services/api';
 
 // ── Mock Data ───────────────────────────────────────────────────────────────
-const EWB_LIST = [
+const ewbData = [
   { id: 'e1',  ewbNo: 'EWB-220081', type: 'Outward', party: 'Netaji Industries',  route: 'Mumbai → Delhi',      date: '25 July 2025', amount: '3,60,000', status: 'Active'   },
   { id: 'e2',  ewbNo: 'EWB-220080', type: 'Outward', party: 'ABC Corporation',    route: 'Delhi → Bangalore',   date: '24 July 2025', amount: '2,80,000', status: 'Expiring' },
   { id: 'e3',  ewbNo: 'EWB-220079', type: 'Inward',  party: 'XYZ Limited',        route: 'Chennai → Mumbai',    date: '23 July 2025', amount: '1,95,000', status: 'Active'   },
@@ -30,10 +32,33 @@ const STATUS_CFG: Record<string, { bg: string; text: string }> = {
 export default function EWBListScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { company } = useAuth();
+  const [ewbData, setEwbData] = useState(ewbData);
+  const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [fromDate, setFromDate] = useState('01/07/25');
   const [toDate,   setToDate]   = useState('31/07/25');
+
+  useEffect(() => {
+    if (!company?.guid) return;
+    setLoading(true);
+    getEWBList(company.guid).then((res: any) => {
+      const list = res?.data || [];
+      if (list.length > 0) {
+        setEwbData(list.map((item: any, idx: number) => ({
+          id: item.id?.toString() || `e${idx}`,
+          ewbNo: item.ewb_no || item.voucher_no || `EWB-${idx}`,
+          type: item.type || 'Outward',
+          party: item.party_name || item.party || 'Unknown',
+          route: item.route || '',
+          date: item.date || '',
+          amount: item.amount?.toLocaleString('en-IN') || '0',
+          status: item.status || 'Active',
+        })));
+      }
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, [company?.guid]);
   const selectMode = selected.length > 0;
 
   const toggleSelect = (id: string) =>
@@ -42,7 +67,7 @@ export default function EWBListScreen() {
   const cancelSelect = () => setSelected([]);
 
   const handleShare = async () => {
-    const lines = EWB_LIST
+    const lines = ewbData
       .filter(i => selected.includes(i.id))
       .map(i => `${i.ewbNo}  ${i.party}  ${i.route}  ₹${i.amount}  ${i.status}`);
     try {
@@ -67,7 +92,7 @@ export default function EWBListScreen() {
         {selectMode ? (
           <TouchableOpacity
             style={s.headerTextBtn}
-            onPress={() => setSelected(EWB_LIST.map(i => i.id))}
+            onPress={() => setSelected(ewbData.map(i => i.id))}
             activeOpacity={0.7}
           >
             <Text style={s.headerTextBtnTxt}>Select All</Text>
@@ -87,7 +112,7 @@ export default function EWBListScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listContent}>
-        {EWB_LIST.map((item) => {
+        {ewbData.map((item) => {
           const cfg = STATUS_CFG[item.status] ?? STATUS_CFG.Active;
           const isSelected = selected.includes(item.id);
           return (

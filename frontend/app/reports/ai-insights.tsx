@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Dimensions, ActivityIndicator,
@@ -10,6 +10,8 @@ import Svg, { Path, Rect, G, Text as SvgText, Circle } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import Toast from 'react-native-toast-message';
+import { useAuth } from '../../src/context/AuthContext';
+import { getAIInsights } from '../../src/services/api';
 
 const AMBER       = '#A89060';
 const AMBER_LIGHT = '#D4BC94';
@@ -375,25 +377,32 @@ const dn = StyleSheet.create({
 export default function AIInsightsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { company } = useAuth();
   const [fromDate,       setFromDate]       = useState('');
   const [toDate,         setToDate]         = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [refreshing,     setRefreshing]     = useState(false);
+  const [aiData,         setAiData]         = useState<any>(null);
 
   const isDateActive = fromDate.length > 0 && toDate.length > 0;
 
-  const handleRefresh = () => {
+  const fetchInsights = useCallback(async () => {
+    if (!company?.guid) return;
     setRefreshing(true);
-    setTimeout(() => {
+    try {
+      const res: any = await getAIInsights(company.guid, fromDate || undefined, toDate || undefined);
+      if (res?.data) setAiData(res.data);
+      Toast.show({ type: 'success', text1: 'Insights Updated', text2: 'AI models refreshed with latest data', visibilityTime: 2200 });
+    } catch {
+      Toast.show({ type: 'info', text1: 'Using cached data', text2: 'Connect to Tally for live AI insights' });
+    } finally {
       setRefreshing(false);
-      Toast.show({
-        type: 'success',
-        text1: 'Insights Updated',
-        text2: 'AI models refreshed with latest data',
-        visibilityTime: 2200,
-      });
-    }, 1800);
-  };
+    }
+  }, [company?.guid, fromDate, toDate]);
+
+  useEffect(() => { fetchInsights(); }, [company?.guid]);
+
+  const handleRefresh = () => fetchInsights();
 
   const handleShare = () => {
     Toast.show({

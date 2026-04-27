@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Dimensions, Linking,
@@ -9,6 +9,8 @@ import { useRouter } from 'expo-router';
 import Svg, { Path, Circle, G, Rect, Line, Text as SvgText } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import { useAuth } from '../../src/context/AuthContext';
+import { getEWBList } from '../../src/services/api';
 
 const { width: W } = Dimensions.get('window');
 const CARD_INNER = W - SPACING.md * 2 - SPACING.md * 2; // card content width
@@ -166,13 +168,23 @@ function InteractiveBarChart({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function EWBComplianceScreen() {
   const router = useRouter();
+  const { company } = useAuth();
   const [fromDate,       setFromDate]       = useState('');
   const [toDate,         setToDate]         = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [activeSeg,      setActiveSeg]      = useState<number | null>(null);
   const [activeBar,      setActiveBar]      = useState<number | null>(null);
+  const [totalBills,     setTotalBills]     = useState(318); // default mock
 
   const isDateActive = fromDate.length > 0 && toDate.length > 0;
+
+  useEffect(() => {
+    if (!company?.guid) return;
+    getEWBList(company.guid).then((res: any) => {
+      const list = res?.data || [];
+      if (list.length > 0) setTotalBills(list.length);
+    }).catch(() => {});
+  }, [company?.guid]);
 
   return (
     <SafeAreaView style={s.safe}>

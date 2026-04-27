@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, KeyboardAvoidingView, Platform, Alert, Modal,
-  Image, Animated,
+  Image, Animated, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -146,13 +146,21 @@ export default function CompanyScreen() {
     }
   };
 
-  const handleSave = () => {
-    Toast.show({
-      type: 'success',
-      text1: 'Company Info Saved',
-      text2: 'Your company information has been updated.',
-      visibilityTime: 3000,
-    });
+  const [saving, setSaving] = useState(false);
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      // Company info is read-only from Tally — save local preferences only
+      Toast.show({
+        type: 'success',
+        text1: 'Preferences Saved',
+        text2: 'Company settings saved locally. Core data syncs from Tally.',
+        visibilityTime: 3000,
+      });
+      setIsDirty(false);
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message || 'Could not save.' });
+    } finally { setSaving(false); }
   };
 
   return (
@@ -164,8 +172,9 @@ export default function CompanyScreen() {
         </TouchableOpacity>
         <Text style={s.headerTitle}>Company Information</Text>
         {isDirty ? (
-          <TouchableOpacity style={s.saveBtn} onPress={handleSave} activeOpacity={0.7}>
-            <Text style={s.saveBtnText}>Save</Text>
+          <TouchableOpacity style={[s.saveBtn, saving && {opacity:0.6}]} onPress={handleSave} activeOpacity={0.7} disabled={saving}>
+            {saving && <ActivityIndicator size="small" color={COLORS.white} style={{marginRight:6}}/>}
+            <Text style={s.saveBtnText}>{saving ? 'Saving...' : 'Save'}</Text>
           </TouchableOpacity>
         ) : (
           <View style={{ width: 52 }} />

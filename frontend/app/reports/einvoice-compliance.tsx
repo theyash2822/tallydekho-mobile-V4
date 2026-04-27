@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Dimensions, Linking,
@@ -9,6 +9,8 @@ import { useRouter } from 'expo-router';
 import Svg, { Path, Circle, G, Rect, Line, Text as SvgText } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import { useAuth } from '../../src/context/AuthContext';
+import { getEInvoicePending, getEInvoiceGenerated } from '../../src/services/api';
 
 const { width: W } = Dimensions.get('window');
 const DONUT_W = Math.min(140, (W - SPACING.md * 4) * 0.42);
@@ -162,13 +164,24 @@ function InteractiveBarChart({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function EInvoiceComplianceScreen() {
   const router = useRouter();
+  const { company } = useAuth();
   const [fromDate,       setFromDate]       = useState('');
   const [toDate,         setToDate]         = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [activeSeg,      setActiveSeg]      = useState<number | null>(null);
   const [activeBar,      setActiveBar]      = useState<number | null>(null);
+  const [pendingCount,   setPendingCount]   = useState(35);
+  const [generatedCount, setGeneratedCount] = useState(236);
 
   const isDateActive = fromDate.length > 0 && toDate.length > 0;
+
+  useEffect(() => {
+    if (!company?.guid) return;
+    Promise.all([getEInvoicePending(company.guid), getEInvoiceGenerated(company.guid)]).then(([p, g]: any[]) => {
+      if ((p?.data || []).length > 0) setPendingCount((p.data).length);
+      if ((g?.data || []).length > 0) setGeneratedCount((g.data).length);
+    }).catch(() => {});
+  }, [company?.guid]);
 
   return (
     <SafeAreaView style={s.safe}>

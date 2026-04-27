@@ -348,3 +348,12 @@ export const retryAuditEntry = (id: string) =>
   withFallback(() => post(`/audit-trail/${id}/retry`, {}), {});
 
 // searchDashboard already declared above
+
+// ══════════════════════════════════════════════════════════════
+// AI INSIGHTS
+// ══════════════════════════════════════════════════════════════
+export const getAIInsights = (companyGuid?: string, from?: string, to?: string) =>
+  withFallback(
+    () => get(withCompany('/ai/insights', companyGuid, from && to ? { from, to } : {})),
+    { data: { insights: [], summary: 'Connect to Tally to get AI insights.' } }
+  );

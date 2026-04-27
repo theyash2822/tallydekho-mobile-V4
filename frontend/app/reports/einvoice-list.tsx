@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Share, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
+import { getEInvoicePending, getEInvoiceGenerated } from '../../src/services/api';
 
 // ── Mock Data ───────────────────────────────────────────────────────────────
-const EINVOICE_LIST = [
+const invoiceData = [
   { id: 'i1',  irn: 'IRN-8a1b2c3d', invoiceNo: 'INV-30982', party: 'ABC Corporation',    date: '24 July 2025', amount: '2,80,000', status: 'Generated' },
   { id: 'i2',  irn: 'IRN-9x2y3z4w', invoiceNo: 'INV-30981', party: 'Netaji Industries',  date: '24 July 2025', amount: '3,60,000', status: 'Pending'   },
   { id: 'i3',  irn: 'IRN-5m6n7o8p', invoiceNo: 'INV-30980', party: 'XYZ Limited',        date: '23 July 2025', amount: '1,95,000', status: 'Generated' },
@@ -30,8 +32,39 @@ const STATUS_CFG: Record<string, { bg: string; text: string; icon: string }> = {
 export default function EInvoiceListScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { company } = useAuth();
+  const [invoiceData, setInvoiceData] = useState(invoiceData);
   const [selected, setSelected] = useState<string[]>([]);
   const selectMode = selected.length > 0;
+
+  useEffect(() => {
+    if (!company?.guid) return;
+    Promise.all([
+      getEInvoicePending(company.guid),
+      getEInvoiceGenerated(company.guid),
+    ]).then(([pendingRes, generatedRes]: any[]) => {
+      const pending = (pendingRes?.data || []).map((i: any, idx: number) => ({
+        id: i.id?.toString() || `p${idx}`,
+        irn: i.irn || '',
+        invoiceNo: i.voucher_no || i.invoice_no || `INV-${idx}`,
+        party: i.party_name || i.party || 'Unknown',
+        date: i.date || '',
+        amount: i.amount?.toLocaleString('en-IN') || '0',
+        status: 'Pending',
+      }));
+      const generated = (generatedRes?.data || []).map((i: any, idx: number) => ({
+        id: i.id?.toString() || `g${idx}`,
+        irn: i.irn || '',
+        invoiceNo: i.voucher_no || i.invoice_no || `INV-${idx}`,
+        party: i.party_name || i.party || 'Unknown',
+        date: i.date || '',
+        amount: i.amount?.toLocaleString('en-IN') || '0',
+        status: 'Generated',
+      }));
+      const combined = [...pending, ...generated];
+      if (combined.length > 0) setInvoiceData(combined);
+    }).catch(() => {});
+  }, [company?.guid]);
 
   const toggleSelect = (id: string) =>
     setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
@@ -39,7 +72,7 @@ export default function EInvoiceListScreen() {
   const cancelSelect = () => setSelected([]);
 
   const handleShare = async () => {
-    const lines = EINVOICE_LIST
+    const lines = invoiceData
       .filter(i => selected.includes(i.id))
       .map(i => `${i.invoiceNo}  ${i.irn}  ${i.party}  ₹${i.amount}  ${i.status}`);
     try {
@@ -64,7 +97,7 @@ export default function EInvoiceListScreen() {
         {selectMode ? (
           <TouchableOpacity
             style={s.headerTextBtn}
-            onPress={() => setSelected(EINVOICE_LIST.map(i => i.id))}
+            onPress={() => setSelected(invoiceData.map(i => i.id))}
             activeOpacity={0.7}
           >
             <Text style={s.headerTextBtnTxt}>Select All</Text>
@@ -75,7 +108,7 @@ export default function EInvoiceListScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listContent}>
-        {EINVOICE_LIST.map((item) => {
+        {invoiceData.map((item) => {
           const cfg = STATUS_CFG[item.status] ?? STATUS_CFG.Generated;
           const isSelected = selected.includes(item.id);
           return (
