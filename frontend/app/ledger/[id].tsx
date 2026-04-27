@@ -573,7 +573,8 @@ export default function LedgerDetailScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+      {/* ── Fixed top section (chart + controls) — does NOT scroll ── */}
+      <View style={styles.stickyTop}>
 
         {/* ── Donut + Legend ── */}
         <View style={styles.chartSection}>
@@ -605,57 +606,9 @@ export default function LedgerDetailScreen() {
           ))}
         </ScrollView>
 
-        {/* ── Search + Dr/Cr filter ── */}
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={80}
-        >
-          <View style={styles.filterRow}>
-            <View style={[styles.searchBox, searchFocused && styles.searchBoxFocused]}>
-              <Ionicons
-                name="search-outline"
-                size={14}
-                color={searchFocused ? COLORS.brandPrimary : COLORS.textTertiary}
-              />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search transactions"
-                placeholderTextColor={COLORS.textTertiary}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                onFocus={() => setSearchFocused(true)}
-                onBlur={() => setSearchFocused(false)}
-                selectionColor={COLORS.brandPrimary}
-                returnKeyType="search"
-                clearButtonMode="while-editing"
-                autoCorrect={false}
-                autoCapitalize="none"
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
-                  <Ionicons name="close-circle" size={15} color={COLORS.textTertiary} />
-                </TouchableOpacity>
-              )}
-            </View>
-            <TouchableOpacity
-              style={[styles.filterPill, showDrOnly && styles.filterPillActive]}
-              onPress={() => { setShowDrOnly(!showDrOnly); setShowCrOnly(false); }}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.filterPillText, showDrOnly && styles.filterPillTextActive]}>Dr</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterPill, showCrOnly && styles.filterPillActive]}
-              onPress={() => { setShowCrOnly(!showCrOnly); setShowDrOnly(false); }}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.filterPillText, showCrOnly && styles.filterPillTextActive]}>Cr</Text>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-
-        {/* ── Date Range Filter Pill ── */}
-        <View style={styles.dateRangeRow}>
+        {/* ── Single-line: Date Range | Search | Dr Cr ── */}
+        <View style={styles.controlRow}>
+          {/* Date Range pill */}
           <TouchableOpacity
             style={[styles.dateRangePill, isDateActive && styles.dateRangePillActive]}
             onPress={() => setShowDateRange(true)}
@@ -666,26 +619,69 @@ export default function LedgerDetailScreen() {
               size={13}
               color={isDateActive ? COLORS.brandPrimary : COLORS.textTertiary}
             />
-            <Text style={[styles.dateRangePillText, isDateActive && styles.dateRangePillTextActive]}>
-              {isDateActive ? `${fromDate}  →  ${toDate}` : 'All Dates'}
+            <Text style={[styles.dateRangePillText, isDateActive && styles.dateRangePillTextActive]} numberOfLines={1}>
+              {isDateActive ? `${fromDate}–${toDate}` : 'Dates'}
             </Text>
-            {!isDateActive && (
+            {isDateActive ? (
+              <TouchableOpacity
+                onPress={(e) => { e.stopPropagation?.(); setFromDate(''); setToDate(''); }}
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+              >
+                <Ionicons name="close-circle" size={13} color={COLORS.brandPrimary} />
+              </TouchableOpacity>
+            ) : (
               <Ionicons name="chevron-down" size={11} color={COLORS.textTertiary} />
             )}
           </TouchableOpacity>
-          {isDateActive && (
-            <TouchableOpacity
-              style={styles.dateRangeClearBtn}
-              onPress={() => { setFromDate(''); setToDate(''); }}
-              activeOpacity={0.7}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons name="close-circle" size={18} color={COLORS.brandPrimary} />
-            </TouchableOpacity>
-          )}
+
+          {/* Search input */}
+          <View style={[styles.searchBox, searchFocused && styles.searchBoxFocused]}>
+            <Ionicons
+              name="search-outline"
+              size={13}
+              color={searchFocused ? COLORS.brandPrimary : COLORS.textTertiary}
+            />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search"
+              placeholderTextColor={COLORS.textTertiary}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              selectionColor={COLORS.brandPrimary}
+              returnKeyType="search"
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
+                <Ionicons name="close-circle" size={13} color={COLORS.textTertiary} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Dr / Cr filter pills */}
+          <TouchableOpacity
+            style={[styles.filterPill, showDrOnly && styles.filterPillActive]}
+            onPress={() => { setShowDrOnly(!showDrOnly); setShowCrOnly(false); }}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.filterPillText, showDrOnly && styles.filterPillTextActive]}>Dr</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterPill, showCrOnly && styles.filterPillActive]}
+            onPress={() => { setShowCrOnly(!showCrOnly); setShowDrOnly(false); }}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.filterPillText, showCrOnly && styles.filterPillTextActive]}>Cr</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* ── Transaction list — month accordion ── */}
+      </View>{/* end stickyTop */}
+
+      {/* ── Scrollable transaction list only ── */}
+      <ScrollView style={styles.txnScroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={styles.txnContainer}>
           {sortedMonths.length === 0 ? (
             <View style={styles.emptySearch}>
@@ -1037,7 +1033,7 @@ const im = StyleSheet.create({
   sheet: {
     backgroundColor: COLORS.cardBg,
     borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    maxHeight: '88%',
+    height: '85%',
   },
   header: {
     flexDirection: 'row', alignItems: 'center',

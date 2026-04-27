@@ -866,28 +866,30 @@ export default function LedgerScreen() {
       />
       {/* Ledger Type Selection Sheet */}
       <Modal visible={showTypeSheet} transparent animationType="slide" onRequestClose={() => setShowTypeSheet(false)}>
-        <TouchableOpacity style={fm.tsOverlay} activeOpacity={1} onPress={() => setShowTypeSheet(false)} />
-        <View style={fm.tsSheet}>
-          <View style={fm.tsHandle} />
-          <Text style={fm.tsTitle}>Add Ledger</Text>
-          <Text style={fm.tsSubtitle}>Select ledger group type</Text>
-          {[
-            { type: 'sundry_creditor', label: 'Sundry Creditors', icon: 'person-add-outline', color: COLORS.positive, desc: 'Vendor/supplier accounts' },
-            { type: 'sundry_debtor', label: 'Sundry Debtors', icon: 'person-outline', color: COLORS.info, desc: 'Customer/party accounts' },
-            { type: 'duties_taxes', label: 'Duties and Taxes', icon: 'receipt-outline', color: COLORS.warning, desc: 'GST, TDS and duty accounts' },
-            { type: 'custom', label: 'Custom Groups', icon: 'settings-outline', color: COLORS.textSecondary, desc: 'Custom ledger under any group' },
-          ].map(opt => (
-            <TouchableOpacity key={opt.type} style={fm.tsOption} onPress={() => { setShowTypeSheet(false); router.push(`/ledger/create?type=${opt.type}` as any); }} activeOpacity={0.7}>
-              <View style={[fm.tsIconWrap, { backgroundColor: opt.color + '18' }]}>
-                <Ionicons name={opt.icon as any} size={22} color={opt.color} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={fm.tsOptionLabel}>{opt.label}</Text>
-                <Text style={fm.tsOptionDesc}>{opt.desc}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
-            </TouchableOpacity>
-          ))}
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setShowTypeSheet(false)} />
+          <View style={fm.tsSheet}>
+            <View style={fm.tsHandle} />
+            <Text style={fm.tsTitle}>Add Ledger</Text>
+            <Text style={fm.tsSubtitle}>Select ledger group type</Text>
+            {[
+              { type: 'sundry_creditor', label: 'Sundry Creditors', icon: 'person-add-outline', color: COLORS.positive, desc: 'Vendor/supplier accounts' },
+              { type: 'sundry_debtor', label: 'Sundry Debtors', icon: 'person-outline', color: COLORS.info, desc: 'Customer/party accounts' },
+              { type: 'duties_taxes', label: 'Duties and Taxes', icon: 'receipt-outline', color: COLORS.warning, desc: 'GST, TDS and duty accounts' },
+              { type: 'custom', label: 'Custom Groups', icon: 'settings-outline', color: COLORS.textSecondary, desc: 'Custom ledger under any group' },
+            ].map(opt => (
+              <TouchableOpacity key={opt.type} style={fm.tsOption} onPress={() => { setShowTypeSheet(false); router.push(`/ledger/create?type=${opt.type}` as any); }} activeOpacity={0.7}>
+                <View style={[fm.tsIconWrap, { backgroundColor: opt.color + '18' }]}>
+                  <Ionicons name={opt.icon as any} size={22} color={opt.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={fm.tsOptionLabel}>{opt.label}</Text>
+                  <Text style={fm.tsOptionDesc}>{opt.desc}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
       </Modal>
     </SafeAreaView>
@@ -1193,7 +1195,7 @@ const fm = StyleSheet.create({
   sheet: {
     backgroundColor: COLORS.cardBg,
     borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    maxHeight: '80%',
+    height: '75%',
   },
   titleRow: {
     paddingHorizontal: SPACING.md, paddingVertical: 16,
