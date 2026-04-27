@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, KeyboardAvoidingView, Platform, Alert, Modal,
@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import * as ImagePicker from 'expo-image-picker';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const MONTHS = [
@@ -97,18 +98,25 @@ const mp = StyleSheet.create({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function CompanyScreen() {
   const router = useRouter();
+  const { company } = useAuth();
 
-  // Company Identity
-  const [companyName, setCompanyName] = useState('YK Industries Pvt. Ltd.');
+  // Company Identity — pre-filled from AuthContext / Tally sync
+  const [companyName, setCompanyName] = useState(company?.name || 'Your Company');
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
-  const [gstin,       setGstin]       = useState('27AAJCR8382E1Z2');
-  const [pan,         setPan]         = useState('AAJCR8382E');
+  const [gstin,       setGstin]       = useState(company?.gstin || '');
+  const [pan,         setPan]         = useState('');
+
+  // Sync when company data loads
+  useEffect(() => {
+    if (company?.name) setCompanyName(company.name);
+    if (company?.gstin) setGstin(company.gstin);
+  }, [company?.name, company?.gstin]);
 
   // Contact
-  const [address, setAddress] = useState('B-42, Andheri Industrial Area, Mumbai - 400069');
-  const [email,   setEmail]   = useState('finance@ykind.com');
-  const [phone,   setPhone]   = useState('+91 22-4421 7890');
+  const [address, setAddress] = useState('');
+  const [email,   setEmail]   = useState('');
+  const [phone,   setPhone]   = useState('');
   const [website, setWebsite] = useState('');
 
   // Financial Settings

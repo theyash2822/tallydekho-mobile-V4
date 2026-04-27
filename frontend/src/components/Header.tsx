@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView,
 } from 'react-native';
@@ -7,6 +7,8 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 import { MOCK_COMPANIES } from '../data/mockData';
+import { useAuth } from '../context/AuthContext';
+import { getCompanies, getCompanyYears } from '../services/api';
 
 const FY_YEARS = [
   'FY 2025-26', 'FY 2024-25', 'FY 2023-24', 'FY 2022-23', 'FY 2021-22',
@@ -40,10 +42,53 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { company, setCompany, isPaired } = useAuth();
   const [selectedFY,      setSelectedFY]      = useState(fyYear);
   const [selectedCompany, setSelectedCompany] = useState(companyName);
   const [showFYModal,      setShowFYModal]      = useState(false);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
+  const [liveCompanies,   setLiveCompanies]   = useState<any[]>([]);
+  const [liveFYYears,     setLiveFYYears]     = useState<string[]>([]);
+
+  // Load real companies from API
+  useEffect(() => {
+    getCompanies().then((res: any) => {
+      const cos = res?.data ?? [];
+      if (cos.length) setLiveCompanies(cos);
+    }).catch(() => {});
+  }, []);
+
+  // Sync company name when AuthContext updates
+  useEffect(() => {
+    if (company?.name) setSelectedCompany(company.name);
+  }, [company?.name]);
+
+  // Load FY years from API (falls back to computed list)
+  useEffect(() => {
+    if (!company?.guid) {
+      // Fallback: compute from current date
+      const now = new Date();
+      const cur = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+      const fys = Array.from({ length: 5 }, (_, i) => { const y = cur - i; return `FY ${y}-${String(y+1).slice(2)}`; });
+      setLiveFYYears(fys);
+      setSelectedFY(fys[0]);
+      return;
+    }
+    getCompanyYears(company.guid).then((res: any) => {
+      const rows = res?.data ?? [];
+      if (rows.length) {
+        const labels = rows.map((r: any) => r.label);
+        setLiveFYYears(labels);
+        setSelectedFY(labels[0]);
+      } else {
+        const now = new Date();
+        const cur = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+        const fys = Array.from({ length: 5 }, (_, i) => { const y = cur - i; return `FY ${y}-${String(y+1).slice(2)}`; });
+        setLiveFYYears(fys);
+        setSelectedFY(fys[0]);
+      }
+    }).catch(() => {});
+  }, [company?.guid]);
 
   const dropdownTop = insets.top + 58;
 
@@ -63,10 +108,13 @@ const Header: React.FC<HeaderProps> = ({
     setShowFYModal(false);
   };
 
-  const handleCompanySelect = (name: string) => {
+  const handleCompanySelect = (co: any) => {
+    const name = typeof co === 'string' ? co : co.name;
     setSelectedCompany(name);
     onCompanyChange?.(name);
     setShowCompanyModal(false);
+    // Update AuthContext so all screens get the new companyGuid
+    if (co?.id && setCompany) setCompany({ guid: co.id, name: co.name, gstin: co.gstin || null });
   };
 
   // Abbreviate long company names
@@ -140,11 +188,11 @@ const Header: React.FC<HeaderProps> = ({
             <View style={styles.dropdownArrowLeft} />
             <Text style={styles.dropdownTitle}>Switch Company</Text>
             <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
-              {MOCK_COMPANIES.map(co => (
+              {(liveCompanies.length > 0 ? liveCompanies : MOCK_COMPANIES).map(co => (
                 <TouchableOpacity
                   key={co.id}
                   style={[styles.optionRow, selectedCompany === co.name && styles.optionRowActive]}
-                  onPress={() => handleCompanySelect(co.name)}
+                  onPress={() => handleCompanySelect(co)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.optionLeft}>
@@ -178,7 +226,7 @@ const Header: React.FC<HeaderProps> = ({
             <View style={styles.dropdownArrowRight} />
             <Text style={styles.dropdownTitle}>Financial Year</Text>
             <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
-              {FY_YEARS.map(fy => (
+              {(liveFYYears.length > 0 ? liveFYYears : FY_YEARS).map(fy => (
                 <TouchableOpacity
                   key={fy}
                   style={[styles.optionRow, selectedFY === fy && styles.optionRowActive]}

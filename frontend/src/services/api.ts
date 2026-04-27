@@ -133,6 +133,8 @@ export const pairWithTally = (pairing_code: string): Promise<PairResponse> =>
 export const getTallySyncStatus = () => get<any>('/tally-sync/status');
 
 export const getCompanies = () => get<any>('/companies');
+export const getCompanyYears = (companyGuid?: string) =>
+  withFallback(() => get(withCompany('/company/years', companyGuid)), { data: [] });
 
 // ══════════════════════════════════════════════════════════════
 // DASHBOARD
