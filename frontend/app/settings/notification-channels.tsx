@@ -189,6 +189,8 @@ function TimePickerSheet({
 }) {
   const { h: initH, m: initM, p: initP } = parseTime(initialTime);
   const [selH, setSelH] = useState(initH);
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = () => setIsDirty(true);
   const [selM, setSelM] = useState(initM);
   const [selP, setSelP] = useState(initP);
 
@@ -413,9 +415,11 @@ export default function NotificationChannelsScreen() {
           )}
         </View>
 
-        <TouchableOpacity style={s.saveBtn} onPress={save} activeOpacity={0.8}>
+        {isDirty && (
+        <TouchableOpacity style={s.saveBtn} onPress={() => { save(); setIsDirty(false); }} activeOpacity={0.8}>
           <Text style={s.saveTxt}>Save Settings</Text>
         </TouchableOpacity>
+        )}
       </ScrollView>
 
       {/* ── Time Picker Sheets ────────────────────────────────────────── */}

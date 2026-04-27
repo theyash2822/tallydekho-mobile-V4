@@ -188,6 +188,8 @@ export default function VoucherConfigScreen() {
     Object.fromEntries(VOUCHER_TYPES.map(v => [v.id, makeDefault(v.id)]))
   );
   const [bankPickerFor, setBankPickerFor] = useState<string | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = () => setIsDirty(true);
   const [saving,        setSaving]        = useState<string | null>(null);
 
   const update = (id: string, key: keyof VConfig, val: any) =>
@@ -387,9 +389,11 @@ export default function VoucherConfigScreen() {
         })}
 
         {/* Global Save */}
-        <TouchableOpacity style={s.saveAllBtn} onPress={handleSaveAll} activeOpacity={0.85}>
+        {isDirty && (
+        <TouchableOpacity style={s.saveAllBtn} onPress={() => { handleSaveAll(); setIsDirty(false); }} activeOpacity={0.85}>
           <Text style={s.saveAllTxt}>Save All Configurations</Text>
         </TouchableOpacity>
+        )}
         <View style={{ height: 40 }} />
       </ScrollView>
 

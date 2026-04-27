@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
@@ -40,6 +40,7 @@ const MOCK_INVOICES: Invoice[] = [
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function GSTScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [activeTab,       setActiveTab]       = useState('GSTR-1');
   const [fromDate,        setFromDate]        = useState('');
@@ -243,7 +244,7 @@ export default function GSTScreen() {
 
       {/* ── Share Bar (appears on long-press selection) ──────────────── */}
       {selected.length > 0 && (
-        <View style={s.shareBar}>
+        <View style={[s.shareBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={s.shareLeft}>
             <Text style={s.shareCount}>{selected.length} selected</Text>
             <TouchableOpacity

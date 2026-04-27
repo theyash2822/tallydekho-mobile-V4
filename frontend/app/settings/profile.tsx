@@ -144,6 +144,8 @@ function DeleteAccountModal({
 }) {
   const [otp, setOtp]         = useState('');
   const [countdown, setCount] = useState(30);
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = () => setIsDirty(true);
   const [canResend, setResend] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -652,7 +654,7 @@ export default function ProfileScreen() {
               <TextInput
                 style={ps.fieldInput}
                 value={name}
-                onChangeText={setName}
+                onChangeText={v => { setName(v); markDirty(); }}
                 placeholder="Enter your name"
                 placeholderTextColor={COLORS.textTertiary}
                 selectionColor={COLORS.brandPrimary}
@@ -727,7 +729,7 @@ export default function ProfileScreen() {
                   <Text style={ps.toggleSub}>Face ID / Fingerprint on app open</Text>
                 </View>
               </View>
-              <CustomToggle value={biometric} onValueChange={setBiometric} />
+              <CustomToggle value={biometric} onValueChange={(v) => { setBiometric(v); markDirty(); }} />
             </View>
 
             <View style={ps.hr} />

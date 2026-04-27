@@ -11,6 +11,8 @@ export default function EWBIntegrationScreen() {
   const router = useRouter();
   const [status] = useState<Status>('disconnected');
   const [gstin, setGstin] = useState('');
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = () => setIsDirty(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -65,10 +67,10 @@ export default function EWBIntegrationScreen() {
           <TouchableOpacity style={s.secondBtn} onPress={testConnection} activeOpacity={0.7}>
             {testing ? <Text style={s.secondTxt}>Testing...</Text> : <><Ionicons name="wifi-outline" size={16} color={COLORS.info} /><Text style={s.secondTxt}>Test Connection</Text></>}
           </TouchableOpacity>
-          <TouchableOpacity style={s.primaryBtn} onPress={saveCredentials} activeOpacity={0.8}>
+          {isDirty && <TouchableOpacity style={s.primaryBtn} onPress={() => { saveCredentials(); setIsDirty(false); }} activeOpacity={0.8}>
             <Ionicons name="save-outline" size={16} color={COLORS.white} />
             <Text style={s.primaryTxt}>Save</Text>
-          </TouchableOpacity>
+          </TouchableOpacity>}
         </View>
         <TouchableOpacity style={s.portalBtn} onPress={openPortal} activeOpacity={0.7}>
           <Ionicons name="open-outline" size={16} color={COLORS.textSecondary} />

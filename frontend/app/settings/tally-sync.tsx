@@ -204,6 +204,8 @@ const ci = StyleSheet.create({
 export default function TallySyncScreen() {
   const router = useRouter();
   const [pairState, setPairState] = useState<'idle' | 'awaiting' | 'paired'>('idle');
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = () => setIsDirty(true);
   const [code, setCode]           = useState<string[]>(Array(6).fill(''));
   const [syncing, setSyncing]     = useState(false);
   const [showHelp,       setShowHelp]       = useState(false);

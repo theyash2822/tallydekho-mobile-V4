@@ -255,9 +255,11 @@ export default function LanguageRegionScreen() {
         </View>
 
         {/* ── Save ── */}
-        <TouchableOpacity style={s.saveBtn} onPress={handleSave} activeOpacity={0.85}>
+        {isDirty && (
+        <TouchableOpacity style={s.saveBtn} onPress={() => { handleSave(); setIsDirty(false); }} activeOpacity={0.85}>
           <Text style={s.saveTxt}>Save Changes</Text>
         </TouchableOpacity>
+        )}
 
         <View style={{ height: 40 }} />
       </ScrollView>

@@ -84,6 +84,8 @@ export default function PreferencesScreen() {
 
   // Number & Currency
   const [numFormat, setNumFormat] = useState('indian');
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = () => setIsDirty(true);
   const [decimals, setDecimals]   = useState('2');
 
   // Voucher Defaults
@@ -272,13 +274,15 @@ export default function PreferencesScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* Save Footer */}
+      {/* Save Footer — only when changes made */}
+      {isDirty && (
       <View style={s.footer}>
-        <TouchableOpacity style={s.footerBtn} onPress={handleSave} activeOpacity={0.7}>
+        <TouchableOpacity style={s.footerBtn} onPress={() => { handleSave(); setIsDirty(false); }} activeOpacity={0.7}>
           <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />
           <Text style={s.footerBtnTxt}>Save Preferences</Text>
         </TouchableOpacity>
       </View>
+      )}
     </SafeAreaView>
   );
 }

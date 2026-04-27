@@ -119,6 +119,8 @@ function BankFormSheet({
 }) {
   const [form, setForm]           = useState<BankFormData>(initialData || EMPTY_FORM);
   const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = () => setIsDirty(true);
 
   React.useEffect(() => {
     if (visible) { setForm(initialData || EMPTY_FORM); setSaveState('idle'); }

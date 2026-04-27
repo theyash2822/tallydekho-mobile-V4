@@ -176,6 +176,8 @@ export default function ComplianceRemindersScreen() {
     gstr1Days: 3, gstr3bDays: 3, autoPause: true,
     channels: { push: true, email: false, whatsapp: false, sms: false } as Channels,
   });
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = () => setIsDirty(true);
 
   // ── E-Invoice ────────────────────────────────────────────────────────────
   const [einv, setEinv] = useState({

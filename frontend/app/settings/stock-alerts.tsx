@@ -215,6 +215,8 @@ function TimePickerSheet({
 }) {
   const { h: ih, mi: im, p: ip } = parseTime(initialTime);
   const [selH, setSelH] = useState(ih);
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = () => setIsDirty(true);
   const [selM, setSelM] = useState(im);
   const [selP, setSelP] = useState(ip);
 
@@ -333,7 +335,7 @@ function ItemSelectorSheet({
             <TextInput
               style={iss.searchInput}
               value={search}
-              onChangeText={setSearch}
+              onChangeText={v => { setSearch(v); markDirty(); }}
               placeholder={`Search ${category === 'item' ? 'items' : 'groups'}…`}
               placeholderTextColor={COLORS.textTertiary}
               selectionColor={COLORS.brandPrimary}

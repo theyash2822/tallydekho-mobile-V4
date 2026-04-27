@@ -18,6 +18,8 @@ const PROVIDERS: DropdownOption[] = [
 export default function EInvoiceScreen() {
   const router = useRouter();
   const [provider, setProvider] = useState('nic');
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = () => setIsDirty(true);
   const [gstin, setGstin] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -76,9 +78,9 @@ export default function EInvoiceScreen() {
             <Ionicons name="wifi-outline" size={16} color={COLORS.info} />
             <Text style={[s.outTxt, {color:COLORS.info}]}>Test Connection</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.primaryBtn} onPress={save} activeOpacity={0.8}>
+          {isDirty && <TouchableOpacity style={s.primaryBtn} onPress={() => { save(); setIsDirty(false); }} activeOpacity={0.8}>
             <Text style={s.primaryTxt}>Save Credentials</Text>
-          </TouchableOpacity>
+          </TouchableOpacity>}
         </View>
         <TouchableOpacity style={s.portalBtn} onPress={()=>Linking.openURL('https://einvoice1.gst.gov.in')} activeOpacity={0.7}>
           <Ionicons name="open-outline" size={16} color={COLORS.textSecondary} />

@@ -99,6 +99,8 @@ export default function CompanyScreen() {
 
   // Company Identity
   const [companyName, setCompanyName] = useState('YK Industries Pvt. Ltd.');
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = () => setIsDirty(true);
   const [gstin,       setGstin]       = useState('27AAJCR8382E1Z2');
   const [pan,         setPan]         = useState('AAJCR8382E');
 
@@ -152,7 +154,11 @@ export default function CompanyScreen() {
         </TouchableOpacity>
         <Text style={s.headerTitle}>Company Information</Text>
         <TouchableOpacity style={s.saveBtn} onPress={handleSave} activeOpacity={0.7}>
-          <Text style={s.saveBtnText}>Save</Text>
+          {isDirty ? (
+            <Text style={s.saveBtnText}>Save</Text>
+          ) : (
+            <View style={{ width: 48 }} />
+          )}
         </TouchableOpacity>
       </View>
 
@@ -192,7 +198,7 @@ export default function CompanyScreen() {
               <TextInput
                 style={s.fieldInput}
                 value={companyName}
-                onChangeText={setCompanyName}
+                onChangeText={v => { setCompanyName(v); markDirty(); }}
                 placeholder="Enter company name"
                 placeholderTextColor={COLORS.textTertiary}
               />
@@ -203,7 +209,7 @@ export default function CompanyScreen() {
               <TextInput
                 style={s.fieldInput}
                 value={gstin}
-                onChangeText={setGstin}
+                onChangeText={v => { setGstin(v); markDirty(); }}
                 placeholder="27AAJCR0000E1Z2"
                 placeholderTextColor={COLORS.textTertiary}
                 autoCapitalize="characters"
@@ -215,7 +221,7 @@ export default function CompanyScreen() {
               <TextInput
                 style={s.fieldInput}
                 value={pan}
-                onChangeText={setPan}
+                onChangeText={v => { setPan(v); markDirty(); }}
                 placeholder="AAJCR0000E"
                 placeholderTextColor={COLORS.textTertiary}
                 autoCapitalize="characters"
@@ -232,7 +238,7 @@ export default function CompanyScreen() {
               <TextInput
                 style={[s.fieldInput, s.fieldMultiline]}
                 value={address}
-                onChangeText={setAddress}
+                onChangeText={v => { setAddress(v); markDirty(); }}
                 multiline
                 placeholder="Enter registered address"
                 placeholderTextColor={COLORS.textTertiary}
@@ -244,7 +250,7 @@ export default function CompanyScreen() {
               <TextInput
                 style={s.fieldInput}
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={v => { setEmail(v); markDirty(); }}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 placeholder="company@email.com"
@@ -257,7 +263,7 @@ export default function CompanyScreen() {
               <TextInput
                 style={s.fieldInput}
                 value={phone}
-                onChangeText={setPhone}
+                onChangeText={v => { setPhone(v); markDirty(); }}
                 keyboardType="phone-pad"
                 placeholder="+91 XXXXX XXXXX"
                 placeholderTextColor={COLORS.textTertiary}
@@ -269,7 +275,7 @@ export default function CompanyScreen() {
               <TextInput
                 style={s.fieldInput}
                 value={website}
-                onChangeText={setWebsite}
+                onChangeText={v => { setWebsite(v); markDirty(); }}
                 keyboardType="url"
                 autoCapitalize="none"
                 placeholder="www.yourcompany.com"
@@ -304,7 +310,7 @@ export default function CompanyScreen() {
                   <Ionicons name="lock-closed-outline" size={14} color={COLORS.textSecondary} />
                   <Text style={s.fieldLabel}>Book Lock Days</Text>
                 </View>
-                <CustomToggle value={bookLockEnabled} onValueChange={setBookLockEnabled} />
+                <CustomToggle value={bookLockEnabled} onValueChange={(v) => { setBookLockEnabled(v); markDirty(); }} />
               </View>
 
               {bookLockEnabled ? (
@@ -313,7 +319,7 @@ export default function CompanyScreen() {
                     <TextInput
                       style={s.lockDaysInput}
                       value={bookLockDays}
-                      onChangeText={setBookLockDays}
+                      onChangeText={v => { setBookLockDays(v); markDirty(); }}
                       keyboardType="number-pad"
                       maxLength={3}
                       selectTextOnFocus
@@ -327,7 +333,7 @@ export default function CompanyScreen() {
             </View>
           </View>
 
-          <View style={{ height: 80 }} />
+          <View style={{ height: isDirty ? 80 : 24 }} />
         </ScrollView>
       </KeyboardAvoidingView>
 

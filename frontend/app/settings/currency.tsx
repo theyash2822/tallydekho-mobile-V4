@@ -170,6 +170,8 @@ export default function CurrencyScreen() {
   const router   = useRouter();
   const [currency,  setCurrency]  = useState('INR');
   const [dateStyle, setDateStyle] = useState('dmy');
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = () => setIsDirty(true);
   const [timeStyle, setTimeStyle] = useState('24h');
   const [thousands, setThousands] = useState('in');
   const [negStyle,  setNegStyle]  = useState('minus');

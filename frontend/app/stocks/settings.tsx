@@ -70,6 +70,10 @@ export default function StockSettingsScreen() {
     general: true, warehouse: false, items: false, alerts: false,
   });
 
+  // ── Dirty state — Save/Cancel only shown when user has changed something
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = () => setIsDirty(true);
+
   // ── General
   const [reorderBuffer, setReorderBuffer] = useState('7');
   const [archiveLedger, setArchiveLedger]  = useState('24');
@@ -121,12 +125,13 @@ export default function StockSettingsScreen() {
 
   const updateWarehouse = (id: string, field: keyof Warehouse, val: string) => {
     setWarehouses(prev => prev.map(w => (w.id === id ? { ...w, [field]: val } : w)));
+    markDirty();
   };
 
   const toggleChannel = (
     setter: React.Dispatch<React.SetStateAction<AlertChannels>>,
     key: keyof AlertChannels,
-  ) => setter(prev => ({ ...prev, [key]: !prev[key] }));
+  ) => { setter(prev => ({ ...prev, [key]: !prev[key] })); markDirty(); };
 
   const addRack = () => {
     if (!newRack.trim()) return;
@@ -157,6 +162,7 @@ export default function StockSettingsScreen() {
     setAddForm(BLANK_FORM);
     setNewRack(''); setNewLabel('');
     setAddModalVisible(false);
+    markDirty();
     if (!openSections.warehouse) {
       setOpenSections(prev => ({ ...prev, warehouse: true }));
     }
@@ -241,7 +247,7 @@ export default function StockSettingsScreen() {
                   <TextInput
                     style={s.inlineInput}
                     value={reorderBuffer}
-                    onChangeText={setReorderBuffer}
+                    onChangeText={v => { setReorderBuffer(v); markDirty(); }}
                     keyboardType="numeric"
                     maxLength={4}
                   />
@@ -258,7 +264,7 @@ export default function StockSettingsScreen() {
                   <TextInput
                     style={s.inlineInput}
                     value={archiveLedger}
-                    onChangeText={setArchiveLedger}
+                    onChangeText={v => { setArchiveLedger(v); markDirty(); }}
                     keyboardType="numeric"
                     maxLength={3}
                   />
@@ -295,6 +301,7 @@ export default function StockSettingsScreen() {
                           setDefaultUom(prev =>
                             prev.includes(uom) ? prev.filter(u => u !== uom) : [...prev, uom]
                           );
+                          markDirty();
                         }}
                         activeOpacity={0.7}
                       >
@@ -429,7 +436,7 @@ export default function StockSettingsScreen() {
                   <Text style={s.fieldLabel}>Batch / Lot Tracking</Text>
                   <Text style={s.fieldSub}>Track items by batch or lot number</Text>
                 </View>
-                <BrandSwitch value={batchTracking} onValueChange={setBatchTracking} />
+                <BrandSwitch value={batchTracking} onValueChange={(v) => { setBatchTracking(v); markDirty(); }} />
               </View>
 
               <View style={s.divider} />
@@ -440,7 +447,7 @@ export default function StockSettingsScreen() {
                   <Text style={s.fieldLabel}>Expiry-Date Tracking</Text>
                   <Text style={s.fieldSub}>Track expiry dates for stock items</Text>
                 </View>
-                <BrandSwitch value={expiryTracking} onValueChange={setExpiryTracking} />
+                <BrandSwitch value={expiryTracking} onValueChange={(v) => { setExpiryTracking(v); markDirty(); }} />
               </View>
 
               <View style={s.divider} />
@@ -451,7 +458,7 @@ export default function StockSettingsScreen() {
                   <Text style={s.fieldLabel}>Allow Negative Stock</Text>
                   <Text style={s.fieldSub}>Permit stock quantity to go below zero</Text>
                 </View>
-                <BrandSwitch value={allowNegative} onValueChange={setAllowNegative} />
+                <BrandSwitch value={allowNegative} onValueChange={(v) => { setAllowNegative(v); markDirty(); }} />
               </View>
 
               <View style={s.divider} />
@@ -463,7 +470,7 @@ export default function StockSettingsScreen() {
                   <TextInput
                     style={s.inlineInput}
                     value={defaultReorder}
-                    onChangeText={setDefaultReorder}
+                    onChangeText={v => { setDefaultReorder(v); markDirty(); }}
                     keyboardType="numeric"
                     maxLength={6}
                   />
@@ -543,7 +550,7 @@ export default function StockSettingsScreen() {
                     <TextInput
                       style={s.inlineInput}
                       value={expiryDays}
-                      onChangeText={setExpiryDays}
+                      onChangeText={v => { setExpiryDays(v); markDirty(); }}
                       keyboardType="numeric"
                       maxLength={3}
                     />
@@ -556,19 +563,21 @@ export default function StockSettingsScreen() {
           )}
         </View>
 
-        {/* Bottom spacer for the fixed action bar */}
-        <View style={{ height: 100 }} />
+        {/* Bottom spacer */}
+        <View style={{ height: isDirty ? 100 : 24 }} />
       </ScrollView>
 
-      {/* ── Fixed Bottom Action Bar */}
+      {/* ── Fixed Bottom Action Bar — only shown when changes are made */}
+      {isDirty && (
       <View style={[s.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <TouchableOpacity style={s.cancelBtn} onPress={() => router.back()} activeOpacity={0.7}>
+        <TouchableOpacity style={s.cancelBtn} onPress={() => { setIsDirty(false); router.back(); }} activeOpacity={0.7}>
           <Text style={s.cancelBtnText}>Cancel</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={s.saveBtn} onPress={() => showToast('Settings saved successfully')} activeOpacity={0.8}>
+        <TouchableOpacity style={s.saveBtn} onPress={() => { showToast('Settings saved successfully'); setIsDirty(false); }} activeOpacity={0.8}>
           <Text style={s.saveBtnText}>Save</Text>
         </TouchableOpacity>
       </View>
+      )}
       </KeyboardAvoidingView>
 
       {/* ══════════════════════════════════════════════

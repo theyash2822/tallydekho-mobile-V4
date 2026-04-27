@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Share, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
@@ -29,6 +29,7 @@ const STATUS_CFG: Record<string, { bg: string; text: string; icon: string }> = {
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function EInvoiceListScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<string[]>([]);
   const selectMode = selected.length > 0;
 
@@ -119,7 +120,7 @@ export default function EInvoiceListScreen() {
 
       {/* Share bar */}
       {selectMode && (
-        <View style={s.shareBar}>
+        <View style={[s.shareBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={s.shareLeft}>
             <Text style={s.shareCount}>{selected.length} selected</Text>
             <TouchableOpacity onPress={cancelSelect} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
