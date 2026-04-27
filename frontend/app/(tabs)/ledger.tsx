@@ -525,7 +525,7 @@ export default function LedgerScreen() {
               <TouchableOpacity
                 testID="add-ledger-btn"
                 style={styles.headerIconBtn}
-                onPress={() => setShowTypeSheet(true)}
+                onPress={() => setShowCreate(true)}
                 activeOpacity={0.7}
               >
                 <Ionicons name="add" size={22} color={COLORS.textPrimary} />
