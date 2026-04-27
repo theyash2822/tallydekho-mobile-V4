@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getLedgers } from '../../src/services/api';
 import { MOCK_LEDGERS } from '../../src/data/mockData';
+import FilterBottomSheet, { FilterRadioRow } from '../../src/components/FilterBottomSheet';
 
 type FilterType = 'All' | 'Debit' | 'Credit';
 type NatureType = 'All' | 'Assets' | 'Liabilities' | 'Income' | 'Expense';
@@ -324,96 +325,70 @@ function FilterModal({ visible, onClose, activeNature, onApply }: FilterModalPro
   const [localNature, setLocalNature] = useState<NatureType>(activeNature);
   const [groupSearch, setGroupSearch] = useState('');
 
-  // Sync with external active nature whenever modal opens
   React.useEffect(() => {
     if (visible) setLocalNature(activeNature);
   }, [visible, activeNature]);
 
   const CATEGORIES = ['Nature', 'Group'] as const;
+  const isFiltered = localNature !== 'All';
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={fm.overlay}>
-        {/* Top spacer — tap to close */}
-        <TouchableOpacity style={{ flex: 1 }} onPress={onClose} activeOpacity={1} />
-
-        <View style={fm.sheet}>
-          {/* Title */}
-          <View style={fm.titleRow}>
-            <Text style={fm.title}>Filter</Text>
-          </View>
-
-          {/* Two-panel body */}
-          <View style={fm.body}>
-            {/* LEFT: category sidebar */}
-            <View style={fm.sidebar}>
-              {CATEGORIES.map(cat => (
-                <TouchableOpacity
-                  key={cat}
-                  style={[fm.sideItem, selectedCategory === cat && fm.sideItemActive]}
-                  onPress={() => setSelectedCategory(cat)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[fm.sideItemTxt, selectedCategory === cat && fm.sideItemTxtActive]}>
-                    {cat}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* RIGHT: options panel */}
-            <View style={fm.content}>
-              {selectedCategory === 'Nature' ? (
-                <ScrollView showsVerticalScrollIndicator={false}>
-                  {NATURE_FILTER_OPTIONS.map((opt, idx) => (
-                    <TouchableOpacity
-                      key={opt}
-                      style={[fm.optRow, idx === NATURE_FILTER_OPTIONS.length - 1 && { borderBottomWidth: 0 }]}
-                      onPress={() => setLocalNature(localNature === opt ? 'All' : opt)}
-                      activeOpacity={0.7}
-                    >
-                      {/* Radio circle */}
-                      <View style={[fm.radio, localNature === opt && fm.radioActive]}>
-                        {localNature === opt && <View style={fm.radioDot} />}
-                      </View>
-                      <Text style={[fm.optTxt, localNature === opt && fm.optTxtActive]}>{opt}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              ) : (
-                <View>
-                  <View style={fm.searchBox}>
-                    <Ionicons name="search" size={14} color={COLORS.textTertiary} />
-                    <TextInput
-                      style={fm.searchInput}
-                      placeholder="Search Group..."
-                      placeholderTextColor={COLORS.textTertiary}
-                      value={groupSearch}
-                      onChangeText={setGroupSearch}
-                    />
-                  </View>
-                  <Text style={fm.groupHint}>Filter by ledger group name</Text>
-                </View>
-              )}
-            </View>
-          </View>
-
-          {/* Bottom actions */}
-          <View style={fm.footer}>
-            <TouchableOpacity style={fm.cancelBtn} onPress={onClose} activeOpacity={0.8}>
-              <Text style={fm.cancelTxt}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={fm.applyBtn}
-              onPress={() => { onApply(localNature); onClose(); }}
-              activeOpacity={0.85}
-            >
-              <Text style={fm.applyBtnText}>Apply filters</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+    <FilterBottomSheet
+      visible={visible}
+      onClose={onClose}
+      title="Filter Ledgers"
+      activeCount={isFiltered ? 1 : 0}
+      onClear={() => setLocalNature('All')}
+      onApply={() => onApply(localNature)}
+      applyLabel="Apply Filters"
+    >
+      {/* Tab selector: Nature | Group */}
+      <View style={fm.tabs}>
+        {CATEGORIES.map(cat => (
+          <TouchableOpacity
+            key={cat}
+            style={[fm.tab, selectedCategory === cat && fm.tabActive]}
+            onPress={() => setSelectedCategory(cat)}
+            activeOpacity={0.7}
+          >
+            <Text style={[fm.tabTxt, selectedCategory === cat && fm.tabTxtActive]}>{cat}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
-    </Modal>
+
+      {/* Content */}
+      {selectedCategory === 'Nature' ? (
+        <View>
+          <FilterRadioRow
+            label="All"
+            selected={localNature === 'All'}
+            onPress={() => setLocalNature('All')}
+          />
+          {NATURE_FILTER_OPTIONS.map(opt => (
+            <FilterRadioRow
+              key={opt}
+              label={opt}
+              selected={localNature === opt}
+              onPress={() => setLocalNature(localNature === opt ? 'All' : opt)}
+            />
+          ))}
+        </View>
+      ) : (
+        <View style={fm.groupPanel}>
+          <View style={fm.searchBox}>
+            <Ionicons name="search" size={14} color={COLORS.textTertiary} />
+            <TextInput
+              style={fm.searchInput}
+              placeholder="Search Group..."
+              placeholderTextColor={COLORS.textTertiary}
+              value={groupSearch}
+              onChangeText={setGroupSearch}
+            />
+          </View>
+          <Text style={fm.groupHint}>Filter by ledger group name</Text>
+        </View>
+      )}
+    </FilterBottomSheet>
   );
 }
 
@@ -1191,60 +1166,28 @@ const cs = StyleSheet.create({
 
 // Filter Modal Styles — two-panel design
 const fm = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet: {
-    backgroundColor: COLORS.cardBg,
-    borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    height: '75%',
-  },
-  titleRow: {
-    paddingHorizontal: SPACING.md, paddingVertical: 16,
+  // ── Filter Modal — tab selector & group search ────────────────────────────
+  tabs: {
+    flexDirection: 'row', gap: 8,
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
     borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
-  title: { fontSize: TYPOGRAPHY.xl, fontWeight: '800', color: COLORS.textPrimary },
-  body: { flexDirection: 'row', flex: 1, minHeight: 380 },
-  sidebar: {
-    width: '38%', backgroundColor: COLORS.pageBg,
-    borderRightWidth: 1, borderRightColor: COLORS.borderDefault,
-    paddingTop: 4,
+  tab: {
+    paddingHorizontal: 16, paddingVertical: 8,
+    borderRadius: RADIUS.full, borderWidth: 1.5,
+    borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg,
   },
-  sideItem: {
-    paddingHorizontal: 16, paddingVertical: 18,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-  },
-  sideItemActive: { backgroundColor: COLORS.cardBg },
-  sideItemTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary, fontWeight: '500' },
-  sideItemTxtActive: { color: COLORS.textPrimary, fontWeight: '700' },
-  content: { flex: 1, paddingTop: 4, paddingBottom: 110 },
-  optRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    paddingHorizontal: 16, paddingVertical: 18,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-  },
-  radio: {
-    width: 22, height: 22, borderRadius: 11,
-    borderWidth: 2, borderColor: COLORS.borderStrong,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  radioActive: { borderColor: COLORS.brandPrimary },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.brandPrimary },
-  optTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary, fontWeight: '500' },
-  optTxtActive: { color: COLORS.textPrimary, fontWeight: '600' },
+  tabActive:   { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary },
+  tabTxt:      { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+  tabTxtActive:{ color: COLORS.white, fontWeight: '700' },
+  groupPanel:  { paddingBottom: SPACING.md },
   searchBox: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    margin: 12, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    margin: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
     paddingHorizontal: 12, paddingVertical: 10, backgroundColor: COLORS.pageBg,
   },
   searchInput: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
-  groupHint: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, paddingHorizontal: 16 },
-  footer: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
-  cancelBtn: {
-    flex: 1, paddingVertical: 18, alignItems: 'center',
-    borderRightWidth: 1, borderRightColor: COLORS.borderDefault,
-  },
-  cancelTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textSecondary },
-  applyBtn: { flex: 1.8, paddingVertical: 18, alignItems: 'center', backgroundColor: COLORS.brandPrimary },
-  applyBtnText: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+  groupHint: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, paddingHorizontal: SPACING.md },
   // Type Sheet styles (kept for the "Add Ledger" type sheet)
   tsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   tsSheet: { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingBottom: 30 },

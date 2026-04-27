@@ -57,8 +57,10 @@ export default function HomeScreen() {
   // KPI Carousel
   const kpiRef  = useRef<FlatList>(null);
   const [kpiIdx, setKpiIdx] = useState(0);
+  const [autoScrollCarousel, setAutoScrollCarousel] = useState(true);
 
   useEffect(() => {
+    if (!autoScrollCarousel) return;
     const t = setInterval(() => {
       setKpiIdx(prev => {
         const next = (prev + 1) % kpiData.length;
@@ -67,7 +69,7 @@ export default function HomeScreen() {
       });
     }, 4000);
     return () => clearInterval(t);
-  }, [kpiData.length]);
+  }, [kpiData.length, autoScrollCarousel]);
 
   // Filtered activity for search results
   const filteredActivity = useMemo(() => {
@@ -82,8 +84,13 @@ export default function HomeScreen() {
 
   // ── Tally pairing check ──────────────────────────────────────────────────
   const checkPaired = useCallback(async () => {
-    const val = await AsyncStorage.getItem('isTallyPaired');
+    const [val, scrollPref] = await Promise.all([
+      AsyncStorage.getItem('isTallyPaired'),
+      AsyncStorage.getItem('autoScrollCarousel'),
+    ]);
     setIsTallyPaired(val === 'true');
+    // Default is ON (null means not yet set → auto-scroll enabled)
+    setAutoScrollCarousel(scrollPref === null ? true : scrollPref !== 'false');
   }, []);
 
   useEffect(() => {

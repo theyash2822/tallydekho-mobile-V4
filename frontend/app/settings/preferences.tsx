@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 
@@ -97,6 +98,16 @@ export default function PreferencesScreen() {
   const [autoSave, setAutoSave]   = useState(true);
   const [offline, setOffline]     = useState(false);
   const [analytics, setAnalytics] = useState(true);
+
+  // Home Screen
+  const [autoScrollCarousel, setAutoScrollCarousel] = useState(true);
+
+  // Load persisted carousel preference on mount
+  useEffect(() => {
+    AsyncStorage.getItem('autoScrollCarousel').then(val => {
+      if (val !== null) setAutoScrollCarousel(val !== 'false');
+    });
+  }, []);
 
   const handleSave = () => {
     Alert.alert('✓ Preferences Saved', 'Your preferences have been updated successfully.', [
@@ -251,7 +262,7 @@ export default function PreferencesScreen() {
             label="Auto-Save"
             sub="Automatically save drafts every 5 min"
             value={autoSave}
-            onChange={setAutoSave}
+            onChange={v => { setAutoSave(v); markDirty(); }}
           />
           <View style={s.divider} />
           <ToggleRow
@@ -259,7 +270,7 @@ export default function PreferencesScreen() {
             label="Offline Mode"
             sub="Work without internet (sync later)"
             value={offline}
-            onChange={setOffline}
+            onChange={v => { setOffline(v); markDirty(); }}
           />
           <View style={s.divider} />
           <ToggleRow
@@ -267,7 +278,23 @@ export default function PreferencesScreen() {
             label="Usage Analytics"
             sub="Help improve the app anonymously"
             value={analytics}
-            onChange={setAnalytics}
+            onChange={v => { setAnalytics(v); markDirty(); }}
+          />
+        </View>
+
+        {/* ─── Home Screen ───────────────────────────────────── */}
+        <SectionHeader icon="home-outline" title="Home Screen" color="#9333EA" bg="#F5F3FF" />
+        <View style={s.card}>
+          <ToggleRow
+            icon="play-circle-outline"
+            label="Auto-Scroll Carousel"
+            sub="KPI cards slide automatically every 4s"
+            value={autoScrollCarousel}
+            onChange={v => {
+              setAutoScrollCarousel(v);
+              AsyncStorage.setItem('autoScrollCarousel', String(v));
+              markDirty();
+            }}
           />
         </View>
 

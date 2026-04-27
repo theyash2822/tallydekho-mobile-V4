@@ -14,68 +14,9 @@ import { AddItemModal } from '../../src/components/forms/AddItemModal';
 import { EditStockModal } from '../../src/components/forms/EditStockModal';
 import { StockTransferModal } from '../../src/components/forms/StockTransferModal';
 import { BulkTransferModal } from '../../src/components/forms/BulkTransferModal';
+import FilterBottomSheet, { FilterChipGroup } from '../../src/components/FilterBottomSheet';
 
 // ─── (Types, mock data, and constants are now in src/data/stockData.ts) ────────
-
-// ─── CHIP SELECTOR ────────────────────────────────────────────────────────────
-
-function ChipSelector({ label, options, selected, multi = true, onSelect }: {
-  label: string; options: { id: string; label: string }[];
-  selected: string[]; multi?: boolean; onSelect: (ids: string[]) => void;
-}) {
-  const toggle = (id: string) => {
-    if (multi) { onSelect(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id]); }
-    else { onSelect(selected.includes(id) ? [] : [id]); }
-  };
-  return (
-    <View style={chip.wrap}>
-      <Text style={chip.label}>{label}</Text>
-      <View style={chip.row}>
-        {options.map(opt => (
-          <TouchableOpacity key={opt.id} style={[chip.item, selected.includes(opt.id) && chip.itemActive]} onPress={() => toggle(opt.id)} activeOpacity={0.7}>
-            <Text style={[chip.text, selected.includes(opt.id) && chip.textActive]}>{opt.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-  );
-}
-const chip = StyleSheet.create({
-  wrap: { marginBottom: SPACING.md },
-  label: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  item: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: RADIUS.full, borderWidth: 1.5, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
-  itemActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
-  text: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
-  textActive: { color: COLORS.white },
-});
-
-// ─── (QtyStepperField → StockFormHelpers.tsx) ────────────────────────────────
-
-// ─── (SubmitButton, ItemHeaderCard, ReadonlyField, InlineField, CurrencyField → StockFormHelpers.tsx) ─
-
-// ─── MODAL SHARED STYLES ──────────────────────────────────────────────────────
-
-const ms = StyleSheet.create({
-  overlay:  { flex: 1, backgroundColor: 'rgba(0,0,0,0.48)' },
-  sheet:    { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 22, borderTopRightRadius: 22, maxHeight: '92%', paddingTop: 10 },
-  handle:   { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  title:    { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
-  scroll:   { padding: SPACING.md },
-  footer:   { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, marginBottom: 4 },
-  row:      { flexDirection: 'row', gap: 10, marginBottom: SPACING.md },
-  divider:  { height: 1, backgroundColor: COLORS.borderDefault, marginVertical: 12 },
-  sectionLbl:{ fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
-  infoBanner:{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#E8E7E1', borderRadius: RADIUS.md, padding: SPACING.sm, marginBottom: SPACING.md },
-  infoBannerTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  clearTxt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: '#A89060' },
-  cancelBtn: { flex: 1, paddingVertical: 14, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.borderDefault, alignItems: 'center', justifyContent: 'center' },
-  cancelTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textSecondary },
-  applyBtn:  { flex: 2, flexDirection: 'row', gap: 8, paddingVertical: 14, borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center' },
-  applyTxt:  { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
-  btnRow:    { flexDirection: 'row', gap: 12, marginBottom: 4 },
-});
 
 // ─── SWIPEABLE STOCK CARD ─────────────────────────────────────────────────────
 
@@ -155,44 +96,52 @@ function SwipeableStockCard({ item, isMultiSelectMode, isSelected, onPress, onLo
   );
 }
 
-// ─── FILTER MODAL ─────────────────────────────────────────────────────────────
+// ─── FILTER MODAL (uses shared FilterBottomSheet + FilterChipGroup) ──────────
 
 function FilterModal({ visible, onClose, onApply, initWh, initCat, initGrp }: {
   visible: boolean; onClose: () => void;
   onApply: (wh: string[], cat: string[], grp: string[]) => void;
   initWh: string[]; initCat: string[]; initGrp: string[];
 }) {
-  const insets = useSafeAreaInsets();
   const [selWh, setSelWh]   = useState<string[]>(initWh);
   const [selCat, setSelCat] = useState<string[]>(initCat);
   const [selGrp, setSelGrp] = useState<string[]>(initGrp);
   useEffect(() => { if (visible) { setSelWh(initWh); setSelCat(initCat); setSelGrp(initGrp); } }, [visible]);
   const total = selWh.length + selCat.length + selGrp.length;
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={ms.overlay} activeOpacity={1} onPress={onClose} />
-      <View style={[ms.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <View style={ms.handle} />
-        <View style={ms.titleRow}>
-          <Text style={ms.title}>Filter Items</Text>
-          <TouchableOpacity onPress={() => { setSelWh([]); setSelCat([]); setSelGrp([]); }} activeOpacity={0.7}>
-            <Text style={ms.clearTxt}>{total > 0 ? `Clear All (${total})` : 'Clear All'}</Text>
-          </TouchableOpacity>
-        </View>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ms.scroll}>
-          <ChipSelector label="Warehouse" options={ALL_WAREHOUSES} selected={selWh} multi onSelect={setSelWh} />
-          <ChipSelector label="Category" options={ALL_CATEGORIES.map(c => ({ id: c, label: c }))} selected={selCat} multi onSelect={setSelCat} />
-          <ChipSelector label="Item Group" options={ALL_GROUPS.map(g => ({ id: g, label: g }))} selected={selGrp} multi onSelect={setSelGrp} />
-        </ScrollView>
-        <View style={[ms.footer, ms.btnRow]}>
-          <TouchableOpacity style={ms.cancelBtn} onPress={onClose} activeOpacity={0.7}><Text style={ms.cancelTxt}>Cancel</Text></TouchableOpacity>
-          <TouchableOpacity style={ms.applyBtn} onPress={() => { onApply(selWh, selCat, selGrp); onClose(); }} activeOpacity={0.7}>
-            <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />
-            <Text style={ms.applyTxt}>Apply Filters</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
+    <FilterBottomSheet
+      visible={visible}
+      onClose={onClose}
+      title="Filter Items"
+      activeCount={total}
+      onClear={() => { setSelWh([]); setSelCat([]); setSelGrp([]); }}
+      onApply={() => onApply(selWh, selCat, selGrp)}
+      applyLabel="Apply Filters"
+    >
+      <FilterChipGroup
+        label="Warehouse"
+        options={ALL_WAREHOUSES}
+        selected={selWh}
+        multi
+        onSelect={setSelWh}
+      />
+      <FilterChipGroup
+        label="Category"
+        options={ALL_CATEGORIES.map(c => ({ id: c, label: c }))}
+        selected={selCat}
+        multi
+        onSelect={setSelCat}
+      />
+      <FilterChipGroup
+        label="Item Group"
+        options={ALL_GROUPS.map(g => ({ id: g, label: g }))}
+        selected={selGrp}
+        multi
+        onSelect={setSelGrp}
+      />
+      <View style={{ height: 16 }} />
+    </FilterBottomSheet>
   );
 }
 

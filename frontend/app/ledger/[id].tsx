@@ -1,8 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Dimensions, Modal, TextInput, KeyboardAvoidingView, Platform,
-  Alert, Share,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput,
+  Dimensions, Alert, Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +10,7 @@ import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_LEDGERS } from '../../src/data/mockData';
 import { TX_TO_DOC_TYPE } from '../../src/utils/documentHelpers';
+import DateRangePickerModal, { parseDMY } from '../../src/components/DateRangePickerModal';
 
 const SCREEN_W = Dimensions.get('window').width;
 
@@ -92,29 +92,7 @@ function DrCrDonutChart({
   );
 }
 
-// ── Calendar helpers for DateRangePicker ────────────────────────────────────
-const MONTHS_CAL = [
-  'January','February','March','April','May','June',
-  'July','August','September','October','November','December',
-];
-const DAY_LABELS_CAL = ['Su','Mo','Tu','We','Th','Fr','Sa'];
-const QUICK_PRESETS = [
-  { key: 'this_month', label: 'This Month'    },
-  { key: 'last_month', label: 'Last Month'    },
-  { key: 'last_3',     label: 'Last 3 Months' },
-  { key: 'this_fy',    label: 'This FY'       },
-];
-
-function parseDMY(str: string): Date | null {
-  if (!str) return null;
-  const p = str.split('/');
-  if (p.length < 3) return null;
-  const year = parseInt(p[2]) < 100 ? 2000 + parseInt(p[2]) : parseInt(p[2]);
-  return new Date(year, parseInt(p[1]) - 1, parseInt(p[0]));
-}
-function fmtDMY(d: Date): string {
-  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`;
-}
+// ── Date helpers ──────────────────────────────────────────────────────────────
 const MONTH_ABBR: Record<string,number> = {
   Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11,
 };
@@ -226,232 +204,6 @@ function LedgerInfoModal({ visible, onClose }: { visible: boolean; onClose: () =
               <Text style={im.closeBtnText}>Close</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-// ── DateRangePickerModal ──────────────────────────────────────────────────────
-function DateRangePickerModal({
-  visible, fromDate, toDate, onApply, onClose,
-}: {
-  visible: boolean;
-  fromDate: string;
-  toDate: string;
-  onApply: (from: string, to: string) => void;
-  onClose: () => void;
-}) {
-  const today = new Date();
-  const [viewYear, setViewYear]   = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
-  const [selFrom, setSelFrom]     = useState<Date | null>(null);
-  const [selTo, setSelTo]         = useState<Date | null>(null);
-  const [step, setStep]           = useState<'from' | 'to'>('from');
-
-  useEffect(() => {
-    if (visible) {
-      const f = parseDMY(fromDate);
-      const t = parseDMY(toDate);
-      setSelFrom(f);
-      setSelTo(t);
-      setStep(f && !t ? 'to' : 'from');
-      const ref = f || today;
-      setViewYear(ref.getFullYear());
-      setViewMonth(ref.getMonth());
-    }
-  }, [visible]);
-
-  const calDays = useMemo(() => {
-    const firstDay    = new Date(viewYear, viewMonth, 1).getDay();
-    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-    const days: (number | null)[] = [];
-    for (let i = 0; i < firstDay; i++) days.push(null);
-    for (let i = 1; i <= daysInMonth; i++) days.push(i);
-    return days;
-  }, [viewYear, viewMonth]);
-
-  const prevMonth = () => {
-    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
-    else setViewMonth(m => m - 1);
-  };
-  const nextMonth = () => {
-    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
-    else setViewMonth(m => m + 1);
-  };
-
-  const cellDate = (d: number) => new Date(viewYear, viewMonth, d);
-
-  const handleDayPress = (day: number) => {
-    const pressed = cellDate(day);
-    if (step === 'from' || (selFrom && selTo)) {
-      setSelFrom(pressed); setSelTo(null); setStep('to');
-    } else {
-      if (selFrom && pressed < selFrom) {
-        setSelTo(selFrom); setSelFrom(pressed);
-      } else {
-        setSelTo(pressed);
-      }
-      setStep('from');
-    }
-  };
-
-  const isStart   = (d: number) => !!selFrom && cellDate(d).getTime() === selFrom.getTime();
-  const isEnd     = (d: number) => !!selTo   && cellDate(d).getTime() === selTo.getTime();
-  const isInRange = (d: number) => {
-    if (!selFrom || !selTo) return false;
-    const dt = cellDate(d); return dt > selFrom && dt < selTo;
-  };
-  const isTodayD  = (d: number) =>
-    today.getDate() === d && today.getMonth() === viewMonth && today.getFullYear() === viewYear;
-
-  const setPreset = (key: string) => {
-    const m = today.getMonth(), y = today.getFullYear();
-    let f: Date, t: Date = new Date();
-    if      (key === 'this_month')  { f = new Date(y, m, 1);     t = new Date(y, m + 1, 0); }
-    else if (key === 'last_month')  { f = new Date(y, m - 1, 1); t = new Date(y, m, 0); }
-    else if (key === 'last_3')      { f = new Date(y, m - 2, 1); t = new Date(y, m + 1, 0); }
-    else { const fyY = m >= 3 ? y : y - 1; f = new Date(fyY, 3, 1); t = new Date(); }
-    setSelFrom(f); setSelTo(t); setStep('from');
-    setViewYear(f.getFullYear()); setViewMonth(f.getMonth());
-  };
-
-  const canApply = !!selFrom && !!selTo;
-
-  const handleApply = () => {
-    if (canApply) { onApply(fmtDMY(selFrom!), fmtDMY(selTo!)); onClose(); }
-  };
-  const handleClear = () => {
-    setSelFrom(null); setSelTo(null); setStep('from');
-    onApply('', ''); onClose();
-  };
-
-  const stepHint =
-    !selFrom          ? 'Tap any date to set the start' :
-    step === 'to'     ? 'Now tap to set the end date'   :
-    selTo             ? 'Tap any date to start a new range' : '';
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={dr.overlay}>
-        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
-        <View style={dr.sheet}>
-
-          {/* ── Handle + Title ── */}
-          <View style={dr.handle} />
-          <Text style={dr.title}>Select Date Range</Text>
-
-          {/* ── Quick Presets ── */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={dr.presetsRow}
-          >
-            {QUICK_PRESETS.map(p => (
-              <TouchableOpacity
-                key={p.key}
-                style={dr.presetChip}
-                onPress={() => setPreset(p.key)}
-                activeOpacity={0.7}
-              >
-                <Text style={dr.presetChipText}>{p.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {/* ── FROM → TO display ── */}
-          <View style={dr.rangeDisplay}>
-            <View style={[dr.rangeDate, step === 'from' && !selTo && dr.rangeDateCurr, selFrom && selTo && dr.rangeDateDone]}>
-              <Text style={dr.rangeDateLabel}>FROM</Text>
-              <View style={dr.rangeDateRow}>
-                <Ionicons name="calendar-outline" size={12} color={selFrom ? COLORS.brandPrimary : COLORS.textTertiary} />
-                <Text style={[dr.rangeDateVal, !selFrom && dr.rangeDateEmpty]}>
-                  {selFrom ? fmtDMY(selFrom) : '--/--/--'}
-                </Text>
-              </View>
-            </View>
-            <View style={dr.rangeArrow}>
-              <Ionicons name="arrow-forward" size={14} color={COLORS.textTertiary} />
-            </View>
-            <View style={[dr.rangeDate, step === 'to' && dr.rangeDateCurr, selFrom && selTo && dr.rangeDateDone]}>
-              <Text style={dr.rangeDateLabel}>TO</Text>
-              <View style={dr.rangeDateRow}>
-                <Ionicons name="calendar-outline" size={12} color={selTo ? COLORS.brandPrimary : COLORS.textTertiary} />
-                <Text style={[dr.rangeDateVal, !selTo && dr.rangeDateEmpty]}>
-                  {selTo ? fmtDMY(selTo) : '--/--/--'}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* ── Step hint ── */}
-          <Text style={dr.stepHint}>{stepHint}</Text>
-
-          {/* ── Month Navigation ── */}
-          <View style={dr.navRow}>
-            <TouchableOpacity style={dr.navBtn} onPress={prevMonth} activeOpacity={0.7}>
-              <Ionicons name="chevron-back" size={20} color={COLORS.textPrimary} />
-            </TouchableOpacity>
-            <Text style={dr.monthYear}>{MONTHS_CAL[viewMonth]} {viewYear}</Text>
-            <TouchableOpacity style={dr.navBtn} onPress={nextMonth} activeOpacity={0.7}>
-              <Ionicons name="chevron-forward" size={20} color={COLORS.textPrimary} />
-            </TouchableOpacity>
-          </View>
-
-          {/* ── Day Headers ── */}
-          <View style={dr.dayHeaders}>
-            {DAY_LABELS_CAL.map(d => <Text key={d} style={dr.dayHeader}>{d}</Text>)}
-          </View>
-
-          {/* ── Calendar Grid ── */}
-          <View style={dr.calGrid}>
-            {calDays.map((day, idx) => {
-              if (day === null) return <View key={idx} style={dr.calCell} />;
-              const start   = isStart(day);
-              const end     = isEnd(day);
-              const inRange = isInRange(day);
-              const td      = isTodayD(day);
-              return (
-                <TouchableOpacity
-                  key={idx}
-                  style={[dr.calCell, inRange && dr.calCellInRange]}
-                  onPress={() => handleDayPress(day)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[
-                    dr.calDay,
-                    (start || end) && dr.calDaySel,
-                    td && !start && !end && dr.calDayToday,
-                  ]}>
-                    <Text style={[
-                      dr.calDayTxt,
-                      (start || end) && dr.calDayTxtSel,
-                      td && !start && !end && dr.calDayTxtToday,
-                      inRange && dr.calDayTxtRange,
-                    ]}>{day}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* ── Action Buttons ── */}
-          <View style={dr.btnRow}>
-            <TouchableOpacity style={dr.clearBtn} onPress={handleClear} activeOpacity={0.7}>
-              <Text style={dr.clearTxt}>Clear All</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[dr.applyBtn, !canApply && dr.applyBtnDis]}
-              onPress={handleApply}
-              disabled={!canApply}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="checkmark-circle-outline" size={16} color={COLORS.white} />
-              <Text style={dr.applyTxt}>Apply Filter</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={{ height: 14 }} />
         </View>
       </View>
     </Modal>
@@ -844,6 +596,18 @@ const styles = StyleSheet.create({
   infoBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   scroll:  { flex: 1 },
 
+  // ── Fixed top (chart + controls) — does NOT scroll ──
+  stickyTop: { backgroundColor: COLORS.pageBg },
+
+  // ── Single-row: Date | Search | Dr | Cr ──────────────────────────────────
+  controlRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: SPACING.md, paddingBottom: SPACING.sm,
+  },
+
+  // ── Scrollable transactions area ─────────────────────────────────────────
+  txnScroll: { flex: 1 },
+
   // Donut + legend card
   chartSection: {
     flexDirection: 'row', alignItems: 'center',
@@ -1096,121 +860,4 @@ const im = StyleSheet.create({
 });
 
 
-// ── DateRangePicker Styles ────────────────────────────────────────────────────
-const dr = StyleSheet.create({
-  overlay: {
-    flex: 1, justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.48)',
-  },
-  sheet: {
-    backgroundColor: COLORS.cardBg,
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingHorizontal: SPACING.md, paddingTop: 12,
-  },
-  handle: {
-    width: 40, height: 4, backgroundColor: COLORS.borderStrong,
-    borderRadius: 2, alignSelf: 'center', marginBottom: 16,
-  },
-  title: {
-    fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary,
-    textAlign: 'center', marginBottom: 14,
-  },
 
-  // ── Quick Presets ──
-  presetsRow: { gap: 8, paddingBottom: 14 },
-  presetChip: {
-    paddingHorizontal: 14, paddingVertical: 7,
-    backgroundColor: COLORS.pageBg, borderRadius: 20,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  presetChipText: {
-    fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary,
-  },
-
-  // ── FROM → TO display ──
-  rangeDisplay: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6,
-  },
-  rangeDate: {
-    flex: 1, paddingVertical: 10, paddingHorizontal: 12,
-    backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md,
-    borderWidth: 1.5, borderColor: COLORS.borderDefault,
-    alignItems: 'center',
-  },
-  rangeDateCurr: {
-    borderColor: COLORS.brandPrimary,
-    backgroundColor: COLORS.activeBg,
-  },
-  rangeDateDone: {
-    borderColor: COLORS.brandPrimary,
-    backgroundColor: COLORS.activeBg,
-  },
-  rangeDateLabel: {
-    fontSize: 9, fontWeight: '800', color: COLORS.textTertiary,
-    letterSpacing: 1.1, marginBottom: 4, textTransform: 'uppercase',
-  },
-  rangeDateRow:  { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  rangeDateVal:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  rangeDateEmpty:{ color: COLORS.textTertiary, fontWeight: '400' },
-  rangeArrow:    { width: 24, alignItems: 'center' },
-
-  // ── Step hint ──
-  stepHint: {
-    fontSize: 11, color: COLORS.textTertiary, textAlign: 'center',
-    fontStyle: 'italic', marginBottom: 10, minHeight: 16,
-  },
-
-  // ── Month Navigation ──
-  navRow: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', marginBottom: 10,
-  },
-  navBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  monthYear: {
-    fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary,
-  },
-
-  // ── Day Headers ──
-  dayHeaders: { flexDirection: 'row', marginBottom: 4 },
-  dayHeader:  {
-    flex: 1, textAlign: 'center',
-    fontSize: 10, fontWeight: '700', color: COLORS.textTertiary,
-  },
-
-  // ── Calendar Grid ──
-  calGrid:       { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 },
-  calCell:       { width: `${100 / 7}%` as any, alignItems: 'center', paddingVertical: 2 },
-  calCellInRange:{
-    backgroundColor: 'rgba(26,26,26,0.07)',
-    width: `${100 / 7}%` as any, alignItems: 'center', paddingVertical: 2,
-  },
-  calDay:        {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  calDaySel:     { backgroundColor: COLORS.brandPrimary },
-  calDayToday:   { borderWidth: 1.5, borderColor: COLORS.brandPrimary },
-  calDayTxt:     { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textPrimary },
-  calDayTxtSel:  { color: COLORS.white, fontWeight: '700' },
-  calDayTxtToday:{ color: COLORS.brandPrimary, fontWeight: '700' },
-  calDayTxtRange:{ color: COLORS.textPrimary, fontWeight: '600' },
-
-  // ── Action Buttons ──
-  btnRow:  { flexDirection: 'row', gap: 10 },
-  clearBtn: {
-    flex: 1, paddingVertical: 14, borderRadius: RADIUS.md,
-    borderWidth: 1.5, borderColor: COLORS.borderDefault, alignItems: 'center',
-  },
-  clearTxt:  { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textSecondary },
-  applyBtn: {
-    flex: 2, flexDirection: 'row', gap: 6, paddingVertical: 14,
-    borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  applyBtnDis: { backgroundColor: COLORS.borderStrong },
-  applyTxt:  { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
-});
