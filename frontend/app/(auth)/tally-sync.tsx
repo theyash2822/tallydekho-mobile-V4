@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import type { FC } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View, Text, TouchableOpacity, StyleSheet,
@@ -9,32 +10,47 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { pairWithTally } from '../../src/services/api';
 
 type SyncStep = 'prompt' | 'input' | 'syncing' | 'done';
 
 export default function TallySyncScreen() {
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { setCompany, setIsPaired } = useAuth();
   const [step, setStep] = useState<SyncStep>('prompt');
   const [pairKey, setPairKey] = useState('');
   const [progress, setProgress] = useState(0);
 
+  const [error, setError] = React.useState('');
+
   const handleSync = async () => {
     if (!pairKey.trim()) return;
     setStep('syncing');
-    // Simulate progress
-    for (let i = 10; i <= 100; i += 10) {
-      await new Promise(res => setTimeout(res, 200));
-      setProgress(i);
+    setError('');
+    // Show progress while API call happens
+    setProgress(20);
+    try {
+      const res = await pairWithTally(pairKey.trim());
+      setProgress(80);
+      if (res?.success && res?.data?.is_paired) {
+        setIsPaired(true);
+        if (res.data.company) {
+          await setCompany({ guid: res.data.company.guid, name: res.data.company.name, gstin: res.data.company.gstin ?? undefined });
+        }
+        setProgress(100);
+        await new Promise(r => setTimeout(r, 400));
+        router.replace('/(tabs)');
+      } else {
+        setStep('input');
+        setError('Pairing failed. Please check the code and try again.');
+      }
+    } catch (err: any) {
+      setStep('input');
+      setError(err?.message || 'Could not connect to Tally. Check your code.');
     }
-    await AsyncStorage.setItem('tally_synced', 'true');
-    await signIn('mock_token_tally');
-    router.replace('/(tabs)');
   };
 
   const handleSkip = async () => {
-    await AsyncStorage.setItem('tally_synced', 'false');
-    await signIn('mock_token_skip');
     router.replace('/(tabs)');
   };
 
@@ -101,7 +117,8 @@ export default function TallySyncScreen() {
               >
                 <Text style={styles.primaryBtnText}>Submit</Text>
               </TouchableOpacity>
-              <TouchableOpacity testID="back-from-input-btn" style={styles.skipBtn} onPress={() => setStep('prompt')} activeOpacity={0.7}>
+              {!!error && <Text style={{ color: COLORS.negative, fontSize: 13, marginBottom: 8, textAlign: 'center' }}>{error}</Text>}
+              <TouchableOpacity testID="back-from-input-btn" style={styles.skipBtn} onPress={() => { setStep('prompt'); setError(''); }} activeOpacity={0.7}>
                 <Text style={styles.skipBtnText}>Back</Text>
               </TouchableOpacity>
             </View>

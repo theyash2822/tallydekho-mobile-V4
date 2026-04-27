@@ -8,6 +8,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect } from 'react';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { registerUser } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
@@ -29,20 +30,28 @@ export default function RegisterScreen() {
   const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
   const canProceed = name.trim().length > 1 && isValidEmail(email) && termsAccepted;
 
+  // Store the token from OTP verify so register can call authenticated endpoint
+  useEffect(() => {
+    if (token) {
+      AsyncStorage.setItem('auth_token', token);
+    }
+  }, [token]);
+
   const handleLogin = async () => {
     if (!canProceed) return;
     setLoading(true);
     setError('');
     try {
-      const res = await registerUser({ name: name.trim(), email: email.trim(), language, phone: phone || '' }) as any;
-      if (res?.token) {
-        await AsyncStorage.setItem('user_data', JSON.stringify({ name: name.trim(), email: email.trim(), language, phone }));
+      const res = await registerUser({ name: name.trim(), email: email.trim(), language });
+      if (res?.success && res?.data?.access_token) {
+        // Update token with fresh one from register response
+        await signIn(res.data.access_token, { name: res.data.user.name, mobile: res.data.user.phone });
         router.replace('/(auth)/tally-sync');
       } else {
         setError('Registration failed. Please retry.');
       }
-    } catch {
-      setError('Something went wrong. Please try again.');
+    } catch (err: any) {
+      setError(err?.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }

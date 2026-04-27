@@ -70,7 +70,7 @@ function OTPBox({
 export default function OTPScreen() {
   const router = useRouter();
   const { phone } = useLocalSearchParams<{ phone: string }>();
-  const { signIn } = useAuth();
+  const { signIn, setCompany, setIsPaired } = useAuth();
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [focusedIdx, setFocusedIdx] = useState<number>(0);
   const [loading, setLoading] = useState(false);
@@ -124,19 +124,24 @@ export default function OTPScreen() {
     setLoading(true);
     setError('');
     try {
-      const res = await verifyOTP(phone || '', code) as any;
-      if (res?.token) {
-        if (res?.isNewUser) {
-          router.replace({ pathname: '/(auth)/register', params: { phone, token: res.token } });
+      const res = await verifyOTP(phone || '', code);
+      if (res?.success && res?.data?.access_token) {
+        const { access_token, is_new_user, user, is_paired, company } = res.data;
+        if (is_new_user) {
+          // Pass token to register screen so it can call /api/auth/register with auth
+          router.replace({ pathname: '/(auth)/register', params: { phone, token: access_token } });
         } else {
-          await signIn(res.token);
+          // Existing user — sign in and restore company/paired state
+          await signIn(access_token, user ? { id: user.id, name: user.name ?? undefined, mobile: user.phone } : undefined);
+          if (is_paired) setIsPaired(true);
+          if (company) await setCompany({ guid: company.guid, name: company.name, gstin: company.gstin ?? undefined });
           router.replace('/(tabs)');
         }
       } else {
         setError('Invalid OTP. Please try again.');
       }
-    } catch {
-      setError('Verification failed. Please retry.');
+    } catch (err: any) {
+      setError(err?.message || 'Verification failed. Please retry.');
     } finally {
       setLoading(false);
     }
