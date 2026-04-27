@@ -166,8 +166,6 @@ function TimePickerSheet({ visible, label, initialTime, onClose, onConfirm }: {
 }) {
   const { h: ih, mi: im, p: ip } = parseTime(initialTime);
   const [selH, setSelH] = useState(ih);
-  const [isDirty, setIsDirty] = useState(false);
-  const markDirty = () => setIsDirty(true);
   const [selM, setSelM] = useState(im);
   const [selP, setSelP] = useState(ip);
   useEffect(() => {
@@ -243,7 +241,7 @@ function PartySelectorSheet({ visible, currentSelection, onClose, onConfirm }: {
           <View style={ps.searchWrap}>
             <Ionicons name="search-outline" size={16} color={COLORS.textTertiary} />
             <TextInput
-              style={ps.searchInput} value={search} onChangeText={v => { setSearch(v); markDirty(); }}
+              style={ps.searchInput} value={search} onChangeText={setSearch}
               placeholder="Search parties…" placeholderTextColor={COLORS.textTertiary}
               selectionColor={COLORS.brandPrimary} autoFocus
             />

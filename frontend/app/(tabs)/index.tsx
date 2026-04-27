@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   RefreshControl, FlatList, AppState, TextInput,
   Modal, Animated, KeyboardAvoidingView, Platform, Dimensions,
-  NativeSyntheticEvent, NativeScrollEvent,
+  NativeSyntheticEvent, NativeScrollEvent, Vibration,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -143,16 +143,24 @@ export default function HomeScreen() {
   };
 
   const handleMicPress = () => {
-    setShowMicModal(true);
-    startMicAnimation();
-    micTimerRef.current = setTimeout(() => {
-      setShowMicModal(false);
-      micScale.stopAnimation(); micScale.setValue(1);
-      micOpacity.stopAnimation(); micOpacity.setValue(0.7);
-      const pick = MOCK_VOICE_SEARCHES[Math.floor(Math.random() * MOCK_VOICE_SEARCHES.length)];
-      setSearchQuery(pick);
-      setSearchFocused(true);
-    }, 2500);
+    // Haptic / vibration feedback so user knows the button was tapped
+    Vibration.vibrate(80);
+    // Dismiss keyboard before showing mic modal
+    setSearchFocused(false);
+    // Short delay so keyboard dismissal doesn't fight the modal
+    setTimeout(() => {
+      setShowMicModal(true);
+      startMicAnimation();
+      if (micTimerRef.current) clearTimeout(micTimerRef.current);
+      micTimerRef.current = setTimeout(() => {
+        setShowMicModal(false);
+        micScale.stopAnimation(); micScale.setValue(1);
+        micOpacity.stopAnimation(); micOpacity.setValue(0.7);
+        const pick = MOCK_VOICE_SEARCHES[Math.floor(Math.random() * MOCK_VOICE_SEARCHES.length)];
+        setSearchQuery(pick);
+        setSearchFocused(true);
+      }, 2500);
+    }, 100);
   };
 
   const clearSearch = () => {

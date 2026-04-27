@@ -189,8 +189,6 @@ function TimePickerSheet({
 }) {
   const { h: initH, m: initM, p: initP } = parseTime(initialTime);
   const [selH, setSelH] = useState(initH);
-  const [isDirty, setIsDirty] = useState(false);
-  const markDirty = () => setIsDirty(true);
   const [selM, setSelM] = useState(initM);
   const [selP, setSelP] = useState(initP);
 
@@ -294,6 +292,9 @@ const CHANNELS = [
 // ─────────────────────────────────────────────────────────────────────────────
 export default function NotificationChannelsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = () => setIsDirty(true);
   const [enabled, setEnabled] = useState<Record<string,boolean>>({
     email:true, whatsapp:true, sms:false, push:true,
   });

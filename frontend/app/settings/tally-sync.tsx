@@ -254,7 +254,11 @@ export default function TallySyncScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
 
         {/* ════════════════════════════════════════════
             PAIRED STATE
@@ -367,14 +371,15 @@ export default function TallySyncScreen() {
                   <SixDigitInput code={code} onChange={setCode} />
                   <Text style={s.codeHint}>Enter 6-digit code from the TallyDekho Desktop Agent</Text>
 
+                  {isComplete && (
                   <TouchableOpacity
-                    style={[s.primaryBtn, !isComplete && s.primaryBtnDisabled]}
+                    style={s.primaryBtn}
                     onPress={handlePair}
                     activeOpacity={0.85}
-                    disabled={!isComplete}
                   >
                     <Text style={s.primaryTxt}>Pair Now</Text>
                   </TouchableOpacity>
+                  )}
 
                   <TouchableOpacity
                     style={s.helpLink}
@@ -408,6 +413,7 @@ export default function TallySyncScreen() {
         )}
 
       </ScrollView>
+      </KeyboardAvoidingView>
 
       <HelpSheet       visible={showHelp}       onClose={() => setShowHelp(false)} />
       <DisconnectSheet visible={showDisconnect} onClose={() => setShowDisconnect(false)} onConfirm={handleDisconnect} />

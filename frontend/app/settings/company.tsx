@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
+import * as ImagePicker from 'expo-image-picker';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -153,13 +154,13 @@ export default function CompanyScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Company Information</Text>
-        <TouchableOpacity style={s.saveBtn} onPress={handleSave} activeOpacity={0.7}>
-          {isDirty ? (
+        {isDirty ? (
+          <TouchableOpacity style={s.saveBtn} onPress={handleSave} activeOpacity={0.7}>
             <Text style={s.saveBtnText}>Save</Text>
-          ) : (
-            <View style={{ width: 48 }} />
-          )}
-        </TouchableOpacity>
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 52 }} />
+        )}
       </View>
 
       <KeyboardAvoidingView
