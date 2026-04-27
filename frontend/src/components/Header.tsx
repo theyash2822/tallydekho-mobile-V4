@@ -153,11 +153,11 @@ const Header: React.FC<HeaderProps> = ({
                         {co.name[0]}
                       </Text>
                     </View>
-                    <View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={[styles.optionText, selectedCompany === co.name && styles.optionTextActive]} numberOfLines={1}>
                         {co.name}
                       </Text>
-                      <Text style={styles.optionSub}>{co.gstin}</Text>
+                      <Text style={styles.optionSub} numberOfLines={1}>{co.gstin}</Text>
                     </View>
                   </View>
                   {selectedCompany === co.name && (

@@ -414,7 +414,7 @@ function OTPVerifySheet({
       : `Enter your new ${isPhone ? 'phone number' : 'email address'}`;
 
     return (
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <View>
         <Text style={ps.modalSub}>{subTitle}</Text>
 
         {/* Input row */}
@@ -457,7 +457,7 @@ function OTPVerifySheet({
           <Text style={[ps.resendText, { color: COLORS.textTertiary }]}>Cancel</Text>
         </TouchableOpacity>
         <View style={{ height: 16 }} />
-      </KeyboardAvoidingView>
+      </View>
     );
   };
 
@@ -516,7 +516,11 @@ function OTPVerifySheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={ps.modalOverlay}>
+      <KeyboardAvoidingView
+        style={{ flex: 1, backgroundColor: COLORS.overlay }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
         <View style={ps.modalSheet}>
           <View style={ps.handle} />
@@ -542,7 +546,7 @@ function OTPVerifySheet({
           {step === 3 && renderInput(false)}
           {step === 4 && renderOTP(false)}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -566,6 +570,10 @@ export default function ProfileScreen() {
   const [showPasskey,   setShowPasskey]   = useState(false);
   const [showEditPhone, setShowEditPhone] = useState(false);
   const [showEditEmail, setShowEditEmail] = useState(false);
+
+  // markDirty — kept as no-op since Save button is always visible on this screen
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  const markDirty = () => {};
 
   // Save toast animation (slidedown below header)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
