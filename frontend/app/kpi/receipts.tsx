@@ -9,6 +9,8 @@ import { PieChart } from 'react-native-gifted-charts';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
+import { getKPIReceipts } from '../../src/services/api';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -215,6 +217,14 @@ function DonutCard() {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function ReceiptsScreen() {
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
+  const [apiData, setApiData] = React.useState<any>(null);
+  React.useEffect(() => {
+    if (!companyGuid) return;
+    getKPIReceipts(companyGuid).then((res: any) => { if (res?.data) setApiData(res.data); }).catch(() => {});
+  }, [companyGuid]);
+
   const router  = useRouter();
   const kpiRef  = useRef<any>(null);
   const [kpiIdx,  setKpiIdx]  = useState(0);

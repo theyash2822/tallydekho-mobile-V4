@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput,
 } from 'react-native';
@@ -7,6 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_EWAYBILLS } from '../../src/data/mockData';
+import { useAuth } from '../../src/context/AuthContext';
+import { getEWBList, getCompanyCapabilities } from '../../src/services/api';
 
 const EWB_COLORS: Record<string, string> = {
   generated: COLORS.positive,
@@ -16,15 +18,58 @@ const EWB_COLORS: Record<string, string> = {
 
 export default function EWayBillScreen() {
   const router = useRouter();
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
   const [search, setSearch] = useState('');
-  const data = MOCK_EWAYBILLS;
+  const [liveBills, setLiveBills] = useState<any[]>([]);
+  const [countryApplicable, setCountryApplicable] = useState(true);
+  const [notApplicableMsg, setNotApplicableMsg] = useState('');
 
-  const filtered = data.bills.filter(
-    b =>
+  useEffect(() => {
+    if (!companyGuid) return;
+    getEWBList(companyGuid).then((res: any) => {
+      if (res?.meta?.country_applicable === false) {
+        setCountryApplicable(false);
+        setNotApplicableMsg(res.meta.message || 'E-Way Bill not applicable for your country');
+        return;
+      }
+      const rows = res?.data ?? [];
+      setLiveBills(rows.map((r: any) => ({
+        id: r.voucher_number || String(r.id),
+        company: r.party_name || '',
+        date: r.date || '',
+        amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`,
+        status: r.ewb_number ? 'generated' : 'pending',
+        ewb_no: r.ewb_number || null,
+      })));
+    }).catch(() => {});
+  }, [companyGuid]);
+
+  const data = MOCK_EWAYBILLS;
+  const allBills = liveBills.length > 0 ? liveBills : data.bills;
+
+  const filtered = allBills.filter(
+    (b: any) =>
       !search ||
-      b.company.toLowerCase().includes(search.toLowerCase()) ||
+      (b.company||'').toLowerCase().includes(search.toLowerCase()) ||
       b.id.toLowerCase().includes(search.toLowerCase()),
   );
+
+  if (!countryApplicable) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{top:8,bottom:8,left:8,right:8}}><Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} /></TouchableOpacity>
+          <Text style={styles.headerTitle}>E-Way Bill</Text><View style={{width:36}} />
+        </View>
+        <View style={{flex:1,alignItems:'center',justifyContent:'center',padding:24}}>
+          <Ionicons name="information-circle-outline" size={48} color={COLORS.textTertiary} />
+          <Text style={{fontSize:16,fontWeight:'700',color:COLORS.textPrimary,marginTop:12,textAlign:'center'}}>Not Applicable</Text>
+          <Text style={{fontSize:14,color:COLORS.textSecondary,marginTop:8,textAlign:'center'}}>{notApplicableMsg}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe}>

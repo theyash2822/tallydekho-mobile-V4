@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_QUOTATIONS } from '../../src/data/mockData';
+import { useAuth } from '../../src/context/AuthContext';
+import { getSalesQuotations } from '../../src/services/api';
 
 const SC: Record<string,string> = { accepted: COLORS.positive, pending: COLORS.warning, expired: COLORS.negative };
 const SL: Record<string,string> = { accepted: 'Accepted', pending: 'Pending', expired: 'Expired' };
@@ -12,8 +14,20 @@ const SL: Record<string,string> = { accepted: 'Accepted', pending: 'Pending', ex
 export default function QuotationsScreen() {
   const router = useRouter();
   const [search, setSearch] = useState('');
-  const data = MOCK_QUOTATIONS;
-  const filtered = data.items.filter(o => !search || o.party.toLowerCase().includes(search.toLowerCase()) || o.id.toLowerCase().includes(search.toLowerCase()));
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
+  const [liveData, setLiveData] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!companyGuid) return;
+    getSalesQuotations(companyGuid).then((res: any) => {
+      const rows = res?.data ?? [];
+      if (rows.length) setLiveData(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), party: r.party_name||'', date: r.date||'', amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`, status: 'confirmed' })));
+    }).catch(() => {});
+  }, [companyGuid]);
+
+    const data = MOCK_QUOTATIONS;
+  const filtered = (liveData.length > 0 ? liveData : data.items).filter(o => !search || o.party.toLowerCase().includes(search.toLowerCase()) || o.id.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <SafeAreaView style={s.safe}>

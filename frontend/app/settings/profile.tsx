@@ -10,6 +10,8 @@ import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_USER } from '../../src/data/mockData';
+import { useAuth } from '../../src/context/AuthContext';
+import { updateMe } from '../../src/services/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -554,12 +556,19 @@ function OTPVerifySheet({
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { user } = useAuth();
 
-  // Form state
-  const [name,  setName]  = useState(MOCK_USER.name || 'Rajesh Sharma');
+  // Form state — pre-filled from AuthContext
+  const [name,  setName]  = useState(user?.name || MOCK_USER.name || 'Your Name');
   const [role,  setRole]  = useState('Admin');
-  const [phone, setPhone] = useState(MOCK_USER.phone || '9876543210');
-  const [email, setEmail] = useState('ashish@ykind.com');
+  const [phone, setPhone] = useState(user?.mobile || MOCK_USER.phone || '');
+  const [email, setEmail] = useState((user as any)?.email || 'your@email.com');
+
+  // Sync when user data loads
+  useEffect(() => {
+    if (user?.name) setName(user.name);
+    if (user?.mobile) setPhone(user.mobile);
+  }, [user]);
 
   // Security
   const [biometric, setBiometric] = useState(true);

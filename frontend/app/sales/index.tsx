@@ -8,6 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_SALES_REGISTER } from '../../src/data/mockData';
+import { useAuth } from '../../src/context/AuthContext';
+import { getSalesInvoices, getKPIStrip } from '../../src/services/api';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
 const AMBER      = '#A89060';
@@ -45,6 +47,34 @@ const BANNERS = [
 export default function SalesScreen() {
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
+  const [liveRecent, setLiveRecent] = useState<any[]>([]);
+  const [liveTopParties, setLiveTopParties] = useState<any[]>([]);
+  const [liveBanners, setLiveBanners] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!companyGuid) return;
+    // Recent invoices
+    getSalesInvoices(companyGuid, { limit: '5' } as any).then((res: any) => {
+      const rows = res?.data ?? [];
+      if (rows.length) setLiveRecent(rows.slice(0,5).map((r: any) => ({
+        id: r.voucher_number || String(r.id),
+        party: r.party_name || '',
+        date: r.date || '',
+        amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`,
+        status: r.irn ? 'generated' : 'pending_irn',
+      })));
+      // Top parties from same data
+      const partyMap: Record<string,number> = {};
+      rows.forEach((r: any) => { if (r.party_name) partyMap[r.party_name] = (partyMap[r.party_name]||0) + (+r.amount||0); });
+      const top = Object.entries(partyMap).sort((a,b) => b[1]-a[1]).slice(0,5);
+      if (top.length) setLiveTopParties(top.map(([name, amt], i) => ({ id: `tp${i}`, name, amount: `₹${Math.round(+amt).toLocaleString('en-IN')}`, color: ['#2563EB','#D97706','#7C3AED','#0891B2','#059669'][i] })));
+      // Dynamic banners
+      const pendingIRN = rows.filter((r: any) => !r.irn).length;
+      if (pendingIRN > 0) setLiveBanners([{ id: 'b1', bold: `${pendingIRN} invoices`, sub: 'pending E-Invoice (IRN) generation', action: 'Generate Now' }, ...BANNERS.slice(1)]);
+    }).catch(() => {});
+  }, [companyGuid]);
 
   // ─ Tab & filter state
   const [tab,      setTab]      = useState<'recent' | 'parties'>('recent');
@@ -88,11 +118,14 @@ export default function SalesScreen() {
   }, []);
 
   // ─ Filtered recent list
-  const recent = MOCK_SALES_REGISTER.invoices.filter(inv => {
+  const sourceRecent = liveRecent.length > 0 ? liveRecent : MOCK_SALES_REGISTER.invoices;
+  const recent = sourceRecent.filter((inv: any) => {
     if (filter === 'Paid')   return inv.status === 'paid';
     if (filter === 'Unpaid') return inv.status === 'unpaid';
     return true;
   }).slice(0, 5);
+  const displayTopParties = liveTopParties.length > 0 ? liveTopParties : TOP_PARTIES;
+  const displayBanners = liveBanners.length > 0 ? liveBanners : BANNERS;
 
   // ─ Date apply handler
   const handleDateApply = (from: string, to: string) => {
@@ -263,7 +296,7 @@ export default function SalesScreen() {
         {/* ── Top Parties ──────────────────────────────────────────── */}
         {tab === 'parties' && (
           <View style={s.listSection}>
-            {TOP_PARTIES.map(p => (
+            {displayTopParties.map(p => (
               <TouchableOpacity key={p.id} style={s.itemCard} activeOpacity={0.7}>
                 <View style={[s.avatar, { backgroundColor: p.color + '22' }]}>
                   <Text style={[s.avatarTxt, { color: p.color }]}>{p.name.charAt(0)}</Text>
@@ -288,7 +321,7 @@ export default function SalesScreen() {
       <View style={[s.bannerWrap, { paddingBottom: insets.bottom > 0 ? insets.bottom : 8 }]}>
         <FlatList
           ref={bannerRef}
-          data={BANNERS}
+          data={displayBanners}
           horizontal
           showsHorizontalScrollIndicator={false}
           keyExtractor={b => b.id}
@@ -318,7 +351,7 @@ export default function SalesScreen() {
         />
         {/* Banner dots */}
         <View style={s.bannerDots}>
-          {BANNERS.map((_, i) => (
+          {displayBanners.map((_, i) => (
             <View key={i} style={[s.bannerDot, i === bannerIdx && s.bannerDotActive]} />
           ))}
         </View>

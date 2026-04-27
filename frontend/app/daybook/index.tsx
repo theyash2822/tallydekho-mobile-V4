@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, FlatList,
@@ -7,6 +7,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
+import { getDaybook } from '../../src/services/api';
 
 const DAYBOOK_TYPE_MAP: Record<string, string> = {
   Sales:    'sales_invoice',
@@ -49,6 +51,28 @@ const TYPE_COLORS: Record<string,string> = {
 export default function DaybookScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
+  const [liveEntries, setLiveEntries] = useState<Entry[]>([]);
+
+  useEffect(() => {
+    if (!companyGuid) return;
+    const today = new Date().toISOString().split('T')[0];
+    getDaybook(companyGuid, today).then((res: any) => {
+      const rows = res?.data ?? [];
+      if (rows.length) setLiveEntries(rows.map((r: any) => ({
+        id: String(r.id),
+        date: r.date || today,
+        type: r.voucher_type || 'Journal',
+        ref: r.voucher_number || '',
+        party: r.party_name || '',
+        amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`,
+        debitCredit: 'Dr',
+        isMine: true,
+      })));
+    }).catch(() => {});
+  }, [companyGuid]);
+
   const [mode, setMode] = useState<ViewMode>('daybook');
   const [vType, setVType] = useState<VType>('ALL');
   const [search, setSearch] = useState('');
@@ -56,7 +80,8 @@ export default function DaybookScreen() {
   const [multiSelect, setMultiSelect] = useState(false);
 
   const filtered = useMemo(() => {
-    let arr = mode === 'myentries' ? ENTRIES.filter(e => e.isMine) : ENTRIES;
+    const sourceEntries = liveEntries.length > 0 ? liveEntries : ENTRIES;
+    let arr = mode === 'myentries' ? sourceEntries.filter(e => e.isMine) : sourceEntries;
     if (vType !== 'ALL') arr = arr.filter(e => e.type === vType);
     if (search) arr = arr.filter(e =>
       e.party.toLowerCase().includes(search.toLowerCase()) ||

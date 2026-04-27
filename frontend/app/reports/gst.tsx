@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
@@ -7,6 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal, { parseDMY, fmtDMY } from '../../src/components/DateRangePickerModal';
+import { useAuth } from '../../src/context/AuthContext';
+import { getGSTDetail, getCompanyCapabilities } from '../../src/services/api';
 
 // ── GSTR Tabs ─────────────────────────────────────────────────────────────────
 const GSTR_TABS = ['GSTR-1', 'GSTR-2A', 'GSTR-9', 'GSTR-4', 'GSTR-3B', 'GSTR-6'];
@@ -41,6 +43,11 @@ const MOCK_INVOICES: Invoice[] = [
 export default function GSTScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
+  const [isGSTApplicable, setIsGSTApplicable] = useState(true);
+  const [gstNotApplicableMsg, setGstNotApplicableMsg] = useState('');
+  const [liveInvoices, setLiveInvoices] = useState<any[]>([]);
 
   const [activeTab,       setActiveTab]       = useState('GSTR-1');
   const [fromDate,        setFromDate]        = useState('');
@@ -48,10 +55,29 @@ export default function GSTScreen() {
   const [showDatePicker,  setShowDatePicker]  = useState(false);
   const [selected,        setSelected]        = useState<string[]>([]);
 
+  useEffect(() => {
+    if (!companyGuid) return;
+    getGSTDetail(companyGuid, { type: activeTab }).then((res: any) => {
+      if (res?.meta?.country_applicable === false) {
+        setIsGSTApplicable(false);
+        setGstNotApplicableMsg(res.meta.message || 'GST reports not applicable for your country');
+        return;
+      }
+      const rows = res?.data ?? [];
+      if (rows.length) setLiveInvoices(rows.map((r: any) => ({
+        id: String(r.id), invoiceNo: r.voucher_number||'', type: r.voucher_type||'Sales',
+        party: r.party_name||'', date: r.date||'', dateObj: new Date(r.date||Date.now()),
+        amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`,
+        matched: !!(r.irn), gstr: [activeTab],
+      })));
+    }).catch(() => {});
+  }, [companyGuid, activeTab]);
+
   const isDateActive = fromDate.length > 0 && toDate.length > 0;
+  const sourceInvoices = liveInvoices.length > 0 ? liveInvoices : MOCK_INVOICES;
 
   // Filter by tab + date range
-  const filteredInvoices = MOCK_INVOICES.filter((inv) => {
+  const filteredInvoices = sourceInvoices.filter((inv: any) => {
     if (!inv.gstr.includes(activeTab)) return false;
     if (isDateActive) {
       const from = parseDMY(fromDate);
@@ -61,9 +87,25 @@ export default function GSTScreen() {
     return true;
   });
 
-  const unmatchedCount = MOCK_INVOICES.filter(
-    (inv) => !inv.matched && inv.gstr.includes(activeTab)
+  const unmatchedCount = sourceInvoices.filter(
+    (inv: any) => !inv.matched && (inv.gstr||[]).includes(activeTab)
   ).length;
+
+  if (!isGSTApplicable) {
+    return (
+      <SafeAreaView style={[s.safe]} edges={['top']}>
+        <View style={[s.header]}>
+          <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{top:8,bottom:8,left:8,right:8}}><Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} /></TouchableOpacity>
+          <Text style={s.headerTitle}>GST Reports</Text><View style={{width:36}} />
+        </View>
+        <View style={{flex:1,alignItems:'center',justifyContent:'center',padding:24}}>
+          <Ionicons name="information-circle-outline" size={48} color={COLORS.textTertiary} />
+          <Text style={{fontSize:16,fontWeight:'700',color:COLORS.textPrimary,marginTop:12,textAlign:'center'}}>Not Applicable</Text>
+          <Text style={{fontSize:14,color:COLORS.textSecondary,marginTop:8,textAlign:'center'}}>{gstNotApplicableMsg}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const toggleSelect = (id: string) => {
     setSelected((prev) =>

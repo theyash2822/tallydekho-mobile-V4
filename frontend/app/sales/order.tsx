@@ -1,19 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_SALES_ORDERS } from '../../src/data/mockData';
+import { useAuth } from '../../src/context/AuthContext';
+import { getSalesOrders } from '../../src/services/api';
 
 const SC: Record<string, string> = { confirmed: COLORS.positive, pending: COLORS.warning, cancelled: COLORS.negative };
 const SL: Record<string, string> = { confirmed: 'Confirmed', pending: 'Pending', cancelled: 'Cancelled' };
 
 export default function SalesOrdersScreen() {
   const router = useRouter();
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
   const [search, setSearch] = useState('');
+  const [liveOrders, setLiveOrders] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!companyGuid) return;
+    getSalesOrders(companyGuid).then((res: any) => {
+      const rows = res?.data ?? [];
+      if (rows.length) setLiveOrders(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), party: r.party_name||'', date: r.date||'', amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`, status: 'confirmed' })));
+    }).catch(() => {});
+  }, [companyGuid]);
+
   const data = MOCK_SALES_ORDERS;
-  const filtered = data.orders.filter(o => !search || o.party.toLowerCase().includes(search.toLowerCase()) || o.id.toLowerCase().includes(search.toLowerCase()));
+  const allOrders = liveOrders.length > 0 ? liveOrders : data.orders;
+  const filtered = allOrders.filter((o: any) => !search || (o.party||'').toLowerCase().includes(search.toLowerCase()) || (o.id||'').toLowerCase().includes(search.toLowerCase()));
 
   return (
     <SafeAreaView style={s.safe}>

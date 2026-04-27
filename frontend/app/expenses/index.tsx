@@ -8,6 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import { useAuth } from '../../src/context/AuthContext';
+import { getExpenses } from '../../src/services/api';
 
 const AMBER    = '#A89060';
 const AMBER_BG = '#FDF9F4';
@@ -41,6 +43,18 @@ const TOP_CATEGORIES = [
 // ─── Screen ─────────────────────────────────────────────────────────────────
 export default function ExpenseScreen() {
   const router = useRouter();
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
+  const [liveExpenses, setLiveExpenses] = useState<any[]>([]);
+  const [expenseSummary, setExpenseSummary] = useState<any>(null);
+
+  useEffect(() => {
+    if (!companyGuid) return;
+    getExpenses(companyGuid).then((res: any) => {
+      if (res?.data?.length) setLiveExpenses(res.data);
+      if (res?.summary) setExpenseSummary(res.summary);
+    }).catch(() => {});
+  }, [companyGuid]);
 
   const [tab,      setTab]      = useState<'recent' | 'categories'>('recent');
   const [filter,   setFilter]   = useState('All');

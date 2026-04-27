@@ -280,3 +280,53 @@ export const markNotificationRead = (id: string) =>
 
 export const markAllNotificationsRead = () =>
   patch('/notifications/read-all', {});
+
+// ══════════════════════════════════════════════════════════════
+// KPI DETAIL VIEWS
+// ══════════════════════════════════════════════════════════════
+
+export const getKPICashInHand = (companyGuid?: string) =>
+  withFallback(() => get(withCompany('/kpi/cash-in-hand', companyGuid)), null);
+export const getKPIBankBalance = (companyGuid?: string) =>
+  withFallback(() => get(withCompany('/kpi/bank-balance', companyGuid)), null);
+export const getKPIReceivables = (companyGuid?: string) =>
+  withFallback(() => get(withCompany('/kpi/receivables', companyGuid)), null);
+export const getKPIPayables = (companyGuid?: string) =>
+  withFallback(() => get(withCompany('/kpi/payables', companyGuid)), null);
+export const getKPIPayments = (companyGuid?: string) =>
+  withFallback(() => get(withCompany('/kpi/payments', companyGuid)), null);
+export const getKPIReceipts = (companyGuid?: string) =>
+  withFallback(() => get(withCompany('/kpi/receipts', companyGuid)), null);
+export const getKPILoansODs = (companyGuid?: string) =>
+  withFallback(() => get(withCompany('/kpi/loans-ods', companyGuid)), null);
+
+// ══════════════════════════════════════════════════════════════
+// E-WAY BILLS + E-INVOICE (country-aware)
+// ══════════════════════════════════════════════════════════════
+
+export const getEWBList = (companyGuid?: string, params?: any) =>
+  withFallback(() => get(withCompany('/ewaybills', companyGuid, params)), { data: [], meta: { country_applicable: false } });
+export const getEInvoicePending = (companyGuid?: string) =>
+  withFallback(() => get(withCompany('/einvoice/pending', companyGuid)), { data: [], meta: { country_applicable: false } });
+export const getEInvoiceGenerated = (companyGuid?: string) =>
+  withFallback(() => get(withCompany('/einvoice/generated', companyGuid)), { data: [], meta: {} });
+export const getGSTDetail = (companyGuid?: string, params?: { type?: string; from?: string; to?: string }) =>
+  withFallback(() => get(withCompany('/reports/gst-detail', companyGuid, params as any)), { data: [], meta: { country_applicable: false } });
+
+// ══════════════════════════════════════════════════════════════
+// EXPENSES + DAYBOOK
+// ══════════════════════════════════════════════════════════════
+
+export const getExpenses = (companyGuid?: string, params?: any) =>
+  withFallback(() => get(withCompany('/expenses', companyGuid, params)), { data: [], summary: { total: 0 } });
+export const getDaybook = (companyGuid?: string, date?: string) =>
+  withFallback(() => get(withCompany('/daybook', companyGuid, date ? { date } : {})), { data: [], meta: { total: 0 } });
+
+// ══════════════════════════════════════════════════════════════
+// COUNTRY CAPABILITIES
+// ══════════════════════════════════════════════════════════════
+
+export const getCompanyCapabilities = (companyGuid?: string) =>
+  withFallback(() => get(withCompany('/company/capabilities', companyGuid)), {
+    data: { country: 'IN', features: { gst: true, einvoice: true, ewaybill: true, tds: true, multi_currency: false, tally_sync: true } }
+  });

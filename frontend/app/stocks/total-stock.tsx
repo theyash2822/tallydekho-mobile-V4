@@ -10,6 +10,8 @@ import Swipeable from 'react-native-gesture-handler/Swipeable';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { StockItem, STOCK_ITEMS, ALL_WAREHOUSES, ALL_CATEGORIES, ALL_GROUPS } from '../../src/data/stockData';
+import { useAuth } from '../../src/context/AuthContext';
+import { getStocks } from '../../src/services/api';
 import { AddItemModal } from '../../src/components/forms/AddItemModal';
 import { EditStockModal } from '../../src/components/forms/EditStockModal';
 import { StockTransferModal } from '../../src/components/forms/StockTransferModal';
@@ -153,6 +155,31 @@ function FilterModal({ visible, onClose, onApply, initWh, initCat, initGrp }: {
 
 export default function TotalStockScreen() {
   const router = useRouter();
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
+  const [liveStocks, setLiveStocks] = useState<StockItem[]>([]);
+
+  useEffect(() => {
+    if (!companyGuid) return;
+    getStocks(companyGuid).then((res: any) => {
+      const items = res?.data?.items ?? [];
+      if (items.length) setLiveStocks(items.map((r: any) => ({
+        id: r.guid || String(r.id),
+        name: r.name || '',
+        sku: r.hsn || '',
+        category: r.category || '',
+        group: r.group_name || '',
+        qty: +(r.closing_qty || 0),
+        value: r.closing_value ? `₹${Math.round(+r.closing_value).toLocaleString('en-IN')}` : '₹0',
+        unit: r.unit || 'pcs',
+        warehouse: r.warehouse_name || 'Default',
+        warehouseId: r.warehouse_name || 'WH01',
+        reorderLevel: +(r.reorder_level || 0),
+        status: +r.closing_qty <= 0 ? 'out_of_stock' : +r.closing_qty <= +(r.reorder_level||0) ? 'low_stock' : 'in_stock',
+      })));
+    }).catch(() => {});
+  }, [companyGuid]);
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const params = useLocalSearchParams<{ whId?: string }>();
 
@@ -162,6 +189,8 @@ export default function TotalStockScreen() {
   const [selWh,  setSelWh]  = useState<string[]>([]);
   const [selCat, setSelCat] = useState<string[]>([]);
   const [selGrp, setSelGrp] = useState<string[]>([]);
+
+  const sourceItems = liveStocks.length > 0 ? liveStocks : STOCK_ITEMS;
 
   // Header "+" popover menu
   const [menuOpen, setMenuOpen] = useState(false);
@@ -178,7 +207,7 @@ export default function TotalStockScreen() {
   const [bulkPreItems,  setBulkPreItems]  = useState<StockItem[]>([]);
 
   // Derived
-  const filtered = STOCK_ITEMS.filter(item => {
+  const filtered = sourceItems.filter(item => {
     const q = query.toLowerCase();
     const qMatch  = !query || item.name.toLowerCase().includes(q) || item.sku.toLowerCase().includes(q);
     const whMatch  = selWh.length  === 0 || selWh.includes(item.warehouse);
@@ -187,7 +216,7 @@ export default function TotalStockScreen() {
     return qMatch && whMatch && catMatch && grpMatch;
   });
 
-  const totalQty          = STOCK_ITEMS.reduce((s, i) => s + i.qty, 0);
+  const totalQty          = sourceItems.reduce((s, i) => s + i.qty, 0);
   const activeFilterCount = selWh.length + selCat.length + selGrp.length;
   const allSelected       = filtered.length > 0 && filtered.every(i => selectedIds.includes(i.id));
 
@@ -215,7 +244,7 @@ export default function TotalStockScreen() {
 
   const openBulkFromMultiselect = useCallback(() => {
     if (!selectedIds.length) return;
-    const items = STOCK_ITEMS.filter(i => selectedIds.includes(i.id));
+    const items = sourceItems.filter(i => selectedIds.includes(i.id));
     setBulkPreItems(items); setBulkOpen(true);
   }, [selectedIds]);
 
@@ -308,7 +337,7 @@ export default function TotalStockScreen() {
       {/* ── Summary KPI strip ── */}
       <View style={styles.summaryRow}>
         {[
-          { label: 'No. of SKUs', value: `${STOCK_ITEMS.length}` },
+          { label: 'No. of SKUs', value: `${sourceItems.length}` },
           { label: 'Total Qty',   value: totalQty.toLocaleString('en-IN') },
           { label: 'Value (INR)', value: '₹83,150' },
         ].map((s, i) => (

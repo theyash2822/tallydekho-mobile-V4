@@ -8,6 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
+import { getKPIBankBalance } from '../../src/services/api';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -72,6 +74,14 @@ const BANKS = [
 // Screen
 // ─────────────────────────────────────────────────────────────────────────────
 export default function BankBalanceScreen() {
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
+  const [apiData, setApiData] = React.useState<any>(null);
+  React.useEffect(() => {
+    if (!companyGuid) return;
+    getKPIBankBalance(companyGuid).then((res: any) => { if (res?.data) setApiData(res.data); }).catch(() => {});
+  }, [companyGuid]);
+
   const router  = useRouter();
   const kpiRef  = useRef<FlatList>(null);
   const [kpiIdx,  setKpiIdx]  = useState(0);

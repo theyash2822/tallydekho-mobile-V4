@@ -8,6 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import { useAuth } from '../../src/context/AuthContext';
+import { getKPIReceivables } from '../../src/services/api';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -40,6 +42,14 @@ const OVERDUE_PARTIES = [
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function ReceivablesScreen() {
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
+  const [apiData, setApiData] = React.useState<any>(null);
+  React.useEffect(() => {
+    if (!companyGuid) return;
+    getKPIReceivables(companyGuid).then((res: any) => { if (res?.data) setApiData(res.data); }).catch(() => {});
+  }, [companyGuid]);
+
   const router = useRouter();
   const agingRef = useRef<FlatList>(null);
 

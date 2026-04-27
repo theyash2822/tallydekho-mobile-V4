@@ -9,6 +9,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import { useAuth } from '../../src/context/AuthContext';
+import { getKPILoansODs } from '../../src/services/api';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -389,6 +391,14 @@ function LoanCalendarModal({
 // Main Screen
 // ─────────────────────────────────────────────────────────────────────────────
 export default function LoansODsScreen() {
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
+  const [apiData, setApiData] = React.useState<any>(null);
+  React.useEffect(() => {
+    if (!companyGuid) return;
+    getKPILoansODs(companyGuid).then((res: any) => { if (res?.data) setApiData(res.data); }).catch(() => {});
+  }, [companyGuid]);
+
   const router  = useRouter();
   const kpiRef  = useRef<FlatList>(null);
   const loanRef = useRef<FlatList>(null);

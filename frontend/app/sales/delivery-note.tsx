@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_DELIVERY_NOTES } from '../../src/data/mockData';
+import { useAuth } from '../../src/context/AuthContext';
+import { getDeliveryNotes } from '../../src/services/api';
 
 const SC: Record<string,string> = { delivered: COLORS.positive, in_transit: COLORS.info, pending: COLORS.warning };
 const SL: Record<string,string> = { delivered: 'Delivered', in_transit: 'In Transit', pending: 'Pending' };
@@ -12,7 +14,19 @@ const SL: Record<string,string> = { delivered: 'Delivered', in_transit: 'In Tran
 export default function DeliveryNotesScreen() {
   const router = useRouter();
   const [search, setSearch] = useState('');
-  const data = MOCK_DELIVERY_NOTES;
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
+  const [liveData, setLiveData] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!companyGuid) return;
+    getDeliveryNotes(companyGuid).then((res: any) => {
+      const rows = res?.data ?? [];
+      if (rows.length) setLiveData(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), party: r.party_name||'', date: r.date||'', amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`, status: 'confirmed' })));
+    }).catch(() => {});
+  }, [companyGuid]);
+
+    const data = MOCK_DELIVERY_NOTES;
   const filtered = data.notes.filter(n => !search || n.party.toLowerCase().includes(search.toLowerCase()) || n.id.toLowerCase().includes(search.toLowerCase()));
 
   return (

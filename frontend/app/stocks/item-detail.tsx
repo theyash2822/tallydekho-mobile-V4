@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions,
 } from 'react-native';
@@ -9,6 +9,8 @@ import Svg, { Rect, Text as SvgText } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { STOCK_ITEMS } from '../../src/data/stockData';
+import { useAuth } from '../../src/context/AuthContext';
+import { getStockItem } from '../../src/services/api';
 
 // ─── DETAILED ITEM DATA ───────────────────────────────────────────────────────────
 
@@ -120,8 +122,18 @@ const pr = StyleSheet.create({
 export default function ItemDetailScreen() {
   const router = useRouter();
   const { id }  = useLocalSearchParams<{ id?: string }>();
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
+  const [liveItem, setLiveItem] = useState<any>(null);
 
-  const stockItem = STOCK_ITEMS.find(i => i.id === id) || STOCK_ITEMS[0];
+  useEffect(() => {
+    if (!companyGuid || !id) return;
+    getStockItem(companyGuid, id as string).then((res: any) => {
+      if (res?.data) setLiveItem(res.data);
+    }).catch(() => {});
+  }, [companyGuid, id]);
+
+  const stockItem = liveItem || STOCK_ITEMS.find(i => i.id === id) || STOCK_ITEMS[0];
   const detail    = ITEM_DETAILS[id || ''] || ITEM_DETAILS.default;
 
   const [calOpen,  setCalOpen]  = useState(false);
