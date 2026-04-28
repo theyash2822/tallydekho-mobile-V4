@@ -33,7 +33,12 @@
     },
     "plugins": [
       "expo-router",
-      ["expo-camera", {"cameraPermission": "Scan vendor bills to auto-fill purchase invoices"}],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Scan vendor bills to auto-fill purchase invoices"
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -42,7 +47,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#000"
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
