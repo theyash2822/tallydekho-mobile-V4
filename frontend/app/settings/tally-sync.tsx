@@ -10,7 +10,7 @@ import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { ShimmerBox } from '../../src/components/Skeleton';
-import { pairWithTally, unpairDevice } from '../../src/services/api';
+import { pairWithTally, unpairDevice, getTallySyncStatus } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 
 // Mock data
@@ -210,11 +210,29 @@ export default function TallySyncScreen() {
   const [pairState, setPairState] = useState<'idle' | 'awaiting' | 'paired'>(
     isPaired ? 'paired' : 'idle'
   );
+  const [deviceInfo, setDeviceInfo] = useState<{ name: string; lastSync: string } | null>(null);
 
   // Keep pairState in sync if isPaired changes externally (e.g. desktop unpairs)
   useEffect(() => {
     setPairState(isPaired ? 'paired' : 'idle');
   }, [isPaired]);
+
+  // Fetch real device info when paired
+  useEffect(() => {
+    if (!isPaired) return;
+    getTallySyncStatus()
+      .then((res: any) => {
+        const d = res?.data ?? res;
+        if (d?.device) {
+          const lastSeen = d.device.last_seen
+            ? new Date(Number(d.device.last_seen) * 1000).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : 'Never';
+          setDeviceInfo({ name: d.device.name || 'TallyDekho Desktop', lastSync: lastSeen });
+        }
+      })
+      .catch(() => {});
+  }, [isPaired]);
+
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
   const [code, setCode]           = useState<string[]>(Array(6).fill(''));
@@ -300,7 +318,7 @@ export default function TallySyncScreen() {
               <Ionicons name="checkmark-circle" size={22} color={COLORS.positive} />
               <View style={{ flex: 1 }}>
                 <Text style={s.pairedTitle}>Tally Paired</Text>
-                <Text style={s.pairedSub}>Last synced: {MOCK_LAST_SYNCED}</Text>
+                <Text style={s.pairedSub}>Last synced: {deviceInfo?.lastSync || 'Syncing...'}</Text>
               </View>
             </View>
 
@@ -311,8 +329,8 @@ export default function TallySyncScreen() {
                   <Ionicons name="desktop-outline" size={26} color={COLORS.brandPrimary} />
                 </View>
                 <View style={s.deviceInfo}>
-                  <Text style={s.deviceName}>{MOCK_PC_NAME}</Text>
-                  <Text style={s.deviceSub}>Last seen: {MOCK_LAST_SYNCED}</Text>
+                  <Text style={s.deviceName}>{deviceInfo?.name || 'TallyDekho Desktop'}</Text>
+                  <Text style={s.deviceSub}>Last seen: {deviceInfo?.lastSync || 'Unknown'}</Text>
                   <View style={s.onlineRow}>
                     <View style={s.onlineDot} />
                     <Text style={s.onlineTxt}>Online</Text>
