@@ -285,7 +285,7 @@ export default function HomeScreen() {
         companyName={company?.name ?? 'My Company'}
         fyYear={activeFY}
         notificationCount={notifCount}
-        userName={user?.name || 'User'}  {/* Real name from AuthContext */}
+        userName={user?.name || 'User'}
         lastSyncTime={lastSyncTime ?? undefined}
         onFYChange={handleFYChange}
         onSettingsPress={() => router.push('/settings' as any)}
