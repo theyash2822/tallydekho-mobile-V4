@@ -272,8 +272,8 @@ export const getParties = (companyGuid?: string, params?: { search?: string; typ
 
 export const createStockItem = (payload: any) => tallyPost('/master/stock-item', payload);
 export const createWarehouse = (payload: any) => tallyPost('/master/warehouse', payload);
-export const createStockAdjustment = (payload: any) => tallyPost('/voucher/sales', payload); // TODO: map to correct tally endpoint
-export const createStockTransfer = (payload: any) => tallyPost('/voucher/sales', payload); // TODO: map to correct tally endpoint
+export const createStockAdjustment = (payload: any) => tallyPost('/voucher/stock-adjustment', payload);
+export const createStockTransfer = (payload: any) => tallyPost('/voucher/stock-transfer', payload);
 export const cancelVoucher = (payload: any) => tallyPost('/voucher/cancel', payload);
 export const createParty = (payload: any) => tallyPost('/master/party', payload);
 

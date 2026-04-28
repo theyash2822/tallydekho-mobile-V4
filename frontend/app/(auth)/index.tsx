@@ -67,10 +67,11 @@ export default function LoginScreen() {
     setLoading(true);
     setError('');
     try {
-      await sendOTP(phone);
+      const fullPhone = `${selectedCountry.code}${digits}`;
+      await sendOTP(fullPhone);
       router.push({
         pathname: '/(auth)/otp',
-        params: { phone: `${selectedCountry.code}${digits}` },
+        params: { phone: fullPhone },
       });
     } catch {
       setError('Failed to send OTP. Please try again.');

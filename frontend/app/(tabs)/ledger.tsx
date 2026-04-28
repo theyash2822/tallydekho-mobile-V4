@@ -512,6 +512,8 @@ export default function LedgerScreen() {
     });
   };
 
+  const normNature = (n: string) => n?.toLowerCase()?.replace(/s$/, '');
+
   const filtered = data
     .filter(item => {
       const matchSearch = item.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -520,7 +522,7 @@ export default function LedgerScreen() {
         (filter === 'Debit' && item.type === 'debit') ||
         (filter === 'Credit' && item.type === 'credit');
       const matchZero = hideZero ? !isZeroBalance(item.balance) : true;
-      const matchNature = activeNature === 'All' || item.nature === activeNature;
+      const matchNature = activeNature === 'All' || normNature(item.nature ?? '') === normNature(activeNature);
       return matchSearch && matchFilter && matchZero && matchNature;
     })
     .sort((a, b) => {

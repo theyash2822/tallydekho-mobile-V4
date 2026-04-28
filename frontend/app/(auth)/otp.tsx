@@ -299,7 +299,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  otpBoxFilled: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.activeBg },
   otpBoxFocused: { borderColor: COLORS.brandPrimary, borderWidth: 2 },
   otpDigit: {
     fontSize: 28,
