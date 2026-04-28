@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import CoachMark, { CoachStep } from '../../src/components/CoachMark';
 import ShimmerPlaceholder, { KPICardSkeleton, MetricCardSkeleton, ActivityRowSkeleton, CardSkeleton } from '../../src/components/ShimmerPlaceholder';
 
 const { width: SW } = Dimensions.get('window');
@@ -59,6 +60,45 @@ export default function HomeScreen() {
   const kpiRef  = useRef<FlatList>(null);
   const [kpiIdx, setKpiIdx] = useState(0);
   const [autoScrollCarousel, setAutoScrollCarousel] = useState(true);
+
+  // ── Coach mark refs (measured after screen loads) ──────────────────────────
+  const cashflowRef = useRef<View>(null);
+  const micRef      = useRef<View>(null);
+  const [coachSteps, setCoachSteps] = useState<CoachStep[]>([]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const steps: (CoachStep | null)[] = [null, null];
+      let done = 0;
+      const tryCommit = () => {
+        done++;
+        if (done === 2) {
+          setCoachSteps(steps.filter(Boolean) as CoachStep[]);
+        }
+      };
+      cashflowRef.current?.measureInWindow((x, y, w, h) => {
+        if (w > 0 && h > 0) {
+          steps[0] = {
+            spotlight: { cx: x + w / 2, cy: y + h / 2, r: 75 },
+            tooltip:   { title: 'Cashflow Overview', body: 'Tap the ring to instantly reveal your income vs expense split.', placement: 'below' },
+            hand: 'tap',
+          };
+        }
+        tryCommit();
+      });
+      micRef.current?.measureInWindow((x, y, w, h) => {
+        if (w > 0 && h > 0) {
+          steps[1] = {
+            spotlight: { cx: x + w / 2, cy: y + h / 2, r: 28 },
+            tooltip:   { title: 'Voice Search', body: 'Tap the mic and speak — find any invoice, party or transaction instantly.', placement: 'below' },
+            hand: 'tap',
+          };
+        }
+        tryCommit();
+      });
+    }, 2200);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (!autoScrollCarousel) return;
@@ -256,9 +296,11 @@ export default function HomeScreen() {
                 <Ionicons name="close-circle" size={16} color={COLORS.textSecondary} />
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity onPress={handleMicPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="mic-outline" size={16} color={COLORS.textTertiary} />
-              </TouchableOpacity>
+              <View ref={micRef}>
+                <TouchableOpacity onPress={handleMicPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="mic-outline" size={16} color={COLORS.textTertiary} />
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         </View>
