@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Modal, ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -205,8 +205,16 @@ const ci = StyleSheet.create({
 // ─────────────────────────────────────────────────────────────────────────────
 export default function TallySyncScreen() {
   const router = useRouter();
-  const { setIsPaired, setCompany } = useAuth();
-  const [pairState, setPairState] = useState<'idle' | 'awaiting' | 'paired'>('idle');
+  const { isPaired, setIsPaired, setCompany } = useAuth();
+  // Derive initial pairState from AuthContext so it persists across screen visits
+  const [pairState, setPairState] = useState<'idle' | 'awaiting' | 'paired'>(
+    isPaired ? 'paired' : 'idle'
+  );
+
+  // Keep pairState in sync if isPaired changes externally (e.g. desktop unpairs)
+  useEffect(() => {
+    setPairState(isPaired ? 'paired' : 'idle');
+  }, [isPaired]);
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
   const [code, setCode]           = useState<string[]>(Array(6).fill(''));
