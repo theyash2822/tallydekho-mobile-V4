@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { getLedgers } from '../../src/services/api';
+import { getLedgers, createLedger } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { MOCK_LEDGERS } from '../../src/data/mockData';
 import FilterBottomSheet, { FilterRadioRow } from '../../src/components/FilterBottomSheet';
@@ -59,6 +59,7 @@ interface CreateLedgerModalProps {
 }
 
 function CreateLedgerModal({ visible, onClose, onSave }: CreateLedgerModalProps) {
+  const { company } = useAuth();
   const [ledgerName, setLedgerName] = useState('');
   const [nature, setNature] = useState('Assets');
   const [group, setGroup] = useState('');
@@ -93,16 +94,33 @@ function CreateLedgerModal({ visible, onClose, onSave }: CreateLedgerModalProps)
 
   const handleSave = async () => {
     if (!ledgerName) return;
+    if (!company?.guid) {
+      Alert.alert('Error', 'No company selected. Please sync from desktop first.');
+      return;
+    }
     setSaving(true);
-    await new Promise(r => setTimeout(r, 800));
-    setSaving(false);
-    setSaved(true);
-    await new Promise(r => setTimeout(r, 700));
-    setSaved(false);
-    onSave({ ledgerName, nature, group, openingBalance, balanceType, narration });
-    // Reset
-    setLedgerName(''); setGroup(''); setOpeningBalance(''); setNarration('');
-    onClose();
+    try {
+      const res = await createLedger({
+        companyGuid: company.guid,
+        companyName: company.name,
+        name: ledgerName,
+        parent: group || 'Sundry Debtors',
+        openingBalance: parseFloat(openingBalance) || 0,
+        isDebit: balanceType === 'Dr',
+      }) as any;
+      if (res?.status) {
+        setSaved(true);
+        onSave({ ledgerName, nature, group, openingBalance, balanceType, narration });
+        setLedgerName(''); setGroup(''); setOpeningBalance(''); setNarration('');
+        setTimeout(() => { setSaved(false); onClose(); }, 800);
+      } else {
+        Alert.alert('Error', res?.message || 'Failed to create ledger. Ensure desktop is connected.');
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to create ledger.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -857,7 +875,10 @@ export default function LedgerScreen() {
       <CreateLedgerModal
         visible={showCreate}
         onClose={() => setShowCreate(false)}
-        onSave={(d) => console.log('New ledger:', d)}
+        onSave={(d) => {
+          // Refresh ledger list after creating a new ledger
+          loadLedgers();
+        }}
       />
       <FilterModal
         visible={showFilter}

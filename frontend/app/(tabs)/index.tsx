@@ -135,7 +135,10 @@ export default function HomeScreen() {
         const metArr = Array.isArray(met) ? met : (met as any)?.data ?? MOCK_METRICS;
         setKpiData(kpiArr as any);
         setMetrics(metArr as any);
-        if (cf && typeof cf === 'object') setCashflow(cf as any);
+        // Cashflow API returns {success, data: {...}} — extract the inner data object
+        const cfData = (cf as any)?.data ?? cf;
+        if (cfData && typeof cfData === 'object' && !('success' in cfData)) setCashflow(cfData as any);
+        else if ((cf as any)?.data) setCashflow((cf as any).data as any);
       }
       const actArr = Array.isArray(act) ? act : (act as any)?.data ?? MOCK_RECENT_ACTIVITY;
       setActivity(actArr as any);

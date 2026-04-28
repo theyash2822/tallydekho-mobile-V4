@@ -144,6 +144,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const res = await fetch(`${BASE_URL}/api/tally-sync/status`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        if (res.status === 401) {
+          // Token expired — sign out cleanly
+          await removeToken();
+          setIsAuthenticated(false);
+          setIsPairedState(false);
+          setCompanyState(null);
+          setUserState(null);
+          return;
+        }
         if (!res.ok) return;
         const json = await res.json();
         if (!json?.success) return;

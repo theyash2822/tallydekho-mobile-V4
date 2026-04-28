@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_REPORTS } from '../../src/data/mockData';
-import { getFinancialData } from '../../src/services/api';
+import { getFinancialData, getGSTReport, getAuditTrail } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { FinancialChartSkeleton } from '../../src/components/Skeleton';
 
@@ -842,12 +842,40 @@ export default function ReportsScreen() {
   } | null>(null);
   const [finLoading, setFinLoading] = useState(true);
 
+  // GST compliance — real filed month count
+  const [gstFiledCount, setGstFiledCount] = useState(0);
+  const [auditCount, setAuditCount] = useState(0);
+  const [auditTotal, setAuditTotal] = useState(100);
+
   useEffect(() => {
+    if (!companyGuid) return;
+
+    // Financial chart
     getFinancialData(companyGuid).then((res: any) => {
       const d = res?.data ?? res;
       if (d?.months) setFinData(d);
       setFinLoading(false);
     }).catch(() => setFinLoading(false));
+
+    // GST summary — count filed months
+    getGSTReport(companyGuid).then((res: any) => {
+      const d = res?.data ?? res;
+      // Backend returns monthly breakdown; count months with filed status
+      const filed = d?.filed_months ?? d?.months_filed ?? 0;
+      setGstFiledCount(typeof filed === 'number' ? Math.min(filed, 12) : 0);
+    }).catch(() => {});
+
+    // Audit trail — get pending/unreconciled count
+    getAuditTrail(companyGuid).then((res: any) => {
+      const d = res?.data ?? res;
+      const entries = d?.entries ?? d ?? [];
+      const pending = Array.isArray(entries)
+        ? entries.filter((e: any) => e.status === 'pending' || e.status === 'failed').length
+        : (d?.stats?.pending_count || 0);
+      const total = Array.isArray(entries) ? entries.length : (d?.stats?.total || 0);
+      setAuditCount(pending);
+      setAuditTotal(Math.max(total, pending));
+    }).catch(() => {});
   }, [companyGuid]);
 
   return (
@@ -877,16 +905,15 @@ export default function ReportsScreen() {
 
         {/* ── 2. Compliance ─────────────────────────────────────────────── */}
         <SectionCard iconName="shield-checkmark-outline" title="Compliance" onPress={() => router.push('/reports/compliance' as any)}>
-          {/* GST gauge: 9 filed (Apr-Dec), needle between Dec & Jan */}
-          <GSTGauge filedCount={9} needleIndex={8} />
+          <GSTGauge filedCount={gstFiledCount} needleIndex={Math.max(gstFiledCount - 1, 0)} />
         </SectionCard>
 
         {/* ── 3. Audit Trail ────────────────────────────────────────────── */}
         <SectionCard iconName="git-branch-outline" title="Audit Trail" onPress={() => router.push('/reports/audit-trail' as any)}>
           <AuditProgressBar
-            label="Unreconciled vouchers"
-            count={14}
-            total={100}
+            label="Pending / failed entries"
+            count={auditCount}
+            total={Math.max(auditTotal, 1)}
           />
         </SectionCard>
 

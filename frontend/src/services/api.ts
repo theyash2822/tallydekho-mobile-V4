@@ -65,7 +65,15 @@ const withCompany = (endpoint: string, companyGuid?: string, extra?: Record<stri
 async function withFallback<T>(apiCall: () => Promise<T>, fallback: T): Promise<T> {
   try { return await apiCall(); }
   catch (err) {
-    console.log('[TallyDekho] API fallback:', (err as Error).message);
+    const msg = (err as Error).message || String(err);
+    // Log clearly: auth errors are serious, network errors are expected when offline
+    if (msg.includes('401') || msg.includes('403') || msg.includes('Unauthorized')) {
+      console.warn('[TallyDekho] Auth error (check token):', msg);
+    } else if (msg.includes('Network') || msg.includes('fetch') || msg.includes('ECONNREFUSED')) {
+      console.log('[TallyDekho] Network fallback (offline?):', msg);
+    } else {
+      console.warn('[TallyDekho] API fallback:', msg);
+    }
     return fallback;
   }
 }
