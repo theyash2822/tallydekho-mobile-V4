@@ -158,7 +158,26 @@ export const getMetrics = (companyGuid?: string, period = '7D') =>
   withFallback(() => get(withCompany('/dashboard/metrics', companyGuid, { period })), MOCK_METRICS);
 
 export const getCashflow = (companyGuid?: string, period = '7D') =>
-  withFallback(() => get(withCompany('/dashboard/cashflow', companyGuid, { period })), MOCK_CASHFLOW);
+  withFallback(
+    () => get<any>(withCompany('/dashboard/cashflow', companyGuid, { period }))
+      .then((res: any) => {
+        // Backend returns snake_case, CashflowCard expects camelCase
+        const d = res?.data ?? res;
+        if (!d || typeof d !== 'object') return MOCK_CASHFLOW;
+        return {
+          netCash:              d.net_cash              ?? d.netCash              ?? 0,
+          grossCash:            d.gross_cash            ?? d.grossCash            ?? 0,
+          netRealisableBalance: d.net_realisable_balance?? d.netRealisableBalance ?? 0,
+          grossProfit:          d.gross_profit          ?? d.grossProfit          ?? 0,
+          netProfit:            d.net_profit            ?? d.netProfit            ?? 0,
+          incomePercentage:     d.income_percentage     ?? d.incomePercentage     ?? 0,
+          updatedAt:            d.updated_at            ?? d.updatedAt            ?? 'just now',
+          totalIncome:          d.total_income          ?? d.totalIncome,
+          totalExpense:         d.total_expense         ?? d.totalExpense,
+        };
+      }),
+    MOCK_CASHFLOW
+  );
 
 export const getRecentActivity = (companyGuid?: string) =>
   withFallback(() => get(withCompany('/dashboard/recent-activity', companyGuid)), MOCK_RECENT_ACTIVITY);
