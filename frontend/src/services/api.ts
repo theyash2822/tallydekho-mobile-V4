@@ -133,6 +133,7 @@ export const pairWithTally = (pairing_code: string): Promise<PairResponse> =>
   post<PairResponse>('/tally-sync/pair', { pairing_code });
 
 export const getTallySyncStatus = () => get<any>('/tally-sync/status');
+export const unpairDevice = () => post<any>('/tally-sync/unpair', {});
 
 export const getCompanies = () => get<any>('/companies');
 export const getCompanyYears = (companyGuid?: string) =>

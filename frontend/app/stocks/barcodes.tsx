@@ -274,7 +274,7 @@ export default function BarcodesScreen() {
             />
           ) : (
             <View style={s.scannerNoPermission}>
-              <Ionicons name="camera-off-outline" size={60} color="rgba(255,255,255,0.4)" />
+              <Ionicons name="camera-outline" size={60} color="rgba(255,255,255,0.4)" />
               <Text style={s.scannerNoPermText}>Camera permission required</Text>
               <TouchableOpacity style={s.permBtn} onPress={requestPermission} activeOpacity={0.8}>
                 <Text style={s.permBtnText}>Grant Permission</Text>

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Modal,
-  ScrollView, Dimensions,
+  ScrollView, Dimensions, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -84,6 +85,7 @@ const SECTIONS = [
 
 const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose, onItemPress }) => {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
   const toggleSection = (sectionId: string) => {
@@ -96,12 +98,21 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose,
     router.push(item.route as any);
   };
 
+  // Bottom padding = safe area inset + extra breathing room above home indicator
+  const sheetBottomPad = Math.max(insets.bottom, 8) + 16;
+
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
       <View style={s.overlay}>
         <TouchableOpacity style={s.backdrop} onPress={onClose} activeOpacity={1} />
 
-        <View style={s.sheet}>
+        <View style={[s.sheet, { paddingBottom: sheetBottomPad }]}>
           {/* Header */}
           <View style={s.header}>
             <Text style={s.title}>Quick Actions</Text>
@@ -195,8 +206,10 @@ const s = StyleSheet.create({
     backgroundColor: '#F4F4F4',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: SCREEN_HEIGHT * 0.92,
-    paddingBottom: 16,
+    // minHeight guarantees the sheet looks "open" even with collapsed sections
+    minHeight: SCREEN_HEIGHT * 0.45,
+    maxHeight: SCREEN_HEIGHT * 0.88,
+    // paddingBottom set dynamically from safe area insets (see sheetBottomPad above)
   },
   header: {
     flexDirection: 'row',
@@ -218,7 +231,9 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   scroll: {
-    flex: 1,
+    // flexGrow instead of flex:1 so the sheet sizes to content but ScrollView still scrolls
+    flexGrow: 1,
+    flexShrink: 1,
   },
   scrollContent: {
     paddingHorizontal: SPACING.md,

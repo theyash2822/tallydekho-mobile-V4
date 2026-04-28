@@ -61,9 +61,9 @@ export default function TallySyncScreen() {
   };
 
   const handleSkip = async () => {
-    // Mark authenticated on skip too
     const token = await AsyncStorage.getItem('auth_token');
     if (token) await signIn(token);
+    setIsPaired(false); // explicit: skipped pairing → unpaired state
     router.replace('/(tabs)');
   };
 

@@ -132,8 +132,9 @@ export default function OTPScreen() {
           router.replace({ pathname: '/(auth)/register', params: { phone, token: access_token } });
         } else {
           // Existing user — sign in and restore company/paired state
-          await signIn(access_token, user ? { id: user.id, name: user.name ?? undefined, mobile: user.phone } : undefined);
-          if (is_paired) setIsPaired(true);
+          await signIn(access_token, user ? { id: user.id, name: user.name ?? undefined, phone: user.phone } : undefined);
+          // Always set isPaired from server — true OR false
+          setIsPaired(is_paired === true);
           if (company) await setCompany({ guid: company.guid, name: company.name, gstin: company.gstin ?? undefined });
           router.replace('/(tabs)');
         }

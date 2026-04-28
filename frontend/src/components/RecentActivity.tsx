@@ -106,7 +106,8 @@ const ActivityItem: React.FC<{ item: Activity; onPress: () => void }> = ({ item,
 
 const RecentActivity: React.FC<RecentActivityProps> = ({ activities }) => {
   const router = useRouter();
-  const displayed = activities.slice(0, 6);
+  const safeActivities = Array.isArray(activities) ? activities : [];
+  const displayed = safeActivities.slice(0, 6);
 
   const handlePress = (item: Activity) => {
     const label      = item.label ?? item.description ?? '';

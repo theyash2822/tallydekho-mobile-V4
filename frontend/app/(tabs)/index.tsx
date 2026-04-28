@@ -17,6 +17,8 @@ const { width: SW } = Dimensions.get('window');
 import Header from '../../src/components/Header';
 import CashflowCard from '../../src/components/CashflowCard';
 import RecentActivity from '../../src/components/RecentActivity';
+import PairingBanner from '../../src/components/PairingBanner';
+import OfflineBadge from '../../src/components/OfflineBadge';
 import {
   getKPIStrip, getMetrics, getCashflow, getRecentActivity,
 } from '../../src/services/api';
@@ -39,7 +41,7 @@ const MOCK_VOICE_SEARCHES = ['Sales Invoice', 'Mehta Enterprises', 'Payment Rece
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { isPaired, company } = useAuth();
+  const { isPaired, isDesktopOnline, company } = useAuth();
   const companyGuid = company?.guid;
   const [activeFY, setActiveFY] = useState(MOCK_USER.fyYear);
   const [activeFilter, setActiveFilter] = useState<TimeFilter>('7D');
@@ -78,9 +80,10 @@ export default function HomeScreen() {
 
   // Filtered activity for search results
   const filteredActivity = useMemo(() => {
-    if (!searchQuery.trim()) return activity;
+    const safeActivity = Array.isArray(activity) ? activity : [];
+    if (!searchQuery.trim()) return safeActivity;
     const q = searchQuery.toLowerCase();
-    return (activity as any[]).filter(item =>
+    return safeActivity.filter((item: any) =>
       (item.label || '').toLowerCase().includes(q) ||
       (item.party || '').toLowerCase().includes(q) ||
       (item.amount || '').toLowerCase().includes(q)
@@ -106,6 +109,19 @@ export default function HomeScreen() {
   }, []);
 
   const loadData = useCallback(async () => {
+    // ── DATA GATE ──────────────────────────────────────────────
+    // Unpaired: show demo data immediately, no API calls.
+    // Paired: fetch real data and show skeletons while loading.
+    // ─────────────────────────────────────────────────
+    if (!isPaired) {
+      setKpiData(MOCK_KPI_STRIP);
+      setMetrics(MOCK_METRICS);
+      setCashflow(MOCK_CASHFLOW);
+      setActivity(MOCK_RECENT_ACTIVITY);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const [kpi, met, cf, act] = await Promise.all([
@@ -115,21 +131,24 @@ export default function HomeScreen() {
         getRecentActivity(companyGuid),
       ]);
       if (activeFY === 'FY 2025-26') {
-        setKpiData(kpi as any);
-        setMetrics(met as any);
-        setCashflow(cf as any);
+        const kpiArr = Array.isArray(kpi) ? kpi : (kpi as any)?.data ?? MOCK_KPI_STRIP;
+        const metArr = Array.isArray(met) ? met : (met as any)?.data ?? MOCK_METRICS;
+        setKpiData(kpiArr as any);
+        setMetrics(metArr as any);
+        if (cf && typeof cf === 'object') setCashflow(cf as any);
       }
-      setActivity(act as any);
+      const actArr = Array.isArray(act) ? act : (act as any)?.data ?? MOCK_RECENT_ACTIVITY;
+      setActivity(actArr as any);
     } finally {
       setIsLoading(false);
     }
-  }, [activeFilter, activeFY]);
+  }, [isPaired, activeFilter, activeFY, companyGuid]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([loadData(), checkPaired()]);
+    await loadData(); // isPaired comes from AuthContext, no separate checkPaired needed
     setRefreshing(false);
   };
 
@@ -263,20 +282,9 @@ export default function HomeScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Tally Sync Banner */}
-        {!isTallyPaired && (
-          <TouchableOpacity testID="sync-banner" style={styles.syncBanner} activeOpacity={0.8} onPress={() => router.push('/settings/tally-sync' as any)}>
-            <View style={styles.syncBannerLeft}>
-              <View style={styles.syncIconBox}>
-                <Ionicons name="sync" size={18} color={COLORS.white} />
-              </View>
-              <View>
-                <Text style={styles.syncTitle}>Sync your account with Tally!</Text>
-                <Text style={styles.syncSubtitle}>Sync for seamless management!</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={COLORS.white} />
-          </TouchableOpacity>
-        )}
+        {/* Status banners — one or the other, never both */}
+        {!isPaired && <PairingBanner />}
+        {isPaired && !isDesktopOnline && <OfflineBadge />}
 
         {/* KPI Carousel */}
         <View style={styles.kpiSection}>
@@ -303,7 +311,7 @@ export default function HomeScreen() {
             />
           )}
           {/* Dot Indicators */}
-          {!isLoading && (
+          {!isLoading && Array.isArray(kpiData) && (
             <View style={styles.kpiDots}>
               {kpiData.map((_, i) => (
                 <View key={i} style={[styles.kpiDot, i === kpiIdx && styles.kpiDotActive]} />
@@ -350,7 +358,7 @@ export default function HomeScreen() {
               ))}
             </>
           ) : (
-            metrics.map((item, idx) => (
+            (Array.isArray(metrics) ? metrics : []).map((item: any, idx: number) => (
               <View key={item.id}>
                 <TouchableOpacity
                   testID={`metric-row-${item.id}`}

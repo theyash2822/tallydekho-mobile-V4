@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,11 +31,11 @@ interface CustomTabBarProps {
   state: { index: number; routes: Route[] };
   navigation: any;
   descriptors: any;
+  onFabPress: () => void;
 }
 
-function CustomTabBar({ state, navigation }: CustomTabBarProps) {
+function CustomTabBar({ state, navigation, onFabPress }: CustomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const [showActions, setShowActions] = useState(false);
   const bottomPad = Math.max(insets.bottom, 4);
 
   const routes = state.routes;
@@ -92,7 +92,7 @@ function CustomTabBar({ state, navigation }: CustomTabBarProps) {
           <TouchableOpacity
             testID="central-fab"
             style={styles.fab}
-            onPress={() => setShowActions(true)}
+            onPress={onFabPress}
             activeOpacity={0.85}
             accessibilityLabel="Quick actions"
           >
@@ -105,27 +105,35 @@ function CustomTabBar({ state, navigation }: CustomTabBarProps) {
           {rightRoutes.map((r, i) => renderTab(r, i + 2))}
         </View>
       </View>
-
-      <QuickActionsModal
-        visible={showActions}
-        onClose={() => setShowActions(false)}
-      />
     </>
   );
 }
 
 export default function TabsLayout() {
+  const [showActions, setShowActions] = useState(false);
+  const handleFabPress = useCallback(() => setShowActions(true), []);
+  const handleModalClose = useCallback(() => setShowActions(false), []);
+  // Memoize the tabBar renderer so React Navigation never sees a prop change
+  // and never remounts CustomTabBar (which would reset any internal state)
+  const renderTabBar = useCallback(
+    (props: any) => <CustomTabBar {...props} onFabPress={handleFabPress} />,
+    [handleFabPress],
+  );
+
   return (
-    <Tabs
-      screenOptions={{ headerShown: false }}
-      sceneContainerStyle={{ backgroundColor: COLORS.pageBg }}
-      tabBar={(props: any) => <CustomTabBar {...props} />}
-    >
-      <Tabs.Screen name="index" />
-      <Tabs.Screen name="ledger" />
-      <Tabs.Screen name="stocks" />
-      <Tabs.Screen name="reports" />
-    </Tabs>
+    <View style={{ flex: 1 }}>
+      <Tabs
+        screenOptions={{ headerShown: false }}
+        tabBar={renderTabBar}
+      >
+        <Tabs.Screen name="index" />
+        <Tabs.Screen name="ledger" />
+        <Tabs.Screen name="stocks" />
+        <Tabs.Screen name="reports" />
+      </Tabs>
+      {/* Modal lives outside Tabs so navigation re-renders never affect it */}
+      <QuickActionsModal visible={showActions} onClose={handleModalClose} />
+    </View>
   );
 }
 

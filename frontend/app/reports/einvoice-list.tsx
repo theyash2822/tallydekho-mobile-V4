@@ -33,7 +33,7 @@ export default function EInvoiceListScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company } = useAuth();
-  const [invoiceData, setInvoiceData] = useState(invoiceData);
+  const [invoiceData, setInvoiceData] = useState<any[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const selectMode = selected.length > 0;
 

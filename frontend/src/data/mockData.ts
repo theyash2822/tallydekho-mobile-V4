@@ -77,7 +77,7 @@ export const MOCK_STOCKS = {
   ],
 };
 
-export const MOCK_LEDGERS = [
+export const MOCK_LEDGERS: Array<{id:string;name:string;group:string;balance:string;type:'credit'|'debit';nature:string;phone:string;lastUpdated:string}> = [
   { id: 'LED001', name: 'Indian Export House', group: 'Sundry Creditor', balance: '₹34,000', type: 'credit', nature: 'Liabilities', phone: '9876543210', lastUpdated: '08/28' },
   { id: 'LED002', name: 'Raj Enterprises', group: 'Sundry Debtor', balance: '₹12,500', type: 'debit', nature: 'Assets', phone: '9845012345', lastUpdated: '08/25' },
   { id: 'LED003', name: 'Cash', group: 'Cash-in-hand', balance: '₹0', type: 'debit', nature: 'Assets', phone: '', lastUpdated: '08/22' },

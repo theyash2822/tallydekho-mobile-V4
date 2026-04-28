@@ -33,7 +33,7 @@ export default function EWBListScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company } = useAuth();
-  const [ewbData, setEwbData] = useState(ewbData);
+  const [ewbData, setEwbData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [showDatePicker, setShowDatePicker] = useState(false);

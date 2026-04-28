@@ -41,9 +41,10 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   isPaired: boolean;
+  isDesktopOnline: boolean;
   company: Company | null;
   user: UserInfo | null;
-  signIn: (token: string) => Promise<void>;
+  signIn: (token: string, userInfo?: UserInfo) => Promise<void>;
   signOut: () => Promise<void>;
   setIsPaired: (v: boolean) => void;
   setCompany: (c: Company) => Promise<void>;
@@ -54,6 +55,7 @@ const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   isLoading: true,
   isPaired: false,
+  isDesktopOnline: false,
   company: null,
   user: null,
   signIn: async () => {},
@@ -67,8 +69,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isPaired, setIsPairedState] = useState(false);
+  const [isDesktopOnline, setIsDesktopOnlineState] = useState(false);
   const [company, setCompanyState] = useState<Company | null>(null);
   const [user, setUserState] = useState<UserInfo | null>(null);
+
+  const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.241:3001';
 
   // Restore persisted state on mount
   useEffect(() => {
@@ -94,9 +99,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => clearTimeout(timeout);
   }, []);
 
-  const signIn = async (token: string) => {
+  const signIn = async (token: string, userInfo?: UserInfo) => {
     await storeToken(token);
     setIsAuthenticated(true);
+    if (userInfo) {
+      setUserState(userInfo);
+      AsyncStorage.setItem('user_info', JSON.stringify(userInfo)).catch(() => {});
+    }
   };
 
   const signOut = async () => {
@@ -122,9 +131,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     AsyncStorage.setItem('user_info', JSON.stringify(u)).catch(() => {});
   };
 
+  // ── Poll pairing + desktop status every 30s ───────────────────────────────
+  // Keeps isPaired + isDesktopOnline in sync with server truth.
+  // Uses /api/tally-sync/status (lightweight, no websocket needed).
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const poll = async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const res = await fetch(`${BASE_URL}/api/tally-sync/status`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!json?.success) return;
+        const { is_paired, desktop_online } = json.data ?? {};
+        if (typeof is_paired === 'boolean') {
+          setIsPairedState(is_paired);
+          AsyncStorage.setItem('is_paired', is_paired ? 'true' : 'false').catch(() => {});
+        }
+        if (typeof desktop_online === 'boolean') {
+          setIsDesktopOnlineState(desktop_online);
+        }
+      } catch {
+        // Network error — don't change state, keep showing cached
+      }
+    };
+
+    poll(); // immediate check on mount / auth change
+    const interval = setInterval(poll, 30_000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, BASE_URL]);
+
   return (
     <AuthContext.Provider value={{
-      isAuthenticated, isLoading, isPaired, company, user,
+      isAuthenticated, isLoading, isPaired, isDesktopOnline, company, user,
       signIn, signOut, setIsPaired, setCompany, setUser,
     }}>
       {children}

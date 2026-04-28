@@ -9,7 +9,6 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { MOCK_USER } from '../../src/data/mockData';
 
 type SectionId = 'account' | 'preferences' | 'notifications' | 'integrations' | 'contact';
 
@@ -188,7 +187,7 @@ const ls = StyleSheet.create({
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { signOut, user, company } = useAuth();
   const [expanded, setExpanded] = useState<SectionId | null>('account');
   const [showLogoutSheet, setShowLogoutSheet] = useState(false);
   // Stores all toggle values keyed by toggleKey
@@ -232,11 +231,11 @@ export default function SettingsScreen() {
         {/* Profile mini card */}
         <View style={styles.profileCard}>
           <View style={styles.avatarLarge}>
-            <Text style={styles.avatarLargeText}>{MOCK_USER.name[0]}</Text>
+            <Text style={styles.avatarLargeText}>{(user?.name || 'U')[0]}</Text>
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{MOCK_USER.name}</Text>
-            <Text style={styles.profilePhone}>{MOCK_USER.phone}</Text>
+            <Text style={styles.profileName}>{user?.name || 'Your Name'}</Text>
+            <Text style={styles.profilePhone}>{user?.phone || ''}</Text>
           </View>
         </View>
 
@@ -294,7 +293,7 @@ export default function SettingsScreen() {
                             {isToggleItem ? (
                               <Switch
                                 value={toggleVal}
-                                onValueChange={v => sub.toggleKey && handleToggle(sub.toggleKey, v)}
+                                onValueChange={v => { if (sub.toggleKey) handleToggle(sub.toggleKey, v); }}
                                 trackColor={{ false: COLORS.borderStrong, true: COLORS.brandPrimary }}
                                 thumbColor={COLORS.white}
                                 style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}

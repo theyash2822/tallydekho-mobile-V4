@@ -10,6 +10,8 @@ import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { ShimmerBox } from '../../src/components/Skeleton';
+import { pairWithTally, unpairDevice } from '../../src/services/api';
+import { useAuth } from '../../src/context/AuthContext';
 
 // Mock data
 const MOCK_LAST_SYNCED = '15 Jun 2025, 11:42 AM';
@@ -203,6 +205,7 @@ const ci = StyleSheet.create({
 // ─────────────────────────────────────────────────────────────────────────────
 export default function TallySyncScreen() {
   const router = useRouter();
+  const { setIsPaired, setCompany } = useAuth();
   const [pairState, setPairState] = useState<'idle' | 'awaiting' | 'paired'>('idle');
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
@@ -214,32 +217,51 @@ export default function TallySyncScreen() {
   const codeStr = code.join('');
   const isComplete = codeStr.length === 6;
 
-  const handlePair = () => {
+  const handlePair = async () => {
     if (!isComplete) {
       Toast.show({ type: 'error', text1: 'Incomplete Code', text2: 'Please enter all 6 digits.' });
       return;
     }
     setPairState('awaiting');
-    setTimeout(async () => {
-      setPairState('paired');
-      await AsyncStorage.setItem('isTallyPaired', 'true');
-      Toast.show({ type: 'success', text1: 'Tally Paired!', text2: 'TallyDekho is now connected.' });
-    }, 2200);
+    try {
+      const res = await pairWithTally(codeStr);
+      if (res?.success && res?.data?.is_paired) {
+        // Update AuthContext with real paired state
+        setIsPaired(true);
+        if (res.data.company) {
+          await setCompany({
+            guid: res.data.company.guid,
+            name: res.data.company.name,
+            gstin: res.data.company.gstin ?? undefined,
+          });
+        }
+        setPairState('paired');
+        Toast.show({ type: 'success', text1: 'Tally Paired!', text2: 'TallyDekho is now connected to your desktop.' });
+      } else {
+        setPairState('idle');
+        const msg = (res as any)?.error?.message || 'Invalid or expired code. Try again.';
+        Toast.show({ type: 'error', text1: 'Pairing Failed', text2: msg });
+      }
+    } catch (err: any) {
+      setPairState('idle');
+      Toast.show({ type: 'error', text1: 'Error', text2: err?.message || 'Could not connect. Check your network.' });
+    }
   };
 
   const handleSyncNow = () => {
-    setSyncing(true);
-    setTimeout(() => {
-      setSyncing(false);
-      Toast.show({ type: 'success', text1: 'Sync Complete', text2: 'All data has been synced.' });
-    }, 2000);
+    // Sync is triggered from the desktop app, not from mobile.
+    // This button is informational only.
+    Toast.show({ type: 'info', text1: 'Sync from Desktop', text2: 'Open TallyDekho Desktop and click "Sync Now".' });
   };
 
   const handleDisconnect = async () => {
+    try {
+      await unpairDevice();
+    } catch (_) { /* best-effort */ }
+    setIsPaired(false);
     setPairState('idle');
     setCode(Array(6).fill(''));
     setShowDisconnect(false);
-    await AsyncStorage.removeItem('isTallyPaired');
     Toast.show({ type: 'info', text1: 'Disconnected', text2: 'Tally sync has been removed.' });
   };
 
