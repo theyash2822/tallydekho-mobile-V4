@@ -130,7 +130,7 @@ export default function OTPScreen() {
           router.replace({ pathname: '/(auth)/register', params: { phone, token: res.token } });
         } else {
           await signIn(res.token);
-          router.replace('/(tabs)');
+          // Navigation handled by _layout.tsx RootNavigation — shows guide on first login
         }
       } else {
         setError('Invalid OTP. Please try again.');

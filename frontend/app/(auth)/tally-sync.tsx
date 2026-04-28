@@ -29,13 +29,13 @@ export default function TallySyncScreen() {
     }
     await AsyncStorage.setItem('tally_synced', 'true');
     await signIn('mock_token_tally');
-    router.replace('/(tabs)');
+    // Navigation handled by _layout.tsx RootNavigation — shows guide on first login
   };
 
   const handleSkip = async () => {
     await AsyncStorage.setItem('tally_synced', 'false');
     await signIn('mock_token_skip');
-    router.replace('/(tabs)');
+    // Navigation handled by _layout.tsx RootNavigation — shows guide on first login
   };
 
   return (
