@@ -10,10 +10,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import CoachMark, { CoachStep } from '../../src/components/CoachMark';
 import ShimmerPlaceholder, { KPICardSkeleton, MetricCardSkeleton, ActivityRowSkeleton, CardSkeleton } from '../../src/components/ShimmerPlaceholder';
 
-const { width: SW, height: SH } = Dimensions.get('window');
+const { width: SW } = Dimensions.get('window');
 import Header from '../../src/components/Header';
 import CashflowCard from '../../src/components/CashflowCard';
 import RecentActivity from '../../src/components/RecentActivity';
@@ -60,69 +59,6 @@ export default function HomeScreen() {
   const kpiRef  = useRef<FlatList>(null);
   const [kpiIdx, setKpiIdx] = useState(0);
   const [autoScrollCarousel, setAutoScrollCarousel] = useState(true);
-
-  // ── Coach mark refs (measured after screen loads) ──────────────────────────
-  const cashflowRef = useRef<View>(null);
-  const micRef      = useRef<View>(null);
-  const [coachSteps, setCoachSteps] = useState<CoachStep[]>([]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      // steps[0] = mic (always visible), steps[1] = cashflow (in scroll view)
-      const steps: (CoachStep | null)[] = [null, null];
-      let done = 0;
-      const total = 2;
-
-      const tryCommit = () => {
-        done++;
-        if (done === total) {
-          const valid = steps.filter(Boolean) as CoachStep[];
-          if (valid.length > 0) setCoachSteps(valid);
-        }
-      };
-
-      // ── Mic button (always visible in search bar) ──
-      if (micRef.current) {
-        micRef.current.measureInWindow((x, y, w, h) => {
-          if (w > 0 && h > 0) {
-            steps[0] = {
-              spotlight: { cx: x + w / 2, cy: y + h / 2, r: 30 },
-              tooltip:   {
-                title: 'Voice Search',
-                body: 'Tap the mic and speak — find any invoice, party or transaction instantly.',
-                placement: 'below',
-              },
-              hand: 'tap',
-            };
-          }
-          tryCommit();
-        });
-      } else {
-        tryCommit(); // ref not ready — count as done
-      }
-
-      // ── Cashflow card (inside ScrollView — only spotlight if in viewport) ──
-      if (cashflowRef.current) {
-        cashflowRef.current.measureInWindow((x, y, w, h) => {
-          if (w > 0 && h > 0 && y > 0 && y < SH) {
-            steps[1] = {
-              spotlight: { cx: x + w / 2, cy: y + h / 2, r: 78 },
-              tooltip:   {
-                title: 'Cashflow Overview',
-                body: 'Tap the ring to instantly reveal your income vs expense split.',
-                placement: 'above',
-              },
-              hand: 'tap',
-            };
-          }
-          tryCommit();
-        });
-      } else {
-        tryCommit(); // ref not ready — count as done
-      }
-    }, 2400); // wait for screen + data to fully render
-    return () => clearTimeout(timer);
-  }, []);
 
   useEffect(() => {
     if (!autoScrollCarousel) return;
@@ -320,11 +256,9 @@ export default function HomeScreen() {
                 <Ionicons name="close-circle" size={16} color={COLORS.textSecondary} />
               </TouchableOpacity>
             ) : (
-              <View ref={micRef}>
-                <TouchableOpacity onPress={handleMicPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="mic-outline" size={16} color={COLORS.textTertiary} />
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity onPress={handleMicPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="mic-outline" size={16} color={COLORS.textTertiary} />
+              </TouchableOpacity>
             )}
           </View>
         </View>
@@ -467,11 +401,7 @@ export default function HomeScreen() {
         {/* Cashflow Card */}
         {isLoading
           ? <CardSkeleton height={200} />
-          : (
-            <View ref={cashflowRef} collapsable={false}>
-              <CashflowCard {...cashflow} />
-            </View>
-          )
+          : <CashflowCard {...cashflow} />
         }
 
         {/* Recent Activity — filtered when searching */}
@@ -509,15 +439,6 @@ export default function HomeScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
-
-      {/* ── CoachMark Guide (first-time only) ── */}
-      {coachSteps.length > 0 && (
-        <CoachMark
-          steps={coachSteps}
-          storageKey="coach_home_v1"
-          onDone={() => setCoachSteps([])}
-        />
-      )}
     </SafeAreaView>
   );
 }
