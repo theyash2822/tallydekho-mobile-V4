@@ -24,7 +24,7 @@ function RootNavigation() {
 
   // Load guide-seen flag once on mount
   useEffect(() => {
-    AsyncStorage.getItem('hasSeenGuide_v2').then(val => {
+    AsyncStorage.getItem('hasSeenGuide_v3').then(val => {
       setGuideSeen(val === 'true');
       setGuideChecked(true);
     });

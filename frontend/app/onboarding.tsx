@@ -20,7 +20,7 @@ const TEXT_PRI = '#1A1A1A';
 const TEXT_SEC = '#787774';
 const TEXT_TER = '#AEACA8';
 
-const GUIDE_KEY = 'hasSeenGuide_v2';
+const GUIDE_KEY = 'hasSeenGuide_v3';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SLIDE 1 — Hero (light theme)
