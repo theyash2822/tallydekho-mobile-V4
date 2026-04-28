@@ -20,8 +20,9 @@ import RecentActivity from '../../src/components/RecentActivity';
 import PairingBanner from '../../src/components/PairingBanner';
 import OfflineBadge from '../../src/components/OfflineBadge';
 import {
-  getKPIStrip, getMetrics, getCashflow, getRecentActivity,
+  getKPIStrip, getMetrics, getCashflow, getRecentActivity, getTallySyncStatus, getNotifications,
 } from '../../src/services/api';
+import Toast from 'react-native-toast-message';
 import {
   MOCK_KPI_STRIP, MOCK_METRICS, MOCK_CASHFLOW, MOCK_RECENT_ACTIVITY, MOCK_USER, FY_DASHBOARD,
 } from '../../src/data/mockData';
@@ -41,7 +42,7 @@ const MOCK_VOICE_SEARCHES = ['Sales Invoice', 'Mehta Enterprises', 'Payment Rece
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { isPaired, isDesktopOnline, company } = useAuth();
+  const { isPaired, isDesktopOnline, company, user } = useAuth();
   const companyGuid = company?.guid;
   const [activeFY, setActiveFY] = useState(MOCK_USER.fyYear);
   const [activeFilter, setActiveFilter] = useState<TimeFilter>('7D');
@@ -50,6 +51,9 @@ export default function HomeScreen() {
   const [cashflow, setCashflow] = useState(MOCK_CASHFLOW);
   const [activity, setActivity] = useState(MOCK_RECENT_ACTIVITY);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [notifCount, setNotifCount] = useState(0);
+  const wasPaired = useRef(false); // track previous isPaired to detect change
   // isPaired comes from AuthContext — no local state needed
   const isTallyPaired = isPaired;
 
@@ -149,6 +153,43 @@ export default function HomeScreen() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // ── Detect pairing state change ─────────────────────────────
+  // When device is paired: show toast + fetch last sync time + refresh notifications
+  useEffect(() => {
+    if (isPaired && !wasPaired.current) {
+      Toast.show({
+        type: 'success',
+        text1: 'Tally Connected ✅',
+        text2: 'Your desktop is now paired. Loading real data...',
+        visibilityTime: 3000,
+      });
+      // Fetch last sync time from status API
+      getTallySyncStatus().then((res: any) => {
+        const d = res?.data ?? res;
+        if (d?.device?.last_seen) {
+          const ts = Number(d.device.last_seen) * 1000;
+          setLastSyncTime(new Date(ts).toLocaleString('en-IN', {
+            day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+          }));
+        }
+      }).catch(() => {});
+    }
+    if (!isPaired && wasPaired.current) {
+      Toast.show({ type: 'info', text1: 'Tally Disconnected', text2: 'Device was unpaired.', visibilityTime: 3000 });
+      setLastSyncTime(null);
+    }
+    wasPaired.current = isPaired;
+  }, [isPaired]);
+
+  // ── Fetch real notification count ─────────────────────────────
+  useEffect(() => {
+    if (!isPaired || !companyGuid) return;
+    getNotifications(companyGuid).then((res: any) => {
+      const notifs = res?.data ?? res ?? [];
+      setNotifCount(Array.isArray(notifs) ? notifs.length : 0);
+    }).catch(() => {});
+  }, [isPaired, companyGuid]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadData(); // isPaired comes from AuthContext, no separate checkPaired needed
@@ -243,8 +284,9 @@ export default function HomeScreen() {
       <Header
         companyName={company?.name ?? 'My Company'}
         fyYear={activeFY}
-        notificationCount={1}
-        userName={MOCK_USER.name}
+        notificationCount={notifCount}
+        userName={user?.name || 'User'}  {/* Real name from AuthContext */}
+        lastSyncTime={lastSyncTime ?? undefined}
         onFYChange={handleFYChange}
         onSettingsPress={() => router.push('/settings' as any)}
       />

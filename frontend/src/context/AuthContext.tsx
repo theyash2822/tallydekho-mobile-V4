@@ -156,10 +156,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!res.ok) return;
         const json = await res.json();
         if (!json?.success) return;
-        const { is_paired, desktop_online } = json.data ?? {};
+        const { is_paired, desktop_online, company: statusCompany } = json.data ?? {};
         if (typeof is_paired === 'boolean') {
+          const wasUnpaired = !isPaired && is_paired;
           setIsPairedState(is_paired);
           AsyncStorage.setItem('is_paired', is_paired ? 'true' : 'false').catch(() => {});
+
+          // When device just got paired: update company from status response
+          if (wasUnpaired && is_paired && statusCompany?.guid && !company?.guid) {
+            const c = { guid: statusCompany.guid, name: statusCompany.name, gstin: statusCompany.gstin || null };
+            setCompanyState(c);
+            AsyncStorage.setItem('company_data', JSON.stringify(c)).catch(() => {});
+          }
         }
         if (typeof desktop_online === 'boolean') {
           setIsDesktopOnlineState(desktop_online);
