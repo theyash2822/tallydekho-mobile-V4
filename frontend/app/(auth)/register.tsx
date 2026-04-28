@@ -44,14 +44,19 @@ export default function RegisterScreen() {
     try {
       const res = await registerUser({ name: name.trim(), email: email.trim(), language });
       if (res?.success && res?.data?.access_token) {
-        const userInfo = {
+        // IMPORTANT: Store token directly — do NOT call signIn() here.
+        // signIn() sets isAuthenticated=true which makes _layout.tsx redirect to /(tabs)
+        // before the user reaches tally-sync. Two conflicting navigations = iOS crash.
+        // signIn() is called from tally-sync.tsx after pairing (or on skip).
+        await AsyncStorage.setItem('auth_token', res.data.access_token);
+        // Store user info under the correct key (user_info, not user_data)
+        await AsyncStorage.setItem('user_info', JSON.stringify({
           id: res.data.user.id,
-          name: res.data.user.name,
+          name: res.data.user.name ?? undefined,
           phone: res.data.user.phone,
           email: res.data.user.email,
           language: res.data.user.language,
-        };
-        await signIn(res.data.access_token, userInfo);
+        }));
         router.replace('/(auth)/tally-sync');
       } else {
         setError('Registration failed. Please retry.');
