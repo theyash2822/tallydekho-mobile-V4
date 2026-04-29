@@ -48,12 +48,14 @@ export default function ExpenseScreen() {
   const [liveExpenses, setLiveExpenses] = useState<any[]>([]);
   const [expenseSummary, setExpenseSummary] = useState<any>(null);
 
+  const [expensesLoaded, setExpensesLoaded] = useState(false);
   useEffect(() => {
     if (!companyGuid) return;
     getExpenses(companyGuid).then((res: any) => {
-      if (res?.data?.length) setLiveExpenses(res.data);
+      setLiveExpenses(res?.data ?? []);  // always update, even if empty
       if (res?.summary) setExpenseSummary(res.summary);
-    }).catch(() => {});
+      setExpensesLoaded(true);
+    }).catch(() => { setExpensesLoaded(true); });
   }, [companyGuid]);
 
   const [tab,      setTab]      = useState<'recent' | 'categories'>('recent');
@@ -79,9 +81,11 @@ export default function ExpenseScreen() {
     return () => clearInterval(t);
   }, []);
 
-  const recent = RECENT_EXPENSES.filter(exp => {
-    if (filter === 'Paid')   return exp.status === 'paid';
-    if (filter === 'Unpaid') return exp.status === 'unpaid';
+  // Use live data if loaded, else mock (only while loading)
+  const displayExpenses = expensesLoaded ? liveExpenses : RECENT_EXPENSES;
+  const recent = displayExpenses.filter((exp: any) => {
+    if (filter === 'Paid')   return exp.status === 'paid'   || exp.voucher_type === 'Payment';
+    if (filter === 'Unpaid') return exp.status === 'unpaid' || exp.voucher_type === 'Journal';
     return true;
   });
 

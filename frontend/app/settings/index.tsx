@@ -67,7 +67,7 @@ const SECTIONS: Section[] = [
     id: 'integrations', title: 'Integrations',
     icon: 'git-network-outline', iconColor: '#0891B2', iconBg: '#ECFEFF',
     subItems: [
-      { id: 'tally', label: 'Tally ERP Sync', icon: 'sync-outline', route: '/settings/tally-sync', badge: 'Paired', badgeColor: '#2D7D46' },
+      { id: 'tally', label: 'Tally ERP Sync', icon: 'sync-outline', route: '/settings/tally-sync', badge: '__TALLY_STATUS__', badgeColor: '__TALLY_COLOR__' },
       { id: 'bank', label: 'Bank Feeds', icon: 'wallet-outline', route: '/settings/bank-feeds' },
       { id: 'ewaybill', label: 'E-Way Bill Integration', icon: 'document-outline', route: '/settings/ewb' },
       { id: 'einvoice', label: 'E-Invoice (IRN)', icon: 'receipt-outline', route: '/settings/einvoice' },
@@ -187,7 +187,7 @@ const ls = StyleSheet.create({
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { signOut, user, company } = useAuth();
+  const { signOut, user, company, isPaired } = useAuth();
   const [expanded, setExpanded] = useState<SectionId | null>('account');
   const [showLogoutSheet, setShowLogoutSheet] = useState(false);
   // Stores all toggle values keyed by toggleKey
@@ -285,11 +285,20 @@ export default function SettingsScreen() {
                             <Text style={styles.subLabel}>{sub.label}</Text>
                           </View>
                           <View style={styles.subRight}>
-                            {sub.badge && (
-                              <View style={[styles.badge, { backgroundColor: sub.badgeColor + '20' }]}>
-                                <Text style={[styles.badgeText, { color: sub.badgeColor }]}>{sub.badge}</Text>
-                              </View>
-                            )}
+                            {sub.badge && (() => {
+                              // Resolve dynamic tally status badge
+                              const badgeText  = sub.badge === '__TALLY_STATUS__'
+                                ? (isPaired ? 'Paired' : 'Unpaired')
+                                : sub.badge;
+                              const badgeColor = sub.badgeColor === '__TALLY_COLOR__'
+                                ? (isPaired ? '#2D7D46' : '#C0392B')
+                                : (sub.badgeColor ?? '#2D7D46');
+                              return (
+                                <View style={[styles.badge, { backgroundColor: badgeColor + '20' }]}>
+                                  <Text style={[styles.badgeText, { color: badgeColor }]}>{badgeText}</Text>
+                                </View>
+                              );
+                            })()}
                             {isToggleItem ? (
                               <Switch
                                 value={toggleVal}

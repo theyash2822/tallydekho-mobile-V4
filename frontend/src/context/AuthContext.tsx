@@ -178,7 +178,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     poll(); // immediate check on mount / auth change
-    const interval = setInterval(poll, 30_000);
+    // Poll every 10s — fast enough to detect unpair within ~10s without hammering the server
+    const interval = setInterval(poll, 10_000);
     return () => clearInterval(interval);
   }, [isAuthenticated, BASE_URL]);
 
