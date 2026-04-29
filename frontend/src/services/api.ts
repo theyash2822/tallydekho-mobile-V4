@@ -151,15 +151,15 @@ export const getCompanyYears = (companyGuid?: string) =>
 // DASHBOARD
 // ══════════════════════════════════════════════════════════════
 
-export const getKPIStrip = (companyGuid?: string, period = '7D') =>
-  withFallback(() => get(withCompany('/dashboard/kpi-strip', companyGuid, { period })), MOCK_KPI_STRIP);
+export const getKPIStrip = (companyGuid?: string, period = '7D', from?: string, to?: string) =>
+  withFallback(() => get(withCompany('/dashboard/kpi-strip', companyGuid, { period, ...(from && to ? { from, to } : {}) })), MOCK_KPI_STRIP);
 
-export const getMetrics = (companyGuid?: string, period = '7D') =>
-  withFallback(() => get(withCompany('/dashboard/metrics', companyGuid, { period })), MOCK_METRICS);
+export const getMetrics = (companyGuid?: string, period = '7D', from?: string, to?: string) =>
+  withFallback(() => get(withCompany('/dashboard/metrics', companyGuid, { period, ...(from && to ? { from, to } : {}) })), MOCK_METRICS);
 
-export const getCashflow = (companyGuid?: string, period = '7D') =>
+export const getCashflow = (companyGuid?: string, period = '7D', from?: string, to?: string) =>
   withFallback(
-    () => get<any>(withCompany('/dashboard/cashflow', companyGuid, { period }))
+    () => get<any>(withCompany('/dashboard/cashflow', companyGuid, { period, ...(from && to ? { from, to } : {}) }))
       .then((res: any) => {
         // Backend returns snake_case, CashflowCard expects camelCase
         const d = res?.data ?? res;

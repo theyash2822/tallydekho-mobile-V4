@@ -104,12 +104,18 @@ export default function HomeScreen() {
   // ── Data loading ─────────────────────────────────────────────────────────
   const [isLoading, setIsLoading] = useState(true);
 
+  // Parse 'FY YYYY-YY' label into ISO date range for API calls
+  const parseFYDates = useCallback((fyLabel: string) => {
+    const match = fyLabel?.match(/FY (\d{4})-(\d{2})/);
+    if (!match) return null;
+    const startYear = parseInt(match[1]);
+    const endYear = startYear + 1;
+    return { from: `${startYear}-04-01`, to: `${endYear}-03-31` };
+  }, []);
+
   const handleFYChange = useCallback((fy: string) => {
     setActiveFY(fy);
-    const fyData = FY_DASHBOARD[fy] || FY_DASHBOARD['FY 2025-26'];
-    setKpiData(fyData.kpi as any);
-    setMetrics(fyData.metrics as any);
-    setCashflow(fyData.cashflow as any);
+    // FY change triggers loadData via useEffect (activeFY dep), no manual mock needed
   }, []);
 
   const loadData = useCallback(async () => {
@@ -128,28 +134,34 @@ export default function HomeScreen() {
 
     setIsLoading(true);
     try {
+      // Parse FY label to date range for API filtering
+      const fyDates = parseFYDates(activeFY);
+      const from = fyDates?.from;
+      const to   = fyDates?.to;
+
       const [kpi, met, cf, act] = await Promise.all([
-        getKPIStrip(companyGuid, activeFilter),
-        getMetrics(companyGuid, activeFilter),
-        getCashflow(companyGuid, activeFilter),
+        getKPIStrip(companyGuid, activeFilter, from, to),
+        getMetrics(companyGuid, activeFilter, from, to),
+        getCashflow(companyGuid, activeFilter, from, to),
         getRecentActivity(companyGuid),
       ]);
-      if (activeFY === 'FY 2025-26') {
-        const kpiArr = Array.isArray(kpi) ? kpi : (kpi as any)?.data ?? MOCK_KPI_STRIP;
-        const metArr = Array.isArray(met) ? met : (met as any)?.data ?? MOCK_METRICS;
-        setKpiData(kpiArr as any);
-        setMetrics(metArr as any);
-        // Cashflow API returns {success, data: {...}} — extract the inner data object
-        const cfData = (cf as any)?.data ?? cf;
-        if (cfData && typeof cfData === 'object' && !('success' in cfData)) setCashflow(cfData as any);
-        else if ((cf as any)?.data) setCashflow((cf as any).data as any);
-      }
+
+      const kpiArr = Array.isArray(kpi) ? kpi : (kpi as any)?.data ?? MOCK_KPI_STRIP;
+      const metArr = Array.isArray(met) ? met : (met as any)?.data ?? MOCK_METRICS;
+      setKpiData(kpiArr as any);
+      setMetrics(metArr as any);
+
+      // Cashflow: extract inner data object
+      const cfData = (cf as any)?.data ?? cf;
+      if (cfData && typeof cfData === 'object' && !('success' in cfData)) setCashflow(cfData as any);
+      else if ((cf as any)?.data) setCashflow((cf as any).data as any);
+
       const actArr = Array.isArray(act) ? act : (act as any)?.data ?? MOCK_RECENT_ACTIVITY;
       setActivity(actArr as any);
     } finally {
       setIsLoading(false);
     }
-  }, [isPaired, activeFilter, activeFY, companyGuid]);
+  }, [isPaired, activeFilter, activeFY, companyGuid, parseFYDates]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
