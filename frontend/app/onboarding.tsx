@@ -6,11 +6,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../src/context/AuthContext';
 
 const { width: SW } = Dimensions.get('window');
-
-// ── App theme (exact match) ───────────────────────────────────────────────────
 const PAGE_BG  = '#F5F4EF';
 const CARD_BG  = '#FFFFFF';
 const BORDER   = '#E9E8E3';
@@ -19,8 +17,6 @@ const GOLD     = '#A89060';
 const TEXT_PRI = '#1A1A1A';
 const TEXT_SEC = '#787774';
 const TEXT_TER = '#AEACA8';
-
-const GUIDE_KEY = 'hasSeenGuide_v4';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SLIDE 1 — Hero (light theme)
@@ -743,9 +739,10 @@ const SLIDES: SlideInfo[] = [
 // MAIN SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 export default function OnboardingScreen() {
-  const router   = useRouter();
-  const params   = useLocalSearchParams<{ replay?: string }>();
-  const isReplay = params.replay === 'true';
+  const router         = useRouter();
+  const params         = useLocalSearchParams<{ replay?: string }>();
+  const isReplay       = params.replay === 'true';
+  const { isAuthenticated } = useAuth();
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [slideH,       setSlideH]       = useState(520);
@@ -764,11 +761,14 @@ export default function OnboardingScreen() {
     }
   }, [currentIndex, goToIndex]);
 
-  const finishGuide = useCallback(async () => {
-    if (!isReplay) await AsyncStorage.setItem(GUIDE_KEY, 'true');
-    if (isReplay) router.back();
-    else          router.replace('/(tabs)');
-  }, [isReplay, router]);
+  const finishGuide = useCallback(() => {
+    if (isReplay) {
+      router.back();
+    } else {
+      // Go to home if already logged in, otherwise go to login
+      router.replace(isAuthenticated ? '/(tabs)' : '/(auth)');
+    }
+  }, [isReplay, router, isAuthenticated]);
 
   const onScroll = useCallback((e: any) => {
     const idx = Math.round(e.nativeEvent.contentOffset.x / SW);

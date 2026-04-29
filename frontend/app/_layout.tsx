@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -10,44 +10,38 @@ import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import * as SplashScreen from 'expo-splash-screen';
 import Toast from 'react-native-toast-message';
 import { toastConfig } from '../src/utils/toastConfig';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Prevent splash screen from auto-hiding while fonts load
 SplashScreen.preventAutoHideAsync();
+
+// Module-level flag — lives in JS memory only.
+// Resets to false on every Metro reload / cold app start automatically.
+let _onboardingShownThisSession = false;
 
 function RootNavigation() {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
-  const [guideChecked, setGuideChecked] = useState(false);
-  const [guideSeen,    setGuideSeen]    = useState(false);
-
-  // Load guide-seen flag once on mount
-  useEffect(() => {
-    AsyncStorage.getItem('hasSeenGuide_v4').then(val => {
-      setGuideSeen(val === 'true');
-      setGuideChecked(true);
-    });
-  }, []);
 
   useEffect(() => {
-    if (isLoading || !guideChecked) return;
+    if (isLoading) return;
     if (segments.length === 0) return;
 
     const inAuth       = segments[0] === '(auth)';
     const inOnboarding = segments[0] === 'onboarding';
 
-    if (!isAuthenticated && !inAuth) {
-      // Not logged in — send to auth screen
-      router.replace('/(auth)');
-    } else if (isAuthenticated && inAuth) {
-      // Just finished logging in — show guide first time, then app
-      router.replace(guideSeen ? '/(tabs)' : '/onboarding');
-    } else if (isAuthenticated && !inAuth && !inOnboarding && !guideSeen) {
-      // Already logged in but guide not seen yet — show it now
+    // ── Always show onboarding first on every fresh app start ──
+    if (!_onboardingShownThisSession && !inOnboarding) {
+      _onboardingShownThisSession = true;
       router.replace('/onboarding');
+      return;
     }
-  }, [isAuthenticated, isLoading, guideChecked, guideSeen, segments]);
+
+    // ── After onboarding: normal auth guard ──
+    if (!inOnboarding && !isAuthenticated && !inAuth) {
+      router.replace('/(auth)');
+    }
+  }, [isAuthenticated, isLoading, segments]);
 
   return <Stack screenOptions={{ headerShown: false }} />;
 }
