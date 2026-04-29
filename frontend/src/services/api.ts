@@ -299,6 +299,10 @@ export const getFinancialData = (companyGuid?: string) =>
 export const getFinancialReport = (companyGuid?: string, from?: string, to?: string) =>
   withFallback(() => get(withCompany('/reports/financial-report', companyGuid, from && to ? { from, to } : {})), null);
 
+// Full P&L + Balance Sheet + Trial Balance from ledger closing balances
+export const getFullFinancialReport = (companyGuid?: string) =>
+  withFallback(() => get(withCompany('/reports/pl-bs', companyGuid)), null);
+
 export const getGSTReport = (companyGuid?: string) =>
   withFallback(() => get(withCompany('/reports/gst', companyGuid)), null);
 

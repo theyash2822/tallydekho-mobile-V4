@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal, { fmtDMY } from '../../src/components/DateRangePickerModal';
+import { getFullFinancialReport } from '../../src/services/api';
+import { useAuth } from '../../src/context/AuthContext';
 
 // ── Mock Data (Tally Prime format) ─────────────────────────────────────────
 const MOCK_PL = {
@@ -115,16 +117,15 @@ const acc = StyleSheet.create({
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Profit & Loss — 2-column card grid
+// Profit & Loss — real data summary
 // ══════════════════════════════════════════════════════════════════════════════
-function PLCardGrid() {
+function PLCardGrid({ pl }: { pl?: any }) {
+  const income   = pl?.totalIncome   ?? 0;
+  const expenses = pl?.totalExpenses ?? 0;
+  const net      = pl?.netProfit     ?? (income - expenses);
   const rows = [
-    { left: 'Opening Stock',   leftAmt: MOCK_PL.openingStock,   right: 'Closing Stock',    rightAmt: MOCK_PL.closingStock    },
-    { left: 'Purchase',        leftAmt: MOCK_PL.purchase,       right: 'Sales',            rightAmt: MOCK_PL.sales           },
-    { left: 'Direct Expense',  leftAmt: MOCK_PL.directExpense,  right: 'Indirect Expense', rightAmt: MOCK_PL.indirectExpense },
-    { left: 'Indirect Income', leftAmt: MOCK_PL.indirectIncome, right: 'Direct Income',    rightAmt: MOCK_PL.directIncome   },
-    { left: 'Gross Profit',    leftAmt: MOCK_PL.grossProfit,    right: 'Gross Loss',       rightAmt: MOCK_PL.grossLoss      },
-    { left: 'Net Profit',      leftAmt: MOCK_PL.netProfit,      right: 'Net Loss',         rightAmt: MOCK_PL.netLoss        },
+    { left: 'Total Income',   leftAmt: income,   right: 'Total Expenses', rightAmt: expenses },
+    { left: net >= 0 ? 'Net Profit' : 'Net Loss', leftAmt: Math.abs(net), right: 'Income Ledgers', rightAmt: pl?.income?.length ?? 0 },
   ];
   return (
     <View style={plg.grid}>
@@ -138,6 +139,12 @@ function PLCardGrid() {
             <Text style={plg.lbl}>{row.right}</Text>
             <Text style={plg.val}>{fmtInr(row.rightAmt)}</Text>
           </View>
+        </View>
+      ))}
+      {pl?.income?.slice(0, 5).map((l: any, i: number) => (
+        <View key={`inc-${i}`} style={[plg.row]}>
+          <View style={[plg.card, { flex: 2 }]}><Text style={plg.lbl} numberOfLines={1}>{l.name}</Text></View>
+          <View style={[plg.card, { flex: 1 }]}><Text style={[plg.val, { color: COLORS.positive }]}>{fmtInr(l.amount)}</Text></View>
         </View>
       ))}
     </View>
@@ -163,8 +170,12 @@ const plg = StyleSheet.create({
 // ══════════════════════════════════════════════════════════════════════════════
 // Balance Sheet — Liability / Assets tab + tables
 // ══════════════════════════════════════════════════════════════════════════════
-function BalanceSheetSection() {
+function BalanceSheetSection({ bs }: { bs?: any }) {
   const [tab, setTab] = useState<'liability' | 'assets'>('liability');
+  const liabilities = bs?.liabilities ?? MOCK_LIABILITIES.map(r => ({ name: r.name, amount: r.current }));
+  const assets      = bs?.assets      ?? MOCK_ASSETS;
+  const totalLiab   = bs?.totalLiabilities ?? MOCK_TOTAL_LIAB;
+  const totalAssets = bs?.totalAssets      ?? MOCK_TOTAL_ASSETS;
 
   return (
     <View>
@@ -195,22 +206,19 @@ function BalanceSheetSection() {
               <Text style={[bss.cell, bss.hdrTxt, bss.right, { flex: 1.3 }]}>Current Period</Text>
             </View>
             {/* Data rows */}
-            {MOCK_LIABILITIES.map((row, i) => (
+            {liabilities.map((row: any, i: number) => (
               <View key={i} style={[bss.tableRow, i % 2 !== 0 && bss.altRow]}>
-                <Text style={[bss.cell, bss.rowName, { flex: 2 }]}>{row.name}</Text>
-                <Text style={[bss.cell, bss.rowVal, bss.right, { flex: 1.2 }]}>
-                  {row.opening === 0 ? '\u20b90' : fmtInr(row.opening)}
-                </Text>
+                <Text style={[bss.cell, bss.rowName, { flex: 2 }]} numberOfLines={1}>{row.name}</Text>
                 <Text style={[bss.cell, bss.rowVal, bss.right, { flex: 1.3 }]}>
-                  {fmtInr(row.current)}
+                  {fmtInr(row.amount ?? row.current ?? 0)}
                 </Text>
               </View>
             ))}
             {/* Total row */}
             <View style={[bss.tableRow, bss.totalRow]}>
               <Text style={[bss.cell, bss.totalName, { flex: 2 }]}>Total Liabilities</Text>
-              <Text style={[bss.cell, bss.totalVal, bss.right, { flex: 2.5 }]}>
-                {fmtInr(MOCK_TOTAL_LIAB)}
+              <Text style={[bss.cell, bss.totalVal, bss.right, { flex: 1.3 }]}>
+                {fmtInr(totalLiab)}
               </Text>
             </View>
           </>
@@ -222,11 +230,11 @@ function BalanceSheetSection() {
               <Text style={[bss.cell, bss.hdrTxt, bss.right, { flex: 1 }]}>Amount (INR)</Text>
             </View>
             {/* Data rows */}
-            {MOCK_ASSETS.map((row, i) => (
+            {assets.map((row: any, i: number) => (
               <View key={i} style={[bss.tableRow, i % 2 !== 0 && bss.altRow]}>
-                <Text style={[bss.cell, bss.rowName, { flex: 2 }]}>{row.name}</Text>
+                <Text style={[bss.cell, bss.rowName, { flex: 2 }]} numberOfLines={1}>{row.name}</Text>
                 <Text style={[bss.cell, bss.rowVal, bss.right, { flex: 1 }]}>
-                  {fmtInr(row.amount)}
+                  {fmtInr(row.amount ?? 0)}
                 </Text>
               </View>
             ))}
@@ -234,7 +242,7 @@ function BalanceSheetSection() {
             <View style={[bss.tableRow, bss.totalRow]}>
               <Text style={[bss.cell, bss.totalName, { flex: 2 }]}>Total Assets</Text>
               <Text style={[bss.cell, bss.totalVal, bss.right, { flex: 1 }]}>
-                {fmtInr(MOCK_TOTAL_ASSETS)}
+                {fmtInr(totalAssets)}
               </Text>
             </View>
           </>
@@ -295,21 +303,31 @@ const bss = StyleSheet.create({
 // ══════════════════════════════════════════════════════════════════════════════
 // Trial Balance — 2-column card grid (4 cards, 2 rows)
 // ══════════════════════════════════════════════════════════════════════════════
-function TrialBalanceGrid() {
+function TrialBalanceGrid({ tb }: { tb?: any }) {
+  const ledgers     = tb?.ledgers    ?? [];
+  const totalDebit  = tb?.totalDebit  ?? 0;
+  const totalCredit = tb?.totalCredit ?? 0;
+  if (ledgers.length === 0) {
+    return (
+      <View style={tbg.grid}>
+        <Text style={{ color: COLORS.textSecondary, textAlign: 'center', padding: 16 }}>No trial balance data</Text>
+      </View>
+    );
+  }
   return (
     <View style={tbg.grid}>
-      {MOCK_TRIAL.map((row, i) => (
+      <View style={[tbg.row, { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, paddingBottom: 8, marginBottom: 4 }]}>
+        <View style={tbg.card}><Text style={tbg.lbl}>Total Debit</Text><Text style={[tbg.val, { color: COLORS.negative }]}>{fmtInr(totalDebit)}</Text></View>
+        <View style={tbg.card}><Text style={tbg.lbl}>Total Credit</Text><Text style={[tbg.val, { color: COLORS.positive }]}>{fmtInr(totalCredit)}</Text></View>
+      </View>
+      {ledgers.slice(0, 10).map((l: any, i: number) => (
         <View key={i} style={tbg.row}>
-          <View style={tbg.card}>
-            <Text style={tbg.lbl}>{row.left}</Text>
-            <Text style={tbg.val}>{fmtInr(row.leftAmt)}</Text>
-          </View>
-          <View style={tbg.card}>
-            <Text style={tbg.lbl}>{row.right}</Text>
-            <Text style={tbg.val}>{fmtInr(row.rightAmt)}</Text>
-          </View>
+          <View style={[tbg.card, { flex: 2 }]}><Text style={tbg.lbl} numberOfLines={1}>{l.name}</Text></View>
+          <View style={tbg.card}><Text style={tbg.lbl}>Dr</Text><Text style={tbg.val}>{fmtInr(l.debit)}</Text></View>
+          <View style={tbg.card}><Text style={tbg.lbl}>Cr</Text><Text style={tbg.val}>{fmtInr(l.credit)}</Text></View>
         </View>
       ))}
+
     </View>
   );
 }
@@ -335,6 +353,7 @@ const tbg = StyleSheet.create({
 // ══════════════════════════════════════════════════════════════════════════════
 export default function FinancialReportScreen() {
   const router = useRouter();
+  const { company } = useAuth();
 
   // Accordion — 'pl' open by default
   const [openSection, setOpenSection] = useState<SectionKey | null>('pl');
@@ -349,6 +368,19 @@ export default function FinancialReportScreen() {
   const [fromDate, setFromDate]           = useState(fmtDMY(fyStart));
   const [toDate,   setToDate]             = useState(fmtDMY(fyEnd));
   const [showDateSheet, setShowDateSheet] = useState(false);
+
+  // Real financial data from backend
+  const [reportData, setReportData] = useState<any>(null);
+  const [loading, setLoading]       = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getFullFinancialReport(company?.guid).then(res => {
+      if (!cancelled && res?.success && res.data) setReportData(res.data);
+    }).catch(() => {}).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [company?.guid]);
 
   return (
     <SafeAreaView style={s.safe}>
@@ -383,7 +415,7 @@ export default function FinancialReportScreen() {
           open={openSection === 'pl'}
           onToggle={toggleSection}
         >
-          <PLCardGrid />
+          {loading ? <ActivityIndicator color={COLORS.brandPrimary} style={{ padding: 20 }} /> : <PLCardGrid pl={reportData?.pl} />}
         </AccSection>
 
         {/* 2. Balance Sheet */}
@@ -393,7 +425,7 @@ export default function FinancialReportScreen() {
           open={openSection === 'bs'}
           onToggle={toggleSection}
         >
-          <BalanceSheetSection />
+          {loading ? <ActivityIndicator color={COLORS.brandPrimary} style={{ padding: 20 }} /> : <BalanceSheetSection bs={reportData?.bs} />}
         </AccSection>
 
         {/* 3. Trial Balance */}
@@ -403,7 +435,7 @@ export default function FinancialReportScreen() {
           open={openSection === 'tb'}
           onToggle={toggleSection}
         >
-          <TrialBalanceGrid />
+          {loading ? <ActivityIndicator color={COLORS.brandPrimary} style={{ padding: 20 }} /> : <TrialBalanceGrid tb={reportData?.trialBalance} />}
         </AccSection>
       </ScrollView>
 
