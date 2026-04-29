@@ -151,36 +151,33 @@ export const getCompanyYears = (companyGuid?: string) =>
 // DASHBOARD
 // ══════════════════════════════════════════════════════════════
 
+// Core dashboard — no mock fallback: empty means no data, not fake data
 export const getKPIStrip = (companyGuid?: string, period = '7D', from?: string, to?: string) =>
-  withFallback(() => get(withCompany('/dashboard/kpi-strip', companyGuid, { period, ...(from && to ? { from, to } : {}) })), MOCK_KPI_STRIP);
+  get(withCompany('/dashboard/kpi-strip', companyGuid, { period, ...(from && to ? { from, to } : {}) }));
 
 export const getMetrics = (companyGuid?: string, period = '7D', from?: string, to?: string) =>
-  withFallback(() => get(withCompany('/dashboard/metrics', companyGuid, { period, ...(from && to ? { from, to } : {}) })), MOCK_METRICS);
+  get(withCompany('/dashboard/metrics', companyGuid, { period, ...(from && to ? { from, to } : {}) }));
 
 export const getCashflow = (companyGuid?: string, period = '7D', from?: string, to?: string) =>
-  withFallback(
-    () => get<any>(withCompany('/dashboard/cashflow', companyGuid, { period, ...(from && to ? { from, to } : {}) }))
-      .then((res: any) => {
-        // Backend returns snake_case, CashflowCard expects camelCase
-        const d = res?.data ?? res;
-        if (!d || typeof d !== 'object') return MOCK_CASHFLOW;
-        return {
-          netCash:              d.net_cash              ?? d.netCash              ?? 0,
-          grossCash:            d.gross_cash            ?? d.grossCash            ?? 0,
-          netRealisableBalance: d.net_realisable_balance?? d.netRealisableBalance ?? 0,
-          grossProfit:          d.gross_profit          ?? d.grossProfit          ?? 0,
-          netProfit:            d.net_profit            ?? d.netProfit            ?? 0,
-          incomePercentage:     d.income_percentage     ?? d.incomePercentage     ?? 0,
-          updatedAt:            d.updated_at            ?? d.updatedAt            ?? 'just now',
-          totalIncome:          d.total_income          ?? d.totalIncome,
-          totalExpense:         d.total_expense         ?? d.totalExpense,
-        };
-      }),
-    MOCK_CASHFLOW
-  );
+  get<any>(withCompany('/dashboard/cashflow', companyGuid, { period, ...(from && to ? { from, to } : {}) }))
+    .then((res: any) => {
+      const d = res?.data ?? res;
+      if (!d || typeof d !== 'object') return null;
+      return {
+        netCash:              d.net_cash              ?? d.netCash              ?? 0,
+        grossCash:            d.gross_cash            ?? d.grossCash            ?? 0,
+        netRealisableBalance: d.net_realisable_balance?? d.netRealisableBalance ?? 0,
+        grossProfit:          d.gross_profit          ?? d.grossProfit          ?? 0,
+        netProfit:            d.net_profit            ?? d.netProfit            ?? 0,
+        incomePercentage:     d.income_percentage     ?? d.incomePercentage     ?? 0,
+        updatedAt:            d.updated_at            ?? d.updatedAt            ?? 'just now',
+        totalIncome:          d.total_income          ?? d.totalIncome,
+        totalExpense:         d.total_expense         ?? d.totalExpense,
+      };
+    });
 
 export const getRecentActivity = (companyGuid?: string) =>
-  withFallback(() => get(withCompany('/dashboard/recent-activity', companyGuid)), MOCK_RECENT_ACTIVITY);
+  get(withCompany('/dashboard/recent-activity', companyGuid));
 
 export const searchDashboard = (q: string, companyGuid?: string) =>
   withFallback(() => get(withCompany('/dashboard/search', companyGuid, { q })), []);
@@ -190,19 +187,19 @@ export const searchDashboard = (q: string, companyGuid?: string) =>
 // ══════════════════════════════════════════════════════════════
 
 export const getSalesInvoices = (companyGuid?: string, params?: { status?: string; search?: string; page?: string; from?: string; to?: string }) =>
-  withFallback(() => get(withCompany('/sales/invoices', companyGuid, params as any)), { data: [], meta: { total: 0 } });
+  get(withCompany('/sales/invoices', companyGuid, params as any));
 
 export const getSalesOrders = (companyGuid?: string, params?: any) =>
-  withFallback(() => get(withCompany('/sales/orders', companyGuid, params)), { data: [], meta: { total: 0 } });
+  get(withCompany('/sales/orders', companyGuid, params));
 
 export const getSalesQuotations = (companyGuid?: string, params?: any) =>
-  withFallback(() => get(withCompany('/sales/quotations', companyGuid, params)), { data: [], meta: { total: 0 } });
+  get(withCompany('/sales/quotations', companyGuid, params));
 
 export const getCreditNotes = (companyGuid?: string, params?: any) =>
-  withFallback(() => get(withCompany('/sales/credit-notes', companyGuid, params)), { data: [], meta: { total: 0 } });
+  get(withCompany('/sales/credit-notes', companyGuid, params));
 
 export const getDeliveryNotes = (companyGuid?: string, params?: any) =>
-  withFallback(() => get(withCompany('/sales/delivery-notes', companyGuid, params)), { data: [], meta: { total: 0 } });
+  get(withCompany('/sales/delivery-notes', companyGuid, params));
 
 export const getEWayBills = (companyGuid?: string, params?: any) =>
   withFallback(() => get(withCompany('/sales/ewaybills', companyGuid, params)), { data: [], meta: { total: 0 } });
@@ -218,13 +215,13 @@ export const createDeliveryNote = (payload: any) => tallyPost('/voucher/delivery
 // ══════════════════════════════════════════════════════════════
 
 export const getPurchaseInvoices = (companyGuid?: string, params?: any) =>
-  withFallback(() => get(withCompany('/purchase/invoices', companyGuid, params)), { data: [], meta: { total: 0 } });
+  get(withCompany('/purchase/invoices', companyGuid, params));
 
 export const getPurchaseOrders = (companyGuid?: string, params?: any) =>
-  withFallback(() => get(withCompany('/purchase/orders', companyGuid, params)), { data: [], meta: { total: 0 } });
+  get(withCompany('/purchase/orders', companyGuid, params));
 
 export const getDebitNotes = (companyGuid?: string, params?: any) =>
-  withFallback(() => get(withCompany('/purchase/debit-notes', companyGuid, params)), { data: [], meta: { total: 0 } });
+  get(withCompany('/purchase/debit-notes', companyGuid, params));
 
 export const createPurchaseInvoice = (payload: any) => tallyPost('/voucher/purchase', payload);
 export const createPurchaseOrder = (payload: any) => tallyPost('/voucher/purchase-order', payload);
@@ -235,7 +232,7 @@ export const createDebitNote = (payload: any) => tallyPost('/voucher/debit-note'
 // ══════════════════════════════════════════════════════════════
 
 export const getVouchers = (companyGuid?: string, type?: string, params?: any) =>
-  withFallback(() => get(withCompany('/vouchers', companyGuid, { ...(type ? { type } : {}), ...params })), { data: [], meta: { total: 0 } });
+  get(withCompany('/vouchers', companyGuid, { ...(type ? { type } : {}), ...params }));
 
 export const createPaymentVoucher = (payload: any) => tallyPost('/voucher/payment', payload);
 export const createReceiptVoucher = (payload: any) => tallyPost('/voucher/receipt', payload);
@@ -247,7 +244,7 @@ export const createContraVoucher = (payload: any) => tallyPost('/voucher/contra'
 // ══════════════════════════════════════════════════════════════
 
 export const getLedgers = (companyGuid?: string, params?: { group?: string; nature?: string; search?: string; page?: string }) =>
-  withFallback(() => get(withCompany('/ledgers', companyGuid, params as any)), { data: MOCK_LEDGERS, meta: { total: 0 } });
+  get(withCompany('/ledgers', companyGuid, params as any));
 
 export const getLedgerDetail = (companyGuid?: string, id?: string, params?: { from?: string; to?: string }) =>
   withFallback(() => get(withCompany(`/ledgers/${id}`, companyGuid, params)), null);
@@ -259,13 +256,13 @@ export const createLedger = (payload: any) => tallyPost('/master/party', payload
 // ══════════════════════════════════════════════════════════════
 
 export const getStocks = (companyGuid?: string, params?: any) =>
-  withFallback(() => get(withCompany('/stocks/items', companyGuid, params)), { data: { summary: {}, items: MOCK_STOCKS } });
+  get(withCompany('/stocks/items', companyGuid, params));
 
 export const getStockItem = (companyGuid?: string, id?: string) =>
   withFallback(() => get(withCompany(`/stocks/items/${id}`, companyGuid)), null);
 
 export const getWarehouses = (companyGuid?: string) =>
-  withFallback(() => get(withCompany('/stocks/warehouses', companyGuid)), { data: [] });
+  get(withCompany('/stocks/warehouses', companyGuid));
 
 export const getParties = (companyGuid?: string, params?: { search?: string; type?: string }) =>
   withFallback(() => get(withCompany('/parties', companyGuid, params)), { data: [] });
@@ -327,20 +324,22 @@ export const markAllNotificationsRead = () =>
 // KPI DETAIL VIEWS
 // ══════════════════════════════════════════════════════════════
 
+// Balance-based KPIs (ledger closing balance — no date filter needed)
 export const getKPICashInHand = (companyGuid?: string) =>
-  withFallback(() => get(withCompany('/kpi/cash-in-hand', companyGuid)), null);
+  get(withCompany('/kpi/cash-in-hand', companyGuid));
 export const getKPIBankBalance = (companyGuid?: string) =>
-  withFallback(() => get(withCompany('/kpi/bank-balance', companyGuid)), null);
+  get(withCompany('/kpi/bank-balance', companyGuid));
 export const getKPIReceivables = (companyGuid?: string) =>
-  withFallback(() => get(withCompany('/kpi/receivables', companyGuid)), null);
+  get(withCompany('/kpi/receivables', companyGuid));
 export const getKPIPayables = (companyGuid?: string) =>
-  withFallback(() => get(withCompany('/kpi/payables', companyGuid)), null);
-export const getKPIPayments = (companyGuid?: string) =>
-  withFallback(() => get(withCompany('/kpi/payments', companyGuid)), null);
-export const getKPIReceipts = (companyGuid?: string) =>
-  withFallback(() => get(withCompany('/kpi/receipts', companyGuid)), null);
+  get(withCompany('/kpi/payables', companyGuid));
 export const getKPILoansODs = (companyGuid?: string) =>
-  withFallback(() => get(withCompany('/kpi/loans-ods', companyGuid)), null);
+  get(withCompany('/kpi/loans-ods', companyGuid));
+// Voucher-based KPIs (accept optional date range for FY scoping)
+export const getKPIPayments = (companyGuid?: string, params?: { from?: string; to?: string }) =>
+  get(withCompany('/kpi/payments', companyGuid, params));
+export const getKPIReceipts = (companyGuid?: string, params?: { from?: string; to?: string }) =>
+  get(withCompany('/kpi/receipts', companyGuid, params));
 
 // ══════════════════════════════════════════════════════════════
 // E-WAY BILLS + E-INVOICE (country-aware)
@@ -359,8 +358,8 @@ export const getGSTDetail = (companyGuid?: string, params?: { type?: string; fro
 // EXPENSES + DAYBOOK
 // ══════════════════════════════════════════════════════════════
 
-export const getExpenses = (companyGuid?: string, params?: any) =>
-  withFallback(() => get(withCompany('/expenses', companyGuid, params)), { data: [], summary: { total: 0 } });
+export const getExpenses = (companyGuid?: string, params?: { from?: string; to?: string; [key: string]: any }) =>
+  get(withCompany('/expenses', companyGuid, params));
 export const getDaybook = (companyGuid?: string, date?: string) =>
   withFallback(() => get(withCompany('/daybook', companyGuid, date ? { date } : {})), { data: [], meta: { total: 0 } });
 

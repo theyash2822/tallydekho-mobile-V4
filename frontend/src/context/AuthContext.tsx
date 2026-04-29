@@ -37,6 +37,12 @@ export interface UserInfo {
   language?: string;
 }
 
+export interface FYInfo {
+  label: string;     // e.g. 'FY 2025-26'
+  startDate: string; // e.g. '2025-04-01'
+  endDate: string;   // e.g. '2026-03-31'
+}
+
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -44,7 +50,9 @@ interface AuthContextType {
   isDesktopOnline: boolean;
   company: Company | null;
   user: UserInfo | null;
-  lastSyncAt: number;  // unix timestamp — increments when backend reports a new sync
+  lastSyncAt: number;
+  selectedFY: FYInfo | null;
+  setSelectedFY: (fy: FYInfo | null) => void;
   signIn: (token: string, userInfo?: UserInfo) => Promise<void>;
   signOut: () => Promise<void>;
   setIsPaired: (v: boolean) => void;
@@ -60,6 +68,8 @@ const AuthContext = createContext<AuthContextType>({
   company: null,
   user: null,
   lastSyncAt: 0,
+  selectedFY: null,
+  setSelectedFY: () => {},
   signIn: async () => {},
   signOut: async () => {},
   setIsPaired: () => {},
@@ -72,7 +82,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const [isPaired, setIsPairedState] = useState(false);
   const [isDesktopOnline, setIsDesktopOnlineState] = useState(false);
-  const [lastSyncAt, setLastSyncAt] = useState(0);  // tracks last known device sync time
+  const [lastSyncAt, setLastSyncAt] = useState(0);
+  const [selectedFY, setSelectedFY] = useState<FYInfo | null>(null);
   const [company, setCompanyState] = useState<Company | null>(null);
   const [user, setUserState] = useState<UserInfo | null>(null);
 
@@ -194,6 +205,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <AuthContext.Provider value={{
       isAuthenticated, isLoading, isPaired, isDesktopOnline, company, user, lastSyncAt,
+      selectedFY, setSelectedFY,
       signIn, signOut, setIsPaired, setCompany, setUser,
     }}>
       {children}

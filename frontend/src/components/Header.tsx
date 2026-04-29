@@ -42,12 +42,14 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { company, setCompany, isPaired, lastSyncAt } = useAuth();
+  const { company, setCompany, isPaired, lastSyncAt, setSelectedFY: setContextFY } = useAuth();
   const [selectedFY,      setSelectedFY]      = useState(fyYear);
   const [selectedCompany, setSelectedCompany] = useState(companyName);
   const [showFYModal,      setShowFYModal]      = useState(false);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [liveCompanies,   setLiveCompanies]   = useState<any[]>([]);
+  // Store full FY objects with startDate/endDate for global context
+  const [liveFYObjects,   setLiveFYObjects]   = useState<{ label: string; startDate: string; endDate: string }[]>([]);
   const [liveFYYears,     setLiveFYYears]     = useState<string[]>([]);
 
   // Load real companies from API
@@ -77,9 +79,18 @@ const Header: React.FC<HeaderProps> = ({
     getCompanyYears(company.guid).then((res: any) => {
       const rows = res?.data ?? [];
       if (rows.length) {
-        const labels = rows.map((r: any) => r.label);
+        // Store full objects with dates
+        const fyObjs = rows.map((r: any) => ({
+          label: r.label,
+          startDate: r.begin_date,
+          endDate: r.end_date,
+        }));
+        setLiveFYObjects(fyObjs);
+        const labels = fyObjs.map((f: any) => f.label);
         setLiveFYYears(labels);
         setSelectedFY(labels[0]);
+        // Push the selected FY (with dates) to global AuthContext
+        setContextFY(fyObjs[0] || null);
       } else {
         const now = new Date();
         const cur = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
@@ -105,6 +116,9 @@ const Header: React.FC<HeaderProps> = ({
   const handleFYSelect = (fy: string) => {
     setSelectedFY(fy);
     onFYChange?.(fy);
+    // Also update global AuthContext with full FY object (has startDate/endDate)
+    const fyObj = liveFYObjects.find(o => o.label === fy);
+    if (fyObj) setContextFY(fyObj);
     setShowFYModal(false);
   };
 

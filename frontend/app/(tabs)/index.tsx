@@ -42,7 +42,7 @@ const MOCK_VOICE_SEARCHES = ['Sales Invoice', 'Mehta Enterprises', 'Payment Rece
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { isPaired, isDesktopOnline, company, user } = useAuth();
+  const { isPaired, isDesktopOnline, company, user, selectedFY } = useAuth();
   const companyGuid = company?.guid;
   const [activeFY, setActiveFY] = useState(MOCK_USER.fyYear);
   const [activeFilter, setActiveFilter] = useState<TimeFilter>('7D');
@@ -134,10 +134,10 @@ export default function HomeScreen() {
 
     setIsLoading(true);
     try {
-      // Parse FY label to date range for API filtering
-      const fyDates = parseFYDates(activeFY);
-      const from = fyDates?.from;
-      const to   = fyDates?.to;
+      // Prefer context selectedFY (has real startDate/endDate from API),
+      // fall back to parseFYDates for label-based parsing
+      const from = selectedFY?.startDate ?? parseFYDates(activeFY)?.from;
+      const to   = selectedFY?.endDate   ?? parseFYDates(activeFY)?.to;
 
       const [kpi, met, cf, act] = await Promise.all([
         getKPIStrip(companyGuid, activeFilter, from, to),
@@ -146,22 +146,24 @@ export default function HomeScreen() {
         getRecentActivity(companyGuid),
       ]);
 
-      const kpiArr = Array.isArray(kpi) ? kpi : (kpi as any)?.data ?? MOCK_KPI_STRIP;
-      const metArr = Array.isArray(met) ? met : (met as any)?.data ?? MOCK_METRICS;
-      setKpiData(kpiArr as any);
-      setMetrics(metArr as any);
+      const kpiArr = Array.isArray(kpi) ? kpi : (kpi as any)?.data ?? [];
+      const metArr = Array.isArray(met) ? met : (met as any)?.data ?? [];
+      if (kpiArr.length > 0) setKpiData(kpiArr as any);
+      if (metArr.length > 0) setMetrics(metArr as any);
 
       // Cashflow: extract inner data object
-      const cfData = (cf as any)?.data ?? cf;
-      if (cfData && typeof cfData === 'object' && !('success' in cfData)) setCashflow(cfData as any);
-      else if ((cf as any)?.data) setCashflow((cf as any).data as any);
+      if (cf) {
+        const cfData = (cf as any)?.data ?? cf;
+        if (cfData && typeof cfData === 'object' && !('success' in cfData)) setCashflow(cfData as any);
+        else if ((cf as any)?.data) setCashflow((cf as any).data as any);
+      }
 
-      const actArr = Array.isArray(act) ? act : (act as any)?.data ?? MOCK_RECENT_ACTIVITY;
-      setActivity(actArr as any);
+      const actArr = Array.isArray(act) ? act : (act as any)?.data ?? [];
+      if (actArr.length > 0) setActivity(actArr as any);
     } finally {
       setIsLoading(false);
     }
-  }, [isPaired, activeFilter, activeFY, companyGuid, parseFYDates]);
+  }, [isPaired, activeFilter, activeFY, companyGuid, parseFYDates, selectedFY]);
 
   useEffect(() => { loadData(); }, [loadData]);
 

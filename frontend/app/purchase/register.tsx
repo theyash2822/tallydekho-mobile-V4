@@ -76,7 +76,7 @@ const MONTH_GROUPS: MonthGroup[] = [
 export default function PurchaseRegisterScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { company } = useAuth();
+  const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
   const [liveInvoices, setLiveInvoices] = useState<PurchaseInvoice[]>([]);
 
@@ -84,7 +84,10 @@ export default function PurchaseRegisterScreen() {
 
   useEffect(() => {
     if (!companyGuid) return;
-    getPurchaseInvoices(companyGuid).then((res: any) => {
+    const from = selectedFY?.startDate;
+    const to   = selectedFY?.endDate;
+    const fyParams = from && to ? { from, to } : {};
+    getPurchaseInvoices(companyGuid, fyParams).then((res: any) => {
       const rows = res?.data ?? [];
       setLiveInvoices(rows.map((r: any) => ({
         id: r.voucher_number || String(r.id),
@@ -95,7 +98,7 @@ export default function PurchaseRegisterScreen() {
         status: r.is_cancelled ? 'unpaid' : 'paid',
       })));
     }).catch(() => {});
-  }, [companyGuid]);
+  }, [companyGuid, selectedFY?.startDate]);
 
   const [search,         setSearch]         = useState('');
   const [statusFilter,   setStatusFilter]   = useState('All');
@@ -118,11 +121,11 @@ export default function PurchaseRegisterScreen() {
   const isSelecting = selected.length > 0;
   const toggleSelect = (id: string) =>
     setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
-  const allInvoices = displayGroups.flatMap(g => g.invoices);
-  const selectAll   = () => setSelected(allInvoices.map(inv => inv.id));
+  const selectAll   = () => setSelected(displayGroups.flatMap(g => g.invoices).map(inv => inv.id));
   const clearSelect = () => setSelected([]);
 
   const handleShare = async () => {
+    const allInvoices = displayGroups.flatMap(g => g.invoices);
     const items = allInvoices.filter(inv => selected.includes(inv.id));
     const lines = items.map(inv => `${inv.id}  ${inv.vendor}  ${inv.amount}  ${STATUS_LABEL[inv.status] ?? inv.status}`);
     try {

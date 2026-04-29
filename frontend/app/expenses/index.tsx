@@ -43,7 +43,7 @@ const TOP_CATEGORIES = [
 // ─── Screen ─────────────────────────────────────────────────────────────────
 export default function ExpenseScreen() {
   const router = useRouter();
-  const { company } = useAuth();
+  const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
   const [liveExpenses, setLiveExpenses] = useState<any[]>([]);
   const [expenseSummary, setExpenseSummary] = useState<any>(null);
@@ -51,12 +51,14 @@ export default function ExpenseScreen() {
   const [expensesLoaded, setExpensesLoaded] = useState(false);
   useEffect(() => {
     if (!companyGuid) return;
-    getExpenses(companyGuid).then((res: any) => {
+    const from = selectedFY?.startDate;
+    const to   = selectedFY?.endDate;
+    getExpenses(companyGuid, from && to ? { from, to } : {}).then((res: any) => {
       setLiveExpenses(res?.data ?? []);  // always update, even if empty
       if (res?.summary) setExpenseSummary(res.summary);
       setExpensesLoaded(true);
     }).catch(() => { setExpensesLoaded(true); });
-  }, [companyGuid]);
+  }, [companyGuid, selectedFY?.startDate]);
 
   const [tab,      setTab]      = useState<'recent' | 'categories'>('recent');
   const [filter,   setFilter]   = useState('All');

@@ -376,7 +376,7 @@ export default function FinancialReportScreen() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    getFullFinancialReport(company?.guid).then(res => {
+    getFullFinancialReport(company?.guid).then((res: any) => {
       if (!cancelled && res?.success && res.data) setReportData(res.data);
     }).catch(() => {}).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
