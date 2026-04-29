@@ -831,7 +831,7 @@ const sc = StyleSheet.create({
 // ══════════════════════════════════════════════════════════════════════════════
 export default function ReportsScreen() {
   const router = useRouter();
-  const { company } = useAuth();
+  const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
 
   // Financial chart data — fetched from API (falls back to mock data)
@@ -849,23 +849,24 @@ export default function ReportsScreen() {
 
   useEffect(() => {
     if (!companyGuid) return;
+    const from = selectedFY?.startDate;
+    const to   = selectedFY?.endDate;
 
-    // Financial chart
-    getFinancialData(companyGuid).then((res: any) => {
+    // Financial chart — scoped to selected FY
+    getFinancialData(companyGuid, from, to).then((res: any) => {
       const d = res?.data ?? res;
       if (d?.months) setFinData(d);
       setFinLoading(false);
     }).catch(() => setFinLoading(false));
 
-    // GST summary — count filed months
-    getGSTReport(companyGuid).then((res: any) => {
+    // GST summary — scoped to selected FY
+    getGSTReport(companyGuid, from, to).then((res: any) => {
       const d = res?.data ?? res;
-      // Backend returns monthly breakdown; count months with filed status
       const filed = d?.filed_months ?? d?.months_filed ?? 0;
       setGstFiledCount(typeof filed === 'number' ? Math.min(filed, 12) : 0);
     }).catch(() => {});
 
-    // Audit trail — get pending/unreconciled count
+    // Audit trail — get pending/unreconciled count (not FY-specific)
     getAuditTrail(companyGuid).then((res: any) => {
       const d = res?.data ?? res;
       const entries = d?.entries ?? d ?? [];
@@ -876,7 +877,7 @@ export default function ReportsScreen() {
       setAuditCount(pending);
       setAuditTotal(Math.max(total, pending));
     }).catch(() => {});
-  }, [companyGuid]);
+  }, [companyGuid, selectedFY?.startDate]);
 
   return (
     <SafeAreaView testID="reports-screen" style={styles.safe}>

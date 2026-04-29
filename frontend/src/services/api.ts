@@ -281,17 +281,8 @@ export const createParty = (payload: any) => tallyPost('/master/party', payload)
 export const getReports = (companyGuid?: string) =>
   withFallback(() => get(withCompany('/reports/financial', companyGuid)), { data: MOCK_REPORTS });
 
-export const getFinancialData = (companyGuid?: string) =>
-  withFallback(
-    () => get<any>(withCompany('/reports/financial', companyGuid)),
-    {
-      data: {
-        months:   ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'],
-        revenue:  [450000,520000,480000,610000,580000,640000,720000,680000,750000,820000,790000,950000],
-        expenses: [380000,420000,410000,490000,460000,510000,580000,545000,600000,660000,630000,720000],
-      }
-    }
-  );
+export const getFinancialData = (companyGuid?: string, from?: string, to?: string) =>
+  get<any>(withCompany('/reports/financial', companyGuid, from && to ? { from, to } : {}));
 
 export const getFinancialReport = (companyGuid?: string, from?: string, to?: string) =>
   withFallback(() => get(withCompany('/reports/financial-report', companyGuid, from && to ? { from, to } : {})), null);
@@ -304,15 +295,15 @@ export const getFullFinancialReport = (companyGuid?: string) =>
 export const getAlerts = (companyGuid?: string) =>
   withFallback(() => get(withCompany('/alerts', companyGuid)), { data: { pendingIRNCount: 0, pendingEWBCount: 0, unmatchedGSTCount: 0, totalAlerts: 0 } });
 
-export const getGSTReport = (companyGuid?: string) =>
-  withFallback(() => get(withCompany('/reports/gst', companyGuid)), null);
+export const getGSTReport = (companyGuid?: string, from?: string, to?: string) =>
+  get(withCompany('/reports/gst', companyGuid, from && to ? { from, to } : {}));
 
 // ══════════════════════════════════════════════════════════════
 // NOTIFICATIONS
 // ══════════════════════════════════════════════════════════════
 
 export const getNotifications = (companyGuid?: string) =>
-  withFallback(() => get(withCompany('/notifications', companyGuid)), { data: MOCK_NOTIFICATIONS });
+  get(withCompany('/notifications', companyGuid));
 
 export const markNotificationRead = (id: string) =>
   patch(`/notifications/${id}/read`, {});

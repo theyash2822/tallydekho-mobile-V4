@@ -474,8 +474,9 @@ export default function LedgerScreen() {
   const [isLoading, setIsLoading] = useState(true);
 
   const loadLedgers = async () => {
+    try {
     const res = await getLedgers(companyGuid, { search }) as any;
-    const rows = res?.data ?? res ?? MOCK_LEDGERS;
+    const rows = res?.data ?? (Array.isArray(res) ? res : []);
     // Normalize to LedgerItem shape
     setData(Array.isArray(rows) ? rows.map((r: any) => ({
       id: r.guid || r.id || String(r.id),
@@ -486,7 +487,8 @@ export default function LedgerScreen() {
       nature: r.nature || '',
       phone: r.mobile || r.phone || '',
       lastUpdated: r.updated_at || r.alter_date || '',
-    })) : MOCK_LEDGERS);
+    })) : []);
+    } catch { /* network error — keep existing data */ }
   };
 
   useEffect(() => {
