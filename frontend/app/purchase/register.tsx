@@ -118,7 +118,7 @@ export default function PurchaseRegisterScreen() {
   const isSelecting = selected.length > 0;
   const toggleSelect = (id: string) =>
     setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
-  const allInvoices = MONTH_GROUPS.flatMap(g => g.invoices);
+  const allInvoices = displayGroups.flatMap(g => g.invoices);
   const selectAll   = () => setSelected(allInvoices.map(inv => inv.id));
   const clearSelect = () => setSelected([]);
 
@@ -148,7 +148,30 @@ export default function PurchaseRegisterScreen() {
       return matchSearch && matchStatus;
     });
 
-  const allFiltered = MONTH_GROUPS.flatMap(g => filterInvoices(g.invoices));
+  // Use live data if available, group by month; else fall back to mock MONTH_GROUPS
+  const displayGroups: MonthGroup[] = liveInvoices.length > 0
+    ? (() => {
+        const map: Record<string, MonthGroup> = {};
+        liveInvoices.forEach(inv => {
+          let monthKey = 'Other'; let monthLabel = 'Other';
+          const d = inv.date;
+          if (d && d.includes('-') && d.length === 10) {
+            const p = d.split('-');
+            monthKey = `${p[0]}-${p[1]}`;
+            monthLabel = new Date(+p[0], +p[1]-1, 1).toLocaleString('en-IN', { month: 'short', year: '2-digit' });
+          } else if (d && d.includes('/')) {
+            const p = d.split('/');
+            monthKey = `${p[2]}-${p[1]}`;
+            monthLabel = `${new Date(2000 + +p[2], +p[1]-1, 1).toLocaleString('en-IN', { month: 'short' })} ${p[2]}`;
+          }
+          if (!map[monthKey]) map[monthKey] = { id: monthKey, label: monthLabel, invoices: [] };
+          map[monthKey].invoices.push(inv);
+        });
+        return Object.values(map).sort((a, b) => b.id.localeCompare(a.id));
+      })()
+    : MONTH_GROUPS;
+
+  const allFiltered = displayGroups.flatMap(g => filterInvoices(g.invoices));
 
   return (
     <SafeAreaView style={s.safe}>
@@ -243,8 +266,16 @@ export default function PurchaseRegisterScreen() {
           ))}
         </View>
 
+        {/* Empty state */}
+        {liveInvoices.length === 0 && allFiltered.length === 0 && (
+          <View style={{ alignItems: 'center', padding: 40, gap: 8 }}>
+            <Ionicons name="cart-outline" size={40} color={COLORS.textTertiary} />
+            <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textSecondary }}>No purchase invoices</Text>
+            <Text style={{ fontSize: 13, color: COLORS.textTertiary, textAlign: 'center' }}>Sync your Tally data or create a new purchase entry</Text>
+          </View>
+        )}
         {/* ── Collapsible Month Sections ────────────────────────────── */}
-        {MONTH_GROUPS.map(group => {
+        {displayGroups.map(group => {
           const groupInvoices = filterInvoices(group.invoices);
           if (groupInvoices.length === 0) return null;
           const isOpen = expanded.has(group.id);

@@ -147,7 +147,10 @@ export default function ExpenseScreen() {
         <View style={s.carouselWrap}>
           <FlatList
             ref={metricRef}
-            data={METRIC_CARDS}
+            data={expenseSummary ? [
+              { id: 'ytd', label: 'Total Expenses', icon: 'ribbon-outline', amount: expenseSummary.display || '₹0', pct: '0%', pos: false },
+              { id: 'count', label: 'Expense Ledgers', icon: 'list-outline', amount: String(liveExpenses.length || 0), pct: '', pos: false },
+            ] : METRIC_CARDS}
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
