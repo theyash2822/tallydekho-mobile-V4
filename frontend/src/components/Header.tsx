@@ -42,7 +42,7 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { company, setCompany, isPaired } = useAuth();
+  const { company, setCompany, isPaired, lastSyncAt } = useAuth();
   const [selectedFY,      setSelectedFY]      = useState(fyYear);
   const [selectedCompany, setSelectedCompany] = useState(companyName);
   const [showFYModal,      setShowFYModal]      = useState(false);
@@ -88,7 +88,7 @@ const Header: React.FC<HeaderProps> = ({
         setSelectedFY(fys[0]);
       }
     }).catch(() => {});
-  }, [company?.guid]);
+  }, [company?.guid, lastSyncAt]);  // re-fetch when sync detected
 
   const dropdownTop = insets.top + 58;
 

@@ -44,6 +44,7 @@ interface AuthContextType {
   isDesktopOnline: boolean;
   company: Company | null;
   user: UserInfo | null;
+  lastSyncAt: number;  // unix timestamp — increments when backend reports a new sync
   signIn: (token: string, userInfo?: UserInfo) => Promise<void>;
   signOut: () => Promise<void>;
   setIsPaired: (v: boolean) => void;
@@ -58,6 +59,7 @@ const AuthContext = createContext<AuthContextType>({
   isDesktopOnline: false,
   company: null,
   user: null,
+  lastSyncAt: 0,
   signIn: async () => {},
   signOut: async () => {},
   setIsPaired: () => {},
@@ -70,6 +72,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const [isPaired, setIsPairedState] = useState(false);
   const [isDesktopOnline, setIsDesktopOnlineState] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState(0);  // tracks last known device sync time
   const [company, setCompanyState] = useState<Company | null>(null);
   const [user, setUserState] = useState<UserInfo | null>(null);
 
@@ -172,6 +175,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (typeof desktop_online === 'boolean') {
           setIsDesktopOnlineState(desktop_online);
         }
+        // Track last_seen changes — when desktop syncs, last_seen advances
+        const deviceLastSeen = json.data?.device?.last_seen;
+        if (deviceLastSeen && typeof deviceLastSeen === 'number') {
+          setLastSyncAt(prev => deviceLastSeen > prev ? deviceLastSeen : prev);
+        }
       } catch {
         // Network error — don't change state, keep showing cached
       }
@@ -185,7 +193,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider value={{
-      isAuthenticated, isLoading, isPaired, isDesktopOnline, company, user,
+      isAuthenticated, isLoading, isPaired, isDesktopOnline, company, user, lastSyncAt,
       signIn, signOut, setIsPaired, setCompany, setUser,
     }}>
       {children}
