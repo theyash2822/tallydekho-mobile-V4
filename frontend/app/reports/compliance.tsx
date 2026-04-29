@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Pressable, PanResponder, Dimensions,
@@ -8,6 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { getAlerts } from '../../src/services/api';
+import { useAuth } from '../../src/context/AuthContext';
 
 const W = Dimensions.get('window').width;
 
@@ -184,6 +186,21 @@ const EWB_SEGMENTS = [
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ComplianceHubScreen() {
   const router = useRouter();
+  const { company } = useAuth();
+
+  // Real alert counts from backend
+  const [alerts, setAlerts] = useState<any>(null);
+  useEffect(() => {
+    if (company?.guid) {
+      getAlerts(company.guid).then((res: any) => {
+        if (res?.data) setAlerts(res.data);
+      }).catch(() => {});
+    }
+  }, [company?.guid]);
+
+  const pendingIRN  = alerts?.pendingIRNCount  ?? 0;
+  const pendingEWB  = alerts?.pendingEWBCount  ?? 0;
+  const unmatchedGST = alerts?.unmatchedGSTCount ?? 0;
 
   // GST tooltips
   const pendingTip  = useToggleTip();
@@ -257,14 +274,14 @@ export default function ComplianceHubScreen() {
                 onPress={() => router.push('/reports/unmatched-list' as any)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Text style={[s.gstBigNum, s.gstNumLink]}>7</Text>
+                <Text style={[s.gstBigNum, s.gstNumLink]}>{unmatchedGST}</Text>
               </Pressable>
             </View>
 
             {/* Pending tooltip */}
             {pendingTip.visible && (
               <View style={s.gstTooltipRow}>
-                <TooltipChip text="3 invoices pending for GSTR-1 filing" />
+                <TooltipChip text={`${pendingIRN} invoice${pendingIRN !== 1 ? 's' : ''} pending for IRN / GSTR-1 filing`} />
               </View>
             )}
           </View>

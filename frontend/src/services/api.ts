@@ -303,6 +303,10 @@ export const getFinancialReport = (companyGuid?: string, from?: string, to?: str
 export const getFullFinancialReport = (companyGuid?: string) =>
   withFallback(() => get(withCompany('/reports/pl-bs', companyGuid)), null);
 
+// Compliance alerts — IRN pending, EWB pending, unmatched GST, etc.
+export const getAlerts = (companyGuid?: string) =>
+  withFallback(() => get(withCompany('/alerts', companyGuid)), { data: { pendingIRNCount: 0, pendingEWBCount: 0, unmatchedGSTCount: 0, totalAlerts: 0 } });
+
 export const getGSTReport = (companyGuid?: string) =>
   withFallback(() => get(withCompany('/reports/gst', companyGuid)), null);
 
