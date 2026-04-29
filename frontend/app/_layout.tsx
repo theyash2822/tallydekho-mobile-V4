@@ -41,10 +41,12 @@ function RootNavigation() {
       // Not logged in — send to auth screen
       router.replace('/(auth)');
     } else if (isAuthenticated && inAuth) {
-      // Logged in — show guide first time, then app
+      // Just finished logging in — show guide first time, then app
       router.replace(guideSeen ? '/(tabs)' : '/onboarding');
+    } else if (isAuthenticated && !inAuth && !inOnboarding && !guideSeen) {
+      // Already logged in but guide not seen yet — show it now
+      router.replace('/onboarding');
     }
-    // Every other case (already in tabs / onboarding): Expo Router handles naturally
   }, [isAuthenticated, isLoading, guideChecked, guideSeen, segments]);
 
   return <Stack screenOptions={{ headerShown: false }} />;
