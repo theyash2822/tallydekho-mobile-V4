@@ -533,10 +533,12 @@ export default function LedgerDetailScreen() {
                           toggleTxnSelect(txn.id);
                         } else {
                           const docType = TX_TO_DOC_TYPE[txn.type];
+                          // Use GUID (txn.id) for reliable API lookup; fall back to voucher number
+                          const docId = txn.id || txn.voucher;
                           router.push(
                             docType
-                              ? `/document/${txn.voucher}?type=${docType}`
-                              : `/document/${txn.voucher}`
+                              ? `/document/${docId}?type=${docType}`
+                              : `/document/${docId}`
                           );
                         }
                       }}

@@ -289,6 +289,7 @@ export function generateDocumentHTML(doc: VoucherDocument): string {
 
 // ── Map transaction type strings to DocumentType ──────────────────────────────
 export const TX_TO_DOC_TYPE: Record<string, DocumentType> = {
+  // Standard types
   'Sales Invoice':    'sales_invoice',
   'Sales Order':      'sales_order',
   'Quotation':        'quotation',
@@ -304,4 +305,12 @@ export const TX_TO_DOC_TYPE: Record<string, DocumentType> = {
   'Receipt Voucher':  'receipt_voucher',
   'Contra':           'contra_voucher',
   'Journal':          'journal_voucher',
+  // Tally-specific voucher type names
+  'Sales GST':         'sales_invoice',
+  'Sales':             'sales_invoice',
+  'Purchase GST':      'purchase_invoice',
+  'Purchase':          'purchase_invoice',
+  'Debit Note GST':    'debit_note',
+  'Credit Note GST':   'credit_note',
+  'Sales Order GST':   'sales_order',
 };
