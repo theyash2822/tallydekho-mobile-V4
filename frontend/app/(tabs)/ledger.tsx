@@ -483,7 +483,7 @@ export default function LedgerScreen() {
       name: r.name,
       group: r.parent || r.group || '',
       balance: r.closing_balance != null ? `₹${Math.abs(+r.closing_balance).toLocaleString('en-IN')}` : (r.balance || '₹0'),
-      type: (+r.closing_balance || 0) >= 0 ? 'debit' : 'credit',
+      type: (r.balance_type === 'Cr') ? 'credit' : 'debit',
       nature: r.nature || '',
       phone: r.mobile || r.phone || '',
       lastUpdated: r.updated_at || r.alter_date || '',
