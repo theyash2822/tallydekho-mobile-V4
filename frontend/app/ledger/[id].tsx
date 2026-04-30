@@ -308,14 +308,14 @@ export default function LedgerDetailScreen() {
     cancelTxnSelect();
   };
 
-  const ledger = liveLedger ||
-    MOCK_LEDGERS?.find((l: any) => l.id === id) ||
-    { id: id || 'L001', name: 'Alliance Trading Co.', group: 'Sundry Debtors', balance: '₹37,500 Dr' };
+  // Use real ledger data only — no mock fallback
+  const ledger = liveLedger || { id: id || '', name: 'Loading…', group: '', balance: '' };
 
   const isDateActive = fromDate.length > 0 && toDate.length > 0;
 
   // Apply Dr/Cr + search + date range filters
-  const SOURCE_TXNS = liveTxns.length > 0 ? liveTxns : MOCK_TRANSACTIONS;
+  // Use real data only — never show mock transactions for real ledgers
+  const SOURCE_TXNS = liveTxns;
   const txns = SOURCE_TXNS.filter((t: any) => {
     if (showDrOnly && !t.isDebit) return false;
     if (showCrOnly &&  t.isDebit) return false;
