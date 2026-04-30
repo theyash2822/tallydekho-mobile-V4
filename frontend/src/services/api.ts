@@ -234,6 +234,9 @@ export const createDebitNote = (payload: any) => tallyPost('/voucher/debit-note'
 export const getVouchers = (companyGuid?: string, type?: string, params?: any) =>
   get(withCompany('/vouchers', companyGuid, { ...(type ? { type } : {}), ...params }));
 
+export const getVoucherById = (companyGuid?: string, guid?: string) =>
+  withFallback(() => get(withCompany(`/vouchers/${guid}`, companyGuid)), null);
+
 export const createPaymentVoucher = (payload: any) => tallyPost('/voucher/payment', payload);
 export const createReceiptVoucher = (payload: any) => tallyPost('/voucher/receipt', payload);
 export const createJournalVoucher = (payload: any) => tallyPost('/voucher/journal', payload);

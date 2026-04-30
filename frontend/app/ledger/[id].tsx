@@ -102,6 +102,20 @@ function parseTxnDate(dateStr: string): Date {
   const [dd, mon] = dateStr.split(' ');
   return new Date(2025, MONTH_ABBR[mon] ?? 0, parseInt(dd));
 }
+// Convert ISO '2024-04-01' → '01 Apr' for grouping
+function isoToDisplay(iso: string): string {
+  if (!iso || !iso.includes('-')) return iso || '';
+  const parts = iso.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${parseInt(parts[2])} ${months[parseInt(parts[1]) - 1] || ''}`;
+}
+// Determine Dr/Cr from voucher type (Sales Invoice = DEBIT confirmed)
+function isDebitVoucher(voucherType: string): boolean {
+  const t = (voucherType || '').toLowerCase();
+  if (t.includes('sales') || t.includes('debit note') || t.includes('delivery') || t.includes('journal') || t.includes('opening')) return true;
+  if (t.includes('receipt') || t.includes('credit note') || t.includes('purchase') || t.includes('payment') || t.includes('contra')) return false;
+  return true;
+}
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
 const MOCK_TRANSACTIONS = [
@@ -128,7 +142,7 @@ const MONTHS_ORDER = [
 ];
 
 // ── Info Modal ────────────────────────────────────────────────────────────────
-function LedgerInfoModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+function LedgerInfoModal({ visible, onClose, ledger }: { visible: boolean; onClose: () => void; ledger: any }) {
 
   const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
     <View style={im.section}>
@@ -167,34 +181,28 @@ function LedgerInfoModal({ visible, onClose }: { visible: boolean; onClose: () =
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            <Section title="GST">
-              <Row label="GSTIN"    value="27ABCDE1234F2Z5" />
-              <Row label="GST Rate" value="18 %" />
-              <Row label="HSN/SAC"  value="998313" />
+            <Section title="LEDGER DETAILS">
+              <Row label="Name"   value={ledger?.name || '—'} />
+              <Row label="Group"  value={ledger?.parent || '—'} />
+              <Row label="Type"   value={ledger?.balance_type === 'Dr' ? 'Debit (Asset/Expense)' : 'Credit (Liability/Income)'} />
             </Section>
+
+            {(ledger?.gstin || ledger?.pan) && (
+              <Section title="GST / TAX">
+                {ledger?.gstin ? <Row label="GSTIN" value={ledger.gstin} /> : null}
+                {ledger?.pan   ? <Row label="PAN"   value={ledger.pan}   /> : null}
+              </Section>
+            )}
 
             <Section title="CONTACT">
-              <Row label="Contact Person" value="Ashish Agarwal" />
-              <Row label="Mobile"         value="+91-9672222367" />
-              <Row label="Email"          value="xyz@sample.com" />
-              <Row label="Address"        value="Plot No. 11, Sitapura Industrial Area, Jaipur, Rajasthan – 302020 INDIA" />
+              <Row label="Mobile"  value={ledger?.phone   || '—'} />
+              <Row label="Email"   value={ledger?.email   || '—'} />
+              <Row label="Address" value={ledger?.address || '—'} />
             </Section>
 
-            <Section title="BANK">
-              <Row label="Beneficiary"    value="ABC Traders Private Limited" />
-              <Row label="Bank Name"      value="ININI Bank" />
-              <Row label="Account No."   value="123456789" />
-              <Row label="IFSC"           value="HDFC0000123" />
-              <Row label="Branch"         value="MI Road" />
-              <Row label="SWIFT"          value="XYZ00099LM1" />
-            </Section>
-
-            <Section title="NARRATION">
-              <Text style={im.narration}>
-                Key distributor for Jaipur region and customers will make advance
-                booking only. Also look at the transaction history and note that
-                it is a sample data.
-              </Text>
+            <Section title="BALANCE">
+              <Row label="Opening" value={ledger?.opening_balance != null ? `₹${Math.round(parseFloat(ledger.opening_balance)).toLocaleString('en-IN')} ${ledger?.balance_type || ''}` : '₹0'} />
+              <Row label="Closing" value={ledger?.closing_balance != null ? `₹${Math.round(parseFloat(ledger.closing_balance)).toLocaleString('en-IN')} ${ledger?.balance_type || ''}` : '₹0'} />
             </Section>
 
             <View style={{ height: 12 }} />
@@ -216,27 +224,32 @@ function LedgerInfoModal({ visible, onClose }: { visible: boolean; onClose: () =
 export default function LedgerDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { company } = useAuth();
+  const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
   const [liveLedger, setLiveLedger] = useState<any>(null);
   const [liveTxns, setLiveTxns] = useState<any[]>([]);
 
   useEffect(() => {
     if (!companyGuid || !id) return;
-    getLedgerDetail(companyGuid, id as string).then((res: any) => {
+    const params = selectedFY?.startDate && selectedFY?.endDate
+      ? { from: selectedFY.startDate, to: selectedFY.endDate }
+      : undefined;
+    getLedgerDetail(companyGuid, id as string, params).then((res: any) => {
       if (res?.data?.ledger) setLiveLedger(res.data.ledger);
       if (res?.data?.transactions) {
         setLiveTxns(res.data.transactions.map((t: any, i: number) => ({
-          id: String(t.id || i),
-          date: t.date || '',
+          id: String(t.guid || t.id || i),
+          guid: t.guid || '',
+          date: isoToDisplay(t.date || ''),
           voucher: t.voucher_number || '',
           type: t.voucher_type || '',
           amount: `₹${Math.abs(+t.amount||0).toLocaleString('en-IN')}`,
-          isDebit: (+t.amount||0) >= 0,
+          amount_raw: Math.abs(+t.amount || 0),
+          isDebit: isDebitVoucher(t.voucher_type || ''),
         })));
       }
     }).catch(() => {});
-  }, [companyGuid, id]);
+  }, [companyGuid, id, selectedFY?.startDate]);
 
   const [showDrOnly, setShowDrOnly] = useState(false);
   const [showCrOnly, setShowCrOnly] = useState(false);
@@ -316,14 +329,14 @@ export default function LedgerDetailScreen() {
     (a, b) => MONTHS_ORDER.indexOf(a) - MONTHS_ORDER.indexOf(b)
   );
 
-  // Accordion state — first month expanded by default
-  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(
-    () => {
-      const allMons = [...new Set(MOCK_TRANSACTIONS.map(t => t.date.split(' ')[1]))]
-        .sort((a, b) => MONTHS_ORDER.indexOf(a) - MONTHS_ORDER.indexOf(b));
-      return new Set(allMons.length ? [allMons[0]] : []);
+  // Accordion state — expand first month when live data arrives
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    if (liveTxns.length > 0) {
+      const firstMon = liveTxns[0]?.date?.split(' ')[1];
+      if (firstMon) setExpandedMonths(new Set([firstMon]));
     }
-  );
+  }, [liveTxns.length]);
 
   const toggleMonth = (mon: string) => {
     setExpandedMonths(prev => {
@@ -337,6 +350,23 @@ export default function LedgerDetailScreen() {
   const effectiveExpanded = searchQuery.trim()
     ? new Set(sortedMonths)   // all months visible while searching
     : expandedMonths;
+
+  // ── Computed Dr/Cr totals from live transactions ─────────────────────────
+  const totalDr = SOURCE_TXNS.filter((t: any) => t.isDebit).reduce((s: number, t: any) => s + (t.amount_raw || 0), 0);
+  const totalCr = SOURCE_TXNS.filter((t: any) => !t.isDebit).reduce((s: number, t: any) => s + (t.amount_raw || 0), 0);
+  const drPctComputed = (totalDr + totalCr) > 0 ? Math.round((totalDr / (totalDr + totalCr)) * 100) : 50;
+  const fmtAmt = (v: number) => v >= 1e5 ? `₹${(v/1e5).toFixed(1)}L` : `₹${Math.round(v).toLocaleString('en-IN')}`;
+
+  const openingBal = liveLedger?.opening_balance != null ? parseFloat(liveLedger.opening_balance) : 0;
+  const closingBal = liveLedger?.closing_balance != null ? parseFloat(liveLedger.closing_balance) : 0;
+  const balType = liveLedger?.balance_type || 'Dr';
+  const liveKpiChips = [
+    { label: 'Opening', value: openingBal > 0 ? `₹${Math.round(openingBal).toLocaleString('en-IN')} ${balType}` : '₹0', color: COLORS.textSecondary },
+    { label: 'Closing', value: closingBal > 0 ? `₹${Math.round(closingBal).toLocaleString('en-IN')} ${balType}` : '₹0', color: balType === 'Dr' ? COLORS.negative : COLORS.positive },
+    { label: 'Total Debit', value: fmtAmt(totalDr), color: COLORS.negative },
+    { label: 'Total Credit', value: fmtAmt(totalCr), color: COLORS.positive },
+    { label: 'Transactions', value: String(SOURCE_TXNS.length), color: COLORS.textSecondary },
+  ];
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -356,15 +386,15 @@ export default function LedgerDetailScreen() {
 
         {/* ── Donut + Legend ── */}
         <View style={styles.chartSection}>
-          <DrCrDonutChart drPct={67} drAmt="₹67K" crAmt="₹33K" />
+          <DrCrDonutChart drPct={drPctComputed} drAmt={fmtAmt(totalDr)} crAmt={fmtAmt(totalCr)} />
           <View style={styles.chartLegend}>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: CHART_DR }]} />
-              <Text style={styles.legendText}>Dr ₹67K</Text>
+              <Text style={styles.legendText}>Dr {fmtAmt(totalDr)}</Text>
             </View>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: CHART_CR }]} />
-              <Text style={styles.legendText}>Cr ₹33K</Text>
+              <Text style={styles.legendText}>Cr {fmtAmt(totalCr)}</Text>
             </View>
             <Text style={styles.tapHint}>Tap segment to inspect</Text>
           </View>
@@ -376,7 +406,7 @@ export default function LedgerDetailScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.kpiRow}
         >
-          {KPI_CHIPS.map(chip => (
+          {liveKpiChips.map(chip => (
             <View key={chip.label} style={styles.kpiChip}>
               <Text style={styles.kpiLabel}>{chip.label}</Text>
               <Text style={[styles.kpiValue, { color: chip.color }]}>{chip.value}</Text>
@@ -563,7 +593,7 @@ export default function LedgerDetailScreen() {
       </ScrollView>
 
       {/* ── Info modal ── */}
-      <LedgerInfoModal visible={showInfo} onClose={() => setShowInfo(false)} />
+      <LedgerInfoModal visible={showInfo} onClose={() => setShowInfo(false)} ledger={liveLedger} />
 
       {/* ── Date Range Picker ── */}
       <DateRangePickerModal

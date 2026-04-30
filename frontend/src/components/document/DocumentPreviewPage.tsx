@@ -701,13 +701,6 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
 
       <View style={ds.actionSep} />
 
-      <TouchableOpacity style={ds.actionBtn} onPress={handleWhatsApp} activeOpacity={0.75}>
-        <FontAwesome5 name="whatsapp" size={21} color="#25D366" />
-        <Text style={ds.actionBtnText}>WhatsApp</Text>
-      </TouchableOpacity>
-
-      <View style={ds.actionSep} />
-
       <TouchableOpacity style={ds.actionBtn} onPress={handlePDF} activeOpacity={0.75} disabled={pdfLoading}>
         {pdfLoading
           ? <ActivityIndicator size="small" color={COLORS.white} />

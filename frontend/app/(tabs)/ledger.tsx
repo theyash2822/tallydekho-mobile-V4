@@ -475,7 +475,7 @@ export default function LedgerScreen() {
 
   const loadLedgers = async () => {
     try {
-    const res = await getLedgers(companyGuid, { search }) as any;
+    const res = await getLedgers(companyGuid, { search, limit: '500' }) as any;
     const rows = res?.data ?? (Array.isArray(res) ? res : []);
     // Normalize to LedgerItem shape
     setData(Array.isArray(rows) ? rows.map((r: any) => ({
