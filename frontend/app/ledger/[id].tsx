@@ -11,7 +11,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { MOCK_LEDGERS } from '../../src/data/mockData';
 import { TX_TO_DOC_TYPE } from '../../src/utils/documentHelpers';
 import { useAuth } from '../../src/context/AuthContext';
-import { getLedgerDetail } from '../../src/services/api';
+import { getLedgerDetail, getLedgerStatement } from '../../src/services/api';
 import DateRangePickerModal, { parseDMY } from '../../src/components/DateRangePickerModal';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -234,19 +234,41 @@ export default function LedgerDetailScreen() {
     const params = selectedFY?.startDate && selectedFY?.endDate
       ? { from: selectedFY.startDate, to: selectedFY.endDate }
       : undefined;
-    getLedgerDetail(companyGuid, id as string, params).then((res: any) => {
+    // Try statement API first (uses voucher_ledger_entries for accurate Dr/Cr)
+    // Falls back to getLedgerDetail (party_name match) if statement has no entries
+    getLedgerStatement(companyGuid, id as string, params).then((res: any) => {
       if (res?.data?.ledger) setLiveLedger(res.data.ledger);
-      if (res?.data?.transactions) {
-        setLiveTxns(res.data.transactions.map((t: any, i: number) => ({
-          id: String(t.guid || t.id || i),
+      const txns = res?.data?.transactions || [];
+      if (txns.length > 0) {
+        setLiveTxns(txns.map((t: any, i: number) => ({
+          id: String(t.guid || i),
           guid: t.guid || '',
           date: isoToDisplay(t.date || ''),
           voucher: t.voucher_number || '',
           type: t.voucher_type || '',
-          amount: `₹${Math.abs(+t.amount||0).toLocaleString('en-IN')}`,
-          amount_raw: Math.abs(+t.amount || 0),
-          isDebit: isDebitVoucher(t.voucher_type || ''),
+          amount: `₹${Math.abs(t.debit || t.credit || 0).toLocaleString('en-IN')}`,
+          amount_raw: Math.abs(t.debit || t.credit || 0),
+          isDebit: t.dr_cr === 'Dr',  // EXACT from Tally ledger entries, not guessed
+          balance: t.balance,
+          balance_type: t.balance_type,
         })));
+      } else {
+        // Fallback: use party_name match if no ledger entries yet
+        getLedgerDetail(companyGuid, id as string, params).then((r2: any) => {
+          if (r2?.data?.ledger && !res?.data?.ledger) setLiveLedger(r2.data.ledger);
+          if (r2?.data?.transactions) {
+            setLiveTxns(r2.data.transactions.map((t: any, i: number) => ({
+              id: String(t.guid || t.id || i),
+              guid: t.guid || '',
+              date: isoToDisplay(t.date || ''),
+              voucher: t.voucher_number || '',
+              type: t.voucher_type || '',
+              amount: `₹${Math.abs(+t.amount||0).toLocaleString('en-IN')}`,
+              amount_raw: Math.abs(+t.amount || 0),
+              isDebit: isDebitVoucher(t.voucher_type || ''),
+            })));
+          }
+        }).catch(() => {});
       }
     }).catch(() => {});
   }, [companyGuid, id, selectedFY?.startDate]);

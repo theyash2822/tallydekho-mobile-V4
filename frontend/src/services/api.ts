@@ -252,6 +252,10 @@ export const getLedgers = (companyGuid?: string, params?: { group?: string; natu
 export const getLedgerDetail = (companyGuid?: string, id?: string, params?: { from?: string; to?: string }) =>
   withFallback(() => get(withCompany(`/ledgers/${id}`, companyGuid, params)), null);
 
+// Ledger statement — uses voucher_ledger_entries for accurate Dr/Cr and closing balance
+export const getLedgerStatement = (companyGuid?: string, id?: string, params?: { from?: string; to?: string }) =>
+  withFallback(() => get(withCompany(`/ledgers/${id}/statement`, companyGuid, params)), null);
+
 export const createLedger = (payload: any) => tallyPost('/master/party', payload);
 
 // ══════════════════════════════════════════════════════════════
