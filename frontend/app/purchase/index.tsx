@@ -7,7 +7,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import DateRangePickerModal, { isoToDMY } from '../../src/components/DateRangePickerModal';
+import { useAuth } from '../../src/context/AuthContext';
 
 const AMBER      = '#A89060';
 const AMBER_BG   = '#FDF9F4';
@@ -63,14 +64,17 @@ const STATUS_LABEL: Record<string, string> = {
 export default function PurchaseScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { selectedFY } = useAuth();
+  const fyFrom = selectedFY?.startDate ?? '';
+  const fyTo   = selectedFY?.endDate   ?? '';
 
   const [tab,      setTab]      = useState<'recent' | 'vendors'>('recent');
   const [filter,   setFilter]   = useState('All');
   const [dropdown, setDropdown] = useState(false);
 
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [fromDate,       setFromDate]       = useState('01/01/25');
-  const [toDate,         setToDate]         = useState('22/04/25');
+  const [fromDate, setFromDate] = useState(() => fyFrom ? isoToDMY(fyFrom) : '01/04/24');
+  const [toDate,   setToDate]   = useState(() => fyTo   ? isoToDMY(fyTo)   : '31/03/25');
 
   const metricRef = useRef<FlatList>(null);
   const bannerRef = useRef<FlatList>(null);
@@ -347,6 +351,8 @@ export default function PurchaseScreen() {
         visible={showDatePicker}
         fromDate={fromDate}
         toDate={toDate}
+        minDate={fyFrom || undefined}
+        maxDate={fyTo || undefined}
         onApply={(from, to) => { setFromDate(from); setToDate(to); setShowDatePicker(false); }}
         onClose={() => setShowDatePicker(false)}
       />

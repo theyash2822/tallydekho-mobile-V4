@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { getExpenses } from '../../src/services/api';
 
@@ -49,24 +49,32 @@ export default function ExpenseScreen() {
   const [expenseSummary, setExpenseSummary] = useState<any>(null);
 
   const [expensesLoaded, setExpensesLoaded] = useState(false);
+
+  const fyFrom = selectedFY?.startDate ?? '';
+  const fyTo   = selectedFY?.endDate   ?? '';
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [fromDate, setFromDate] = useState(() => fyFrom ? isoToDMY(fyFrom) : '01/04/24');
+  const [toDate,   setToDate]   = useState(() => fyTo   ? isoToDMY(fyTo)   : '31/03/25');
+
+  // Reset date range when FY changes
+  useEffect(() => {
+    if (fyFrom && fyTo) { setFromDate(isoToDMY(fyFrom)); setToDate(isoToDMY(fyTo)); }
+  }, [fyFrom, fyTo]);
+
   useEffect(() => {
     if (!companyGuid) return;
-    const from = selectedFY?.startDate;
-    const to   = selectedFY?.endDate;
+    const from = dmyToISO(fromDate) || fyFrom;
+    const to   = dmyToISO(toDate)   || fyTo;
     getExpenses(companyGuid, from && to ? { from, to } : {}).then((res: any) => {
-      setLiveExpenses(res?.data ?? []);  // always update, even if empty
+      setLiveExpenses(res?.data ?? []);
       if (res?.summary) setExpenseSummary(res.summary);
       setExpensesLoaded(true);
     }).catch(() => { setExpensesLoaded(true); });
-  }, [companyGuid, selectedFY?.startDate]);
+  }, [companyGuid, fromDate, toDate, fyFrom, fyTo]);
 
   const [tab,      setTab]      = useState<'recent' | 'categories'>('recent');
   const [filter,   setFilter]   = useState('All');
   const [dropdown, setDropdown] = useState(false);
-
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [fromDate,       setFromDate]       = useState('30/09/25');
-  const [toDate,         setToDate]         = useState('23/04/26');
 
   const metricRef = useRef<FlatList>(null);
   const [metricIdx, setMetricIdx] = useState(0);
@@ -278,6 +286,8 @@ export default function ExpenseScreen() {
         visible={showDatePicker}
         fromDate={fromDate}
         toDate={toDate}
+        minDate={fyFrom || undefined}
+        maxDate={fyTo || undefined}
         onApply={(from, to) => { setFromDate(from); setToDate(to); setShowDatePicker(false); }}
         onClose={() => setShowDatePicker(false)}
       />
