@@ -37,19 +37,40 @@ const QUICK_PRESETS = [
   { key: 'last_3',     label: 'Last 3 Months' },
 ];
 
+// Convert ISO 'YYYY-MM-DD' to 'DD/MM/YY'
+export function isoToDMY(iso: string): string {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  if (!y || !m || !d) return '';
+  return `${d.padStart(2,'0')}/${m.padStart(2,'0')}/${y.slice(-2)}`;
+}
+
+// Convert 'DD/MM/YY' to ISO 'YYYY-MM-DD'
+export function dmyToISO(dmy: string): string {
+  if (!dmy) return '';
+  const p = dmy.split('/');
+  if (p.length < 3) return '';
+  const year = parseInt(p[2]) < 100 ? 2000 + parseInt(p[2]) : parseInt(p[2]);
+  return `${year}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 interface Props {
   visible:   boolean;
   fromDate:  string;
   toDate:    string;
+  minDate?:  string; // ISO 'YYYY-MM-DD' — earliest selectable date (FY start)
+  maxDate?:  string; // ISO 'YYYY-MM-DD' — latest selectable date (FY end)
   onApply:   (from: string, to: string) => void;
   onClose:   () => void;
 }
 
 export default function DateRangePickerModal({
-  visible, fromDate, toDate, onApply, onClose,
+  visible, fromDate, toDate, onApply, onClose, minDate, maxDate,
 }: Props) {
   const today = new Date();
+  const minD = minDate ? new Date(minDate + 'T00:00:00') : null;
+  const maxD = maxDate ? new Date(maxDate + 'T00:00:00') : null;
 
   const [viewYear,  setViewYear]  = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
@@ -90,17 +111,24 @@ export default function DateRangePickerModal({
     else setViewMonth(m => m + 1);
   };
 
-  const cellDate  = (d: number) => new Date(viewYear, viewMonth, d);
-  const isStart   = (d: number) => !!selFrom && cellDate(d).getTime() === selFrom.getTime();
-  const isEnd     = (d: number) => !!selTo   && cellDate(d).getTime() === selTo.getTime();
-  const isInRange = (d: number) => {
+  const cellDate   = (d: number) => new Date(viewYear, viewMonth, d);
+  const isStart    = (d: number) => !!selFrom && cellDate(d).getTime() === selFrom.getTime();
+  const isEnd      = (d: number) => !!selTo   && cellDate(d).getTime() === selTo.getTime();
+  const isInRange  = (d: number) => {
     if (!selFrom || !selTo) return false;
     const dt = cellDate(d); return dt > selFrom && dt < selTo;
   };
-  const isTodayD  = (d: number) =>
+  const isTodayD   = (d: number) =>
     today.getDate() === d && today.getMonth() === viewMonth && today.getFullYear() === viewYear;
+  const isDisabled = (d: number) => {
+    const dt = cellDate(d);
+    if (minD && dt < minD) return true;
+    if (maxD && dt > maxD) return true;
+    return false;
+  };
 
   const handleDayPress = (day: number) => {
+    if (isDisabled(day)) return; // block out-of-FY dates
     const pressed = cellDate(day);
     if (step === 'from' || (selFrom && selTo)) {
       setSelFrom(pressed); setSelTo(null); setStep('to');
@@ -242,18 +270,21 @@ export default function DateRangePickerModal({
                   key={idx}
                   style={[s.calCell, inRange && s.calCellInRange]}
                   onPress={() => handleDayPress(day)}
-                  activeOpacity={0.7}
+                  activeOpacity={isDisabled(day) ? 1 : 0.7}
+                  disabled={isDisabled(day)}
                 >
                   <View style={[
                     s.calDay,
                     (start || end) && s.calDaySel,
                     td && !start && !end && s.calDayToday,
+                    isDisabled(day) && s.calDayDisabled,
                   ]}>
                     <Text style={[
                       s.calDayTxt,
                       (start || end) && s.calDayTxtSel,
                       td && !start && !end && s.calDayTxtToday,
                       inRange && s.calDayTxtRange,
+                      isDisabled(day) && s.calDayTxtDisabled,
                     ]}>{day}</Text>
                   </View>
                 </TouchableOpacity>
@@ -360,7 +391,9 @@ const s = StyleSheet.create({
   calDayTxt:      { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textPrimary },
   calDayTxtSel:   { color: COLORS.white, fontWeight: '700' },
   calDayTxtToday: { color: COLORS.brandPrimary, fontWeight: '700' },
-  calDayTxtRange: { color: COLORS.textPrimary, fontWeight: '600' },
+  calDayTxtRange:    { color: COLORS.textPrimary, fontWeight: '600' },
+  calDayDisabled:    { opacity: 0.25 },
+  calDayTxtDisabled: { color: COLORS.textTertiary },
 
   // Action buttons
   btnRow:    { flexDirection: 'row', gap: 10 },

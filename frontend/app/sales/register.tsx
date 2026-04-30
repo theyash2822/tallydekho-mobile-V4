@@ -10,7 +10,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { MOCK_SALES_REGISTER } from '../../src/data/mockData';
 import { useAuth } from '../../src/context/AuthContext';
 import { getSalesInvoices } from '../../src/services/api';
-import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
 
 const AMBER    = '#A89060';
 const AMBER_BG = '#FDF9F4';
@@ -83,18 +83,29 @@ export default function SalesRegisterScreen() {
   const [statusFilter,   setStatusFilter]   = useState('All');
   const [dropdown,       setDropdown]       = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [fromDate,       setFromDate]       = useState('01/01/25');
-  const [toDate,         setToDate]         = useState('30/04/25');
+  // Init date range from selected FY; update when FY changes
+  const fyFrom = selectedFY?.startDate ?? '';
+  const fyTo   = selectedFY?.endDate   ?? '';
+  const [fromDate, setFromDate] = useState(() => fyFrom ? isoToDMY(fyFrom) : '01/04/24');
+  const [toDate,   setToDate]   = useState(() => fyTo   ? isoToDMY(fyTo)   : '31/03/25');
   const [liveInvoices, setLiveInvoices]     = useState<Invoice[]>([]);
   const [loadingData, setLoadingData]       = useState(false);
+
+  // When FY changes, reset date range to full FY
+  useEffect(() => {
+    if (fyFrom && fyTo) {
+      setFromDate(isoToDMY(fyFrom));
+      setToDate(isoToDMY(fyTo));
+    }
+  }, [fyFrom, fyTo]);
 
   const data = MOCK_SALES_REGISTER;
 
   useEffect(() => {
     if (!companyGuid) return;
     setLoadingData(true);
-    const from = selectedFY?.startDate;
-    const to   = selectedFY?.endDate;
+    const from = dmyToISO(fromDate) || fyFrom;
+    const to   = dmyToISO(toDate)   || fyTo;
     getSalesInvoices(companyGuid, { search, ...(from && to ? { from, to } : {}) }).then((res: any) => {
       const rows = res?.data ?? [];
       setLiveInvoices(rows.map((r: any) => ({
@@ -106,7 +117,7 @@ export default function SalesRegisterScreen() {
         status: r.is_cancelled ? 'unpaid' : 'paid',
       })));
     }).catch(() => {}).finally(() => setLoadingData(false));
-  }, [companyGuid, search, selectedFY?.startDate]);
+  }, [companyGuid, search, fromDate, toDate, fyFrom, fyTo]);
 
   // Collapsible months — all open by default
   const [expanded, setExpanded] = useState<Set<string>>(new Set(MONTH_GROUPS.map(g => g.id)));
@@ -394,6 +405,8 @@ export default function SalesRegisterScreen() {
         visible={showDatePicker}
         fromDate={fromDate}
         toDate={toDate}
+        minDate={fyFrom || undefined}
+        maxDate={fyTo || undefined}
         onApply={(from, to) => { setFromDate(from); setToDate(to); setShowDatePicker(false); }}
         onClose={() => setShowDatePicker(false)}
       />

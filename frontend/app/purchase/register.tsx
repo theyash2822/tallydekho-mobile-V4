@@ -10,7 +10,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { MOCK_PURCHASE_REGISTER } from '../../src/data/mockData';
 import { useAuth } from '../../src/context/AuthContext';
 import { getPurchaseInvoices } from '../../src/services/api';
-import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
 
 const AMBER    = '#A89060';
 const AMBER_BG = '#FDF9F4';
@@ -82,10 +82,20 @@ export default function PurchaseRegisterScreen() {
 
   const data = MOCK_PURCHASE_REGISTER;
 
+  const fyFrom = selectedFY?.startDate ?? '';
+  const fyTo   = selectedFY?.endDate   ?? '';
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [fromDate, setFromDate] = useState(() => fyFrom ? isoToDMY(fyFrom) : '01/04/24');
+  const [toDate,   setToDate]   = useState(() => fyTo   ? isoToDMY(fyTo)   : '31/03/25');
+
+  useEffect(() => {
+    if (fyFrom && fyTo) { setFromDate(isoToDMY(fyFrom)); setToDate(isoToDMY(fyTo)); }
+  }, [fyFrom, fyTo]);
+
   useEffect(() => {
     if (!companyGuid) return;
-    const from = selectedFY?.startDate;
-    const to   = selectedFY?.endDate;
+    const from = dmyToISO(fromDate) || fyFrom;
+    const to   = dmyToISO(toDate)   || fyTo;
     const fyParams = from && to ? { from, to } : {};
     getPurchaseInvoices(companyGuid, fyParams).then((res: any) => {
       const rows = res?.data ?? [];
@@ -98,14 +108,11 @@ export default function PurchaseRegisterScreen() {
         status: r.is_cancelled ? 'unpaid' : 'paid',
       })));
     }).catch(() => {});
-  }, [companyGuid, selectedFY?.startDate]);
+  }, [companyGuid, fromDate, toDate, fyFrom, fyTo]);
 
   const [search,         setSearch]         = useState('');
   const [statusFilter,   setStatusFilter]   = useState('All');
   const [dropdown,       setDropdown]       = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [fromDate,       setFromDate]       = useState('01/01/25');
-  const [toDate,         setToDate]         = useState('30/04/25');
 
   // Collapsible months — all open by default
   const [expanded, setExpanded] = useState<Set<string>>(new Set(MONTH_GROUPS.map(g => g.id)));
@@ -386,6 +393,8 @@ export default function PurchaseRegisterScreen() {
         visible={showDatePicker}
         fromDate={fromDate}
         toDate={toDate}
+        minDate={fyFrom || undefined}
+        maxDate={fyTo || undefined}
         onApply={(from, to) => { setFromDate(from); setToDate(to); setShowDatePicker(false); }}
         onClose={() => setShowDatePicker(false)}
       />

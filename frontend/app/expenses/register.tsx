@@ -7,7 +7,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import DateRangePickerModal, { isoToDMY } from '../../src/components/DateRangePickerModal';
+import { useAuth } from '../../src/context/AuthContext';
 
 const AMBER    = '#A89060';
 const AMBER_BG = '#FDF9F4';
@@ -77,6 +78,9 @@ const MONTH_GROUPS: MonthGroup[] = [
 export default function ExpenseRegisterScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { selectedFY } = useAuth();
+  const fyFrom = selectedFY?.startDate ?? '';
+  const fyTo   = selectedFY?.endDate   ?? '';
 
   const [search,       setSearch]       = useState('');
   const [typeFilter,   setTypeFilter]   = useState('All');
@@ -85,8 +89,8 @@ export default function ExpenseRegisterScreen() {
   const [statusOpen,   setStatusOpen]   = useState(false);
 
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [fromDate,       setFromDate]       = useState('31/12/25');
-  const [toDate,         setToDate]         = useState('23/04/26');
+  const [fromDate, setFromDate] = useState(() => fyFrom ? isoToDMY(fyFrom) : '01/04/24');
+  const [toDate,   setToDate]   = useState(() => fyTo   ? isoToDMY(fyTo)   : '31/03/25');
 
   // Collapsible months — all open by default
   const [expanded, setExpanded] = useState<Set<string>>(new Set(MONTH_GROUPS.map(g => g.id)));
@@ -367,6 +371,8 @@ export default function ExpenseRegisterScreen() {
         visible={showDatePicker}
         fromDate={fromDate}
         toDate={toDate}
+        minDate={fyFrom || undefined}
+        maxDate={fyTo || undefined}
         onApply={(from, to) => { setFromDate(from); setToDate(to); setShowDatePicker(false); }}
         onClose={() => setShowDatePicker(false)}
       />
