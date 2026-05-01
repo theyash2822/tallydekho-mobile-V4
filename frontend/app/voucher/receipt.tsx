@@ -26,7 +26,7 @@ export default function ReceiptVouchersScreen() {
     getVouchers(companyGuid, 'receipt').then((res: any) => {
       const rows = res?.data ?? [];
       setLiveItems(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), party: r.party_name||'', date: r.date||'', time: '', amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`, method: 'Cash', status: 'cleared' })));
-    }).catch((err: any) => console.error('[API Error]', err?.message));
+    }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
   }, [companyGuid]);
 
   const data = MOCK_RECEIPT_VOUCHERS;
@@ -40,6 +40,7 @@ export default function ReceiptVouchersScreen() {
         <Text style={s.hdrTitle}>Receipt Vouchers</Text>
         <TouchableOpacity style={s.hdrAct}><Ionicons name="ellipsis-vertical" size={20} color={COLORS.textPrimary} /></TouchableOpacity>
       </View>
+      {apiError && <ErrorBanner message={apiError} />}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
         <View style={s.filterRow}>
           <TouchableOpacity style={s.dd}><Ionicons name="calendar-outline" size={13} color={COLORS.textSecondary} /><Text style={s.ddTxt}>June 25</Text><Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} /></TouchableOpacity>

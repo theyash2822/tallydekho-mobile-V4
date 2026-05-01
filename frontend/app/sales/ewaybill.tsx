@@ -44,7 +44,7 @@ export default function EWayBillScreen() {
         status: r.ewb_number ? 'generated' : 'pending',
         ewb_no: r.ewb_number || null,
       })));
-    }).catch((err: any) => console.error('[API Error]', err?.message));
+    }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
   }, [companyGuid]);
 
   const data = MOCK_EWAYBILLS;

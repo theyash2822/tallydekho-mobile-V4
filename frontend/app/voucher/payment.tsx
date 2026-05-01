@@ -34,7 +34,7 @@ export default function PaymentVouchersScreen() {
         method: 'NEFT',
         status: 'cleared',
       })));
-    }).catch((err: any) => console.error('[API Error]', err?.message));
+    }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
   }, [companyGuid]);
 
   const data = MOCK_PAYMENT_VOUCHERS;
@@ -48,6 +48,7 @@ export default function PaymentVouchersScreen() {
         <Text style={s.hdrTitle}>Payment Vouchers</Text>
         <TouchableOpacity style={s.hdrAct}><Ionicons name="ellipsis-vertical" size={20} color={COLORS.textPrimary} /></TouchableOpacity>
       </View>
+      {apiError && <ErrorBanner message={apiError} />}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
         <View style={s.filterRow}>
           <TouchableOpacity style={s.dd}><Ionicons name="calendar-outline" size={13} color={COLORS.textSecondary} /><Text style={s.ddTxt}>June 25</Text><Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} /></TouchableOpacity>

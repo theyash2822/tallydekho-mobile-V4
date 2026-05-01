@@ -25,7 +25,7 @@ export default function SalesOrdersScreen() {
     getSalesOrders(companyGuid).then((res: any) => {
       const rows = res?.data ?? [];
       if (rows.length) setLiveOrders(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), party: r.party_name||'', date: r.date||'', amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`, status: 'confirmed' })));
-    }).catch((err: any) => console.error('[API Error]', err?.message));
+    }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
   }, [companyGuid]);
 
   const data = MOCK_SALES_ORDERS;
@@ -41,6 +41,7 @@ export default function SalesOrdersScreen() {
         <Text style={s.hdrTitle}>Sales Orders</Text>
         <TouchableOpacity style={s.hdrAct}><Ionicons name="ellipsis-vertical" size={20} color={COLORS.textPrimary} /></TouchableOpacity>
       </View>
+      {apiError && <ErrorBanner message={apiError} />}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
         <View style={s.filterRow}>
           <TouchableOpacity style={s.dd}><Ionicons name="calendar-outline" size={13} color={COLORS.textSecondary} /><Text style={s.ddTxt}>June 25</Text><Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} /></TouchableOpacity>

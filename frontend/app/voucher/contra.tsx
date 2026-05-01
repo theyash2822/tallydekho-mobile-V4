@@ -22,7 +22,7 @@ export default function ContraVouchersScreen() {
     getVouchers(companyGuid, 'contra').then((res: any) => {
       const rows = res?.data ?? [];
       setLiveItems(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), narration: r.narration||'', date: r.date||'', amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`, status: 'posted' })));
-    }).catch((err: any) => console.error('[API Error]', err?.message));
+    }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
   }, [companyGuid]);
 
   const data = MOCK_CONTRA_VOUCHERS;
@@ -36,6 +36,7 @@ export default function ContraVouchersScreen() {
         <Text style={s.hdrTitle}>Contra Vouchers</Text>
         <TouchableOpacity style={s.hdrAct}><Ionicons name="ellipsis-vertical" size={20} color={COLORS.textPrimary} /></TouchableOpacity>
       </View>
+      {apiError && <ErrorBanner message={apiError} />}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
         <View style={s.filterRow}>
           <TouchableOpacity style={s.dd}><Ionicons name="calendar-outline" size={13} color={COLORS.textSecondary} /><Text style={s.ddTxt}>June 25</Text><Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} /></TouchableOpacity>

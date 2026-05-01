@@ -109,7 +109,7 @@ export default function PurchaseRegisterScreen() {
         amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`,
         status: r.is_cancelled ? 'unpaid' : 'paid',
       })));
-    }).catch((err: any) => console.error('[API Error]', err?.message));
+    }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
   }, [companyGuid, fromDate, toDate, fyFrom, fyTo]);
 
   const [search,         setSearch]         = useState('');
@@ -261,6 +261,7 @@ export default function PurchaseRegisterScreen() {
         )}
       </View>
 
+      {apiError && <ErrorBanner message={apiError} />}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: isSelecting ? 120 : 40 }}>
 
         {/* ── Stats 2×2 Grid ──────────────────────────────────────── */}

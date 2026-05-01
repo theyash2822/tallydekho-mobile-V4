@@ -55,6 +55,7 @@ export default function NotificationsScreen() {
         </TouchableOpacity>
       </View>
 
+      {apiError && <ErrorBanner message={apiError} />}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32, paddingTop: SPACING.sm }}>
         {notifications.length === 0 ? (
           <View style={s.empty}>
