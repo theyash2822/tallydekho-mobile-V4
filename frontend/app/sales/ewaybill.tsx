@@ -5,8 +5,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 import { useAuth } from '../../src/context/AuthContext';
@@ -26,6 +24,7 @@ export default function EWayBillScreen() {
   const [liveBills, setLiveBills] = useState<any[]>([]);
   const [countryApplicable, setCountryApplicable] = useState(true);
   const [notApplicableMsg, setNotApplicableMsg] = useState('');
+  const [apiError, setApiError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!companyGuid) return;
@@ -47,8 +46,7 @@ export default function EWayBillScreen() {
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
   }, [companyGuid]);
 
-  const data = MOCK_EWAYBILLS;
-  const allBills = liveBills.length > 0 ? liveBills : data.bills;
+  const allBills = liveBills;
 
   const filtered = allBills.filter(
     (b: any) =>
@@ -75,6 +73,7 @@ export default function EWayBillScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      {apiError && <ErrorBanner message={apiError} onRetry={() => setApiError(null)} />}
       {/* ── Header ───────────────────────────────────────────── */}
       <View style={styles.header}>
         <TouchableOpacity

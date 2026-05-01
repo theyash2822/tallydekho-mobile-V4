@@ -5,7 +5,6 @@ import {
   Dimensions, FlatList, NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
@@ -54,9 +53,11 @@ export default function SalesScreen() {
   const [liveRecent, setLiveRecent] = useState<any[]>([]);
   const [liveTopParties, setLiveTopParties] = useState<any[]>([]);
   const [liveBanners, setLiveBanners] = useState<any[]>([]);
+  const [apiError, setApiError]       = useState<string | null>(null);
 
   useEffect(() => {
     if (!companyGuid) return;
+    setApiError(null);
     // Recent invoices
     getSalesInvoices(companyGuid, { limit: '5' } as any).then((res: any) => {
       const rows = res?.data ?? [];
@@ -75,7 +76,10 @@ export default function SalesScreen() {
       // Dynamic banners
       const pendingIRN = rows.filter((r: any) => !r.irn).length;
       if (pendingIRN > 0) setLiveBanners([{ id: 'b1', bold: `${pendingIRN} invoices`, sub: 'pending E-Invoice (IRN) generation', action: 'Generate Now' }, ...BANNERS.slice(1)]);
-    }).catch((err: any) => console.error('[API Error]', err?.message));
+    }).catch((err: any) => {
+      setApiError(err?.message || 'Failed to load sales data');
+      console.error('[Sales]', err?.message);
+    });
   }, [companyGuid]);
 
   // ─ Tab & filter state
@@ -138,6 +142,7 @@ export default function SalesScreen() {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
+      {apiError && <ErrorBanner message={apiError} onRetry={() => { setApiError(null); }} />}
 
       {/* ── Header ─────────────────────────────────────────────────── */}
       <View style={s.header}>

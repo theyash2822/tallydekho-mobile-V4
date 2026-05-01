@@ -6,7 +6,6 @@ import {
   Platform, Linking, Animated, Alert, Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ErrorBanner } from '../../src/components/ApiStateViews';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { Ionicons } from '@expo/vector-icons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
@@ -474,23 +473,27 @@ export default function LedgerScreen() {
   };
 
   const [isLoading, setIsLoading] = useState(true);
+  const [apiError, setApiError]   = useState<string | null>(null);
 
   const loadLedgers = async () => {
+    setApiError(null);
     try {
-    const res = await getLedgers(companyGuid, { search, limit: '500' }) as any;
-    const rows = res?.data ?? (Array.isArray(res) ? res : []);
-    // Normalize to LedgerItem shape
-    setData(Array.isArray(rows) ? rows.map((r: any) => ({
-      id: r.guid || r.id || String(r.id),
-      name: r.name,
-      group: r.parent || r.group || '',
-      balance: r.closing_balance != null ? `₹${Math.abs(+r.closing_balance).toLocaleString('en-IN')}` : (r.balance || '₹0'),
-      type: (r.balance_type === 'Cr') ? 'credit' : 'debit',
-      nature: r.nature || '',
-      phone: r.mobile || r.phone || '',
-      lastUpdated: r.updated_at || r.alter_date || '',
-    })) : []);
-    } catch (err: any) { console.error('[API Error]', err?.message); /* network error — keep existing data */ }
+      const res = await getLedgers(companyGuid, { search, limit: '500' }) as any;
+      const rows = res?.data ?? (Array.isArray(res) ? res : []);
+      setData(Array.isArray(rows) ? rows.map((r: any) => ({
+        id: r.guid || r.id || String(r.id),
+        name: r.name,
+        group: r.parent || r.group || '',
+        balance: r.closing_balance != null ? `₹${Math.abs(+r.closing_balance).toLocaleString('en-IN')}` : (r.balance || '₹0'),
+        type: (r.balance_type === 'Cr') ? 'credit' : 'debit',
+        nature: r.nature || '',
+        phone: r.mobile || r.phone || '',
+        lastUpdated: r.updated_at || r.alter_date || '',
+      })) : []);
+    } catch (err: any) {
+      setApiError(err?.message || 'Failed to load ledgers');
+      console.error('[Ledgers]', err?.message);
+    }
   };
 
   useEffect(() => {
@@ -545,6 +548,7 @@ export default function LedgerScreen() {
 
   return (
     <SafeAreaView testID="ledger-screen" style={styles.safe}>
+      {apiError && <ErrorBanner message={apiError} onRetry={loadLedgers} />}
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>

@@ -4,7 +4,6 @@ import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
@@ -74,24 +73,31 @@ export default function StocksDashboard() {
   const { company } = useAuth();
   const companyGuid = company?.guid;
   const [stockSummary, setStockSummary] = useState<any>(null);
+  const [apiError, setApiError]          = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadStock = () => {
     if (!companyGuid) return;
+    setApiError(null);
     getStocks(companyGuid).then((res: any) => {
       const s = res?.data?.summary;
-      if (s) setStockSummary(prev => ({
-        ...prev,
-        totalValue: s.total_value ?? prev.totalValue,
-        totalSKUs: s.total_skus ?? prev.totalSKUs,
-        lowStockCount: s.low_stock_count ?? prev.lowStockCount,
-      }));
-    }).catch((err: any) => console.error('[API Error]', err?.message));
-  }, [companyGuid]);
+      if (s) setStockSummary({
+        totalValue:    s.total_value    ?? '0',
+        totalSKUs:     s.total_skus     ?? 0,
+        lowStockCount: s.low_stock_count ?? 0,
+      });
+    }).catch((err: any) => {
+      setApiError(err?.message || 'Failed to load stock data');
+      console.error('[Stocks]', err?.message);
+    });
+  };
+
+  useEffect(() => { loadStock(); }, [companyGuid]);
 
   const data = stockSummary;
 
   return (
     <SafeAreaView style={styles.safe}>
+      {apiError && <ErrorBanner message={apiError} onRetry={loadStock} />}
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Stock Dashboard</Text>

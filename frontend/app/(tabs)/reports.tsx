@@ -5,7 +5,6 @@ import {
   PanResponder, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ErrorBanner } from '../../src/components/ApiStateViews';
 import Svg, {
   Path, Circle, Line, G, Text as SvgText, Rect,
 } from 'react-native-svg';
@@ -843,6 +842,7 @@ export default function ReportsScreen() {
     expenses: number[];
   } | null>(null);
   const [finLoading, setFinLoading] = useState(true);
+  const [apiError, setApiError]      = useState<string | null>(null);
 
   // GST compliance — real filed month count
   const [gstFiledCount, setGstFiledCount] = useState(0);
@@ -854,12 +854,16 @@ export default function ReportsScreen() {
     const from = selectedFY?.startDate;
     const to   = selectedFY?.endDate;
 
+    setApiError(null);
     // Financial chart — scoped to selected FY
     getFinancialData(companyGuid, from, to).then((res: any) => {
       const d = res?.data ?? res;
       if (d?.months) setFinData(d);
       setFinLoading(false);
-    }).catch(() => setFinLoading(false));
+    }).catch((err: any) => {
+      setApiError(err?.message || 'Failed to load financial data');
+      setFinLoading(false);
+    });
 
     // GST summary — scoped to selected FY
     getGSTReport(companyGuid, from, to).then((res: any) => {
@@ -883,6 +887,7 @@ export default function ReportsScreen() {
 
   return (
     <SafeAreaView testID="reports-screen" style={styles.safe}>
+      {apiError && <ErrorBanner message={apiError} onRetry={() => { setFinLoading(true); setApiError(null); }} />}
       {/* Page Header — mirrors Ledger screen style */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Reports</Text>
