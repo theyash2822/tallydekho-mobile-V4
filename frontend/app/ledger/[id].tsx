@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { MOCK_LEDGERS } from '../../src/data/mockData';
+
 import { TX_TO_DOC_TYPE } from '../../src/utils/documentHelpers';
 import { useAuth } from '../../src/context/AuthContext';
 import { getLedgerDetail, getLedgerStatement } from '../../src/services/api';

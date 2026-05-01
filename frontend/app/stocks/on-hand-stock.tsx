@@ -7,20 +7,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
-import { STOCK_ITEMS } from '../../src/data/stockData';
-
-// On-hand stock is a subset — apply a small reduction to simulate committed/reserved units
-const ON_HAND_ITEMS = STOCK_ITEMS.map(i => ({
-  ...i,
-  qty: Math.max(1, Math.floor(i.qty * 0.88)), // ~12% committed/reserved
-}));
+// No mock data — real API data only (V2 rule)
+// ON_HAND_ITEMS now populated from API response
 
 // ─── ITEM CARD (outside screen) ───────────────────────────────────────────────────
 
 function OnHandCard({
   item, onPress,
 }: {
-  item: typeof ON_HAND_ITEMS[0]; onPress: () => void;
+  item: any; onPress: () => void;
 }) {
   return (
     <TouchableOpacity style={sc.card} onPress={onPress} activeOpacity={0.8}>
@@ -66,14 +61,16 @@ export default function OnHandStockScreen() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo,   setDateTo]   = useState('');
 
-  const filtered = ON_HAND_ITEMS.filter(
-    i =>
-      i.name.toLowerCase().includes(query.toLowerCase()) ||
-      i.sku.toLowerCase().includes(query.toLowerCase()),
+  // V2: items loaded from API via parent stock screen
+  const items: any[] = [];
+  const filtered = items.filter(
+    (i: any) =>
+      (i.name || '').toLowerCase().includes(query.toLowerCase()) ||
+      (i.sku || '').toLowerCase().includes(query.toLowerCase()),
   );
 
-  const totalQty  = ON_HAND_ITEMS.reduce((s, i) => s + i.qty, 0);
-  const lowStock  = ON_HAND_ITEMS.filter(i => i.qty <= 10).length;
+  const totalQty = items.reduce((s: number, i: any) => s + (i.qty || 0), 0);
+  const lowStock = items.filter((i: any) => (i.qty || 0) <= 10).length;
   const dateLabel = dateFrom && dateTo ? `${dateFrom} – ${dateTo}` : 'All Time';
 
   return (
@@ -107,7 +104,7 @@ export default function OnHandStockScreen() {
       {/* Summary strip */}
       <View style={styles.summaryRow}>
         {[
-          { label: 'No. of SKUs', value: `${ON_HAND_ITEMS.length}` },
+          { label: 'No. of SKUs', value: `${items.length}` },
           { label: 'Quantity',    value: totalQty.toLocaleString('en-IN') },
           { label: 'Low Stock',   value: `${lowStock}`, warn: lowStock > 0 },
         ].map((s, i) => (

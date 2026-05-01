@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { MOCK_STOCK_DASHBOARD } from '../../src/data/mockData';
+// No mock data imports — real data only (V2 rule)
 import { useAuth } from '../../src/context/AuthContext';
 import { getStocks } from '../../src/services/api';
 
@@ -26,43 +26,43 @@ const WIDGET_TILES = [
     id: 'total_stock', title: 'Total Stock',
     icon: 'cube-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
     route: '/stocks/total-stock',
-    getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
-      { label: 'QTY',   value: d.totalQty   },
-      { label: 'Value', value: d.totalValue },
+    getValue: (d: any) => [
+      { label: 'QTY',   value: d?.totalQty   ?? '0' },
+      { label: 'Value', value: d?.totalValue ?? '0' },
     ],
   },
   {
     id: 'warehouses', title: 'Warehouses',
     icon: 'business-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
     route: '/stocks/warehouses',
-    getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
-      { label: 'Total',       value: String(d.warehouses.total)       },
-      { label: 'Utilisation', value: `${d.warehouses.utilization}%`   },
+    getValue: (d: any) => [
+      { label: 'Total',       value: String(d?.warehouses?.total ?? 0)         },
+      { label: 'Utilisation', value: `${d?.warehouses?.utilization ?? 0}%`     },
     ],
   },
   {
     id: 'low_stock', title: 'Low-Stock Items',
     icon: 'alert-circle-outline', iconColor: '#DC2626', iconBg: '#FEF2F2',
     route: '/stocks/reorder-queue',
-    getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
-      { label: 'Items', value: String(d.lowStockCount) },
+    getValue: (d: any) => [
+      { label: 'Items', value: String(d?.lowStockCount ?? 0) },
     ],
   },
   {
     id: 'aged', title: 'Aged Inventory',
     icon: 'time-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
     route: '/stocks/aged-items',
-    getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
-      { label: 'Value', value: d.agedInventory.value              },
-      { label: 'Age',   value: `${d.agedInventory.days} days`     },
+    getValue: (d: any) => [
+      { label: 'Value', value: d?.agedInventory?.value ?? '₹0'                },
+      { label: 'Age',   value: `${d?.agedInventory?.days ?? 0} days`         },
     ],
   },
   {
     id: 'fast_moving', title: 'Fast-Moving Items',
     icon: 'flash-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
     route: '/stocks/movement-analytics',
-    getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
-      { label: 'Items', value: String(d.fastMovingCount) },
+    getValue: (d: any) => [
+      { label: 'Items', value: String(d?.fastMovingCount ?? 0) },
     ],
   },
 ];
@@ -71,7 +71,7 @@ export default function StocksDashboard() {
   const router = useRouter();
   const { company } = useAuth();
   const companyGuid = company?.guid;
-  const [stockSummary, setStockSummary] = useState(MOCK_STOCK_DASHBOARD);
+  const [stockSummary, setStockSummary] = useState<any>(null);
 
   useEffect(() => {
     if (!companyGuid) return;

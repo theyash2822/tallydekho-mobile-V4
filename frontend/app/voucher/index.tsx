@@ -4,7 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { MOCK_PAYMENT_VOUCHERS, MOCK_RECEIPT_VOUCHERS, MOCK_JOURNAL_VOUCHERS, MOCK_CONTRA_VOUCHERS } from '../../src/data/mockData';
+
 
 const VOUCHER_TYPES = [
   { label: 'Payment',  icon: 'arrow-up-circle-outline',   route: '/voucher/payment',  color: '#C0392B', bg: '#FDECEA', data: MOCK_PAYMENT_VOUCHERS },

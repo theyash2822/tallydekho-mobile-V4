@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING } from '../../constants/colors';
-import { ALL_GROUPS, ALL_UNITS, ALL_TAX_RATES, ALL_WAREHOUSES } from '../../data/stockData';
+
 import {
   InlineDropdownField, InlineField, CurrencyField, SubmitButton,
   modalStyles as ms,

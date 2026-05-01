@@ -10,7 +10,7 @@ import Svg, {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { MOCK_REPORTS } from '../../src/data/mockData';
+
 import { getFinancialData, getGSTReport, getAuditTrail } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { FinancialChartSkeleton } from '../../src/components/Skeleton';

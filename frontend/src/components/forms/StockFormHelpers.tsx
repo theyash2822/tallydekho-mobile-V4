@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
-import { StockItem, LOW_STOCK_QTY } from '../../data/stockData';
+
 
 // ─── BUTTON PHASE ─────────────────────────────────────────────────────────────
 export type BtnPhase = 'idle' | 'loading' | 'success';

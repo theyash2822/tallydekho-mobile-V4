@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { MOCK_SALES_ORDERS } from '../../src/data/mockData';
+
 import { useAuth } from '../../src/context/AuthContext';
 import { getSalesOrders } from '../../src/services/api';
 

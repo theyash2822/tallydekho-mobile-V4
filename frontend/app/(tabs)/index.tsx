@@ -23,9 +23,7 @@ import {
   getKPIStrip, getMetrics, getCashflow, getRecentActivity, getTallySyncStatus, getNotifications,
 } from '../../src/services/api';
 import Toast from 'react-native-toast-message';
-import {
-  MOCK_KPI_STRIP, MOCK_METRICS, MOCK_CASHFLOW, MOCK_RECENT_ACTIVITY, MOCK_USER, FY_DASHBOARD,
-} from '../../src/data/mockData';
+// No mock data imports — real data only (V2 rule)
 
 const TIME_FILTERS = ['7D', '1M', '3M', '6M'] as const;
 type TimeFilter = typeof TIME_FILTERS[number];
@@ -44,12 +42,12 @@ export default function HomeScreen() {
   const router = useRouter();
   const { isPaired, isDesktopOnline, company, user, selectedFY } = useAuth();
   const companyGuid = company?.guid;
-  const [activeFY, setActiveFY] = useState(MOCK_USER.fyYear);
+  const [activeFY, setActiveFY] = useState('');
   const [activeFilter, setActiveFilter] = useState<TimeFilter>('7D');
-  const [kpiData, setKpiData] = useState(MOCK_KPI_STRIP);
-  const [metrics, setMetrics] = useState(MOCK_METRICS);
-  const [cashflow, setCashflow] = useState(MOCK_CASHFLOW);
-  const [activity, setActivity] = useState(MOCK_RECENT_ACTIVITY);
+  const [kpiData, setKpiData] = useState<any[]>([]);
+  const [metrics, setMetrics] = useState<any[]>([]);
+  const [cashflow, setCashflow] = useState<any>(null);
+  const [activity, setActivity] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [notifCount, setNotifCount] = useState(0);
@@ -124,10 +122,11 @@ export default function HomeScreen() {
     // Paired: fetch real data and show skeletons while loading.
     // ─────────────────────────────────────────────────
     if (!isPaired) {
-      setKpiData(MOCK_KPI_STRIP);
-      setMetrics(MOCK_METRICS);
-      setCashflow(MOCK_CASHFLOW);
-      setActivity(MOCK_RECENT_ACTIVITY);
+      // Not paired: show empty state, no mock data
+      setKpiData([]);
+      setMetrics([]);
+      setCashflow(null);
+      setActivity([]);
       setIsLoading(false);
       return;
     }

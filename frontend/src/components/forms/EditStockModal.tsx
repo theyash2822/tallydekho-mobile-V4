@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { COLORS } from '../../constants/colors';
-import { StockItem, ALL_WAREHOUSES, ADJ_REASONS } from '../../data/stockData';
+
 import {
   InlineDropdownField, InlineField, ReadonlyField,
   QtyStepperField, ItemHeaderCard, SubmitButton,

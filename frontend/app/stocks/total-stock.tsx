@@ -9,7 +9,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { StockItem, STOCK_ITEMS, ALL_WAREHOUSES, ALL_CATEGORIES, ALL_GROUPS } from '../../src/data/stockData';
+
 import { useAuth } from '../../src/context/AuthContext';
 import { getStocks } from '../../src/services/api';
 import { AddItemModal } from '../../src/components/forms/AddItemModal';
@@ -190,7 +190,7 @@ export default function TotalStockScreen() {
   const [selCat, setSelCat] = useState<string[]>([]);
   const [selGrp, setSelGrp] = useState<string[]>([]);
 
-  const sourceItems = liveStocks.length > 0 ? liveStocks : STOCK_ITEMS;
+  const sourceItems = liveStocks;
 
   // Header "+" popover menu
   const [menuOpen, setMenuOpen] = useState(false);

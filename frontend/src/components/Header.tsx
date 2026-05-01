@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
-import { MOCK_COMPANIES } from '../data/mockData';
+// No mock data imports — real data only (V2 rule)
 import { useAuth } from '../context/AuthContext';
 import { getCompanies, getCompanyYears } from '../services/api';
 
@@ -202,7 +202,7 @@ const Header: React.FC<HeaderProps> = ({
             <View style={styles.dropdownArrowLeft} />
             <Text style={styles.dropdownTitle}>Switch Company</Text>
             <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
-              {(liveCompanies.length > 0 ? liveCompanies : MOCK_COMPANIES).map(co => (
+              {(liveCompanies || []).map(co => (
                 <TouchableOpacity
                   key={co.id}
                   style={[styles.optionRow, selectedCompany === co.name && styles.optionRowActive]}

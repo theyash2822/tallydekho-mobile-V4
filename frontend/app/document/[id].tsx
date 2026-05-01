@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { DocumentType, VoucherDocument } from '../../src/types/document';
-import { getDocument } from '../../src/data/mockDocuments';
+
 import DocumentPreviewPage from '../../src/components/document/DocumentPreviewPage';
 import { getVoucherById } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';

@@ -7,7 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { MOCK_SALES_REGISTER } from '../../src/data/mockData';
+
 import { useAuth } from '../../src/context/AuthContext';
 import { getSalesInvoices, getKPIStrip } from '../../src/services/api';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
