@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, RefreshControl, Modal, KeyboardAvoidingView,
   Platform, Linking, Animated, Alert, Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { Ionicons } from '@expo/vector-icons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
@@ -455,7 +457,7 @@ export default function LedgerScreen() {
           filtered.filter(i => selected.includes(i.id)).map(i => `• ${i.name}: ${i.balance}`).join('\n'),
         title: 'Share Ledger Report',
       });
-    } catch {
+    } catch (err: any) { console.error('[API Error]', err?.message);
       Alert.alert('Share PDF', `${selected.length} ledger(s) ready to share as PDF.`);
     }
     cancelSelectMode();
@@ -488,7 +490,7 @@ export default function LedgerScreen() {
       phone: r.mobile || r.phone || '',
       lastUpdated: r.updated_at || r.alter_date || '',
     })) : []);
-    } catch { /* network error — keep existing data */ }
+    } catch (err: any) { console.error('[API Error]', err?.message); /* network error — keep existing data */ }
   };
 
   useEffect(() => {

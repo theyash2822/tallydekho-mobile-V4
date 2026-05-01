@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
@@ -83,7 +85,7 @@ export default function StocksDashboard() {
         totalSKUs: s.total_skus ?? prev.totalSKUs,
         lowStockCount: s.low_stock_count ?? prev.lowStockCount,
       }));
-    }).catch(() => {});
+    }).catch((err: any) => console.error('[API Error]', err?.message));
   }, [companyGuid]);
 
   const data = stockSummary;

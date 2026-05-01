@@ -42,11 +42,12 @@ const post = <T>(endpoint: string, body: object, auth = true) => request<T>('POS
 const patch = <T>(endpoint: string, body: object) => request<T>('PATCH', endpoint, body);
 const tallyPost = <T>(endpoint: string, body: object) => request<T>('POST', endpoint, body, true, 'tally');
 
-// Helper: append companyGuid to query string
-const withCompany = (endpoint: string, companyGuid?: string, extra?: Record<string, string>) => {
+// Helper: append companyGuid + optional fy= param to query string
+// fy = financial year in backend format e.g. '2025-2026'
+const withCompany = (endpoint: string, companyGuid?: string, extra?: Record<string, string | undefined>) => {
   const params = new URLSearchParams();
   if (companyGuid) params.set('companyGuid', companyGuid);
-  if (extra) Object.entries(extra).forEach(([k, v]) => v && params.set(k, v));
+  if (extra) Object.entries(extra).forEach(([k, v]) => { if (v != null && v !== '') params.set(k, v); });
   const qs = params.toString();
   return qs ? `${endpoint}?${qs}` : endpoint;
 };
@@ -170,9 +171,11 @@ export const createContraVoucher  = (payload: any) => tallyPost<any>('/voucher/c
 // LEDGERS
 // ══════════════════════════════════════════════════════════════
 
+// Ledger endpoints accept optional fy= param for FY-specific balances
 export const getLedgers        = (companyGuid?: string, params?: any) => get<any>(withCompany('/ledgers', companyGuid, params));
+export const getLedgerFyBalances = (companyGuid?: string, fy?: string) => get<any>(withCompany('/ledgers/fy-balances', companyGuid, fy ? { fy } : {}));
 export const getLedgerDetail   = (companyGuid?: string, id?: string, params?: any) => get<any>(withCompany(`/ledgers/${id}`, companyGuid, params));
-export const getLedgerStatement = (companyGuid?: string, id?: string, params?: any) => get<any>(withCompany(`/ledgers/${id}/statement`, companyGuid, params));
+export const getLedgerStatement = (companyGuid?: string, id?: string, fy?: string, params?: any) => get<any>(withCompany(`/ledgers/${id}/statement`, companyGuid, { ...(fy ? { fy } : {}), ...params }));
 export const createLedger      = (payload: any) => tallyPost<any>('/master/party', payload);
 
 // ══════════════════════════════════════════════════════════════

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions,
   PanResponder, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import Svg, {
   Path, Circle, Line, G, Text as SvgText, Rect,
 } from 'react-native-svg';
@@ -864,7 +866,7 @@ export default function ReportsScreen() {
       const d = res?.data ?? res;
       const filed = d?.filed_months ?? d?.months_filed ?? 0;
       setGstFiledCount(typeof filed === 'number' ? Math.min(filed, 12) : 0);
-    }).catch(() => {});
+    }).catch((err: any) => console.error('[API Error]', err?.message));
 
     // Audit trail — get pending/unreconciled count (not FY-specific)
     getAuditTrail(companyGuid).then((res: any) => {
@@ -876,7 +878,7 @@ export default function ReportsScreen() {
       const total = Array.isArray(entries) ? entries.length : (d?.stats?.total || 0);
       setAuditCount(pending);
       setAuditTotal(Math.max(total, pending));
-    }).catch(() => {});
+    }).catch((err: any) => console.error('[API Error]', err?.message));
   }, [companyGuid, selectedFY?.startDate]);
 
   return (

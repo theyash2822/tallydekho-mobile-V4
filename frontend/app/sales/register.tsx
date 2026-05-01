@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Dimensions, Share, Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
@@ -90,6 +92,7 @@ export default function SalesRegisterScreen() {
   const [toDate,   setToDate]   = useState(() => fyTo   ? isoToDMY(fyTo)   : '31/03/25');
   const [liveInvoices, setLiveInvoices]     = useState<Invoice[]>([]);
   const [loadingData, setLoadingData]       = useState(false);
+  const [apiError, setApiError]              = useState<string | null>(null);
 
   // When FY changes, reset date range to full FY
   useEffect(() => {
@@ -99,13 +102,12 @@ export default function SalesRegisterScreen() {
     }
   }, [fyFrom, fyTo]);
 
-  const data = MOCK_SALES_REGISTER;
-
   useEffect(() => {
     if (!companyGuid) return;
     setLoadingData(true);
     const from = dmyToISO(fromDate) || fyFrom;
     const to   = dmyToISO(toDate)   || fyTo;
+    setApiError(null);
     getSalesInvoices(companyGuid, { search, ...(from && to ? { from, to } : {}) }).then((res: any) => {
       const rows = res?.data ?? [];
       setLiveInvoices(rows.map((r: any) => ({
@@ -116,7 +118,9 @@ export default function SalesRegisterScreen() {
         amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`,
         status: r.is_cancelled ? 'unpaid' : 'paid',
       })));
-    }).catch(() => {}).finally(() => setLoadingData(false));
+    }).catch((err: any) => {
+      setApiError(err?.message || 'Failed to load sales data');
+    }).finally(() => setLoadingData(false));
   }, [companyGuid, search, fromDate, toDate, fyFrom, fyTo]);
 
   // Collapsible months — all open by default
@@ -271,6 +275,7 @@ export default function SalesRegisterScreen() {
         )}
       </View>
 
+      {apiError && <ErrorBanner message={apiError} onRetry={() => { /* trigger reload */ }} />}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: isSelecting ? 120 : 40 }}>
 
         {/* ── Stats 2×2 Grid ──────────────────────────────────────── */}

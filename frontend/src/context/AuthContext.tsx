@@ -41,6 +41,19 @@ export interface FYInfo {
   label: string;     // e.g. 'FY 2025-26'
   startDate: string; // e.g. '2025-04-01'
   endDate: string;   // e.g. '2026-03-31'
+  finYear?: string;  // e.g. '2025-2026' (backend format, used as fy= param)
+}
+
+// Convert FYInfo label to backend finYear format: 'FY 2025-26' -> '2025-2026'
+export function fyInfoToParam(fy: FYInfo | null): string | undefined {
+  if (!fy) return undefined;
+  if (fy.finYear) return fy.finYear;
+  // Parse from label: 'FY 2025-26' or from startDate
+  if (fy.startDate) {
+    const y = parseInt(fy.startDate.slice(0, 4), 10);
+    return `${y}-${y + 1}`;
+  }
+  return undefined;
 }
 
 interface AuthContextType {

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -31,7 +33,7 @@ export default function NotificationsScreen() {
       if (Array.isArray(data) && data.length > 0) {
         setNotifications(data.map((n: any) => ({ ...n, read: n.read ?? false })));
       }
-    }).catch(() => {});
+    }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load notifications'); });
   }, [companyGuid]);
 
   const markAllRead = () => setNotifications(ns => ns.map(n => ({ ...n, read: true })));

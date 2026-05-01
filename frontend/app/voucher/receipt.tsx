@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -24,7 +26,7 @@ export default function ReceiptVouchersScreen() {
     getVouchers(companyGuid, 'receipt').then((res: any) => {
       const rows = res?.data ?? [];
       setLiveItems(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), party: r.party_name||'', date: r.date||'', time: '', amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`, method: 'Cash', status: 'cleared' })));
-    }).catch(() => {});
+    }).catch((err: any) => console.error('[API Error]', err?.message));
   }, [companyGuid]);
 
   const data = MOCK_RECEIPT_VOUCHERS;

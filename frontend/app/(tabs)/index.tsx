@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuth } from '../../src/context/AuthContext';
+import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import ShimmerPlaceholder, { KPICardSkeleton, MetricCardSkeleton, ActivityRowSkeleton, CardSkeleton } from '../../src/components/ShimmerPlaceholder';
 
@@ -23,6 +23,7 @@ import {
   getKPIStrip, getMetrics, getCashflow, getRecentActivity, getTallySyncStatus, getNotifications,
 } from '../../src/services/api';
 import Toast from 'react-native-toast-message';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 // No mock data imports — real data only (V2 rule)
 
 const TIME_FILTERS = ['7D', '1M', '3M', '6M'] as const;
@@ -49,6 +50,7 @@ export default function HomeScreen() {
   const [cashflow, setCashflow] = useState<any>(null);
   const [activity, setActivity] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [notifCount, setNotifCount] = useState(0);
   const wasPaired = useRef(false); // track previous isPaired to detect change
@@ -132,11 +134,13 @@ export default function HomeScreen() {
     }
 
     setIsLoading(true);
+    setApiError(null);
     try {
       // Prefer context selectedFY (has real startDate/endDate from API),
       // fall back to parseFYDates for label-based parsing
       const from = selectedFY?.startDate ?? parseFYDates(activeFY)?.from;
       const to   = selectedFY?.endDate   ?? parseFYDates(activeFY)?.to;
+      const fy   = fyInfoToParam(selectedFY);  // e.g. '2025-2026' for backend fy= param
 
       const [kpi, met, cf, act] = await Promise.all([
         getKPIStrip(companyGuid, activeFilter, from, to),
@@ -159,6 +163,8 @@ export default function HomeScreen() {
 
       const actArr = Array.isArray(act) ? act : (act as any)?.data ?? [];
       if (actArr.length > 0) setActivity(actArr as any);
+    } catch (err: any) {
+      setApiError(err?.message || 'Failed to load dashboard data');
     } finally {
       setIsLoading(false);
     }
@@ -343,6 +349,7 @@ export default function HomeScreen() {
         {/* Status banners — one or the other, never both */}
         {!isPaired && <PairingBanner />}
         {isPaired && !isDesktopOnline && <OfflineBadge />}
+        {apiError && <ErrorBanner message={apiError} onRetry={loadData} />}
 
         {/* KPI Carousel */}
         <View style={styles.kpiSection}>

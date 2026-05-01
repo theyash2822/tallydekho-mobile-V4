@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Dimensions, FlatList, NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
@@ -73,7 +75,7 @@ export default function SalesScreen() {
       // Dynamic banners
       const pendingIRN = rows.filter((r: any) => !r.irn).length;
       if (pendingIRN > 0) setLiveBanners([{ id: 'b1', bold: `${pendingIRN} invoices`, sub: 'pending E-Invoice (IRN) generation', action: 'Generate Now' }, ...BANNERS.slice(1)]);
-    }).catch(() => {});
+    }).catch((err: any) => console.error('[API Error]', err?.message));
   }, [companyGuid]);
 
   // ─ Tab & filter state

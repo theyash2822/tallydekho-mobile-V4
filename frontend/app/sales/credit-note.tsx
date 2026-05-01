@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -23,7 +25,7 @@ export default function CreditNotesScreen() {
     getCreditNotes(companyGuid).then((res: any) => {
       const rows = res?.data ?? [];
       if (rows.length) setLiveData(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), party: r.party_name||'', date: r.date||'', amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`, status: 'confirmed' })));
-    }).catch(() => {});
+    }).catch((err: any) => console.error('[API Error]', err?.message));
   }, [companyGuid]);
 
     const data = MOCK_CREDIT_NOTES;

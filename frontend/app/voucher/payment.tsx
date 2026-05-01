@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -32,7 +34,7 @@ export default function PaymentVouchersScreen() {
         method: 'NEFT',
         status: 'cleared',
       })));
-    }).catch(() => {});
+    }).catch((err: any) => console.error('[API Error]', err?.message));
   }, [companyGuid]);
 
   const data = MOCK_PAYMENT_VOUCHERS;

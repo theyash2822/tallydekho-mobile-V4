@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Dimensions, Share, Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
@@ -107,7 +109,7 @@ export default function PurchaseRegisterScreen() {
         amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`,
         status: r.is_cancelled ? 'unpaid' : 'paid',
       })));
-    }).catch(() => {});
+    }).catch((err: any) => console.error('[API Error]', err?.message));
   }, [companyGuid, fromDate, toDate, fyFrom, fyTo]);
 
   const [search,         setSearch]         = useState('');
@@ -137,7 +139,7 @@ export default function PurchaseRegisterScreen() {
     const lines = items.map(inv => `${inv.id}  ${inv.vendor}  ${inv.amount}  ${STATUS_LABEL[inv.status] ?? inv.status}`);
     try {
       await Share.share({ message: `TallyDekho — Purchase Register\n${lines.join('\n')}`, title: 'Share Invoices' });
-    } catch {
+    } catch (err: any) { console.error('[API Error]', err?.message);
       Alert.alert('Share', `${selected.length} invoice(s) ready to share.`);
     }
     clearSelect();
