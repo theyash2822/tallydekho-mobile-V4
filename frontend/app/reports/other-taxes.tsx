@@ -19,50 +19,6 @@ type TaxTab = typeof TABS[number];
 const TAB_STATS: Record<TaxTab, { label: string; value: string }[]> = {
   'TDS': [], 'TCS': [], 'Import Duty': [], 'Export Duty': [], 'Excise Duty': [], 'VAT': [], 'Cess': [],
 };
-[]> = {
-  'TDS': [
-    { label: 'Deducted',    value: '\u20b9182K' },
-    { label: 'Remitted',    value: '\u20b9140K' },
-    { label: 'Pending Pay', value: '\u20b942K'  },
-    { label: 'Late-Fee',    value: '\u20b91.5K' },
-  ],
-  'TCS': [
-    { label: 'Collected',   value: '\u20b9182K' },
-    { label: 'Remitted',    value: '\u20b9140K' },
-    { label: 'Pending Pay', value: '\u20b942K'  },
-    { label: 'Late-Fee',    value: '\u20b91.5K' },
-  ],
-  'Import Duty': [
-    { label: 'Duty Assessed', value: '\u20b9182K' },
-    { label: 'Duty Paid',     value: '\u20b9140K' },
-    { label: 'Pending Duty',  value: '\u20b942K'  },
-    { label: 'Interest',      value: '\u20b91.5K' },
-  ],
-  'Export Duty': [
-    { label: 'Duty Assessed',    value: '\u20b9182K' },
-    { label: 'Duty Paid',        value: '\u20b9140K' },
-    { label: 'Pending Duty',     value: '\u20b942K'  },
-    { label: 'Refund Awaiting',  value: '\u20b91.5K' },
-  ],
-  'Excise Duty': [
-    { label: 'Duty Accrued', value: '\u20b9182K' },
-    { label: 'Duty Paid',    value: '\u20b9140K' },
-    { label: 'Input Credit', value: '\u20b942K'  },
-    { label: 'Net Payable',  value: '\u20b91.5K' },
-  ],
-  'VAT': [
-    { label: 'Output VAT',  value: '\u20b9182K' },
-    { label: 'Input VAT',   value: '\u20b9140K' },
-    { label: 'Net Payable', value: '\u20b942K'  },
-    { label: '',            value: ''           },
-  ],
-  'Cess': [
-    { label: 'Cess Accrued', value: '\u20b9182K' },
-    { label: 'Cess Paid',    value: '\u20b9140K' },
-    { label: 'Pending Cess', value: '\u20b942K'  },
-    { label: 'Interest',     value: '\u20b91.5K' },
-  ],
-};
 
 // Late Challans (shared mock)
 const LATE_CHALLANS: any[] = []; // TODO: fetch from TDS/GST API when available
