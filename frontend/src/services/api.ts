@@ -99,6 +99,13 @@ export const unpairDevice     = () => post<any>('/tally-sync/unpair', {});
 export const getCompanies     = () => get<any>('/companies');
 export const getCompanyYears   = (companyGuid?: string) => get<any>(withCompany('/company/years', companyGuid));
 export const getCompanyProfile = (companyGuid?: string) => get<any>(withCompany('/company/profile', companyGuid));
+
+export const getNotificationSettings  = () => get<any>('/notification-settings');
+export const updateNotificationSettings = (data: any) => patch<any>('/notification-settings', data);
+export const getAlertSettings         = () => get<any>('/alert-settings');
+export const updateAlertSettings      = (data: any) => patch<any>('/alert-settings', data);
+export const getIntegrationSettings   = () => get<any>('/integration-settings');
+export const updateIntegrationSettings = (data: any) => patch<any>('/integration-settings', data);
 export const updateCompanyProfile = (companyGuid: string, data: any) => patch<any>(withCompany('/company/profile', companyGuid), data);
 
 // ══════════════════════════════════════════════════════════════

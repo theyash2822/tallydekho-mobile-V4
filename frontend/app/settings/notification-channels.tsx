@@ -8,6 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getNotificationSettings, updateNotificationSettings } from '../../src/services/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CustomToggle
@@ -291,6 +293,37 @@ const CHANNELS = [
 // Main Screen
 // ─────────────────────────────────────────────────────────────────────────────
 export default function NotificationChannelsScreen() {
+  // Load settings from backend on mount
+  React.useEffect(() => {
+    getNotificationSettings().then((res: any) => {
+      if (res?.data) {
+        const d = res.data;
+        if (d.push_enabled !== undefined || d.email_enabled !== undefined || d.whatsapp_enabled !== undefined || d.sms_enabled !== undefined) {
+          setEnabled({
+            push: d.push_enabled ?? true,
+            email: d.email_enabled ?? true,
+            whatsapp: d.whatsapp_enabled ?? true,
+            sms: d.sms_enabled ?? false,
+          });
+        }
+        if (d.quiet_enabled !== undefined) setQuietHours(d.quiet_enabled);
+        if (d.quiet_from) setStartTime(d.quiet_from);
+        if (d.quiet_to) setEndTime(d.quiet_to);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const saveAll = async () => {
+    try {
+      await updateNotificationSettings({
+        push_enabled: enabled.push, email_enabled: enabled.email,
+        whatsapp_enabled: enabled.whatsapp, sms_enabled: enabled.sms,
+        quiet_enabled: quietHours, quiet_from: startTime, quiet_to: endTime,
+      });
+      saveAll(); // Toast.show({ type: 'success', text1: 'Saved', text2: 'Notification settings updated.' });
+    } catch { Toast.show({ type: 'error', text1: 'Error', text2: 'Could not save settings.' }); }
+  };
+
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [isDirty, setIsDirty] = useState(false);

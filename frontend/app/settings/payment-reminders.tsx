@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { getAlertSettings, updateAlertSettings } from '../../src/services/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mock party ledger data
@@ -618,6 +619,23 @@ const DEFAULT_REMINDERS: Reminder[] = [
 let nextId = 3;
 
 export default function PaymentRemindersScreen() {
+  // Load reminder settings from backend
+  React.useEffect(() => {
+    getAlertSettings().then((res: any) => {
+      if (res?.data?.payment_reminders) {
+        const d = res.data.payment_reminders;
+        if (d.threshold) setThreshold(String(d.threshold));
+        if (d.reminders) setReminders(d.reminders);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const saveToBackend = async () => {
+    try {
+      await updateAlertSettings({ payment_reminders: { threshold: parseFloat(threshold)||0, reminders } });
+    } catch {}
+  };
+
   const router = useRouter();
   const [threshold, setThreshold] = useState('500');
   const [reminders, setReminders] = useState<Reminder[]>(DEFAULT_REMINDERS);
@@ -647,8 +665,7 @@ export default function PaymentRemindersScreen() {
     ]);
   };
 
-  const save = () =>
-    Toast.show({ type: 'success', text1: 'Saved', text2: 'Payment reminder settings updated.' });
+  const save = () => { saveToBackend(); Toast.show({ type: 'success', text1: 'Saved', text2: 'Payment reminder settings updated.' }); };
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>

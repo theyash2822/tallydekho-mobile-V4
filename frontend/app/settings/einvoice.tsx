@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { getIntegrationSettings, updateIntegrationSettings } from '../../src/services/api';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 
 const PROVIDERS: DropdownOption[] = [
@@ -16,6 +17,23 @@ const PROVIDERS: DropdownOption[] = [
 ];
 
 export default function EInvoiceScreen() {
+  // Load saved E-Invoice credentials from backend
+  React.useEffect(() => {
+    getIntegrationSettings().then((res: any) => {
+      if (res?.data?.einvoice) {
+        const d = res.data.einvoice;
+        if (d.gstin) setGstin && setGstin(d.gstin);
+        if (d.username) setUsername && setUsername(d.username);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const saveToBackend = async (data?: any) => {
+    try {
+      await updateIntegrationSettings({ einvoice: { ...data, connected: false } });
+    } catch {}
+  };
+
   const router = useRouter();
   const [provider, setProvider] = useState('nic');
   const [isDirty, setIsDirty] = useState(false);

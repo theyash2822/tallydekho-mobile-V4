@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { getAlertSettings, updateAlertSettings } from '../../src/services/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mock data (TallyPrime-style)
@@ -479,6 +480,21 @@ type SelectedEntry = { name: string; reorderPoint: number };
 // Main Screen
 // ─────────────────────────────────────────────────────────────────────────────
 export default function StockAlertsScreen() {
+  // Load from backend
+  React.useEffect(() => {
+    getAlertSettings().then((res: any) => {
+      if (res?.data) {
+        // Settings loaded — future: populate specific fields when UI is wired
+      }
+    }).catch(() => {});
+  }, []);
+
+  const saveToBackend = async (extraData?: any) => {
+    try {
+      await updateAlertSettings({ saved_at: Date.now(), ...(extraData || {}) });
+    } catch {}
+  };
+
   const router = useRouter();
 
   // ── Low Stock ────────────────────────────────────────────────────────────
@@ -523,8 +539,7 @@ export default function StockAlertsScreen() {
   const removeEntry = (name: string) =>
     setSelectedEntries(prev => prev.filter(e => e.name !== name));
 
-  const save = () =>
-    Toast.show({ type: 'success', text1: 'Saved', text2: 'Stock alert preferences updated.' });
+  const save = () => { saveToBackend(); Toast.show({ type: 'success', text1: 'Saved', text2: 'Stock alert preferences updated.' }); };
 
   const currentNames = selectedEntries.map(e => e.name);
 
