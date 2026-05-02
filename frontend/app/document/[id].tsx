@@ -59,12 +59,9 @@ function apiVoucherToDoc(data: any, companyName: string): VoucherDocument {
     amount: parseFloat(item.amount || '0'),
   })) : undefined;
 
-  // GST tax lines — show if taxable amount > 0 OR any GST amount > 0 OR GST reg type is set
-  const hasTax = gst && (
-    parseFloat(gst.cgst_amount) > 0 || parseFloat(gst.sgst_amount) > 0 ||
-    parseFloat(gst.igst_amount) > 0 || parseFloat(gst.taxable_amount) > 0 ||
-    (gst.gst_reg_type && gst.gst_reg_type !== '')
-  );
+  // GST tax lines — show whenever a gst_voucher_details record exists for this voucher
+  // (even if amounts are 0 — GST-exempt goods still need the section to show reg type/place of supply)
+  const hasTax = !!gst;
   const taxes = hasTax ? [{
     description: gst.gst_reg_type ? `GST (${gst.gst_reg_type})` : 'GST',
     rate: 0,

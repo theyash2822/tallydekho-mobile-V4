@@ -649,15 +649,28 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
   const [pdfLoading, setPdfLoading] = useState(false);
 
   const handleShare = async () => {
+    // Generate PDF and open system share sheet (same as Download PDF button)
     try {
-      await Share.share({
-        message:
-          `${doc.documentTitle} – ${doc.documentNumber}\n` +
-          `Date: ${doc.date}\n` +
-          `Total: ${formatCurrency(doc.totals.total)}`,
-        title: doc.documentNumber,
-      });
-    } catch (_) {}
+      setPdfLoading(true);
+      const html = generateDocumentHTML(doc);
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      setPdfLoading(false);
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: `Share ${doc.documentNumber}`,
+          UTI: 'com.adobe.pdf',
+        });
+      } else {
+        await Share.share({
+          message: `${doc.documentTitle} – ${doc.documentNumber}\nDate: ${doc.date}\nTotal: ${formatCurrency(doc.totals.total)}`,
+          title: doc.documentNumber,
+        });
+      }
+    } catch (_) {
+      setPdfLoading(false);
+    }
   };
 
   const handleWhatsApp = async () => {

@@ -742,6 +742,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 7,
     backgroundColor: COLORS.cardBg, borderRadius: 20,
     borderWidth: 1, borderColor: COLORS.borderDefault,
+    minWidth: 44, alignItems: 'center' as const,
   },
   filterPillActive:     { backgroundColor: COLORS.activeBg, borderColor: COLORS.brandPrimary },
   filterPillText:       { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
