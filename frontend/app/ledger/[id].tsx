@@ -201,8 +201,8 @@ function LedgerInfoModal({ visible, onClose, ledger }: { visible: boolean; onClo
             </Section>
 
             <Section title="BALANCE">
-              <Row label="Opening" value={ledger?.opening_balance != null ? `₹${Math.round(parseFloat(ledger.opening_balance)).toLocaleString('en-IN')} ${ledger?.balance_type || ''}` : '₹0'} />
-              <Row label="Closing" value={ledger?.closing_balance != null ? `₹${Math.round(parseFloat(ledger.closing_balance)).toLocaleString('en-IN')} ${ledger?.balance_type || ''}` : '₹0'} />
+              <Row label="Opening" value={fyOpening ? `₹${Math.round(fyOpening.balance).toLocaleString('en-IN')} ${fyOpening.type}` : (ledger?.opening_balance != null ? `₹${Math.round(parseFloat(ledger.opening_balance)).toLocaleString('en-IN')} ${ledger?.balance_type || ''}` : '₹0')} />
+              <Row label="Closing" value={fyClosing ? `₹${Math.round(fyClosing.balance).toLocaleString('en-IN')} ${fyClosing.type}` : (ledger?.closing_balance != null ? `₹${Math.round(parseFloat(ledger.closing_balance)).toLocaleString('en-IN')} ${ledger?.balance_type || ''}` : '₹0')} />
             </Section>
 
             <View style={{ height: 12 }} />
@@ -228,6 +228,8 @@ export default function LedgerDetailScreen() {
   const companyGuid = company?.guid;
   const [liveLedger, setLiveLedger] = useState<any>(null);
   const [liveTxns, setLiveTxns] = useState<any[]>([]);
+  const [fyOpening, setFyOpening] = useState<{ balance: number; type: string } | null>(null);
+  const [fyClosing, setFyClosing] = useState<{ balance: number; type: string } | null>(null);
 
   useEffect(() => {
     if (!companyGuid || !id) return;
@@ -238,6 +240,13 @@ export default function LedgerDetailScreen() {
     // Falls back to getLedgerDetail (party_name match) if statement has no entries
     getLedgerStatement(companyGuid, id as string, undefined, params).then((res: any) => {
       if (res?.data?.ledger) setLiveLedger(res.data.ledger);
+      // Store FY-specific computed opening/closing (not the static ledger table values)
+      if (res?.data?.opening_balance != null) {
+        setFyOpening({ balance: parseFloat(res.data.opening_balance), type: res.data.opening_balance_type || 'Dr' });
+      }
+      if (res?.data?.closing_balance != null) {
+        setFyClosing({ balance: parseFloat(res.data.closing_balance), type: res.data.closing_balance_type || 'Dr' });
+      }
       const txns = res?.data?.transactions || [];
       if (txns.length > 0) {
         setLiveTxns(txns.map((t: any, i: number) => ({
@@ -379,12 +388,15 @@ export default function LedgerDetailScreen() {
   const drPctComputed = (totalDr + totalCr) > 0 ? Math.round((totalDr / (totalDr + totalCr)) * 100) : 50;
   const fmtAmt = (v: number) => v >= 1e5 ? `₹${(v/1e5).toFixed(1)}L` : `₹${Math.round(v).toLocaleString('en-IN')}`;
 
-  const openingBal = liveLedger?.opening_balance != null ? parseFloat(liveLedger.opening_balance) : 0;
-  const closingBal = liveLedger?.closing_balance != null ? parseFloat(liveLedger.closing_balance) : 0;
+  // Use FY-specific computed balances (from statement API) — NOT static ledger table values
+  const openingBal = fyOpening?.balance ?? (liveLedger?.opening_balance != null ? parseFloat(liveLedger.opening_balance) : 0);
+  const openingType = fyOpening?.type ?? liveLedger?.balance_type ?? 'Dr';
+  const closingBal = fyClosing?.balance ?? (liveLedger?.closing_balance != null ? parseFloat(liveLedger.closing_balance) : 0);
+  const closingType = fyClosing?.type ?? liveLedger?.balance_type ?? 'Dr';
   const balType = liveLedger?.balance_type || 'Dr';
   const liveKpiChips = [
-    { label: 'Opening', value: openingBal > 0 ? `₹${Math.round(openingBal).toLocaleString('en-IN')} ${balType}` : '₹0', color: COLORS.textSecondary },
-    { label: 'Closing', value: closingBal > 0 ? `₹${Math.round(closingBal).toLocaleString('en-IN')} ${balType}` : '₹0', color: balType === 'Dr' ? COLORS.negative : COLORS.positive },
+    { label: 'Opening', value: openingBal > 0 ? `₹${Math.round(openingBal).toLocaleString('en-IN')} ${openingType}` : '₹0', color: openingType === 'Dr' ? COLORS.negative : COLORS.positive },
+    { label: 'Closing', value: closingBal > 0 ? `₹${Math.round(closingBal).toLocaleString('en-IN')} ${closingType}` : '₹0', color: closingType === 'Dr' ? COLORS.negative : COLORS.positive },
     { label: 'Total Debit', value: fmtAmt(totalDr), color: COLORS.negative },
     { label: 'Total Credit', value: fmtAmt(totalCr), color: COLORS.positive },
     { label: 'Transactions', value: String(SOURCE_TXNS.length), color: COLORS.textSecondary },
