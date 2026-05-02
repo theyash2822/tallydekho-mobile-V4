@@ -6,6 +6,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
+import { getVouchers } from '../../src/services/api';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
 // ── Mock Data ────────────────────────────────────────────────────────────────
@@ -62,6 +65,31 @@ type FilterType = 'all' | 'inflow' | 'outflow';
 // ── Component ────────────────────────────────────────────────────────────────
 export default function CashRegisterScreen() {
   const router = useRouter();
+  const { company, selectedFY } = useAuth();
+  const companyGuid = company?.guid;
+  const [liveItems, setLiveItems] = useState<TxItem[]>([]);
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!companyGuid) return;
+    const fyParams = selectedFY ? { from: selectedFY.startDate, to: selectedFY.endDate } : {};
+    getVouchers(companyGuid, undefined, { ...fyParams, limit: '500' }).then((res: any) => {
+      const rows = (res?.data ?? []).filter((r: any) =>
+        ['Payment','Receipt','Contra'].some(t => (r.voucher_type||'').toLowerCase().includes(t.toLowerCase()))
+      );
+      setLiveItems(rows.map((r: any) => ({
+        id: r.guid || String(r.id),
+        voucher: r.voucher_number || '',
+        desc: r.narration || r.party_name || '',
+        date: r.date || '',
+        amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`,
+        positive: (r.voucher_type||'').toLowerCase().includes('receipt'),
+        type: (r.voucher_type||'').toLowerCase().includes('payment') ? 'payment' as TxType :
+              (r.voucher_type||'').toLowerCase().includes('receipt') ? 'receipt' as TxType : 'contra' as TxType,
+      })));
+    }).catch((err: any) => setApiError(err?.message || 'Failed to load'));
+  }, [companyGuid, selectedFY?.startDate]);
+
   const [search,       setSearch]       = useState('');
   const [typeFilter,   setTypeFilter]   = useState<FilterType>('all');
   const [showTypeMenu, setShowTypeMenu] = useState(false);
@@ -80,7 +108,7 @@ export default function CashRegisterScreen() {
     return `${fmt(dateFrom)} \u2013 ${fmt(dateTo)}`;
   };
 
-  const allItems = MONTH_GROUPS.flatMap(g => g.items);
+  const allItems = liveItems;
   const inflowTotal  = allItems.filter(i => i.positive).reduce((a, i) => a + parseFloat(i.amount.replace(/[^0-9.]/g, '')), 0);
   const outflowTotal = allItems.filter(i => !i.positive).reduce((a, i) => a + parseFloat(i.amount.replace(/[^0-9.]/g, '')), 0);
 
@@ -94,7 +122,21 @@ export default function CashRegisterScreen() {
     setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
 
-  const filteredGroups = MONTH_GROUPS
+    // Group live items by month dynamically
+  const monthMap: Record<string, MonthGroup> = {};
+  liveItems.forEach(item => {
+    const d = item.date;
+    let key = 'other', label = 'Other';
+    if (d && d.includes('-') && d.length === 10) {
+      const [y, m] = d.split('-');
+      key = `${y}-${m}`;
+      label = new Date(+y, +m - 1, 1).toLocaleString('en-IN', { month: 'short', year: 'numeric' });
+    }
+    if (!monthMap[key]) monthMap[key] = { id: key, label, items: [] };
+    monthMap[key].items.push(item);
+  });
+  const filteredGroups = Object.values(monthMap)
+    .sort((a, b) => b.id.localeCompare(a.id))
     .map(g => ({
       ...g,
       items: g.items.filter(item => {

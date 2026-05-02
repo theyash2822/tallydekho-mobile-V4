@@ -9,6 +9,8 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal, { isoToDMY } from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
+import { getVouchers } from '../../src/services/api';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 
 const AMBER    = '#A89060';
 const AMBER_BG = '#FDF9F4';
@@ -79,6 +81,34 @@ export default function ExpenseRegisterScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { selectedFY } = useAuth();
+  const companyGuid = company?.guid;
+  const [liveItems, setLiveItems] = useState<TxItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!companyGuid) return;
+    setIsLoading(true);
+    setApiError(null);
+    const fyParams = selectedFY ? { from: selectedFY.startDate, to: selectedFY.endDate } : {};
+    // Expenses = payment + receipt + contra vouchers
+    getVouchers(companyGuid, undefined, { ...fyParams, limit: '500' }).then((res: any) => {
+      const rows = (res?.data ?? []).filter((r: any) =>
+        ['Payment','Receipt','Contra'].some(t => (r.voucher_type||'').toLowerCase().includes(t.toLowerCase()))
+      );
+      setLiveItems(rows.map((r: any) => ({
+        id: r.guid || String(r.id),
+        voucher: r.voucher_number || '',
+        desc: r.narration || r.party_name || r.voucher_type || '',
+        date: r.date || '',
+        amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`,
+        positive: (r.voucher_type||'').toLowerCase().includes('receipt'),
+        type: (r.voucher_type||'').toLowerCase().includes('payment') ? 'payment' :
+              (r.voucher_type||'').toLowerCase().includes('receipt') ? 'receipt' : 'contra',
+      })));
+    }).catch((err: any) => setApiError(err?.message || 'Failed to load'))
+      .finally(() => setIsLoading(false));
+  }, [companyGuid, selectedFY?.startDate]);
   const fyFrom = selectedFY?.startDate ?? '';
   const fyTo   = selectedFY?.endDate   ?? '';
 
@@ -106,7 +136,7 @@ export default function ExpenseRegisterScreen() {
   const isSelecting = selected.length > 0;
   const toggleSelect = (id: string) =>
     setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
-  const allItems   = MONTH_GROUPS.flatMap(g => g.items);
+  const allItems   = liveItems;
   const selectAll  = () => setSelected(allItems.map(i => i.id));
   const clearSelect = () => setSelected([]);
 
@@ -139,7 +169,7 @@ export default function ExpenseRegisterScreen() {
       return matchSearch && matchStatus && matchType;
     });
 
-  const allFiltered = MONTH_GROUPS.flatMap(g => filterItems(g.items));
+  const allFiltered = filterItems(liveItems);
   const totalAmt = allFiltered.reduce((sum, i) => {
     const n = parseFloat(i.amount.replace(/[₹,]/g, ''));
     return sum + (isNaN(n) ? 0 : n);
@@ -272,10 +302,31 @@ export default function ExpenseRegisterScreen() {
         <Text style={s.sectionHeading}>List Of Expenses</Text>
 
         {/* ── Collapsible Month Sections ────────────────────────────── */}
-        {MONTH_GROUPS.map(group => {
-          const groupItems = filterItems(group.items);
+        {(() => {
+          // Group live items by month
+          const monthMap: Record<string, { id: string; label: string; items: TxItem[] }> = {};
+          filterItems(liveItems).forEach(item => {
+            const d = item.date;
+            let key = 'other', label = 'Other';
+            if (d && d.includes('-') && d.length === 10) {
+              const [y, m] = d.split('-');
+              key = `${y}-${m}`;
+              label = new Date(+y, +m - 1, 1).toLocaleString('en-IN', { month: 'short', year: 'numeric' });
+            }
+            if (!monthMap[key]) monthMap[key] = { id: key, label, items: [] };
+            monthMap[key].items.push(item);
+          });
+          const displayGroups = Object.values(monthMap).sort((a, b) => b.id.localeCompare(a.id));
+          if (displayGroups.length === 0 && !isLoading) return (
+            <View style={{ alignItems: 'center', padding: 40, gap: 8 }}>
+              <Ionicons name="receipt-outline" size={40} color={COLORS.textTertiary} />
+              <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textSecondary }}>No expenses found</Text>
+            </View>
+          );
+          return displayGroups.map(group => {
+          const groupItems = group.items;
           if (groupItems.length === 0) return null;
-          const isOpen = expanded.has(group.id);
+          const isOpen = expanded.has(group.id) !== false;
 
           return (
             <View key={group.id} style={s.monthSection}>
@@ -340,7 +391,8 @@ export default function ExpenseRegisterScreen() {
               )}
             </View>
           );
-        })}
+          });
+        })()}
 
       </ScrollView>
 
