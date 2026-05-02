@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Share, Alert,
 } from 'react-native';
@@ -6,20 +6,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
+import { getVouchers } from '../../src/services/api';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 
-// ── Mock invoice data (shared across all tax registers) ────────────────────────
-const REGISTER_INVOICES = [
-  { id: 'r1',  invoiceNo: 'INV-993',  type: 'Sales',    party: 'Netaji Industries',   date: '25 July 2025', amount: '18,000',  status: 'Pending' },
-  { id: 'r2',  invoiceNo: 'INV-918',  type: 'Sales',    party: 'ABC Corporation',     date: '24 July 2025', amount: '12,000',  status: 'Paid'    },
-  { id: 'r3',  invoiceNo: 'INV-321',  type: 'Purchase', party: 'XYZ Limited',         date: '23 July 2025', amount: '11,200',  status: 'Late'    },
-  { id: 'r4',  invoiceNo: 'INV-245',  type: 'Sales',    party: 'Tech Solutions Ltd',  date: '22 July 2025', amount: '15,500',  status: 'Pending' },
-  { id: 'r5',  invoiceNo: 'INV-789',  type: 'Sales',    party: 'Global Industries',   date: '21 July 2025', amount: '9,800',   status: 'Paid'    },
-  { id: 'r6',  invoiceNo: 'INV-654',  type: 'Purchase', party: 'Prime Services',      date: '20 July 2025', amount: '22,400',  status: 'Pending' },
-  { id: 'r7',  invoiceNo: 'INV-432',  type: 'Sales',    party: 'Innovation Corp',     date: '19 July 2025', amount: '8,600',   status: 'Late'    },
-  { id: 'r8',  invoiceNo: 'INV-310',  type: 'Purchase', party: 'Metro Traders',       date: '18 July 2025', amount: '31,000',  status: 'Paid'    },
-  { id: 'r9',  invoiceNo: 'INV-208',  type: 'Sales',    party: 'Sunrise Exports',     date: '17 July 2025', amount: '14,700',  status: 'Pending' },
-  { id: 'r10', invoiceNo: 'INV-101',  type: 'Sales',    party: 'Apex Distributors',   date: '16 July 2025', amount: '7,200',   status: 'Paid'    },
-];
+// Invoice data loaded from API
 
 const STATUS_CFG: Record<string, { bg: string; text: string; icon: string }> = {
   Paid:    { bg: '#F0FBF4', text: '#2D7D46', icon: 'checkmark-circle' },
@@ -33,6 +24,34 @@ export default function OtherTaxesRegisterScreen() {
   const params  = useLocalSearchParams<{ tab?: string }>();
   const tabName = params.tab ?? 'TDS';
 
+  const { company, selectedFY } = useAuth();
+  const companyGuid = company?.guid;
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!companyGuid) return;
+    setIsLoading(true);
+    const fyParams = selectedFY ? { from: selectedFY.startDate, to: selectedFY.endDate } : {};
+    getVouchers(companyGuid, undefined, { ...fyParams, limit: '200' }).then((res: any) => {
+      const rows = (res?.data ?? []).filter((r: any) =>
+        (r.voucher_type||'').toLowerCase().includes('sales') ||
+        (r.voucher_type||'').toLowerCase().includes('purchase')
+      );
+      setInvoices(rows.map((r: any) => ({
+        id: r.guid || String(r.id),
+        invoiceNo: r.voucher_number || '',
+        type: (r.voucher_type||'').toLowerCase().includes('purchase') ? 'Purchase' : 'Sales',
+        party: r.party_name || '—',
+        date: r.date || '',
+        amount: Math.abs(+r.amount||0).toLocaleString('en-IN'),
+        status: r.is_cancelled ? 'Cancelled' : 'Posted',
+      })));
+    }).catch((err: any) => setApiError(err?.message || 'Failed'))
+      .finally(() => setIsLoading(false));
+  }, [companyGuid, selectedFY?.startDate]);
+
   const [selected,    setSelected]    = useState<string[]>([]);
   const selectMode = selected.length > 0;
 
@@ -42,7 +61,7 @@ export default function OtherTaxesRegisterScreen() {
   const cancelSelect = () => setSelected([]);
 
   const handleExport = async () => {
-    const lines = REGISTER_INVOICES
+    const lines = invoices
       .filter(i => selected.includes(i.id))
       .map(i => `${i.invoiceNo}  ${i.party}  \u20b9${i.amount}  ${i.status}`);
     try {
@@ -70,7 +89,7 @@ export default function OtherTaxesRegisterScreen() {
         {selectMode ? (
           <TouchableOpacity
             style={s.headerTextBtn}
-            onPress={() => setSelected(REGISTER_INVOICES.map(i => i.id))}
+            onPress={() => setSelected(invoices.map(i => i.id))}
             activeOpacity={0.7}
           >
             <Text style={s.headerTextBtnTxt}>Select All</Text>
@@ -82,7 +101,7 @@ export default function OtherTaxesRegisterScreen() {
 
       {/* Invoice List */}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listContent}>
-        {REGISTER_INVOICES.map((item) => {
+        {invoices.map((item) => {
           const cfg        = STATUS_CFG[item.status] ?? STATUS_CFG.Pending;
           const isSelected = selected.includes(item.id);
 

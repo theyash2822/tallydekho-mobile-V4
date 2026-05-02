@@ -65,13 +65,7 @@ const TAB_STATS: Record<TaxTab, { label: string; value: string }[]> = {
 };
 
 // Late Challans (shared mock)
-const LATE_CHALLANS = [
-  { id: 'INV-993', amount: '\u20b918K',   due: 'Due 05 Jul' },
-  { id: 'INV-918', amount: '\u20b912K',   due: 'Due 09 Jul' },
-  { id: 'INV-321', amount: '\u20b911.2K', due: 'Due 09 Jul' },
-  { id: 'INV-245', amount: '\u20b915.5K', due: 'Due 09 Jul' },
-  { id: 'INV-789', amount: '\u20b99.8K',  due: 'Due 09 Jul' },
-];
+const LATE_CHALLANS: any[] = []; // TODO: fetch from TDS/GST API when available
 
 // Recent Activity (shared mock)
 const RECENT_ACTIVITY = [
@@ -150,8 +144,15 @@ export default function OtherTaxesScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={s.scrollContent}
       >
-        {/* Stats 2×2 card */}
-        <View style={s.statsCard}>
+        {/* Stats 2×2 card — only shown when data is available */}
+        {stats.length === 0 && (
+          <View style={{ alignItems: 'center', padding: 32, gap: 8 }}>
+            <Ionicons name="receipt-outline" size={40} color={COLORS.textTertiary} />
+            <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary }}>No {activeTab} data available</Text>
+            <Text style={{ fontSize: 12, color: COLORS.textTertiary, textAlign: 'center' }}>{activeTab} details are not tracked in the current Tally sync</Text>
+          </View>
+        )}
+        {stats.length >= 4 && (<View style={s.statsCard}>
           {/* Row 1 */}
           <View style={s.statsRow}>
             <View style={s.statCell}>
@@ -178,7 +179,7 @@ export default function OtherTaxesScreen() {
               <Text style={s.statValue}>{stats[3].value}</Text>
             </View>
           </View>
-        </View>
+        </View>)}
 
         {/* Top 5 Late Challans */}
         <View style={s.card}>
