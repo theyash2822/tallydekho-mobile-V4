@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { DocumentType, VoucherDocument } from '../../src/types/document';
 
 import DocumentPreviewPage from '../../src/components/document/DocumentPreviewPage';
 import { getVoucherById } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { TX_TO_DOC_TYPE, DOC_TYPE_CONFIG, amountInWords } from '../../src/utils/documentHelpers';
-import { getDocument } from '../../src/data/mockDocuments';
 import { COLORS } from '../../src/constants/colors';
 
 // Convert ISO '2025-04-04' → '04 Apr 2025'
@@ -112,31 +112,31 @@ export default function DocumentPage() {
   const { company } = useAuth();
   const companyGuid = company?.guid;
   const companyName = company?.name || '';
+  const router = useRouter();
 
   const [doc, setDoc] = useState<VoucherDocument | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!params.id || !companyGuid) {
-      setDoc(getDocument(params.id, params.type as DocumentType | undefined));
-      setLoading(false);
-      return;
-    }
+    if (!params.id) { setLoading(false); setError('No document ID provided'); return; }
+    if (!companyGuid) { setLoading(false); setError('Company not loaded — please wait'); return; }
     setLoading(true);
+    setError(null);
     getVoucherById(companyGuid, params.id)
       .then((res: any) => {
         if (res?.data?.voucher) {
           try {
             setDoc(apiVoucherToDoc(res.data, companyName));
-          } catch (e) {
-            setDoc(getDocument(params.id, params.type as DocumentType | undefined));
+          } catch (e: any) {
+            setError('Failed to parse document: ' + (e?.message || 'unknown error'));
           }
         } else {
-          setDoc(getDocument(params.id, params.type as DocumentType | undefined));
+          setError('Document not found');
         }
       })
-      .catch(() => {
-        setDoc(getDocument(params.id, params.type as DocumentType | undefined));
+      .catch((err: any) => {
+        setError(err?.message || 'Failed to load document');
       })
       .finally(() => setLoading(false));
   }, [params.id, companyGuid]);
@@ -149,8 +149,24 @@ export default function DocumentPage() {
     );
   }
 
-  const finalDoc = doc || getDocument(params.id, params.type as DocumentType | undefined);
-  return <DocumentPreviewPage document={finalDoc} />;
+  if (error || !doc) {
+    return (
+      <View style={s.loader}>
+        <Ionicons name="document-text-outline" size={48} color={COLORS.textTertiary} />
+        <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textSecondary, marginTop: 12, textAlign: 'center' }}>
+          {error || 'Document not found'}
+        </Text>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={{ marginTop: 16, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: COLORS.brandPrimary, borderRadius: 8 }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return <DocumentPreviewPage document={doc} />;
 }
 
 const s = StyleSheet.create({
