@@ -647,14 +647,15 @@ function FooterBlock({ doc }: { doc: VoucherDocument }) {
 function ActionBar({ doc }: { doc: VoucherDocument }) {
   const insets = useSafeAreaInsets();
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
 
   const handleShare = async () => {
-    // Generate PDF and open system share sheet (same as Download PDF button)
     try {
-      setPdfLoading(true);
+      setShareLoading(true);
       const html = generateDocumentHTML(doc);
       const { uri } = await Print.printToFileAsync({ html, base64: false });
-      setPdfLoading(false);
+      setShareLoading(false);
+      // Try expo-sharing first (opens native share sheet with PDF)
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
         await Sharing.shareAsync(uri, {
@@ -663,13 +664,11 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
           UTI: 'com.adobe.pdf',
         });
       } else {
-        await Share.share({
-          message: `${doc.documentTitle} – ${doc.documentNumber}\nDate: ${doc.date}\nTotal: ${formatCurrency(doc.totals.total)}`,
-          title: doc.documentNumber,
-        });
+        // iOS fallback: Share.share with url shares the file
+        await Share.share({ url: uri, title: doc.documentNumber });
       }
     } catch (_) {
-      setPdfLoading(false);
+      setShareLoading(false);
     }
   };
 
@@ -719,9 +718,11 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
 
   return (
     <View style={[ds.actionBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
-      <TouchableOpacity style={ds.actionBtn} onPress={handleShare} activeOpacity={0.75}>
-        <Ionicons name="share-outline" size={21} color={COLORS.white} />
-        <Text style={ds.actionBtnText}>Share</Text>
+      <TouchableOpacity style={ds.actionBtn} onPress={handleShare} activeOpacity={0.75} disabled={shareLoading}>
+        {shareLoading
+          ? <ActivityIndicator size="small" color={COLORS.white} />
+          : <Ionicons name="share-outline" size={21} color={COLORS.white} />}
+        <Text style={ds.actionBtnText}>{shareLoading ? 'Generating…' : 'Share PDF'}</Text>
       </TouchableOpacity>
 
       <View style={ds.actionSep} />
