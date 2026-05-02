@@ -174,7 +174,7 @@ export default function EWBComplianceScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [activeSeg,      setActiveSeg]      = useState<number | null>(null);
   const [activeBar,      setActiveBar]      = useState<number | null>(null);
-  const [totalBills,     setTotalBills]     = useState(318); // default mock
+  const [totalBills,     setTotalBills]     = useState(0); // loaded from API
 
   const isDateActive = fromDate.length > 0 && toDate.length > 0;
 

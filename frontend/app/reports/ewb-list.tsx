@@ -8,19 +8,7 @@ import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { getEWBList } from '../../src/services/api';
 
-// ── Mock Data ───────────────────────────────────────────────────────────────
-const ewbData = [
-  { id: 'e1',  ewbNo: 'EWB-220081', type: 'Outward', party: 'Netaji Industries',  route: 'Mumbai → Delhi',      date: '25 July 2025', amount: '3,60,000', status: 'Active'   },
-  { id: 'e2',  ewbNo: 'EWB-220080', type: 'Outward', party: 'ABC Corporation',    route: 'Delhi → Bangalore',   date: '24 July 2025', amount: '2,80,000', status: 'Expiring' },
-  { id: 'e3',  ewbNo: 'EWB-220079', type: 'Inward',  party: 'XYZ Limited',        route: 'Chennai → Mumbai',    date: '23 July 2025', amount: '1,95,000', status: 'Active'   },
-  { id: 'e4',  ewbNo: 'EWB-220078', type: 'Outward', party: 'Tech Solutions Ltd', route: 'Kolkata → Hyderabad', date: '22 July 2025', amount: '4,20,000', status: 'Expired'  },
-  { id: 'e5',  ewbNo: 'EWB-220077', type: 'Outward', party: 'Global Industries',  route: 'Pune → Chennai',      date: '21 July 2025', amount: '1,80,000', status: 'Active'   },
-  { id: 'e6',  ewbNo: 'EWB-220076', type: 'Inward',  party: 'Prime Services',     route: 'Surat → Ahmedabad',   date: '20 July 2025', amount: '3,20,000', status: 'Active'   },
-  { id: 'e7',  ewbNo: 'EWB-220075', type: 'Outward', party: 'Innovation Corp',    route: 'Jaipur → Lucknow',    date: '19 July 2025', amount: '2,75,000', status: 'Expired'  },
-  { id: 'e8',  ewbNo: 'EWB-220074', type: 'Inward',  party: 'Metro Traders',      route: 'Nagpur → Bhopal',     date: '18 July 2025', amount: '1,50,000', status: 'Active'   },
-  { id: 'e9',  ewbNo: 'EWB-220073', type: 'Outward', party: 'Sunrise Exports',    route: 'Kochi → Coimbatore',  date: '17 July 2025', amount: '5,10,000', status: 'Expiring' },
-  { id: 'e10', ewbNo: 'EWB-220072', type: 'Inward',  party: 'Apex Distributors',  route: 'Indore → Bhopal',     date: '16 July 2025', amount: '2,10,000', status: 'Active'   },
-];
+// Data loaded from API
 
 const STATUS_CFG: Record<string, { bg: string; text: string }> = {
   Active:   { bg: '#F0FBF4', text: '#2D7D46' },
@@ -112,6 +100,13 @@ export default function EWBListScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listContent}>
+        {ewbData.length === 0 && !loading && (
+          <View style={{ alignItems: 'center', padding: 48, gap: 12 }}>
+            <Ionicons name="document-text-outline" size=40 color={COLORS.textTertiary} />
+            <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary }}>No E-Way Bills found</Text>
+            <Text style={{ fontSize: 12, color: COLORS.textTertiary, textAlign: 'center' }}>This feature requires GSTIN-enabled company and valid E-Way Bill API credentials</Text>
+          </View>
+        )}
         {ewbData.map((item) => {
           const cfg = STATUS_CFG[item.status] ?? STATUS_CFG.Active;
           const isSelected = selected.includes(item.id);

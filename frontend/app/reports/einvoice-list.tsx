@@ -7,19 +7,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { getEInvoicePending, getEInvoiceGenerated } from '../../src/services/api';
 
-// ── Mock Data ───────────────────────────────────────────────────────────────
-const invoiceData = [
-  { id: 'i1',  irn: 'IRN-8a1b2c3d', invoiceNo: 'INV-30982', party: 'ABC Corporation',    date: '24 July 2025', amount: '2,80,000', status: 'Generated' },
-  { id: 'i2',  irn: 'IRN-9x2y3z4w', invoiceNo: 'INV-30981', party: 'Netaji Industries',  date: '24 July 2025', amount: '3,60,000', status: 'Pending'   },
-  { id: 'i3',  irn: 'IRN-5m6n7o8p', invoiceNo: 'INV-30980', party: 'XYZ Limited',        date: '23 July 2025', amount: '1,95,000', status: 'Generated' },
-  { id: 'i4',  irn: 'IRN-4q5r6s7t', invoiceNo: 'INV-30979', party: 'Tech Solutions Ltd', date: '22 July 2025', amount: '4,20,000', status: 'Error'     },
-  { id: 'i5',  irn: 'IRN-3u4v5w6x', invoiceNo: 'INV-30978', party: 'Global Industries',  date: '21 July 2025', amount: '1,80,000', status: 'Generated' },
-  { id: 'i6',  irn: 'IRN-2y3z4a5b', invoiceNo: 'INV-30977', party: 'Prime Services',     date: '20 July 2025', amount: '3,20,000', status: 'Cancelled' },
-  { id: 'i7',  irn: 'IRN-1c2d3e4f', invoiceNo: 'INV-30976', party: 'Innovation Corp',    date: '19 July 2025', amount: '2,75,000', status: 'Generated' },
-  { id: 'i8',  irn: 'IRN-0g1h2i3j', invoiceNo: 'INV-30975', party: 'Metro Traders',      date: '18 July 2025', amount: '1,50,000', status: 'Pending'   },
-  { id: 'i9',  irn: 'IRN-9k0l1m2n', invoiceNo: 'INV-30974', party: 'Sunrise Exports',    date: '17 July 2025', amount: '5,10,000', status: 'Generated' },
-  { id: 'i10', irn: 'IRN-8o9p0q1r', invoiceNo: 'INV-30973', party: 'Apex Distributors',  date: '16 July 2025', amount: '2,10,000', status: 'Error'     },
-];
+// Data loaded from API
 
 const STATUS_CFG: Record<string, { bg: string; text: string; icon: string }> = {
   Generated: { bg: '#F0FBF4', text: '#2D7D46', icon: 'checkmark-circle' },
@@ -108,6 +96,13 @@ export default function EInvoiceListScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listContent}>
+        {invoiceData.length === 0 && !loading && (
+          <View style={{ alignItems: 'center', padding: 48, gap: 12 }}>
+            <Ionicons name="receipt-outline" size=40 color={COLORS.textTertiary} />
+            <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary }}>No E-Invoices found</Text>
+            <Text style={{ fontSize: 12, color: COLORS.textTertiary, textAlign: 'center' }}>This feature requires GSTIN-enabled company and valid E-Way Bill API credentials</Text>
+          </View>
+        )}
         {invoiceData.map((item) => {
           const cfg = STATUS_CFG[item.status] ?? STATUS_CFG.Generated;
           const isSelected = selected.includes(item.id);

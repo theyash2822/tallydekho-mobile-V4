@@ -37,7 +37,8 @@ async function request<T>(
   return data;
 }
 
-const get  = <T>(endpoint: string, auth = true) => request<T>('GET', endpoint, undefined, auth);
+const get      = <T>(endpoint: string, auth = true) => request<T>('GET', endpoint, undefined, auth);
+const tallyGet = <T>(endpoint: string, auth = true) => request<T>('GET', endpoint, undefined, auth, 'tally');
 const post = <T>(endpoint: string, body: object, auth = true) => request<T>('POST', endpoint, body, auth);
 const patch = <T>(endpoint: string, body: object) => request<T>('PATCH', endpoint, body);
 const tallyPost = <T>(endpoint: string, body: object) => request<T>('POST', endpoint, body, true, 'tally');
@@ -252,8 +253,8 @@ export const getCompanyCapabilities = (companyGuid?: string) => get<any>(withCom
 // AUDIT TRAIL
 // ══════════════════════════════════════════════════════════════
 
-export const getAuditTrail    = (companyGuid?: string) => get<any>(withCompany('/audit-trail', companyGuid));
-export const retryAuditEntry  = (id: string) => post<any>(`/audit-trail/${id}/retry`, {});
+export const getAuditTrail    = (companyGuid?: string) => tallyGet<any>(withCompany('/audit-trail', companyGuid));
+export const retryAuditEntry  = (id: string) => tallyPost<any>(`/audit-trail/${id}/retry`, {});
 export const getMyEntries     = (companyGuid?: string, params?: any) => get<any>(withCompany('/vouchers/my-entries', companyGuid, params));
 
 // ══════════════════════════════════════════════════════════════
