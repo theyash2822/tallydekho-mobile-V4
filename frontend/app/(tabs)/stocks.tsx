@@ -78,7 +78,7 @@ export default function StocksDashboard() {
   const loadStock = () => {
     if (!companyGuid) return;
     setApiError(null);
-    getStocks(companyGuid).then((res: any) => {
+    getStocks(companyGuid, { limit: '1000' }).then((res: any) => {
       const s = res?.data?.summary;
       if (s) setStockSummary({
         totalValue:    s.total_value    ?? '0',

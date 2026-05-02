@@ -162,7 +162,7 @@ export default function TotalStockScreen() {
 
   useEffect(() => {
     if (!companyGuid) return;
-    getStocks(companyGuid).then((res: any) => {
+    getStocks(companyGuid, { limit: '1000' }).then((res: any) => {
       const items = res?.data?.items ?? [];
       if (items.length) setLiveStocks(items.map((r: any) => ({
         id: r.guid || String(r.id),
