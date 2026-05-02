@@ -28,7 +28,7 @@ export default function PurchaseOrdersScreen() {
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
   }, [companyGuid]);
 
-  const filtered = (liveData.length > 0 ? liveData : data.orders).filter(o => !search || o.vendor.toLowerCase().includes(search.toLowerCase()) || o.id.toLowerCase().includes(search.toLowerCase()));
+  const filtered = (liveData.length > 0 ? liveData : liveData).filter(o => !search || o.vendor.toLowerCase().includes(search.toLowerCase()) || o.id.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <SafeAreaView style={s.safe}>

@@ -28,7 +28,7 @@ export default function DebitNotesScreen() {
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
   }, [companyGuid]);
 
-  const filtered = (liveData.length > 0 ? liveData : data.notes).filter(n => !search || n.vendor.toLowerCase().includes(search.toLowerCase()) || n.id.toLowerCase().includes(search.toLowerCase()));
+  const filtered = (liveData.length > 0 ? liveData : liveData).filter(n => !search || n.vendor.toLowerCase().includes(search.toLowerCase()) || n.id.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <SafeAreaView style={s.safe}>

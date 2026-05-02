@@ -520,7 +520,7 @@ export default function LoansODsScreen() {
                     <Text style={s.loanMaturity}>Maturity: {card.maturity}</Text>
                   </View>
                   <View style={s.loanStatsRow}>
-                    {card.stats.map((st, i) => (
+                    {card.stats.map((st: any, i: number) => (
                       <View key={i} style={s.loanStat}>
                         <Text style={s.loanStatLabel}>{st.label}</Text>
                         <Text style={s.loanStatValue}>{st.value}</Text>

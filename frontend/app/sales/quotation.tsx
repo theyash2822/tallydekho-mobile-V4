@@ -28,7 +28,7 @@ export default function QuotationsScreen() {
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
   }, [companyGuid]);
 
-      const filtered = (liveData.length > 0 ? liveData : data.items).filter(o => !search || o.party.toLowerCase().includes(search.toLowerCase()) || o.id.toLowerCase().includes(search.toLowerCase()));
+      const filtered = (liveData).filter((o: any) => !search || o.party.toLowerCase().includes(search.toLowerCase()) || o.id.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <SafeAreaView style={s.safe}>

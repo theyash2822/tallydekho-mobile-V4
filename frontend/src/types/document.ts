@@ -53,6 +53,7 @@ export interface LedgerEntry {
   id: string;
   particulars: string;
   narration?: string;
+  reference?: string;
   debit?: number;
   credit?: number;
 }
@@ -133,6 +134,7 @@ export interface VoucherDocument {
   totals: Totals;
   paymentDetails?: PaymentDetails;
   narration?: string;
+  reference?: string;
   terms?: string;
   footerInfo?: FooterInfo;
 }

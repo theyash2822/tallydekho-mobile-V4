@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Dimensions, Share, Alert,
@@ -11,6 +11,8 @@ import DateRangePickerModal, { isoToDMY } from '../../src/components/DateRangePi
 import { useAuth } from '../../src/context/AuthContext';
 import { getVouchers } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+
+type TxItem = { id: string; voucher: string; desc: string; date: string; amount: string; positive: boolean; type: 'payment' | 'receipt' | 'contra'; party?: string; time?: string; status?: string; };
 
 const AMBER    = '#A89060';
 const AMBER_BG = '#FDF9F4';
@@ -42,9 +44,9 @@ type MonthGroup = { id: string; label: string; items: ExpenseItem[] };
 export default function ExpenseRegisterScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { selectedFY } = useAuth();
+  const { selectedFY, company } = useAuth();
   const companyGuid = company?.guid;
-  const [liveItems, setLiveItems] = useState<TxItem[]>([]);
+  const [liveItems, setLiveItems] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -266,7 +268,7 @@ export default function ExpenseRegisterScreen() {
         {/* ── Collapsible Month Sections ────────────────────────────── */}
         {(() => {
           // Group live items by month
-          const monthMap: Record<string, { id: string; label: string; items: TxItem[] }> = {};
+          const monthMap: Record<string, { id: string; label: string; items: any[] }> = {};
           filterItems(liveItems).forEach(item => {
             const d = item.date;
             let key = 'other', label = 'Other';

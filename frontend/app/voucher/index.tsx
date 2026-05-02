@@ -69,7 +69,7 @@ export default function VouchersHubScreen() {
         {/* Recent */}
         <View style={s.secRow}><Text style={s.secTitle}>Recent Activity</Text></View>
         <View style={s.listCard}>
-          {[{ ...null, type: 'Payment' }, { ...null, type: 'Receipt' }].map((item, idx) => (
+          {[{ id: null, party: '', date: '', amount: '₹0', type: 'Payment' }, { id: null, party: '', date: '', amount: '₹0', type: 'Receipt' }].map((item, idx) => (
             <View key={item.id}>
               <TouchableOpacity
                 style={s.listRow}
