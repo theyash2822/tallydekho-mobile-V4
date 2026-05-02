@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { ErrorBanner } from '../src/components/ApiStateViews';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,7 +8,6 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../src/constants/colors';
 
 import { useAuth } from '../src/context/AuthContext';
 import { getNotifications } from '../src/services/api';
-import { MOCK_NOTIFICATIONS } from '../src/data/mockData';
 
 const TYPE_CONFIG: Record<string, { icon: any; color: string; bg: string }> = {
   warning: { icon: 'warning-outline',          color: COLORS.warning,  bg: COLORS.warningBg },
@@ -24,17 +23,23 @@ export default function NotificationsScreen() {
   const { company } = useAuth();
   const companyGuid = company?.guid;
   const [apiError, setApiError] = useState<string | null>(null);
-  const [notifications, setNotifications] = useState(
-    MOCK_NOTIFICATIONS.map(n => ({ ...n, read: false }))
-  );
+  const [isLoading, setIsLoading] = useState(true);
+  const [notifications, setNotifications] = useState<any[]>([]);
 
   useEffect(() => {
-    getNotifications(companyGuid).then((res: any) => {
-      const data = res?.data ?? res;
-      if (Array.isArray(data) && data.length > 0) {
-        setNotifications(data.map((n: any) => ({ ...n, read: n.read ?? false })));
-      }
-    }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load notifications'); });
+    setIsLoading(true);
+    getNotifications(companyGuid)
+      .then((res: any) => {
+        const data = res?.data ?? res;
+        if (Array.isArray(data)) {
+          setNotifications(data.map((n: any) => ({ ...n, read: n.read ?? false })));
+        }
+      })
+      .catch((err: any) => {
+        console.error('[API Error]', err?.message);
+        setApiError(err?.message || 'Failed to load notifications');
+      })
+      .finally(() => setIsLoading(false));
   }, [companyGuid]);
 
   const markAllRead = () => setNotifications(ns => ns.map(n => ({ ...n, read: true })));
@@ -58,11 +63,15 @@ export default function NotificationsScreen() {
 
       {apiError && <ErrorBanner message={apiError} />}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32, paddingTop: SPACING.sm }}>
-        {notifications.length === 0 ? (
+        {isLoading ? (
+          <View style={s.empty}>
+            <ActivityIndicator size="large" color={COLORS.brandPrimary} />
+          </View>
+        ) : notifications.length === 0 ? (
           <View style={s.empty}>
             <Ionicons name="notifications-off-outline" size={48} color={COLORS.textTertiary} />
-            <Text style={s.emptyTitle}>All caught up!</Text>
-            <Text style={s.emptySub}>No notifications right now.</Text>
+            <Text style={s.emptyTitle}>All caught up</Text>
+            <Text style={s.emptySub}>No new notifications</Text>
           </View>
         ) : (
           notifications.map(notif => {

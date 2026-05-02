@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Modal,
@@ -23,23 +23,9 @@ interface TxEntry {
   type: TxnType;
 }
 
-// ── Mock Data ─────────────────────────────────────────────────────────────────
-const WAREHOUSES = ['WH-001 Main', 'WH-002 Echo Depot', 'WH-003 Sierra Storage'];
-const TXN_TYPES: TxnType[] = ['Sales', 'Purchase', 'Transfer', 'Adjustment', 'Opening'];
+// Mock data removed — stock transaction history shown as empty state until API is built
+const WAREHOUSES: string[] = [];
 const VOUCHER_TYPES: VoucherType[] = ['Sales Invoice', 'Purchase Invoice', 'Credit Note', 'Debit Note'];
-
-const MOCK_TXN: TxEntry[] = [
-  { id: 't1',  sku: 'SKU-2987', item: 'Black JBL',       batch: '#BS-2407', txnId: 'TXN-10231', docRef: 'INV-8881', docType: 'Sales Invoice',   date: 'Dec 15, 2024', time: '14:23', qty: -50,  unitCost: '₹275',   balance: '₹12,000', value: '₹13,750',  warehouse: 'WH-002', postedBy: 'Rina Kusuma', note: '-',             type: 'Sales'    },
-  { id: 't2',  sku: 'SKU-2987', item: 'Black JBL',       batch: '#BS-2408', txnId: 'TXN-10232', docRef: 'PO-00124',  docType: 'Purchase Order',  date: 'Dec 14, 2024', time: '11:30', qty:  100, unitCost: '₹260',   balance: '₹28,000', value: '₹26,000',  warehouse: 'WH-001', postedBy: 'Amit Shah',   note: 'Restock',       type: 'Purchase' },
-  { id: 't3',  sku: 'SKU-2987', item: 'Black JBL',       batch: '#BS-2407', txnId: 'TXN-10233', docRef: 'ST-00082',  docType: 'Transfer',        date: 'Dec 13, 2024', time: '09:15', qty: -30,  unitCost: '₹275',   balance: '₹8,250',  value: '₹9,100',   warehouse: 'WH-002', postedBy: 'Dev Sharma',  note: 'To WH-001',    type: 'Transfer' },
-  { id: 't4',  sku: 'SKU-2987', item: 'Black JBL',       batch: '#BS-2409', txnId: 'TXN-10234', docRef: 'INV-8879',  docType: 'Sales Invoice',   date: 'Dec 12, 2024', time: '16:45', qty: -20,  unitCost: '₹275',   balance: '₹5,500',  value: '₹6,200',   warehouse: 'WH-001', postedBy: 'Rina Kusuma', note: '-',             type: 'Sales'    },
-  { id: 't5',  sku: 'SKU-3104', item: 'USB-C Hub',       batch: '#UC-1102', txnId: 'TXN-10235', docRef: 'PO-00125',  docType: 'Purchase Order',  date: 'Dec 11, 2024', time: '10:00', qty:  200, unitCost: '₹1,200', balance: '₹2,40,000', value: '₹2,20,000', warehouse: 'WH-001', postedBy: 'Priya Nair',  note: 'Q4 restock',   type: 'Purchase' },
-  { id: 't6',  sku: 'SKU-3104', item: 'USB-C Hub',       batch: '#UC-1102', txnId: 'TXN-10236', docRef: 'INV-8882',  docType: 'Sales Invoice',   date: 'Dec 10, 2024', time: '13:20', qty: -80,  unitCost: '₹1,200', balance: '₹96,000', value: '₹1,08,000', warehouse: 'WH-001', postedBy: 'Rina Kusuma', note: '-',             type: 'Sales'    },
-  { id: 't7',  sku: 'SKU-4211', item: 'Wireless Mouse',  batch: '#WM-0541', txnId: 'TXN-10237', docRef: 'ADJ-00011', docType: 'Adjustment',      date: 'Dec 09, 2024', time: '08:00', qty:   15, unitCost: '₹850',   balance: '₹12,750', value: '₹11,900',  warehouse: 'WH-003', postedBy: 'Dev Sharma',  note: 'Cycle count',  type: 'Adjustment'},
-  { id: 't8',  sku: 'SKU-4211', item: 'Wireless Mouse',  batch: '#WM-0542', txnId: 'TXN-10238', docRef: 'PO-00126',  docType: 'Purchase Order',  date: 'Dec 08, 2024', time: '14:50', qty:  150, unitCost: '₹820',   balance: '₹1,23,000', value: '₹1,08,000', warehouse: 'WH-003', postedBy: 'Amit Shah',   note: '-',            type: 'Purchase' },
-  { id: 't9',  sku: 'SKU-4211', item: 'Wireless Mouse',  batch: '#WM-0541', txnId: 'TXN-10239', docRef: 'INV-8883',  docType: 'Sales Invoice',   date: 'Dec 07, 2024', time: '11:10', qty: -60,  unitCost: '₹850',   balance: '₹51,000', value: '₹58,500',  warehouse: 'WH-003', postedBy: 'Rina Kusuma', note: '-',             type: 'Sales'    },
-  { id: 't10', sku: 'SKU-1055', item: 'Laptop 15" Pro',  batch: '#LP-0010', txnId: 'TXN-10240', docRef: 'OB-00001',  docType: 'Opening Balance', date: 'Apr 01, 2024', time: '00:00', qty:   12, unitCost: '₹82,000', balance: '₹9,84,000', value: '₹9,84,000', warehouse: 'WH-001', postedBy: 'Admin',       note: 'Opening',      type: 'Opening'  },
-];
 
 const TYPE_COLOR: Record<TxnType, string> = {
   Sales: '#A89060', Purchase: COLORS.textPrimary, Transfer: '#7C3AED', Adjustment: '#D97706', Opening: '#3A3A3A',
@@ -138,8 +124,10 @@ export default function StockLedgerScreen() {
     return `${p[0]} ${m[parseInt(p[1])-1]} ${p[2]}`;
   };
 
+  const [txnData] = useState<TxEntry[]>([]);
+
   // Filtered transactions
-  const filtered = useMemo(() => MOCK_TXN.filter(t => {
+  const filtered = useMemo(() => txnData.filter(t => {
     if (selWH.size       > 0 && ![...selWH].some(w => t.warehouse.includes(w.split(' ')[0]))) return false;
     if (selVouchers.size > 0 && !selVouchers.has(t.docType as VoucherType))                  return false;
     if (itemSearch  && !t.item.toLowerCase().includes(itemSearch.toLowerCase()))              return false;
@@ -413,7 +401,10 @@ export default function StockLedgerScreen() {
         {filtered.length === 0 && (
           <View style={s.empty}>
             <Ionicons name="document-outline" size={48} color={COLORS.borderDefault} />
-            <Text style={s.emptyTxt}>No transactions found</Text>
+            <Text style={s.emptyTxt}>Stock transaction history not available</Text>
+            <Text style={{ fontSize: 13, color: COLORS.textTertiary, textAlign: 'center', paddingHorizontal: 24 }}>
+              Full stock movement history will be available in a future update
+            </Text>
           </View>
         )}
         <View style={{ height: 100 }} />

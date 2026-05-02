@@ -252,6 +252,7 @@ export const getCompanyCapabilities = (companyGuid?: string) => get<any>(withCom
 
 export const getAuditTrail    = (companyGuid?: string) => get<any>(withCompany('/audit-trail', companyGuid));
 export const retryAuditEntry  = (id: string) => post<any>(`/audit-trail/${id}/retry`, {});
+export const getMyEntries     = (companyGuid?: string, params?: any) => get<any>(withCompany('/vouchers/my-entries', companyGuid, params));
 
 // ══════════════════════════════════════════════════════════════
 // AI INSIGHTS

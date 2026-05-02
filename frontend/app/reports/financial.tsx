@@ -10,43 +10,7 @@ import DateRangePickerModal, { fmtDMY } from '../../src/components/DateRangePick
 import { getFullFinancialReport } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 
-// ── Mock Data (Tally Prime format) ─────────────────────────────────────────
-const MOCK_PL = {
-  openingStock:     150000,
-  closingStock:    7400000,
-  purchase:         150000,
-  sales:           7400000,
-  directExpense:    150000,
-  indirectExpense: 7400000,
-  indirectIncome:   150000,
-  directIncome:    7400000,
-  grossProfit:      150000,
-  grossLoss:       7400000,
-  netProfit:        150000,
-  netLoss:         7400000,
-};
-
-const MOCK_LIABILITIES = [
-  { name: 'Capital Account',        opening: 500000, current: 520000 },
-  { name: 'Current Liability',      opening: 120000, current: 100000 },
-  { name: 'Loan Liabilities',       opening: 300000, current: 280000 },
-  { name: 'Miscellaneous Expenses', opening:  25000, current:  30000 },
-  { name: 'Profit & Loss',          opening:      0, current:  40000 },
-];
-const MOCK_TOTAL_LIAB = 970000;
-
-const MOCK_ASSETS = [
-  { name: 'Fixed Asset',                   amount: 600000 },
-  { name: 'Current Assets',                amount: 250000 },
-  { name: 'Investments',                   amount:  50000 },
-  { name: 'Difference in Opening Balance', amount:  70000 },
-];
-const MOCK_TOTAL_ASSETS = 970000;
-
-const MOCK_TRIAL = [
-  { left: 'Current Assets',  leftAmt: 250000, right: 'Miscellaneous Expenses', rightAmt:  15000 },
-  { left: 'Sales Account',   leftAmt: 480000, right: 'Purchase Accounts',      rightAmt: 320000 },
-];
+// (Mock data removed — all data comes from real API)
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function fmtInr(n: number): string {
@@ -172,10 +136,10 @@ const plg = StyleSheet.create({
 // ══════════════════════════════════════════════════════════════════════════════
 function BalanceSheetSection({ bs }: { bs?: any }) {
   const [tab, setTab] = useState<'liability' | 'assets'>('liability');
-  const liabilities = bs?.liabilities ?? MOCK_LIABILITIES.map(r => ({ name: r.name, amount: r.current }));
-  const assets      = bs?.assets      ?? MOCK_ASSETS;
-  const totalLiab   = bs?.totalLiabilities ?? MOCK_TOTAL_LIAB;
-  const totalAssets = bs?.totalAssets      ?? MOCK_TOTAL_ASSETS;
+  const liabilities = bs?.liabilities ?? [];
+  const assets      = bs?.assets      ?? [];
+  const totalLiab   = bs?.totalLiabilities ?? 0;
+  const totalAssets = bs?.totalAssets      ?? 0;
 
   return (
     <View>
@@ -415,7 +379,17 @@ export default function FinancialReportScreen() {
           open={openSection === 'pl'}
           onToggle={toggleSection}
         >
-          {loading ? <ActivityIndicator color={COLORS.brandPrimary} style={{ padding: 20 }} /> : <PLCardGrid pl={reportData?.pl} />}
+          {loading ? (
+            <ActivityIndicator color={COLORS.brandPrimary} style={{ padding: 20 }} />
+          ) : !reportData?.pl ? (
+            <View style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
+              <Text style={{ fontSize: 14, color: COLORS.textSecondary, textAlign: 'center' }}>
+                No financial data — sync your Tally data first
+              </Text>
+            </View>
+          ) : (
+            <PLCardGrid pl={reportData?.pl} />
+          )}
         </AccSection>
 
         {/* 2. Balance Sheet */}
@@ -425,7 +399,17 @@ export default function FinancialReportScreen() {
           open={openSection === 'bs'}
           onToggle={toggleSection}
         >
-          {loading ? <ActivityIndicator color={COLORS.brandPrimary} style={{ padding: 20 }} /> : <BalanceSheetSection bs={reportData?.bs} />}
+          {loading ? (
+            <ActivityIndicator color={COLORS.brandPrimary} style={{ padding: 20 }} />
+          ) : !reportData?.bs ? (
+            <View style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
+              <Text style={{ fontSize: 14, color: COLORS.textSecondary, textAlign: 'center' }}>
+                No financial data — sync your Tally data first
+              </Text>
+            </View>
+          ) : (
+            <BalanceSheetSection bs={reportData?.bs} />
+          )}
         </AccSection>
 
         {/* 3. Trial Balance */}

@@ -13,7 +13,7 @@ import { getGSTDetail, getCompanyCapabilities } from '../../src/services/api';
 // ── GSTR Tabs ─────────────────────────────────────────────────────────────────
 const GSTR_TABS = ['GSTR-1', 'GSTR-2A', 'GSTR-9', 'GSTR-4', 'GSTR-3B', 'GSTR-6'];
 
-// ── Mock Invoice Data ─────────────────────────────────────────────────────────
+// (Mock invoice data removed — real API only)
 interface Invoice {
   id: string;
   invoiceNo: string;
@@ -25,19 +25,6 @@ interface Invoice {
   matched: boolean;
   gstr: string[];
 }
-
-const MOCK_INVOICES: Invoice[] = [
-  { id: '1',  invoiceNo: 'XYD-0909A', type: 'Sales',    party: 'Netaji Industries',  date: '25 July 2025', dateObj: new Date(2025, 6, 25), amount: '₹3,60,000', matched: false, gstr: ['GSTR-1', 'GSTR-6'] },
-  { id: '2',  invoiceNo: 'XYD-0908B', type: 'Sales',    party: 'ABC Corporation',    date: '24 July 2025', dateObj: new Date(2025, 6, 24), amount: '₹2,80,000', matched: true,  gstr: ['GSTR-1', 'GSTR-2A', 'GSTR-6'] },
-  { id: '3',  invoiceNo: 'XYD-0907C', type: 'Sales',    party: 'XYZ Limited',        date: '23 July 2025', dateObj: new Date(2025, 6, 23), amount: '₹1,95,000', matched: true,  gstr: ['GSTR-1', 'GSTR-2A', 'GSTR-9', 'GSTR-6'] },
-  { id: '4',  invoiceNo: 'XYD-0906D', type: 'Sales',    party: 'Tech Solutions Ltd', date: '22 July 2025', dateObj: new Date(2025, 6, 22), amount: '₹4,20,000', matched: false, gstr: ['GSTR-1', 'GSTR-3B'] },
-  { id: '5',  invoiceNo: 'XYD-0905E', type: 'Sales',    party: 'Global Industries',  date: '21 July 2025', dateObj: new Date(2025, 6, 21), amount: '₹1,80,000', matched: true,  gstr: ['GSTR-1', 'GSTR-2A', 'GSTR-9', 'GSTR-4'] },
-  { id: '6',  invoiceNo: 'XYD-0904F', type: 'Sales',    party: 'Prime Services',     date: '20 July 2025', dateObj: new Date(2025, 6, 20), amount: '₹3,20,000', matched: true,  gstr: ['GSTR-2A', 'GSTR-3B'] },
-  { id: '7',  invoiceNo: 'XYD-0903G', type: 'Purchase', party: 'Innovation Corp',    date: '19 July 2025', dateObj: new Date(2025, 6, 19), amount: '₹2,75,000', matched: false, gstr: ['GSTR-2A', 'GSTR-4', 'GSTR-3B', 'GSTR-6'] },
-  { id: '8',  invoiceNo: 'XYD-0902H', type: 'Purchase', party: 'Metro Traders',      date: '18 July 2025', dateObj: new Date(2025, 6, 18), amount: '₹1,50,000', matched: true,  gstr: ['GSTR-9', 'GSTR-4'] },
-  { id: '9',  invoiceNo: 'XYD-0901I', type: 'Sales',    party: 'Sunrise Exports',    date: '17 July 2025', dateObj: new Date(2025, 6, 17), amount: '₹5,10,000', matched: false, gstr: ['GSTR-1', 'GSTR-3B', 'GSTR-6'] },
-  { id: '10', invoiceNo: 'XYD-0900J', type: 'Sales',    party: 'Apex Distributors',  date: '16 July 2025', dateObj: new Date(2025, 6, 16), amount: '₹2,10,000', matched: true,  gstr: ['GSTR-9', 'GSTR-4', 'GSTR-3B'] },
-];
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function GSTScreen() {
@@ -74,7 +61,7 @@ export default function GSTScreen() {
   }, [companyGuid, activeTab]);
 
   const isDateActive = fromDate.length > 0 && toDate.length > 0;
-  const sourceInvoices = liveInvoices.length > 0 ? liveInvoices : MOCK_INVOICES;
+  const sourceInvoices = liveInvoices;
 
   // Filter by tab + date range
   const filteredInvoices = sourceInvoices.filter((inv: any) => {

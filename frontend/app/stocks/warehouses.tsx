@@ -1,22 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-
-// ─── DATA ───────────────────────────────────────────────────────────────
-
-export const WAREHOUSES = [
-  { id: 'WH01', name: 'Mumbai Central',  location: 'Mumbai, MH',    racks: 24, rackLabel: '24C', utilization: 82, skus: 124, value: '₹28,50,000', manager: 'Ramesh K.',  qty: 4820 },
-  { id: 'WH02', name: 'Delhi Hub',       location: 'New Delhi, DL', racks: 18, rackLabel: '18C', utilization: 64, skus: 89,  value: '₹19,20,000', manager: 'Sunita P.',  qty: 3600 },
-  { id: 'WH03', name: 'Bangalore South', location: 'Bengaluru, KA', racks: 16, rackLabel: '16C', utilization: 71, skus: 67,  value: '₹14,80,000', manager: 'Arjun S.',   qty: 2485 },
-  { id: 'WH04', name: 'Chennai Port',    location: 'Chennai, TN',   racks: 12, rackLabel: '12C', utilization: 45, skus: 42,  value: '₹9,60,000',  manager: 'Meena R.',   qty: 1900 },
-  { id: 'WH05', name: 'Kolkata East',    location: 'Kolkata, WB',   racks: 20, rackLabel: '20C', utilization: 58, skus: 55,  value: '₹11,40,000', manager: 'Dipesh G.',  qty: 2320 },
-];
+import { getWarehouses } from '../../src/services/api';
+import { useAuth } from '../../src/context/AuthContext';
 
 // ─── RING CHART (outside screen component) ───────────────────────────────────────
 
@@ -35,7 +27,7 @@ function RingChart({ pct, size = 72 }: { pct: number; size?: number }) {
         cx={cx} cy={cy} r={r}
         fill="none" stroke={COLORS.borderDefault} strokeWidth={11}
       />
-      {/* Progress arc — transform string works reliably on both web & native */}
+      {/* Progress arc */}
       <Circle
         cx={cx} cy={cy} r={r}
         fill="none"
@@ -46,7 +38,7 @@ function RingChart({ pct, size = 72 }: { pct: number; size?: number }) {
         strokeLinecap="round"
         transform={`rotate(-90, ${cx}, ${cy})`}
       />
-      {/* Percentage — vertically centred inside the ring */}
+      {/* Percentage */}
       <SvgText
         x={cx} y={cy + 2}
         textAnchor="middle" fontSize="15" fontWeight="800"
@@ -69,18 +61,45 @@ function RingChart({ pct, size = 72 }: { pct: number; size?: number }) {
 
 export default function WarehousesScreen() {
   const router = useRouter();
-  const [query, setQuery] = useState('');
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
 
-  const filtered = WAREHOUSES.filter(
+  const [query, setQuery] = useState('');
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!companyGuid) return;
+    setIsLoading(true);
+    setError(null);
+    getWarehouses(companyGuid)
+      .then((res: any) => {
+        const rows = res?.data ?? (Array.isArray(res) ? res : []);
+        setWarehouses(rows.map((r: any) => ({
+          id: r.id || r.guid || r.name,
+          name: r.name,
+          location: r.address || r.parent || '',
+          utilization: 0,
+          parent: r.parent || '',
+        })));
+      })
+      .catch((err: any) => {
+        console.error('[Warehouses]', err?.message);
+        setError(err?.message || 'Failed to load warehouses');
+      })
+      .finally(() => setIsLoading(false));
+  }, [companyGuid]);
+
+  const filtered = warehouses.filter(
     w =>
       w.name.toLowerCase().includes(query.toLowerCase()) ||
       w.location.toLowerCase().includes(query.toLowerCase()),
   );
 
-  const totalSkus = WAREHOUSES.reduce((s, w) => s + w.skus, 0);
-  const avgUtil   = Math.round(
-    WAREHOUSES.reduce((s, w) => s + w.utilization, 0) / WAREHOUSES.length,
-  );
+  const avgUtil = warehouses.length > 0
+    ? Math.round(warehouses.reduce((s, w) => s + w.utilization, 0) / warehouses.length)
+    : 0;
   const utilColor = avgUtil >= 85 ? COLORS.negative : '#A89060';
 
   return (
@@ -103,9 +122,9 @@ export default function WarehousesScreen() {
       {/* Summary strip */}
       <View style={styles.summaryRow}>
         {[
-          { label: 'Warehouses',      value: `${WAREHOUSES.length}`,  clr: COLORS.textPrimary },
+          { label: 'Warehouses',      value: `${warehouses.length}`,  clr: COLORS.textPrimary },
           { label: 'Avg Utilization', value: `${avgUtil}%`,           clr: utilColor          },
-          { label: 'Total SKUs',      value: `${totalSkus}`,          clr: COLORS.textPrimary },
+          { label: 'Locations',       value: `${warehouses.length}`,  clr: COLORS.textPrimary },
         ].map((s, i) => (
           <View key={i} style={styles.summaryItem}>
             <Text style={[styles.summaryVal, { color: s.clr }]}>{s.value}</Text>
@@ -136,60 +155,81 @@ export default function WarehousesScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        {filtered.map(wh => (
-          <TouchableOpacity
-            key={wh.id}
-            style={styles.whCard}
-            activeOpacity={0.8}
-            onPress={() => router.push(`/stocks/warehouse-detail?id=${wh.id}` as any)}
-          >
-            {/* Main row */}
-            <View style={styles.cardMain}>
-              {/* Icon */}
-              <View style={styles.whIcon}>
-                <Ionicons name="business-outline" size={20} color={COLORS.white} />
+        {isLoading ? (
+          <View style={styles.centerBox}>
+            <ActivityIndicator size="large" color={COLORS.brandPrimary} />
+            <Text style={styles.centerTxt}>Loading warehouses...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.centerBox}>
+            <Ionicons name="alert-circle-outline" size={48} color={COLORS.negative} />
+            <Text style={styles.centerTxt}>{error}</Text>
+          </View>
+        ) : filtered.length === 0 ? (
+          <View style={styles.centerBox}>
+            <Ionicons name="business-outline" size={48} color={COLORS.textTertiary} />
+            <Text style={styles.emptyTitle}>No warehouses found</Text>
+            <Text style={styles.emptySubtitle}>
+              {warehouses.length === 0
+                ? 'Sync your Tally data to see godowns here'
+                : 'No results match your search'}
+            </Text>
+          </View>
+        ) : (
+          filtered.map(wh => (
+            <TouchableOpacity
+              key={wh.id}
+              style={styles.whCard}
+              activeOpacity={0.8}
+              onPress={() => router.push(`/stocks/warehouse-detail?id=${wh.id}` as any)}
+            >
+              {/* Main row */}
+              <View style={styles.cardMain}>
+                {/* Icon */}
+                <View style={styles.whIcon}>
+                  <Ionicons name="business-outline" size={20} color={COLORS.white} />
+                </View>
+
+                {/* Info */}
+                <View style={styles.whInfo}>
+                  <Text style={styles.whName}>{wh.name}</Text>
+                  {wh.location ? (
+                    <View style={styles.locationRow}>
+                      <Ionicons name="location-outline" size={11} color={COLORS.textTertiary} />
+                      <Text style={styles.locationTxt}>{wh.location}</Text>
+                    </View>
+                  ) : null}
+                  {wh.parent ? (
+                    <View style={styles.badgeRow}>
+                      <View style={styles.badge}>
+                        <Ionicons name="git-branch-outline" size={9} color={COLORS.textSecondary} />
+                        <Text style={styles.badgeTxt}>{wh.parent}</Text>
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+
+                {/* Ring chart */}
+                <RingChart pct={wh.utilization} />
               </View>
 
-              {/* Info */}
-              <View style={styles.whInfo}>
-                <Text style={styles.whName}>{wh.name}</Text>
-                <View style={styles.locationRow}>
-                  <Ionicons name="location-outline" size={11} color={COLORS.textTertiary} />
-                  <Text style={styles.locationTxt}>{wh.location}</Text>
-                </View>
-                <View style={styles.badgeRow}>
-                  <View style={styles.badge}>
-                    <Ionicons name="grid-outline" size={9} color={COLORS.textSecondary} />
-                    <Text style={styles.badgeTxt}>#Racks · {wh.rackLabel}</Text>
-                  </View>
-                  <View style={styles.badge}>
-                    <Ionicons name="cube-outline" size={9} color={COLORS.textSecondary} />
-                    <Text style={styles.badgeTxt}>{wh.skus} SKUs</Text>
-                  </View>
-                </View>
+              {/* Footer */}
+              <View style={styles.cardFooter}>
+                <Ionicons name="cube-outline" size={11} color={COLORS.textTertiary} />
+                <Text style={styles.managerTxt}>Tally Godown</Text>
+                <View style={{ flex: 1 }} />
+                <Ionicons name="chevron-forward" size={13} color={COLORS.textTertiary} />
               </View>
-
-              {/* Ring chart */}
-              <RingChart pct={wh.utilization} />
-            </View>
-
-            {/* Footer */}
-            <View style={styles.cardFooter}>
-              <Ionicons name="person-outline" size={11} color={COLORS.textTertiary} />
-              <Text style={styles.managerTxt}>{wh.manager}</Text>
-              <View style={{ flex: 1 }} />
-              <Text style={styles.valueTxt}>{wh.value}</Text>
-              <Ionicons name="chevron-forward" size={13} color={COLORS.textTertiary} />
-            </View>
-          </TouchableOpacity>
-        ))}
+            </TouchableOpacity>
+          ))
+        )}
         <View style={{ height: 80 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// ─── STYLES ───────────────────────────────────────────────────────────────
+// ─── STYLES ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: COLORS.pageBg },
@@ -228,6 +268,11 @@ const styles = StyleSheet.create({
 
   scroll:  { flex: 1 },
   content: { padding: SPACING.md, gap: 10 },
+
+  centerBox: { alignItems: 'center', paddingVertical: 60, gap: 12 },
+  centerTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, textAlign: 'center' },
+  emptyTitle: { fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
+  emptySubtitle: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, textAlign: 'center', paddingHorizontal: 24 },
 
   whCard:   {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,

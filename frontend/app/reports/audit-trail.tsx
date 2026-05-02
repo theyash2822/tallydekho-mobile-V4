@@ -10,7 +10,7 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
-import { getVouchers } from '../../src/services/api';
+import { getVouchers, getMyEntries } from '../../src/services/api';
 
 const SCREEN_W = Dimensions.get('window').width;
 const AMBER = '#A89060';
@@ -218,16 +218,19 @@ export default function AuditTrailScreen() {
     if (!companyGuid) return;
     setIsLoading(true);
     setApiError(null);
-    getVouchers(companyGuid, undefined, { from: fromDate, to: toDate, limit: 500 })
+    const fetchFn = activeTab === 'myentries'
+      ? getMyEntries(companyGuid, { from: fromDate, to: toDate, limit: '500' })
+      : getVouchers(companyGuid, undefined, { from: fromDate, to: toDate, limit: 500 });
+    fetchFn
       .then((res: any) => {
         const rows = res?.data ?? [];
-        setApiEntries(rows.map(mapApiRow));
+        setApiEntries(rows.map((r: any) => ({ ...mapApiRow(r), isMine: activeTab === 'myentries' })));
       })
       .catch((err: any) => {
         setApiError(err?.message || 'Failed to load vouchers');
       })
       .finally(() => setIsLoading(false));
-  }, [companyGuid, fromDate, toDate]);
+  }, [companyGuid, fromDate, toDate, activeTab]);
 
   const isDateActive = fromDate.length > 0 && toDate.length > 0;
   // Both tabs use the same live data
@@ -509,7 +512,16 @@ export default function AuditTrailScreen() {
             {grouped.length === 0 ? (
               <View style={s.empty}>
                 <Ionicons name="document-text-outline" size={48} color={COLORS.borderStrong} />
-                <Text style={s.emptyTxt}>No entries found</Text>
+                <Text style={s.emptyTxt}>
+                  {activeTab === 'myentries'
+                    ? 'No entries yet'
+                    : 'No entries found'}
+                </Text>
+                {activeTab === 'myentries' && (
+                  <Text style={{ fontSize: 13, color: COLORS.textTertiary, textAlign: 'center', paddingHorizontal: 24, marginTop: 4 }}>
+                    Create your first voucher from the sales or purchase screens.
+                  </Text>
+                )}
               </View>
             ) : grouped.map(([month, entries]) => (
               <View key={month}>
