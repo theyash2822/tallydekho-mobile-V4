@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
+import { useSettings } from '../../src/context/SettingsContext';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type SelectOption = { label: string; value: string };
@@ -73,6 +74,7 @@ function SectionHeader({ icon, title, color, bg }: {
 // ── Main Screen ───────────────────────────────────────────────────────────
 export default function PreferencesScreen() {
   const router = useRouter();
+  const { settings, updateSettings } = useSettings();
 
   // Language & Region
   const [language, setLanguage]   = useState('en');
@@ -80,14 +82,14 @@ export default function PreferencesScreen() {
   const [timeFormat, setTimeFmt]  = useState('12h');
 
   // Display
-  const [theme, setTheme]         = useState('light');
+  const [theme, setTheme]         = useState(settings.theme || 'light');
   const [textSize, setTextSize]   = useState('normal');
 
   // Number & Currency
-  const [numFormat, setNumFormat] = useState('indian');
+  const [numFormat, setNumFormat] = useState(settings.number_format === 'Indian' ? 'indian' : 'intl');
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
-  const [decimals, setDecimals]   = useState('2');
+  const [decimals, setDecimals]   = useState(String(settings.decimal_places ?? 2));
 
   // Voucher Defaults
   const [gstType, setGstType]     = useState('regular');
@@ -99,20 +101,32 @@ export default function PreferencesScreen() {
   const [offline, setOffline]     = useState(false);
   const [analytics, setAnalytics] = useState(true);
 
-  // Home Screen
-  const [autoScrollCarousel, setAutoScrollCarousel] = useState(true);
+  // Home Screen — driven by SettingsContext (no AsyncStorage needed)
+  const autoScrollCarousel = settings.kpi_autoscroll;
 
-  // Load persisted carousel preference on mount
-  useEffect(() => {
-    AsyncStorage.getItem('autoScrollCarousel').then(val => {
-      if (val !== null) setAutoScrollCarousel(val !== 'false');
+  const handleAutoscrollToggle = async (value: boolean) => {
+    await updateSettings({ kpi_autoscroll: value });
+    markDirty();
+  };
+
+  const handleThemeChange = async (value: string) => {
+    setTheme(value);
+    await updateSettings({ theme: value });
+    markDirty();
+  };
+
+  const handleSave = async () => {
+    await updateSettings({
+      theme,
+      number_format: numFormat === 'indian' ? 'Indian' : 'International',
+      decimal_places: parseInt(decimals, 10) || 2,
     });
-  }, []);
-
-  const handleSave = () => {
-    Alert.alert('✓ Preferences Saved', 'Your preferences have been updated successfully.', [
-      { text: 'OK', onPress: () => router.back() },
-    ]);
+    setIsDirty(false);
+    Toast.show({
+      type: 'success',
+      text1: 'Preferences Saved',
+      text2: 'Your preferences have been updated.',
+    });
   };
 
   return (
@@ -173,11 +187,11 @@ export default function PreferencesScreen() {
           <OptionRow
             label="Theme"
             selected={theme}
-            onSelect={setTheme}
+            onSelect={handleThemeChange}
             options={[
               { label: '☀️ Light', value: 'light' },
               { label: '🌙 Dark', value: 'dark' },
-              { label: '⚙️ System', value: 'system' },
+              { label: '⚙️ Auto', value: 'auto' },
             ]}
           />
           <View style={s.divider} />
@@ -251,6 +265,18 @@ export default function PreferencesScreen() {
             sub="Show narration/note in all forms"
             value={showNarration}
             onChange={setNarr}
+          />
+        </View>
+
+        {/* ─── Home Screen ──────────────────────────────────────── */}
+        <SectionHeader icon="home-outline" title="Home Screen" color="#0891B2" bg="#ECFEFF" />
+        <View style={s.card}>
+          <ToggleRow
+            icon="play-circle-outline"
+            label="KPI Auto-Scroll"
+            sub="Automatically scroll through KPI cards"
+            value={autoScrollCarousel}
+            onChange={handleAutoscrollToggle}
           />
         </View>
 

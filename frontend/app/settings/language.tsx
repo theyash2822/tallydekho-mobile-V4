@@ -7,20 +7,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useSettings } from '../../src/context/SettingsContext';
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 const LANGUAGES = [
-  { value: 'en', label: 'English',   native: 'English'    },
-  { value: 'hi', label: 'Hindi',     native: 'हिन्दी'     },
-  { value: 'gu', label: 'Gujarati',  native: 'ગુજરાતી'    },
-  { value: 'mr', label: 'Marathi',   native: 'मराठी'      },
-  { value: 'ta', label: 'Tamil',     native: 'தமிழ்'      },
-  { value: 'te', label: 'Telugu',    native: 'తెలుగు'     },
-  { value: 'kn', label: 'Kannada',   native: 'ಕನ್ನಡ'      },
-  { value: 'pa', label: 'Punjabi',   native: 'ਪੰਜਾਬੀ'    },
-  { value: 'bn', label: 'Bengali',   native: 'বাংলা'      },
-  { value: 'ml', label: 'Malayalam', native: 'മലയാളം'    },
-  { value: 'or', label: 'Odia',      native: 'ଓଡ଼ିଆ'      },
+  { value: 'English',   label: 'English',   native: 'English'    },
+  { value: 'Hindi',     label: 'Hindi',     native: 'हिन्दी'     },
+  { value: 'Gujarati',  label: 'Gujarati',  native: 'ગુજરાતી'    },
+  { value: 'Marathi',   label: 'Marathi',   native: 'मराठी'      },
+  { value: 'Tamil',     label: 'Tamil',     native: 'தமிழ்'      },
+  { value: 'Telugu',    label: 'Telugu',    native: 'తెలుగు'     },
+  { value: 'Kannada',   label: 'Kannada',   native: 'ಕನ್ನಡ'      },
+  { value: 'Punjabi',   label: 'Punjabi',   native: 'ਪੰਜਾਬੀ'    },
+  { value: 'Bengali',   label: 'Bengali',   native: 'বাংলা'      },
+  { value: 'Malayalam', label: 'Malayalam', native: 'മലയാളം'    },
+  { value: 'Odia',      label: 'Odia',      native: 'ଓଡ଼ିଆ'      },
 ];
 
 type TzOption = { value: string; label: string; offset: string };
@@ -166,7 +167,8 @@ type ActivePicker = 'language' | 'country' | 'timezone' | 'weekday' | null;
 
 export default function LanguageRegionScreen() {
   const router = useRouter();
-  const [lang,       setLang]       = useState('en');
+  const { settings, updateSettings } = useSettings();
+  const [lang,       setLang]       = useState(settings.language || 'English');
   const [country,    setCountry]    = useState('India');
   const [timezone,   setTimezone]   = useState('UTC+05:30 · Asia/Kolkata');
   const [weekday,    setWeekday]    = useState('Monday');
@@ -183,7 +185,19 @@ export default function LanguageRegionScreen() {
     if (tzs.length > 0) setTimezone(tzs[0].value);
   };
 
-  const handleSave = () => {
+  const handleLangSelect = async (selected: string) => {
+    setLang(selected);
+    setIsDirty(true);
+    await updateSettings({ language: selected });
+    Toast.show({
+      type: 'success',
+      text1: 'Language Updated',
+      text2: `Language set to ${selected}`,
+    });
+  };
+
+  const handleSave = async () => {
+    await updateSettings({ language: lang });
     Toast.show({
       type: 'success',
       text1: 'Settings Saved',
@@ -271,7 +285,7 @@ export default function LanguageRegionScreen() {
         title="Select Language"
         items={langItems}
         selected={lang}
-        onSelect={setLang}
+        onSelect={handleLangSelect}
         onClose={() => setPicker(null)}
       />
       <PickerSheet

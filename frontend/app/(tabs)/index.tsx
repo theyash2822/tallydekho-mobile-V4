@@ -8,8 +8,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
+import { useSettings } from '../../src/context/SettingsContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import ShimmerPlaceholder, { KPICardSkeleton, MetricCardSkeleton, ActivityRowSkeleton, CardSkeleton } from '../../src/components/ShimmerPlaceholder';
 
@@ -65,10 +65,11 @@ export default function HomeScreen() {
   const micOpacity = useRef(new Animated.Value(0.7)).current;
   const micTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // KPI Carousel
+  // KPI Carousel — driven by SettingsContext (no AsyncStorage race condition)
+  const { settings } = useSettings();
+  const autoScrollCarousel = settings.kpi_autoscroll;
   const kpiRef  = useRef<FlatList>(null);
   const [kpiIdx, setKpiIdx] = useState(0);
-  const [autoScrollCarousel, setAutoScrollCarousel] = useState(true);
 
   useEffect(() => {
     if (!autoScrollCarousel) return;
@@ -94,12 +95,6 @@ export default function HomeScreen() {
     );
   }, [searchQuery, activity]);
 
-  // ── Auto-scroll preference ──────────────────────────────────────────────
-  useEffect(() => {
-    AsyncStorage.getItem('autoScrollCarousel').then(val => {
-      setAutoScrollCarousel(val === null ? true : val !== 'false');
-    });
-  }, []);
 
   // ── Data loading ─────────────────────────────────────────────────────────
   const [isLoading, setIsLoading] = useState(true);

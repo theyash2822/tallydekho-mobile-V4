@@ -265,3 +265,10 @@ export const getMyEntries     = (companyGuid?: string, params?: any) => get<any>
 
 export const getAIInsights = (companyGuid?: string, from?: string, to?: string) =>
   get<any>(withCompany('/ai/insights', companyGuid, from && to ? { from, to } : {}));
+
+// ════════════════════════════════════════════════════════════
+// USER SETTINGS
+// ════════════════════════════════════════════════════════════
+
+export const getUserSettings    = () => get<any>('/auth/user-settings');
+export const updateUserSettings = (data: any) => patch<any>('/auth/user-settings', data);

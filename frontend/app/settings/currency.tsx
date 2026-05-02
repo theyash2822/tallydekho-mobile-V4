@@ -7,6 +7,26 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useSettings } from '../../src/context/SettingsContext';
+
+// Map internal keys to SettingsContext values
+const DATE_TO_CONTEXT: Record<string, string> = {
+  dmy: 'DD/MM/YYYY',
+  dmy2: 'DD/MM/YYYY',
+  mdy: 'MM/DD/YYYY',
+  ymd: 'YYYY-MM-DD',
+};
+const DATE_FROM_CONTEXT: Record<string, string> = {
+  'DD/MM/YYYY': 'dmy',
+  'MM/DD/YYYY': 'mdy',
+  'YYYY-MM-DD': 'ymd',
+};
+const NUM_TO_CONTEXT: Record<string, string> = {
+  in: 'Indian',
+  int: 'International',
+  eu: 'International',
+  fr: 'International',
+};
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 const CURRENCIES = [
@@ -168,19 +188,27 @@ type ActivePicker = 'currency' | 'dateStyle' | 'timeStyle' | 'thousands' | 'negS
 
 export default function CurrencyScreen() {
   const router   = useRouter();
-  const [currency,  setCurrency]  = useState('INR');
-  const [dateStyle, setDateStyle] = useState('dmy');
+  const { settings, updateSettings } = useSettings();
+  const [currency,  setCurrency]  = useState(settings.currency || 'INR');
+  const [dateStyle, setDateStyle] = useState(DATE_FROM_CONTEXT[settings.date_format] || 'dmy');
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
   const [timeStyle, setTimeStyle] = useState('24h');
-  const [thousands, setThousands] = useState('in');
+  const [thousands, setThousands] = useState(settings.number_format === 'International' ? 'int' : 'in');
   const [negStyle,  setNegStyle]  = useState('minus');
-  const [decimals,  setDecimals]  = useState(2);
+  const [decimals,  setDecimals]  = useState(settings.decimal_places ?? 2);
   const [picker,    setPicker]    = useState<ActivePicker>(null);
 
   const preview = buildPreview(currency, thousands, decimals);
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    await updateSettings({
+      currency,
+      number_format: NUM_TO_CONTEXT[thousands] || 'Indian',
+      date_format: DATE_TO_CONTEXT[dateStyle] || 'DD/MM/YYYY',
+      decimal_places: decimals,
+    });
+    setIsDirty(false);
     Toast.show({
       type: 'success',
       text1: 'Settings Saved',

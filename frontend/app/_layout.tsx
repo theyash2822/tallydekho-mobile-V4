@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
+import { SettingsProvider } from '../src/context/SettingsContext';
 import { getMe } from '../src/services/api';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
@@ -72,10 +73,12 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <AuthProvider>
-          <StatusBar style="dark" />
-          <RootNavigation />
-        </AuthProvider>
+        <SettingsProvider>
+          <AuthProvider>
+            <StatusBar style="dark" />
+            <RootNavigation />
+          </AuthProvider>
+        </SettingsProvider>
       </SafeAreaProvider>
       {/* Toast must be LAST so it renders above everything */}
       <Toast config={toastConfig} topOffset={56} />

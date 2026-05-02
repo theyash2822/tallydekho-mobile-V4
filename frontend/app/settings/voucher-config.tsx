@@ -7,6 +7,9 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
@@ -47,12 +50,20 @@ interface VConfig {
   qrEnabled: boolean;
   qrImage:   string | null;
   terms:     string[];
+  qrType:    'upi' | 'url' | 'bank'; // UPI ID, website URL, or bank details
+  qrUpiId:   string;
+  qrUrl:     string;
+  qrIfsc:    string;
+  qrAccount: string;
 }
 
 const makeDefault = (id: string): VConfig => ({
   format: 1, bank: 'hdfc', qrEnabled: false, qrImage: null,
   terms: DEFAULT_TERMS[id] ?? [],
+  qrType: 'upi', qrUpiId: '', qrUrl: '', qrIfsc: '', qrAccount: '',
 });
+
+const VOUCHER_CONFIG_KEY = 'voucherConfig';
 
 // ── Format Thumbnail (mini PDF preview) ───────────────────────────────────────
 function FormatThumb({ type }: { type: 1 | 2 | 3 }) {
@@ -191,6 +202,25 @@ export default function VoucherConfigScreen() {
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
   const [saving,        setSaving]        = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState<string | null>(null);
+
+  // Load persisted config on mount
+  useEffect(() => {
+    AsyncStorage.getItem(VOUCHER_CONFIG_KEY).then(stored => {
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          setConfigs(prev => {
+            const merged: Record<string, VConfig> = { ...prev };
+            Object.keys(parsed).forEach(k => {
+              if (merged[k]) merged[k] = { ...merged[k], ...parsed[k] };
+            });
+            return merged;
+          });
+        } catch {}
+      }
+    });
+  }, []);
 
   const update = (id: string, key: keyof VConfig, val: any) =>
     setConfigs(prev => ({ ...prev, [id]: { ...prev[id], [key]: val } }));
@@ -229,8 +259,52 @@ export default function VoucherConfigScreen() {
     }, 800);
   };
 
-  const handleSaveAll = () => {
+  const handleSaveAll = async () => {
+    await AsyncStorage.setItem(VOUCHER_CONFIG_KEY, JSON.stringify(configs));
+    setIsDirty(false);
     Toast.show({ type: 'success', text1: 'All Configurations Saved', text2: 'Voucher settings updated for all types.' });
+  };
+
+  const handlePDFPreview = async (id: string, label: string) => {
+    setPreviewLoading(id);
+    try {
+      const cfg = configs[id];
+      const termsHtml = cfg.terms.map(t => `<li>${t}</li>`).join('');
+      const html = `
+        <html><head><style>
+          body { font-family: Arial, sans-serif; padding: 24px; color: #222; }
+          h1 { color: #2D7D46; font-size: 20px; margin-bottom: 4px; }
+          .meta { color: #888; font-size: 12px; margin-bottom: 16px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+          th { background: #f0fbf4; text-align: left; padding: 8px; font-size: 12px; }
+          td { padding: 8px; border-bottom: 1px solid #eee; font-size: 12px; }
+          .total { font-weight: bold; font-size: 14px; }
+          .terms { font-size: 10px; color: #888; margin-top: 12px; }
+          .terms li { margin-bottom: 4px; }
+        </style></head><body>
+          <h1>${label} — Sample Preview</h1>
+          <div class="meta">Format ${cfg.format} &nbsp;|&nbsp; Date: ${new Date().toLocaleDateString('en-IN')}</div>
+          <table>
+            <tr><th>#</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr>
+            <tr><td>1</td><td>Sample Product A</td><td>10</td><td>₹500</td><td>₹5,000</td></tr>
+            <tr><td>2</td><td>Sample Product B</td><td>5</td><td>₹1,200</td><td>₹6,000</td></tr>
+            <tr><td colspan="4" class="total">Total</td><td class="total">₹11,000</td></tr>
+          </table>
+          ${cfg.terms.length > 0 ? `<div class="terms"><b>Terms & Conditions:</b><ul>${termsHtml}</ul></div>` : ''}
+        </body></html>
+      `;
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `${label} Preview` });
+      } else {
+        Toast.show({ type: 'info', text1: 'PDF Generated', text2: 'Sharing not available on this device.' });
+      }
+    } catch (err) {
+      Toast.show({ type: 'error', text1: 'PDF Error', text2: 'Could not generate preview.' });
+    } finally {
+      setPreviewLoading(null);
+    }
   };
 
   const bankLabel = (id: string) => BANK_OPTS.find(b => b.value === configs[id].bank)?.label || 'Select Bank';
@@ -315,6 +389,65 @@ export default function VoucherConfigScreen() {
                       <CustomToggle value={cfg.qrEnabled} onChange={v => update(vt.id, 'qrEnabled', v)} />
                     </View>
 
+                    {/* QR Type Selector */}
+                    {cfg.qrEnabled && (
+                      <View style={s.qrTypeRow}>
+                        {([{ v: 'upi', l: 'UPI ID' }, { v: 'url', l: 'Website' }, { v: 'bank', l: 'Bank Details' }] as const).map(opt => (
+                          <TouchableOpacity
+                            key={opt.v}
+                            style={[s.qrTypeChip, cfg.qrType === opt.v && s.qrTypeChipActive]}
+                            onPress={() => update(vt.id, 'qrType', opt.v)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[s.qrTypeChipTxt, cfg.qrType === opt.v && s.qrTypeChipTxtActive]}>{opt.l}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    {cfg.qrEnabled && cfg.qrType === 'upi' && (
+                      <TextInput
+                        style={s.termInput}
+                        value={cfg.qrUpiId}
+                        onChangeText={t => update(vt.id, 'qrUpiId', t)}
+                        placeholder="Enter UPI ID (e.g. business@upi)"
+                        placeholderTextColor={COLORS.textTertiary}
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                      />
+                    )}
+                    {cfg.qrEnabled && cfg.qrType === 'url' && (
+                      <TextInput
+                        style={s.termInput}
+                        value={cfg.qrUrl}
+                        onChangeText={t => update(vt.id, 'qrUrl', t)}
+                        placeholder="Enter website URL (e.g. https://yoursite.com)"
+                        placeholderTextColor={COLORS.textTertiary}
+                        autoCapitalize="none"
+                        keyboardType="url"
+                      />
+                    )}
+                    {cfg.qrEnabled && cfg.qrType === 'bank' && (
+                      <View style={{ gap: 8 }}>
+                        <TextInput
+                          style={s.termInput}
+                          value={cfg.qrIfsc}
+                          onChangeText={t => update(vt.id, 'qrIfsc', t.toUpperCase())}
+                          placeholder="IFSC Code (e.g. HDFC0001234)"
+                          placeholderTextColor={COLORS.textTertiary}
+                          autoCapitalize="characters"
+                        />
+                        <TextInput
+                          style={s.termInput}
+                          value={cfg.qrAccount}
+                          onChangeText={t => update(vt.id, 'qrAccount', t)}
+                          placeholder="Account Number"
+                          placeholderTextColor={COLORS.textTertiary}
+                          keyboardType="numeric"
+                        />
+                      </View>
+                    )}
+
                     {cfg.qrEnabled && (
                       cfg.qrImage ? (
                         /* QR Preview Card */
@@ -340,7 +473,7 @@ export default function VoucherConfigScreen() {
                         /* Upload Zone */
                         <TouchableOpacity style={s.uploadZone} onPress={() => handlePickQR(vt.id)} activeOpacity={0.7}>
                           <Ionicons name="cloud-upload-outline" size={28} color={COLORS.textTertiary} />
-                          <Text style={s.uploadMainTxt}>Upload QR Code</Text>
+                          <Text style={s.uploadMainTxt}>Upload QR Code Image</Text>
                           <Text style={s.uploadSubTxt}>Tap to select from gallery · PNG or JPG</Text>
                         </TouchableOpacity>
                       )
@@ -373,15 +506,26 @@ export default function VoucherConfigScreen() {
                     </TouchableOpacity>
                   </View>
 
-                  {/* ⑤ Use this format */}
-                  <TouchableOpacity
-                    style={[s.useBtn, isSaving && s.useBtnSaving]}
-                    onPress={() => handleUseFormat(vt.id, vt.label, cfg.format)}
-                    disabled={isSaving}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={s.useBtnTxt}>{isSaving ? 'Saving...' : 'Use this format'}</Text>
-                  </TouchableOpacity>
+                  {/* ⑤ PDF Preview + Use this format */}
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <TouchableOpacity
+                      style={s.previewBtn}
+                      onPress={() => handlePDFPreview(vt.id, vt.label)}
+                      disabled={previewLoading === vt.id}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="document-outline" size={16} color={COLORS.brandPrimary} />
+                      <Text style={s.previewBtnTxt}>{previewLoading === vt.id ? 'Generating...' : 'PDF Preview'}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[s.useBtn, { flex: 1 }, isSaving && s.useBtnSaving]}
+                      onPress={() => { handleUseFormat(vt.id, vt.label, cfg.format); markDirty(); }}
+                      disabled={isSaving}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={s.useBtnTxt}>{isSaving ? 'Saving...' : 'Use this format'}</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               )}
             </View>
@@ -390,7 +534,7 @@ export default function VoucherConfigScreen() {
 
         {/* Global Save */}
         {isDirty && (
-        <TouchableOpacity style={s.saveAllBtn} onPress={() => { handleSaveAll(); setIsDirty(false); }} activeOpacity={0.85}>
+        <TouchableOpacity style={s.saveAllBtn} onPress={handleSaveAll} activeOpacity={0.85}>
           <Text style={s.saveAllTxt}>Save All Configurations</Text>
         </TouchableOpacity>
         )}
@@ -471,6 +615,17 @@ const s = StyleSheet.create({
   termDeleteBtn: { padding: 4, marginTop: 4 },
   addTermBtn:    { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 2 },
   addTermTxt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.brandPrimary },
+
+  // QR type chips
+  qrTypeRow:        { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  qrTypeChip:       { paddingHorizontal: 14, paddingVertical: 7, borderRadius: RADIUS.full, borderWidth: 1.5, borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg },
+  qrTypeChipActive: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary },
+  qrTypeChipTxt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textSecondary },
+  qrTypeChipTxtActive: { color: COLORS.white, fontWeight: '700' },
+
+  // PDF Preview button
+  previewBtn:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, flex: 1, borderWidth: 1.5, borderColor: COLORS.brandPrimary, borderRadius: RADIUS.lg, paddingVertical: 14, backgroundColor: COLORS.cardBg },
+  previewBtnTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.brandPrimary },
 
   // Use this format / Save All
   useBtn:        { backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.lg, paddingVertical: 14, alignItems: 'center' },
