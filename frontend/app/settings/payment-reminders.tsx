@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Modal, FlatList, Animated,
+  TextInput, Modal, FlatList, Animated, Alert,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -626,19 +626,35 @@ export default function PaymentRemindersScreen() {
         const d = res.data.payment_reminders;
         if (d.threshold) setThreshold(String(d.threshold));
         if (d.reminders) setReminders(d.reminders);
+        if (d.template_name) setTemplateName(d.template_name);
+        if (d.whatsapp_enabled !== undefined) setWhatsappEnabled(d.whatsapp_enabled);
       }
     }).catch(() => {});
   }, []);
 
   const saveToBackend = async () => {
     try {
-      await updateAlertSettings({ payment_reminders: { threshold: parseFloat(threshold)||0, reminders } });
+      await updateAlertSettings({ payment_reminders: { threshold: parseFloat(threshold)||0, reminders, template_name: templateName, whatsapp_enabled: whatsappEnabled } });
     } catch {}
   };
 
   const router = useRouter();
   const [threshold, setThreshold] = useState('500');
   const [reminders, setReminders] = useState<Reminder[]>(DEFAULT_REMINDERS);
+  const [templateName, setTemplateName] = useState('payment reminder');
+  const [whatsappEnabled, setWhatsappEnabled] = useState(true);
+  const [testSending, setTestSending] = useState(false);
+
+  const sendTestReminder = async () => {
+    setTestSending(true);
+    try {
+      Alert.alert(
+        'Test Reminder',
+        'To test, go to any ledger with a phone number and tap the green WhatsApp "Remind" button. The reminder will be sent using your configured template.',
+        [{ text: 'Got it' }]
+      );
+    } finally { setTestSending(false); }
+  };
 
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
