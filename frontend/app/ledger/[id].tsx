@@ -13,7 +13,7 @@ import { TX_TO_DOC_TYPE } from '../../src/utils/documentHelpers';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useAuth } from '../../src/context/AuthContext';
-import { getLedgerDetail, getLedgerStatement } from '../../src/services/api';
+import { getLedgerDetail, getLedgerStatement, sendPaymentReminder } from '../../src/services/api';
 import DateRangePickerModal, { parseDMY } from '../../src/components/DateRangePickerModal';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -346,6 +346,40 @@ export default function LedgerDetailScreen() {
     cancelTxnSelect();
   };
 
+  // Send WhatsApp payment reminder to the ledger party
+  const handleSendReminder = async () => {
+    const phone = liveLedger?.phone || liveLedger?.mobile || '';
+    const digits = phone.replace(/[^0-9]/g, '');
+    if (!digits || digits.length < 10) {
+      Alert.alert('No Phone', 'This ledger does not have a phone number. Please add one in Tally.');
+      return;
+    }
+    const companyName = company?.name || '';
+    const amount = closingBal > 0 ? `₹${Math.round(closingBal).toLocaleString('en-IN')}` : '₹0';
+    Alert.alert(
+      'Send Payment Reminder',
+      `Send WhatsApp reminder to ${liveLedger?.name}?\nAmount: ${amount}\nPhone: +91 ${digits.slice(-10)}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send', onPress: async () => {
+            try {
+              await sendPaymentReminder(company?.guid || '', {
+                ledgerName: liveLedger?.name || '',
+                mobile: digits.slice(-10),
+                amount: closingBal,
+                contactNumber: companyName,
+              });
+              Alert.alert('Sent ✓', 'Payment reminder sent via WhatsApp.');
+            } catch (err: any) {
+              Alert.alert('Failed', err?.message || 'Could not send reminder.');
+            }
+          }
+        },
+      ]
+    );
+  };
+
   // Use real ledger data only — no mock fallback
   const ledger = liveLedger || { id: id || '', name: 'Loading…', group: '', balance: '' };
 
@@ -648,11 +682,19 @@ export default function LedgerDetailScreen() {
           )}
         </View>
 
-        {/* ── Share button ── */}
-        <TouchableOpacity style={styles.shareBtn} activeOpacity={0.8} onPress={handleTxnShare}>
-          <Ionicons name="share-outline" size={16} color={COLORS.white} />
-          <Text style={styles.shareBtnText}>Share PDF / XLSX</Text>
-        </TouchableOpacity>
+        {/* ── Action buttons ── */}
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <TouchableOpacity style={[styles.shareBtn, { flex: 1 }]} activeOpacity={0.8} onPress={handleTxnShare}>
+            <Ionicons name="share-outline" size={16} color={COLORS.white} />
+            <Text style={styles.shareBtnText}>Share PDF</Text>
+          </TouchableOpacity>
+          {(liveLedger?.phone || liveLedger?.mobile) ? (
+            <TouchableOpacity style={[styles.shareBtn, { flex: 1, backgroundColor: '#25D366' }]} activeOpacity={0.8} onPress={handleSendReminder}>
+              <Ionicons name="logo-whatsapp" size={16} color={COLORS.white} />
+              <Text style={styles.shareBtnText}>Remind</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
 
         <View style={{ height: txnSelectMode ? 90 : 30 }} />
       </ScrollView>
