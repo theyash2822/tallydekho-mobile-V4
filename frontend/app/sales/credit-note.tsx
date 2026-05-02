@@ -8,6 +8,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getCreditNotes } from '../../src/services/api';
+import { MOCK_CREDIT_NOTES } from '../../src/data/mockData';
 
 const SC: Record<string,string> = { issued: COLORS.warning, settled: COLORS.positive };
 const SL: Record<string,string> = { issued: 'Issued', settled: 'Settled' };
@@ -15,6 +16,7 @@ const SL: Record<string,string> = { issued: 'Issued', settled: 'Settled' };
 export default function CreditNotesScreen() {
   const router = useRouter();
   const [search, setSearch] = useState('');
+  const [apiError, setApiError] = useState<string | null>(null);
   const { company } = useAuth();
   const companyGuid = company?.guid;
   const [liveData, setLiveData] = useState<any[]>([]);

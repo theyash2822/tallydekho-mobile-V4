@@ -18,10 +18,14 @@ export default function PaymentVouchersScreen() {
   const { company } = useAuth();
   const companyGuid = company?.guid;
   const [search, setSearch] = useState('');
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [liveItems, setLiveItems] = useState<any[]>([]);
 
   useEffect(() => {
     if (!companyGuid) return;
+    setIsLoading(true);
+    setApiError(null);
     getVouchers(companyGuid, 'payment').then((res: any) => {
       const rows = res?.data ?? [];
       setLiveItems(rows.map((r: any) => ({
@@ -33,12 +37,10 @@ export default function PaymentVouchersScreen() {
         method: 'NEFT',
         status: 'cleared',
       })));
-    }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
+    }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); }).finally(() => setIsLoading(false));
   }, [companyGuid]);
 
-  const data = MOCK_PAYMENT_VOUCHERS;
-  const allItems = liveItems.length > 0 ? liveItems : data.items;
-  const filtered = allItems.filter((i: any) => !search || (i.party||'').toLowerCase().includes(search.toLowerCase()) || (i.id||'').toLowerCase().includes(search.toLowerCase()));
+  const filtered = liveItems.filter((i: any) => !search || (i.party||'').toLowerCase().includes(search.toLowerCase()) || (i.id||'').toLowerCase().includes(search.toLowerCase()));
 
   return (
     <SafeAreaView style={s.safe}>
@@ -59,14 +61,26 @@ export default function PaymentVouchersScreen() {
           {search.length > 0 && <TouchableOpacity onPress={() => setSearch('')}><Ionicons name="close-circle" size={16} color={COLORS.textTertiary} /></TouchableOpacity>}
         </View>
         <View style={s.statsRow}>
-          {[{l:'Total',v:data.summary.total},{l:'Docs',v:String(data.summary.docs)}].map(st=>(
+          {(() => {
+            const parseAmount = (amtStr: string) => { const n = parseFloat((amtStr || '0').replace(/[₹,]/g, '')); return isNaN(n) ? 0 : n; };
+            const totalAmt = filtered.reduce((sum: number, i: any) => sum + parseAmount(i.amount), 0);
+            const fmtAmt = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+            return [{l:'Total',v:fmtAmt(totalAmt)},{l:'Docs',v:String(filtered.length)}];
+          })().map(st=>(
             <View key={st.l} style={s.stat}><Text style={s.statV}>{st.v}</Text><Text style={s.statL}>{st.l}</Text></View>
           ))}
           <View style={s.stat}><Text style={s.statV}>Jan 25</Text><Text style={s.statL}>Period</Text></View>
           <View style={s.stat}><Text style={s.statV}>4</Text><Text style={s.statL}>Methods</Text></View>
         </View>
         <View style={s.secHdr}><Text style={s.secT}>Payment Vouchers</Text></View>
-        <View style={s.card}>
+        {filtered.length === 0 && (
+          <View style={{ alignItems: 'center', padding: 40, gap: 8 }}>
+            <Ionicons name="send-outline" size={40} color={COLORS.textTertiary} />
+            <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textSecondary }}>No payment vouchers</Text>
+            <Text style={{ fontSize: 13, color: COLORS.textTertiary, textAlign: 'center' }}>Sync your Tally data to see payment records</Text>
+          </View>
+        )}
+        {filtered.length > 0 && <View style={s.card}>
           {filtered.map((item, idx) => (
             <View key={item.id}>
               <TouchableOpacity
@@ -93,7 +107,7 @@ export default function PaymentVouchersScreen() {
               {idx < filtered.length - 1 && <View style={s.div} />}
             </View>
           ))}
-        </View>
+        </View>}
       </ScrollView>
     </SafeAreaView>
   );

@@ -8,6 +8,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getDeliveryNotes } from '../../src/services/api';
+import { MOCK_DELIVERY_NOTES } from '../../src/data/mockData';
 
 const SC: Record<string,string> = { delivered: COLORS.positive, in_transit: COLORS.info, pending: COLORS.warning };
 const SL: Record<string,string> = { delivered: 'Delivered', in_transit: 'In Transit', pending: 'Pending' };
@@ -15,6 +16,7 @@ const SL: Record<string,string> = { delivered: 'Delivered', in_transit: 'In Tran
 export default function DeliveryNotesScreen() {
   const router = useRouter();
   const [search, setSearch] = useState('');
+  const [apiError, setApiError] = useState<string | null>(null);
   const { company } = useAuth();
   const companyGuid = company?.guid;
   const [liveData, setLiveData] = useState<any[]>([]);

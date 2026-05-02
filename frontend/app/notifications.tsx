@@ -8,6 +8,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../src/constants/colors';
 
 import { useAuth } from '../src/context/AuthContext';
 import { getNotifications } from '../src/services/api';
+import { MOCK_NOTIFICATIONS } from '../src/data/mockData';
 
 const TYPE_CONFIG: Record<string, { icon: any; color: string; bg: string }> = {
   warning: { icon: 'warning-outline',          color: COLORS.warning,  bg: COLORS.warningBg },
@@ -22,6 +23,7 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const { company } = useAuth();
   const companyGuid = company?.guid;
+  const [apiError, setApiError] = useState<string | null>(null);
   const [notifications, setNotifications] = useState(
     MOCK_NOTIFICATIONS.map(n => ({ ...n, read: false }))
   );

@@ -8,6 +8,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getSalesOrders } from '../../src/services/api';
+import { MOCK_SALES_ORDERS } from '../../src/data/mockData';
 
 const SC: Record<string, string> = { confirmed: COLORS.positive, pending: COLORS.warning, cancelled: COLORS.negative };
 const SL: Record<string, string> = { confirmed: 'Confirmed', pending: 'Pending', cancelled: 'Cancelled' };
@@ -17,6 +18,7 @@ export default function SalesOrdersScreen() {
   const { company } = useAuth();
   const companyGuid = company?.guid;
   const [search, setSearch] = useState('');
+  const [apiError, setApiError] = useState<string | null>(null);
   const [liveOrders, setLiveOrders] = useState<any[]>([]);
 
   useEffect(() => {

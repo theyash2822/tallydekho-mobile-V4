@@ -8,6 +8,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getPurchaseOrders } from '../../src/services/api';
+import { MOCK_PURCHASE_ORDERS } from '../../src/data/mockData';
 
 const SC: Record<string,string> = { confirmed: COLORS.positive, pending: COLORS.warning, received: COLORS.info };
 const SL: Record<string,string> = { confirmed: 'Confirmed', pending: 'Pending', received: 'Received' };
@@ -15,6 +16,7 @@ const SL: Record<string,string> = { confirmed: 'Confirmed', pending: 'Pending', 
 export default function PurchaseOrdersScreen() {
   const router = useRouter();
   const [search, setSearch] = useState('');
+  const [apiError, setApiError] = useState<string | null>(null);
   const { company } = useAuth();
   const companyGuid = company?.guid;
   const [liveData, setLiveData] = useState<any[]>([]);

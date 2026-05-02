@@ -11,6 +11,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getSalesInvoices, getKPIStrip } from '../../src/services/api';
+import { MOCK_SALES_REGISTER } from '../../src/data/mockData';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
 const AMBER      = '#A89060';

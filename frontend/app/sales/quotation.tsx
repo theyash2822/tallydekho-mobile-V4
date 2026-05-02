@@ -8,6 +8,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getSalesQuotations } from '../../src/services/api';
+import { MOCK_QUOTATIONS } from '../../src/data/mockData';
 
 const SC: Record<string,string> = { accepted: COLORS.positive, pending: COLORS.warning, expired: COLORS.negative };
 const SL: Record<string,string> = { accepted: 'Accepted', pending: 'Pending', expired: 'Expired' };
@@ -15,6 +16,7 @@ const SL: Record<string,string> = { accepted: 'Accepted', pending: 'Pending', ex
 export default function QuotationsScreen() {
   const router = useRouter();
   const [search, setSearch] = useState('');
+  const [apiError, setApiError] = useState<string | null>(null);
   const { company } = useAuth();
   const companyGuid = company?.guid;
   const [liveData, setLiveData] = useState<any[]>([]);

@@ -70,7 +70,7 @@ const MONTH_GROUPS: MonthGroup[] = [
   },
   {
     id: 'jan25', label: 'Jan 25',
-    invoices: MOCK_SALES_REGISTER.invoices as Invoice[],
+    invoices: [],
   },
 ];
 
@@ -279,12 +279,18 @@ export default function SalesRegisterScreen() {
 
         {/* ── Stats 2×2 Grid ──────────────────────────────────────── */}
         <View style={s.statsGrid}>
-          {[
-            { label: 'Total', value: data.summary.total },
-            { label: 'Tax',   value: data.summary.tax   },
-            { label: 'AVG',   value: data.summary.avg   },
-            { label: 'Docs',  value: String(allFiltered.length) },
-          ].map(stat => (
+          {(() => {
+            const parseAmount = (amtStr: string) => { const n = parseFloat((amtStr || '0').replace(/[₹,]/g, '')); return isNaN(n) ? 0 : n; };
+            const totalAmt = allFiltered.reduce((sum, inv) => sum + parseAmount(inv.amount), 0);
+            const avgAmt = allFiltered.length > 0 ? totalAmt / allFiltered.length : 0;
+            const fmtAmt = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+            return [
+              { label: 'Total', value: fmtAmt(totalAmt) },
+              { label: 'Tax',   value: '—' },
+              { label: 'AVG',   value: fmtAmt(avgAmt) },
+              { label: 'Docs',  value: String(allFiltered.length) },
+            ];
+          })().map(stat => (
             <View key={stat.label} style={s.statCell}>
               <Text style={s.statValue} numberOfLines={1} adjustsFontSizeToFit>{stat.value}</Text>
               <Text style={s.statLabel}>{stat.label}</Text>

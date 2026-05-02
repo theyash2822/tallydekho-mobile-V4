@@ -70,7 +70,7 @@ const MONTH_GROUPS: MonthGroup[] = [
   },
   {
     id: 'jan25', label: 'Jan 25',
-    invoices: MOCK_PURCHASE_REGISTER.invoices as PurchaseInvoice[],
+    invoices: [],
   },
 ];
 
@@ -80,8 +80,8 @@ export default function PurchaseRegisterScreen() {
   const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
   const [liveInvoices, setLiveInvoices] = useState<PurchaseInvoice[]>([]);
-
-  const data = MOCK_PURCHASE_REGISTER;
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const fyFrom = selectedFY?.startDate ?? '';
   const fyTo   = selectedFY?.endDate   ?? '';
@@ -98,6 +98,8 @@ export default function PurchaseRegisterScreen() {
     const from = dmyToISO(fromDate) || fyFrom;
     const to   = dmyToISO(toDate)   || fyTo;
     const fyParams = from && to ? { from, to } : {};
+    setIsLoading(true);
+    setApiError(null);
     getPurchaseInvoices(companyGuid, fyParams).then((res: any) => {
       const rows = res?.data ?? [];
       setLiveInvoices(rows.map((r: any) => ({
@@ -108,7 +110,7 @@ export default function PurchaseRegisterScreen() {
         amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`,
         status: r.is_cancelled ? 'unpaid' : 'paid',
       })));
-    }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
+    }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); }).finally(() => setIsLoading(false));
   }, [companyGuid, fromDate, toDate, fyFrom, fyTo]);
 
   const [search,         setSearch]         = useState('');
@@ -260,17 +262,23 @@ export default function PurchaseRegisterScreen() {
         )}
       </View>
 
-      {apiError && <ErrorBanner message={apiError} />}
+      {apiError && <ErrorBanner message={apiError} onRetry={() => { setApiError(null); }} />}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: isSelecting ? 120 : 40 }}>
 
         {/* ── Stats 2×2 Grid ──────────────────────────────────────── */}
         <View style={s.statsGrid}>
-          {[
-            { label: 'Total', value: data.summary.total },
-            { label: 'Tax',   value: data.summary.tax   },
-            { label: 'AVG',   value: data.summary.avg   },
-            { label: 'Docs',  value: String(allFiltered.length) },
-          ].map(stat => (
+          {(() => {
+            const parseAmount = (amtStr: string) => { const n = parseFloat((amtStr || '0').replace(/[₹,]/g, '')); return isNaN(n) ? 0 : n; };
+            const totalAmt = allFiltered.reduce((sum, inv) => sum + parseAmount(inv.amount), 0);
+            const avgAmt = allFiltered.length > 0 ? totalAmt / allFiltered.length : 0;
+            const fmtAmt = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+            return [
+              { label: 'Total', value: fmtAmt(totalAmt) },
+              { label: 'Tax',   value: '—' },
+              { label: 'AVG',   value: fmtAmt(avgAmt) },
+              { label: 'Docs',  value: String(allFiltered.length) },
+            ];
+          })().map(stat => (
             <View key={stat.label} style={s.statCell}>
               <Text style={s.statValue} numberOfLines={1} adjustsFontSizeToFit>{stat.value}</Text>
               <Text style={s.statLabel}>{stat.label}</Text>

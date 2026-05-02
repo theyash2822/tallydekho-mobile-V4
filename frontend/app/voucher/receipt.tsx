@@ -18,19 +18,21 @@ export default function ReceiptVouchersScreen() {
   const { company } = useAuth();
   const companyGuid = company?.guid;
   const [search, setSearch] = useState('');
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [liveItems, setLiveItems] = useState<any[]>([]);
 
   useEffect(() => {
     if (!companyGuid) return;
+    setIsLoading(true);
+    setApiError(null);
     getVouchers(companyGuid, 'receipt').then((res: any) => {
       const rows = res?.data ?? [];
       setLiveItems(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), party: r.party_name||'', date: r.date||'', time: '', amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`, method: 'Cash', status: 'cleared' })));
-    }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
+    }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); }).finally(() => setIsLoading(false));
   }, [companyGuid]);
 
-  const data = MOCK_RECEIPT_VOUCHERS;
-  const allItems = liveItems.length > 0 ? liveItems : data.items;
-  const filtered = allItems.filter((i: any) => !search || (i.party||'').toLowerCase().includes(search.toLowerCase()) || (i.id||'').toLowerCase().includes(search.toLowerCase()));
+  const filtered = liveItems.filter((i: any) => !search || (i.party||'').toLowerCase().includes(search.toLowerCase()) || (i.id||'').toLowerCase().includes(search.toLowerCase()));
 
   return (
     <SafeAreaView style={s.safe}>
@@ -50,7 +52,12 @@ export default function ReceiptVouchersScreen() {
           <TextInput style={s.searchIn} placeholder="Search receipt vouchers..." placeholderTextColor={COLORS.textTertiary} value={search} onChangeText={setSearch} />
         </View>
         <View style={s.statsRow}>
-          {[{l:'Total',v:data.summary.total},{l:'Docs',v:String(data.summary.docs)},{l:'Period',v:'Jan 25'},{l:'Pending',v:'3'}].map(st=>(
+          {(() => {
+            const parseAmount = (amtStr: string) => { const n = parseFloat((amtStr || '0').replace(/[₹,]/g, '')); return isNaN(n) ? 0 : n; };
+            const totalAmt = filtered.reduce((sum: number, i: any) => sum + parseAmount(i.amount), 0);
+            const fmtAmt = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+            return [{l:'Total',v:fmtAmt(totalAmt)},{l:'Docs',v:String(filtered.length)},{l:'Period',v:'Jan 25'},{l:'Pending',v:'3'}];
+          })().map(st=>(
             <View key={st.l} style={s.stat}><Text style={s.statV}>{st.v}</Text><Text style={s.statL}>{st.l}</Text></View>
           ))}
         </View>
