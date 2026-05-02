@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Share, Linking, ActivityIndicator,
+  Share, Alert, Linking, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -649,74 +649,41 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
 
-  const handleShare = async () => {
+  // Shared PDF helper — loading reset BEFORE shareAsync to prevent UI hang
+  const generateAndSharePDF = async (
+    setLoading: (v: boolean) => void,
+    dialogTitle: string,
+    fallback?: () => Promise<void>
+  ) => {
+    setLoading(true);
     try {
-      setShareLoading(true);
       const html = generateDocumentHTML(doc);
       const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
-      setShareLoading(false);
-      // Try expo-sharing first (opens native share sheet with PDF)
+      setLoading(false); // Reset BEFORE shareAsync (shareAsync blocks until sheet dismissed)
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
-        await Sharing.shareAsync(uri, {
-          mimeType: 'application/pdf',
-          dialogTitle: `Share ${doc.documentNumber}`,
-          UTI: 'com.adobe.pdf',
-        });
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle, UTI: 'com.adobe.pdf' });
+      } else if (fallback) {
+        await fallback();
       } else {
-        // iOS fallback: Share.share with url shares the file
         await Share.share({ url: uri, title: doc.documentNumber });
       }
-    } catch (_) {
-      setShareLoading(false);
+    } catch (err: any) {
+      setLoading(false);
+      Alert.alert('PDF Error', 'Could not generate PDF. Please try again.');
     }
   };
 
-  const handleWhatsApp = async () => {
-    // Generate PDF and share via system share sheet — user selects WhatsApp from there
-    try {
-      setPdfLoading(true);
-      const html = generateDocumentHTML(doc);
-      const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
-      setPdfLoading(false);
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(uri, {
-          mimeType: 'application/pdf',
-          dialogTitle: `Share ${doc.documentNumber} via WhatsApp`,
-          UTI: 'com.adobe.pdf',
-        });
-      } else {
-        // Fallback: send as text message if sharing not available
-        const msg = encodeURIComponent(`📄 *${doc.documentTitle}*\n📋 No: ${doc.documentNumber}\n📅 Date: ${doc.date}\n💰 Total: ${formatCurrency(doc.totals.total)}`);
-        await Linking.openURL(`whatsapp://send?text=${msg}`);
-      }
-    } catch (_) {
-      setPdfLoading(false);
+  const handleShare    = () => generateAndSharePDF(setShareLoading, `Share ${doc.documentNumber}`);
+  const handleWhatsApp = () => generateAndSharePDF(setPdfLoading, `${doc.documentNumber} via WhatsApp`,
+    async () => {
+      const msg = encodeURIComponent(`${doc.documentTitle}\n${doc.documentNumber}\n${formatCurrency(doc.totals.total)}`);
+      await Linking.openURL(`whatsapp://send?text=${msg}`);
     }
-  };
+  );
+  const handlePDF = () => generateAndSharePDF(setPdfLoading, `${doc.documentNumber}.pdf`);
 
-  const handlePDF = async () => {
-    try {
-      setPdfLoading(true);
-      const html = generateDocumentHTML(doc);
-      const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
-      setPdfLoading(false);
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(uri, {
-          mimeType: 'application/pdf',
-          dialogTitle: `${doc.documentNumber}.pdf`,
-          UTI: 'com.adobe.pdf',
-        });
-      }
-    } catch (err) {
-      setPdfLoading(false);
-      console.error('[DocumentPreview] PDF error:', err);
-    }
-  };
-
-  return (
+    return (
     <View style={[ds.actionBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
       <TouchableOpacity style={ds.actionBtn} onPress={handleShare} activeOpacity={0.75} disabled={shareLoading}>
         {shareLoading
