@@ -66,14 +66,51 @@ export const DOC_TYPE_CONFIG: Record<DocumentType, { label: string; color: strin
 export function generateDocumentHTML(doc: VoucherDocument): string {
   const cfg = DOC_TYPE_CONFIG[doc.documentType];
   const hasItems = !!(doc.items && doc.items.length > 0);
+  const hasEntries = !!(doc.ledgerEntries && doc.ledgerEntries.length > 0);
   const t = doc.totals;
   const isVoucher = ['payment_voucher','receipt_voucher','contra_voucher','journal_voucher'].includes(doc.documentType);
+  const isOrder = ['sales_order','purchase_order','quotation'].includes(doc.documentType);
+  const isDelivery = doc.documentType === 'delivery_note';
 
   const fmt = (n: number) => '₹' + Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const cell = (label: string, value: string, style = '') =>
-    `<td style="border:1px solid #ccc;padding:4px 6px;vertical-align:top;font-size:11px;${style}"><span style="color:#777;font-size:9px;display:block">${label}</span><span style="font-weight:600;color:#000">${value || ''}</span></td>`;
+  const cell = (label: string, value: string) =>
+    `<td style="border:1px solid #ccc;padding:4px 6px;vertical-align:top;font-size:11px"><span style="color:#777;font-size:9px;display:block">${label}</span><span style="font-weight:600">${value || ''}</span></td>`;
 
-  const itemRows = hasItems ? doc.items!.map((item, i) => `
+  // ── Meta fields row — adapts by document type ──────────────────────────────
+  const metaTable = isVoucher ? `
+    <table style="width:100%">
+      <tr>${cell('Voucher No.', doc.documentNumber)}${cell('Date', doc.date)}</tr>
+      <tr>${cell('Mode of Payment', '')}${cell('Reference', doc.reference || '')}</tr>
+      <tr>${cell('Narration', doc.narration || '')}</tr>
+    </table>
+  ` : isOrder ? `
+    <table style="width:100%">
+      <tr>${cell('Order No.', doc.documentNumber)}${cell('Dated', doc.date)}</tr>
+      <tr>${cell('Reference No.', doc.reference || '')}${cell('Other References', '')}</tr>
+      <tr>${cell("Buyer's Order No.", '')}${cell('Dated', '')}</tr>
+      <tr><td colspan="2" style="border:1px solid #ccc;padding:4px 6px;font-size:11px"><span style="color:#777;font-size:9px;display:block">Terms of Delivery</span></td></tr>
+    </table>
+  ` : isDelivery ? `
+    <table style="width:100%">
+      <tr>${cell('Delivery Note No.', doc.documentNumber)}${cell('Dated', doc.date)}</tr>
+      <tr>${cell('Reference No.', doc.reference || '')}${cell("Buyer's Order No.", '')}</tr>
+      <tr>${cell('Dispatched through', '')}${cell('Destination', '')}</tr>
+      <tr><td colspan="2" style="border:1px solid #ccc;padding:4px 6px;font-size:11px"><span style="color:#777;font-size:9px;display:block">Terms of Delivery</span></td></tr>
+    </table>
+  ` : `
+    <table style="width:100%">
+      <tr>${cell('Invoice No.', doc.documentNumber)}${cell('Dated', doc.date)}</tr>
+      <tr>${cell('Delivery Note', '')}${cell('Mode/Terms of Payment', '')}</tr>
+      <tr>${cell('Reference No. & Date', doc.reference || '')}${cell('Other References', '')}</tr>
+      <tr>${cell("Buyer's Order No.", '')}${cell('Dated', '')}</tr>
+      <tr>${cell('Dispatch Doc No.', '')}${cell('Delivery Note Date', '')}</tr>
+      <tr>${cell('Dispatched through', '')}${cell('Destination', '')}</tr>
+      <tr><td colspan="2" style="border:1px solid #ccc;padding:4px 6px;font-size:11px"><span style="color:#777;font-size:9px;display:block">Terms of Delivery</span></td></tr>
+    </table>
+  `;
+
+  // ── Items/Entries table body ───────────────────────────────────────────────
+  const itemsBody = hasItems ? doc.items!.map((item, i) => `
     <tr>
       <td style="border:1px solid #ccc;padding:4px 6px;text-align:center;font-size:11px">${i + 1}</td>
       <td style="border:1px solid #ccc;padding:4px 6px;font-size:11px"><b>${item.name}</b>${item.hsn ? `<br><span style="color:#888;font-size:9px">HSN: ${item.hsn}</span>` : ''}</td>
@@ -81,103 +118,36 @@ export function generateDocumentHTML(doc: VoucherDocument): string {
       <td style="border:1px solid #ccc;padding:4px 6px;text-align:right;font-size:11px">${item.rate.toFixed(2)}</td>
       <td style="border:1px solid #ccc;padding:4px 6px;text-align:center;font-size:11px">${item.unit}</td>
       <td style="border:1px solid #ccc;padding:4px 6px;text-align:right;font-size:11px;font-weight:600">${item.amount.toFixed(2)}</td>
-    </tr>`).join('') : `<tr><td colspan="6" style="border:1px solid #ccc;padding:12px;text-align:center;color:#888;font-size:11px">No items</td></tr>`;
+    </tr>`).join('') : `<tr><td colspan="6" style="border:1px solid #ccc;padding:40px;text-align:center;color:#bbb;font-size:11px">&nbsp;</td></tr>`;
+
+  const entriesBody = hasEntries ? doc.ledgerEntries!.map((e, i) => `
+    <tr>
+      <td style="border:1px solid #ccc;padding:4px 6px;font-size:11px">${e.particulars}${e.narration ? `<br><span style="font-size:9px;color:#888">${e.narration}</span>` : ''}</td>
+      <td style="border:1px solid #ccc;padding:4px 6px;text-align:right;font-size:11px;color:#c0392b;font-weight:${e.debit ? 600 : 400}">${e.debit ? fmt(e.debit) : '—'}</td>
+      <td style="border:1px solid #ccc;padding:4px 6px;text-align:right;font-size:11px;color:#2d7d46;font-weight:${e.credit ? 600 : 400}">${e.credit ? fmt(e.credit) : '—'}</td>
+    </tr>`).join('') : `<tr><td colspan="3" style="border:1px solid #ccc;padding:40px;text-align:center;color:#bbb;font-size:11px">&nbsp;</td></tr>`;
 
   const totalQty = hasItems ? doc.items!.reduce((s, i) => s + i.qty, 0) : 0;
 
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"/>
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: Arial, sans-serif; font-size: 12px; color: #000; padding: 20px; background: #fff; }
-  .page { max-width: 750px; margin: 0 auto; border: 1px solid #000; }
-  .header-box { border-bottom: 2px solid #000; padding: 8px 12px; text-align: center; }
-  .doc-type { font-size: 18px; font-weight: bold; border: 2px solid #C62828; display: inline-block; padding: 2px 16px; color: #000; }
-  .doc-sub { font-size: 10px; color: #555; margin-top: 2px; }
-  table { width: 100%; border-collapse: collapse; }
-  .company-name { font-size: 14px; font-weight: bold; }
-  .company-addr { font-size: 10px; color: #444; }
-  .section-label { font-size: 9px; color: #777; text-transform: uppercase; margin-bottom: 2px; }
-  .party-name { font-size: 12px; font-weight: bold; }
-  .footer-note { font-size: 10px; text-align: center; color: #555; padding: 6px; border-top: 1px solid #ccc; }
-  .amount-words { font-size: 11px; font-style: italic; }
-  .declaration { font-size: 9px; color: #444; }
-  .sign-box { text-align: right; font-size: 11px; padding: 8px; border-top: 1px solid #ccc; }
-</style>
-</head>
-<body>
-<div class="page">
-
-  <!-- TOP: Company + Doc type -->
+  // ── TABLE SECTION ─────────────────────────────────────────────────────────
+  const tableSection = isVoucher ? `
   <table>
-    <tr>
-      <td style="width:50%;border:1px solid #ccc;padding:8px 10px;vertical-align:top">
-        <div class="company-name">${doc.company?.name || 'Company'}</div>
-        <div class="company-addr">${doc.company?.address || ''}</div>
-        ${doc.company?.gstin ? `<div style="font-size:10px;margin-top:4px">GSTIN: <b>${doc.company.gstin}</b></div>` : ''}
-      </td>
-      <td style="width:50%;border:1px solid #ccc;padding:8px;vertical-align:top">
-        <div style="text-align:center;margin-bottom:6px">
-          <span class="doc-type">${cfg.label}</span>
-          ${doc.documentType === 'credit_note' ? '<div class="doc-sub">Credit Sales</div>' : ''}
-        </div>
-        <table style="width:100%">
-          <tr>
-            ${cell('Invoice No.', doc.documentNumber)}
-            ${cell('Dated', doc.date)}
-          </tr>
-          <tr>
-            ${cell('Delivery Note', '')}
-            ${cell('Mode/Terms of Payment', '')}
-          </tr>
-          <tr>
-            ${cell('Reference No. & Date', doc.reference || '')}
-            ${cell('Other References', '')}
-          </tr>
-          <tr>
-            ${cell("Buyer's Order No.", '')}
-            ${cell('Dated', '')}
-          </tr>
-          <tr>
-            ${cell('Dispatch Doc No.', '')}
-            ${cell('Delivery Note Date', '')}
-          </tr>
-          <tr>
-            ${cell('Dispatched through', '')}
-            ${cell('Destination', '')}
-          </tr>
-          <tr>
-            <td colspan="2" style="border:1px solid #ccc;padding:4px 6px;font-size:11px">
-              <span style="color:#777;font-size:9px;display:block">Terms of Delivery</span>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-
-  <!-- PARTIES: Consignee + Buyer -->
-  <table>
-    <tr>
-      <td style="width:50%;border:1px solid #ccc;padding:6px 10px;vertical-align:top">
-        <div class="section-label">Consignee (Ship to)</div>
-        ${doc.party?.name ? `<div class="party-name">${doc.party.name}</div>` : ''}
-        ${doc.party?.address ? `<div style="font-size:10px;color:#444">${doc.party.address}</div>` : ''}
-        ${doc.party?.gstin ? `<div style="font-size:10px">GSTIN: ${doc.party.gstin}</div>` : ''}
-        &nbsp;
-      </td>
-      <td style="width:50%;border:1px solid #ccc;padding:6px 10px;vertical-align:top">
-        <div class="section-label">Buyer (Bill to)</div>
-        ${doc.party?.name ? `<div class="party-name">${doc.party.name}</div>` : ''}
-        ${doc.party?.address ? `<div style="font-size:10px;color:#444">${doc.party.address}</div>` : ''}
-        ${doc.party?.phone ? `<div style="font-size:10px">Ph: ${doc.party.phone}</div>` : ''}
-        ${doc.party?.gstin ? `<div style="font-size:10px">GSTIN: ${doc.party.gstin}</div>` : ''}
-        &nbsp;
-      </td>
-    </tr>
-  </table>
-
-  <!-- ITEMS TABLE -->
+    <thead>
+      <tr style="background:#f0f0f0">
+        <th style="border:1px solid #ccc;padding:6px;text-align:left;font-size:11px">Particulars</th>
+        <th style="border:1px solid #ccc;padding:6px;text-align:right;font-size:11px;width:110px">Debit (Dr)</th>
+        <th style="border:1px solid #ccc;padding:6px;text-align:right;font-size:11px;width:110px">Credit (Cr)</th>
+      </tr>
+    </thead>
+    <tbody>${entriesBody}${!hasEntries && doc.narration ? `<tr><td style="border:1px solid #ccc;padding:8px;font-size:11px">${doc.narration}</td><td style="border:1px solid #ccc"></td><td style="border:1px solid #ccc"></td></tr>` : ''}</tbody>
+    <tfoot>
+      <tr>
+        <td style="border:1px solid #ccc;padding:6px;text-align:right;font-size:11px;font-weight:bold">Total</td>
+        <td style="border:1px solid #ccc;padding:6px;text-align:right;font-size:13px;font-weight:bold;color:#c0392b">${t.drTotal ? fmt(t.drTotal) : fmt(t.total)}</td>
+        <td style="border:1px solid #ccc;padding:6px;text-align:right;font-size:13px;font-weight:bold;color:#2d7d46">${t.crTotal ? fmt(t.crTotal) : fmt(t.total)}</td>
+      </tr>
+    </tfoot>
+  </table>` : `
   <table>
     <thead>
       <tr style="background:#f0f0f0">
@@ -186,34 +156,98 @@ export function generateDocumentHTML(doc: VoucherDocument): string {
         <th style="border:1px solid #ccc;padding:6px;text-align:center;font-size:11px;width:70px">Quantity</th>
         <th style="border:1px solid #ccc;padding:6px;text-align:center;font-size:11px;width:60px">Rate</th>
         <th style="border:1px solid #ccc;padding:6px;text-align:center;font-size:11px;width:35px">per</th>
-        <th style="border:1px solid #ccc;padding:6px;text-align:center;font-size:11px;width:80px">Amount</th>
+        <th style="border:1px solid #ccc;padding:6px;text-align:center;font-size:11px;width:90px">Amount</th>
       </tr>
     </thead>
-    <tbody>
-      ${itemRows}
-      ${!hasItems && doc.narration ? `<tr><td colspan="5" style="border:1px solid #ccc;padding:6px;font-size:11px">${doc.narration}</td><td style="border:1px solid #ccc;padding:6px;text-align:right;font-size:13px;font-weight:bold">${fmt(t.total)}</td></tr>` : ''}
-    </tbody>
+    <tbody>${itemsBody}${!hasItems && doc.narration ? `<tr><td colspan="5" style="border:1px solid #ccc;padding:8px;font-size:11px">${doc.narration}</td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-size:13px;font-weight:bold">${fmt(t.total)}</td></tr>` : ''}</tbody>
     <tfoot>
       <tr>
-        <td style="border:1px solid #ccc;padding:6px;text-align:right;font-size:11px;font-weight:bold" colspan="2">Total</td>
-        <td style="border:1px solid #ccc;padding:6px;text-align:right;font-size:11px;font-weight:bold">${hasItems ? totalQty + ' ' + (doc.items![0]?.unit || 'Nos') : ''}</td>
+        <td colspan="2" style="border:1px solid #ccc;padding:6px;text-align:right;font-size:11px;font-weight:bold">Total</td>
+        <td style="border:1px solid #ccc;padding:6px;text-align:right;font-size:11px;font-weight:bold">${hasItems ? totalQty + ' ' + (doc.items![0]?.unit || '') : ''}</td>
         <td style="border:1px solid #ccc;padding:6px"></td>
         <td style="border:1px solid #ccc;padding:6px"></td>
         <td style="border:1px solid #ccc;padding:6px;text-align:right;font-size:13px;font-weight:bold">${fmt(t.total)}</td>
       </tr>
-      ${t.taxTotal && t.taxTotal > 0 ? `
-      <tr>
-        <td colspan="5" style="border:1px solid #ccc;padding:4px 6px;text-align:right;font-size:10px;color:#555">CGST @ ${t.cgstTotal ? (t.cgstTotal / (t.subtotal||1) * 100).toFixed(1) + '%' : '—'}</td>
-        <td style="border:1px solid #ccc;padding:4px 6px;text-align:right;font-size:10px">${t.cgstTotal ? fmt(t.cgstTotal) : '—'}</td>
-      </tr>
-      <tr>
-        <td colspan="5" style="border:1px solid #ccc;padding:4px 6px;text-align:right;font-size:10px;color:#555">SGST</td>
-        <td style="border:1px solid #ccc;padding:4px 6px;text-align:right;font-size:10px">${t.sgstTotal ? fmt(t.sgstTotal) : '—'}</td>
-      </tr>` : ''}
+      ${(t.cgstTotal||0) > 0 ? `<tr><td colspan="5" style="border:1px solid #ccc;padding:4px 6px;text-align:right;font-size:10px;color:#555">CGST</td><td style="border:1px solid #ccc;padding:4px 6px;text-align:right;font-size:10px">${fmt(t.cgstTotal!)}</td></tr><tr><td colspan="5" style="border:1px solid #ccc;padding:4px 6px;text-align:right;font-size:10px;color:#555">SGST</td><td style="border:1px solid #ccc;padding:4px 6px;text-align:right;font-size:10px">${fmt(t.sgstTotal||0)}</td></tr>` : ''}
+      ${(t.igstTotal||0) > 0 ? `<tr><td colspan="5" style="border:1px solid #ccc;padding:4px 6px;text-align:right;font-size:10px;color:#555">IGST</td><td style="border:1px solid #ccc;padding:4px 6px;text-align:right;font-size:10px">${fmt(t.igstTotal!)}</td></tr>` : ''}
     </tfoot>
+  </table>`;
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"/>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: Arial, sans-serif; font-size: 12px; color: #000; padding: 20px; background: #fff; }
+  .page { max-width: 750px; margin: 0 auto; border: 1px solid #000; }
+  table { width: 100%; border-collapse: collapse; }
+  .company-name { font-size: 14px; font-weight: bold; }
+  .company-addr { font-size: 10px; color: #444; line-height: 1.4; }
+  .section-label { font-size: 9px; color: #777; text-transform: uppercase; margin-bottom: 2px; }
+  .party-name { font-size: 13px; font-weight: bold; }
+  .footer-note { font-size: 10px; text-align: center; color: #555; padding: 6px; border-top: 1px solid #ccc; }
+  .amount-words { font-size: 11px; font-style: italic; }
+  .declaration { font-size: 9px; color: #444; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER: Company + Title + Meta -->
+  <table>
+    <tr>
+      <td style="width:50%;border:1px solid #ccc;padding:8px 10px;vertical-align:top">
+        <div class="company-name">${doc.company?.name || 'Company'}</div>
+        <div class="company-addr">${(doc.company?.address || '').replace(/,/g, ',<br>')}</div>
+        ${doc.company?.gstin ? `<div style="font-size:10px;margin-top:4px">GSTIN: <b>${doc.company.gstin}</b></div>` : ''}
+        ${doc.company?.gstin === undefined && !doc.company?.gstin ? '' : ''}
+      </td>
+      <td style="width:50%;border:1px solid #ccc;padding:8px;vertical-align:top">
+        <div style="text-align:center;margin-bottom:8px">
+          <span style="font-size:16px;font-weight:bold;border:2px solid #C62828;padding:3px 18px;display:inline-block">${cfg.label}</span>
+          ${doc.documentType === 'credit_note' ? '<div style="font-size:9px;color:#555;margin-top:3px">Credit Sales</div>' : ''}
+          ${doc.documentType === 'debit_note'  ? '<div style="font-size:9px;color:#555;margin-top:3px">Debit Note</div>' : ''}
+        </div>
+        ${metaTable}
+      </td>
+    </tr>
   </table>
 
-  <!-- AMOUNT IN WORDS + DECLARATION -->
+  <!-- PARTIES -->
+  <table>
+    <tr>
+      <td style="width:50%;border:1px solid #ccc;padding:6px 10px;vertical-align:top;min-height:60px">
+        ${isVoucher ? `
+          <div class="section-label">Account</div>
+          <div class="party-name">${doc.party?.name || '—'}</div>
+          ${doc.party?.phone ? `<div style="font-size:10px">Ph: ${doc.party.phone}</div>` : ''}
+        ` : `
+          <div class="section-label">Consignee (Ship to)</div>
+          <div class="party-name">${doc.party?.name || '—'}</div>
+          ${doc.party?.address ? `<div style="font-size:10px;color:#444">${doc.party.address}</div>` : ''}
+          ${doc.party?.gstin ? `<div style="font-size:10px">GSTIN: ${doc.party.gstin}</div>` : ''}
+        `}
+        &nbsp;
+      </td>
+      <td style="width:50%;border:1px solid #ccc;padding:6px 10px;vertical-align:top;min-height:60px">
+        ${isVoucher ? `
+          <div class="section-label">Narration</div>
+          <div style="font-size:11px;font-style:italic">${doc.narration || '—'}</div>
+        ` : `
+          <div class="section-label">Buyer (Bill to)</div>
+          <div class="party-name">${doc.party?.name || '—'}</div>
+          ${doc.party?.address ? `<div style="font-size:10px;color:#444">${doc.party.address}</div>` : ''}
+          ${doc.party?.phone ? `<div style="font-size:10px">Ph: ${doc.party.phone}</div>` : ''}
+          ${doc.party?.gstin ? `<div style="font-size:10px">GSTIN: ${doc.party.gstin}</div>` : ''}
+        `}
+        &nbsp;
+      </td>
+    </tr>
+  </table>
+
+  <!-- MAIN TABLE -->
+  ${tableSection}
+
+  <!-- FOOTER: Amount in Words + Signature -->
   <table>
     <tr>
       <td style="width:60%;border:1px solid #ccc;padding:6px 10px;vertical-align:top">
@@ -221,24 +255,25 @@ export function generateDocumentHTML(doc: VoucherDocument): string {
         <div class="amount-words">INR ${amountInWords(t.total)}</div>
         <br/>
         <div class="section-label" style="margin-top:8px">Declaration</div>
-        <div class="declaration">We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.</div>
+        <div class="declaration">We declare that this ${isVoucher ? 'voucher' : 'invoice'} shows the actual ${isVoucher ? 'transaction' : 'price of the goods described'} and that all particulars are true and correct.</div>
       </td>
       <td style="width:40%;border:1px solid #ccc;padding:6px 10px;vertical-align:top">
-        <div style="font-size:9px;color:#777">E. &amp; O.E</div>
+        <div style="font-size:9px;color:#777;text-align:right">E. &amp; O.E</div>
         <br/><br/><br/>
-        <div class="sign-box">
-          <div>for <b>${doc.company?.name || ''}</b></div>
+        <div style="text-align:right">
+          <div style="font-size:11px">for <b>${doc.company?.name || ''}</b></div>
           <br/><br/>
-          <div style="border-top:1px solid #000;padding-top:4px;font-size:10px">Authorised Signatory</div>
+          <div style="border-top:1px solid #000;padding-top:4px;font-size:10px;display:inline-block;min-width:150px;text-align:center">Authorised Signatory</div>
         </div>
       </td>
     </tr>
   </table>
 
-  <div class="footer-note">This is a Computer Generated Invoice</div>
+  <div class="footer-note">This is a Computer Generated ${isVoucher ? 'Voucher' : 'Invoice'}</div>
 </div>
 </body></html>`;
 }
+
 
 
 // ── Map transaction type strings to DocumentType ──────────────────────────────
