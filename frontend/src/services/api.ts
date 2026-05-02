@@ -184,7 +184,8 @@ export const createLedger      = (payload: any) => tallyPost<any>('/master/party
 
 export const getStocks       = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/items', companyGuid, params));
 export const getStockItem    = (companyGuid?: string, id?: string) => get<any>(withCompany(`/stocks/items/${id}`, companyGuid));
-export const getWarehouses   = (companyGuid?: string) => get<any>(withCompany('/stocks/warehouses', companyGuid));
+export const getWarehouses       = (companyGuid?: string) => get<any>(withCompany('/stocks/warehouses', companyGuid));
+export const getWarehouseDetail  = (companyGuid?: string, id?: string) => get<any>(withCompany(`/stocks/warehouses/${id}`, companyGuid));
 export const getParties      = (companyGuid?: string, params?: any) => get<any>(withCompany('/parties', companyGuid, params));
 export const createStockItem       = (payload: any) => tallyPost<any>('/master/stock-item', payload);
 export const createWarehouse       = (payload: any) => tallyPost<any>('/master/warehouse', payload);
