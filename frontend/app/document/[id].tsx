@@ -43,7 +43,8 @@ function apiVoucherToDoc(data: any, companyName: string): VoucherDocument {
   }
 
   const documentTitle = DOC_TYPE_CONFIG[docType]?.label || rawType;
-  const totalAmount = parseFloat(v.amount || '0');
+  // Use party_amount (per-party ledger entry) when available — v.amount can be wrong when Tally has multiple parties
+  const totalAmount = parseFloat((v.party_amount ?? v.amount) || '0');
 
   // Map inventory items
   const items = apiItems.length > 0 ? apiItems.map((item: any, i: number) => ({
