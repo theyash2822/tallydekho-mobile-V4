@@ -176,9 +176,9 @@ function Divider() { return <View style={s.divider} />; }
 // EWB SEGMENT DATA  (with bill counts)
 // ─────────────────────────────────────────────────────────────────────────────
 const EWB_SEGMENTS = [
-  { pct: 32, color: COLORS.brandPrimary, label: 'Active',        value: '32%', count: '256 bills active' },
-  { pct: 21, color: '#A89060',           label: 'Expiring soon', value: '21%', count: '168 bills · 3 days left' },
-  { pct: 47, color: COLORS.borderStrong, label: 'Expired',       value: '47%', count: '376 bills expired' },
+  { pct: 0, color: COLORS.brandPrimary, label: 'Active',        value: '0%', count: '0 bills active' },
+  { pct: 0, color: '#A89060',           label: 'Expiring soon', value: '0%', count: '0 bills · — days left' },
+  { pct: 100, color: COLORS.borderStrong, label: 'No Data',     value: '—',  count: 'Sync EWB data first' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

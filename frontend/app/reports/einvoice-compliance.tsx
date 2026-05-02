@@ -20,21 +20,17 @@ const TOTAL_BILLS = 319;
 const GENERATED  = 265;
 
 const DONUT_SEGS = [
-  { label: 'Generated', pct: 74, count: 236, color: '#2D7D46' },
-  { label: 'Pending',   pct: 11, count: 35,  color: '#D97706' },
-  { label: 'Errors',    pct: 3,  count: 9,   color: '#DC2626' },
-  { label: 'Expiring',  pct: 12, count: 38,  color: '#2563EB' },
+  { label: 'Generated', pct: 0, count: 0, color: '#2D7D46' },
+  { label: 'Pending',   pct: 0, count: 0, color: '#D97706' },
+  { label: 'Errors',    pct: 0, count: 0, color: '#DC2626' },
+  { label: 'No Data',   pct: 100, count: 0, color: COLORS.borderStrong },
 ];
 
-const BAR_DATA = [22,48,15,58,72,30,65,18,52,38,80,28,44,68,20,55,40,74,32,58,35,66,45,85,40,18,60,76,48,30,55];
+const BAR_DATA = Array(31).fill(0); // real data from e-invoice API when available
 const MAX_Y    = 100;
 const Y_AXIS_W = 28;
 
-const ERROR_BOARD = [
-  { rank: 1, label: 'Amount Mismatch', count: 9 },
-  { rank: 2, label: 'GST Mismatch',    count: 5 },
-  { rank: 3, label: 'Name Mismatch',   count: 3 },
-];
+const ERROR_BOARD: any[] = []; // populated from real e-invoice error API when available
 
 const RECENT_ACTIVITY = [
   { text: '14 IRNs generated',                    time: '10 Jul 14:42' },

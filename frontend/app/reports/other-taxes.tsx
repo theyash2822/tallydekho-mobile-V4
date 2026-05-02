@@ -68,11 +68,7 @@ const TAB_STATS: Record<TaxTab, { label: string; value: string }[]> = {
 const LATE_CHALLANS: any[] = []; // TODO: fetch from TDS/GST API when available
 
 // Recent Activity (shared mock)
-const RECENT_ACTIVITY = [
-  { text: '14 IRNs generated',                     time: '10 Jul 14:42' },
-  { text: '9 IRNs retry (success 8)',              time: '10 Jul 14:42' },
-  { text: '9 IRNs Modified (success 3, Failed 6)', time: '10 Jul 14:42' },
-];
+// RECENT_ACTIVITY: fetch from API when tax activity endpoint is available
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function OtherTaxesScreen() {
@@ -197,8 +193,8 @@ export default function OtherTaxesScreen() {
         {/* Recent Activity */}
         <View style={s.card}>
           <Text style={s.cardTitle}>Recent Activity</Text>
-          {RECENT_ACTIVITY.map((item, idx) => (
-            <View key={idx} style={[s.actRow, idx < RECENT_ACTIVITY.length - 1 && s.actBorder]}>
+          {([] as any[]).map((item: any, idx: number) => (
+            <View key={idx} style={[s.actRow, false && s.actBorder]}>
               <Text style={s.actTxt}>{item.text}</Text>
               <Text style={s.actTime}>{item.time}</Text>
             </View>

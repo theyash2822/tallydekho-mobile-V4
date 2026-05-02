@@ -384,6 +384,13 @@ export default function AIInsightsScreen() {
   const [refreshing,     setRefreshing]     = useState(false);
   const [aiData,         setAiData]         = useState<any>(null);
 
+  // Derive display data from aiData (API) with sensible fallbacks
+  const forecastData   = aiData?.salesForecast?.map((v: number, i: number) => ({ week: aiData?.weekLabels?.[i] || `W${i+1}`, sales: v, forecast: aiData?.salesActual?.[i] || v })) || [];
+  const topCustomers   = aiData?.topCustomers || [];
+  const inventoryData  = aiData?.inventory    || null;
+  const growthData     = aiData?.growth       || null;
+  const forecastNext   = aiData?.forecast     || null;
+
   const isDateActive = fromDate.length > 0 && toDate.length > 0;
 
   const fetchInsights = useCallback(async () => {
@@ -486,7 +493,7 @@ export default function AIInsightsScreen() {
             <View style={[s.legendDot, { backgroundColor: COLORS.borderDefault, opacity: 0.5 }]} />
             <Text style={s.legendTxt}>Forecast Zone</Text>
           </View>
-          <ForecastLineChart data={FORECAST_DATA} />
+          <ForecastLineChart data={forecastData.length > 0 ? forecastData : FORECAST_DATA} />
         </View>
 
         {/* ──────────────────────────────────────────────────────────────── */}
@@ -494,7 +501,7 @@ export default function AIInsightsScreen() {
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
           <Text style={s.cardTitle}>Cash-Flow Projection</Text>
-          {CASHFLOW.map((row, i) => (
+          {CASHFLOW.map((row: any, i: number) => (
             <View key={row.label}
               style={[s.cashRow, i < CASHFLOW.length - 1 ? s.cashRowBorder : null]}
             >
@@ -517,7 +524,7 @@ export default function AIInsightsScreen() {
               </Text>
             </View>
           </View>
-          {STOCKOUT.map((item, i) => (
+          {STOCKOUT.map((item: any, i: number) => (
             <View key={item.item}
               style={[s.stockRow, i < STOCKOUT.length - 1 ? s.stockRowBorder : null]}
             >
@@ -566,7 +573,7 @@ export default function AIInsightsScreen() {
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
           <Text style={s.cardTitle}>Top 3 Suppliers</Text>
-          {TOP_SUPPLIERS.map((sup, i) => (
+          {(topCustomers.length > 0 ? topCustomers.map((sup: any) => ({ name: sup.name, amount: `₹${Math.round(sup.total||0).toLocaleString("en-IN")}`, count: String(sup.count||0) })) : TOP_SUPPLIERS).map((sup: any, i: number) => (
             <View key={sup.name}
               style={[s.supRow, i < TOP_SUPPLIERS.length - 1 ? s.supRowBorder : null]}
             >
