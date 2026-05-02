@@ -302,6 +302,7 @@ function ItemSelectorSheet({
   const allItems = category === 'item' ? MOCK_ITEMS : MOCK_GROUPS;
   const [search,  setSearch]  = useState('');
   const [checked, setChecked] = useState<Set<string>>(new Set(currentSelection));
+  const markDirty = () => {};
 
   useEffect(() => {
     if (visible) { setSearch(''); setChecked(new Set(currentSelection)); }
