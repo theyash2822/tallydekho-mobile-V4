@@ -8,7 +8,6 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getDebitNotes } from '../../src/services/api';
-import { MOCK_DEBIT_NOTES } from '../../src/data/mockData';
 
 const SC: Record<string,string> = { issued: COLORS.warning, settled: COLORS.positive };
 const SL: Record<string,string> = { issued: 'Issued', settled: 'Settled' };
@@ -29,7 +28,6 @@ export default function DebitNotesScreen() {
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
   }, [companyGuid]);
 
-    const data = MOCK_DEBIT_NOTES;
   const filtered = (liveData.length > 0 ? liveData : data.notes).filter(n => !search || n.vendor.toLowerCase().includes(search.toLowerCase()) || n.id.toLowerCase().includes(search.toLowerCase()));
 
   return (
@@ -50,7 +48,7 @@ export default function DebitNotesScreen() {
           <TextInput style={s.searchIn} placeholder="Search debit notes..." placeholderTextColor={COLORS.textTertiary} value={search} onChangeText={setSearch} />
         </View>
         <View style={s.statsRow}>
-          {[{l:'Total',v:data.summary.total},{l:'Issued',v:String(data.summary.count)},{l:'Docs',v:String(data.summary.docs)}].map(st=>(
+          {[{l:'Total',v:"—"},{l:'Issued',v:String("—")},{l:'Docs',v:String("—")}].map(st=>(
             <View key={st.l} style={s.stat}><Text style={s.statV}>{st.v}</Text><Text style={s.statL}>{st.l}</Text></View>
           ))}
           <View style={s.stat}><Text style={s.statV}>Jan 25</Text><Text style={s.statL}>Period</Text></View>

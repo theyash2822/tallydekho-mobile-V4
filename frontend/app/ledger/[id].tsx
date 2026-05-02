@@ -117,16 +117,7 @@ function isDebitVoucher(voucherType: string): boolean {
   return true;
 }
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
-const MOCK_TRANSACTIONS = [
-  { id: 't1', date: '01 Apr', voucher: 'SI-30865', type: 'Sales Invoice', amount: '₹12,500', isDebit: false, balance: '-₹12,500' },
-  { id: 't2', date: '05 Apr', voucher: 'PV-2045',  type: 'Payment',       amount: '₹8,000',  isDebit: true,  balance: '-₹4,500'  },
-  { id: 't3', date: '12 Apr', voucher: 'SI-30901', type: 'Sales Invoice', amount: '₹22,000', isDebit: false, balance: '-₹26,500' },
-  { id: 't4', date: '18 Apr', voucher: 'RV-1023',  type: 'Receipt',       amount: '₹15,000', isDebit: true,  balance: '-₹11,500' },
-  { id: 't5', date: '25 Apr', voucher: 'JV-0034',  type: 'Journal',       amount: '₹5,400',  isDebit: false, balance: '-₹16,900' },
-  { id: 't6', date: '03 May', voucher: 'SI-30977', type: 'Sales Invoice', amount: '₹18,700', isDebit: false, balance: '-₹35,600' },
-  { id: 't7', date: '10 May', voucher: 'PV-2089',  type: 'Payment',       amount: '₹20,000', isDebit: true,  balance: '-₹15,600' },
-];
+// Transaction data from API only
 
 const KPI_CHIPS = [
   { label: 'Opening',      value: '₹0',        color: COLORS.textSecondary },
@@ -350,7 +341,7 @@ export default function LedgerDetailScreen() {
   });
 
   // Group filtered transactions by month
-  const monthGroups: Record<string, typeof MOCK_TRANSACTIONS> = {};
+  const monthGroups: Record<string, any[]> = {};
   txns.forEach(t => {
     const mon = t.date.split(' ')[1];
     if (!monthGroups[mon]) monthGroups[mon] = [];

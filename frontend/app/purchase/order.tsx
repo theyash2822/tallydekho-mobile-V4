@@ -8,7 +8,6 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getPurchaseOrders } from '../../src/services/api';
-import { MOCK_PURCHASE_ORDERS } from '../../src/data/mockData';
 
 const SC: Record<string,string> = { confirmed: COLORS.positive, pending: COLORS.warning, received: COLORS.info };
 const SL: Record<string,string> = { confirmed: 'Confirmed', pending: 'Pending', received: 'Received' };
@@ -29,7 +28,6 @@ export default function PurchaseOrdersScreen() {
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
   }, [companyGuid]);
 
-    const data = MOCK_PURCHASE_ORDERS;
   const filtered = (liveData.length > 0 ? liveData : data.orders).filter(o => !search || o.vendor.toLowerCase().includes(search.toLowerCase()) || o.id.toLowerCase().includes(search.toLowerCase()));
 
   return (
@@ -51,7 +49,7 @@ export default function PurchaseOrdersScreen() {
           {search.length > 0 && <TouchableOpacity onPress={() => setSearch('')}><Ionicons name="close-circle" size={16} color={COLORS.textTertiary} /></TouchableOpacity>}
         </View>
         <View style={s.statsRow}>
-          {[{l:'Total',v:data.summary.total},{l:'Confirmed',v:String(data.summary.confirmed)},{l:'Pending',v:String(data.summary.pending)},{l:'Docs',v:String(data.summary.docs)}].map(st=>(
+          {[{l:'Total',v:"—"},{l:'Confirmed',v:String("—")},{l:'Pending',v:String("—")},{l:'Docs',v:String("—")}].map(st=>(
             <View key={st.l} style={s.stat}><Text style={s.statV} numberOfLines={1} adjustsFontSizeToFit>{st.v}</Text><Text style={s.statL}>{st.l}</Text></View>
           ))}
         </View>

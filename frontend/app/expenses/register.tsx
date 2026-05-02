@@ -37,45 +37,7 @@ type ExpenseItem = {
 type MonthGroup = { id: string; label: string; items: ExpenseItem[] };
 
 // ─── Month-grouped data ──────────────────────────────────────────────────
-const MONTH_GROUPS: MonthGroup[] = [
-  {
-    id: 'apr25', label: 'Apr 25',
-    items: [
-      { id: 'EXP-019', party: 'Office Supplies Co.',  date: '28/04/25', time: '11:00 AM', amount: '₹2,500',  status: 'paid',   type: 'indirect' },
-      { id: 'EXP-018', party: 'Electricity Board',    date: '22/04/25', time: '10:30 AM', amount: '₹4,200',  status: 'paid',   type: 'direct'   },
-      { id: 'EXP-017', party: 'Legal Services',       date: '15/04/25', time: '03:00 PM', amount: '₹8,900',  status: 'unpaid', type: 'indirect' },
-      { id: 'EXP-016', party: 'Transport Services',   date: '08/04/25', time: '09:00 AM', amount: '₹3,400',  status: 'paid',   type: 'direct'   },
-    ],
-  },
-  {
-    id: 'mar25', label: 'Mar 25',
-    items: [
-      { id: 'EXP-015', party: 'Cleaning Services',    date: '29/03/25', time: '02:00 PM', amount: '₹3,800',  status: 'paid',   type: 'indirect' },
-      { id: 'EXP-014', party: 'Marketing Agency',     date: '20/03/25', time: '11:00 AM', amount: '₹5,600',  status: 'unpaid', type: 'indirect' },
-      { id: 'EXP-013', party: 'Internet Provider',    date: '12/03/25', time: '09:30 AM', amount: '₹1,200',  status: 'paid',   type: 'direct'   },
-    ],
-  },
-  {
-    id: 'feb25', label: 'Feb 25',
-    items: [
-      { id: 'EXP-012', party: 'Security Services',    date: '25/02/25', time: '10:00 AM', amount: '₹6,800',  status: 'paid',   type: 'direct'   },
-      { id: 'EXP-011', party: 'Salary - March',       date: '14/02/25', time: '11:30 AM', amount: '₹75,000', status: 'paid',   type: 'direct'   },
-    ],
-  },
-  {
-    id: 'jan25', label: 'Jan 25',
-    items: [
-      { id: 'EXP-001', party: 'Office Supplies Co.',  date: '01/01/26', time: '09:00 AM', amount: '₹2,500',  status: 'paid',   type: 'indirect' },
-      { id: 'EXP-002', party: 'Internet Provider',    date: '31/12/25', time: '08:30 AM', amount: '₹1,200',  status: 'unpaid', type: 'direct'   },
-      { id: 'EXP-003', party: 'Cleaning Services',    date: '30/12/25', time: '08:00 AM', amount: '₹3,800',  status: 'paid',   type: 'indirect' },
-      { id: 'EXP-004', party: 'Marketing Agency',     date: '15/12/25', time: '07:30 PM', amount: '₹5,600',  status: 'paid',   type: 'indirect' },
-      { id: 'EXP-005', party: 'Electricity Board',    date: '10/12/25', time: '06:45 PM', amount: '₹4,200',  status: 'unpaid', type: 'direct'   },
-      { id: 'EXP-006', party: 'Legal Services',       date: '05/12/25', time: '05:15 PM', amount: '₹8,900',  status: 'paid',   type: 'indirect' },
-      { id: 'EXP-007', party: 'Transport Services',   date: '25/11/25', time: '04:30 PM', amount: '₹3,400',  status: 'paid',   type: 'direct'   },
-      { id: 'EXP-008', party: 'Security Services',    date: '20/11/25', time: '03:00 PM', amount: '₹6,800',  status: 'unpaid', type: 'direct'   },
-    ],
-  },
-];
+// Legacy MONTH_GROUPS removed — using live data
 
 export default function ExpenseRegisterScreen() {
   const router = useRouter();
@@ -123,7 +85,7 @@ export default function ExpenseRegisterScreen() {
   const [toDate,   setToDate]   = useState(() => fyTo   ? isoToDMY(fyTo)   : '31/03/25');
 
   // Collapsible months — all open by default
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(MONTH_GROUPS.map(g => g.id)));
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleMonth = (id: string) =>
     setExpanded(prev => {
       const next = new Set(prev);

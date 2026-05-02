@@ -8,7 +8,6 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getCreditNotes } from '../../src/services/api';
-import { MOCK_CREDIT_NOTES } from '../../src/data/mockData';
 
 const SC: Record<string,string> = { issued: COLORS.warning, settled: COLORS.positive };
 const SL: Record<string,string> = { issued: 'Issued', settled: 'Settled' };
@@ -29,8 +28,7 @@ export default function CreditNotesScreen() {
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
   }, [companyGuid]);
 
-    const data = MOCK_CREDIT_NOTES;
-  const filtered = (liveData.length > 0 ? liveData : data.notes).filter(n => !search || n.party.toLowerCase().includes(search.toLowerCase()) || n.id.toLowerCase().includes(search.toLowerCase()));
+  const filtered = (liveData).filter(n => !search || n.party.toLowerCase().includes(search.toLowerCase()) || n.id.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <SafeAreaView style={s.safe}>
@@ -50,7 +48,7 @@ export default function CreditNotesScreen() {
           <TextInput style={s.searchIn} placeholder="Search credit notes..." placeholderTextColor={COLORS.textTertiary} value={search} onChangeText={setSearch} />
         </View>
         <View style={s.statsRow}>
-          {[{l:'Total',v:data.summary.total},{l:'Issued',v:String(data.summary.count)},{l:'Docs',v:String(data.summary.docs)}].map(st=>(
+          {[{l:'Total',v:{total:"₹0",docs:"0"}.total},{l:'Issued',v:String({total:"₹0",docs:"0"}.count)},{l:'Docs',v:String({total:"₹0",docs:"0"}.docs)}].map(st=>(
             <View key={st.l} style={s.stat}><Text style={s.statV}>{st.v}</Text><Text style={s.statL}>{st.l}</Text></View>
           ))}
           <View style={s.stat}><Text style={s.statV}>Jan 25</Text><Text style={s.statL}>Period</Text></View>

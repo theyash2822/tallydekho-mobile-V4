@@ -5,14 +5,13 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { MOCK_PAYMENT_VOUCHERS, MOCK_RECEIPT_VOUCHERS, MOCK_JOURNAL_VOUCHERS, MOCK_CONTRA_VOUCHERS } from '../../src/data/mockData';
 
 
 const VOUCHER_TYPES = [
-  { label: 'Payment',  icon: 'arrow-up-circle-outline',   route: '/voucher/payment',  color: '#C0392B', bg: '#FDECEA', data: MOCK_PAYMENT_VOUCHERS },
-  { label: 'Receipt',  icon: 'arrow-down-circle-outline', route: '/voucher/receipt',  color: '#2D7D46', bg: '#F0FBF4', data: MOCK_RECEIPT_VOUCHERS },
-  { label: 'Journal',  icon: 'book-outline',              route: '/voucher/journal',  color: '#2563EB', bg: '#EFF6FF', data: MOCK_JOURNAL_VOUCHERS },
-  { label: 'Contra',   icon: 'swap-horizontal-outline',   route: '/voucher/contra',   color: '#7C3AED', bg: '#F5F3FF', data: MOCK_CONTRA_VOUCHERS },
+  { label: 'Payment',  icon: 'arrow-up-circle-outline',   route: '/voucher/payment',  color: '#C0392B', bg: '#FDECEA' },
+  { label: 'Receipt',  icon: 'arrow-down-circle-outline', route: '/voucher/receipt',  color: '#2D7D46', bg: '#F0FBF4' },
+  { label: 'Journal',  icon: 'book-outline',              route: '/voucher/journal',  color: '#2563EB', bg: '#EFF6FF' },
+  { label: 'Contra',   icon: 'swap-horizontal-outline',   route: '/voucher/contra',   color: '#7C3AED', bg: '#F5F3FF' },
 ] as const;
 
 const CREATE_OPTIONS = [
@@ -26,8 +25,6 @@ export default function VouchersHubScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [showCreate, setShowCreate] = useState(false);
-  const recentPayment = MOCK_PAYMENT_VOUCHERS.items[0];
-  const recentReceipt = MOCK_RECEIPT_VOUCHERS.items[0];
 
   return (
     <SafeAreaView style={s.safe}>
@@ -72,7 +69,7 @@ export default function VouchersHubScreen() {
         {/* Recent */}
         <View style={s.secRow}><Text style={s.secTitle}>Recent Activity</Text></View>
         <View style={s.listCard}>
-          {[{ ...recentPayment, type: 'Payment' }, { ...recentReceipt, type: 'Receipt' }].map((item, idx) => (
+          {[{ ...null, type: 'Payment' }, { ...null, type: 'Receipt' }].map((item, idx) => (
             <View key={item.id}>
               <TouchableOpacity
                 style={s.listRow}

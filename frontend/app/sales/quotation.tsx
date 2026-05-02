@@ -8,7 +8,6 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getSalesQuotations } from '../../src/services/api';
-import { MOCK_QUOTATIONS } from '../../src/data/mockData';
 
 const SC: Record<string,string> = { accepted: COLORS.positive, pending: COLORS.warning, expired: COLORS.negative };
 const SL: Record<string,string> = { accepted: 'Accepted', pending: 'Pending', expired: 'Expired' };
@@ -29,8 +28,7 @@ export default function QuotationsScreen() {
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
   }, [companyGuid]);
 
-    const data = MOCK_QUOTATIONS;
-  const filtered = (liveData.length > 0 ? liveData : data.items).filter(o => !search || o.party.toLowerCase().includes(search.toLowerCase()) || o.id.toLowerCase().includes(search.toLowerCase()));
+      const filtered = (liveData.length > 0 ? liveData : data.items).filter(o => !search || o.party.toLowerCase().includes(search.toLowerCase()) || o.id.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <SafeAreaView style={s.safe}>
@@ -51,7 +49,7 @@ export default function QuotationsScreen() {
           {search.length > 0 && <TouchableOpacity onPress={() => setSearch('')}><Ionicons name="close-circle" size={16} color={COLORS.textTertiary} /></TouchableOpacity>}
         </View>
         <View style={s.statsRow}>
-          {[{l:'Total',v:data.summary.total},{l:'Accepted',v:String(data.summary.accepted)},{l:'Pending',v:String(data.summary.pending)},{l:'Docs',v:String(data.summary.docs)}].map(st=>(
+          {[{l:'Total',v:{total:"₹0",docs:"0",avg:"₹0",win:"0%"}.total},{l:'Accepted',v:String({total:"₹0",docs:"0",avg:"₹0",win:"0%"}.accepted)},{l:'Pending',v:String({total:"₹0",docs:"0",avg:"₹0",win:"0%"}.pending)},{l:'Docs',v:String({total:"₹0",docs:"0",avg:"₹0",win:"0%"}.docs)}].map(st=>(
             <View key={st.l} style={s.stat}><Text style={s.statV} numberOfLines={1} adjustsFontSizeToFit>{st.v}</Text><Text style={s.statL}>{st.l}</Text></View>
           ))}
         </View>

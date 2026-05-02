@@ -193,7 +193,7 @@ export default function SalesRegisterScreen() {
         });
         return Object.values(map).sort((a, b) => b.id.localeCompare(a.id));
       })()
-    : MONTH_GROUPS;
+    : [];
 
   // Summary stats across all months
   const allFiltered = displayGroups.flatMap(g => filterInvoices(g.invoices));

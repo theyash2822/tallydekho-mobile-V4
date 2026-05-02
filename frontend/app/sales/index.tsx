@@ -11,7 +11,6 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getSalesInvoices, getKPIStrip } from '../../src/services/api';
-import { MOCK_SALES_REGISTER } from '../../src/data/mockData';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
 const AMBER      = '#A89060';
@@ -125,7 +124,7 @@ export default function SalesScreen() {
   }, []);
 
   // ─ Filtered recent list
-  const sourceRecent = liveRecent.length > 0 ? liveRecent : MOCK_SALES_REGISTER.invoices;
+  const sourceRecent = liveRecent;
   const recent = sourceRecent.filter((inv: any) => {
     if (filter === 'Paid')   return inv.status === 'paid';
     if (filter === 'Unpaid') return inv.status === 'unpaid';

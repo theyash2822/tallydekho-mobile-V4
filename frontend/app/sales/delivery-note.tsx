@@ -8,7 +8,6 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getDeliveryNotes } from '../../src/services/api';
-import { MOCK_DELIVERY_NOTES } from '../../src/data/mockData';
 
 const SC: Record<string,string> = { delivered: COLORS.positive, in_transit: COLORS.info, pending: COLORS.warning };
 const SL: Record<string,string> = { delivered: 'Delivered', in_transit: 'In Transit', pending: 'Pending' };
@@ -29,8 +28,7 @@ export default function DeliveryNotesScreen() {
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
   }, [companyGuid]);
 
-    const data = MOCK_DELIVERY_NOTES;
-  const filtered = data.notes.filter(n => !search || n.party.toLowerCase().includes(search.toLowerCase()) || n.id.toLowerCase().includes(search.toLowerCase()));
+  const filtered = liveData.filter(n => !search || n.party.toLowerCase().includes(search.toLowerCase()) || n.id.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <SafeAreaView style={s.safe}>
@@ -50,7 +48,7 @@ export default function DeliveryNotesScreen() {
           <TextInput style={s.searchIn} placeholder="Search delivery notes..." placeholderTextColor={COLORS.textTertiary} value={search} onChangeText={setSearch} />
         </View>
         <View style={s.statsRow}>
-          {[{l:'Delivered',v:String(data.summary.delivered)},{l:'In Transit',v:String(data.summary.in_transit)},{l:'Pending',v:String(data.summary.pending)},{l:'Total',v:String(data.summary.docs)}].map(st=>(
+          {[{l:'Delivered',v:String({total:"₹0",docs:"0"}.delivered)},{l:'In Transit',v:String({total:"₹0",docs:"0"}.in_transit)},{l:'Pending',v:String({total:"₹0",docs:"0"}.pending)},{l:'Total',v:String({total:"₹0",docs:"0"}.docs)}].map(st=>(
             <View key={st.l} style={s.stat}><Text style={s.statV}>{st.v}</Text><Text style={s.statL}>{st.l}</Text></View>
           ))}
         </View>
