@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
