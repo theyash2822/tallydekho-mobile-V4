@@ -49,7 +49,7 @@ export default function QuotationsScreen() {
           {search.length > 0 && <TouchableOpacity onPress={() => setSearch('')}><Ionicons name="close-circle" size={16} color={COLORS.textTertiary} /></TouchableOpacity>}
         </View>
         <View style={s.statsRow}>
-          {[{l:'Total',v:{total:"₹0",docs:"0",avg:"₹0",win:"0%"}.total},{l:'Accepted',v:String({total:"₹0",docs:"0",avg:"₹0",win:"0%"}.accepted)},{l:'Pending',v:String({total:"₹0",docs:"0",avg:"₹0",win:"0%"}.pending)},{l:'Docs',v:String({total:"₹0",docs:"0",avg:"₹0",win:"0%"}.docs)}].map(st=>(
+          {[{l:'Total',v:'₹0'},{l:'Accepted',v:'0'},{l:'Pending',v:'0'},{l:'Docs',v:String(liveData.length)}].map(st=>(
             <View key={st.l} style={s.stat}><Text style={s.statV} numberOfLines={1} adjustsFontSizeToFit>{st.v}</Text><Text style={s.statL}>{st.l}</Text></View>
           ))}
         </View>

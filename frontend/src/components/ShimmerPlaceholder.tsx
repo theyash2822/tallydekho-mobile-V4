@@ -54,7 +54,7 @@ export default function ShimmerPlaceholder({
   return (
     <View
       style={[
-        { width, height, borderRadius, backgroundColor: '#E0DFDA', overflow: 'hidden' },
+        { width: width as any, height, borderRadius, backgroundColor: '#E0DFDA', overflow: 'hidden' },
         style,
       ]}
     >

@@ -306,7 +306,8 @@ const m = StyleSheet.create({
   optTxt:{fontSize:TYPOGRAPHY.base,color:COLORS.textPrimary},
   center:{backgroundColor:COLORS.cardBg,borderRadius:RADIUS.lg,margin:SPACING.xl,overflow:'hidden'},
   unitOpt:{paddingHorizontal:SPACING.xl,paddingVertical:14,borderBottomWidth:1,borderBottomColor:COLORS.borderDefault,alignItems:'center'},
-});
+
+  unitTxt:{fontSize:14,color:'#1A1A1A',fontWeight:'600'},});
 const ir = StyleSheet.create({
   topRow:{flexDirection:'row',alignItems:'center',gap:8,marginBottom:10},
   prodBtn:{flex:1,flexDirection:'row',alignItems:'center',gap:6,backgroundColor:COLORS.pageBg,borderRadius:RADIUS.sm,paddingHorizontal:10,paddingVertical:10,borderWidth:1,borderColor:COLORS.borderDefault},
@@ -318,4 +319,6 @@ const ir = StyleSheet.create({
   ml:{fontSize:TYPOGRAPHY.xs,fontWeight:'600',color:COLORS.textSecondary,marginBottom:4},
   mi:{backgroundColor:COLORS.pageBg,borderWidth:1,borderColor:COLORS.borderDefault,borderRadius:RADIUS.sm,paddingHorizontal:8,paddingVertical:9,fontSize:TYPOGRAPHY.sm,color:COLORS.textPrimary,textAlign:'center',minHeight:38},
   unitBtn:{flexDirection:'row',alignItems:'center',gap:3,backgroundColor:COLORS.pageBg,borderRadius:RADIUS.sm,paddingHorizontal:8,paddingVertical:9,borderWidth:1,borderColor:COLORS.borderDefault,alignSelf:'flex-end',minHeight:38},
-});
+
+  card:{backgroundColor:'#fff',borderRadius:8,padding:16,marginBottom:12,borderWidth:1,borderColor:'#E9E8E3'},
+  unitTxt:{fontSize:14,color:'#1A1A1A',fontWeight:'600'},});

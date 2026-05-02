@@ -60,8 +60,8 @@ export default function VouchersHubScreen() {
                 <Ionicons name={vt.icon as any} size={26} color={vt.color} />
               </View>
               <Text style={s.vLabel}>{vt.label}</Text>
-              <Text style={s.vTotal}>{vt.data.summary.total}</Text>
-              <Text style={s.vDocs}>{vt.data.summary.docs} docs</Text>
+              <Text style={s.vTotal}>{'—'}</Text>
+              <Text style={s.vDocs}>{'—'} docs</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -69,7 +69,7 @@ export default function VouchersHubScreen() {
         {/* Recent */}
         <View style={s.secRow}><Text style={s.secTitle}>Recent Activity</Text></View>
         <View style={s.listCard}>
-          {[{ id: null, party: '', date: '', amount: '₹0', type: 'Payment' }, { id: null, party: '', date: '', amount: '₹0', type: 'Receipt' }].map((item, idx) => (
+          {[{ id: null, party: '', date: '', amount: '₹0', type: 'Payment', method: '' }, { id: null, party: '', date: '', amount: '₹0', type: 'Receipt', method: '' }].map((item, idx) => (
             <View key={item.id}>
               <TouchableOpacity
                 style={s.listRow}

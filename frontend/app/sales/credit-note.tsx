@@ -48,7 +48,7 @@ export default function CreditNotesScreen() {
           <TextInput style={s.searchIn} placeholder="Search credit notes..." placeholderTextColor={COLORS.textTertiary} value={search} onChangeText={setSearch} />
         </View>
         <View style={s.statsRow}>
-          {[{l:'Total',v:{total:"₹0",docs:"0"}.total},{l:'Issued',v:String({total:"₹0",docs:"0"}.count)},{l:'Docs',v:String({total:"₹0",docs:"0"}.docs)}].map(st=>(
+          {[{l:'Total',v:'₹0'},{l:'Issued',v:'0'},{l:'Docs',v:String(liveData.length)}].map(st=>(
             <View key={st.l} style={s.stat}><Text style={s.statV}>{st.v}</Text><Text style={s.statL}>{st.l}</Text></View>
           ))}
           <View style={s.stat}><Text style={s.statV}>Jan 25</Text><Text style={s.statL}>Period</Text></View>

@@ -48,7 +48,7 @@ export default function DeliveryNotesScreen() {
           <TextInput style={s.searchIn} placeholder="Search delivery notes..." placeholderTextColor={COLORS.textTertiary} value={search} onChangeText={setSearch} />
         </View>
         <View style={s.statsRow}>
-          {[{l:'Delivered',v:String({total:"₹0",docs:"0"}.delivered)},{l:'In Transit',v:String({total:"₹0",docs:"0"}.in_transit)},{l:'Pending',v:String({total:"₹0",docs:"0"}.pending)},{l:'Total',v:String({total:"₹0",docs:"0"}.docs)}].map(st=>(
+          {[{l:'Delivered',v:'0'},{l:'In Transit',v:'0'},{l:'Pending',v:'0'},{l:'Total',v:String(liveData.length)}].map(st=>(
             <View key={st.l} style={s.stat}><Text style={s.statV}>{st.v}</Text><Text style={s.statL}>{st.l}</Text></View>
           ))}
         </View>
