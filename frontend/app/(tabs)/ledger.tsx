@@ -12,7 +12,7 @@ import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getLedgers, createLedger } from '../../src/services/api';
-import { MOCK_LEDGERS } from '../../src/data/mockData';
+
 import { useAuth } from '../../src/context/AuthContext';
 
 import FilterBottomSheet, { FilterRadioRow } from '../../src/components/FilterBottomSheet';
@@ -420,7 +420,7 @@ export default function LedgerScreen() {
   const { company } = useAuth();
   const companyGuid = company?.guid;
   const filterBtnRef = useRef<typeof TouchableOpacity>(null);
-  const [data, setData] = useState<LedgerItem[]>(MOCK_LEDGERS);
+  const [data, setData] = useState<LedgerItem[]>([]);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('All');
   const [activeNature, setActiveNature] = useState<NatureType>('All');
@@ -846,10 +846,10 @@ export default function LedgerScreen() {
             );
           })}
 
-          {filtered.length === 0 && (
+          {!isLoading && filtered.length === 0 && (
             <View style={styles.emptyState}>
               <Ionicons name="journal-outline" size={48} color={COLORS.textTertiary} />
-              <Text style={styles.emptyText}>No ledgers found</Text>
+              <Text style={styles.emptyText}>{data.length === 0 ? 'No ledgers synced yet — do a Tally sync first' : 'No ledgers match your filter'}</Text>
             </View>
           )}
         </View>
