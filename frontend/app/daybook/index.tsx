@@ -1,14 +1,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, FlatList,
+  TextInput, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { getDaybook } from '../../src/services/api';
+import { getVouchers } from '../../src/services/api';
 
 const DAYBOOK_TYPE_MAP: Record<string, string> = {
   Sales:    'sales_invoice',
@@ -30,18 +30,17 @@ interface Entry {
   isCredit: boolean; status: 'posted' | 'pending'; isMine: boolean;
 }
 
-const ENTRIES: Entry[] = [
-  { id:'e1', date:'15 Jun', month:'Jun 25', type:'Sales', party:'ABC Traders', ref:'INV-30979', amount:'₹42,500', isCredit:false, status:'posted', isMine:true },
-  { id:'e2', date:'15 Jun', month:'Jun 25', type:'Purchase', party:'PQR Exports', ref:'PO-00124', amount:'₹28,000', isCredit:true, status:'posted', isMine:false },
-  { id:'e3', date:'14 Jun', month:'Jun 25', type:'Payment', party:'Kumar & Sons', ref:'PV-00081', amount:'₹15,000', isCredit:true, status:'posted', isMine:true },
-  { id:'e4', date:'14 Jun', month:'Jun 25', type:'Receipt', party:'XYZ Retail', ref:'RV-00062', amount:'₹33,200', isCredit:false, status:'posted', isMine:true },
-  { id:'e5', date:'13 Jun', month:'Jun 25', type:'Journal', party:'Capital A/c', ref:'JV-00015', amount:'₹5,000', isCredit:true, status:'pending', isMine:true },
-  { id:'e6', date:'13 Jun', month:'Jun 25', type:'Sales', party:'Sharma Electronics', ref:'INV-30978', amount:'₹18,750', isCredit:false, status:'posted', isMine:false },
-  { id:'e7', date:'12 Jun', month:'Jun 25', type:'Contra', party:'HDFC → SBI', ref:'CV-00008', amount:'₹50,000', isCredit:false, status:'posted', isMine:true },
-  { id:'e8', date:'10 Jun', month:'Jun 25', type:'Purchase', party:'Delhi Suppliers', ref:'PO-00123', amount:'₹62,400', isCredit:true, status:'pending', isMine:false },
-  { id:'e9', date:'05 May', month:'May 25', type:'Sales', party:'Raj Enterprises', ref:'INV-30950', amount:'₹27,300', isCredit:false, status:'posted', isMine:true },
-  { id:'e10', date:'02 May', month:'May 25', type:'Payment', party:'Indian Export House', ref:'PV-00070', amount:'₹44,000', isCredit:true, status:'posted', isMine:false },
-];
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+const mapVoucherType = (raw: string): VType => {
+  const s = (raw || '').toLowerCase();
+  if (s.includes('sales')) return 'Sales';
+  if (s.includes('purchase')) return 'Purchase';
+  if (s.includes('payment')) return 'Payment';
+  if (s.includes('receipt')) return 'Receipt';
+  if (s.includes('journal')) return 'Journal';
+  if (s.includes('contra')) return 'Contra';
+  return 'Journal';
+};
 
 const TYPE_COLORS: Record<string,string> = {
   Sales: COLORS.positive, Purchase: COLORS.info, Payment: COLORS.negative,
@@ -51,27 +50,42 @@ const TYPE_COLORS: Record<string,string> = {
 export default function DaybookScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { company } = useAuth();
+  const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
+
+  const today = new Date().toISOString().split('T')[0];
+  const [fromDate, setFromDate] = useState(selectedFY?.startDate || today);
+  const [toDate,   setToDate]   = useState(today);
+
   const [liveEntries, setLiveEntries] = useState<Entry[]>([]);
+  const [isLoading,   setIsLoading]   = useState(false);
+  const [apiError,    setApiError]    = useState<string | null>(null);
 
   useEffect(() => {
     if (!companyGuid) return;
-    const today = new Date().toISOString().split('T')[0];
-    getDaybook(companyGuid, today).then((res: any) => {
-      const rows = res?.data ?? [];
-      if (rows.length) setLiveEntries(rows.map((r: any) => ({
-        id: String(r.id),
-        date: r.date || today,
-        type: r.voucher_type || 'Journal',
-        ref: r.voucher_number || '',
-        party: r.party_name || '',
-        amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`,
-        debitCredit: 'Dr',
-        isMine: true,
-      })));
-    }).catch(() => {});
-  }, [companyGuid]);
+    setIsLoading(true);
+    setApiError(null);
+    getVouchers(companyGuid, undefined, { from: fromDate, to: toDate, limit: 500 })
+      .then((res: any) => {
+        const rows = res?.data ?? [];
+        setLiveEntries(rows.map((r: any) => ({
+          id: r.guid || String(r.id),
+          date: r.date || today,
+          month: new Date(r.date || today).toLocaleString('en-IN', { month: 'short', year: '2-digit' }),
+          type: mapVoucherType(r.voucher_type) as VType,
+          ref: r.voucher_number || '',
+          party: r.party_name || '',
+          amount: `₹${Math.abs(+r.amount || 0).toLocaleString('en-IN')}`,
+          isCredit: +r.amount < 0,
+          status: 'posted' as const,
+          isMine: true,
+        })));
+      })
+      .catch((err: any) => {
+        setApiError(err?.message || 'Failed to load entries');
+      })
+      .finally(() => setIsLoading(false));
+  }, [companyGuid, fromDate, toDate]);
 
   const [mode, setMode] = useState<ViewMode>('daybook');
   const [vType, setVType] = useState<VType>('ALL');
@@ -79,8 +93,9 @@ export default function DaybookScreen() {
   const [selected, setSelected] = useState<string[]>([]);
   const [multiSelect, setMultiSelect] = useState(false);
 
+  const sourceEntries = liveEntries;
+
   const filtered = useMemo(() => {
-    const sourceEntries = liveEntries.length > 0 ? liveEntries : ENTRIES;
     let arr = mode === 'myentries' ? sourceEntries.filter(e => e.isMine) : sourceEntries;
     if (vType !== 'ALL') arr = arr.filter(e => e.type === vType);
     if (search) arr = arr.filter(e =>
@@ -88,7 +103,7 @@ export default function DaybookScreen() {
       e.ref.toLowerCase().includes(search.toLowerCase())
     );
     return arr;
-  }, [mode, vType, search]);
+  }, [mode, vType, search, sourceEntries]);
 
   // Group by month
   const grouped = useMemo(() => {
@@ -159,74 +174,90 @@ export default function DaybookScreen() {
         </View>
       )}
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom: Math.max(insets.bottom,20)+16}} keyboardShouldPersistTaps="handled">
-        {grouped.map(([month, entries]) => (
-          <View key={month}>
-            {/* Month header */}
-            <View style={s.monthHdr}>
-              <Text style={s.monthTxt}>{month}</Text>
-              <View style={s.monthLine} />
-            </View>
-            {/* Entries */}
-            <View style={s.card}>
-              {entries.map((entry, idx) => {
-                const isSel = selected.includes(entry.id);
-                const tc = TYPE_COLORS[entry.type] || COLORS.textSecondary;
-                return (
-                  <View key={entry.id}>
-                    <TouchableOpacity
-                      style={[s.row, isSel && s.rowSelected]}
-                      activeOpacity={0.7}
-                      onPress={() => {
-                        if (multiSelect) {
-                          toggleSelect(entry.id);
-                        } else {
-                          const docType = DAYBOOK_TYPE_MAP[entry.type] || 'sales_invoice';
-                          router.push(`/document/${entry.ref}?type=${docType}` as any);
-                        }
-                      }}
-                      onLongPress={() => { if (mode==='myentries') { setMultiSelect(true); toggleSelect(entry.id); } }}
-                    >
-                      {multiSelect && mode==='myentries' && (
-                        <View style={[s.checkbox, isSel && s.checkboxActive]}>
-                          {isSel && <Ionicons name="checkmark" size={12} color={COLORS.white} />}
-                        </View>
-                      )}
-                      <View style={[s.typeIcon, {backgroundColor: tc+'15'}]}>
-                        <Ionicons name={entry.isCredit ? 'arrow-down-circle-outline' : 'arrow-up-circle-outline'} size={18} color={tc} />
-                      </View>
-                      <View style={s.entryInfo}>
-                        <View style={s.entryTop}>
-                          <View style={[s.vTypePill, {backgroundColor: tc+'18'}]}>
-                            <Text style={[s.vTypeTxt, {color:tc}]}>{entry.type}</Text>
+      {/* Error Banner */}
+      {apiError ? (
+        <View style={s.errorBanner}>
+          <Ionicons name="alert-circle-outline" size={16} color="#DC2626" />
+          <Text style={s.errorBannerTxt}>{apiError}</Text>
+        </View>
+      ) : null}
+
+      {/* Loading */}
+      {isLoading ? (
+        <View style={s.loadingBox}>
+          <ActivityIndicator size="large" color={COLORS.brandPrimary} />
+          <Text style={s.loadingTxt}>Loading entries...</Text>
+        </View>
+      ) : (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom: Math.max(insets.bottom,20)+16}} keyboardShouldPersistTaps="handled">
+          {grouped.map(([month, entries]) => (
+            <View key={month}>
+              {/* Month header */}
+              <View style={s.monthHdr}>
+                <Text style={s.monthTxt}>{month}</Text>
+                <View style={s.monthLine} />
+              </View>
+              {/* Entries */}
+              <View style={s.card}>
+                {entries.map((entry, idx) => {
+                  const isSel = selected.includes(entry.id);
+                  const tc = TYPE_COLORS[entry.type] || COLORS.textSecondary;
+                  return (
+                    <View key={entry.id}>
+                      <TouchableOpacity
+                        style={[s.row, isSel && s.rowSelected]}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          if (multiSelect) {
+                            toggleSelect(entry.id);
+                          } else {
+                            const docType = DAYBOOK_TYPE_MAP[entry.type] || 'sales_invoice';
+                            router.push(`/document/${entry.ref}?type=${docType}` as any);
+                          }
+                        }}
+                        onLongPress={() => { if (mode==='myentries') { setMultiSelect(true); toggleSelect(entry.id); } }}
+                      >
+                        {multiSelect && mode==='myentries' && (
+                          <View style={[s.checkbox, isSel && s.checkboxActive]}>
+                            {isSel && <Ionicons name="checkmark" size={12} color={COLORS.white} />}
                           </View>
-                          <Text style={s.refTxt}>{entry.ref}</Text>
-                          {entry.status === 'pending' && (
-                            <View style={s.pendingBadge}><Text style={s.pendingTxt}>Pending</Text></View>
-                          )}
+                        )}
+                        <View style={[s.typeIcon, {backgroundColor: tc+'15'}]}>
+                          <Ionicons name={entry.isCredit ? 'arrow-down-circle-outline' : 'arrow-up-circle-outline'} size={18} color={tc} />
                         </View>
-                        <Text style={s.partyTxt}>{entry.party}</Text>
-                        <Text style={s.dateTxt}>{entry.date}</Text>
-                      </View>
-                      <View style={s.amtCol}>
-                        <Text style={[s.amtTxt, {color: entry.isCredit ? COLORS.negative : COLORS.positive}]}>{entry.amount}</Text>
-                        <Text style={[s.drCrTxt, {color: entry.isCredit ? COLORS.negative : COLORS.positive}]}>{entry.isCredit?'Cr':'Dr'}</Text>
-                      </View>
-                    </TouchableOpacity>
-                    {idx < entries.length-1 && <View style={s.divider} />}
-                  </View>
-                );
-              })}
+                        <View style={s.entryInfo}>
+                          <View style={s.entryTop}>
+                            <View style={[s.vTypePill, {backgroundColor: tc+'18'}]}>
+                              <Text style={[s.vTypeTxt, {color:tc}]}>{entry.type}</Text>
+                            </View>
+                            <Text style={s.refTxt}>{entry.ref}</Text>
+                            {entry.status === 'pending' && (
+                              <View style={s.pendingBadge}><Text style={s.pendingTxt}>Pending</Text></View>
+                            )}
+                          </View>
+                          <Text style={s.partyTxt}>{entry.party}</Text>
+                          <Text style={s.dateTxt}>{entry.date}</Text>
+                        </View>
+                        <View style={s.amtCol}>
+                          <Text style={[s.amtTxt, {color: entry.isCredit ? COLORS.negative : COLORS.positive}]}>{entry.amount}</Text>
+                          <Text style={[s.drCrTxt, {color: entry.isCredit ? COLORS.negative : COLORS.positive}]}>{entry.isCredit?'Cr':'Dr'}</Text>
+                        </View>
+                      </TouchableOpacity>
+                      {idx < entries.length-1 && <View style={s.divider} />}
+                    </View>
+                  );
+                })}
+              </View>
             </View>
-          </View>
-        ))}
-        {filtered.length === 0 && (
-          <View style={s.empty}>
-            <Ionicons name="document-text-outline" size={48} color={COLORS.borderStrong} />
-            <Text style={s.emptyTxt}>No entries found</Text>
-          </View>
-        )}
-      </ScrollView>
+          ))}
+          {filtered.length === 0 && (
+            <View style={s.empty}>
+              <Ionicons name="document-text-outline" size={48} color={COLORS.borderStrong} />
+              <Text style={s.emptyTxt}>No entries found</Text>
+            </View>
+          )}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -254,6 +285,10 @@ const s = StyleSheet.create({
   actionTxt:{fontSize:TYPOGRAPHY.sm,color:COLORS.white,fontWeight:'600'},
   pushBtn:{flexDirection:'row',alignItems:'center',gap:6,backgroundColor:COLORS.positive,paddingHorizontal:14,paddingVertical:8,borderRadius:RADIUS.md},
   pushTxt:{fontSize:TYPOGRAPHY.sm,color:COLORS.white,fontWeight:'700'},
+  errorBanner:{flexDirection:'row',alignItems:'center',gap:8,backgroundColor:'#FEE2E2',borderRadius:RADIUS.md,padding:SPACING.sm,marginHorizontal:SPACING.md,marginTop:SPACING.sm,borderWidth:1,borderColor:'#FECACA'},
+  errorBannerTxt:{flex:1,fontSize:TYPOGRAPHY.sm,color:'#DC2626'},
+  loadingBox:{alignItems:'center',justifyContent:'center',paddingVertical:80,gap:12},
+  loadingTxt:{fontSize:TYPOGRAPHY.sm,color:COLORS.textSecondary},
   monthHdr:{flexDirection:'row',alignItems:'center',gap:10,marginHorizontal:SPACING.md,marginTop:SPACING.lg,marginBottom:SPACING.sm},
   monthTxt:{fontSize:TYPOGRAPHY.sm,fontWeight:'700',color:COLORS.textSecondary},
   monthLine:{flex:1,height:1,backgroundColor:COLORS.borderDefault},
