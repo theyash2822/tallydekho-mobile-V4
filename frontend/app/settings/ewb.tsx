@@ -52,6 +52,12 @@ export default function EWBIntegrationScreen() {
   const [clientId, setClientId] = useState('');
   const [secret, setSecret] = useState('');
   const [testing, setTesting] = useState(false);
+  const [gspProvider, setGspProvider] = useState<'nic'|'cleartax'|'masters'>('nic');
+  const GSP_OPTIONS = [
+    { id: 'nic',       label: 'NIC Direct',     url: 'ewaybillgst.gov.in',  desc: 'Free, direct NIC portal' },
+    { id: 'cleartax',  label: 'Cleartax GSP',   url: 'cleartax.in',         desc: 'Paid, full-featured GSP' },
+    { id: 'masters',   label: 'Masters India',  url: 'mastersindia.co',      desc: 'Paid, enterprise GSP' },
+  ];
 
   const saveCredentials = saveToBackend;
   const testConnection = testNICConnection;

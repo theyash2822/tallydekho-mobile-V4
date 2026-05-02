@@ -11,6 +11,7 @@ import Toast from 'react-native-toast-message';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { askHelpAI } from '../../src/services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Role = 'user' | 'bot';
@@ -141,18 +142,24 @@ export default function HelpCenterScreen() {
     setInput('');
     setSending(true);
 
-    // Simulate bot typing delay
-    setTimeout(() => {
+    // Call real AI help endpoint
+    askHelpAI(text, messages.slice(-6)).then((res: any) => {
+      const reply = res?.data?.reply || getBotResponse(text); // fallback to keyword bot
       const botMsg: Message = {
         id: (Date.now()+1).toString(),
         role: 'bot',
-        text: getBotResponse(text),
+        text: reply,
         time: timestamp(),
       };
       setMessages(prev => [...prev, botMsg]);
       setSending(false);
       setTimeout(()=>scrollRef.current?.scrollToEnd({animated:true}), 100);
-    }, 900);
+    }).catch(() => {
+      // Fallback to keyword bot on API error
+      const botMsg: Message = { id: (Date.now()+1).toString(), role: 'bot', text: getBotResponse(text), time: timestamp() };
+      setMessages(prev => [...prev, botMsg]);
+      setSending(false);
+    });
 
     setTimeout(()=>scrollRef.current?.scrollToEnd({animated:true}), 80);
   }, [input, sending]);

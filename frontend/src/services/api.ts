@@ -228,6 +228,9 @@ export const markAllNotificationsRead = () => patch<any>('/notifications/read-al
 
 export const getAlerts           = (companyGuid?: string) => get<any>(withCompany('/alerts', companyGuid));
 export const getEWBList          = (companyGuid?: string, params?: any) => get<any>(withCompany('/ewaybills', companyGuid, params));
+export const askHelpAI = (message: string, history?: any[]) => post<any>('/ai/help', { message, history });
+export const sendPaymentReminder = (companyGuid: string, data: any) => post<any>('/reminders/send', { companyGuid, ...data });
+
 export const getUnmatchedInvoices = (companyGuid?: string, params?: any) => get<any>(withCompany('/reports/unmatched', companyGuid, params));
 export const getEInvoicePending  = (companyGuid?: string) => get<any>(withCompany('/einvoice/pending', companyGuid));
 export const getEInvoiceGenerated = (companyGuid?: string) => get<any>(withCompany('/einvoice/generated', companyGuid));
