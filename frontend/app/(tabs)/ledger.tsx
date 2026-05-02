@@ -417,7 +417,7 @@ function FilterModal({ visible, onClose, activeNature, onApply }: FilterModalPro
 // ─── Main Ledger Screen ───────────────────────────────────────────────────────
 export default function LedgerScreen() {
   const router = useRouter();
-  const { company } = useAuth();
+  const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
   const filterBtnRef = useRef<typeof TouchableOpacity>(null);
   const [data, setData] = useState<LedgerItem[]>([]);
@@ -479,7 +479,10 @@ export default function LedgerScreen() {
   const loadLedgers = async () => {
     setApiError(null);
     try {
-      const res = await getLedgers(companyGuid, { search, limit: '500' }) as any;
+      const fyParams = selectedFY?.startDate && selectedFY?.endDate
+        ? { from: selectedFY.startDate, to: selectedFY.endDate }
+        : {};
+      const res = await getLedgers(companyGuid, { search, limit: '500', ...fyParams }) as any;
       const rows = res?.data ?? (Array.isArray(res) ? res : []);
       setData(Array.isArray(rows) ? rows.map((r: any) => ({
         id: r.guid || r.id || String(r.id),
@@ -500,7 +503,7 @@ export default function LedgerScreen() {
   useEffect(() => {
     setIsLoading(true);
     loadLedgers().finally(() => setIsLoading(false));
-  }, [companyGuid]);
+  }, [companyGuid, selectedFY?.startDate]);
 
   const onRefresh = async () => {
     setRefreshing(true);
