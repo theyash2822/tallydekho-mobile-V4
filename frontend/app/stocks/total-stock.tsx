@@ -17,6 +17,7 @@ import { EditStockModal } from '../../src/components/forms/EditStockModal';
 import { StockTransferModal } from '../../src/components/forms/StockTransferModal';
 import { BulkTransferModal } from '../../src/components/forms/BulkTransferModal';
 import FilterBottomSheet, { FilterChipGroup } from '../../src/components/FilterBottomSheet';
+import { ALL_WAREHOUSES, ALL_CATEGORIES, ALL_GROUPS } from '../../src/data/stockData';
 
 // ─── (Types, mock data, and constants are now in src/data/stockData.ts) ────────
 

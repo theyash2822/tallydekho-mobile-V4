@@ -550,7 +550,7 @@ function ProductDropdownModal({ visible, value, onSelect, onClose }: {
         <View style={m.handle} />
         <Text style={m.title}>Select Product / Service</Text>
         <ScrollView showsVerticalScrollIndicator={false}>
-          {PRODUCTS.map(p => (
+          {ALL_PRODUCTS.map(p => (
             <TouchableOpacity key={p.value} style={[m.opt, p.value === value && m.optActive]}
               onPress={() => { onSelect(p); onClose(); }} activeOpacity={0.7}>
               <View style={m.optLeft}>
