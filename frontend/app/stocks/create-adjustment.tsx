@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput,
+  KeyboardAvoidingView, Platform, Alert, TextInput, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,8 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import FormDropdown from '../../src/components/forms/FormDropdown';
+import { getWarehouses } from '../../src/services/api';
+import { useAuth } from '../../src/context/AuthContext';
 
 const ADJ_REASONS = ['Damage', 'Physical Count Correction', 'Expired Goods', 'Theft / Loss', 'Production Consumption', 'Sample / Display', 'Opening Stock Entry', 'Other'];
 const WEB = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
@@ -46,7 +48,27 @@ function SearchInput({ value, onChange, placeholder }: { value: string; onChange
 export default function CreateStockAdjustmentScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
   const [entryType, setEntryType] = useState<EntryType>('regular');
+
+  // Warehouse data from API
+  const [warehouses,        setWarehouses]        = useState<string[]>([]);
+  const [whLoading,         setWhLoading]         = useState(false);
+  const [selectedWarehouse, setSelectedWarehouse] = useState('');
+  const [whDropOpen,        setWhDropOpen]        = useState(false);
+
+  useEffect(() => {
+    if (!companyGuid) return;
+    setWhLoading(true);
+    getWarehouses(companyGuid)
+      .then((res: any) => {
+        const data: any[] = res?.data ?? [];
+        setWarehouses(data.map((w: any) => w.name ?? '').filter(Boolean));
+      })
+      .catch(() => {})
+      .finally(() => setWhLoading(false));
+  }, [companyGuid]);
 
   const [warehouseSearch, setWarehouseSearch] = useState('');
   const [binRack, setBinRack] = useState('');
@@ -77,9 +99,50 @@ export default function CreateStockAdjustmentScreen() {
           contentContainerStyle={s.form}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Search Warehouse */}
-          <Text style={s.label}>Search Warehouse</Text>
-          <SearchInput value={warehouseSearch} onChange={setWarehouseSearch} placeholder="Search warehouse" />
+          {/* Search / Select Warehouse */}
+          <Text style={s.label}>Warehouse</Text>
+          {selectedWarehouse ? (
+            <TouchableOpacity
+              style={s.selectedWH}
+              onPress={() => { setSelectedWarehouse(''); setWarehouseSearch(''); setWhDropOpen(false); }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="business-outline" size={16} color={COLORS.brandPrimary} />
+              <Text style={s.selectedWHTxt}>{selectedWarehouse}</Text>
+              <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
+            </TouchableOpacity>
+          ) : (
+            <>
+              <SearchInput
+                value={warehouseSearch}
+                onChange={v => { setWarehouseSearch(v); setWhDropOpen(v.length > 0); }}
+                placeholder="Search warehouse…"
+              />
+              {whLoading && <ActivityIndicator size="small" color={COLORS.brandPrimary} style={{ marginTop: 8 }} />}
+              {whDropOpen && !whLoading && (
+                <View style={s.dropList}>
+                  {warehouses
+                    .filter(w => w.toLowerCase().includes(warehouseSearch.toLowerCase()))
+                    .slice(0, 8)
+                    .map((w, idx, arr) => (
+                      <TouchableOpacity
+                        key={w}
+                        style={[s.dropItem, idx === arr.length - 1 && { borderBottomWidth: 0 }]}
+                        onPress={() => { setSelectedWarehouse(w); setWarehouseSearch(''); setWhDropOpen(false); }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={s.dropTxt}>{w}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  {warehouses.filter(w => w.toLowerCase().includes(warehouseSearch.toLowerCase())).length === 0 && (
+                    <View style={s.dropItem}>
+                      <Text style={[s.dropTxt, { color: COLORS.textTertiary }]}>No warehouses found</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </>
+          )}
 
           {/* Bin / Rack + Batch / Serial Picker */}
           <View style={s.row2}>
@@ -189,6 +252,8 @@ const s = StyleSheet.create({
   },
   dropTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
   dropTxtActive: { fontWeight: '700' },
+  selectedWH:    { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 13, borderWidth: 1, borderColor: COLORS.brandPrimary, borderRadius: RADIUS.md, backgroundColor: COLORS.cardBg },
+  selectedWHTxt: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, fontWeight: '600' },
   footer: {
     paddingHorizontal: SPACING.md, paddingTop: SPACING.md,
     borderTopWidth: 1, borderTopColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg,

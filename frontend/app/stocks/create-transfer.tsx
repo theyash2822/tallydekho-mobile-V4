@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput,
+  KeyboardAvoidingView, Platform, Alert, TextInput, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,8 +9,8 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import FormDropdown from '../../src/components/forms/FormDropdown';
-
-const WAREHOUSES = ['Main Warehouse - Mumbai', 'Warehouse B - Delhi', 'Warehouse C - Pune', 'Transit Hub - Chennai'];
+import { getWarehouses } from '../../src/services/api';
+import { useAuth } from '../../src/context/AuthContext';
 const RACKS = ['Rack A-1', 'Rack A-2', 'Rack B-1', 'Rack B-2', 'Bay 12', 'Bay 14', 'Bin C-3'];
 const WEB = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
 
@@ -47,7 +47,27 @@ function SearchInput({ value, onChange, placeholder }: { value: string; onChange
 export default function CreateStockTransferScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
   const [entryType, setEntryType] = useState<EntryType>('regular');
+
+  // Warehouses from API
+  const [warehouses,        setWarehouses]        = useState<string[]>([]);
+  const [whLoading,         setWhLoading]         = useState(false);
+  const [selectedWarehouse, setSelectedWarehouse] = useState('');
+  const [whDropOpen,        setWhDropOpen]        = useState(false);
+
+  useEffect(() => {
+    if (!companyGuid) return;
+    setWhLoading(true);
+    getWarehouses(companyGuid)
+      .then((res: any) => {
+        const data: any[] = res?.data ?? [];
+        setWarehouses(data.map((w: any) => w.name ?? '').filter(Boolean));
+      })
+      .catch(() => {})
+      .finally(() => setWhLoading(false));
+  }, [companyGuid]);
 
   const [warehouseSearch, setWarehouseSearch] = useState('');
   const [sourceRack, setSourceRack] = useState('');
@@ -58,7 +78,7 @@ export default function CreateStockTransferScreen() {
   const [qtyToTransfer, setQtyToTransfer] = useState('');
   const [narration, setNarration] = useState('');
 
-  const filteredWH = WAREHOUSES.filter(w =>
+  const filteredWH = warehouses.filter(w =>
     !warehouseSearch || w.toLowerCase().includes(warehouseSearch.toLowerCase())
   );
 
@@ -84,9 +104,47 @@ export default function CreateStockTransferScreen() {
           contentContainerStyle={s.form}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Search Warehouse */}
-          <Text style={s.label}>Search Warehouse</Text>
-          <SearchInput value={warehouseSearch} onChange={setWarehouseSearch} placeholder="Search warehouse" />
+          {/* Search / Select Source Warehouse */}
+          <Text style={s.label}>Source Warehouse</Text>
+          {selectedWarehouse ? (
+            <TouchableOpacity
+              style={s.selectedWH}
+              onPress={() => { setSelectedWarehouse(''); setWarehouseSearch(''); setWhDropOpen(false); }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="business-outline" size={16} color={COLORS.brandPrimary} />
+              <Text style={s.selectedWHTxt}>{selectedWarehouse}</Text>
+              <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
+            </TouchableOpacity>
+          ) : (
+            <>
+              <SearchInput
+                value={warehouseSearch}
+                onChange={v => { setWarehouseSearch(v); setWhDropOpen(v.length > 0); }}
+                placeholder="Search source warehouse…"
+              />
+              {whLoading && <ActivityIndicator size="small" color={COLORS.brandPrimary} style={{ marginTop: 8 }} />}
+              {whDropOpen && !whLoading && (
+                <View style={s.dropList}>
+                  {filteredWH.slice(0, 8).map((w, idx, arr) => (
+                    <TouchableOpacity
+                      key={w}
+                      style={[s.dropItem, idx === arr.length - 1 && { borderBottomWidth: 0 }]}
+                      onPress={() => { setSelectedWarehouse(w); setWarehouseSearch(''); setWhDropOpen(false); }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={s.dropTxt}>{w}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {filteredWH.length === 0 && (
+                    <View style={s.dropItem}>
+                      <Text style={[s.dropTxt, { color: COLORS.textTertiary }]}>No warehouses found</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </>
+          )}
 
           {/* Source Rack */}
           <FormDropdown
@@ -114,7 +172,7 @@ export default function CreateStockTransferScreen() {
             label="Destination Warehouse"
             required
             value={destWarehouse}
-            options={WAREHOUSES.map(s => ({ label: s, value: s }))}
+            options={warehouses.map(s => ({ label: s, value: s }))}
             placeholder="Select warehouse"
             onSelect={o => setDestWarehouse(o.value)}
           />
@@ -203,6 +261,8 @@ const s = StyleSheet.create({
   },
   dropTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
   dropTxtActive: { fontWeight: '700' },
+  selectedWH:    { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 13, borderWidth: 1, borderColor: COLORS.brandPrimary, borderRadius: RADIUS.md, backgroundColor: COLORS.cardBg },
+  selectedWHTxt: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, fontWeight: '600' },
   footer: {
     paddingHorizontal: SPACING.md, paddingTop: SPACING.md,
     borderTopWidth: 1, borderTopColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg,

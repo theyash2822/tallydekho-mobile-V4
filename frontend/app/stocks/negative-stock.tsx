@@ -1,52 +1,71 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  TextInput, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { getStocks } from '../../src/services/api';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { useAuth } from '../../src/context/AuthContext';
 
 const AMBER = '#A89060';
 
 interface NegStockItem {
   id: string;
   name: string;
-  sku: string;
-  warehouse: string;
-  batch: string;
-  balanceQty: number;
-  lastMovement: string;
+  group: string;
+  qty: number;
+  value: number;
 }
-
-const ITEMS: NegStockItem[] = [
-  { id: 'ns1', name: 'Black JBL',          sku: 'PRD-1002-ABC', warehouse: 'Sierra Storage',  batch: '#B023', balanceQty: -245, lastMovement: '10/10/24' },
-  { id: 'ns2', name: 'Red Headset',         sku: 'PRD-1003-DEF', warehouse: 'Delhi Branch',    batch: '#B024', balanceQty: -112, lastMovement: '15/10/24' },
-  { id: 'ns3', name: 'Blue Speakers',       sku: 'PRD-1004-GHI', warehouse: 'Pune Godown',     batch: '#B025', balanceQty: -78,  lastMovement: '18/10/24' },
-  { id: 'ns4', name: 'Wireless Mouse',      sku: 'PRD-2001-JKL', warehouse: 'Mumbai HQ',       batch: '#B026', balanceQty: -45,  lastMovement: '20/10/24' },
-  { id: 'ns5', name: 'Laptop Charger',      sku: 'PRD-2002-MNO', warehouse: 'Chennai Depot',   batch: '#B027', balanceQty: -32,  lastMovement: '22/10/24' },
-  { id: 'ns6', name: 'USB-C Cable',         sku: 'PRD-2003-PQR', warehouse: 'Jaipur Depot',    batch: '#B028', balanceQty: -189, lastMovement: '25/10/24' },
-  { id: 'ns7', name: 'Power Bank 20K',      sku: 'PRD-3001-STU', warehouse: 'Hyderabad Hub',   batch: '#B029', balanceQty: -67,  lastMovement: '28/10/24' },
-  { id: 'ns8', name: 'Smart Watch Strap',   sku: 'PRD-3002-VWX', warehouse: 'Kolkata WH',      batch: '#B030', balanceQty: -23,  lastMovement: '01/11/24' },
-];
 
 export default function NegativeStockScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
 
   const [search,       setSearch]       = useState('');
   const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set());
   const [isSelMode,    setIsSelMode]    = useState(false);
 
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError,  setApiError]  = useState<string | null>(null);
+  const [items,     setItems]     = useState<NegStockItem[]>([]);
+
+  useEffect(() => {
+    if (!companyGuid) return;
+    setIsLoading(true);
+    setApiError(null);
+    getStocks(companyGuid, { limit: '500' })
+      .then((res: any) => {
+        const rows: any[] = res?.data ?? [];
+        const negItems: NegStockItem[] = rows
+          .filter((r: any) => Number(r.closing_qty) < 0)
+          .map((r: any, idx: number) => ({
+            id:    String(r.id ?? idx),
+            name:  r.name ?? 'Unknown',
+            group: r.group_name ?? '—',
+            qty:   Number(r.closing_qty),
+            value: Number(r.closing_qty) * Number(r.rate ?? 0),
+          }));
+        setItems(negItems);
+      })
+      .catch((err: any) => {
+        setApiError(err?.message ?? 'Failed to load stock data');
+      })
+      .finally(() => setIsLoading(false));
+  }, [companyGuid]);
+
   const visibleItems = useMemo(() =>
-    ITEMS.filter(it => {
+    items.filter(it => {
       if (!search) return true;
       const q = search.toLowerCase();
-      return it.name.toLowerCase().includes(q) ||
-             it.sku.toLowerCase().includes(q)  ||
-             it.warehouse.toLowerCase().includes(q);
+      return it.name.toLowerCase().includes(q) || it.group.toLowerCase().includes(q);
     }),
-    [search]
+    [search, items]
   );
 
   // ── Multi-select ───────────────────────────────────────────────────────
@@ -72,6 +91,13 @@ export default function NegativeStockScreen() {
   const cancelSelection = () => { setSelectedIds(new Set()); setIsSelMode(false); };
   const selectAll       = () => { setSelectedIds(new Set(visibleItems.map(i => i.id))); setIsSelMode(true); };
 
+  const fmtValue = (v: number) => {
+    const abs = Math.abs(v);
+    if (abs >= 100000) return `₹${(abs / 100000).toFixed(1)}L`;
+    if (abs >= 1000)   return `₹${(abs / 1000).toFixed(1)}K`;
+    return `₹${abs.toFixed(0)}`;
+  };
+
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
       {/* ── Header */}
@@ -82,6 +108,9 @@ export default function NegativeStockScreen() {
         <Text style={s.headerTitle}>Negative Stock Exceptions</Text>
         <View style={{ width: 44 }} />
       </View>
+
+      {/* ── Error Banner */}
+      {apiError && <ErrorBanner message={apiError} />}
 
       {/* ── Selection Banner */}
       {isSelMode && (
@@ -103,7 +132,7 @@ export default function NegativeStockScreen() {
           <Ionicons name="search-outline" size={16} color={COLORS.textTertiary} />
           <TextInput
             style={s.searchInput}
-            placeholder="Search products, warehouse..."
+            placeholder="Search products, group..."
             placeholderTextColor={COLORS.textTertiary}
             value={search}
             onChangeText={setSearch}
@@ -116,8 +145,16 @@ export default function NegativeStockScreen() {
         </View>
       )}
 
+      {/* ── Loading */}
+      {isLoading && (
+        <View style={s.loadingWrap}>
+          <ActivityIndicator size="large" color={COLORS.brandPrimary} />
+          <Text style={s.loadingTxt}>Loading stock data…</Text>
+        </View>
+      )}
+
       {/* ── Hint */}
-      {!isSelMode && visibleItems.length > 0 && (
+      {!isSelMode && !isLoading && visibleItems.length > 0 && (
         <View style={s.hintRow}>
           <Ionicons name="hand-left-outline" size={13} color={COLORS.textTertiary} />
           <Text style={s.hintTxt}>Long press to select items</Text>
@@ -125,70 +162,59 @@ export default function NegativeStockScreen() {
       )}
 
       {/* ── Item List */}
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.list}>
-        {visibleItems.length === 0 ? (
-          <View style={s.empty}>
-            <Ionicons name="alert-circle-outline" size={48} color={COLORS.borderDefault} />
-            <Text style={s.emptyTxt}>No negative stock found</Text>
-          </View>
-        ) : (
-          visibleItems.map(item => {
-            const isSel = selectedIds.has(item.id);
-            return (
-              <TouchableOpacity
-                key={item.id}
-                style={[s.card, isSel && s.cardSel]}
-                onPress={() => handlePress(item.id)}
-                onLongPress={() => handleLongPress(item.id)}
-                delayLongPress={350}
-                activeOpacity={0.85}
-              >
-                {/* Avatar circle */}
-                <View style={[s.avatar, isSel && s.avatarSel]}>
-                  {isSel
-                    ? <Ionicons name="checkmark" size={18} color="#fff" />
-                    : <Ionicons name="cube-outline" size={20} color="#fff" />
-                  }
-                </View>
-
-                {/* Card content */}
-                <View style={s.cardContent}>
-                  {/* Name + SKU */}
-                  <Text style={s.itemName}>{item.name}</Text>
-                  <Text style={s.itemSku}>{item.sku}</Text>
-
-                  <View style={s.divider} />
-
-                  {/* Row 1: Warehouse + Batch */}
-                  <View style={s.infoRow}>
-                    <View style={s.infoGroup}>
-                      <Text style={s.infoLabel}>Warehouse</Text>
-                      <Text style={s.infoValue}>{item.warehouse}</Text>
-                    </View>
-                    <View style={s.infoGroup}>
-                      <Text style={s.infoLabel}>Batch</Text>
-                      <Text style={s.infoValue}>{item.batch}</Text>
-                    </View>
+      {!isLoading && (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.list}>
+          {visibleItems.length === 0 && !apiError ? (
+            <View style={s.empty}>
+              <Ionicons name="checkmark-circle-outline" size={48} color={COLORS.borderDefault} />
+              <Text style={s.emptyTxt}>No negative stock items</Text>
+              <Text style={s.emptySubTxt}>All stock levels are positive</Text>
+            </View>
+          ) : (
+            visibleItems.map(item => {
+              const isSel = selectedIds.has(item.id);
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[s.card, isSel && s.cardSel]}
+                  onPress={() => handlePress(item.id)}
+                  onLongPress={() => handleLongPress(item.id)}
+                  delayLongPress={350}
+                  activeOpacity={0.85}
+                >
+                  {/* Avatar circle */}
+                  <View style={[s.avatar, isSel && s.avatarSel]}>
+                    {isSel
+                      ? <Ionicons name="checkmark" size={18} color="#fff" />
+                      : <Ionicons name="cube-outline" size={20} color="#fff" />
+                    }
                   </View>
 
-                  {/* Row 2: Balance Qty (red) + Last Movement */}
-                  <View style={s.infoRow}>
-                    <View style={s.infoGroup}>
-                      <Text style={s.infoLabel}>Balance Qty</Text>
-                      <Text style={[s.infoValue, s.negQty]}>{item.balanceQty}</Text>
-                    </View>
-                    <View style={s.infoGroup}>
-                      <Text style={s.infoLabel}>Last Movement</Text>
-                      <Text style={s.infoValue}>{item.lastMovement}</Text>
+                  {/* Card content */}
+                  <View style={s.cardContent}>
+                    <Text style={s.itemName}>{item.name}</Text>
+                    <Text style={s.itemGroup}>{item.group}</Text>
+
+                    <View style={s.divider} />
+
+                    <View style={s.infoRow}>
+                      <View style={s.infoGroup}>
+                        <Text style={s.infoLabel}>Balance Qty</Text>
+                        <Text style={[s.infoValue, s.negQty]}>{item.qty}</Text>
+                      </View>
+                      <View style={s.infoGroup}>
+                        <Text style={s.infoLabel}>Est. Value</Text>
+                        <Text style={[s.infoValue, s.negQty]}>{fmtValue(item.value)}</Text>
+                      </View>
                     </View>
                   </View>
-                </View>
-              </TouchableOpacity>
-            );
-          })
-        )}
-        <View style={{ height: 100 }} />
-      </ScrollView>
+                </TouchableOpacity>
+              );
+            })
+          )}
+          <View style={{ height: 100 }} />
+        </ScrollView>
+      )}
 
       {/* ── Conditional Share Bar */}
       {isSelMode && selectedIds.size > 0 && (
@@ -226,6 +252,9 @@ const s = StyleSheet.create({
   searchBox:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: SPACING.md, marginTop: SPACING.md, marginBottom: SPACING.xs, backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md, paddingVertical: 12, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault },
   searchInput: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
 
+  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  loadingTxt:  { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
+
   hintRow: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: SPACING.md, paddingTop: 4, paddingBottom: 6 },
   hintTxt: { fontSize: 11, color: COLORS.textTertiary },
 
@@ -240,7 +269,7 @@ const s = StyleSheet.create({
 
   cardContent: { flex: 1 },
   itemName:    { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  itemSku:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+  itemGroup:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
   divider:     { height: 1, backgroundColor: COLORS.borderDefault, marginVertical: SPACING.sm },
 
   infoRow:   { flexDirection: 'row', marginBottom: 4 },
@@ -249,8 +278,9 @@ const s = StyleSheet.create({
   infoValue: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary, marginTop: 2 },
   negQty:    { color: COLORS.negative },
 
-  empty:    { alignItems: 'center', paddingVertical: 60, gap: 12 },
-  emptyTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
+  empty:       { alignItems: 'center', paddingVertical: 60, gap: 8 },
+  emptyTxt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textSecondary },
+  emptySubTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
 
   // Share bar
   shareBar:           { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingTop: SPACING.md, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
