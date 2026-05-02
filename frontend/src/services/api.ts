@@ -218,6 +218,7 @@ export const markAllNotificationsRead = () => patch<any>('/notifications/read-al
 
 export const getAlerts           = (companyGuid?: string) => get<any>(withCompany('/alerts', companyGuid));
 export const getEWBList          = (companyGuid?: string, params?: any) => get<any>(withCompany('/ewaybills', companyGuid, params));
+export const getUnmatchedInvoices = (companyGuid?: string, params?: any) => get<any>(withCompany('/reports/unmatched', companyGuid, params));
 export const getEInvoicePending  = (companyGuid?: string) => get<any>(withCompany('/einvoice/pending', companyGuid));
 export const getEInvoiceGenerated = (companyGuid?: string) => get<any>(withCompany('/einvoice/generated', companyGuid));
 export const getGSTDetail        = (companyGuid?: string, params?: any) => get<any>(withCompany('/reports/gst-detail', companyGuid, params));

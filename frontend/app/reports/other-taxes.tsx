@@ -6,14 +6,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
+import { getLedgers } from '../../src/services/api';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
 // ── Tab Config ───────────────────────────────────────────────────────────────
 const TABS = ['TDS', 'TCS', 'Import Duty', 'Export Duty', 'Excise Duty', 'VAT', 'Cess'] as const;
 type TaxTab = typeof TABS[number];
 
-// Stats per tab — 4 cells in a 2×2 grid (null = empty cell)
+// Tax stats — populated from Tally ledger data
 const TAB_STATS: Record<TaxTab, { label: string; value: string }[]> = {
+  'TDS': [], 'TCS': [], 'Import Duty': [], 'Export Duty': [], 'Excise Duty': [], 'VAT': [], 'Cess': [],
+};
+[]> = {
   'TDS': [
     { label: 'Deducted',    value: '\u20b9182K' },
     { label: 'Remitted',    value: '\u20b9140K' },

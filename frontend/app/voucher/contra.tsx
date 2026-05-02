@@ -11,7 +11,7 @@ import { getVouchers } from '../../src/services/api';
 
 export default function ContraVouchersScreen() {
   const router = useRouter();
-  const { company } = useAuth();
+  const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
   const [search, setSearch] = useState('');
   const [apiError, setApiError] = useState<string | null>(null);
@@ -22,11 +22,11 @@ export default function ContraVouchersScreen() {
     if (!companyGuid) return;
     setIsLoading(true);
     setApiError(null);
-    getVouchers(companyGuid, 'contra').then((res: any) => {
+    getVouchers(companyGuid, 'contra', selectedFY?.startDate && selectedFY?.endDate ? { from: selectedFY.startDate, to: selectedFY.endDate } : {}).then((res: any) => {
       const rows = res?.data ?? [];
       setLiveItems(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), narration: r.narration||'', date: r.date||'', amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`, status: 'posted' })));
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); }).finally(() => setIsLoading(false));
-  }, [companyGuid]);
+  }, [companyGuid, selectedFY?.startDate]);
 
   const filtered = liveItems.filter((i: any) => !search || (i.narration||'').toLowerCase().includes(search.toLowerCase()) || (i.id||'').toLowerCase().includes(search.toLowerCase()));
 

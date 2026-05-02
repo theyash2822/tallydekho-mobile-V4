@@ -15,7 +15,7 @@ const SL: Record<string,string> = { received:'Received', pending:'Pending' };
 
 export default function ReceiptVouchersScreen() {
   const router = useRouter();
-  const { company } = useAuth();
+  const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
   const [search, setSearch] = useState('');
   const [apiError, setApiError] = useState<string | null>(null);
@@ -26,11 +26,11 @@ export default function ReceiptVouchersScreen() {
     if (!companyGuid) return;
     setIsLoading(true);
     setApiError(null);
-    getVouchers(companyGuid, 'receipt').then((res: any) => {
+    getVouchers(companyGuid, 'receipt', selectedFY?.startDate && selectedFY?.endDate ? { from: selectedFY.startDate, to: selectedFY.endDate } : {}).then((res: any) => {
       const rows = res?.data ?? [];
       setLiveItems(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), party: r.party_name||'', date: r.date||'', time: '', amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`, method: 'Cash', status: 'cleared' })));
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); }).finally(() => setIsLoading(false));
-  }, [companyGuid]);
+  }, [companyGuid, selectedFY?.startDate]);
 
   const filtered = liveItems.filter((i: any) => !search || (i.party||'').toLowerCase().includes(search.toLowerCase()) || (i.id||'').toLowerCase().includes(search.toLowerCase()));
 
