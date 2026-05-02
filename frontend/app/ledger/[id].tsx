@@ -142,7 +142,7 @@ const MONTHS_ORDER = [
 ];
 
 // ── Info Modal ────────────────────────────────────────────────────────────────
-function LedgerInfoModal({ visible, onClose, ledger }: { visible: boolean; onClose: () => void; ledger: any }) {
+function LedgerInfoModal({ visible, onClose, ledger, fyOpening, fyClosing }: { visible: boolean; onClose: () => void; ledger: any; fyOpening?: { balance: number; type: string } | null; fyClosing?: { balance: number; type: string } | null }) {
 
   const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
     <View style={im.section}>
@@ -629,7 +629,7 @@ export default function LedgerDetailScreen() {
       </ScrollView>
 
       {/* ── Info modal ── */}
-      <LedgerInfoModal visible={showInfo} onClose={() => setShowInfo(false)} ledger={liveLedger} />
+      <LedgerInfoModal visible={showInfo} onClose={() => setShowInfo(false)} ledger={liveLedger} fyOpening={fyOpening} fyClosing={fyClosing} />
 
       {/* ── Date Range Picker ── */}
       <DateRangePickerModal
