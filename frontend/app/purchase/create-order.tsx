@@ -250,7 +250,7 @@ export default function CreatePurchaseOrderScreen() {
         company_guid: company?.guid, vendor, date,
         delivery_date: dueDate || undefined,
         ref_no: refNo || undefined,
-        items: items.map(i=>({ stock_item: i.product, qty: parseFloat(i.qty)||0, rate: parseFloat(i.rate)||0, unit: i.unit, discount: parseFloat(i.disc)||0, tax_rate: parseFloat(i.taxRate)||0 })),
+        items: items.map(i=>({ stock_item: i.product, qty: parseFloat(i.qty)||0, rate: parseFloat(i.rate)||0, unit: i.unit, discount: parseFloat(i.discount)||0, tax_rate: parseFloat(i.taxRate)||0 })),
         narration: narration || undefined,
         is_draft: draft,
       });

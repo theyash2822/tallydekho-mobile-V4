@@ -622,6 +622,9 @@ export default function PaymentRemindersScreen() {
   const [threshold, setThreshold] = useState('500');
   const [reminders, setReminders] = useState<Reminder[]>(DEFAULT_REMINDERS);
 
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = () => setIsDirty(true);
+
   const updateReminder = (updated: Reminder) =>
     setReminders(prev => prev.map(r => r.id === updated.id ? updated : r));
 

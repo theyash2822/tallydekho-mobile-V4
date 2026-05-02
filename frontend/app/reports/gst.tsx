@@ -329,6 +329,7 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.cardBg,
     borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
+  backBtn:     { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
   iconBtn:     { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary },
 

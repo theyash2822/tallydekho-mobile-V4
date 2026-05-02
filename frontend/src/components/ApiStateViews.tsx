@@ -9,7 +9,7 @@ import { COLORS, SPACING, RADIUS } from '../constants/colors';
 export function LoadingState({ message = 'Loading...' }: { message?: string }) {
   return (
     <View style={s.center}>
-      <ActivityIndicator size="large" color={COLORS.primary || '#3F5263'} />
+      <ActivityIndicator size="large" color={COLORS.brandPrimary || '#3F5263'} />
       <Text style={s.subText}>{message}</Text>
     </View>
   );

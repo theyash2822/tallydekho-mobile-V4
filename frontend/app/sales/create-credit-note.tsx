@@ -232,7 +232,7 @@ export default function CreateCreditNoteScreen() {
       await createCreditNote({
         company_guid: company?.guid, party, date,
         linked_invoice: linkedInvoice || undefined,
-        items: items.map(i=>({ stock_item: i.product, qty: parseFloat(i.qty)||0, rate: parseFloat(i.rate)||0, unit: i.unit, discount: parseFloat(i.disc)||0, tax_rate: parseFloat(i.taxRate)||0 })),
+        items: items.map(i=>({ stock_item: i.product, qty: parseFloat(i.qty)||0, rate: parseFloat(i.rate)||0, unit: i.unit, discount: parseFloat(i.discount)||0, tax_rate: parseFloat(i.taxRate)||0 })),
         narration: narration || undefined,
       });
       Toast.show({ type: 'success', text1: 'Credit Note Issued', text2: `${cnNo} sent to Tally.` });

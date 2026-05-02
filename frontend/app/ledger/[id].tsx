@@ -236,7 +236,7 @@ export default function LedgerDetailScreen() {
       : undefined;
     // Try statement API first (uses voucher_ledger_entries for accurate Dr/Cr)
     // Falls back to getLedgerDetail (party_name match) if statement has no entries
-    getLedgerStatement(companyGuid, id as string, params).then((res: any) => {
+    getLedgerStatement(companyGuid, id as string, undefined, params).then((res: any) => {
       if (res?.data?.ledger) setLiveLedger(res.data.ledger);
       const txns = res?.data?.transactions || [];
       if (txns.length > 0) {

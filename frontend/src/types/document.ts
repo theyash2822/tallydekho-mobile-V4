@@ -77,6 +77,7 @@ export interface Totals {
   taxTotal?: number;
   roundOff?: number;
   total: number;
+  totalInWords?: string;
   balanceDue?: number;
   drTotal?: number;
   crTotal?: number;

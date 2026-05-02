@@ -305,7 +305,7 @@ export default function CreatePurchaseInvoiceScreen() {
         vendor_invoice_date: vendorInvDate || undefined,
         payment_terms: payTerms,
         ref_no: purchaseRefNo || undefined,
-        items: items.map(i=>({ stock_item: i.product, qty: parseFloat(i.qty)||0, rate: parseFloat(i.rate)||0, unit: i.unit, discount: parseFloat(i.disc)||0, tax_rate: parseFloat(i.taxRate)||0 })),
+        items: items.map(i=>({ stock_item: i.product, qty: parseFloat(i.qty)||0, rate: parseFloat(i.rate)||0, unit: i.unit, discount: parseFloat(i.discount)||0, tax_rate: parseFloat(i.taxRate)||0 })),
         narration: narration || undefined,
         is_draft: draft,
       });

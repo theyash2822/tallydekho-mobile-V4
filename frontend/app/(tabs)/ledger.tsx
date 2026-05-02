@@ -419,7 +419,7 @@ export default function LedgerScreen() {
   const router = useRouter();
   const { company } = useAuth();
   const companyGuid = company?.guid;
-  const filterBtnRef = useRef<TouchableOpacity>(null);
+  const filterBtnRef = useRef<typeof TouchableOpacity>(null);
   const [data, setData] = useState<LedgerItem[]>(MOCK_LEDGERS);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('All');

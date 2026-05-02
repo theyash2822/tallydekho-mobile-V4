@@ -842,7 +842,7 @@ export default function CreateSalesInvoiceScreen() {
           qty: parseFloat(item.qty) || 0,
           unit: item.unit,
           rate: parseFloat(item.rate) || 0,
-          discount: parseFloat(item.disc) || 0,
+          discount: parseFloat(item.discount) || 0,
           tax_rate: parseFloat(item.taxRate) || 0,
         })),
         narration: narration || undefined,
@@ -1341,6 +1341,19 @@ const s = StyleSheet.create({
   draftTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textSecondary },
   submitBtn: { flex: 2, flexDirection: 'row', gap: 8, paddingVertical: 14, borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center' },
   submitTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+  divider: { height: 1, backgroundColor: COLORS.borderDefault, marginVertical: 8 },
+  payNowToggleRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingVertical: 12, paddingHorizontal: SPACING.md },
+  payNowLeft: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
+  payNowIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center' as const, justifyContent: 'center' as const },
+  payNowTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '600' as const, color: COLORS.textPrimary },
+  payNowSub: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  payNowBody: { paddingHorizontal: SPACING.md, paddingBottom: 12, gap: 10 },
+  payStatusChip: { flexDirection: 'row' as const, gap: 8, paddingVertical: 8 },
+  payStatusPaid: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.full, backgroundColor: COLORS.positiveBg, borderWidth: 1, borderColor: COLORS.positive },
+  payStatusPartial: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.full, backgroundColor: COLORS.warningBg, borderWidth: 1, borderColor: COLORS.warning },
+  payStatusPending: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.full, backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault },
+  payStatusTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600' as const, color: COLORS.textSecondary },
+  payStatusSub: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
 });
 
 const m = StyleSheet.create({

@@ -4,6 +4,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 import { useAuth } from '../../src/context/AuthContext';
@@ -46,6 +48,12 @@ export default function EWayBillScreen() {
   }, [companyGuid]);
 
   const allBills = liveBills;
+
+  const data = {
+    pending:   allBills.filter((b: any) => b.status === 'pending').length,
+    cancelled: allBills.filter((b: any) => b.status === 'cancelled').length,
+    generated: allBills.filter((b: any) => b.status === 'generated').length,
+  };
 
   const filtered = allBills.filter(
     (b: any) =>

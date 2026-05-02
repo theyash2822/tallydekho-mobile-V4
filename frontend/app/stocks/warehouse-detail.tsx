@@ -253,6 +253,8 @@ export default function WarehouseDetailScreen() {
 
       <DateRangePickerModal
         visible={calOpen}
+        fromDate={dateFrom}
+        toDate={dateTo}
         onClose={() => setCalOpen(false)}
         onApply={(from, to) => { setDateFrom(from); setDateTo(to); }}
       />

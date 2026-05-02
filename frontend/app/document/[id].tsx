@@ -7,6 +7,7 @@ import DocumentPreviewPage from '../../src/components/document/DocumentPreviewPa
 import { getVoucherById } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { TX_TO_DOC_TYPE, DOC_TYPE_CONFIG, amountInWords } from '../../src/utils/documentHelpers';
+import { getDocument } from '../../src/data/mockDocuments';
 import { COLORS } from '../../src/constants/colors';
 
 // Convert ISO '2025-04-04' → '04 Apr 2025'

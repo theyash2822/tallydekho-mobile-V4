@@ -1,15 +1,16 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Dimensions, Modal, Alert,
+  Dimensions, Modal, Alert, ActivityIndicator,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import Svg, { Rect, Text as SvgText, G } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import { useAuth } from '../../src/context/AuthContext';
+import { getVouchers } from '../../src/services/api';
 
 const SCREEN_W = Dimensions.get('window').width;
 const AMBER = '#A89060';
@@ -42,52 +43,40 @@ const VOUCHER_TYPES: VoucherType[] = [
   'Journal', 'Contra', 'Debit Note', 'Credit Note', 'Delivery Note',
 ];
 
-// ─── Mock Data — My Entries ───────────────────────────────────────────────────
-const MY_ENTRIES: VoucherEntry[] = [
-  { id: 'm1', ref: 'PV-2098', date: '07 May', month: 'May 25', type: 'Payment', party: 'Netaji Industries', description: 'HDFC → Rent', amount: '₹75,000', isCredit: true, syncStatus: 'pending', isMine: true },
-  { id: 'm2', ref: 'JV-0142', date: '08 May', month: 'May 25', type: 'Journal', party: 'Netaji Industries', description: 'Journal → Salary Accrual', amount: '₹75,000', isCredit: true, syncStatus: 'pending', isMine: true },
-  { id: 'm3', ref: 'INV-0901', date: '09 May', month: 'May 25', type: 'Sales', party: 'ABC Traders', description: 'Sales → Export Invoice', amount: '₹42,500', isCredit: false, syncStatus: 'failed', isMine: true },
-  { id: 'm4', ref: 'PO-0234', date: '12 May', month: 'May 25', type: 'Purchase', party: 'Delhi Suppliers', description: 'Purchase → Raw Material', amount: '₹62,400', isCredit: true, syncStatus: 'synced', isMine: true },
-  { id: 'm5', ref: 'RV-0062', date: '15 May', month: 'May 25', type: 'Receipt', party: 'XYZ Retail', description: 'Receipt → Payment Received', amount: '₹33,200', isCredit: false, syncStatus: 'synced', isMine: true },
-  { id: 'm6', ref: 'INV-0912', date: '01 Jun', month: 'Jun 25', type: 'Sales', party: 'Kumar & Sons', description: 'Sales → Export Invoice', amount: '₹28,000', isCredit: false, syncStatus: 'synced', isMine: true },
-  { id: 'm7', ref: 'PV-0089', date: '04 Jun', month: 'Jun 25', type: 'Payment', party: 'Indian Export House', description: 'HDFC → Salary', amount: '₹44,000', isCredit: true, syncStatus: 'pending', isMine: true },
-  { id: 'm8', ref: 'CV-0012', date: '08 Jun', month: 'Jun 25', type: 'Contra', party: 'HDFC → SBI', description: 'Fund Transfer', amount: '₹1,00,000', isCredit: false, syncStatus: 'synced', isMine: true },
-  { id: 'm9', ref: 'DN-0034', date: '10 Jun', month: 'Jun 25', type: 'Debit Note', party: 'Sharma Electronics', description: 'Return Debit Note', amount: '₹18,750', isCredit: false, syncStatus: 'failed', isMine: true },
-];
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const formatMonth = (dateStr: string) => {
+  if (!dateStr) return 'Unknown';
+  const d = new Date(dateStr);
+  return d.toLocaleString('en-IN', { month: 'short', year: '2-digit' });
+};
 
-// ─── Mock Data — Day Book ─────────────────────────────────────────────────────
-const DAYBOOK_ENTRIES: VoucherEntry[] = [
-  { id: 'd1', ref: 'INV-30979', date: '15 Jun', month: 'Jun 25', type: 'Sales', party: 'ABC Traders', description: 'Payment HDFC → Rent', amount: '₹42,500', isCredit: false, action: 'Edited', isMine: true },
-  { id: 'd2', ref: 'PV-00081', date: '14 Jun', month: 'Jun 25', type: 'Payment', party: 'Kumar & Sons', description: 'Payment → Vendor', amount: '₹15,000', isCredit: true, action: 'Created', isMine: false },
-  { id: 'd3', ref: 'INV-30975', date: '13 Jun', month: 'Jun 25', type: 'Sales', party: 'Sharma Electronics', description: 'Sales → GST Invoice', amount: '₹18,750', isCredit: false, action: 'Deleted', isMine: false },
-  { id: 'd4', ref: 'JV-00015', date: '13 Jun', month: 'Jun 25', type: 'Journal', party: 'Capital Account', description: 'Journal → Capital Adjustment', amount: '₹5,000', isCredit: true, action: 'Created', isMine: true },
-  { id: 'd5', ref: 'PO-00123', date: '12 Jun', month: 'Jun 25', type: 'Purchase', party: 'Delhi Suppliers', description: 'Purchase → Raw Material', amount: '₹62,400', isCredit: true, action: 'Edited', isMine: false },
-  { id: 'd6', ref: 'RV-00062', date: '12 Jun', month: 'Jun 25', type: 'Receipt', party: 'XYZ Retail', description: 'Receipt → Sales GST', amount: '₹33,200', isCredit: false, action: 'Created', isMine: false },
-  { id: 'd7', ref: 'INV-30940', date: '05 May', month: 'May 25', type: 'Sales', party: 'Raj Enterprises', description: 'Sales → Export Invoice', amount: '₹27,300', isCredit: false, action: 'Created', isMine: true },
-  { id: 'd8', ref: 'PV-00070', date: '02 May', month: 'May 25', type: 'Payment', party: 'Indian Export House', description: 'Payment → Salary', amount: '₹44,000', isCredit: true, action: 'Edited', isMine: false },
-  { id: 'd9', ref: 'CN-00015', date: '28 Apr', month: 'Apr 25', type: 'Credit Note', party: 'ABC Traders', description: 'Credit Note Return', amount: '₹8,200', isCredit: true, action: 'Created', isMine: true },
-];
+const mapVoucherType = (raw: string): Exclude<VoucherType, 'ALL'> => {
+  const s = (raw || '').toLowerCase();
+  if (s.includes('sales')) return 'Sales';
+  if (s.includes('purchase')) return 'Purchase';
+  if (s.includes('payment')) return 'Payment';
+  if (s.includes('receipt')) return 'Receipt';
+  if (s.includes('journal')) return 'Journal';
+  if (s.includes('contra')) return 'Contra';
+  if (s.includes('debit')) return 'Debit Note';
+  if (s.includes('credit')) return 'Credit Note';
+  if (s.includes('delivery')) return 'Delivery Note';
+  return 'Journal';
+};
 
-// ─── KPI Data ─────────────────────────────────────────────────────────────────
-const KPI_MY_ENTRIES = [
-  { label: 'Vouchers Created', value: '265' },
-  { label: 'Pending Push',     value: '12'  },
-  { label: 'Sync Failed',      value: '3'   },
-  { label: 'Net Amount',       value: '₹4.2L'},
-];
-
-const KPI_DAYBOOK = [
-  { label: 'Edited',  value: '117'    },
-  { label: 'Deleted', value: '8'      },
-  { label: 'Net Dr',  value: '₹42K'   },
-  { label: 'Net Cr',  value: '₹72.4M' },
-];
-
-// ─── Bar Chart Data ───────────────────────────────────────────────────────────
-const genBars = (seed: number) =>
-  Array.from({ length: 30 }, (_, i) => ({ day: i + 1, count: Math.floor(((seed * (i + 3)) % 16) + 2) }));
-const BAR_DATA_MY = genBars(7);
-const BAR_DATA_DB = genBars(13);
+const mapApiRow = (r: any): VoucherEntry => ({
+  id: r.guid || String(r.id),
+  ref: r.voucher_number || '',
+  date: r.date || '',
+  month: formatMonth(r.date),
+  type: mapVoucherType(r.voucher_type),
+  party: r.party_name || '',
+  description: r.voucher_type || '',
+  amount: `₹${Math.abs(+r.amount || 0).toLocaleString('en-IN')}`,
+  isCredit: +r.amount < 0,
+  syncStatus: 'synced' as const,
+  isMine: true,
+});
 
 // ─── Color Maps ───────────────────────────────────────────────────────────────
 const TYPE_COLORS: Record<string, string> = {
@@ -99,84 +88,52 @@ const ACTION_COLORS: Record<string, string> = {
   Created: '#2D7D46', Edited: '#D97706', Deleted: '#C0392B',
 };
 
-// ─── Interactive Bar Chart (with fixed Y-axis + scrollable bars) ─────────────
-function InteractiveBarChart({ data }: { data: { day: number; count: number }[] }) {
-  const [activeIdx, setActiveIdx] = useState<number | null>(null);
-  const YAXIS_W = 32;
-  const BAR_W   = 20; const GAP = 4; const H = 140;
-  const PAD_B   = 20; const PAD_T = 30;
-  const chartH  = H - PAD_B - PAD_T;
-  const maxCount = Math.max(...data.map(d => d.count), 1);
-  // Round up to nearest 5 for clean Y-axis ticks
-  const niceMax  = Math.ceil(maxCount / 5) * 5 || 5;
-  const barAreaW = (BAR_W + GAP) * data.length;
-  const yTicks   = [0, Math.round(niceMax * 0.5), niceMax];
+// ─── Type Breakdown Card ──────────────────────────────────────────────────────
+function TypeBreakdownCard({ entries }: { entries: VoucherEntry[] }) {
+  const breakdown = useMemo(() => {
+    const map: Record<string, number> = {};
+    entries.forEach(e => { map[e.type] = (map[e.type] || 0) + 1; });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  }, [entries]);
+
+  if (breakdown.length === 0) return null;
 
   return (
-    <View style={{ flexDirection: 'row', height: H }}>
-      {/* ── Fixed Y-Axis ── */}
-      <Svg width={YAXIS_W} height={H}>
-        {/* Vertical axis line */}
-        <Rect x={YAXIS_W - 1} y={PAD_T - 4} width={1} height={chartH + 6} fill={COLORS.borderStrong} />
-        {yTicks.map(tick => {
-          const y = PAD_T + chartH - (tick / niceMax) * chartH;
+    <View style={tc.card}>
+      <Text style={tc.title}>Voucher Breakdown</Text>
+      <View style={tc.grid}>
+        {breakdown.map(([type, count]) => {
+          const color = TYPE_COLORS[type] || COLORS.textSecondary;
           return (
-            <SvgText key={tick} x={YAXIS_W - 5} y={y + 4} textAnchor="end" fontSize={8} fill={COLORS.textTertiary}>
-              {tick}
-            </SvgText>
+            <View key={type} style={tc.cell}>
+              <View style={[tc.dot, { backgroundColor: color }]} />
+              <Text style={tc.typeLabel} numberOfLines={1}>{type}</Text>
+              <Text style={[tc.count, { color }]}>{count}</Text>
+            </View>
           );
         })}
-      </Svg>
-
-      {/* ── Scrollable Bar Area ── */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
-        <Svg width={barAreaW + 4} height={H}>
-          {/* Horizontal guide lines */}
-          {yTicks.map(tick => {
-            const y = PAD_T + chartH - (tick / niceMax) * chartH;
-            return (
-              <Rect key={tick} x={0} y={y} width={barAreaW} height={0.5}
-                fill={COLORS.borderDefault} opacity={0.9} />
-            );
-          })}
-          {/* X-axis baseline */}
-          <Rect x={0} y={PAD_T + chartH} width={barAreaW} height={1} fill={COLORS.borderStrong} />
-
-          {/* Bars */}
-          {data.map((d, i) => {
-            const bh = Math.max((d.count / niceMax) * chartH, 3);
-            const x  = i * (BAR_W + GAP);
-            const y  = PAD_T + chartH - bh;
-            const isActive = activeIdx === i;
-            return (
-              <G key={i} onPress={() => setActiveIdx(isActive ? null : i)}>
-                <Rect x={x} y={y} width={BAR_W} height={bh} rx={3}
-                  fill={isActive ? COLORS.textPrimary : AMBER}
-                  opacity={isActive ? 1 : 0.85}
-                />
-                {/* X-axis day label */}
-                {(d.day === 1 || d.day % 5 === 0) && (
-                  <SvgText x={x + BAR_W / 2} y={H - 4} textAnchor="middle" fontSize={7} fill={COLORS.textTertiary}>
-                    {d.day}
-                  </SvgText>
-                )}
-                {/* Tap tooltip */}
-                {isActive && (
-                  <G>
-                    <Rect x={Math.max(0, x - 8)} y={2} width={BAR_W + 16} height={24} rx={5} fill={COLORS.textPrimary} />
-                    <SvgText x={x + BAR_W / 2} y={18} textAnchor="middle" fontSize={11} fill="#FFFFFF" fontWeight="700">
-                      {d.count}
-                    </SvgText>
-                  </G>
-                )}
-              </G>
-            );
-          })}
-        </Svg>
-      </ScrollView>
+      </View>
     </View>
   );
 }
+
+const tc = StyleSheet.create({
+  card: {
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    padding: SPACING.md, marginBottom: SPACING.sm,
+  },
+  title: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 10 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  cell: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm,
+    paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  dot: { width: 7, height: 7, borderRadius: 4 },
+  typeLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, maxWidth: 80 },
+  count: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
+});
 
 // ─── Voucher Type Dropdown ────────────────────────────────────────────────────
 function VTypeDropdown({
@@ -229,32 +186,81 @@ const dd = StyleSheet.create({
 export default function AuditTrailScreen() {
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
+  const { company, selectedFY } = useAuth();
+  const companyGuid = company?.guid;
+
+  const defaultFrom = () => {
+    if (selectedFY?.startDate) return selectedFY.startDate;
+    const d = new Date(); d.setDate(d.getDate() - 30);
+    return d.toISOString().split('T')[0];
+  };
+  const defaultTo = () => selectedFY?.endDate || new Date().toISOString().split('T')[0];
 
   const [activeTab,      setActiveTab]      = useState<TabType>('myentries');
-  const [fromDate,       setFromDate]       = useState('');
-  const [toDate,         setToDate]         = useState('');
+  const [fromDate,       setFromDate]       = useState(defaultFrom);
+  const [toDate,         setToDate]         = useState(defaultTo);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [voucherType,    setVoucherType]    = useState<VoucherType>('ALL');
   const [showVTypeModal, setShowVTypeModal] = useState(false);
   const [showDr,         setShowDr]         = useState(true);
   const [showCr,         setShowCr]         = useState(true);
-  const [multiSelect,     setMultiSelect]     = useState(false);
-  const [selected,        setSelected]        = useState<string[]>([]);
+  const [multiSelect,    setMultiSelect]    = useState(false);
+  const [selected,       setSelected]       = useState<string[]>([]);
   const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
 
-  const isDateActive = fromDate.length > 0 && toDate.length > 0;
-  const kpiData   = activeTab === 'myentries' ? KPI_MY_ENTRIES : KPI_DAYBOOK;
-  const barData   = activeTab === 'myentries' ? BAR_DATA_MY    : BAR_DATA_DB;
-  const allSource = activeTab === 'myentries' ? MY_ENTRIES     : DAYBOOK_ENTRIES;
+  // ── API State ─────────────────────────────────────────────
+  const [apiEntries, setApiEntries] = useState<VoucherEntry[]>([]);
+  const [isLoading,  setIsLoading]  = useState(false);
+  const [apiError,   setApiError]   = useState<string | null>(null);
 
-  // ── Filtered & Grouped ────────────────────────────────────────────────
+  // ── Fetch data ────────────────────────────────────────────
+  useEffect(() => {
+    if (!companyGuid) return;
+    setIsLoading(true);
+    setApiError(null);
+    getVouchers(companyGuid, undefined, { from: fromDate, to: toDate, limit: 500 })
+      .then((res: any) => {
+        const rows = res?.data ?? [];
+        setApiEntries(rows.map(mapApiRow));
+      })
+      .catch((err: any) => {
+        setApiError(err?.message || 'Failed to load vouchers');
+      })
+      .finally(() => setIsLoading(false));
+  }, [companyGuid, fromDate, toDate]);
+
+  const isDateActive = fromDate.length > 0 && toDate.length > 0;
+  // Both tabs use the same live data
+  const allSource = apiEntries;
+
+  // ── KPI Stats (computed from live data) ───────────────────
+  const kpiData = useMemo(() => {
+    const total = allSource.length;
+    let drTotal = 0, crTotal = 0;
+    allSource.forEach(e => {
+      const raw = parseFloat(e.amount.replace(/[₹,]/g, '')) || 0;
+      if (e.isCredit) crTotal += raw; else drTotal += raw;
+    });
+    const fmt = (n: number) =>
+      n >= 1e7 ? `₹${(n / 1e7).toFixed(1)}Cr`
+      : n >= 1e5 ? `₹${(n / 1e5).toFixed(1)}L`
+      : n >= 1e3 ? `₹${(n / 1e3).toFixed(0)}K`
+      : `₹${n}`;
+    return [
+      { label: 'Total Vouchers', value: String(total) },
+      { label: 'Dr Total',       value: fmt(drTotal) },
+      { label: 'Cr Total',       value: fmt(crTotal) },
+      { label: 'Net Amount',     value: fmt(Math.abs(drTotal - crTotal)) },
+    ];
+  }, [allSource]);
+
+  // ── Filtered & Grouped ────────────────────────────────────
   const filtered = useMemo(() => {
     let arr = allSource;
     if (voucherType !== 'ALL') arr = arr.filter(e => e.type === voucherType);
-    // Dr/Cr: both checked OR both unchecked → show all; only one → filter
     if (showDr !== showCr) {
-      if (showDr && !showCr) arr = arr.filter(e => !e.isCredit);  // Dr only
-      if (!showDr && showCr) arr = arr.filter(e => e.isCredit);   // Cr only
+      if (showDr && !showCr) arr = arr.filter(e => !e.isCredit);
+      if (!showDr && showCr) arr = arr.filter(e => e.isCredit);
     }
     return arr;
   }, [allSource, voucherType, showDr, showCr]);
@@ -268,7 +274,7 @@ export default function AuditTrailScreen() {
     return Object.entries(map);
   }, [filtered]);
 
-  // ── Helpers ────────────────────────────────────────────────────────────
+  // ── Helpers ────────────────────────────────────────────────
   const toggleSelect = (id: string) =>
     setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
@@ -402,7 +408,11 @@ export default function AuditTrailScreen() {
         {!isDateActive && <Ionicons name="chevron-down" size={11} color={COLORS.textTertiary} />}
         {isDateActive && (
           <TouchableOpacity
-            onPress={() => { setFromDate(''); setToDate(''); }}
+            onPress={() => {
+              const d = new Date(); d.setDate(d.getDate() - 30);
+              setFromDate(d.toISOString().split('T')[0]);
+              setToDate(new Date().toISOString().split('T')[0]);
+            }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Ionicons name="close-circle" size={16} color={AMBER} />
@@ -419,204 +429,204 @@ export default function AuditTrailScreen() {
           { paddingBottom: showBottomBar ? 110 + insets.bottom : 40 + insets.bottom },
         ]}
       >
-        {/* KPI Cards — 2×2 Grid */}
-        <View style={s.kpiCard}>
-          <View style={s.kpiRow}>
-            <View style={[s.kpiCell, s.kpiCellRight]}>
-              <Text style={s.kpiLabel}>{kpiData[0].label}</Text>
-              <Text style={s.kpiValue}>{kpiData[0].value}</Text>
-            </View>
-            <View style={s.kpiCell}>
-              <Text style={s.kpiLabel}>{kpiData[1].label}</Text>
-              <Text style={s.kpiValue}>{kpiData[1].value}</Text>
-            </View>
+        {/* Error Banner */}
+        {apiError ? (
+          <View style={s.errorBanner}>
+            <Ionicons name="alert-circle-outline" size={16} color="#DC2626" />
+            <Text style={s.errorBannerTxt}>{apiError}</Text>
           </View>
-          <View style={s.kpiDivH} />
-          <View style={s.kpiRow}>
-            <View style={[s.kpiCell, s.kpiCellRight]}>
-              <Text style={s.kpiLabel}>{kpiData[2].label}</Text>
-              <Text style={s.kpiValue}>{kpiData[2].value}</Text>
-            </View>
-            <View style={s.kpiCell}>
-              <Text style={s.kpiLabel}>{kpiData[3].label}</Text>
-              <Text style={s.kpiValue}>{kpiData[3].value}</Text>
-            </View>
+        ) : null}
+
+        {/* Loading Indicator */}
+        {isLoading ? (
+          <View style={s.loadingBox}>
+            <ActivityIndicator size="large" color={AMBER} />
+            <Text style={s.loadingTxt}>Loading vouchers...</Text>
           </View>
-        </View>
-
-        {/* Bar Chart */}
-        <View style={s.chartCard}>
-          <Text style={s.chartTitle}>
-            {activeTab === 'myentries' ? 'My Entries (Last 30 Days)' : 'Daily Activity (Last 30 Days)'}
-          </Text>
-          <InteractiveBarChart data={barData} />
-        </View>
-
-        {/* Filter Row */}
-        <View style={s.filterRow}>
-          <TouchableOpacity style={s.vTypeBtn} onPress={() => setShowVTypeModal(true)} activeOpacity={0.8}>
-            <Ionicons
-              name="filter-outline" size={14}
-              color={voucherType !== 'ALL' ? AMBER : COLORS.textSecondary}
-            />
-            <Text style={[s.vTypeTxt, voucherType !== 'ALL' && s.vTypeTxtActive]} numberOfLines={1}>
-              {voucherType === 'ALL' ? 'Voucher Type' : voucherType}
-            </Text>
-            <Ionicons name="chevron-down" size={13} color={COLORS.textTertiary} />
-          </TouchableOpacity>
-
-          <View style={s.drCrGroup}>
-            <TouchableOpacity
-              style={[s.drCrChip, showDr && s.drCrChipActive]}
-              onPress={() => setShowDr(v => !v)}
-              activeOpacity={0.8}
-            >
-              {showDr && <Ionicons name="checkmark" size={11} color={COLORS.white} />}
-              <Text style={[s.drCrChipTxt, showDr && s.drCrChipTxtActive]}>Dr</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[s.drCrChip, showCr && s.drCrChipActive]}
-              onPress={() => setShowCr(v => !v)}
-              activeOpacity={0.8}
-            >
-              {showCr && <Ionicons name="checkmark" size={11} color={COLORS.white} />}
-              <Text style={[s.drCrChipTxt, showCr && s.drCrChipTxtActive]}>Cr</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {grouped.length === 0 ? (
-          <View style={s.empty}>
-            <Ionicons name="document-text-outline" size={48} color={COLORS.borderStrong} />
-            <Text style={s.emptyTxt}>No entries found</Text>
-          </View>
-        ) : grouped.map(([month, entries]) => (
-          <View key={month}>
-            {/* Month Header — tap to collapse */}
-            <TouchableOpacity
-              style={s.monthHdr}
-              onPress={() => toggleMonth(month)}
-              activeOpacity={0.7}
-            >
-              <Text style={s.monthTxt}>{month}</Text>
-              <View style={s.monthLine} />
-              <View style={s.monthCountBadge}>
-                <Text style={s.monthCountTxt}>{entries.length}</Text>
+        ) : (
+          <>
+            {/* KPI Cards — 2×2 Grid */}
+            <View style={s.kpiCard}>
+              <View style={s.kpiRow}>
+                <View style={[s.kpiCell, s.kpiCellRight]}>
+                  <Text style={s.kpiLabel}>{kpiData[0].label}</Text>
+                  <Text style={s.kpiValue}>{kpiData[0].value}</Text>
+                </View>
+                <View style={s.kpiCell}>
+                  <Text style={s.kpiLabel}>{kpiData[1].label}</Text>
+                  <Text style={s.kpiValue}>{kpiData[1].value}</Text>
+                </View>
               </View>
-              <Ionicons
-                name={collapsedMonths.has(month) ? 'chevron-down' : 'chevron-up'}
-                size={14} color={COLORS.textTertiary}
-              />
-            </TouchableOpacity>
+              <View style={s.kpiDivH} />
+              <View style={s.kpiRow}>
+                <View style={[s.kpiCell, s.kpiCellRight]}>
+                  <Text style={s.kpiLabel}>{kpiData[2].label}</Text>
+                  <Text style={s.kpiValue}>{kpiData[2].value}</Text>
+                </View>
+                <View style={s.kpiCell}>
+                  <Text style={s.kpiLabel}>{kpiData[3].label}</Text>
+                  <Text style={s.kpiValue}>{kpiData[3].value}</Text>
+                </View>
+              </View>
+            </View>
 
-            {/* Entries — hidden when collapsed */}
-            {collapsedMonths.has(month) ? null : (
-              <View style={s.monthCard}>
-                {entries.map((entry, idx) => {
-                  const isSel  = selected.includes(entry.id);
-                  const tc     = TYPE_COLORS[entry.type] || COLORS.textSecondary;
-                  const sInfo  = activeTab === 'myentries' ? getSyncInfo(entry.syncStatus) : null;
-                  const hasBorder =
-                    activeTab === 'myentries' &&
-                    (entry.syncStatus === 'pending' || entry.syncStatus === 'failed');
+            {/* Type Breakdown (replaces bar chart) */}
+            <TypeBreakdownCard entries={allSource} />
 
-                  return (
-                    <View key={entry.id}>
-                      <TouchableOpacity
-                        style={[
-                          s.entryRow,
-                          isSel && s.entryRowSelected,
-                          hasBorder
-                            ? { borderLeftWidth: 3, borderLeftColor: sInfo!.borderColor }
-                            : null,
-                        ]}
-                        activeOpacity={0.75}
-                        onPress={() => {
-                          if (multiSelect) {
-                            toggleSelect(entry.id);
-                          } else {
-                            router.push(`/document/${entry.ref}` as any);
-                          }
-                        }}
-                        onLongPress={() => { setMultiSelect(true); toggleSelect(entry.id); }}
-                        delayLongPress={450}
-                      >
-                        {/* Checkbox */}
-                        {multiSelect ? (
-                          <View style={[s.checkbox, isSel && s.checkboxActive]}>
-                            {isSel ? <Ionicons name="checkmark" size={12} color={COLORS.white} /> : null}
-                          </View>
-                        ) : null}
+            {/* Filter Row */}
+            <View style={s.filterRow}>
+              <TouchableOpacity style={s.vTypeBtn} onPress={() => setShowVTypeModal(true)} activeOpacity={0.8}>
+                <Ionicons
+                  name="filter-outline" size={14}
+                  color={voucherType !== 'ALL' ? AMBER : COLORS.textSecondary}
+                />
+                <Text style={[s.vTypeTxt, voucherType !== 'ALL' && s.vTypeTxtActive]} numberOfLines={1}>
+                  {voucherType === 'ALL' ? 'Voucher Type' : voucherType}
+                </Text>
+                <Ionicons name="chevron-down" size={13} color={COLORS.textTertiary} />
+              </TouchableOpacity>
 
-                        {/* Sync icon — My Entries */}
-                        {!multiSelect && activeTab === 'myentries' && sInfo ? (
+              <View style={s.drCrGroup}>
+                <TouchableOpacity
+                  style={[s.drCrChip, showDr && s.drCrChipActive]}
+                  onPress={() => setShowDr(v => !v)}
+                  activeOpacity={0.8}
+                >
+                  {showDr && <Ionicons name="checkmark" size={11} color={COLORS.white} />}
+                  <Text style={[s.drCrChipTxt, showDr && s.drCrChipTxtActive]}>Dr</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.drCrChip, showCr && s.drCrChipActive]}
+                  onPress={() => setShowCr(v => !v)}
+                  activeOpacity={0.8}
+                >
+                  {showCr && <Ionicons name="checkmark" size={11} color={COLORS.white} />}
+                  <Text style={[s.drCrChipTxt, showCr && s.drCrChipTxtActive]}>Cr</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {grouped.length === 0 ? (
+              <View style={s.empty}>
+                <Ionicons name="document-text-outline" size={48} color={COLORS.borderStrong} />
+                <Text style={s.emptyTxt}>No entries found</Text>
+              </View>
+            ) : grouped.map(([month, entries]) => (
+              <View key={month}>
+                {/* Month Header — tap to collapse */}
+                <TouchableOpacity
+                  style={s.monthHdr}
+                  onPress={() => toggleMonth(month)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={s.monthTxt}>{month}</Text>
+                  <View style={s.monthLine} />
+                  <View style={s.monthCountBadge}>
+                    <Text style={s.monthCountTxt}>{entries.length}</Text>
+                  </View>
+                  <Ionicons
+                    name={collapsedMonths.has(month) ? 'chevron-down' : 'chevron-up'}
+                    size={14} color={COLORS.textTertiary}
+                  />
+                </TouchableOpacity>
+
+                {/* Entries — hidden when collapsed */}
+                {collapsedMonths.has(month) ? null : (
+                  <View style={s.monthCard}>
+                    {entries.map((entry, idx) => {
+                      const isSel  = selected.includes(entry.id);
+                      const color  = TYPE_COLORS[entry.type] || COLORS.textSecondary;
+                      const sInfo  = activeTab === 'myentries' ? getSyncInfo(entry.syncStatus) : null;
+                      const hasBorder =
+                        activeTab === 'myentries' &&
+                        (entry.syncStatus === 'pending' || entry.syncStatus === 'failed');
+
+                      return (
+                        <View key={entry.id}>
                           <TouchableOpacity
-                            style={[s.statusIcon, { backgroundColor: sInfo.color + '18' }]}
+                            style={[
+                              s.entryRow,
+                              isSel && s.entryRowSelected,
+                              hasBorder
+                                ? { borderLeftWidth: 3, borderLeftColor: sInfo!.borderColor }
+                                : null,
+                            ]}
+                            activeOpacity={0.75}
                             onPress={() => {
-                              if (entry.syncStatus !== 'synced') handleSinglePush(entry);
-                            }}
-                            activeOpacity={entry.syncStatus !== 'synced' ? 0.7 : 1}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          >
-                            <Ionicons name={sInfo.icon} size={19} color={sInfo.color} />
-                          </TouchableOpacity>
-                        ) : null}
-
-                        {/* Action icon — Day Book */}
-                        {!multiSelect && activeTab === 'daybook' ? (
-                          <View style={[s.statusIcon, { backgroundColor: (ACTION_COLORS[entry.action!] || '#999') + '18' }]}>
-                            <Ionicons
-                              name={
-                                entry.action === 'Created' ? 'add-circle-outline' :
-                                entry.action === 'Edited'  ? 'create-outline' : 'trash-outline'
+                              if (multiSelect) {
+                                toggleSelect(entry.id);
+                              } else {
+                                router.push(`/document/${entry.ref}` as any);
                               }
-                              size={19}
-                              color={ACTION_COLORS[entry.action!] || COLORS.textSecondary}
-                            />
-                          </View>
-                        ) : null}
+                            }}
+                            onLongPress={() => { setMultiSelect(true); toggleSelect(entry.id); }}
+                            delayLongPress={450}
+                          >
+                            {/* Checkbox */}
+                            {multiSelect ? (
+                              <View style={[s.checkbox, isSel && s.checkboxActive]}>
+                                {isSel ? <Ionicons name="checkmark" size={12} color={COLORS.white} /> : null}
+                              </View>
+                            ) : null}
 
-                        {/* Entry detail */}
-                        <View style={s.entryInfo}>
-                          <View style={s.entryTopRow}>
-                            <View style={[s.vtypePill, { backgroundColor: tc + '18' }]}>
-                              <Text style={[s.vtypePillTxt, { color: tc }]}>{entry.type}</Text>
+                            {/* Sync icon — My Entries */}
+                            {!multiSelect && activeTab === 'myentries' && sInfo ? (
+                              <TouchableOpacity
+                                style={[s.statusIcon, { backgroundColor: sInfo.color + '18' }]}
+                                onPress={() => {
+                                  if (entry.syncStatus !== 'synced') handleSinglePush(entry);
+                                }}
+                                activeOpacity={entry.syncStatus !== 'synced' ? 0.7 : 1}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              >
+                                <Ionicons name={sInfo.icon} size={19} color={sInfo.color} />
+                              </TouchableOpacity>
+                            ) : null}
+
+                            {/* Action icon — Day Book */}
+                            {!multiSelect && activeTab === 'daybook' ? (
+                              <View style={[s.statusIcon, { backgroundColor: (ACTION_COLORS[entry.action || 'Created'] || '#999') + '18' }]}>
+                                <Ionicons
+                                  name="book-outline"
+                                  size={19}
+                                  color={color}
+                                />
+                              </View>
+                            ) : null}
+
+                            {/* Entry detail */}
+                            <View style={s.entryInfo}>
+                              <View style={s.entryTopRow}>
+                                <View style={[s.vtypePill, { backgroundColor: color + '18' }]}>
+                                  <Text style={[s.vtypePillTxt, { color }]}>{entry.type}</Text>
+                                </View>
+                                <Text style={s.refTxt}>{entry.ref}</Text>
+                              </View>
+                              <Text style={s.partyTxt}>{entry.party}</Text>
+                              <Text style={s.descTxt}>{entry.description}</Text>
+                              <Text style={s.entryDateTxt}>{entry.date}</Text>
                             </View>
-                            <Text style={s.refTxt}>{entry.ref}</Text>
-                            {activeTab === 'myentries' && entry.syncStatus === 'pending' ? (
-                              <View style={s.pendingBadge}>
-                                <Text style={s.pendingBadgeTxt}>Pending</Text>
-                              </View>
-                            ) : null}
-                            {activeTab === 'myentries' && entry.syncStatus === 'failed' ? (
-                              <View style={s.failedBadge}>
-                                <Text style={s.failedBadgeTxt}>Failed</Text>
-                              </View>
-                            ) : null}
-                          </View>
-                          <Text style={s.partyTxt}>{entry.party}</Text>
-                          <Text style={s.descTxt}>{entry.description}</Text>
-                          <Text style={s.entryDateTxt}>{entry.date}</Text>
-                        </View>
 
-                        {/* Amount */}
-                        <View style={s.amtCol}>
-                          <Text style={[s.amtTxt, { color: entry.isCredit ? COLORS.negative : COLORS.positive }]}>
-                            {entry.amount}
-                          </Text>
-                          <Text style={[s.drCrLbl, { color: entry.isCredit ? COLORS.negative : COLORS.positive }]}>
-                            {entry.isCredit ? 'Cr' : 'Dr'}
-                          </Text>
+                            {/* Amount */}
+                            <View style={s.amtCol}>
+                              <Text style={[s.amtTxt, { color: entry.isCredit ? COLORS.negative : COLORS.positive }]}>
+                                {entry.amount}
+                              </Text>
+                              <Text style={[s.drCrLbl, { color: entry.isCredit ? COLORS.negative : COLORS.positive }]}>
+                                {entry.isCredit ? 'Cr' : 'Dr'}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                          {idx < entries.length - 1 ? <View style={s.divider} /> : null}
                         </View>
-                      </TouchableOpacity>
-                      {idx < entries.length - 1 ? <View style={s.divider} /> : null}
-                    </View>
-                  );
-                })}
+                      );
+                    })}
+                  </View>
+                )}
               </View>
-            )}
-          </View>
-        ))}
+            ))}
+          </>
+        )}
       </ScrollView>
 
       {/* ── Bottom Action Bar ──────────────────────────────────────────── */}
@@ -722,6 +732,19 @@ const s = StyleSheet.create({
   scroll:        { flex: 1 },
   scrollContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.md },
 
+  // Error Banner
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#FEE2E2', borderRadius: RADIUS.md,
+    padding: SPACING.sm, marginBottom: SPACING.sm,
+    borderWidth: 1, borderColor: '#FECACA',
+  },
+  errorBannerTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, color: '#DC2626' },
+
+  // Loading
+  loadingBox: { alignItems: 'center', paddingVertical: 60, gap: 12 },
+  loadingTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
+
   // KPI Grid (2×2)
   kpiCard: {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
@@ -734,14 +757,6 @@ const s = StyleSheet.create({
   kpiDivH:      { height: 1, backgroundColor: COLORS.borderDefault },
   kpiLabel:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500', marginBottom: 6 },
   kpiValue:     { fontSize: 20, fontWeight: '800', color: COLORS.textPrimary },
-
-  // Chart
-  chartCard: {
-    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-    padding: SPACING.md, marginBottom: SPACING.sm,
-  },
-  chartTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 10 },
 
   // Filter Row
   filterRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: SPACING.sm },
@@ -797,11 +812,6 @@ const s = StyleSheet.create({
   vtypePill:    { paddingHorizontal: 7, paddingVertical: 2, borderRadius: RADIUS.sm },
   vtypePillTxt: { fontSize: 10, fontWeight: '700' },
   refTxt:       { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
-
-  pendingBadge: { backgroundColor: AMBER + '22', paddingHorizontal: 6, paddingVertical: 2, borderRadius: RADIUS.sm },
-  pendingBadgeTxt:{ fontSize: 9, fontWeight: '700', color: AMBER },
-  failedBadge:  { backgroundColor: '#FEE2E2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: RADIUS.sm },
-  failedBadgeTxt: { fontSize: 9, fontWeight: '700', color: '#DC2626' },
 
   partyTxt:     { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
   descTxt:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },

@@ -34,7 +34,7 @@ function RootNavigation() {
   useEffect(() => {
     if (isLoading) return;
     // Wait for router to fully resolve before acting
-    if (segments.length === 0) return;
+    if ((segments as string[]).length === 0) return;
 
     const inAuth = segments[0] === '(auth)';
 
