@@ -333,7 +333,7 @@ export default function LedgerDetailScreen() {
       </tbody></table>
       <div style="margin-top:20px;text-align:center;font-size:10px;color:#888">Powered by TallyDekho</div>
       </body></html>`;
-      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
         await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `${ledger.name} — Statement.pdf`, UTI: 'com.adobe.pdf' });

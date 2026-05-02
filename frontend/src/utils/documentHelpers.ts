@@ -169,9 +169,10 @@ export function generateDocumentHTML(doc: VoucherDocument): string {
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <style>
+  @page { size: A4; margin: 15mm; }
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{font-family:Arial,sans-serif;font-size:11px;color:#000;padding:18px;background:#fff;}
-  .page{max-width:750px;margin:0 auto;border:2px solid #000;}
+  body{font-family:Arial,sans-serif;font-size:11px;color:#000;padding:0;background:#fff;width:210mm;}
+  .page{width:100%;border:2px solid #000;}
   table{width:100%;border-collapse:collapse;}
 </style>
 </head><body>

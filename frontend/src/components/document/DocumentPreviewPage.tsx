@@ -653,7 +653,7 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
     try {
       setShareLoading(true);
       const html = generateDocumentHTML(doc);
-      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
       setShareLoading(false);
       // Try expo-sharing first (opens native share sheet with PDF)
       const canShare = await Sharing.isAvailableAsync();
@@ -677,7 +677,7 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
     try {
       setPdfLoading(true);
       const html = generateDocumentHTML(doc);
-      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
       setPdfLoading(false);
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
@@ -700,7 +700,7 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
     try {
       setPdfLoading(true);
       const html = generateDocumentHTML(doc);
-      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
       setPdfLoading(false);
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
