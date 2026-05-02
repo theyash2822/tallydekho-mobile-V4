@@ -98,7 +98,7 @@ export default function EInvoiceListScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listContent}>
         {invoiceData.length === 0 && !loading && (
           <View style={{ alignItems: 'center', padding: 48, gap: 12 }}>
-            <Ionicons name="receipt-outline" size=40 color={COLORS.textTertiary} />
+            <Ionicons name="receipt-outline" size={40} color={COLORS.textTertiary} />
             <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary }}>No E-Invoices found</Text>
             <Text style={{ fontSize: 12, color: COLORS.textTertiary, textAlign: 'center' }}>This feature requires GSTIN-enabled company and valid E-Way Bill API credentials</Text>
           </View>
