@@ -772,7 +772,11 @@ export default function LedgerScreen() {
                   {/* Call button */}
                   <TouchableOpacity
                     style={styles.callAction}
-                    onPress={() => Linking.openURL(`tel:${item.phone}`)}
+                    onPress={() => {
+                      const digits = (item.phone||'').replace(/[^0-9+]/g,'');
+                      if (!digits) { Alert.alert('No phone', 'Phone number not available'); return; }
+                      Linking.openURL(`tel:${digits}`).catch(() => Alert.alert('Error', 'Could not open phone app'));
+                    }}
                     activeOpacity={0.85}
                   >
                     <Ionicons name="call" size={22} color="#fff" />
@@ -781,7 +785,12 @@ export default function LedgerScreen() {
                   {/* WhatsApp button */}
                   <TouchableOpacity
                     style={styles.waAction}
-                    onPress={() => Linking.openURL(`https://wa.me/91${item.phone}`)}
+                    onPress={() => {
+                      const digits = (item.phone||'').replace(/[^0-9]/g,'');
+                      const num = digits.startsWith('91') && digits.length > 10 ? digits : `91${digits}`;
+                      if (!digits) { Alert.alert('No phone', 'Phone number not available'); return; }
+                      Linking.openURL(`https://wa.me/${num}`).catch(() => Alert.alert('Error', 'Could not open WhatsApp'));
+                    }}
                     activeOpacity={0.85}
                   >
                     <FontAwesome5 name="whatsapp" size={22} color="#fff" />

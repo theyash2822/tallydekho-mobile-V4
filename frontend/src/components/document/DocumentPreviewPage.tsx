@@ -661,15 +661,27 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
   };
 
   const handleWhatsApp = async () => {
-    const msg = encodeURIComponent(
-      `📄 *${doc.documentTitle}*\n` +
-      `📋 No: ${doc.documentNumber}\n` +
-      `📅 Date: ${doc.date}\n` +
-      `💰 Total: ${formatCurrency(doc.totals.total)}`
-    );
+    // Generate PDF and share via system share sheet — user selects WhatsApp from there
     try {
-      await Linking.openURL(`whatsapp://send?text=${msg}`);
-    } catch (_) {}
+      setPdfLoading(true);
+      const html = generateDocumentHTML(doc);
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      setPdfLoading(false);
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: `Share ${doc.documentNumber} via WhatsApp`,
+          UTI: 'com.adobe.pdf',
+        });
+      } else {
+        // Fallback: send as text message if sharing not available
+        const msg = encodeURIComponent(`📄 *${doc.documentTitle}*\n📋 No: ${doc.documentNumber}\n📅 Date: ${doc.date}\n💰 Total: ${formatCurrency(doc.totals.total)}`);
+        await Linking.openURL(`whatsapp://send?text=${msg}`);
+      }
+    } catch (_) {
+      setPdfLoading(false);
+    }
   };
 
   const handlePDF = async () => {
