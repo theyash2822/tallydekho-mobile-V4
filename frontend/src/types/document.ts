@@ -14,6 +14,7 @@ export interface CompanyInfo {
   pan?: string;
   phone?: string;
   email?: string;
+  state?: string;
 }
 
 export interface PartyInfo {

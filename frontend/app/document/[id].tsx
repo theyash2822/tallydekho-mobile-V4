@@ -84,8 +84,10 @@ function apiVoucherToDoc(data: any, companyName: string): VoucherDocument {
     date: isoToDocDate(v.date || ''),
     company: {
       name: companyName || co?.name || 'Company',
-      address: co?.address || '',
+      address: [co?.address, co?.state, co?.country].filter(Boolean).join(', ') || '',
       gstin: co?.gstin || undefined,
+      state: co?.state || undefined,
+      email: co?.email || undefined,
     },
     party: v.party_name ? {
       name: v.party_name,

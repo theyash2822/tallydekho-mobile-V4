@@ -97,7 +97,9 @@ export const pairWithTally    = (pairing_code: string) => post<any>('/tally-sync
 export const getTallySyncStatus = () => get<any>('/tally-sync/status');
 export const unpairDevice     = () => post<any>('/tally-sync/unpair', {});
 export const getCompanies     = () => get<any>('/companies');
-export const getCompanyYears  = (companyGuid?: string) => get<any>(withCompany('/company/years', companyGuid));
+export const getCompanyYears   = (companyGuid?: string) => get<any>(withCompany('/company/years', companyGuid));
+export const getCompanyProfile = (companyGuid?: string) => get<any>(withCompany('/company/profile', companyGuid));
+export const updateCompanyProfile = (companyGuid: string, data: any) => patch<any>(withCompany('/company/profile', companyGuid), data);
 
 // ══════════════════════════════════════════════════════════════
 // DASHBOARD

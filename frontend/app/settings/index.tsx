@@ -39,7 +39,7 @@ const SECTIONS: Section[] = [
     icon: 'person-circle-outline', iconColor: '#7C3AED', iconBg: '#F5F3FF',
     subItems: [
       { id: 'profile', label: 'Profile', icon: 'person-outline', route: '/settings/profile' },
-      { id: 'company', label: 'Company Information', icon: 'business-outline', route: '/settings/company' },
+      { id: 'company', label: 'Company Profile (PDF Details)', icon: 'business-outline', route: '/settings/company-profile' },
       { id: 'license', label: 'License & Credits', icon: 'card-outline', route: '/settings/license', badge: 'Free', badgeColor: '#2D7D46' },
     ],
   },

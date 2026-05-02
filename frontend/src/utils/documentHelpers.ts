@@ -184,7 +184,9 @@ export function generateDocumentHTML(doc: VoucherDocument): string {
     <td style="width:50%;border:1px solid #999;padding:8px 10px;vertical-align:top">
       <div style="font-size:14px;font-weight:bold">${doc.company?.name || ''}</div>
       <div style="font-size:9px;color:#444;margin-top:3px">${(doc.company?.address || '').replace(/,/g,',\n')}</div>
-      ${doc.company?.gstin ? `<div style="font-size:9px;margin-top:4px"><b>GSTIN/UIN:</b> ${doc.company.gstin}</div>` : ''}
+      ${doc.company?.gstin ? `<div style="font-size:9px;margin-top:3px"><b>GSTIN/UIN:</b> ${doc.company.gstin}</div>` : ''}
+      ${(doc.company as any)?.state ? `<div style="font-size:9px;color:#444">State Name: <b>${(doc.company as any).state}</b></div>` : ''}
+      ${doc.company?.email ? `<div style="font-size:9px;color:#444">E-Mail: ${doc.company.email}</div>` : ''}
     </td>
     <td style="width:50%;border:1px solid #999;padding:8px;vertical-align:top">
       <div style="text-align:center;margin-bottom:8px">
