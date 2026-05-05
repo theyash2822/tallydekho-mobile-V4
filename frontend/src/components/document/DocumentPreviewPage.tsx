@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Share, Alert, Linking, ActivityIndicator,
@@ -9,10 +9,12 @@ import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useRouter } from 'expo-router';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 import { VoucherDocument } from '../../types/document';
 import { formatCurrency, amountInWords, DOC_TYPE_CONFIG, generateDocumentHTML } from '../../utils/documentHelpers';
 import { useSettings } from '../../context/SettingsContext';
+import { useAuth } from '../../context/AuthContext';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utility Components
@@ -649,6 +651,17 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
   const insets = useSafeAreaInsets();
   const [pdfLoading, setPdfLoading] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
+  const { company } = useAuth();
+  const logoUriRef = useRef<string | null>(null);
+
+  // Load company logo from AsyncStorage once
+  useEffect(() => {
+    if (company?.guid) {
+      AsyncStorage.getItem(`company_logo_${company.guid}`)
+        .then(uri => { logoUriRef.current = uri; })
+        .catch(() => {});
+    }
+  }, [company?.guid]);
 
   // Shared PDF helper — loading reset BEFORE shareAsync to prevent UI hang
   const generateAndSharePDF = async (
@@ -658,7 +671,7 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
   ) => {
     setLoading(true);
     try {
-      const html = generateDocumentHTML(doc);
+      const html = generateDocumentHTML(doc, logoUriRef.current);
       const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
       setLoading(false); // Reset BEFORE shareAsync (shareAsync blocks until sheet dismissed)
       const canShare = await Sharing.isAvailableAsync();

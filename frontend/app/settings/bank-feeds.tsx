@@ -1,4 +1,5 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Modal, ActivityIndicator, Vibration,
@@ -528,7 +529,7 @@ export default function BankFeedsScreen() {
 
   const handleEditSave = (data: BankFormData) => {
     if (!editTarget) return;
-    setAccounts(prev => prev.map(a => a.id === editTarget.id ? { ...a, ...data } : a));
+    persistAccounts(accounts.map(a => a.id === editTarget.id ? { ...a, ...data } : a));
     setEditTarget(null);
     Toast.show({ type: 'success', text1: 'Updated', text2: 'Bank account updated successfully.' });
   };

@@ -65,7 +65,7 @@ export const DOC_TYPE_CONFIG: Record<DocumentType, { label: string; color: strin
 };
 
 // ── PDF HTML Template Generator ──────────────────────────────────────────────
-export function generateDocumentHTML(doc: VoucherDocument): string {
+export function generateDocumentHTML(doc: VoucherDocument, logoUri?: string | null): string {
   const cfg = DOC_TYPE_CONFIG[doc.documentType];
   const hasItems = !!(doc.items && doc.items.length > 0);
   const hasEntries = !!(doc.ledgerEntries && doc.ledgerEntries.length > 0);
@@ -184,6 +184,7 @@ export function generateDocumentHTML(doc: VoucherDocument): string {
 <table>
   <tr>
     <td style="width:50%;border:1px solid #999;padding:8px 10px;vertical-align:top">
+      ${logoUri ? `<img src="${logoUri}" style="max-height:60px;max-width:130px;object-fit:contain;display:block;margin-bottom:6px" />` : ''}
       <div style="font-size:14px;font-weight:bold">${doc.company?.name || ''}</div>
       <div style="font-size:9px;color:#444;margin-top:3px">${(doc.company?.address || '').replace(/,/g,',\n')}</div>
       ${doc.company?.gstin ? `<div style="font-size:9px;margin-top:3px"><b>GSTIN/UIN:</b> ${doc.company.gstin}</div>` : ''}
