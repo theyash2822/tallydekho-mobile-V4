@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
+import { useSettings } from '../context/SettingsContext';
 
 // ── Theme-matched ring colors ─────────────────────────────────────────────────
 const RING_INCOME  = '#1A1A1A';  // Brand primary — income arc
@@ -26,12 +27,6 @@ const SIZE = (RADIUS_SIZE + STROKE_W) * 2 + 4;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS_SIZE;
 const CENTER = SIZE / 2;
 
-const formatAmount = (val: number): string => {
-  if (val >= 1_00_000) return `₹${(val / 1_00_000).toFixed(2)}L`;
-  if (val >= 1000) return `₹${val.toLocaleString('en-IN')}`;
-  return `₹${val.toFixed(2)}`;
-};
-
 const CashflowCard: React.FC<CashflowCardProps> = ({
   netCash = 20830,
   grossCash = 606.21,
@@ -43,6 +38,8 @@ const CashflowCard: React.FC<CashflowCardProps> = ({
   totalIncome,
   totalExpense,
 }) => {
+  const { formatAmountCompact } = useSettings();
+  const formatAmount = (v: number) => formatAmountCompact(Math.round(v));
   const incomeArc = (incomePercentage / 100) * CIRCUMFERENCE;
   const [showTooltip, setShowTooltip] = useState(false);
   const incomeDisplay  = totalIncome  ? formatAmount(totalIncome)  : formatAmount(Math.round(netCash * 1.8));
@@ -113,7 +110,7 @@ const CashflowCard: React.FC<CashflowCardProps> = ({
             ) : (
               <>
                 <Text style={styles.netCashLabel}>Net Cash</Text>
-                <Text style={styles.netCashValue}>₹{netCash.toLocaleString('en-IN')}</Text>
+                <Text style={styles.netCashValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>₹{netCash.toLocaleString('en-IN')}</Text>
                 <Text style={styles.updatedText}>Updated {updatedAt}</Text>
               </>
             )}
@@ -199,17 +196,20 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 28,
   },
   netCashLabel: {
     fontSize: TYPOGRAPHY.sm,
     color: COLORS.textSecondary,
     fontWeight: '400',
+    textAlign: 'center',
   },
   netCashValue: {
     fontSize: TYPOGRAPHY.xxl,
     fontWeight: '700',
     color: COLORS.textPrimary,
     letterSpacing: -0.5,
+    textAlign: 'center',
   },
   updatedText: {
     fontSize: TYPOGRAPHY.xs,
