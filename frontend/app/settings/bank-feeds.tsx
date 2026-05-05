@@ -529,7 +529,7 @@ export default function BankFeedsScreen() {
 
   const handleEditSave = (data: BankFormData) => {
     if (!editTarget) return;
-    persistAccounts(accounts.map(a => a.id === editTarget.id ? { ...a, ...data } : a));
+    setAccounts(accounts.map(a => a.id === editTarget.id ? { ...a, ...data } : a));
     setEditTarget(null);
     Toast.show({ type: 'success', text1: 'Updated', text2: 'Bank account updated successfully.' });
   };
