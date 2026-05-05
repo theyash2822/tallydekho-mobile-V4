@@ -1,20 +1,27 @@
 // Push Notification Service — Expo
 // Registers device for push notifications and saves token to backend
+// Note: expo-notifications requires a dev build or production app — not supported in Expo Go SDK 53+
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { registerPushToken } from './api';
 
-// Configure how notifications appear when app is in foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// Check if running in Expo Go (push not supported there in SDK 53+)
+const isExpoGo = Constants.appOwnership === 'expo';
+
+// Configure how notifications appear when app is in foreground (only in dev build / production)
+if (!isExpoGo) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
 
 /**
  * Register device for push notifications and save token to backend.
@@ -22,6 +29,12 @@ Notifications.setNotificationHandler({
  * Returns the Expo push token string, or null if permission denied / not a device.
  */
 export async function registerForPushNotifications(): Promise<string | null> {
+  // Not supported in Expo Go SDK 53+
+  if (isExpoGo) {
+    console.log('[Push] Expo Go detected — push notifications require a dev build. Skipping.');
+    return null;
+  }
+
   // Push notifications only work on physical devices
   if (!Device.isDevice) {
     console.log('[Push] Simulator detected — skipping push token registration');
@@ -72,6 +85,9 @@ export async function registerForPushNotifications(): Promise<string | null> {
  * Set up notification response handler (tap on notification → navigate)
  */
 export function setupNotificationHandlers(router: any) {
+  // Not supported in Expo Go
+  if (isExpoGo) return () => {};
+
   // Foreground notification received
   const foregroundSub = Notifications.addNotificationReceivedListener(notification => {
     console.log('[Push] Foreground notification:', notification.request.content);
