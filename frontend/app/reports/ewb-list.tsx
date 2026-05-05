@@ -7,6 +7,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { getEWBList } from '../../src/services/api';
+import { useSettings } from '../../src/context/SettingsContext';
 
 // Data loaded from API
 
@@ -18,6 +19,7 @@ const STATUS_CFG: Record<string, { bg: string; text: string }> = {
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function EWBListScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company } = useAuth();

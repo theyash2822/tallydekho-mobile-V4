@@ -10,6 +10,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getEWBList, getCompanyCapabilities } from '../../src/services/api';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const EWB_COLORS: Record<string, string> = {
   generated: COLORS.positive,
@@ -18,6 +19,7 @@ const EWB_COLORS: Record<string, string> = {
 };
 
 export default function EWayBillScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const { company } = useAuth();
   const companyGuid = company?.guid;
@@ -40,7 +42,7 @@ export default function EWayBillScreen() {
         id: r.voucher_number || String(r.id),
         company: r.party_name || '',
         date: r.date || '',
-        amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`,
+        amount: formatAmount(Math.abs(+r.amount||0)),
         status: r.ewb_number ? 'generated' : 'pending',
         ewb_no: r.ewb_number || null,
       })));

@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, TextInput, StyleSheet } from 'react-nativ
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 import FormDropdown, { DropdownOption } from './FormDropdown';
+import { useSettings } from '../../context/SettingsContext';
 
 export interface LogEntry {
   id: string;
@@ -39,6 +40,7 @@ interface Props {
 }
 
 export default function LogisticsSection({ entries, taxRate, onEntriesChange, onTaxRateChange }: Props) {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const [expanded, setExpanded] = useState(false);
   const total = calcLogisticsTotal(entries, taxRate);
 

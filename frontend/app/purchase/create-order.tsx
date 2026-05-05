@@ -16,6 +16,7 @@ import RegularOptionalToggle, { EntryType } from '../../src/components/forms/Reg
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
 import SearchableDropdown, { SDOption } from '../../src/components/forms/SearchableDropdown';
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const PURCHASE_LEDGERS: SDOption[] = [
   { label: 'Purchase - Raw Materials', value: 'purchase_raw' },
@@ -210,6 +211,7 @@ function ItemRow({ item, onUpdate, onRemove, onModal }: {
 }
 
 export default function CreatePurchaseOrderScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [entryType, setEntryType] = useState<EntryType>('regular');

@@ -491,7 +491,20 @@ export default function StockAlertsScreen() {
 
   const saveToBackend = async (extraData?: any) => {
     try {
-      await updateAlertSettings({ saved_at: Date.now(), ...(extraData || {}) });
+      await updateAlertSettings({
+        stock_alerts: {
+          category,
+          selected_entries: selectedEntries,
+          include_negative: includeNeg,
+          expiry_days: expiryDays,
+          tracked_batches: trackedBatches,
+          group_by_warehouse: groupByWh,
+          channels,
+          frequency: freq,
+          send_time: sendTime,
+        },
+        ...(extraData || {}),
+      });
     } catch {}
   };
 

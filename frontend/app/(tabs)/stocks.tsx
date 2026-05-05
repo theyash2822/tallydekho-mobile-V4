@@ -10,6 +10,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 // No mock data imports — real data only (V2 rule)
 import { useAuth } from '../../src/context/AuthContext';
 import { getStocks } from '../../src/services/api';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const DARK = '#1A1A1A';
 

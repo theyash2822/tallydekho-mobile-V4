@@ -9,6 +9,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import DateRangePickerModal, { fmtDMY } from '../../src/components/DateRangePickerModal';
 import { getFullFinancialReport } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
+import { useSettings } from '../../src/context/SettingsContext';
 
 // (Mock data removed — all data comes from real API)
 

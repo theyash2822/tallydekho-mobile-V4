@@ -320,7 +320,7 @@ export default function NotificationChannelsScreen() {
         whatsapp_enabled: enabled.whatsapp, sms_enabled: enabled.sms,
         quiet_enabled: quietHours, quiet_from: startTime, quiet_to: endTime,
       });
-      saveAll(); // Toast.show({ type: 'success', text1: 'Saved', text2: 'Notification settings updated.' });
+      Toast.show({ type: 'success', text1: 'Saved', text2: 'Notification settings updated.' });
     } catch { Toast.show({ type: 'error', text1: 'Error', text2: 'Could not save settings.' }); }
   };
 

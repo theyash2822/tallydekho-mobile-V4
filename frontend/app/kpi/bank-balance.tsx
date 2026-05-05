@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getKPIBankBalance } from '../../src/services/api';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -74,6 +75,7 @@ const BANKS = [
 // Screen
 // ─────────────────────────────────────────────────────────────────────────────
 export default function BankBalanceScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const { company } = useAuth();
   const companyGuid = company?.guid;
   const [apiData, setApiData] = React.useState<any>(null);

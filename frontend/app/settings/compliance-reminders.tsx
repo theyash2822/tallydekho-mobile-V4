@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { updateAlertSettings } from '../../src/services/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. CustomCheckbox
@@ -197,8 +198,21 @@ export default function ComplianceRemindersScreen() {
     channels: { push: true, email: false, whatsapp: false, sms: false } as Channels,
   });
 
-  const save = () =>
-    Toast.show({ type: 'success', text1: 'Saved', text2: 'Compliance reminders updated.' });
+  const save = async () => {
+    try {
+      await updateAlertSettings({
+        compliance_reminders: {
+          einvoice: einv,
+          ewb,
+          other_taxes: other,
+        },
+      });
+      Toast.show({ type: 'success', text1: 'Saved', text2: 'Compliance reminders updated.' });
+      setIsDirty(false);
+    } catch {
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Could not save. Try again.' });
+    }
+  };
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>

@@ -9,6 +9,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { getVouchers } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { useSettings } from '../../src/context/SettingsContext';
 
 // Invoice data loaded from API
 

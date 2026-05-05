@@ -17,6 +17,7 @@ import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDro
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
 import SearchableDropdown, { SDOption } from '../../src/components/forms/SearchableDropdown';
+import { useSettings } from '../../src/context/SettingsContext';
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 const LEDGER_ACCOUNTS: DropdownOption[] = [
@@ -751,6 +752,7 @@ const PAY_MODES: DropdownOption[] = [
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CreateSalesInvoiceScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company, isPaired } = useAuth();

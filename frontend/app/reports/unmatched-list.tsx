@@ -7,6 +7,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { getUnmatchedInvoices } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const ERROR_CFG: Record<string, { badgeBg: string; dotColor: string; textColor: string }> = {
   'No GST entry':      { badgeBg: '#FEE2E2', dotColor: '#DC2626', textColor: '#DC2626' },
@@ -16,7 +17,7 @@ const ERROR_CFG: Record<string, { badgeBg: string; dotColor: string; textColor: 
 };
 const DEFAULT_ERR = { badgeBg: '#FEE2E2', dotColor: '#DC2626', textColor: '#DC2626' };
 
-const fmt = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+// fmt is defined inside component to use settings-aware formatAmount
 const isoToDisplay = (d: string) => {
   if (!d || !d.includes('-')) return d;
   const [y, m, day] = d.split('-');
@@ -25,6 +26,8 @@ const isoToDisplay = (d: string) => {
 };
 
 export default function UnmatchedListScreen() {
+  const { formatAmount } = useSettings();
+  const fmt = (n: number) => formatAmount(Math.round(n));
   const router = useRouter();
   const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;

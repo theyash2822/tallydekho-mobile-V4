@@ -10,7 +10,11 @@ import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { updateMe } from '../../src/services/api';
+import { updateMe, get2FAStatus, setPin as apiSetPin, removePin, setBiometric as apiSetBiometric } from '../../src/services/api';
+import * as SecureStore from 'expo-secure-store';
+import * as LocalAuthentication from 'expo-local-authentication';
+
+const BIOMETRIC_PIN_KEY = 'td_biometric_pin';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -255,7 +259,7 @@ function CreatePasskeyModal({
 }: {
   visible: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (pin: string) => void;
 }) {
   const [pin, setPin] = useState('');
 
@@ -283,7 +287,7 @@ function CreatePasskeyModal({
           {/* Confirm button */}
           <TouchableOpacity
             style={[ps.modalBtn, ps.confirmBtnColor, pin.length < 4 && ps.btnDisabled]}
-            onPress={() => pin.length === 4 && onConfirm()}
+            onPress={() => pin.length === 4 && onConfirm(pin)}
             activeOpacity={0.85}
             disabled={pin.length < 4}
           >
@@ -569,9 +573,61 @@ export default function ProfileScreen() {
     if (user?.phone) setPhone(user.phone);
   }, [user]);
 
-  // Security
-  const [biometric, setBiometric] = useState(true);
-  const [twoFA,     setTwoFA]     = useState(false);
+  // Security — loaded from API
+  const [biometric, setBiometricState] = useState(false);
+  const [twoFA,     setTwoFA]          = useState(false);
+  const [pinForDisable, setPinForDisable] = useState('');
+  const [showDisable2FA, setShowDisable2FA] = useState(false);
+
+  // Load 2FA status on mount
+  useEffect(() => {
+    get2FAStatus().then((res: any) => {
+      if (res?.success) {
+        setTwoFA(res.data?.two_fa_enabled || false);
+        setBiometricState(res.data?.biometric_enabled || false);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const handleBiometricToggle = async (val: boolean) => {
+    if (val) {
+      // Verify biometric hardware is available
+      const hasHW = await LocalAuthentication.hasHardwareAsync();
+      const enrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!hasHW || !enrolled) {
+        Toast.show({ type: 'error', text1: 'Biometric Not Available', text2: 'Please set up Face ID / Fingerprint in device settings first.' });
+        return;
+      }
+      // Prompt biometric to confirm user's identity before enabling
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Confirm your identity to enable biometric login',
+        cancelLabel: 'Cancel',
+        disableDeviceFallback: false,
+      });
+      if (!result.success) {
+        Toast.show({ type: 'info', text1: 'Cancelled', text2: 'Biometric not enabled.' });
+        return;
+      }
+      // Store PIN securely for biometric auto-login (if 2FA is set)
+      if (twoFA) {
+        Toast.show({ type: 'info', text1: 'Enter your PIN', text2: 'Enter PIN once to enable biometric login.' });
+        // setShowPasskey flow will handle saving PIN to SecureStore
+        setShowPasskey(true);
+        // We set biometric after PIN is confirmed via handlePasskeyConfirm
+        return;
+      }
+    } else {
+      // Disabling biometric — clear stored PIN
+      await SecureStore.deleteItemAsync(BIOMETRIC_PIN_KEY).catch(() => {});
+    }
+    setBiometricState(val);
+    try {
+      await apiSetBiometric(val);
+    } catch {
+      setBiometricState(!val); // revert
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Could not update biometric setting.' });
+    }
+  };
 
   // Modals
   const [showDelete,    setShowDelete]    = useState(false);
@@ -603,17 +659,61 @@ export default function ProfileScreen() {
     ]).start(() => setSaveState('idle'));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     showToast('saving');
-    setTimeout(() => {
+    try {
+      await updateMe({ name: name.trim(), email: email.trim() });
       showToast('saved');
       setTimeout(hideToast, 1600);
-    }, 1100);
+    } catch {
+      hideToast();
+      Toast.show({ type: 'error', text1: 'Save Failed', text2: 'Could not update profile. Try again.' });
+    }
   };
 
   const handle2FAToggle = (val: boolean) => {
-    if (val) { setShowPasskey(true); }
-    else     { setTwoFA(false); }
+    if (val) {
+      setShowPasskey(true);
+    } else {
+      // Ask for current PIN before disabling
+      setShowDisable2FA(true);
+    }
+  };
+
+  const handlePasskeyConfirm = async (pin: string) => {
+    setShowPasskey(false);
+    try {
+      await apiSetPin(pin);
+      setTwoFA(true);
+      // Store PIN securely for biometric auto-login
+      const hasHW = await LocalAuthentication.hasHardwareAsync();
+      const enrolled = await LocalAuthentication.isEnrolledAsync();
+      if (hasHW && enrolled) {
+        await SecureStore.setItemAsync(BIOMETRIC_PIN_KEY, pin);
+        // Also enable biometric on server if not already enabled
+        if (!biometric) {
+          await apiSetBiometric(true).catch(() => {});
+          setBiometricState(true);
+        }
+      }
+      Toast.show({ type: 'success', text1: 'Passkey Set', text2: '2-Factor Authentication is now enabled.' });
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Error', text2: err?.message || 'Could not set passkey.' });
+    }
+  };
+
+  const handleDisable2FA = async (pin: string) => {
+    setShowDisable2FA(false);
+    try {
+      await removePin(pin);
+      setTwoFA(false);
+      // Clear stored biometric PIN
+      await SecureStore.deleteItemAsync(BIOMETRIC_PIN_KEY).catch(() => {});
+      setBiometricState(false);
+      Toast.show({ type: 'success', text1: '2FA Disabled', text2: 'Two-Factor Authentication has been turned off.' });
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Incorrect PIN', text2: err?.message || 'Could not disable 2FA.' });
+    }
   };
 
   return (
@@ -746,7 +846,7 @@ export default function ProfileScreen() {
                   <Text style={ps.toggleSub}>Face ID / Fingerprint on app open</Text>
                 </View>
               </View>
-              <CustomToggle value={biometric} onValueChange={(v) => { setBiometric(v); markDirty(); }} />
+              <CustomToggle value={biometric} onValueChange={handleBiometricToggle} />
             </View>
 
             <View style={ps.hr} />
@@ -796,7 +896,13 @@ export default function ProfileScreen() {
       <CreatePasskeyModal
         visible={showPasskey}
         onClose={() => setShowPasskey(false)}
-        onConfirm={() => { setTwoFA(true); setShowPasskey(false); }}
+        onConfirm={handlePasskeyConfirm}
+      />
+      {/* Disable 2FA — requires current PIN */}
+      <CreatePasskeyModal
+        visible={showDisable2FA}
+        onClose={() => setShowDisable2FA(false)}
+        onConfirm={handleDisable2FA}
       />
 
       {/* ── Edit Phone — WhatsApp OTP ───────────────────────────────────── */}

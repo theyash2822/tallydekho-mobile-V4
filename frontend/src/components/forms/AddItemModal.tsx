@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { StockItem, STOCK_ITEMS, ALL_WAREHOUSES, ALL_CATEGORIES, ALL_GROUPS, ALL_UNITS, ALL_TAX_RATES, RACK_OPTIONS, ADJ_REASONS, LOW_STOCK_QTY } from '../../data/stockData';
 import { COLORS, TYPOGRAPHY, SPACING } from '../../constants/colors';
+import { useSettings } from '../../context/SettingsContext';
 
 import {
   InlineDropdownField, InlineField, CurrencyField, SubmitButton,
@@ -19,6 +20,7 @@ export function AddItemModal({
 }: {
   visible: boolean; onClose: () => void;
 }) {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const insets = useSafeAreaInsets();
   const [group,         setGroup]         = useState('');
   const [name,          setName]          = useState('');

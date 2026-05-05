@@ -12,6 +12,7 @@ import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../../src/context/AuthContext';
 import { getAIInsights } from '../../src/services/api';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const AMBER       = '#A89060';
 const AMBER_LIGHT = '#D4BC94';
@@ -375,6 +376,7 @@ const dn = StyleSheet.create({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function AIInsightsScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company } = useAuth();
@@ -573,7 +575,7 @@ export default function AIInsightsScreen() {
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
           <Text style={s.cardTitle}>Top 3 Suppliers</Text>
-          {(topCustomers.length > 0 ? topCustomers.map((sup: any) => ({ name: sup.name, amount: `₹${Math.round(sup.total||0).toLocaleString("en-IN")}`, count: String(sup.count||0) })) : TOP_SUPPLIERS).map((sup: any, i: number) => (
+          {(topCustomers.length > 0 ? topCustomers.map((sup: any) => ({ name: sup.name, amount: formatAmount(Math.round(sup.total||0)), count: String(sup.count||0) })) : TOP_SUPPLIERS).map((sup: any, i: number) => (
             <View key={sup.name}
               style={[s.supRow, i < TOP_SUPPLIERS.length - 1 ? s.supRowBorder : null]}
             >

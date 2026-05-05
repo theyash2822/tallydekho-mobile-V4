@@ -11,6 +11,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { getKPICashInHand } from '../../src/services/api';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -61,6 +62,7 @@ const RECENT_TXN = [
 
 // ── Component ───────────────────────────────────────────────────────────────
 export default function CashInHandScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const { company } = useAuth();
   const companyGuid = company?.guid;
   const [apiData, setApiData] = React.useState<any>(null);

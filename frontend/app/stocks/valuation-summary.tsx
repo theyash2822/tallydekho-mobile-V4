@@ -10,6 +10,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { getStocks } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth } from '../../src/context/AuthContext';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const SLICE_COLORS = ['#A89060', '#3A3A3A', '#7C5C3A', '#1A1A1A', '#5A7A5A', '#5A5A9A', '#9A5A5A', '#5A8A9A'];
 
@@ -22,6 +23,7 @@ interface GroupSummary {
 }
 
 export default function ValuationSummaryScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
   const { company } = useAuth();

@@ -77,8 +77,10 @@ export default function PreferencesScreen() {
   const { settings, updateSettings } = useSettings();
 
   // Language & Region
+  const DATE_MAP: Record<string, string> = { 'dmy': 'DD/MM/YYYY', 'mdy': 'MM/DD/YYYY', 'iso': 'YYYY-MM-DD' };
+  const DATE_MAP_REV: Record<string, string> = { 'DD/MM/YYYY': 'dmy', 'MM/DD/YYYY': 'mdy', 'YYYY-MM-DD': 'iso' };
   const [language, setLanguage]   = useState('en');
-  const [dateFormat, setDateFmt]  = useState('dmy');
+  const [dateFormat, setDateFmt]  = useState(DATE_MAP_REV[settings.date_format] || 'dmy');
   const [timeFormat, setTimeFmt]  = useState('12h');
 
   // Display
@@ -120,6 +122,7 @@ export default function PreferencesScreen() {
       theme,
       number_format: numFormat === 'indian' ? 'Indian' : 'International',
       decimal_places: parseInt(decimals, 10) || 2,
+      date_format: DATE_MAP[dateFormat] || 'DD/MM/YYYY',
     });
     setIsDirty(false);
     Toast.show({

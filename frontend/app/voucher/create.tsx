@@ -12,6 +12,7 @@ import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import AddPartyModal, { PartyData } from '../../src/components/forms/AddPartyModal';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import { useSettings } from '../../src/context/SettingsContext';
 
 type VType = 'payment' | 'receipt' | 'journal' | 'contra';
 
@@ -83,6 +84,7 @@ const todayStr = () => {
 };
 
 export default function CreateVoucherScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const params = useLocalSearchParams<{ type?: string }>();
   const insets = useSafeAreaInsets();

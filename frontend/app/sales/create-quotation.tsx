@@ -15,6 +15,7 @@ import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
+import { useSettings } from '../../src/context/SettingsContext';
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 const PARTIES: DropdownOption[] = [
@@ -274,6 +275,7 @@ function ItemRow({ item, onUpdate, onRemove, onModal }: {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CreateQuotationScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company, isPaired } = useAuth();

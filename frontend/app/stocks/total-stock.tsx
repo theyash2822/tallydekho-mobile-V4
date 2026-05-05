@@ -18,6 +18,7 @@ import { StockTransferModal } from '../../src/components/forms/StockTransferModa
 import { BulkTransferModal } from '../../src/components/forms/BulkTransferModal';
 import FilterBottomSheet, { FilterChipGroup } from '../../src/components/FilterBottomSheet';
 import { StockItem, ALL_WAREHOUSES, ALL_CATEGORIES, ALL_GROUPS } from '../../src/data/stockData';
+import { useSettings } from '../../src/context/SettingsContext';
 
 // ─── (Types, mock data, and constants are now in src/data/stockData.ts) ────────
 
@@ -155,6 +156,7 @@ function FilterModal({ visible, onClose, onApply, initWh, initCat, initGrp }: {
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 
 export default function TotalStockScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const { company } = useAuth();
   const companyGuid = company?.guid;
@@ -171,7 +173,7 @@ export default function TotalStockScreen() {
         category: r.category || '',
         group: r.group_name || '',
         qty: +(r.closing_qty || 0),
-        value: r.closing_value ? `₹${Math.round(+r.closing_value).toLocaleString('en-IN')}` : '₹0',
+        value: r.closing_value ? formatAmount(Math.round(+r.closing_value)) : formatAmount(0),
         unit: r.unit || 'pcs',
         warehouse: r.warehouse_name || 'Default',
         warehouseId: r.warehouse_name || 'WH01',

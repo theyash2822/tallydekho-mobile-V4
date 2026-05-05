@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
+import { useSettings } from '../context/SettingsContext';
 
 // Supports both the legacy mock shape AND the new API shape
 interface Activity {
@@ -48,13 +49,17 @@ function extractVoucherNo(label: string = ''): string {
 }
 
 const ActivityItem: React.FC<{ item: Activity; onPress: () => void }> = ({ item, onPress }) => {
+  const { formatAmountCompact } = useSettings();
   // Prefer API shape, fall back to legacy shape
   const title  = item.label       ?? item.description ?? '';
   const sub    = item.party       ?? '';
   const timing = item.date        ?? item.time        ?? '';
-  const amount = item.amount      ?? '';
-  const isCredit = item.type === 'credit';
+  const isCredit = item.type === 'credit' || (item as any).is_credit === true;
   const isDebit  = item.type === 'debit';
+  // Use raw amount if available, otherwise fall back to pre-formatted string
+  const amount = (item as any).amount_raw != null
+    ? (isCredit ? '+' : '-') + formatAmountCompact((item as any).amount_raw)
+    : (item.amount ?? '');
 
   // Derive avatar initial: from party or avatar field
   const initial = (item.party?.[0] ?? item.avatar?.[0] ?? 'T').toUpperCase();

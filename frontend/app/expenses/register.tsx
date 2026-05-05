@@ -11,6 +11,7 @@ import DateRangePickerModal, { isoToDMY } from '../../src/components/DateRangePi
 import { useAuth } from '../../src/context/AuthContext';
 import { getVouchers } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { useSettings } from '../../src/context/SettingsContext';
 
 type TxItem = { id: string; voucher: string; desc: string; date: string; amount: string; positive: boolean; type: 'payment' | 'receipt' | 'contra'; party?: string; time?: string; status?: string; };
 
@@ -42,6 +43,7 @@ type MonthGroup = { id: string; label: string; items: ExpenseItem[] };
 // Legacy MONTH_GROUPS removed — using live data
 
 export default function ExpenseRegisterScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { selectedFY, company } = useAuth();
@@ -65,7 +67,7 @@ export default function ExpenseRegisterScreen() {
         voucher: r.voucher_number || '',
         desc: r.narration || r.party_name || r.voucher_type || '',
         date: r.date || '',
-        amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`,
+        amount: formatAmount(Math.abs(+r.amount||0)),
         positive: (r.voucher_type||'').toLowerCase().includes('receipt'),
         type: (r.voucher_type||'').toLowerCase().includes('payment') ? 'payment' :
               (r.voucher_type||'').toLowerCase().includes('receipt') ? 'receipt' : 'contra',

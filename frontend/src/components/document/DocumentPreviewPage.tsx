@@ -12,6 +12,7 @@ import * as Sharing from 'expo-sharing';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 import { VoucherDocument } from '../../types/document';
 import { formatCurrency, amountInWords, DOC_TYPE_CONFIG, generateDocumentHTML } from '../../utils/documentHelpers';
+import { useSettings } from '../../context/SettingsContext';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utility Components

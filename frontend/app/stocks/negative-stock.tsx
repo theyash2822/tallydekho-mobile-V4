@@ -10,6 +10,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { getStocks } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth } from '../../src/context/AuthContext';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const AMBER = '#A89060';
 
@@ -22,6 +23,7 @@ interface NegStockItem {
 }
 
 export default function NegativeStockScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company } = useAuth();

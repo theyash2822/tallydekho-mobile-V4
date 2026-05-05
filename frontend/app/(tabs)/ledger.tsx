@@ -14,6 +14,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { getLedgers, createLedger } from '../../src/services/api';
 
 import { useAuth } from '../../src/context/AuthContext';
+import { useSettings } from '../../src/context/SettingsContext';
 
 import FilterBottomSheet, { FilterRadioRow } from '../../src/components/FilterBottomSheet';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
@@ -418,6 +419,7 @@ function FilterModal({ visible, onClose, activeNature, onApply }: FilterModalPro
 export default function LedgerScreen() {
   const router = useRouter();
   const { company, selectedFY } = useAuth();
+  const { formatAmount } = useSettings();
   const companyGuid = company?.guid;
   const filterBtnRef = useRef<View>(null);
   const [data, setData] = useState<LedgerItem[]>([]);
@@ -488,7 +490,7 @@ export default function LedgerScreen() {
         id: r.guid || r.id || String(r.id),
         name: r.name,
         group: r.parent || r.group || '',
-        balance: r.closing_balance != null ? `₹${Math.abs(+r.closing_balance).toLocaleString('en-IN')}` : (r.balance || '₹0'),
+        balance: r.closing_balance != null ? formatAmount(Math.abs(+r.closing_balance)) : (r.balance || formatAmount(0)),
         type: (r.balance_type === 'Cr') ? 'credit' : 'debit',
         nature: r.nature || '',
         phone: r.mobile || r.phone || '',

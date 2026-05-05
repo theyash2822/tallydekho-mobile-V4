@@ -15,6 +15,7 @@ import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDro
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import SearchableDropdown, { SDOption } from '../../src/components/forms/SearchableDropdown';
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const VENDORS: SDOption[] = [
   { label: 'ABC Traders', value: 'abc' },
@@ -139,6 +140,7 @@ function DebitItemRow({ item, onUpdate, onRemove, onModal }: {
 }
 
 export default function CreateDebitNoteScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company, isPaired } = useAuth();

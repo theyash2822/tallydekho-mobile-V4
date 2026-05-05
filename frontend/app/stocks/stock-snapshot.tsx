@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const AMBER    = '#A89060';
 const AMBER_BG = '#A8906018';
@@ -61,6 +62,7 @@ const SNAPSHOT_DATA: Record<ValuationType, SnapshotData> = {
 const VALUATION_TYPES: ValuationType[] = ['Average', 'Opening', 'Closing', 'Peak'];
 
 export default function StockSnapshotScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
 

@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
+import { useSettings } from '../../src/context/SettingsContext';
 import { getVouchers } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
@@ -66,6 +67,7 @@ type FilterType = 'all' | 'inflow' | 'outflow';
 export default function CashRegisterScreen() {
   const router = useRouter();
   const { company, selectedFY } = useAuth();
+  const { formatAmount } = useSettings();
   const companyGuid = company?.guid;
   const [liveItems, setLiveItems] = useState<TxItem[]>([]);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -82,7 +84,7 @@ export default function CashRegisterScreen() {
         voucher: r.voucher_number || '',
         desc: r.narration || r.party_name || '',
         date: r.date || '',
-        amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`,
+        amount: formatAmount(Math.abs(+r.amount||0)),
         positive: (r.voucher_type||'').toLowerCase().includes('receipt'),
         type: (r.voucher_type||'').toLowerCase().includes('payment') ? 'payment' as TxType :
               (r.voucher_type||'').toLowerCase().includes('receipt') ? 'receipt' as TxType : 'contra' as TxType,

@@ -9,6 +9,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import DateRangePickerModal, { parseDMY, fmtDMY } from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { getGSTDetail, getCompanyCapabilities } from '../../src/services/api';
+import { useSettings } from '../../src/context/SettingsContext';
 
 // ── GSTR Tabs ─────────────────────────────────────────────────────────────────
 const GSTR_TABS = ['GSTR-1', 'GSTR-2A', 'GSTR-9', 'GSTR-4', 'GSTR-3B', 'GSTR-6'];
@@ -28,6 +29,7 @@ interface Invoice {
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function GSTScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company } = useAuth();
@@ -54,7 +56,7 @@ export default function GSTScreen() {
       if (rows.length) setLiveInvoices(rows.map((r: any) => ({
         id: String(r.id), invoiceNo: r.voucher_number||'', type: r.voucher_type||'Sales',
         party: r.party_name||'', date: r.date||'', dateObj: new Date(r.date||Date.now()),
-        amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`,
+        amount: formatAmount(Math.abs(+r.amount||0)),
         matched: !!(r.irn), gstr: [activeTab],
       })));
     }).catch(() => {});

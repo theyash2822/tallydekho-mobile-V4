@@ -5,6 +5,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useSettings } from '../../src/context/SettingsContext';
 
 
 const VOUCHER_TYPES = [
@@ -22,6 +23,7 @@ const CREATE_OPTIONS = [
 ];
 
 export default function VouchersHubScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [showCreate, setShowCreate] = useState(false);

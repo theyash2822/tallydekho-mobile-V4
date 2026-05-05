@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
+import { useSettings } from '../../src/context/SettingsContext';
 import { getKPIReceipts } from '../../src/services/api';
 
 const { width: SW } = Dimensions.get('window');
@@ -56,11 +57,13 @@ const RECENT_RCP = [
 const PERIOD_TABS = ['7D', '1M', '3M', '6M'];
 const TYPE_TABS   = ['All', 'Cash', 'Bank'];
 
-const fmtK   = (v: number) => v >= 1000 ? `₹${(v / 1000).toFixed(1)}K` : `₹${v}`;
-const fmtAmt = (v: number) => `₹${(v / 1000).toFixed(1)}K`;
+// fmtK and fmtAmt are now instance methods using useSettings — see inside component
 
 // ─── Interactive Line Chart ────────────────────────────────────────────────────
 function DailyChart() {
+  const { formatAmountCompact } = useSettings();
+  const fmtAmt = (v: number) => formatAmountCompact(Math.round(v));
+  const fmtK   = (v: number) => formatAmountCompact(Math.round(v));
   const [activeIdx, setActiveIdx] = useState<number | null>(3);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -218,6 +221,9 @@ function DonutCard() {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function ReceiptsScreen() {
   const { company } = useAuth();
+  const { formatAmount, formatAmountCompact } = useSettings();
+  const fmtK   = (v: number) => formatAmountCompact(Math.round(v));
+  const fmtAmt = (v: number) => formatAmountCompact(Math.round(v));
   const companyGuid = company?.guid;
   const [apiData, setApiData] = React.useState<any>(null);
   React.useEffect(() => {

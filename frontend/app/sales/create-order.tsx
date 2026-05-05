@@ -16,6 +16,7 @@ import RegularOptionalToggle, { EntryType } from '../../src/components/forms/Reg
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
 import SearchableDropdown, { SDOption } from '../../src/components/forms/SearchableDropdown';
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
+import { useSettings } from '../../src/context/SettingsContext';
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 const SALES_LEDGERS: SDOption[] = [
@@ -241,6 +242,7 @@ function DateInput({ label, value, onChange, required, title }: {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CreateSalesOrderScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company, isPaired } = useAuth();

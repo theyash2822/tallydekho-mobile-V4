@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getVouchers } from '../../src/services/api';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const DAYBOOK_TYPE_MAP: Record<string, string> = {
   Sales:    'sales_invoice',
@@ -48,6 +49,7 @@ const TYPE_COLORS: Record<string,string> = {
 };
 
 export default function DaybookScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
@@ -75,7 +77,7 @@ export default function DaybookScreen() {
           type: mapVoucherType(r.voucher_type) as VType,
           ref: r.voucher_number || '',
           party: r.party_name || '',
-          amount: `₹${Math.abs(+r.amount || 0).toLocaleString('en-IN')}`,
+          amount: formatAmount(Math.abs(+r.amount || 0)),
           isCredit: +r.amount < 0,
           status: 'posted' as const,
           isMine: true,

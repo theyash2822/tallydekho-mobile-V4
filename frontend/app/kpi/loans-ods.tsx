@@ -11,6 +11,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { getKPILoansODs } from '../../src/services/api';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const { width: SW } = Dimensions.get('window');
 

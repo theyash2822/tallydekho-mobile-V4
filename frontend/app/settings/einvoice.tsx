@@ -46,7 +46,11 @@ export default function EInvoiceScreen() {
   const [secret, setSecret] = useState('');
   const pendingIRN = 3;
 
-  const save = () => Alert.alert('Saved!', 'E-Invoice credentials saved.', [{text:'OK'}]);
+  const save = async () => {
+    await saveToBackend({ gstin, username, password, client_id: clientId, client_secret: secret, provider });
+    Alert.alert('Saved!', 'E-Invoice credentials saved.', [{text:'OK'}]);
+    setIsDirty(false);
+  };
   const test = () => Alert.alert('Connection Test', 'Successfully connected to IRP portal');
   const bulkGenerate = () => Alert.alert('Bulk Generate', `Generating IRN for ${pendingIRN} pending invoices...`);
 

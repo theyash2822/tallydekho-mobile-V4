@@ -1,6 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getUserSettings, updateUserSettings } from '../services/api';
+import {
+  formatAmount as _formatAmount,
+  formatAmountCompact as _formatAmountCompact,
+  formatDate as _formatDate,
+  getCurrencySymbol,
+  DEFAULT_FORMAT_SETTINGS,
+} from '../utils/format';
 
 export interface UserSettings {
   language: string;        // 'English' | 'Hindi' | 'Gujarati' | 'Marathi' | 'Tamil' | ...
@@ -28,14 +35,22 @@ const DEFAULT_SETTINGS: UserSettings = {
 interface SettingsContextType {
   settings: UserSettings;
   updateSettings: (partial: Partial<UserSettings>) => Promise<void>;
+  /** Full amount: ₹1,25,000.00 / $125,000.00 */
   formatAmount: (n: number) => string;
+  /** Compact amount for KPI cards, charts: ₹1.2L / $125K / $1.2M */
+  formatAmountCompact: (n: number) => string;
+  /** Currency symbol only: ₹ / $ / € */
+  currencySymbol: string;
+  /** Format ISO date strings per user's date_format setting */
   formatDate: (iso: string) => string;
 }
 
 const SettingsContext = createContext<SettingsContextType>({
   settings: DEFAULT_SETTINGS,
   updateSettings: async () => {},
-  formatAmount: (n) => '₹' + n.toLocaleString('en-IN'),
+  formatAmount: (n) => _formatAmount(n, DEFAULT_FORMAT_SETTINGS),
+  formatAmountCompact: (n) => _formatAmountCompact(n, DEFAULT_FORMAT_SETTINGS),
+  currencySymbol: '₹',
   formatDate: (d) => d,
 });
 
@@ -65,44 +80,27 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     try { await updateUserSettings(partial); } catch {}
   };
 
-  // Currency symbol lookup
-  const getCurrencySymbol = (currency: string): string => {
-    const symbols: Record<string, string> = {
-      INR: '₹', USD: '$', EUR: '€', GBP: '£', AED: 'د.إ', AUD: 'A$',
-      BDT: '৳', BHD: 'BD', CAD: 'C$', CNY: '¥', JPY: '¥', KES: 'KSh',
-      KWD: 'KD', LKR: 'Rs', MYR: 'RM', NGN: '₦', NPR: 'रू', NZD: 'NZ$',
-      OMR: '﷼', QAR: 'QR', SAR: 'SR', SGD: 'S$', TZS: 'TSh', ZAR: 'R',
-    };
-    return symbols[currency] || currency;
+  const fmtSettings = {
+    currency:       settings.currency,
+    number_format:  settings.number_format,
+    decimal_places: settings.decimal_places,
+    date_format:    settings.date_format,
   };
 
-  // Number formatting
-  const formatAmount = (n: number): string => {
-    const symbol = getCurrencySymbol(settings.currency);
-    const abs = Math.abs(n);
-    const locale = settings.number_format === 'Indian' ? 'en-IN' : 'en-US';
-    const formatted = abs.toLocaleString(locale, {
-      minimumFractionDigits: settings.decimal_places,
-      maximumFractionDigits: settings.decimal_places,
-    });
-    return (n < 0 ? '-' : '') + symbol + formatted;
-  };
-
-  // Date formatting
-  const formatDate = (iso: string): string => {
-    if (!iso || !iso.includes('-')) return iso || '';
-    const parts = iso.split('T')[0].split('-');
-    if (parts.length < 3) return iso;
-    const [y, m, d] = parts;
-    switch (settings.date_format) {
-      case 'MM/DD/YYYY': return `${m}/${d}/${y}`;
-      case 'YYYY-MM-DD': return `${y}-${m}-${d}`;
-      default: return `${d}/${m}/${y}`; // DD/MM/YYYY
-    }
-  };
+  const formatAmount        = (n: number) => _formatAmount(n, fmtSettings);
+  const formatAmountCompact = (n: number) => _formatAmountCompact(n, fmtSettings);
+  const currencySymbol      = getCurrencySymbol(settings.currency);
+  const formatDate          = (iso: string) => _formatDate(iso, fmtSettings);
 
   return (
-    <SettingsContext.Provider value={{ settings, updateSettings, formatAmount, formatDate }}>
+    <SettingsContext.Provider value={{
+      settings,
+      updateSettings,
+      formatAmount,
+      formatAmountCompact,
+      currencySymbol,
+      formatDate,
+    }}>
       {children}
     </SettingsContext.Provider>
   );

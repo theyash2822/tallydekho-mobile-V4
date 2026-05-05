@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useSettings } from '../../src/context/SettingsContext';
 
 // ─── DATA ─────────────────────────────────────────────────────────────────────
 
@@ -172,6 +173,7 @@ function CategoryGroup({ cat, items }: { cat: string; items: AgedItem[] }) {
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 
 export default function AgedItemsScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router    = useRouter();
   const [filter,    setFilter]    = useState<FilterOpt>('All');
   const [activeTab, setActiveTab] = useState<TabOpt>('By Age');

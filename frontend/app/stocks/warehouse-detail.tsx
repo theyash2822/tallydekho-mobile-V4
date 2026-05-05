@@ -9,6 +9,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { getWarehouseDetail } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const DIR_CONFIG: Record<string, { icon: string; color: string; bg: string }> = {
   inward:  { icon: 'arrow-down-outline',        color: COLORS.positive, bg: COLORS.positiveBg },

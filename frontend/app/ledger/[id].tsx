@@ -13,6 +13,7 @@ import { TX_TO_DOC_TYPE } from '../../src/utils/documentHelpers';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useAuth } from '../../src/context/AuthContext';
+import { useSettings } from '../../src/context/SettingsContext';
 import { getLedgerDetail, getLedgerStatement, sendPaymentReminder } from '../../src/services/api';
 import DateRangePickerModal, { parseDMY } from '../../src/components/DateRangePickerModal';
 
@@ -136,6 +137,7 @@ const MONTHS_ORDER = [
 
 // ── Info Modal ────────────────────────────────────────────────────────────────
 function LedgerInfoModal({ visible, onClose, ledger, fyOpening, fyClosing }: { visible: boolean; onClose: () => void; ledger: any; fyOpening?: { balance: number; type: string } | null; fyClosing?: { balance: number; type: string } | null }) {
+  const { formatAmount } = useSettings();
 
   const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
     <View style={im.section}>
@@ -194,8 +196,8 @@ function LedgerInfoModal({ visible, onClose, ledger, fyOpening, fyClosing }: { v
             </Section>
 
             <Section title="BALANCE">
-              <Row label="Opening" value={fyOpening ? `₹${Math.round(fyOpening.balance).toLocaleString('en-IN')} ${fyOpening.type}` : (ledger?.opening_balance != null ? `₹${Math.round(parseFloat(ledger.opening_balance)).toLocaleString('en-IN')} ${ledger?.balance_type || ''}` : '₹0')} />
-              <Row label="Closing" value={fyClosing ? `₹${Math.round(fyClosing.balance).toLocaleString('en-IN')} ${fyClosing.type}` : (ledger?.closing_balance != null ? `₹${Math.round(parseFloat(ledger.closing_balance)).toLocaleString('en-IN')} ${ledger?.balance_type || ''}` : '₹0')} />
+              <Row label="Opening" value={fyOpening ? `${formatAmount(Math.round(fyOpening.balance))} ${fyOpening.type}` : (ledger?.opening_balance != null ? `${formatAmount(Math.round(parseFloat(ledger.opening_balance)))} ${ledger?.balance_type || ''}` : formatAmount(0))} />
+              <Row label="Closing" value={fyClosing ? `${formatAmount(Math.round(fyClosing.balance))} ${fyClosing.type}` : (ledger?.closing_balance != null ? `${formatAmount(Math.round(parseFloat(ledger.closing_balance)))} ${ledger?.balance_type || ''}` : formatAmount(0))} />
             </Section>
 
             <View style={{ height: 12 }} />
@@ -248,7 +250,7 @@ export default function LedgerDetailScreen() {
           date: isoToDisplay(t.date || ''),
           voucher: t.voucher_number || '',
           type: t.voucher_type || '',
-          amount: `₹${Math.abs(t.debit || t.credit || 0).toLocaleString('en-IN')}`,
+          amount: formatAmount(Math.abs(t.debit || t.credit || 0)),
           amount_raw: Math.abs(t.debit || t.credit || 0),
           isDebit: t.dr_cr === 'Dr',  // EXACT from Tally ledger entries, not guessed
           balance: t.balance,
@@ -265,7 +267,7 @@ export default function LedgerDetailScreen() {
               date: isoToDisplay(t.date || ''),
               voucher: t.voucher_number || '',
               type: t.voucher_type || '',
-              amount: `₹${Math.abs(+t.amount||0).toLocaleString('en-IN')}`,
+              amount: formatAmount(Math.abs(+t.amount||0)),
               amount_raw: Math.abs(+t.amount || 0),
               isDebit: isDebitVoucher(t.voucher_type || ''),
             })));
@@ -355,7 +357,7 @@ export default function LedgerDetailScreen() {
       return;
     }
     const companyName = company?.name || '';
-    const amount = closingBal > 0 ? `₹${Math.round(closingBal).toLocaleString('en-IN')}` : '₹0';
+    const amount = closingBal > 0 ? formatAmount(Math.round(closingBal)) : formatAmount(0);
     Alert.alert(
       'Send Payment Reminder',
       `Send WhatsApp reminder to ${liveLedger?.name}?\nAmount: ${amount}\nPhone: +91 ${digits.slice(-10)}`,
@@ -449,7 +451,8 @@ export default function LedgerDetailScreen() {
   const totalDr = SOURCE_TXNS.filter((t: any) => t.isDebit).reduce((s: number, t: any) => s + (t.amount_raw || 0), 0);
   const totalCr = SOURCE_TXNS.filter((t: any) => !t.isDebit).reduce((s: number, t: any) => s + (t.amount_raw || 0), 0);
   const drPctComputed = (totalDr + totalCr) > 0 ? Math.round((totalDr / (totalDr + totalCr)) * 100) : 50;
-  const fmtAmt = (v: number) => v >= 1e5 ? `₹${(v/1e5).toFixed(1)}L` : `₹${Math.round(v).toLocaleString('en-IN')}`;
+  const { formatAmount } = useSettings();
+  const fmtAmt = (v: number) => formatAmount(Math.round(v));
 
   // Use FY-specific computed balances (from statement API) — NOT static ledger table values
   const openingBal = fyOpening?.balance ?? (liveLedger?.opening_balance != null ? parseFloat(liveLedger.opening_balance) : 0);
@@ -458,8 +461,8 @@ export default function LedgerDetailScreen() {
   const closingType = fyClosing?.type ?? liveLedger?.balance_type ?? 'Dr';
   const balType = liveLedger?.balance_type || 'Dr';
   const liveKpiChips = [
-    { label: 'Opening', value: openingBal > 0 ? `₹${Math.round(openingBal).toLocaleString('en-IN')} ${openingType}` : '₹0', color: openingType === 'Dr' ? COLORS.negative : COLORS.positive },
-    { label: 'Closing', value: closingBal > 0 ? `₹${Math.round(closingBal).toLocaleString('en-IN')} ${closingType}` : '₹0', color: closingType === 'Dr' ? COLORS.negative : COLORS.positive },
+    { label: 'Opening', value: openingBal > 0 ? `${formatAmount(Math.round(openingBal))} ${openingType}` : formatAmount(0), color: openingType === 'Dr' ? COLORS.negative : COLORS.positive },
+    { label: 'Closing', value: closingBal > 0 ? `${formatAmount(Math.round(closingBal))} ${closingType}` : formatAmount(0), color: closingType === 'Dr' ? COLORS.negative : COLORS.positive },
     { label: 'Total Debit', value: fmtAmt(totalDr), color: COLORS.negative },
     { label: 'Total Credit', value: fmtAmt(totalCr), color: COLORS.positive },
     { label: 'Transactions', value: String(SOURCE_TXNS.length), color: COLORS.textSecondary },

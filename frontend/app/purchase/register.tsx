@@ -12,6 +12,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { getPurchaseInvoices } from '../../src/services/api';
 import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const AMBER    = '#A89060';
 const AMBER_BG = '#FDF9F4';
@@ -75,6 +76,7 @@ const MONTH_GROUPS: MonthGroup[] = [
 ];
 
 export default function PurchaseRegisterScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
@@ -107,7 +109,7 @@ export default function PurchaseRegisterScreen() {
         vendor: r.party_name || '',
         date: r.date || '',
         time: '',
-        amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`,
+        amount: formatAmount(Math.abs(+r.amount||0)),
         status: r.is_cancelled ? 'unpaid' : 'paid',
       })));
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); }).finally(() => setIsLoading(false));
@@ -271,7 +273,7 @@ export default function PurchaseRegisterScreen() {
             const parseAmount = (amtStr: string) => { const n = parseFloat((amtStr || '0').replace(/[₹,]/g, '')); return isNaN(n) ? 0 : n; };
             const totalAmt = allFiltered.reduce((sum, inv) => sum + parseAmount(inv.amount), 0);
             const avgAmt = allFiltered.length > 0 ? totalAmt / allFiltered.length : 0;
-            const fmtAmt = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+            const fmtAmt = (n: number) => formatAmount(Math.round(n));
             return [
               { label: 'Total', value: fmtAmt(totalAmt) },
               { label: 'Tax',   value: '—' },

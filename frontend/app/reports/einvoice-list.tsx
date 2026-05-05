@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getEInvoicePending, getEInvoiceGenerated } from '../../src/services/api';
+import { useSettings } from '../../src/context/SettingsContext';
 
 // Data loaded from API
 
@@ -18,6 +19,7 @@ const STATUS_CFG: Record<string, { bg: string; text: string; icon: string }> = {
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function EInvoiceListScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company } = useAuth();

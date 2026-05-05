@@ -10,6 +10,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { getExpenses } from '../../src/services/api';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const AMBER    = '#A89060';
 const AMBER_BG = '#FDF9F4';
@@ -42,6 +43,7 @@ const TOP_CATEGORIES = [
 
 // ─── Screen ─────────────────────────────────────────────────────────────────
 export default function ExpenseScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;

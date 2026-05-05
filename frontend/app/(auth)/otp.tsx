@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { verifyOTP, sendOTP } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const OTP_LENGTH = 4;
 
@@ -125,15 +126,25 @@ export default function OTPScreen() {
     setError('');
     try {
       const res = await verifyOTP(phone || '', code);
-      if (res?.success && res?.data?.access_token) {
-        const { access_token, is_new_user, user, is_paired, company } = res.data;
+      if (res?.success) {
+        const data = res.data;
+
+        // ── 2FA required — route to PIN screen
+        if (data?.requires_2fa) {
+          await AsyncStorage.setItem('pre_auth_token', data.pre_auth_token || '');
+          router.replace({
+            pathname: '/(auth)/verify-pin' as any,
+            params: { phone, biometric: data.biometric_enabled ? '1' : '0' },
+          });
+          return;
+        }
+
+        // ── No 2FA — normal login
+        const { access_token, is_new_user, user, is_paired, company } = data;
         if (is_new_user) {
-          // Pass token to register screen so it can call /api/auth/register with auth
           router.replace({ pathname: '/(auth)/register', params: { phone, token: access_token } });
         } else {
-          // Existing user — sign in and restore company/paired state
-          await signIn(access_token, user ? { id: user.id, name: user.name ?? undefined, phone: user.phone } : undefined);
-          // Always set isPaired from server — true OR false
+          await signIn(access_token || '', user ? { id: user.id, name: user.name ?? undefined, phone: user.phone } : undefined);
           setIsPaired(is_paired === true);
           if (company) await setCompany({ guid: company.guid, name: company.name, gstin: company.gstin ?? undefined });
           router.replace('/(tabs)');

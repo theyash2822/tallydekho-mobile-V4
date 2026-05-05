@@ -12,6 +12,7 @@ import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { getStockItem } from '../../src/services/api';
 import { STOCK_ITEMS } from '../../src/data/stockData';
+import { useSettings } from '../../src/context/SettingsContext';
 
 // ─── DETAILED ITEM DATA ───────────────────────────────────────────────────────────
 

@@ -66,7 +66,7 @@ export default function HomeScreen() {
   const micTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // KPI Carousel — driven by SettingsContext (no AsyncStorage race condition)
-  const { settings } = useSettings();
+  const { settings, formatAmount, formatAmountCompact } = useSettings();
   const autoScrollCarousel = settings.kpi_autoscroll;
   const kpiRef  = useRef<FlatList>(null);
   const [kpiIdx, setKpiIdx] = useState(0);
@@ -270,7 +270,7 @@ export default function HomeScreen() {
         {/* Middle: Label + Amount stacked — flex:1 so never clips */}
         <View style={styles.kpiTextWrap}>
           <Text style={styles.kpiLabel} numberOfLines={1}>{item.label}</Text>
-          <Text style={styles.kpiAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount}</Text>
+          <Text style={styles.kpiAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount_raw != null ? formatAmountCompact(item.amount_raw) : item.amount}</Text>
         </View>
 
         {/* Right: Trend badge */}

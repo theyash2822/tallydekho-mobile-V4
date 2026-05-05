@@ -1,7 +1,9 @@
 import { DocumentType, VoucherDocument } from '../types/document';
+import { useSettings } from '../context/SettingsContext';
 
 // ── Currency formatter ────────────────────────────────────────────────────────
 export function formatCurrency(amount: number): string {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   return '\u20b9' + Math.abs(amount).toLocaleString('en-IN', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,

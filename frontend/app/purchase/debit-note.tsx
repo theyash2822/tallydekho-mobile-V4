@@ -8,11 +8,13 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getDebitNotes } from '../../src/services/api';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const SC: Record<string,string> = { issued: COLORS.warning, settled: COLORS.positive };
 const SL: Record<string,string> = { issued: 'Issued', settled: 'Settled' };
 
 export default function DebitNotesScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [apiError, setApiError] = useState<string | null>(null);
@@ -24,7 +26,7 @@ export default function DebitNotesScreen() {
     if (!companyGuid) return;
     getDebitNotes(companyGuid).then((res: any) => {
       const rows = res?.data ?? [];
-      if (rows.length) setLiveData(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), party: r.party_name||'', date: r.date||'', amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`, status: 'confirmed' })));
+      if (rows.length) setLiveData(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), party: r.party_name||'', date: r.date||'', amount: formatAmount(Math.abs(+r.amount||0)), status: 'confirmed' })));
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
   }, [companyGuid]);
 

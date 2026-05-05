@@ -8,12 +8,14 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getVouchers } from '../../src/services/api';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const MC: Record<string,string> = { NEFT:'#2563EB', RTGS:'#7C3AED', Cash:COLORS.positive, Cheque:COLORS.warning };
 const SC: Record<string,string> = { cleared:COLORS.positive, pending:COLORS.warning };
 const SL: Record<string,string> = { cleared:'Cleared', pending:'Pending' };
 
 export default function PaymentVouchersScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
@@ -33,7 +35,7 @@ export default function PaymentVouchersScreen() {
         party: r.party_name || '',
         date: r.date || '',
         time: '',
-        amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`,
+        amount: formatAmount(Math.abs(+r.amount||0)),
         method: 'NEFT',
         status: 'cleared',
       })));
@@ -64,7 +66,7 @@ export default function PaymentVouchersScreen() {
           {(() => {
             const parseAmount = (amtStr: string) => { const n = parseFloat((amtStr || '0').replace(/[₹,]/g, '')); return isNaN(n) ? 0 : n; };
             const totalAmt = filtered.reduce((sum: number, i: any) => sum + parseAmount(i.amount), 0);
-            const fmtAmt = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+            const fmtAmt = (n: number) => formatAmount(Math.round(n));
             return [{l:'Total',v:fmtAmt(totalAmt)},{l:'Docs',v:String(filtered.length)}];
           })().map(st=>(
             <View key={st.l} style={s.stat}><Text style={s.statV}>{st.v}</Text><Text style={s.statL}>{st.l}</Text></View>

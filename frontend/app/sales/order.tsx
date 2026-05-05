@@ -8,11 +8,13 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getSalesOrders } from '../../src/services/api';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const SC: Record<string, string> = { confirmed: COLORS.positive, pending: COLORS.warning, cancelled: COLORS.negative };
 const SL: Record<string, string> = { confirmed: 'Confirmed', pending: 'Pending', cancelled: 'Cancelled' };
 
 export default function SalesOrdersScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const { company } = useAuth();
   const companyGuid = company?.guid;
@@ -24,7 +26,7 @@ export default function SalesOrdersScreen() {
     if (!companyGuid) return;
     getSalesOrders(companyGuid).then((res: any) => {
       const rows = res?.data ?? [];
-      if (rows.length) setLiveOrders(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), party: r.party_name||'', date: r.date||'', amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`, status: 'confirmed' })));
+      if (rows.length) setLiveOrders(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), party: r.party_name||'', date: r.date||'', amount: formatAmount(Math.abs(+r.amount||0)), status: 'confirmed' })));
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
   }, [companyGuid]);
 
@@ -53,7 +55,7 @@ export default function SalesOrdersScreen() {
           {search.length > 0 && <TouchableOpacity onPress={() => setSearch('')}><Ionicons name="close-circle" size={16} color={COLORS.textTertiary} /></TouchableOpacity>}
         </View>
         <View style={s.statsRow}>
-          {[{l:'Total',v:`₹${liveOrders.reduce((s,o)=>s+parseFloat((o.amount||"0").replace(/[₹,]/g,"")),0).toLocaleString("en-IN")}`},{l:'Confirmed',v:"—"},{l:'Pending',v:"—"},{l:'Docs',v:String(String(liveOrders.length))}].map(st=>(
+          {[{l:'Total',v: formatAmount(liveOrders.reduce((s,o)=>s+parseFloat((o.amount||"0").replace(/[₹,]/g,"")),0))},{l:'Confirmed',v:"—"},{l:'Pending',v:"—"},{l:'Docs',v:String(String(liveOrders.length))}].map(st=>(
             <View key={st.l} style={s.stat}><Text style={s.statV} numberOfLines={1} adjustsFontSizeToFit>{st.v}</Text><Text style={s.statL}>{st.l}</Text></View>
           ))}
         </View>

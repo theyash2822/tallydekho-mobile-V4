@@ -16,6 +16,7 @@ import RegularOptionalToggle, { EntryType } from '../../src/components/forms/Reg
 import SearchableDropdown, { SDOption } from '../../src/components/forms/SearchableDropdown';
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const PARTIES: SDOption[] = [
   { label: 'ABC Traders', value: 'abc' },

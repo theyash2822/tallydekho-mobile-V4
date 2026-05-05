@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal, { isoToDMY } from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const AMBER      = '#A89060';
 const AMBER_BG   = '#FDF9F4';

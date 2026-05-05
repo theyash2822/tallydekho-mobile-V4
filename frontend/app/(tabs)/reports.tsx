@@ -15,6 +15,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { getFinancialData, getGSTReport, getAuditTrail } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { FinancialChartSkeleton } from '../../src/components/Skeleton';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const SCREEN_W = Dimensions.get('window').width;
 // Card width (screen - outer margins). Content area inside card (card - card padding).
@@ -831,6 +832,7 @@ const sc = StyleSheet.create({
 // Main Reports Screen
 // ══════════════════════════════════════════════════════════════════════════════
 export default function ReportsScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;

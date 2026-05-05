@@ -8,11 +8,13 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getDeliveryNotes } from '../../src/services/api';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const SC: Record<string,string> = { delivered: COLORS.positive, in_transit: COLORS.info, pending: COLORS.warning };
 const SL: Record<string,string> = { delivered: 'Delivered', in_transit: 'In Transit', pending: 'Pending' };
 
 export default function DeliveryNotesScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [apiError, setApiError] = useState<string | null>(null);
@@ -24,7 +26,7 @@ export default function DeliveryNotesScreen() {
     if (!companyGuid) return;
     getDeliveryNotes(companyGuid).then((res: any) => {
       const rows = res?.data ?? [];
-      if (rows.length) setLiveData(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), party: r.party_name||'', date: r.date||'', amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`, status: 'confirmed' })));
+      if (rows.length) setLiveData(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), party: r.party_name||'', date: r.date||'', amount: formatAmount(Math.abs(+r.amount||0)), status: 'confirmed' })));
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
   }, [companyGuid]);
 

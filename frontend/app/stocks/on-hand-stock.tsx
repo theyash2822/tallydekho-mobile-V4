@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import { useSettings } from '../../src/context/SettingsContext';
 // No mock data — real API data only (V2 rule)
 // ON_HAND_ITEMS now populated from API response
 

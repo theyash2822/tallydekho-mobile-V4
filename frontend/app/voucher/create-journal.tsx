@@ -11,11 +11,13 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import { useAuth } from '../../src/context/AuthContext';
 import { createJournalVoucher } from '../../src/services/api';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 const voucherNo = 'JV-' + String(Math.floor(1000 + Math.random() * 9000));
 
 export default function CreateJournalVoucher() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const { company, isPaired } = useAuth();
   const [entryType, setEntryType] = useState<EntryType>('regular');

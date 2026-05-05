@@ -10,6 +10,7 @@ import Svg, { Path, Circle } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getAlerts } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const W = Dimensions.get('window').width;
 
@@ -185,6 +186,7 @@ const EWB_SEGMENTS = [
 // MAIN SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ComplianceHubScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const { company } = useAuth();
 

@@ -11,6 +11,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { getVouchers, getMyEntries } from '../../src/services/api';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const SCREEN_W = Dimensions.get('window').width;
 const AMBER = '#A89060';
@@ -64,7 +65,7 @@ const mapVoucherType = (raw: string): Exclude<VoucherType, 'ALL'> => {
   return 'Journal';
 };
 
-const mapApiRow = (r: any): VoucherEntry => ({
+const mapApiRow = (r: any, fmt: (n: number) => string = (n) => String(n)): VoucherEntry => ({
   id: r.guid || String(r.id),
   ref: r.voucher_number || '',
   date: r.date || '',
@@ -72,7 +73,7 @@ const mapApiRow = (r: any): VoucherEntry => ({
   type: mapVoucherType(r.voucher_type),
   party: r.party_name || '',
   description: r.voucher_type || '',
-  amount: `₹${Math.abs(+r.amount || 0).toLocaleString('en-IN')}`,
+  amount: fmt(Math.abs(+r.amount || 0)),
   isCredit: +r.amount < 0,
   syncStatus: 'synced' as const,
   isMine: true,
@@ -184,6 +185,7 @@ const dd = StyleSheet.create({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function AuditTrailScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
@@ -224,7 +226,7 @@ export default function AuditTrailScreen() {
     fetchFn
       .then((res: any) => {
         const rows = res?.data ?? [];
-        setApiEntries(rows.map((r: any) => ({ ...mapApiRow(r), isMine: activeTab === 'myentries' })));
+        setApiEntries(rows.map((r: any) => ({ ...mapApiRow(r, formatAmount), isMine: activeTab === 'myentries' })));
       })
       .catch((err: any) => {
         setApiError(err?.message || 'Failed to load vouchers');

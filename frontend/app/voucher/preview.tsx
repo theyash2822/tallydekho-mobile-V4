@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const AMBER = '#1A1A1A';
 
@@ -22,6 +23,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export default function VoucherPreviewScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const p = useLocalSearchParams<Record<string, string>>();
   const type  = (p.type as string) || 'payment';

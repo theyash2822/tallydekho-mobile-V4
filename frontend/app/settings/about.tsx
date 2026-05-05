@@ -15,7 +15,7 @@ const CHANGELOG = [
     'Warehouse detail with real Tally godowns',
     'Document preview with share PDF functionality',
   ]},
-  { version:'v4.0.0', date:'Jun 2025', changes:['Fixed Quick Actions routing to create forms','Added RegularOptionalToggle to all 12 form screens','Improved Daybook with multi-select and push-to-Tally'] },
+  { version:'v3.8.0', date:'Jun 2025', changes:['Fixed Quick Actions routing to create forms','Added RegularOptionalToggle to all 12 form screens','Improved Daybook with multi-select and push-to-Tally'] },
   { version:'v3.7.0', date:'May 2025', changes:['E-Way Bill compliance dashboard','Audit trail with bar charts','AI Insights redesign with 6 insight cards'] },
   { version:'v3.6.0', date:'Apr 2025', changes:['New Stock Dashboard with 5 metric cards','Barcode print queue','Warehouse management screens'] },
 ];

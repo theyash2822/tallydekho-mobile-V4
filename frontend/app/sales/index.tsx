@@ -12,6 +12,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { getSalesInvoices, getKPIStrip } from '../../src/services/api';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import { useSettings } from '../../src/context/SettingsContext';
 
 const AMBER      = '#A89060';
 const AMBER_BG   = '#FDF9F4';
@@ -46,6 +47,7 @@ const BANNERS = [
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function SalesScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
   const { company } = useAuth();
@@ -65,14 +67,14 @@ export default function SalesScreen() {
         id: r.voucher_number || String(r.id),
         party: r.party_name || '',
         date: r.date || '',
-        amount: `₹${Math.abs(+r.amount||0).toLocaleString('en-IN')}`,
+        amount: formatAmount(Math.abs(+r.amount||0)),
         status: r.irn ? 'generated' : 'pending_irn',
       })));
       // Top parties from same data
       const partyMap: Record<string,number> = {};
       rows.forEach((r: any) => { if (r.party_name) partyMap[r.party_name] = (partyMap[r.party_name]||0) + (+r.amount||0); });
       const top = Object.entries(partyMap).sort((a,b) => b[1]-a[1]).slice(0,5);
-      if (top.length) setLiveTopParties(top.map(([name, amt], i) => ({ id: `tp${i}`, name, amount: `₹${Math.round(+amt).toLocaleString('en-IN')}`, color: ['#2563EB','#D97706','#7C3AED','#0891B2','#059669'][i] })));
+      if (top.length) setLiveTopParties(top.map(([name, amt], i) => ({ id: `tp${i}`, name, amount: formatAmount(Math.round(+amt)), color: ['#2563EB','#D97706','#7C3AED','#0891B2','#059669'][i] })));
       // Dynamic banners
       const pendingIRN = rows.filter((r: any) => !r.irn).length;
       if (pendingIRN > 0) setLiveBanners([{ id: 'b1', bold: `${pendingIRN} invoices`, sub: 'pending E-Invoice (IRN) generation', action: 'Generate Now' }, ...BANNERS.slice(1)]);

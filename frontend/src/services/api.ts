@@ -7,7 +7,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.241:3001';
+const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.245:3001';
 
 // ── Token helpers ────────────────────────────────────────────
 const getToken = async (): Promise<string | null> => {
@@ -65,12 +65,17 @@ export interface SendOTPResponse {
 export interface VerifyOTPResponse {
   success: boolean;
   data: {
-    is_new_user: boolean;
-    access_token: string;
-    expires_in: number;
-    user: { id: number; name: string | null; phone: string; language: string };
-    is_paired: boolean;
-    company: { guid: string; name: string; gstin: string | null } | null;
+    // 2FA flow
+    requires_2fa?: boolean;
+    pre_auth_token?: string;
+    biometric_enabled?: boolean;
+    // Normal login flow
+    is_new_user?: boolean;
+    access_token?: string;
+    expires_in?: number;
+    user?: { id: number; name: string | null; phone: string; language: string };
+    is_paired?: boolean;
+    company?: { guid: string; name: string; gstin: string | null } | null;
   };
 }
 
@@ -83,7 +88,8 @@ export interface RegisterResponse {
 }
 
 export const sendOTP    = (phone: string): Promise<SendOTPResponse> => post<SendOTPResponse>('/auth/send-otp', { phone }, false);
-export const verifyOTP  = (phone: string, otp: string): Promise<VerifyOTPResponse> => post<VerifyOTPResponse>('/auth/verify-otp', { phone, otp }, false);
+export const verifyOTP  = (phone: string, otp: string, opts?: { reset_pin?: boolean }): Promise<VerifyOTPResponse> =>
+  post<VerifyOTPResponse>('/auth/verify-otp', { phone, otp, ...opts }, false);
 export const registerUser = (data: Partial<{ name: string; email: string; language: string; phone: string }>): Promise<RegisterResponse> => post<RegisterResponse>('/auth/register', data);
 export const getMe       = () => get<any>('/auth/me');
 export const updateMe    = (data: Partial<{ name: string; email: string; language: string }>) => patch<any>('/auth/me', data);
@@ -282,3 +288,26 @@ export const getAIInsights = (companyGuid?: string, from?: string, to?: string) 
 
 export const getUserSettings    = () => get<any>('/user-settings');
 export const updateUserSettings = (data: any) => patch<any>('/user-settings', data);
+
+// ── 2FA / Passkey ─────────────────────────────────────────────────────────────
+// Helper: POST with a custom bearer token (for pre_auth_token flows)
+async function postWithToken<T>(endpoint: string, body: object, customToken: string): Promise<T> {
+  const res = await fetch(`${BASE_URL}/api${endpoint}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${customToken}` },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
+  return data;
+}
+
+export const verifyPin   = (pin: string, preAuthToken: string) =>
+  postWithToken<any>('/auth/verify-pin', { pin }, preAuthToken);
+
+export const setPin      = (pin: string) => post<any>('/auth/set-pin', { pin });
+export const resetPin    = (pin: string, preAuthToken: string) =>
+  postWithToken<any>('/auth/reset-pin', { pin }, preAuthToken);
+export const removePin   = (pin: string) => request<any>('DELETE', '/auth/remove-pin', { pin });
+export const setBiometric = (enabled: boolean) => patch<any>('/auth/set-biometric', { enabled });
+export const get2FAStatus = () => get<any>('/auth/two-fa-status');

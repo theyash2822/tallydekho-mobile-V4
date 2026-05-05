@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import { useSettings } from '../../src/context/SettingsContext';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ViewMode = 'chronological' | 'byItem' | 'byDocument';
@@ -33,6 +34,7 @@ const TYPE_COLOR: Record<TxnType, string> = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function StockLedgerScreen() {
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router   = useRouter();
   const insets   = useSafeAreaInsets();
 
