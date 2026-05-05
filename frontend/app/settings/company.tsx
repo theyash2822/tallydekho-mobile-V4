@@ -9,10 +9,23 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
+const INDIAN_STATES = [
+  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
+  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand',
+  'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur',
+  'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab',
+  'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura',
+  'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+  'Andaman and Nicobar Islands', 'Chandigarh',
+  'Dadra and Nagar Haveli and Daman and Diu', 'Delhi',
+  'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry',
+];
+
 const MONTHS = [
   'January','February','March','April','May','June',
   'July','August','September','October','November','December',
@@ -40,6 +53,43 @@ const ct = StyleSheet.create({
   track: { width: 44, height: 26, borderRadius: 13, justifyContent: 'center' },
   thumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: COLORS.white, position: 'absolute' },
 });
+
+// ── Generic List Picker Bottom Sheet ─────────────────────────────────────────
+function ListPickerSheet({
+  visible, title, items, selected, onSelect, onClose,
+}: {
+  visible: boolean; title: string; items: string[];
+  selected: string; onSelect: (m: string) => void; onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={mp.overlay}>
+        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
+        <View style={mp.sheet}>
+          <View style={mp.handle} />
+          <Text style={mp.title}>{title}</Text>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={mp.list}>
+            {items.map(item => {
+              const active = selected === item;
+              return (
+                <TouchableOpacity
+                  key={item}
+                  style={[mp.row, active && mp.rowActive]}
+                  onPress={() => { onSelect(item); onClose(); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[mp.rowText, active && mp.rowTextActive]}>{item}</Text>
+                  {active && <Ionicons name="checkmark" size={18} color={COLORS.white} />}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+          <View style={{ height: 16 }} />
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 // ── Month Picker Bottom Sheet ─────────────────────────────────────────────────
 function MonthPickerSheet({
@@ -124,9 +174,19 @@ export default function CompanyScreen() {
   const [bookLockEnabled, setBookLockEnabled] = useState(true);
   const [bookLockDays,    setBookLockDays]    = useState('30');
   const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [state,           setState]           = useState('');
+  const [showStatePicker, setShowStatePicker] = useState(false);
 
-  // Logo
+  // Logo — load from AsyncStorage on mount
   const [logoUri, setLogoUri] = useState<string | null>(null);
+  const logoKey = company?.guid ? `company_logo_${company.guid}` : null;
+
+  useEffect(() => {
+    if (!logoKey) return;
+    AsyncStorage.getItem(logoKey).then(uri => {
+      if (uri) setLogoUri(uri);
+    }).catch(() => {});
+  }, [logoKey]);
 
   const pickLogo = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -139,9 +199,14 @@ export default function CompanyScreen() {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
+      base64: false,
     });
     if (!result.canceled && result.assets[0]) {
-      setLogoUri(result.assets[0].uri);
+      const uri = result.assets[0].uri;
+      setLogoUri(uri);
+      if (logoKey) {
+        await AsyncStorage.setItem(logoKey, uri).catch(() => {});
+      }
       markDirty();
     }
   };
@@ -150,7 +215,8 @@ export default function CompanyScreen() {
   const handleSave = async () => {
     try {
       setSaving(true);
-      // Company info is read-only from Tally — save local preferences only
+      // Save local preferences to AsyncStorage
+      if (logoKey && logoUri) await AsyncStorage.setItem(logoKey, logoUri).catch(() => {});
       Toast.show({
         type: 'success',
         text1: 'Preferences Saved',
@@ -289,7 +355,7 @@ export default function CompanyScreen() {
               />
             </View>
 
-            <View style={s.fieldWrap}>
+            <View style={[s.fieldWrap, s.fieldBorder]}>
               <Text style={s.fieldLabel}>Website</Text>
               <TextInput
                 style={s.fieldInput}
@@ -300,6 +366,22 @@ export default function CompanyScreen() {
                 placeholder="www.yourcompany.com"
                 placeholderTextColor={COLORS.textTertiary}
               />
+            </View>
+
+            <View style={s.fieldWrap}>
+              <Text style={s.fieldLabel}>State</Text>
+              <TouchableOpacity
+                style={s.dropdownRow}
+                onPress={() => setShowStatePicker(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={[s.dropdownValue, !state && { color: COLORS.textTertiary }]}>
+                  {state || 'Select State'}
+                </Text>
+                <View style={s.dropdownChevron}>
+                  <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
+                </View>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -362,6 +444,14 @@ export default function CompanyScreen() {
         selected={fyStartMonth}
         onSelect={(m) => { setFyStartMonth(m); markDirty(); }}
         onClose={() => setShowMonthPicker(false)}
+      />
+      <ListPickerSheet
+        visible={showStatePicker}
+        title="Select State / UT"
+        items={INDIAN_STATES}
+        selected={state}
+        onSelect={(s) => { setState(s); markDirty(); }}
+        onClose={() => setShowStatePicker(false)}
       />
     </SafeAreaView>
   );

@@ -11,6 +11,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
+import { createBankLedger } from '../../src/services/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types & Constants
@@ -474,6 +476,7 @@ const sw = StyleSheet.create({
 // ─────────────────────────────────────────────────────────────────────────────
 export default function BankFeedsScreen() {
   const router = useRouter();
+  const { company } = useAuth();
 
   const [accounts,     setAccounts]     = useState<BankAccount[]>(MOCK_ACCOUNTS);
   const [isSelecting,  setIsSelecting]  = useState(false);
@@ -501,10 +504,26 @@ export default function BankFeedsScreen() {
   const cancelSelection = () => { setIsSelecting(false); setSelectedIds(new Set()); };
 
   // ── Save/delete handlers ────────────────────────────────────────────────────
-  const handleAddSave = (data: BankFormData) => {
+  const handleAddSave = async (data: BankFormData) => {
     const grad = CARD_GRADIENTS[accounts.length % CARD_GRADIENTS.length];
     setAccounts(prev => [...prev, { id: Date.now().toString(), ...data, isPrimary: prev.length === 0, gradient: grad }]);
     Toast.show({ type: 'success', text1: 'Bank Added', text2: `${data.bankName} account saved.` });
+
+    // Push to Tally if company is paired
+    if (company?.guid) {
+      try {
+        await createBankLedger({
+          companyGuid: company.guid,
+          bankName: data.bankName,
+          accountNumber: data.accountNumber,
+          ifsc: data.ifsc,
+          accountType: data.accountType,
+        });
+      } catch (err: any) {
+        // Non-blocking: account is saved locally, Tally push may be queued
+        console.warn('[BankFeeds] Tally push warning:', err?.message);
+      }
+    }
   };
 
   const handleEditSave = (data: BankFormData) => {

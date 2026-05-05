@@ -183,26 +183,26 @@ export default function LanguageRegionScreen() {
     setCountry(c);
     const tzs = COUNTRY_TZ[c] || [];
     if (tzs.length > 0) setTimezone(tzs[0].value);
+    setIsDirty(true);
   };
 
-  const handleLangSelect = async (selected: string) => {
+  const handleLangSelect = (selected: string) => {
     setLang(selected);
     setIsDirty(true);
-    await updateSettings({ language: selected });
-    Toast.show({
-      type: 'success',
-      text1: 'Language Updated',
-      text2: `Language set to ${selected}`,
-    });
   };
 
   const handleSave = async () => {
-    await updateSettings({ language: lang });
-    Toast.show({
-      type: 'success',
-      text1: 'Settings Saved',
-      text2: 'Language & Region preferences updated.',
-    });
+    try {
+      await updateSettings({ language: lang });
+      setIsDirty(false);
+      Toast.show({
+        type: 'success',
+        text1: 'Settings Saved',
+        text2: 'Language & Region preferences updated.',
+      });
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Save Failed', text2: err?.message || 'Could not save settings.' });
+    }
   };
 
   // Build picker item arrays
@@ -301,7 +301,7 @@ export default function LanguageRegionScreen() {
         title="Select Time Zone"
         items={tzItems}
         selected={timezone}
-        onSelect={setTimezone}
+        onSelect={(v) => { setTimezone(v); setIsDirty(true); }}
         onClose={() => setPicker(null)}
       />
       <PickerSheet
@@ -309,7 +309,7 @@ export default function LanguageRegionScreen() {
         title="First Day of Week"
         items={dayItems}
         selected={weekday}
-        onSelect={setWeekday}
+        onSelect={(v) => { setWeekday(v); setIsDirty(true); }}
         onClose={() => setPicker(null)}
       />
     </SafeAreaView>

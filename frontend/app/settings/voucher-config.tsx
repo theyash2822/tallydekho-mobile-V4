@@ -251,12 +251,19 @@ export default function VoucherConfigScreen() {
     }
   };
 
-  const handleUseFormat = (id: string, label: string, format: number) => {
+  const handleUseFormat = async (id: string, label: string, format: number) => {
     setSaving(id);
-    setTimeout(() => {
+    try {
+      // Persist the selected format immediately
+      const updated = { ...configs, [id]: { ...configs[id], format: format as 1 | 2 | 3 } };
+      setConfigs(updated);
+      await AsyncStorage.setItem(VOUCHER_CONFIG_KEY, JSON.stringify(updated));
+      Toast.show({ type: 'success', text1: `${label} Updated`, text2: `Format ${format} applied and saved.` });
+    } catch {
+      Toast.show({ type: 'error', text1: 'Save Failed', text2: 'Could not save format selection.' });
+    } finally {
       setSaving(null);
-      Toast.show({ type: 'success', text1: `${label} Updated`, text2: `Format ${format} applied successfully.` });
-    }, 800);
+    }
   };
 
   const handleSaveAll = async () => {

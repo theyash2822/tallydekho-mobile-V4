@@ -12,20 +12,21 @@ import { useSettings } from '../../src/context/SettingsContext';
 // Map internal keys to SettingsContext values
 const DATE_TO_CONTEXT: Record<string, string> = {
   dmy: 'DD/MM/YYYY',
-  dmy2: 'DD/MM/YYYY',
+  dmy2: 'DD-MM-YYYY',
   mdy: 'MM/DD/YYYY',
   ymd: 'YYYY-MM-DD',
 };
 const DATE_FROM_CONTEXT: Record<string, string> = {
   'DD/MM/YYYY': 'dmy',
+  'DD-MM-YYYY': 'dmy2',
   'MM/DD/YYYY': 'mdy',
   'YYYY-MM-DD': 'ymd',
 };
 const NUM_TO_CONTEXT: Record<string, string> = {
   in: 'Indian',
   int: 'International',
-  eu: 'International',
-  fr: 'International',
+  eu: 'European',
+  fr: 'French',
 };
 
 // ── Data ──────────────────────────────────────────────────────────────────────
@@ -335,7 +336,7 @@ export default function CurrencyScreen() {
         title="Select Currency"
         items={CURRENCIES}
         selected={currency}
-        onSelect={setCurrency}
+        onSelect={(v) => { setCurrency(v); markDirty(); }}
         onClose={() => setPicker(null)}
       />
       <PickerSheet
@@ -343,7 +344,7 @@ export default function CurrencyScreen() {
         title="Date Style"
         items={DATE_STYLES}
         selected={dateStyle}
-        onSelect={setDateStyle}
+        onSelect={(v) => { setDateStyle(v); markDirty(); }}
         onClose={() => setPicker(null)}
       />
       <PickerSheet
@@ -359,7 +360,7 @@ export default function CurrencyScreen() {
         title="Thousands Separator"
         items={THOUSANDS}
         selected={thousands}
-        onSelect={setThousands}
+        onSelect={(v) => { setThousands(v); markDirty(); }}
         onClose={() => setPicker(null)}
       />
       <PickerSheet

@@ -72,7 +72,7 @@ export default function HomeScreen() {
   const [kpiIdx, setKpiIdx] = useState(0);
 
   useEffect(() => {
-    if (!autoScrollCarousel) return;
+    if (!autoScrollCarousel || kpiData.length === 0) return;
     const t = setInterval(() => {
       setKpiIdx(prev => {
         const next = (prev + 1) % kpiData.length;

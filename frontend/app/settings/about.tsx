@@ -22,8 +22,8 @@ const CHANGELOG = [
 
 const LINKS = [
   { icon:'globe-outline',           label:'Website',          action:()=>Linking.openURL('https://tallydekho.com'),                  color:COLORS.info },
-  { icon:'shield-checkmark-outline', label:'Privacy Policy',   action:()=>Alert.alert('Privacy Policy','Available at tallydekho.com/privacy'), color:'#7C3AED' },
-  { icon:'document-text-outline',   label:'Terms of Service', action:()=>Alert.alert('Terms of Service','Available at tallydekho.com/terms'), color:COLORS.warning },
+  { icon:'shield-checkmark-outline', label:'Privacy Policy',   action:()=>Linking.openURL('https://tallydekho.com/privacy'), color:'#7C3AED' },
+  { icon:'document-text-outline',   label:'Terms of Service', action:()=>Linking.openURL('https://tallydekho.com/terms'), color:COLORS.warning },
 ];
 
 export default function AboutScreen() {

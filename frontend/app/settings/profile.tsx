@@ -10,7 +10,7 @@ import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { updateMe, get2FAStatus, setPin as apiSetPin, removePin, setBiometric as apiSetBiometric } from '../../src/services/api';
+import { updateMe, get2FAStatus, setPin as apiSetPin, removePin, setBiometric as apiSetBiometric, changePhone, changeEmail } from '../../src/services/api';
 import * as SecureStore from 'expo-secure-store';
 import * as LocalAuthentication from 'expo-local-authentication';
 
@@ -371,12 +371,62 @@ function OTPVerifySheet({
     }, 1000);
   };
 
-  const handleSendCurrentOTP   = () => { setOtp(''); setStep(2); startTimer(); };
-  const handleVerifyCurrentOTP = () => { if (otp.length < 4) return; setOtp(''); setStep(3); };
-  const handleSendNewOTP       = () => { setOtp(''); setStep(4); startTimer(); };
-  const handleVerifyNewOTP     = () => {
+  const [loading, setLoading] = React.useState(false);
+  // Store verified OTP for current phone/email (used in phone step 2 call)
+  const verifiedCurrentOtpRef = React.useRef('');
+
+  const handleSendCurrentOTP = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      if (isPhone) {
+        await changePhone({ step: 1, currentPhone: currentVal });
+      } else {
+        await changeEmail({ step: 1, currentEmail: currentVal });
+      }
+      setOtp(''); setStep(2); startTimer();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to send OTP. Try again.');
+    } finally { setLoading(false); }
+  };
+
+  const handleVerifyCurrentOTP = () => {
+    // Just move to step 3 — actual verification happens in handleSendNewOTP
     if (otp.length < 4) return;
-    onSuccess(newVal.trim()); onClose();
+    verifiedCurrentOtpRef.current = otp;
+    setOtp(''); setStep(3);
+  };
+
+  const handleSendNewOTP = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      if (isPhone) {
+        // Backend step 2: verify current OTP + send OTP to new phone
+        await changePhone({ step: 2, currentPhone: currentVal, otp: verifiedCurrentOtpRef.current, newPhone: newVal });
+      } else {
+        // Email: step 1 already sent OTP to currentEmail; now send OTP to newEmail for verification
+        await changeEmail({ step: 1, currentEmail: newVal });
+      }
+      setOtp(''); setStep(4); startTimer();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to send OTP to new number. Try again.');
+    } finally { setLoading(false); }
+  };
+
+  const handleVerifyNewOTP = async () => {
+    if (otp.length < 4 || loading) return;
+    setLoading(true);
+    try {
+      if (isPhone) {
+        await changePhone({ step: 3, otp });
+      } else {
+        await changeEmail({ step: 2, otp, newEmail: newVal });
+      }
+      onSuccess(newVal.trim()); onClose();
+    } catch (err: any) {
+      Alert.alert('Invalid OTP', err?.message || 'OTP did not match. Try again.');
+    } finally { setLoading(false); }
   };
 
   const handleResend = () => {

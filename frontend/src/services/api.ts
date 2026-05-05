@@ -307,6 +307,22 @@ async function postWithToken<T>(endpoint: string, body: object, customToken: str
   return data;
 }
 
+// ── Phone / Email Change ────────────────────────────────────────────────
+export const changePhone = (body: { step: number; currentPhone?: string; otp?: string; newPhone?: string }) =>
+  post<any>('/auth/change-phone', body);
+export const changeEmail = (body: { step: number; currentEmail?: string; otp?: string; newEmail?: string }) =>
+  post<any>('/auth/change-email', body);
+
+// ── Bank Feeds ─────────────────────────────────────────────────────────
+export const createBankLedger = (payload: {
+  companyGuid: string;
+  bankName: string;
+  accountNumber?: string;
+  ifsc?: string;
+  accountType?: string;
+  openingBalance?: number;
+}) => request<any>('POST', '/master/bank', payload, true, 'tally');
+
 export const verifyPin   = (pin: string, preAuthToken: string) =>
   postWithToken<any>('/auth/verify-pin', { pin }, preAuthToken);
 
