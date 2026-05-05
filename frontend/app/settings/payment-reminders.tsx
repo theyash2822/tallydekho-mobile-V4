@@ -24,7 +24,7 @@ const MOCK_PARTIES = [
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
-type Channels = { push: boolean; email: boolean; whatsapp: boolean; sms: boolean };
+type Channels = { email: boolean; whatsapp: boolean; sms: boolean };
 
 interface Reminder {
   id: string;
@@ -434,7 +434,7 @@ function ReminderCard({
           <View style={[rc.divider, { marginVertical: 12 }]} />
           <Text style={rc.fieldLabel}>Channels</Text>
           <View style={rc.chipsRow}>
-            {(['push','email','whatsapp','sms'] as (keyof Channels)[]).map(ch => {
+            {(['email','whatsapp','sms'] as (keyof Channels)[]).map(ch => {
               const active = reminder.channels[ch];
               return (
                 <TouchableOpacity
@@ -605,13 +605,13 @@ const DEFAULT_REMINDERS: Reminder[] = [
   {
     id: 'r1', name: 'First Reminder', daysBefore: 3, time: '10:00 AM',
     onDueDate: false, enabled: true,
-    channels: { push: true, email: false, whatsapp: true, sms: false },
+    channels: { email: false, whatsapp: true, sms: false },
     exceptions: [], expanded: true,
   },
   {
     id: 'r2', name: 'Due Date Alert', daysBefore: 0, time: '09:00 AM',
     onDueDate: true, enabled: true,
-    channels: { push: true, email: true, whatsapp: false, sms: false },
+    channels: { email: true, whatsapp: false, sms: false },
     exceptions: [], expanded: false,
   },
 ];
@@ -675,7 +675,7 @@ export default function PaymentRemindersScreen() {
         name: `${ordinals[prev.length]} Reminder`,
         daysBefore: 0, time: '',
         onDueDate: false, enabled: false,
-        channels: { push: false, email: false, whatsapp: false, sms: false },
+        channels: { email: false, whatsapp: false, sms: false },
         exceptions: [], expanded: true,
       },
     ]);
