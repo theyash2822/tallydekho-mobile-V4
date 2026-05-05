@@ -41,6 +41,7 @@ const get      = <T>(endpoint: string, auth = true) => request<T>('GET', endpoin
 const tallyGet = <T>(endpoint: string, auth = true) => request<T>('GET', endpoint, undefined, auth, 'tally');
 const post = <T>(endpoint: string, body: object, auth = true) => request<T>('POST', endpoint, body, auth);
 const patch = <T>(endpoint: string, body: object) => request<T>('PATCH', endpoint, body);
+const del   = <T>(endpoint: string, body?: object) => request<T>('DELETE', endpoint, body);
 const tallyPost = <T>(endpoint: string, body: object) => request<T>('POST', endpoint, body, true, 'tally');
 
 // Helper: append companyGuid + optional fy= param to query string
@@ -93,7 +94,11 @@ export const verifyOTP  = (phone: string, otp: string, opts?: { reset_pin?: bool
 export const registerUser = (data: Partial<{ name: string; email: string; language: string; phone: string }>): Promise<RegisterResponse> => post<RegisterResponse>('/auth/register', data);
 export const getMe       = () => get<any>('/auth/me');
 export const updateMe    = (data: Partial<{ name: string; email: string; language: string }>) => patch<any>('/auth/me', data);
-export const logout      = () => post<any>('/auth/logout', {});
+export const logout      = (pushToken?: string) => post<any>('/auth/logout', pushToken ? { pushToken } : {});
+export const registerPushToken = (token: string, platform: string, deviceId?: string) =>
+  post<any>('/push-token', { token, platform, deviceId });
+export const removePushToken = (token?: string) =>
+  del<any>('/push-token', token ? { token } : {});
 
 // ══════════════════════════════════════════════════════════════
 // TALLY SYNC / PAIRING

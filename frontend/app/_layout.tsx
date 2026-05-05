@@ -12,6 +12,7 @@ import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import * as SplashScreen from 'expo-splash-screen';
 import Toast from 'react-native-toast-message';
 import { toastConfig } from '../src/utils/toastConfig';
+import { registerForPushNotifications, setupNotificationHandlers } from '../src/services/pushNotifications';
 
 // Prevent splash screen from auto-hiding while fonts load
 SplashScreen.preventAutoHideAsync();
@@ -20,6 +21,13 @@ function RootNavigation() {
   const { isAuthenticated, isLoading, company, setCompany, setIsPaired, setUser, user, signIn } = useAuth();
   const router = useRouter();
   const segments = useSegments();
+
+  // Register push notifications when user logs in
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    registerForPushNotifications().catch(() => {});
+    return setupNotificationHandlers(router);
+  }, [isAuthenticated]);
 
   // Bootstrap: if authenticated but no company, fetch /api/auth/me to restore state
   useEffect(() => {
