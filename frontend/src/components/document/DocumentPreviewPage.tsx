@@ -17,6 +17,22 @@ import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Voucher config constants (mirrors voucher-config.tsx)
+// ─────────────────────────────────────────────────────────────────────────────
+const VOUCHER_CONFIG_KEY = 'voucherConfig';
+
+const DOC_TYPE_TO_CONFIG_ID: Record<string, string> = {
+  'sales_invoice':    'sales_inv',
+  'purchase_invoice': 'purchase_inv',
+  'sales_order':      'sales_order',
+  'purchase_order':   'purchase_order',
+  'quotation':        'quotation',
+  'credit_note':      'credit_note',
+  'debit_note':       'debit_note',
+  'delivery_note':    'delivery_note',
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Utility Components
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -653,6 +669,7 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
   const [shareLoading, setShareLoading] = useState(false);
   const { company } = useAuth();
   const logoUriRef = useRef<string | null>(null);
+  const voucherConfigRef = useRef<Record<string, any> | null>(null);
 
   // Load company logo from AsyncStorage once
   useEffect(() => {
@@ -663,6 +680,15 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
     }
   }, [company?.guid]);
 
+  // Load voucher config from AsyncStorage once
+  useEffect(() => {
+    AsyncStorage.getItem(VOUCHER_CONFIG_KEY)
+      .then(json => {
+        if (json) voucherConfigRef.current = JSON.parse(json);
+      })
+      .catch(() => {});
+  }, []);
+
   // Shared PDF helper — loading reset BEFORE shareAsync to prevent UI hang
   const generateAndSharePDF = async (
     setLoading: (v: boolean) => void,
@@ -671,7 +697,10 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
   ) => {
     setLoading(true);
     try {
-      const html = generateDocumentHTML(doc, logoUriRef.current);
+      const configId = DOC_TYPE_TO_CONFIG_ID[doc.documentType];
+      const format = ((voucherConfigRef.current?.[configId]?.format) ?? 1) as 1 | 2 | 3;
+      const terms = (voucherConfigRef.current?.[configId]?.terms ?? []) as string[];
+      const html = generateDocumentHTML(doc, logoUriRef.current, format, terms);
       const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
       setLoading(false); // Reset BEFORE shareAsync (shareAsync blocks until sheet dismissed)
       const canShare = await Sharing.isAvailableAsync();
