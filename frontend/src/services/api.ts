@@ -194,6 +194,7 @@ export const createContraVoucher  = (payload: any) => tallyPost<any>('/voucher/c
 
 // Ledger endpoints accept optional fy= param for FY-specific balances
 export const getLedgers        = (companyGuid?: string, params?: any) => get<any>(withCompany('/ledgers', companyGuid, params));
+export const getBankLedgers    = (companyGuid?: string) => get<any>(withCompany('/bank-ledgers', companyGuid));
 export const getLedgerFyBalances = (companyGuid?: string, fy?: string) => get<any>(withCompany('/ledgers/fy-balances', companyGuid, fy ? { fy } : {}));
 export const getLedgerDetail   = (companyGuid?: string, id?: string, params?: any) => get<any>(withCompany(`/ledgers/${id}`, companyGuid, params));
 export const getLedgerStatement = (companyGuid?: string, id?: string, fy?: string, params?: any) => get<any>(withCompany(`/ledgers/${id}/statement`, companyGuid, { ...(fy ? { fy } : {}), ...params }));

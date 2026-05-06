@@ -12,14 +12,13 @@ import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
+import { getUserSettings, updateUserSettings, getBankLedgers } from '../../src/services/api';
 
 // ── Data ──────────────────────────────────────────────────────────────────────
-const BANK_OPTS = [
-  { value: 'hdfc',  label: 'HDFC Bank – Current A/c' },
-  { value: 'sbi',   label: 'SBI – Savings A/c'        },
-  { value: 'icici', label: 'ICICI Bank – Current A/c' },
-  { value: 'axis',  label: 'Axis Bank – Current A/c'  },
-  { value: 'cash',  label: 'Cash'                      },
+// Bank options are fetched from Tally (see useEffect in component)
+const FALLBACK_BANK_OPTS = [
+  { value: 'Cash', label: 'Cash' },
 ];
 
 const VOUCHER_TYPES = [
@@ -194,31 +193,63 @@ const pk = StyleSheet.create({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function VoucherConfigScreen() {
   const router = useRouter();
+  const { company } = useAuth();
   const [expanded,      setExpanded]      = useState<string | null>('sales_inv');
   const [configs,       setConfigs]       = useState<Record<string, VConfig>>(
     Object.fromEntries(VOUCHER_TYPES.map(v => [v.id, makeDefault(v.id)]))
   );
+  const [bankOpts, setBankOpts] = useState<{ value: string; label: string }[]>(FALLBACK_BANK_OPTS);
   const [bankPickerFor, setBankPickerFor] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
   const [saving,        setSaving]        = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState<string | null>(null);
 
-  // Load persisted config on mount
+  // Load bank ledgers from Tally on mount
   useEffect(() => {
-    AsyncStorage.getItem(VOUCHER_CONFIG_KEY).then(stored => {
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          setConfigs(prev => {
-            const merged: Record<string, VConfig> = { ...prev };
-            Object.keys(parsed).forEach(k => {
-              if (merged[k]) merged[k] = { ...merged[k], ...parsed[k] };
-            });
-            return merged;
-          });
-        } catch {}
+    if (!company?.guid) return;
+    getBankLedgers(company.guid).then((res: any) => {
+      if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
+        const opts = [
+          ...res.data.map((b: any) => ({ value: b.name, label: b.name })),
+          { value: 'Cash', label: 'Cash' },
+        ];
+        setBankOpts(opts);
       }
+    }).catch(() => {});
+  }, [company?.guid]);
+
+  // Load persisted config: backend first, AsyncStorage fallback
+  useEffect(() => {
+    const applyParsed = (parsed: any) => {
+      setConfigs(prev => {
+        const merged: Record<string, VConfig> = { ...prev };
+        Object.keys(parsed).forEach(k => {
+          if (merged[k]) merged[k] = { ...merged[k], ...parsed[k] };
+        });
+        return merged;
+      });
+    };
+
+    getUserSettings().then((res: any) => {
+      const serverConfig = res?.data?.voucher_config;
+      if (serverConfig) {
+        try {
+          const parsed = typeof serverConfig === 'string' ? JSON.parse(serverConfig) : serverConfig;
+          applyParsed(parsed);
+          AsyncStorage.setItem(VOUCHER_CONFIG_KEY, JSON.stringify(parsed)).catch(() => {});
+        } catch {}
+      } else {
+        // No server config yet — try AsyncStorage cache
+        AsyncStorage.getItem(VOUCHER_CONFIG_KEY).then(stored => {
+          if (stored) { try { applyParsed(JSON.parse(stored)); } catch {} }
+        }).catch(() => {});
+      }
+    }).catch(() => {
+      // Backend failed — fallback to AsyncStorage
+      AsyncStorage.getItem(VOUCHER_CONFIG_KEY).then(stored => {
+        if (stored) { try { applyParsed(JSON.parse(stored)); } catch {} }
+      }).catch(() => {});
     });
   }, []);
 
@@ -254,10 +285,11 @@ export default function VoucherConfigScreen() {
   const handleUseFormat = async (id: string, label: string, format: number) => {
     setSaving(id);
     try {
-      // Persist the selected format immediately
       const updated = { ...configs, [id]: { ...configs[id], format: format as 1 | 2 | 3 } };
       setConfigs(updated);
       await AsyncStorage.setItem(VOUCHER_CONFIG_KEY, JSON.stringify(updated));
+      // Sync to backend
+      await updateUserSettings({ voucher_config: updated }).catch(() => {});
       Toast.show({ type: 'success', text1: `${label} Updated`, text2: `Format ${format} applied and saved.` });
     } catch {
       Toast.show({ type: 'error', text1: 'Save Failed', text2: 'Could not save format selection.' });
@@ -268,6 +300,8 @@ export default function VoucherConfigScreen() {
 
   const handleSaveAll = async () => {
     await AsyncStorage.setItem(VOUCHER_CONFIG_KEY, JSON.stringify(configs));
+    // Sync to backend
+    await updateUserSettings({ voucher_config: configs }).catch(() => {});
     setIsDirty(false);
     Toast.show({ type: 'success', text1: 'All Configurations Saved', text2: 'Voucher settings updated for all types.' });
   };
@@ -314,7 +348,7 @@ export default function VoucherConfigScreen() {
     }
   };
 
-  const bankLabel = (id: string) => BANK_OPTS.find(b => b.value === configs[id].bank)?.label || 'Select Bank';
+  const bankLabel = (id: string) => bankOpts.find(b => b.value === configs[id].bank)?.label || configs[id].bank || 'Select Bank';
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -552,7 +586,7 @@ export default function VoucherConfigScreen() {
       <PickerSheet
         visible={bankPickerFor !== null}
         title="Select Bank Account"
-        items={BANK_OPTS}
+        items={bankOpts}
         selected={bankPickerFor ? configs[bankPickerFor].bank : ''}
         onSelect={v => { if (bankPickerFor) update(bankPickerFor, 'bank', v); }}
         onClose={() => setBankPickerFor(null)}
