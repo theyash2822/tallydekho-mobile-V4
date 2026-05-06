@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getCompanyProfile, updateCompanyProfile } from '../../src/services/api';
+import { useTranslation } from 'react-i18next';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const INDIAN_STATES = [
@@ -94,9 +95,9 @@ function ListPickerSheet({
 
 // ── Month Picker Bottom Sheet ─────────────────────────────────────────────────
 function MonthPickerSheet({
-  visible, selected, onSelect, onClose,
+  visible, title, selected, onSelect, onClose,
 }: {
-  visible: boolean; selected: string;
+  visible: boolean; title: string; selected: string;
   onSelect: (m: string) => void; onClose: () => void;
 }) {
   return (
@@ -105,7 +106,7 @@ function MonthPickerSheet({
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
         <View style={mp.sheet}>
           <View style={mp.handle} />
-          <Text style={mp.title}>FY Start Month</Text>
+          <Text style={mp.title}>{title}</Text>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={mp.list}>
             {MONTHS.map(month => {
               const active = selected === month;
@@ -149,6 +150,7 @@ const mp = StyleSheet.create({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function CompanyScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { company } = useAuth();
 
   // Company Identity — pre-filled from AuthContext / Tally sync
@@ -240,8 +242,8 @@ export default function CompanyScreen() {
       }
       Toast.show({
         type: 'success',
-        text1: 'Company Info Saved',
-        text2: 'Details updated successfully.',
+        text1: t('company.saved'),
+        text2: t('company.savedDesc'),
         visibilityTime: 3000,
       });
       setIsDirty(false);
@@ -257,11 +259,11 @@ export default function CompanyScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Company Information</Text>
+        <Text style={s.headerTitle}>{t('company.title')}</Text>
         {isDirty ? (
           <TouchableOpacity style={[s.saveBtn, saving && {opacity:0.6}]} onPress={handleSave} activeOpacity={0.7} disabled={saving}>
             {saving && <ActivityIndicator size="small" color={COLORS.white} style={{marginRight:6}}/>}
-            <Text style={s.saveBtnText}>{saving ? 'Saving...' : 'Save'}</Text>
+            <Text style={s.saveBtnText}>{saving ? t('common.saving') : t('common.save')}</Text>
           </TouchableOpacity>
         ) : (
           <View style={{ width: 52 }} />
@@ -291,16 +293,16 @@ export default function CompanyScreen() {
                 <Ionicons name="camera" size={13} color={COLORS.white} />
               </View>
             </TouchableOpacity>
-            <Text style={s.logoLabel}>Company Logo</Text>
-            <Text style={s.logoHint}>JPG, PNG or GIF · Max 500 KB</Text>
+            <Text style={s.logoLabel}>{t('company.logo')}</Text>
+            <Text style={s.logoHint}>{t('company.logoHint')}</Text>
           </View>
 
           {/* ── Company Identity ── */}
           <View style={s.card}>
-            <Text style={s.cardTitle}>Company Identity</Text>
+            <Text style={s.cardTitle}>{t('company.identity')}</Text>
 
             <View style={[s.fieldWrap, s.fieldBorder]}>
-              <Text style={s.fieldLabel}>Company Name</Text>
+              <Text style={s.fieldLabel}>{t('company.name')}</Text>
               <TextInput
                 style={s.fieldInput}
                 value={companyName}
@@ -311,7 +313,7 @@ export default function CompanyScreen() {
             </View>
 
             <View style={[s.fieldWrap, s.fieldBorder]}>
-              <Text style={s.fieldLabel}>GSTIN</Text>
+              <Text style={s.fieldLabel}>{t('company.gstin')}</Text>
               <TextInput
                 style={s.fieldInput}
                 value={gstin}
@@ -323,7 +325,7 @@ export default function CompanyScreen() {
             </View>
 
             <View style={s.fieldWrap}>
-              <Text style={s.fieldLabel}>PAN</Text>
+              <Text style={s.fieldLabel}>{t('company.pan')}</Text>
               <TextInput
                 style={s.fieldInput}
                 value={pan}
@@ -337,10 +339,10 @@ export default function CompanyScreen() {
 
           {/* ── Contact Details ── */}
           <View style={s.card}>
-            <Text style={s.cardTitle}>Contact Details</Text>
+            <Text style={s.cardTitle}>{t('company.contact')}</Text>
 
             <View style={[s.fieldWrap, s.fieldBorder]}>
-              <Text style={s.fieldLabel}>Registered Address</Text>
+              <Text style={s.fieldLabel}>{t('company.address')}</Text>
               <TextInput
                 style={[s.fieldInput, s.fieldMultiline]}
                 value={address}
@@ -352,7 +354,7 @@ export default function CompanyScreen() {
             </View>
 
             <View style={[s.fieldWrap, s.fieldBorder]}>
-              <Text style={s.fieldLabel}>Email</Text>
+              <Text style={s.fieldLabel}>{t('company.email')}</Text>
               <TextInput
                 style={s.fieldInput}
                 value={email}
@@ -365,7 +367,7 @@ export default function CompanyScreen() {
             </View>
 
             <View style={[s.fieldWrap, s.fieldBorder]}>
-              <Text style={s.fieldLabel}>Phone</Text>
+              <Text style={s.fieldLabel}>{t('company.phone')}</Text>
               <TextInput
                 style={s.fieldInput}
                 value={phone}
@@ -377,7 +379,7 @@ export default function CompanyScreen() {
             </View>
 
             <View style={[s.fieldWrap, s.fieldBorder]}>
-              <Text style={s.fieldLabel}>Website</Text>
+              <Text style={s.fieldLabel}>{t('company.website')}</Text>
               <TextInput
                 style={s.fieldInput}
                 value={website}
@@ -390,14 +392,14 @@ export default function CompanyScreen() {
             </View>
 
             <View style={s.fieldWrap}>
-              <Text style={s.fieldLabel}>State</Text>
+              <Text style={s.fieldLabel}>{t('company.state')}</Text>
               <TouchableOpacity
                 style={s.dropdownRow}
                 onPress={() => setShowStatePicker(true)}
                 activeOpacity={0.7}
               >
                 <Text style={[s.dropdownValue, !state && { color: COLORS.textTertiary }]}>
-                  {state || 'Select State'}
+                  {state || t('company.selectState')}
                 </Text>
                 <View style={s.dropdownChevron}>
                   <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
@@ -408,11 +410,11 @@ export default function CompanyScreen() {
 
           {/* ── Financial Settings ── */}
           <View style={s.card}>
-            <Text style={s.cardTitle}>Financial Settings</Text>
+            <Text style={s.cardTitle}>{t('company.financial')}</Text>
 
             {/* FY Start Month — themed dropdown */}
             <View style={[s.fieldWrap, s.fieldBorder]}>
-              <Text style={s.fieldLabel}>FY Start Month</Text>
+              <Text style={s.fieldLabel}>{t('company.fyStartMonth')}</Text>
               <TouchableOpacity
                 style={s.dropdownRow}
                 onPress={() => setShowMonthPicker(true)}
@@ -430,7 +432,7 @@ export default function CompanyScreen() {
               <View style={s.lockHeaderRow}>
                 <View style={s.lockLabelRow}>
                   <Ionicons name="lock-closed-outline" size={14} color={COLORS.textSecondary} />
-                  <Text style={s.fieldLabel}>Book Lock Days</Text>
+                  <Text style={s.fieldLabel}>{t('company.bookLock')}</Text>
                 </View>
                 <CustomToggle value={bookLockEnabled} onValueChange={(v) => { setBookLockEnabled(v); markDirty(); }} />
               </View>
@@ -462,13 +464,14 @@ export default function CompanyScreen() {
       {/* ── Month Picker Sheet ── */}
       <MonthPickerSheet
         visible={showMonthPicker}
+        title={t('company.fyStartMonth')}
         selected={fyStartMonth}
         onSelect={(m) => { setFyStartMonth(m); markDirty(); }}
         onClose={() => setShowMonthPicker(false)}
       />
       <ListPickerSheet
         visible={showStatePicker}
-        title="Select State / UT"
+        title={t('company.selectState')}
         items={INDIAN_STATES}
         selected={state}
         onSelect={(s) => { setState(s); markDirty(); }}

@@ -67,7 +67,17 @@
     "pin": "PIN",
     "enterPin": "Enter your PIN",
     "setPin": "Set PIN",
-    "biometric": "Use Biometric"
+    "biometric": "Use Biometric",
+    "enterWhatsApp": "Enter your WhatsApp Number",
+    "otpSubtitle": "We'll send you a 4-digit OTP to verify",
+    "sendOtpBtn": "Send OTP",
+    "disclaimer": "By continuing, you agree to our",
+    "termsLink": "Terms & Privacy Policy",
+    "selectCountry": "Select Country",
+    "otpSentHeading": "We've sent a 4-digit code to your WhatsApp",
+    "codeSentTo": "Code has been sent to {{phone}}",
+    "continueBtn": "Continue",
+    "resendOtpTimer": "Resend OTP ({{countdown}}s)"
   },
   "dashboard": {
     "greeting": "Hello",
@@ -80,7 +90,15 @@
     "recentActivity": "Recent Activity",
     "noActivity": "No recent activity",
     "syncStatus": "Sync Status",
-    "lastSync": "Last synced"
+    "lastSync": "Last synced",
+    "searchPlaceholder": "Search transactions, parties...",
+    "filter7D": "7 Days",
+    "filter1M": "1 Month",
+    "filter3M": "3 Months",
+    "filter6M": "6 Months",
+    "listening": "Listening...",
+    "speakNow": "Speak now to search",
+    "noResults": "No results for \"{{query}}\""
   },
   "settings": {
     "title": "Settings",
@@ -103,7 +121,13 @@
     "help": "Help Center",
     "saveChanges": "Save Changes",
     "savingChanges": "Saving changes…",
-    "savedSuccessfully": "Saved successfully"
+    "savedSuccessfully": "Saved successfully",
+    "notificationChannels": "Channels & Quiet Hours",
+    "stockAlerts": "Low Stock & Expiry Alerts",
+    "complianceReminders": "Compliance Reminders",
+    "paymentReminders": "Payment Reminders",
+    "ewayBill": "E-Way Bill Integration",
+    "eInvoice": "E-Invoice (IRN)"
   },
   "profile": {
     "title": "Profile",
@@ -122,7 +146,12 @@
     "profileUpdated": "Profile Updated",
     "phoneUpdated": "Phone Number Updated",
     "emailUpdated": "Email Address Updated",
-    "deleteAccount": "Delete Account"
+    "deleteAccount": "Delete Account",
+    "biometricScreenLock": "Biometric & screen lock",
+    "biometricSub": "Face ID / Fingerprint on app open",
+    "passkey": "PassKey (2FA)",
+    "passkeyActive": "4-digit passkey active",
+    "passkeySub": "Extra security for sensitive actions"
   },
   "company": {
     "title": "Company Information",
@@ -142,7 +171,8 @@
     "fyStartMonth": "FY Start Month",
     "bookLock": "Book Lock",
     "saved": "Company Info Saved",
-    "savedDesc": "Details updated successfully."
+    "savedDesc": "Details updated successfully.",
+    "selectState": "Select State / UT"
   },
   "languageRegion": {
     "title": "Language & Region",
@@ -152,7 +182,13 @@
     "weekStart": "Week Starts On",
     "saved": "Settings Saved",
     "savedDesc": "Language and region preferences updated.",
-    "autoDetected": "Auto-detected from your phone number"
+    "autoDetected": "Auto-detected from your phone number",
+    "language": "Language",
+    "regionTime": "Region & Time",
+    "selectLanguage": "Select Language",
+    "selectCountry": "Select Country",
+    "selectTimezone": "Select Time Zone",
+    "firstDayOfWeek": "First Day of Week"
   },
   "currency": {
     "title": "Currency & Number Format",
@@ -163,7 +199,16 @@
     "preview": "Preview",
     "indian": "Indian (1,00,000)",
     "international": "International (100,000)",
-    "saved": "Format Settings Saved"
+    "saved": "Format Settings Saved",
+    "savedDesc": "Currency & Number Format updated.",
+    "dateTimeFormat": "Date & Time Format",
+    "numberFormatting": "Number Formatting",
+    "dateStyle": "Date Style",
+    "timeStyle": "Time Style",
+    "thousandsSeparator": "Thousands Separator",
+    "negativeNumbers": "Negative Numbers",
+    "negativeNumbersStyle": "Negative Numbers Style",
+    "selectCurrency": "Select Currency"
   },
   "ledger": {
     "title": "Ledger",
@@ -175,7 +220,12 @@
     "transactions": "Transactions",
     "statement": "Statement",
     "noTransactions": "No transactions found",
-    "sendReminder": "Send Reminder"
+    "sendReminder": "Send Reminder",
+    "searchPlaceholder": "Search Ledgers...",
+    "selectedCount": "{{count}} Selected",
+    "selectAll": "Select All",
+    "noLedgers": "No ledgers synced yet — do a Tally sync first",
+    "noMatch": "No ledgers match your filter"
   },
   "sales": {
     "title": "Sales",

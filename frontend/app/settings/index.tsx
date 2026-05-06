@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
@@ -85,6 +86,28 @@ const SECTIONS: Section[] = [
   },
 ];
 
+// ── Sub-item translation key map ─────────────────────────────────────────────
+const SUBITEM_KEY: Record<string, string> = {
+  profile:      'settings.profile',
+  company:      'settings.companyInfo',
+  license:      'settings.license',
+  language:     'settings.language',
+  currency:     'settings.currency',
+  voucher:      'settings.voucher',
+  kpi_scroll:   'settings.kpiScroll',
+  channels:     'settings.notificationChannels',
+  stock_alerts: 'settings.stockAlerts',
+  compliance:   'settings.complianceReminders',
+  payments:     'settings.paymentReminders',
+  tally:        'settings.tallySync',
+  bank:         'settings.bankFeeds',
+  ewaybill:     'settings.ewayBill',
+  einvoice:     'settings.eInvoice',
+  about:        'settings.about',
+  security:     'settings.security',
+  help:         'settings.help',
+};
+
 // ── Logout Confirm Bottom Sheet ───────────────────────────────────────────────
 function LogoutConfirmSheet({
   visible,
@@ -95,6 +118,7 @@ function LogoutConfirmSheet({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const { t } = useTranslation();
   const slideY = useRef(new Animated.Value(300)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -124,16 +148,16 @@ function LogoutConfirmSheet({
               <Ionicons name="log-out-outline" size={28} color="#E53935" />
             </View>
           </View>
-          <Text style={ls.title}>Log Out</Text>
-          <Text style={ls.sub}>Are you sure you want to log out of TallyDekho?</Text>
+          <Text style={ls.title}>{t('auth.logout')}</Text>
+          <Text style={ls.sub}>{t('auth.logoutConfirm')}</Text>
           {/* Log Out (destructive) */}
           <TouchableOpacity style={ls.logoutBtn} onPress={onConfirm} activeOpacity={0.85}>
             <Ionicons name="log-out-outline" size={16} color="#fff" />
-            <Text style={ls.logoutBtnTxt}>Log Out</Text>
+            <Text style={ls.logoutBtnTxt}>{t('auth.logout')}</Text>
           </TouchableOpacity>
           {/* Cancel */}
           <TouchableOpacity style={ls.cancelBtn} onPress={onClose} activeOpacity={0.7}>
-            <Text style={ls.cancelBtnTxt}>Cancel</Text>
+            <Text style={ls.cancelBtnTxt}>{t('common.cancel')}</Text>
           </TouchableOpacity>
           <View style={{ height: 16 }} />
         </Animated.View>
@@ -190,6 +214,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { signOut, user, company, isPaired } = useAuth();
   const { settings, updateSettings } = useSettings();
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState<SectionId | null>('account');
   const [showLogoutSheet, setShowLogoutSheet] = useState(false);
   // Stores all toggle values keyed by toggleKey
@@ -229,7 +254,7 @@ export default function SettingsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Settings</Text>
+        <Text style={styles.headerTitle}>{t('settings.title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -260,7 +285,7 @@ export default function SettingsScreen() {
                   <View style={[styles.sectionIcon, { backgroundColor: section.iconBg }]}>
                     <Ionicons name={section.icon as any} size={18} color={section.iconColor} />
                   </View>
-                  <Text style={styles.sectionTitle}>{section.title}</Text>
+                  <Text style={styles.sectionTitle}>{t('settings.' + section.id)}</Text>
                   <Ionicons
                     name={isOpen ? 'chevron-up' : 'chevron-down'}
                     size={16}
@@ -290,7 +315,7 @@ export default function SettingsScreen() {
                             <View style={styles.subIconBox}>
                               <Ionicons name={sub.icon as any} size={16} color={COLORS.textSecondary} />
                             </View>
-                            <Text style={styles.subLabel}>{sub.label}</Text>
+                            <Text style={styles.subLabel}>{t(SUBITEM_KEY[sub.id] || sub.label)}</Text>
                           </View>
                           <View style={styles.subRight}>
                             {sub.badge && (() => {
@@ -338,7 +363,7 @@ export default function SettingsScreen() {
         {/* Logout */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
           <Ionicons name="log-out-outline" size={18} color='#E53935' />
-          <Text style={styles.logoutText}>Log Out</Text>
+          <Text style={styles.logoutText}>{t('auth.logout')}</Text>
         </TouchableOpacity>
 
         <View style={{ height: 30 }} />

@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useSettings } from '../../src/context/SettingsContext';
+import { useTranslation } from 'react-i18next';
 
 // Map internal keys to SettingsContext values
 const DATE_TO_CONTEXT: Record<string, string> = {
@@ -189,6 +190,7 @@ type ActivePicker = 'currency' | 'dateStyle' | 'timeStyle' | 'thousands' | 'negS
 
 export default function CurrencyScreen() {
   const router   = useRouter();
+  const { t } = useTranslation();
   const { settings, updateSettings } = useSettings();
   const [currency,  setCurrency]  = useState(settings.currency || 'INR');
   const [dateStyle, setDateStyle] = useState(DATE_FROM_CONTEXT[settings.date_format] || 'dmy');
@@ -212,8 +214,8 @@ export default function CurrencyScreen() {
     setIsDirty(false);
     Toast.show({
       type: 'success',
-      text1: 'Settings Saved',
-      text2: 'Currency & Number Format updated.',
+      text1: t('currency.saved'),
+      text2: t('currency.savedDesc'),
     });
   };
 
@@ -225,7 +227,7 @@ export default function CurrencyScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.hdrTitle}>Currency & Number Format</Text>
+        <Text style={s.hdrTitle}>{t('currency.title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -235,10 +237,10 @@ export default function CurrencyScreen() {
         <View style={s.card}>
           <View style={s.cardHdr}>
             <Ionicons name="cash-outline" size={18} color={COLORS.textSecondary} />
-            <Text style={s.cardTitle}>Currency</Text>
+            <Text style={s.cardTitle}>{t('currency.currency')}</Text>
           </View>
           <DropdownField
-            label="Currency"
+            label={t('currency.currency')}
             value={getLabel(CURRENCIES, currency)}
             onPress={() => setPicker('currency')}
           />
@@ -248,15 +250,15 @@ export default function CurrencyScreen() {
         <View style={s.card}>
           <View style={s.cardHdr}>
             <Ionicons name="calendar-outline" size={18} color={COLORS.textSecondary} />
-            <Text style={s.cardTitle}>Date & Time Format</Text>
+            <Text style={s.cardTitle}>{t('currency.dateTimeFormat')}</Text>
           </View>
           <DropdownField
-            label="Date Style"
+            label={t('currency.dateStyle')}
             value={getLabel(DATE_STYLES, dateStyle)}
             onPress={() => setPicker('dateStyle')}
           />
           <DropdownField
-            label="Time Style"
+            label={t('currency.timeStyle')}
             value={getLabel(TIME_STYLES, timeStyle)}
             onPress={() => setPicker('timeStyle')}
           />
@@ -266,22 +268,22 @@ export default function CurrencyScreen() {
         <View style={s.card}>
           <View style={s.cardHdr}>
             <Ionicons name="calculator-outline" size={18} color={COLORS.textSecondary} />
-            <Text style={s.cardTitle}>Number Formatting</Text>
+            <Text style={s.cardTitle}>{t('currency.numberFormatting')}</Text>
           </View>
           <DropdownField
-            label="Thousands Separator"
+            label={t('currency.thousandsSeparator')}
             value={getLabel(THOUSANDS, thousands)}
             onPress={() => setPicker('thousands')}
           />
           <DropdownField
-            label="Negative Numbers"
+            label={t('currency.negativeNumbers')}
             value={getLabel(NEGATIVE_STYLES, negStyle)}
             onPress={() => setPicker('negStyle')}
           />
 
           {/* Decimal Places — merged with live preview */}
           <View style={s.decWrap}>
-            <Text style={df.label}>Decimal Places</Text>
+            <Text style={df.label}>{t('currency.decimalPlaces')}</Text>
             <View style={s.decPill}>
               {/* Minus button */}
               <TouchableOpacity
@@ -324,7 +326,7 @@ export default function CurrencyScreen() {
 
         {/* Save */}
         <TouchableOpacity style={s.saveBtn} onPress={handleSave} activeOpacity={0.85}>
-          <Text style={s.saveTxt}>Save Changes</Text>
+          <Text style={s.saveTxt}>{t('settings.saveChanges')}</Text>
         </TouchableOpacity>
 
         <View style={{ height: 40 }} />
@@ -333,7 +335,7 @@ export default function CurrencyScreen() {
       {/* ── Pickers (siblings at root, never nested) ── */}
       <PickerSheet
         visible={picker === 'currency'}
-        title="Select Currency"
+        title={t('currency.selectCurrency')}
         items={CURRENCIES}
         selected={currency}
         onSelect={(v) => { setCurrency(v); markDirty(); }}
@@ -341,7 +343,7 @@ export default function CurrencyScreen() {
       />
       <PickerSheet
         visible={picker === 'dateStyle'}
-        title="Date Style"
+        title={t('currency.dateStyle')}
         items={DATE_STYLES}
         selected={dateStyle}
         onSelect={(v) => { setDateStyle(v); markDirty(); }}
@@ -349,7 +351,7 @@ export default function CurrencyScreen() {
       />
       <PickerSheet
         visible={picker === 'timeStyle'}
-        title="Time Style"
+        title={t('currency.timeStyle')}
         items={TIME_STYLES}
         selected={timeStyle}
         onSelect={setTimeStyle}
@@ -357,7 +359,7 @@ export default function CurrencyScreen() {
       />
       <PickerSheet
         visible={picker === 'thousands'}
-        title="Thousands Separator"
+        title={t('currency.thousandsSeparator')}
         items={THOUSANDS}
         selected={thousands}
         onSelect={(v) => { setThousands(v); markDirty(); }}
@@ -365,7 +367,7 @@ export default function CurrencyScreen() {
       />
       <PickerSheet
         visible={picker === 'negStyle'}
-        title="Negative Numbers Style"
+        title={t('currency.negativeNumbersStyle')}
         items={NEGATIVE_STYLES}
         selected={negStyle}
         onSelect={setNegStyle}

@@ -9,6 +9,7 @@ import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useAuth } from '../../src/context/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 // ── Country detection from phone country code ─────────────────────────────────
 const PHONE_PREFIX_TO_COUNTRY: Record<string, string> = {
@@ -240,6 +241,7 @@ type ActivePicker = 'language' | 'country' | 'timezone' | 'weekday' | null;
 
 export default function LanguageRegionScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { settings, updateSettings } = useSettings();
   const { user } = useAuth();
   const [lang,       setLang]       = useState(settings.language || 'English');
@@ -250,14 +252,18 @@ export default function LanguageRegionScreen() {
   const [isDirty,    setIsDirty]    = useState(false);
   const [autoDetected, setAutoDetected] = useState(false);
 
-  // Auto-detect country from phone number on first load (only if not already saved)
+  // Auto-detect country from phone number — apply if detected differs from current setting
   useEffect(() => {
-    if (settings.country) return; // already set by user, skip
     const detected = detectCountryFromPhone(user?.phone);
-    if (detected) {
+    if (detected && detected !== country) {
       setCountry(detected);
       const tzs = COUNTRY_TZ[detected] || [];
       if (tzs.length > 0) setTimezone(tzs[0].value);
+      // Cascade currency + number_format for detected country
+      const defaults = COUNTRY_DEFAULTS[detected];
+      if (defaults) {
+        updateSettings({ currency: defaults.currency, number_format: defaults.number_format });
+      }
       setAutoDetected(true);
       setIsDirty(true);
     }
@@ -296,8 +302,8 @@ export default function LanguageRegionScreen() {
       setAutoDetected(false);
       Toast.show({
         type: 'success',
-        text1: 'Settings Saved',
-        text2: 'Language & Region preferences updated.',
+        text1: t('languageRegion.saved'),
+        text2: t('languageRegion.savedDesc'),
       });
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Save Failed', text2: err?.message || 'Could not save settings.' });
@@ -326,7 +332,7 @@ export default function LanguageRegionScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.hdrTitle}>Language & Region</Text>
+        <Text style={s.hdrTitle}>{t('languageRegion.title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -336,10 +342,10 @@ export default function LanguageRegionScreen() {
         <View style={s.card}>
           <View style={s.cardHdr}>
             <Ionicons name="language-outline" size={18} color={COLORS.textSecondary} />
-            <Text style={s.cardTitle}>App Language</Text>
+            <Text style={s.cardTitle}>{t('languageRegion.appLanguage')}</Text>
           </View>
           <DropdownField
-            label="Language"
+            label={t('languageRegion.language')}
             value={langDisplay}
             onPress={() => setPicker('language')}
           />
@@ -349,26 +355,26 @@ export default function LanguageRegionScreen() {
         <View style={s.card}>
           <View style={s.cardHdr}>
             <Ionicons name="globe-outline" size={18} color={COLORS.textSecondary} />
-            <Text style={s.cardTitle}>Region & Time</Text>
+            <Text style={s.cardTitle}>{t('languageRegion.regionTime')}</Text>
           </View>
           {autoDetected && (
             <View style={s.autoDetectedBanner}>
               <Ionicons name="location-outline" size={14} color={COLORS.brandPrimary} />
-              <Text style={s.autoDetectedText}>Auto-detected from your phone number</Text>
+              <Text style={s.autoDetectedText}>{t('languageRegion.autoDetected')}</Text>
             </View>
           )}
           <DropdownField
-            label="Country"
+            label={t('languageRegion.country')}
             value={country}
             onPress={() => setPicker('country')}
           />
           <DropdownField
-            label="Time Zone"
+            label={t('languageRegion.timezone')}
             value={timezone}
             onPress={() => setPicker('timezone')}
           />
           <DropdownField
-            label="First Day of Week"
+            label={t('languageRegion.firstDayOfWeek')}
             value={weekday}
             onPress={() => setPicker('weekday')}
           />
@@ -377,7 +383,7 @@ export default function LanguageRegionScreen() {
         {/* ── Save ── */}
         {isDirty && (
           <TouchableOpacity style={s.saveBtn} onPress={handleSave} activeOpacity={0.85}>
-            <Text style={s.saveTxt}>Save Changes</Text>
+            <Text style={s.saveTxt}>{t('settings.saveChanges')}</Text>
           </TouchableOpacity>
         )}
 
@@ -387,7 +393,7 @@ export default function LanguageRegionScreen() {
       {/* ── Bottom Sheet Pickers ── */}
       <PickerSheet
         visible={picker === 'language'}
-        title="Select Language"
+        title={t('languageRegion.selectLanguage')}
         items={langItems}
         selected={lang}
         onSelect={handleLangSelect}
@@ -395,7 +401,7 @@ export default function LanguageRegionScreen() {
       />
       <PickerSheet
         visible={picker === 'country'}
-        title="Select Country"
+        title={t('languageRegion.selectCountry')}
         items={countryItems}
         selected={country}
         onSelect={handleCountryChange}
@@ -403,7 +409,7 @@ export default function LanguageRegionScreen() {
       />
       <PickerSheet
         visible={picker === 'timezone'}
-        title="Select Time Zone"
+        title={t('languageRegion.selectTimezone')}
         items={tzItems}
         selected={timezone}
         onSelect={(v) => { setTimezone(v); setIsDirty(true); }}
@@ -411,7 +417,7 @@ export default function LanguageRegionScreen() {
       />
       <PickerSheet
         visible={picker === 'weekday'}
-        title="First Day of Week"
+        title={t('languageRegion.weekStart')}
         items={dayItems}
         selected={weekday}
         onSelect={(v) => { setWeekday(v); setIsDirty(true); }}

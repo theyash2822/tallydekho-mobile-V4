@@ -24,6 +24,7 @@ import {
 } from '../../src/services/api';
 import Toast from 'react-native-toast-message';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { useTranslation } from 'react-i18next';
 // No mock data imports — real data only (V2 rule)
 
 const TIME_FILTERS = ['7D', '1M', '3M', '6M'] as const;
@@ -41,6 +42,7 @@ const MOCK_VOICE_SEARCHES = ['Sales Invoice', 'Mehta Enterprises', 'Payment Rece
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { isPaired, isDesktopOnline, company, user, selectedFY } = useAuth();
   const companyGuid = company?.guid;
   const [activeFY, setActiveFY] = useState('');
@@ -313,7 +315,7 @@ export default function HomeScreen() {
             <TextInput
               testID="search-bar"
               style={styles.searchInput}
-              placeholder="Search transactions, parties..."
+              placeholder={t('dashboard.searchPlaceholder')}
               placeholderTextColor={COLORS.textTertiary}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -392,7 +394,7 @@ export default function HomeScreen() {
                 activeOpacity={0.7}
               >
                 <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>
-                  {f === '7D' ? '7 Days' : f === '1M' ? '1 Month' : f === '3M' ? '3 Months' : '6 Months'}
+                  {f === '7D' ? t('dashboard.filter7D') : f === '1M' ? t('dashboard.filter1M') : f === '3M' ? t('dashboard.filter3M') : t('dashboard.filter6M')}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -476,7 +478,7 @@ export default function HomeScreen() {
         {isSearching && filteredActivity.length === 0 && (
           <View style={styles.emptySearch}>
             <Ionicons name="search" size={32} color={COLORS.textTertiary} />
-            <Text style={styles.emptySearchText}>No results for "{searchQuery}"</Text>
+            <Text style={styles.emptySearchText}>{t('dashboard.noResults', { query: searchQuery })}</Text>
           </View>
         )}
 
@@ -494,8 +496,8 @@ export default function HomeScreen() {
                 <Ionicons name="mic" size={32} color={COLORS.white} />
               </View>
             </View>
-            <Text style={styles.micListeningText}>Listening...</Text>
-            <Text style={styles.micHint}>Speak now to search</Text>
+            <Text style={styles.micListeningText}>{t('dashboard.listening')}</Text>
+            <Text style={styles.micHint}>{t('dashboard.speakNow')}</Text>
           </View>
         </TouchableOpacity>
       </Modal>

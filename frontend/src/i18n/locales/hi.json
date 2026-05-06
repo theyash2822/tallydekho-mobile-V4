@@ -67,7 +67,17 @@
     "pin": "पिन",
     "enterPin": "अपना पिन दर्ज करें",
     "setPin": "पिन सेट करें",
-    "biometric": "बायोमेट्रिक उपयोग करें"
+    "biometric": "बायोमेट्रिक उपयोग करें",
+    "enterWhatsApp": "अपना WhatsApp नंबर दर्ज करें",
+    "otpSubtitle": "हम आपको वेरिफाई करने के लिए 4-अंकीय OTP भेजेंगे",
+    "sendOtpBtn": "OTP भेजें",
+    "disclaimer": "जारी रखकर, आप हमारी सहमति देते हैं",
+    "termsLink": "नियम और गोपनीयता नीति",
+    "selectCountry": "देश चुनें",
+    "otpSentHeading": "हमने आपके WhatsApp पर 4-अंकीय कोड भेजा है",
+    "codeSentTo": "{{phone}} पर कोड भेजा गया है",
+    "continueBtn": "जारी रखें",
+    "resendOtpTimer": "OTP पुनः भेजें ({{countdown}}s)"
   },
   "dashboard": {
     "greeting": "नमस्ते",
@@ -80,7 +90,15 @@
     "recentActivity": "हाल की गतिविधि",
     "noActivity": "हाल की कोई गतिविधि नहीं",
     "syncStatus": "सिंक स्थिति",
-    "lastSync": "अंतिम सिंक"
+    "lastSync": "अंतिम सिंक",
+    "searchPlaceholder": "लेनदेन, पार्टियां खोजें...",
+    "filter7D": "7 दिन",
+    "filter1M": "1 महीना",
+    "filter3M": "3 महीने",
+    "filter6M": "6 महीने",
+    "listening": "सुन रहा है...",
+    "speakNow": "अब बोलें",
+    "noResults": "\"{{query}}\" के लिए कोई परिणाम नहीं"
   },
   "settings": {
     "title": "सेटिंग्स",
@@ -103,7 +121,13 @@
     "help": "सहायता केंद्र",
     "saveChanges": "बदलाव सहेजें",
     "savingChanges": "बदलाव सहेजे जा रहे हैं…",
-    "savedSuccessfully": "सफलतापूर्वक सहेजा गया"
+    "savedSuccessfully": "सफलतापूर्वक सहेजा गया",
+    "notificationChannels": "चैनल और शांत घंटे",
+    "stockAlerts": "कम स्टॉक और एक्सपायरी अलर्ट",
+    "complianceReminders": "कॉम्प्लायंस रिमाइंडर",
+    "paymentReminders": "भुगतान रिमाइंडर",
+    "ewayBill": "ई-वे बिल एकीकरण",
+    "eInvoice": "ई-इनवॉयस (IRN)"
   },
   "profile": {
     "title": "प्रोफ़ाइल",
@@ -122,7 +146,12 @@
     "profileUpdated": "प्रोफ़ाइल अपडेट हुई",
     "phoneUpdated": "फ़ोन नंबर अपडेट हुआ",
     "emailUpdated": "ईमेल पता अपडेट हुआ",
-    "deleteAccount": "खाता हटाएं"
+    "deleteAccount": "खाता हटाएं",
+    "biometricScreenLock": "बायोमेट्रिक और स्क्रीन लॉक",
+    "biometricSub": "ऐप खोलने पर Face ID / फिंगरप्रिंट",
+    "passkey": "पासकी (2FA)",
+    "passkeyActive": "4-अंकीय पासकी सक्रिय",
+    "passkeySub": "संवेदनशील कार्यों के लिए अतिरिक्त सुरक्षा"
   },
   "company": {
     "title": "कंपनी जानकारी",
@@ -142,7 +171,8 @@
     "fyStartMonth": "वित्त वर्ष शुरू महीना",
     "bookLock": "बुक लॉक",
     "saved": "कंपनी जानकारी सहेजी गई",
-    "savedDesc": "विवरण सफलतापूर्वक अपडेट हुआ।"
+    "savedDesc": "विवरण सफलतापूर्वक अपडेट हुआ।",
+    "selectState": "राज्य / केंद्र शासित प्रदेश चुनें"
   },
   "languageRegion": {
     "title": "भाषा और क्षेत्र",
@@ -152,7 +182,13 @@
     "weekStart": "सप्ताह शुरू होता है",
     "saved": "सेटिंग्स सहेजी गई",
     "savedDesc": "भाषा और क्षेत्र प्राथमिकताएं अपडेट हुईं।",
-    "autoDetected": "आपके फ़ोन नंबर से स्वतः पहचाना गया"
+    "autoDetected": "आपके फ़ोन नंबर से स्वतः पहचाना गया",
+    "language": "भाषा",
+    "regionTime": "क्षेत्र और समय",
+    "selectLanguage": "भाषा चुनें",
+    "selectCountry": "देश चुनें",
+    "selectTimezone": "समय क्षेत्र चुनें",
+    "firstDayOfWeek": "सप्ताह का पहला दिन"
   },
   "currency": {
     "title": "मुद्रा और संख्या प्रारूप",
@@ -163,7 +199,16 @@
     "preview": "पूर्वावलोकन",
     "indian": "भारतीय (1,00,000)",
     "international": "अंतर्राष्ट्रीय (100,000)",
-    "saved": "प्रारूप सेटिंग्स सहेजी गई"
+    "saved": "प्रारूप सेटिंग्स सहेजी गई",
+    "savedDesc": "मुद्रा और संख्या प्रारूप अपडेट किया गया।",
+    "dateTimeFormat": "दिनांक और समय प्रारूप",
+    "numberFormatting": "संख्या स्वरूपण",
+    "dateStyle": "दिनांक शैली",
+    "timeStyle": "समय शैली",
+    "thousandsSeparator": "हजार विभाजक",
+    "negativeNumbers": "नकारात्मक संख्याएं",
+    "negativeNumbersStyle": "नकारात्मक संख्या शैली",
+    "selectCurrency": "मुद्रा चुनें"
   },
   "ledger": {
     "title": "लेजर",
@@ -175,7 +220,12 @@
     "transactions": "लेनदेन",
     "statement": "स्टेटमेंट",
     "noTransactions": "कोई लेनदेन नहीं मिला",
-    "sendReminder": "अनुस्मारक भेजें"
+    "sendReminder": "अनुस्मारक भेजें",
+    "searchPlaceholder": "लेजर खोजें...",
+    "selectedCount": "{{count}} चयनित",
+    "selectAll": "सभी चुनें",
+    "noLedgers": "अभी कोई लेजर सिंक नहीं हुआ — पहले Tally सिंक करें",
+    "noMatch": "आपके फ़िल्टर से कोई लेजर मेल नहीं खाता"
   },
   "sales": {
     "title": "बिक्री",

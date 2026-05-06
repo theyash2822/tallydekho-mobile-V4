@@ -15,6 +15,7 @@ import { getLedgers, createLedger } from '../../src/services/api';
 
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
+import { useTranslation } from 'react-i18next';
 
 import FilterBottomSheet, { FilterRadioRow } from '../../src/components/FilterBottomSheet';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
@@ -418,6 +419,7 @@ function FilterModal({ visible, onClose, activeNature, onApply }: FilterModalPro
 // ─── Main Ledger Screen ───────────────────────────────────────────────────────
 export default function LedgerScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { company, selectedFY } = useAuth();
   const { formatAmount } = useSettings();
   const companyGuid = company?.guid;
@@ -558,7 +560,7 @@ export default function LedgerScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>
-          {selectMode ? `${selected.length} Selected` : 'Ledgers'}
+          {selectMode ? t('ledger.selectedCount', { count: selected.length }) : t('ledger.title')}
         </Text>
         <View style={styles.headerActions}>
           {selectMode ? (
@@ -568,14 +570,14 @@ export default function LedgerScreen() {
                 onPress={selectAll}
                 activeOpacity={0.7}
               >
-                <Text style={styles.headerTextBtnPrimary}>Select All</Text>
+                <Text style={styles.headerTextBtnPrimary}>{t('ledger.selectAll')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.headerTextBtn}
                 onPress={cancelSelectMode}
                 activeOpacity={0.7}
               >
-                <Text style={styles.headerTextBtnCancel}>Cancel</Text>
+                <Text style={styles.headerTextBtnCancel}>{t('common.cancel')}</Text>
               </TouchableOpacity>
             </>
           ) : (
@@ -608,7 +610,7 @@ export default function LedgerScreen() {
           <TextInput
             testID="ledger-search"
             style={styles.searchInput}
-            placeholder="Search Ledgers..."
+            placeholder={t('ledger.searchPlaceholder')}
             placeholderTextColor={COLORS.textTertiary}
             value={search}
             onChangeText={setSearch}
@@ -863,7 +865,7 @@ export default function LedgerScreen() {
           {!isLoading && filtered.length === 0 && (
             <View style={styles.emptyState}>
               <Ionicons name="journal-outline" size={48} color={COLORS.textTertiary} />
-              <Text style={styles.emptyText}>{data.length === 0 ? 'No ledgers synced yet — do a Tally sync first' : 'No ledgers match your filter'}</Text>
+              <Text style={styles.emptyText}>{data.length === 0 ? t('ledger.noLedgers') : t('ledger.noMatch')}</Text>
             </View>
           )}
         </View>

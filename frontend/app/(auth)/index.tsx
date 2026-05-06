@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { sendOTP } from '../../src/services/api';
+import { useTranslation } from 'react-i18next';
 
 // ─── Country Data ───────────────────────────────────────────────────────────
 type Country = {
@@ -46,6 +47,7 @@ const COUNTRIES: Country[] = [
 // ─── Screen ──────────────────────────────────────────────────────────────────
 export default function LoginScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [phone, setPhone]                   = useState('');
   const [loading, setLoading]               = useState(false);
   const [error, setError]                   = useState('');
@@ -132,8 +134,8 @@ export default function LoginScreen() {
 
           {/* ── Card ── */}
           <View style={styles.card}>
-            <Text style={styles.heading}>Enter your{'\n'}WhatsApp Number</Text>
-            <Text style={styles.subHeading}>We'll send you a 4-digit OTP to verify</Text>
+            <Text style={styles.heading}>{t('auth.enterWhatsApp')}</Text>
+            <Text style={styles.subHeading}>{t('auth.otpSubtitle')}</Text>
 
             {/* ── Phone Input Row ── */}
             <View style={[styles.inputRow, !!error && styles.inputError]}>
@@ -177,14 +179,14 @@ export default function LoginScreen() {
             >
               {loading
                 ? <ActivityIndicator color={COLORS.white} size="small" />
-                : <Text style={styles.primaryBtnText}>Send OTP</Text>
+                : <Text style={styles.primaryBtnText}>{t('auth.sendOtpBtn')}</Text>
               }
             </TouchableOpacity>
 
             <Text style={styles.disclaimer}>
-              By continuing, you agree to our{' '}
+              {t('auth.disclaimer')}{' '}
               <Text style={styles.link} onPress={() => router.push('/(auth)/terms' as any)}>
-                Terms & Privacy Policy
+                {t('auth.termsLink')}
               </Text>
             </Text>
           </View>
@@ -214,7 +216,7 @@ export default function LoginScreen() {
 
           {/* Header */}
           <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Select Country</Text>
+            <Text style={styles.sheetTitle}>{t('auth.selectCountry')}</Text>
             <TouchableOpacity
               style={styles.sheetCloseBtn}
               onPress={() => setShowSheet(false)}

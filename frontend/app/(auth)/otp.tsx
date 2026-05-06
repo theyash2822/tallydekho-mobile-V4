@@ -8,6 +8,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { verifyOTP, sendOTP } from '../../src/services/api';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../src/context/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -70,6 +71,7 @@ function OTPBox({
 
 export default function OTPScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { phone } = useLocalSearchParams<{ phone: string }>();
   const { signIn, setCompany, setIsPaired } = useAuth();
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
@@ -184,8 +186,8 @@ export default function OTPScreen() {
 
           {/* Card */}
           <View style={styles.card}>
-            <Text style={styles.heading}>We've sent a 4-digit{'\n'}code to your WhatsApp</Text>
-            <Text style={styles.subHeading}>Code has been sent to {phone}</Text>
+            <Text style={styles.heading}>{t('auth.otpSentHeading')}</Text>
+            <Text style={styles.subHeading}>{t('auth.codeSentTo', { phone })}</Text>
 
             {/* OTP Boxes */}
             <View style={styles.otpRow}>
@@ -215,7 +217,7 @@ export default function OTPScreen() {
               activeOpacity={0.8}
             >
               {loading ? <ActivityIndicator color={COLORS.white} size="small" /> : (
-                <Text style={styles.primaryBtnText}>Continue</Text>
+                <Text style={styles.primaryBtnText}>{t('auth.continueBtn')}</Text>
               )}
             </TouchableOpacity>
 
@@ -228,7 +230,7 @@ export default function OTPScreen() {
               activeOpacity={0.7}
             >
               <Text style={[styles.resendText, countdown > 0 && styles.resendDisabled]}>
-                {countdown > 0 ? `Resend OTP (${countdown}s)` : 'Resend OTP'}
+                {countdown > 0 ? t('auth.resendOtpTimer', { countdown }) : t('auth.resendOtp')}
               </Text>
             </TouchableOpacity>
           </View>

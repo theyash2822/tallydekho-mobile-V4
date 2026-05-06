@@ -13,6 +13,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { updateMe, get2FAStatus, setPin as apiSetPin, removePin, setBiometric as apiSetBiometric, changePhone, changeEmail } from '../../src/services/api';
 import * as SecureStore from 'expo-secure-store';
 import * as LocalAuthentication from 'expo-local-authentication';
+import { useTranslation } from 'react-i18next';
 
 const BIOMETRIC_PIN_KEY = 'td_biometric_pin';
 
@@ -609,6 +610,7 @@ function OTPVerifySheet({
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { user, setUser } = useAuth();
 
   // Form state — pre-filled from AuthContext
@@ -774,7 +776,7 @@ export default function ProfileScreen() {
         <TouchableOpacity style={ps.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={ps.headerTitle}>Profile</Text>
+        <Text style={ps.headerTitle}>{t('profile.title')}</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -790,12 +792,12 @@ export default function ProfileScreen() {
           {saveState === 'saving' ? (
             <>
               <ActivityIndicator size="small" color={COLORS.white} />
-              <Text style={ps.toastText}>Saving changes…</Text>
+              <Text style={ps.toastText}>{t('settings.savingChanges')}</Text>
             </>
           ) : (
             <>
               <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />
-              <Text style={ps.toastText}>Saved successfully</Text>
+              <Text style={ps.toastText}>{t('settings.savedSuccessfully')}</Text>
             </>
           )}
         </View>
@@ -814,11 +816,11 @@ export default function ProfileScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* ── Personal Info ────────────────────────────────────────── */}
-          <SectionLabel title="PERSONAL INFORMATION" />
+          <SectionLabel title={t('profile.personalInfo').toUpperCase()} />
           <View style={ps.card}>
             {/* Full Name */}
             <View style={ps.fieldWrap}>
-              <Text style={ps.fieldLabel}>Full Name</Text>
+              <Text style={ps.fieldLabel}>{t('profile.fullName')}</Text>
               <TextInput
                 style={ps.fieldInput}
                 value={name}
@@ -834,7 +836,7 @@ export default function ProfileScreen() {
 
             {/* Role — read-only, set by backend */}
             <View style={ps.fieldWrap}>
-              <Text style={ps.fieldLabel}>Role</Text>
+              <Text style={ps.fieldLabel}>{t('profile.role')}</Text>
               <Text style={ps.fieldInput}>{role}</Text>
             </View>
 
@@ -842,7 +844,7 @@ export default function ProfileScreen() {
 
             {/* Phone (masked) */}
             <View style={ps.fieldWrap}>
-              <Text style={ps.fieldLabel}>Phone Number</Text>
+              <Text style={ps.fieldLabel}>{t('profile.phoneNumber')}</Text>
               <View style={ps.maskedRow}>
                 <Text style={ps.maskedValue}>{maskPhone(phone)}</Text>
                 <View style={ps.verifiedPill}>
@@ -864,7 +866,7 @@ export default function ProfileScreen() {
 
             {/* Email (masked) */}
             <View style={[ps.fieldWrap, { paddingBottom: 16 }]}>
-              <Text style={ps.fieldLabel}>Email</Text>
+              <Text style={ps.fieldLabel}>{t('profile.email')}</Text>
               <View style={ps.maskedRow}>
                 <Text style={ps.maskedValue}>{maskEmail(email)}</Text>
                 <View style={ps.verifiedPill}>
@@ -884,7 +886,7 @@ export default function ProfileScreen() {
           </View>
 
           {/* ── Security ─────────────────────────────────────────────── */}
-          <SectionLabel title="SECURITY" />
+          <SectionLabel title={t('profile.security').toUpperCase()} />
           <View style={ps.card}>
             {/* Biometric */}
             <View style={ps.toggleRow}>
@@ -893,8 +895,8 @@ export default function ProfileScreen() {
                   <Ionicons name="finger-print-outline" size={17} color={COLORS.textSecondary} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={ps.toggleLabel}>Biometric &amp; screen lock</Text>
-                  <Text style={ps.toggleSub}>Face ID / Fingerprint on app open</Text>
+                  <Text style={ps.toggleLabel}>{t('profile.biometricScreenLock')}</Text>
+                  <Text style={ps.toggleSub}>{t('profile.biometricSub')}</Text>
                 </View>
               </View>
               <CustomToggle value={biometric} onValueChange={handleBiometricToggle} />
@@ -909,9 +911,9 @@ export default function ProfileScreen() {
                   <Ionicons name="key-outline" size={17} color={COLORS.textSecondary} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={ps.toggleLabel}>PassKey (2FA)</Text>
+                  <Text style={ps.toggleLabel}>{t('profile.passkey')}</Text>
                   <Text style={ps.toggleSub}>
-                    {twoFA ? '4-digit passkey active' : 'Extra security for sensitive actions'}
+                    {twoFA ? t('profile.passkeyActive') : t('profile.passkeySub')}
                   </Text>
                 </View>
               </View>
@@ -921,7 +923,7 @@ export default function ProfileScreen() {
 
           {/* ── Save Button ───────────────────────────────────────────── */}
           <TouchableOpacity style={ps.saveBtn} onPress={handleSave} activeOpacity={0.85}>
-            <Text style={ps.saveBtnText}>Save Changes</Text>
+            <Text style={ps.saveBtnText}>{t('profile.saveChanges')}</Text>
           </TouchableOpacity>
 
           {/* ── Delete Account ────────────────────────────────────────── */}
@@ -931,7 +933,7 @@ export default function ProfileScreen() {
             activeOpacity={0.7}
           >
             <Ionicons name="trash-outline" size={14} color={COLORS.negative} />
-            <Text style={ps.deleteTextBtnLabel}>Delete Account</Text>
+            <Text style={ps.deleteTextBtnLabel}>{t('profile.deleteAccount')}</Text>
           </TouchableOpacity>
 
           <View style={{ height: 50 }} />
