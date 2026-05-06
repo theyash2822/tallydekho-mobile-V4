@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal,
 } from 'react-native';
@@ -8,6 +8,79 @@ import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useSettings } from '../../src/context/SettingsContext';
+import { useAuth } from '../../src/context/AuthContext';
+
+// ── Country detection from phone country code ─────────────────────────────────
+const PHONE_PREFIX_TO_COUNTRY: Record<string, string> = {
+  '91':  'India',
+  '971': 'UAE',
+  '1':   'United States',
+  '44':  'United Kingdom',
+  '61':  'Australia',
+  '65':  'Singapore',
+  '60':  'Malaysia',
+  '966': 'Saudi Arabia',
+  '974': 'Qatar',
+  '973': 'Bahrain',
+  '968': 'Oman',
+  '965': 'Kuwait',
+  '27':  'South Africa',
+  '254': 'Kenya',
+  '234': 'Nigeria',
+  '255': 'Tanzania',
+  '64':  'New Zealand',
+  '49':  'Germany',
+  '33':  'France',
+  '81':  'Japan',
+  '86':  'China',
+  '880': 'Bangladesh',
+  '977': 'Nepal',
+  '94':  'Sri Lanka',
+};
+
+// Order matters — longer prefixes first to avoid '1' matching before '1xxx'
+const SORTED_PREFIXES = Object.keys(PHONE_PREFIX_TO_COUNTRY).sort((a, b) => b.length - a.length);
+
+function detectCountryFromPhone(phone?: string): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  const normalized = digits.replace(/^0+/, '');
+  for (const prefix of SORTED_PREFIXES) {
+    if (normalized.startsWith(prefix)) {
+      return PHONE_PREFIX_TO_COUNTRY[prefix];
+    }
+  }
+  return null;
+}
+
+// ── Country → currency + number format defaults ───────────────────────────────
+const COUNTRY_DEFAULTS: Record<string, { currency: string; number_format: string }> = {
+  'India':          { currency: 'INR', number_format: 'Indian' },
+  'UAE':            { currency: 'AED', number_format: 'International' },
+  'United States':  { currency: 'USD', number_format: 'International' },
+  'United Kingdom': { currency: 'GBP', number_format: 'International' },
+  'Australia':      { currency: 'AUD', number_format: 'International' },
+  'Singapore':      { currency: 'SGD', number_format: 'International' },
+  'Malaysia':       { currency: 'MYR', number_format: 'International' },
+  'Saudi Arabia':   { currency: 'SAR', number_format: 'International' },
+  'Qatar':          { currency: 'QAR', number_format: 'International' },
+  'Bahrain':        { currency: 'BHD', number_format: 'International' },
+  'Oman':           { currency: 'OMR', number_format: 'International' },
+  'Kuwait':         { currency: 'KWD', number_format: 'International' },
+  'South Africa':   { currency: 'ZAR', number_format: 'International' },
+  'Kenya':          { currency: 'KES', number_format: 'International' },
+  'Nigeria':        { currency: 'NGN', number_format: 'International' },
+  'Tanzania':       { currency: 'TZS', number_format: 'International' },
+  'New Zealand':    { currency: 'NZD', number_format: 'International' },
+  'Germany':        { currency: 'EUR', number_format: 'International' },
+  'France':         { currency: 'EUR', number_format: 'International' },
+  'Japan':          { currency: 'JPY', number_format: 'International' },
+  'China':          { currency: 'CNY', number_format: 'International' },
+  'Bangladesh':     { currency: 'BDT', number_format: 'International' },
+  'Nepal':          { currency: 'NPR', number_format: 'International' },
+  'Sri Lanka':      { currency: 'LKR', number_format: 'International' },
+  'Canada':         { currency: 'CAD', number_format: 'International' },
+};
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 const LANGUAGES = [
@@ -168,21 +241,41 @@ type ActivePicker = 'language' | 'country' | 'timezone' | 'weekday' | null;
 export default function LanguageRegionScreen() {
   const router = useRouter();
   const { settings, updateSettings } = useSettings();
+  const { user } = useAuth();
   const [lang,       setLang]       = useState(settings.language || 'English');
-  const [country,    setCountry]    = useState('India');
-  const [timezone,   setTimezone]   = useState('UTC+05:30 · Asia/Kolkata');
-  const [weekday,    setWeekday]    = useState('Monday');
+  const [country,    setCountry]    = useState(settings.country || 'India');
+  const [timezone,   setTimezone]   = useState(settings.timezone || 'UTC+05:30 · Asia/Kolkata');
+  const [weekday,    setWeekday]    = useState(settings.week_start || 'Monday');
   const [picker,     setPicker]     = useState<ActivePicker>(null);
   const [isDirty,    setIsDirty]    = useState(false);
+  const [autoDetected, setAutoDetected] = useState(false);
+
+  // Auto-detect country from phone number on first load (only if not already saved)
+  useEffect(() => {
+    if (settings.country) return; // already set by user, skip
+    const detected = detectCountryFromPhone(user?.phone);
+    if (detected) {
+      setCountry(detected);
+      const tzs = COUNTRY_TZ[detected] || [];
+      if (tzs.length > 0) setTimezone(tzs[0].value);
+      setAutoDetected(true);
+      setIsDirty(true);
+    }
+  }, [user?.phone]);
 
   const langObj   = LANGUAGES.find(l => l.value === lang);
   const tzOptions = COUNTRY_TZ[country] || [];
 
-  // When country changes, auto-select first timezone of that country
+  // When country changes: auto-select timezone + cascade currency + number format
   const handleCountryChange = (c: string) => {
     setCountry(c);
     const tzs = COUNTRY_TZ[c] || [];
     if (tzs.length > 0) setTimezone(tzs[0].value);
+    // Cascade currency + number format immediately
+    const defaults = COUNTRY_DEFAULTS[c];
+    if (defaults) {
+      updateSettings({ currency: defaults.currency, number_format: defaults.number_format });
+    }
     setIsDirty(true);
   };
 
@@ -193,8 +286,14 @@ export default function LanguageRegionScreen() {
 
   const handleSave = async () => {
     try {
-      await updateSettings({ language: lang });
+      await updateSettings({
+        language:   lang,
+        country:    country,
+        timezone:   timezone,
+        week_start: weekday,
+      });
       setIsDirty(false);
+      setAutoDetected(false);
       Toast.show({
         type: 'success',
         text1: 'Settings Saved',
@@ -252,6 +351,12 @@ export default function LanguageRegionScreen() {
             <Ionicons name="globe-outline" size={18} color={COLORS.textSecondary} />
             <Text style={s.cardTitle}>Region & Time</Text>
           </View>
+          {autoDetected && (
+            <View style={s.autoDetectedBanner}>
+              <Ionicons name="location-outline" size={14} color={COLORS.brandPrimary} />
+              <Text style={s.autoDetectedText}>Auto-detected from your phone number</Text>
+            </View>
+          )}
           <DropdownField
             label="Country"
             value={country}
@@ -271,7 +376,7 @@ export default function LanguageRegionScreen() {
 
         {/* ── Save ── */}
         {isDirty && (
-          <TouchableOpacity style={s.saveBtn} onPress={() => { handleSave(); setIsDirty(false); }} activeOpacity={0.85}>
+          <TouchableOpacity style={s.saveBtn} onPress={handleSave} activeOpacity={0.85}>
             <Text style={s.saveTxt}>Save Changes</Text>
           </TouchableOpacity>
         )}
@@ -326,6 +431,8 @@ const s = StyleSheet.create({
   card:         { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault, gap: SPACING.md },
   cardHdr:      { flexDirection: 'row', alignItems: 'center', gap: 8 },
   cardTitle:    { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-  saveBtn:      { backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.lg, paddingVertical: 16, alignItems: 'center' },
-  saveTxt:      { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+  saveBtn:          { backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.lg, paddingVertical: 16, alignItems: 'center' },
+  saveTxt:          { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+  autoDetectedBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.brandPrimary + '15', borderRadius: RADIUS.sm, paddingHorizontal: 10, paddingVertical: 6 },
+  autoDetectedText:   { fontSize: TYPOGRAPHY.xs, color: COLORS.brandPrimary, fontWeight: '600' },
 });

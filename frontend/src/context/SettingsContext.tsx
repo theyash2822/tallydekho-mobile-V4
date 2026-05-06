@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getUserSettings, updateUserSettings } from '../services/api';
+import i18n, { LANGUAGE_CODE_MAP } from '../i18n';
 import {
   formatAmount as _formatAmount,
   formatAmountCompact as _formatAmountCompact,
@@ -17,6 +18,9 @@ export interface UserSettings {
   theme: string;           // 'light' | 'dark' | 'auto'
   kpi_autoscroll: boolean;
   decimal_places: number;
+  country?: string;        // 'India' | 'UAE' | 'United States' | ...
+  timezone?: string;       // 'UTC+05:30 · Asia/Kolkata' | ...
+  week_start?: string;     // 'Monday' | 'Sunday' | ...
   voucher_terms?: string;
   qr_type?: string;
   qr_value?: string;
@@ -30,6 +34,9 @@ const DEFAULT_SETTINGS: UserSettings = {
   theme: 'light',
   kpi_autoscroll: true,
   decimal_places: 2,
+  country: 'India',
+  timezone: 'UTC+05:30 · Asia/Kolkata',
+  week_start: 'Monday',
 };
 
 interface SettingsContextType {
@@ -68,6 +75,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (res?.data) {
         const merged = { ...DEFAULT_SETTINGS, ...res.data };
         setSettings(merged);
+        // Apply stored language to i18next
+        const code = LANGUAGE_CODE_MAP[merged.language] || 'en';
+        i18n.changeLanguage(code);
         AsyncStorage.setItem('userSettings', JSON.stringify(merged));
       }
     }).catch(() => {});
@@ -76,6 +86,11 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const updateSettings = async (partial: Partial<UserSettings>) => {
     const updated = { ...settings, ...partial };
     setSettings(updated);
+    // Sync language change to i18next immediately
+    if (partial.language) {
+      const code = LANGUAGE_CODE_MAP[partial.language] || 'en';
+      i18n.changeLanguage(code);
+    }
     await AsyncStorage.setItem('userSettings', JSON.stringify(updated));
     try { await updateUserSettings(partial); } catch {}
   };

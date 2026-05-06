@@ -291,8 +291,8 @@ export const getAIInsights = (companyGuid?: string, from?: string, to?: string) 
 // USER SETTINGS
 // ════════════════════════════════════════════════════════════
 
-export const getUserSettings    = () => get<any>('/user-settings');
-export const updateUserSettings = (data: any) => patch<any>('/user-settings', data);
+export const getUserSettings    = () => get<any>('/auth/user-settings');
+export const updateUserSettings = (data: any) => patch<any>('/auth/user-settings', data);
 
 // ── 2FA / Passkey ─────────────────────────────────────────────────────────────
 // Helper: POST with a custom bearer token (for pre_auth_token flows)
