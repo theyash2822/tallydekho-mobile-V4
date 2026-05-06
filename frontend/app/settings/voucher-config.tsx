@@ -57,7 +57,7 @@ interface VConfig {
 }
 
 const makeDefault = (id: string): VConfig => ({
-  format: 1, bank: 'hdfc', qrEnabled: false, qrImage: null,
+  format: 1, bank: 'Cash', qrEnabled: false, qrImage: null,
   terms: DEFAULT_TERMS[id] ?? [],
   qrType: 'upi', qrUpiId: '', qrUrl: '', qrIfsc: '', qrAccount: '',
 });
