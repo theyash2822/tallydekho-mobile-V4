@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
+import { useSettings } from '../../src/context/SettingsContext';
 
 type SectionId = 'account' | 'preferences' | 'notifications' | 'integrations' | 'contact';
 
@@ -39,7 +40,7 @@ const SECTIONS: Section[] = [
     icon: 'person-circle-outline', iconColor: '#7C3AED', iconBg: '#F5F3FF',
     subItems: [
       { id: 'profile', label: 'Profile', icon: 'person-outline', route: '/settings/profile' },
-      { id: 'company', label: 'Company Profile (PDF Details)', icon: 'business-outline', route: '/settings/company-profile' },
+      { id: 'company', label: 'Company Information', icon: 'business-outline', route: '/settings/company' },
       { id: 'license', label: 'License & Credits', icon: 'card-outline', route: '/settings/license', badge: 'Free', badgeColor: '#2D7D46' },
     ],
   },
@@ -50,7 +51,7 @@ const SECTIONS: Section[] = [
       { id: 'language', label: 'Language & Region', icon: 'language-outline', route: '/settings/language' },
       { id: 'currency', label: 'Currency & Number Format', icon: 'cash-outline', route: '/settings/currency' },
       { id: 'voucher', label: 'Voucher Configuration', icon: 'document-text-outline', route: '/settings/voucher-config' },
-      { id: 'kpi_scroll', label: 'KPI Auto-Scroll', icon: 'play-circle-outline', toggleKey: 'autoScrollCarousel', toggleDefault: true },
+      { id: 'kpi_scroll', label: 'KPI Auto-Scroll', icon: 'play-circle-outline', toggleKey: 'kpi_autoscroll', toggleDefault: true },
     ],
   },
   {
@@ -188,6 +189,7 @@ const ls = StyleSheet.create({
 export default function SettingsScreen() {
   const router = useRouter();
   const { signOut, user, company, isPaired } = useAuth();
+  const { settings, updateSettings } = useSettings();
   const [expanded, setExpanded] = useState<SectionId | null>('account');
   const [showLogoutSheet, setShowLogoutSheet] = useState(false);
   // Stores all toggle values keyed by toggleKey
@@ -212,8 +214,12 @@ export default function SettingsScreen() {
   const handleLogout = () => setShowLogoutSheet(true);
 
   const handleToggle = (toggleKey: string, value: boolean) => {
-    setToggles(prev => ({ ...prev, [toggleKey]: value }));
-    AsyncStorage.setItem(toggleKey, String(value));
+    if (toggleKey === 'kpi_autoscroll') {
+      updateSettings({ kpi_autoscroll: value });
+    } else {
+      setToggles(prev => ({ ...prev, [toggleKey]: value }));
+      AsyncStorage.setItem(toggleKey, String(value));
+    }
   };
 
   return (
@@ -267,7 +273,9 @@ export default function SettingsScreen() {
                   <View style={styles.subItems}>
                     {section.subItems.map((sub, idx) => {
                       const isToggleItem = !!sub.toggleKey;
-                      const toggleVal = sub.toggleKey ? (toggles[sub.toggleKey] ?? sub.toggleDefault ?? true) : false;
+                      const toggleVal = sub.toggleKey === 'kpi_autoscroll'
+                        ? settings.kpi_autoscroll
+                        : (sub.toggleKey ? (toggles[sub.toggleKey] ?? sub.toggleDefault ?? true) : false);
                       return (
                         <TouchableOpacity
                           key={sub.id}
