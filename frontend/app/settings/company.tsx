@@ -12,6 +12,7 @@ import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
+import { getCompanyProfile, updateCompanyProfile } from '../../src/services/api';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const INDIAN_STATES = [
@@ -169,6 +170,18 @@ export default function CompanyScreen() {
   const [phone,   setPhone]   = useState('');
   const [website, setWebsite] = useState('');
 
+  // Load company profile from backend on mount
+  useEffect(() => {
+    if (!company?.guid) return;
+    getCompanyProfile(company.guid).then((res: any) => {
+      const d = res?.data;
+      if (!d) return;
+      if (d.gstin)   { setGstin(d.gstin); }
+      if (d.address) { setAddress(d.address); }
+      if (d.state)   { setState(d.state); }
+    }).catch(() => {});
+  }, [company?.guid]);
+
   // Financial Settings
   const [fyStartMonth,    setFyStartMonth]    = useState('April');
   const [bookLockEnabled, setBookLockEnabled] = useState(true);
@@ -215,12 +228,20 @@ export default function CompanyScreen() {
   const handleSave = async () => {
     try {
       setSaving(true);
-      // Save local preferences to AsyncStorage
+      // Save logo locally (device-side storage until backend upload is built)
       if (logoKey && logoUri) await AsyncStorage.setItem(logoKey, logoUri).catch(() => {});
+      // Save editable fields to backend
+      if (company?.guid) {
+        await updateCompanyProfile(company.guid, {
+          gstin:   gstin.trim(),
+          address: address.trim(),
+          state:   state.trim(),
+        });
+      }
       Toast.show({
         type: 'success',
-        text1: 'Preferences Saved',
-        text2: 'Company settings saved locally. Core data syncs from Tally.',
+        text1: 'Company Info Saved',
+        text2: 'Details updated successfully.',
         visibilityTime: 3000,
       });
       setIsDirty(false);

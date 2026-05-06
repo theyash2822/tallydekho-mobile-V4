@@ -632,7 +632,7 @@ export default function ProfileScreen() {
   // Load 2FA status on mount
   useEffect(() => {
     get2FAStatus().then((res: any) => {
-      if (res?.success) {
+      if (res?.status) {
         setTwoFA(res.data?.two_fa_enabled || false);
         setBiometricState(res.data?.biometric_enabled || false);
       }
