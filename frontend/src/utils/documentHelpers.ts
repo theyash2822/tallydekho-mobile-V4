@@ -66,7 +66,7 @@ export const DOC_TYPE_CONFIG: Record<DocumentType, { label: string; color: strin
 
 // ── PDF HTML Template Generator ──────────────────────────────────────────────
 export function generateDocumentHTML(doc: VoucherDocument, logoUri?: string | null, format: 1 | 2 | 3 = 1, terms?: string[]): string {
-  if (format === 2) return _generateFormat2HTML(doc, logoUri);
+  if (format === 2) return _generateFormat2HTML(doc, logoUri, terms);
   if (format === 3) return _generateFormat3HTML(doc, logoUri, terms);
   const cfg = DOC_TYPE_CONFIG[doc.documentType];
   const hasItems = !!(doc.items && doc.items.length > 0);
@@ -272,13 +272,14 @@ ${mainTable}
   </tr>
 </table>
 
-<!-- DECLARATION + FOOTER -->
+<!-- DECLARATION + TERMS + FOOTER -->
 <table>
   <tr>
     <td style="border:1px solid #999;padding:6px 10px;vertical-align:top">
       <b style="font-size:10px">Company's PAN${doc.company?.gstin ? ' : ' + doc.company.gstin.slice(2,12) : ''}</b>
       <div style="font-size:9px;color:#777;text-transform:uppercase;margin-top:6px;margin-bottom:2px">Declaration</div>
       <div style="font-size:9px;color:#444;line-height:1.5">We declare that this ${isVoucher ? 'voucher' : 'invoice'} shows the actual ${isVoucher ? 'transaction' : 'price of the goods described'} and that all particulars are true and correct.</div>
+      ${terms && terms.length > 0 ? `<div style="font-size:9px;color:#777;text-transform:uppercase;margin-top:8px;margin-bottom:3px;font-weight:bold">Terms &amp; Conditions</div><ol style="font-size:9px;color:#444;padding-left:16px;margin:0;line-height:1.6">${terms.map(term => `<li>${term}</li>`).join('')}</ol>` : ''}
     </td>
   </tr>
 </table>
@@ -292,7 +293,7 @@ ${mainTable}
 
 
 // ── Format 2 — Modern layout ─────────────────────────────────────────────────
-function _generateFormat2HTML(doc: VoucherDocument, logoUri?: string | null): string {
+function _generateFormat2HTML(doc: VoucherDocument, logoUri?: string | null, terms?: string[]): string {
   const cfg = DOC_TYPE_CONFIG[doc.documentType];
   const t = doc.totals;
   const hasItems = !!(doc.items && doc.items.length > 0);
@@ -425,6 +426,15 @@ function _generateFormat2HTML(doc: VoucherDocument, logoUri?: string | null): st
     <div style="font-size:9px;color:#666;margin-bottom:2px;font-weight:bold;">AMOUNT IN WORDS</div>
     <div style="font-size:11px;font-weight:bold;font-style:italic;color:#222;">Indian Rupees ${amountInWords(t.total)}</div>
   </div>
+
+  <!-- Terms & Conditions -->
+  ${terms && terms.length > 0 ? `
+  <div style="margin-top:20px;padding-top:12px;border-top:1px solid #e8e8e8;">
+    <div style="font-size:9px;font-weight:bold;color:#555;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Terms &amp; Conditions</div>
+    <ol style="font-size:9px;color:#555;padding-left:16px;margin:0;line-height:1.7;">
+      ${terms.map(term => `<li>${term}</li>`).join('')}
+    </ol>
+  </div>` : ''}
 
   <!-- Footer -->
   <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:24px;padding-top:16px;border-top:1px solid #e8e8e8;">
