@@ -609,7 +609,7 @@ function OTPVerifySheet({
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
 
   // Form state — pre-filled from AuthContext
   const [name,  setName]  = useState(user?.name || 'Your Name');
@@ -713,6 +713,7 @@ export default function ProfileScreen() {
     showToast('saving');
     try {
       await updateMe({ name: name.trim(), email: email.trim() });
+      if (user) setUser({ ...user, name: name.trim(), email: email.trim() });
       showToast('saved');
       setTimeout(hideToast, 1600);
     } catch {
@@ -961,6 +962,7 @@ export default function ProfileScreen() {
         onClose={() => setShowEditPhone(false)}
         onSuccess={(newPhone) => {
           setPhone(newPhone);
+          if (user) setUser({ ...user, phone: newPhone });
           Toast.show({
             type: 'success',
             text1: 'Phone Number Updated',
@@ -982,6 +984,7 @@ export default function ProfileScreen() {
         onClose={() => setShowEditEmail(false)}
         onSuccess={(newEmail) => {
           setEmail(newEmail);
+          if (user) setUser({ ...user, email: newEmail });
           Toast.show({
             type: 'success',
             text1: 'Email Address Updated',
