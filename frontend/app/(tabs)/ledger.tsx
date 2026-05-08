@@ -527,7 +527,16 @@ export default function LedgerScreen() {
     });
   };
 
-  const normNature = (n: string) => n?.toLowerCase()?.replace(/s$/, '');
+  // Normalize nature for comparison: maps Tally group nature values to filter option values
+  // Tally returns: 'Assets'/'Asset', 'Liabilities'/'Liability', 'Income', 'Expense'/'Expenses'
+  const normNature = (n: string): string => {
+    const v = (n || '').toLowerCase().trim();
+    if (v === 'assets' || v === 'asset') return 'assets';
+    if (v === 'liabilities' || v === 'liability') return 'liabilities';
+    if (v === 'income' || v === 'incomes') return 'income';
+    if (v === 'expense' || v === 'expenses') return 'expense';
+    return v;
+  };
 
   const filtered = data
     .filter(item => {
