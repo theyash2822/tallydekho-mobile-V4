@@ -435,7 +435,9 @@ export default function HomeScreen() {
                     <Text style={styles.metricLabel}>{item.label}</Text>
                   </View>
                   <View style={styles.metricRight}>
-                    <Text style={styles.metricAmount}>{item.amount}</Text>
+                    <Text style={styles.metricAmount}>
+                      {item.amount_raw != null ? formatAmountCompact(item.amount_raw) : (item.amount || '—')}
+                    </Text>
                     <View style={[
                       styles.changeBadge,
                       { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg }
