@@ -13,7 +13,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { getUserSettings, updateUserSettings, getBankLedgers } from '../../src/services/api';
+import { getUserSettings, updateUserSettings, getBankLedgers, getCompanyLogo } from '../../src/services/api';
+import { generateDocumentHTML } from '../../src/utils/documentHelpers';
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 // Bank options are fetched from Tally (see useEffect in component)
@@ -204,6 +205,7 @@ export default function VoucherConfigScreen() {
   const markDirty = () => setIsDirty(true);
   const [saving,        setSaving]        = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState<string | null>(null);
+  const companyLogoRef = useRef<string | null>(null);
 
   // Load bank ledgers from Tally on mount
   useEffect(() => {
@@ -217,6 +219,21 @@ export default function VoucherConfigScreen() {
         setBankOpts(opts);
       }
     }).catch(() => {});
+  }, [company?.guid]);
+
+  // Load company logo for PDF preview
+  useEffect(() => {
+    if (!company?.guid) return;
+    const key = `company_logo_${company.guid}`;
+    getCompanyLogo(company.guid).then((res: any) => {
+      const url = res?.data?.logo_url;
+      if (url) { companyLogoRef.current = url; }
+      else {
+        AsyncStorage.getItem(key).then(uri => { if (uri) companyLogoRef.current = uri; }).catch(() => {});
+      }
+    }).catch(() => {
+      AsyncStorage.getItem(key).then(uri => { if (uri) companyLogoRef.current = uri; }).catch(() => {});
+    });
   }, [company?.guid]);
 
   // Load persisted config: backend first, AsyncStorage fallback
@@ -310,31 +327,40 @@ export default function VoucherConfigScreen() {
     setPreviewLoading(id);
     try {
       const cfg = configs[id];
-      const termsHtml = cfg.terms.map(t => `<li>${t}</li>`).join('');
-      const html = `
-        <html><head><style>
-          body { font-family: Arial, sans-serif; padding: 24px; color: #222; }
-          h1 { color: #2D7D46; font-size: 20px; margin-bottom: 4px; }
-          .meta { color: #888; font-size: 12px; margin-bottom: 16px; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-          th { background: #f0fbf4; text-align: left; padding: 8px; font-size: 12px; }
-          td { padding: 8px; border-bottom: 1px solid #eee; font-size: 12px; }
-          .total { font-weight: bold; font-size: 14px; }
-          .terms { font-size: 10px; color: #888; margin-top: 12px; }
-          .terms li { margin-bottom: 4px; }
-        </style></head><body>
-          <h1>${label} — Sample Preview</h1>
-          <div class="meta">Format ${cfg.format} &nbsp;|&nbsp; Date: ${new Date().toLocaleDateString('en-IN')}</div>
-          <table>
-            <tr><th>#</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr>
-            <tr><td>1</td><td>Sample Product A</td><td>10</td><td>₹500</td><td>₹5,000</td></tr>
-            <tr><td>2</td><td>Sample Product B</td><td>5</td><td>₹1,200</td><td>₹6,000</td></tr>
-            <tr><td colspan="4" class="total">Total</td><td class="total">₹11,000</td></tr>
-          </table>
-          ${cfg.terms.length > 0 ? `<div class="terms"><b>Terms & Conditions:</b><ul>${termsHtml}</ul></div>` : ''}
-        </body></html>
-      `;
-      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      // Build a realistic sample document for preview
+      const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      const sampleDoc: any = {
+        documentType: id === 'purchase_inv' ? 'purchase_invoice'
+          : id === 'sales_order' ? 'sales_order'
+          : id === 'purchase_order' ? 'purchase_order'
+          : id === 'quotation' ? 'quotation'
+          : id === 'credit_note' ? 'credit_note'
+          : id === 'debit_note' ? 'debit_note'
+          : id === 'delivery_note' ? 'delivery_note'
+          : 'sales_invoice',
+        documentNumber: 'SMPL/2425/001',
+        date: today,
+        reference: '',
+        company: {
+          name: company?.name || 'Your Company',
+          address: 'Mumbai, Maharashtra',
+          gstin: company?.gstin || '27AAJCR0000E1Z2',
+          state: 'Maharashtra',
+        },
+        party: { name: 'Sample Customer', address: 'Delhi, India', gstin: '07AABCD1234E1ZP' },
+        items: [
+          { name: 'Sample Product A', hsn: '8471', qty: 10, unit: 'PCS', rate: 500, discount: 0, amount: 5000 },
+          { name: 'Sample Product B', hsn: '8517', qty: 5,  unit: 'PCS', rate: 1200, discount: 0, amount: 6000 },
+        ],
+        ledgerEntries: [],
+        totals: { subtotal: 11000, discount: 0, taxableAmount: 11000, cgstTotal: 990, sgstTotal: 990, igstTotal: 0, taxTotal: 1980, roundOff: 0, total: 12980, balanceDue: 12980 },
+        taxes: [{ name: 'GST 18%', taxableAmount: 11000, cgst: 990, sgst: 990, igst: 0, total: 1980 }],
+        narration: 'Sample preview document',
+        terms: cfg.terms.join('\n'),
+        bankDetails: null,
+      };
+      const html = generateDocumentHTML(sampleDoc, companyLogoRef.current, cfg.format, cfg.terms);
+      const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
         await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `${label} Preview` });
