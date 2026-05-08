@@ -14,7 +14,7 @@ import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getUserSettings, updateUserSettings, getBankLedgers, getCompanyLogo } from '../../src/services/api';
-import { generateDocumentHTML } from '../../src/utils/documentHelpers';
+import { generateDocumentHTML, PDFBankInfo } from '../../src/utils/documentHelpers';
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 // Bank options are fetched from Tally (see useEffect in component)
@@ -359,13 +359,19 @@ export default function VoucherConfigScreen() {
         terms: cfg.terms.join('\n'),
         bankDetails: null,
       };
+      const bankInfo = cfg.bank ? {
+        bankName: cfg.bank !== 'Cash' ? cfg.bank : null,
+        accountNo: cfg.qrEnabled && cfg.qrType === 'bank' ? cfg.qrAccount || null : null,
+        ifsc:      cfg.qrEnabled && cfg.qrType === 'bank' ? cfg.qrIfsc || null : null,
+        upiId:     cfg.qrEnabled && cfg.qrType === 'upi'  ? cfg.qrUpiId || null : null,
+      } : null;
       const html = generateDocumentHTML(
         sampleDoc,
         companyLogoRef.current,
         cfg.format,
         cfg.terms,
         cfg.qrEnabled ? cfg.qrImage : null,
-        cfg.bank && cfg.bank !== 'Cash' ? cfg.bank : null,
+        bankInfo,
       );
       const { uri } = await Print.printToFileAsync({ html, base64: false });
       const canShare = await Sharing.isAvailableAsync();

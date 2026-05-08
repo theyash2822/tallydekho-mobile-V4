@@ -46,6 +46,21 @@ export function amountInWords(amount: number): string {
   return result + ' Only';
 }
 
+
+// ── Bank details HTML block (shared across all PDF formats) ──────────────────
+function _bankBlock(bankInfo?: PDFBankInfo | null, align: 'left' | 'right' = 'right'): string {
+  if (!bankInfo) return '';
+  const { bankName, accountNo, ifsc, upiId } = bankInfo;
+  if (!bankName && !accountNo && !ifsc && !upiId) return '';
+  const ta = align === 'right' ? 'text-align:right;' : '';
+  let rows = '';
+  if (bankName) rows += `<div style="font-size:9px;color:#444;${ta}"><b>Bank:</b> ${bankName}</div>`;
+  if (accountNo) rows += `<div style="font-size:9px;color:#444;${ta}"><b>A/C:</b> ${accountNo}</div>`;
+  if (ifsc) rows += `<div style="font-size:9px;color:#444;${ta}"><b>IFSC:</b> ${ifsc}</div>`;
+  if (upiId) rows += `<div style="font-size:9px;color:#444;${ta}"><b>UPI:</b> ${upiId}</div>`;
+  return `<div style="margin-bottom:6px;">${rows}</div>`;
+}
+
 // ── Document type config (label + brand color) ────────────────────────────────
 export const DOC_TYPE_CONFIG: Record<DocumentType, { label: string; color: string; bg: string }> = {
   sales_invoice:    { label: 'Tax Invoice',       color: '#2D7D46', bg: '#E8F5E9' },
@@ -65,9 +80,10 @@ export const DOC_TYPE_CONFIG: Record<DocumentType, { label: string; color: strin
 };
 
 // ── PDF HTML Template Generator ──────────────────────────────────────────────
-export function generateDocumentHTML(doc: VoucherDocument, logoUri?: string | null, format: 1 | 2 | 3 = 1, terms?: string[], qrImage?: string | null, bankName?: string | null): string {
-  if (format === 2) return _generateFormat2HTML(doc, logoUri, terms, qrImage, bankName);
-  if (format === 3) return _generateFormat3HTML(doc, logoUri, terms, qrImage, bankName);
+export interface PDFBankInfo { bankName?: string | null; accountNo?: string | null; ifsc?: string | null; upiId?: string | null; }
+export function generateDocumentHTML(doc: VoucherDocument, logoUri?: string | null, format: 1 | 2 | 3 = 1, terms?: string[], qrImage?: string | null, bankInfo?: PDFBankInfo | null): string {
+  if (format === 2) return _generateFormat2HTML(doc, logoUri, terms, qrImage, bankInfo);
+  if (format === 3) return _generateFormat3HTML(doc, logoUri, terms, qrImage, bankInfo);
   const cfg = DOC_TYPE_CONFIG[doc.documentType];
   const hasItems = !!(doc.items && doc.items.length > 0);
   const hasEntries = !!(doc.ledgerEntries && doc.ledgerEntries.length > 0);
@@ -266,7 +282,7 @@ ${mainTable}
       <div style="font-size:9px;text-align:right;color:#777">E. &amp; O.E</div>
       <br/>
       ${qrImage ? `<div style="text-align:right;margin-bottom:6px"><img src="${qrImage}" style="width:70px;height:70px;object-fit:contain" /></div>` : ''}
-      ${bankName && bankName !== 'Cash' ? `<div style="font-size:9px;color:#444;text-align:right;margin-bottom:8px">Bank: <b>${bankName}</b></div>` : ''}
+      ${_bankBlock(bankInfo, 'right')}
       <div style="text-align:right">
         <div style="font-size:11px">for <b>${doc.company?.name||''}</b></div>
         <br/><br/>
@@ -297,7 +313,7 @@ ${mainTable}
 
 
 // ── Format 2 — Modern layout ─────────────────────────────────────────────────
-function _generateFormat2HTML(doc: VoucherDocument, logoUri?: string | null, terms?: string[], qrImage?: string | null, bankName?: string | null): string {
+function _generateFormat2HTML(doc: VoucherDocument, logoUri?: string | null, terms?: string[], qrImage?: string | null, bankInfo?: PDFBankInfo | null): string {
   const cfg = DOC_TYPE_CONFIG[doc.documentType];
   const t = doc.totals;
   const hasItems = !!(doc.items && doc.items.length > 0);
@@ -450,7 +466,7 @@ function _generateFormat2HTML(doc: VoucherDocument, logoUri?: string | null, ter
     </div>
     <div style="text-align:center;min-width:150px;">
       ${qrImage ? `<img src="${qrImage}" style="width:60px;height:60px;object-fit:contain;margin-bottom:4px;display:block;margin-left:auto;margin-right:auto" />` : '<div style="height:40px;"></div>'}
-      ${bankName && bankName !== 'Cash' ? `<div style="font-size:9px;color:#aaa;margin-bottom:6px;">Bank: ${bankName}</div>` : ''}
+      ${_bankBlock(bankInfo, 'right')}
       <div style="border-top:1px solid #333;padding-top:6px;">
         <div style="font-size:10px;font-weight:bold;">for ${doc.company?.name || ''}</div>
         <div style="font-size:9px;color:#666;margin-top:2px;">Authorised Signatory</div>
@@ -463,7 +479,7 @@ function _generateFormat2HTML(doc: VoucherDocument, logoUri?: string | null, ter
 }
 
 // ── Format 3 — Detailed layout ────────────────────────────────────────────────
-function _generateFormat3HTML(doc: VoucherDocument, logoUri?: string | null, terms?: string[], qrImage?: string | null, bankName?: string | null): string {
+function _generateFormat3HTML(doc: VoucherDocument, logoUri?: string | null, terms?: string[], qrImage?: string | null, bankInfo?: PDFBankInfo | null): string {
   const cfg = DOC_TYPE_CONFIG[doc.documentType];
   const t = doc.totals;
   const hasItems = !!(doc.items && doc.items.length > 0);
@@ -628,7 +644,7 @@ ${mainTable}
       <div style="margin-top:24px;text-align:center;">
         <div style="font-size:10px;font-style:italic;color:#777;margin-bottom:8px;">for ${doc.company?.name || ''}</div>
         ${qrImage ? `<img src="${qrImage}" style="width:60px;height:60px;object-fit:contain;margin:0 auto 8px auto;display:block" />` : '<div style="width:60px;height:60px;border-radius:50%;border:1px dashed #aaa;margin:0 auto 8px auto;"></div>'}
-        ${bankName && bankName !== 'Cash' ? `<div style="font-size:9px;color:#777;margin-bottom:6px;">Bank: ${bankName}</div>` : ''}
+        ${_bankBlock(bankInfo, 'right')}
         <div style="border-top:1px solid #333;padding-top:5px;font-size:10px;font-weight:bold;">Authorised Signatory</div>
       </div>
     </td>

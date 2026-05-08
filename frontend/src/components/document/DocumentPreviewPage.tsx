@@ -12,7 +12,7 @@ import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 import { VoucherDocument } from '../../types/document';
-import { formatCurrency, amountInWords, DOC_TYPE_CONFIG, generateDocumentHTML } from '../../utils/documentHelpers';
+import { formatCurrency, amountInWords, DOC_TYPE_CONFIG, generateDocumentHTML, PDFBankInfo } from '../../utils/documentHelpers';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
 import { getUserSettings } from '../../services/api';
@@ -714,8 +714,13 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
       const format = ((vCfg?.format) ?? 1) as 1 | 2 | 3;
       const terms = (vCfg?.terms ?? []) as string[];
       const qrImage = (vCfg?.qrEnabled && vCfg?.qrImage) ? vCfg.qrImage : null;
-      const bankName = (vCfg?.bank && vCfg.bank !== 'Cash') ? vCfg.bank : null;
-      const html = generateDocumentHTML(doc, logoUriRef.current, format, terms, qrImage, bankName);
+      const bankInfo = vCfg?.bank ? {
+        bankName:  vCfg.bank !== 'Cash' ? vCfg.bank : null,
+        accountNo: vCfg.qrEnabled && vCfg.qrType === 'bank' ? vCfg.qrAccount || null : null,
+        ifsc:      vCfg.qrEnabled && vCfg.qrType === 'bank' ? vCfg.qrIfsc  || null : null,
+        upiId:     vCfg.qrEnabled && vCfg.qrType === 'upi'  ? vCfg.qrUpiId || null : null,
+      } : null;
+      const html = generateDocumentHTML(doc, logoUriRef.current, format, terms, qrImage, bankInfo);
       const { uri } = await Print.printToFileAsync({ html, base64: false });
       setLoading(false); // Reset BEFORE shareAsync (shareAsync blocks until sheet dismissed)
       const canShare = await Sharing.isAvailableAsync();
