@@ -18,7 +18,6 @@ import Header from '../../src/components/Header';
 import CashflowCard from '../../src/components/CashflowCard';
 import RecentActivity from '../../src/components/RecentActivity';
 import PairingBanner from '../../src/components/PairingBanner';
-import OfflineBadge from '../../src/components/OfflineBadge';
 import {
   getKPIStrip, getMetrics, getCashflow, getRecentActivity, getTallySyncStatus, getNotifications,
 } from '../../src/services/api';
@@ -43,7 +42,7 @@ const MOCK_VOICE_SEARCHES = ['Sales Invoice', 'Mehta Enterprises', 'Payment Rece
 export default function HomeScreen() {
   const router = useRouter();
   const { t } = useTranslation();
-  const { isPaired, isDesktopOnline, company, user, selectedFY } = useAuth();
+  const { isPaired, company, user, selectedFY } = useAuth();
   const companyGuid = company?.guid;
   const [activeFY, setActiveFY] = useState('');
   const [activeFilter, setActiveFilter] = useState<TimeFilter>('7D');
@@ -345,7 +344,7 @@ export default function HomeScreen() {
         {/* Tally Sync Banner */}
         {/* Status banners — one or the other, never both */}
         {!isPaired && <PairingBanner />}
-        {isPaired && !isDesktopOnline && <OfflineBadge />}
+        {/* OfflineBadge removed — was shown when desktop offline, but auto-sync keeps data fresh */}
         {apiError && <ErrorBanner message={apiError} onRetry={loadData} />}
 
         {/* KPI Carousel */}
