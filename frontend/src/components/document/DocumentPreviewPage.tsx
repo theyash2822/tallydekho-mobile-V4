@@ -710,10 +710,13 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
     setLoading(true);
     try {
       const configId = DOC_TYPE_TO_CONFIG_ID[doc.documentType];
-      const format = ((voucherConfigRef.current?.[configId]?.format) ?? 1) as 1 | 2 | 3;
-      const terms = (voucherConfigRef.current?.[configId]?.terms ?? []) as string[];
-      const html = generateDocumentHTML(doc, logoUriRef.current, format, terms);
-      const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
+      const vCfg = voucherConfigRef.current?.[configId];
+      const format = ((vCfg?.format) ?? 1) as 1 | 2 | 3;
+      const terms = (vCfg?.terms ?? []) as string[];
+      const qrImage = (vCfg?.qrEnabled && vCfg?.qrImage) ? vCfg.qrImage : null;
+      const bankName = (vCfg?.bank && vCfg.bank !== 'Cash') ? vCfg.bank : null;
+      const html = generateDocumentHTML(doc, logoUriRef.current, format, terms, qrImage, bankName);
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
       setLoading(false); // Reset BEFORE shareAsync (shareAsync blocks until sheet dismissed)
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {

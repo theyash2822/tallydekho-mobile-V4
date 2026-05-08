@@ -65,9 +65,9 @@ export const DOC_TYPE_CONFIG: Record<DocumentType, { label: string; color: strin
 };
 
 // ── PDF HTML Template Generator ──────────────────────────────────────────────
-export function generateDocumentHTML(doc: VoucherDocument, logoUri?: string | null, format: 1 | 2 | 3 = 1, terms?: string[]): string {
-  if (format === 2) return _generateFormat2HTML(doc, logoUri, terms);
-  if (format === 3) return _generateFormat3HTML(doc, logoUri, terms);
+export function generateDocumentHTML(doc: VoucherDocument, logoUri?: string | null, format: 1 | 2 | 3 = 1, terms?: string[], qrImage?: string | null, bankName?: string | null): string {
+  if (format === 2) return _generateFormat2HTML(doc, logoUri, terms, qrImage, bankName);
+  if (format === 3) return _generateFormat3HTML(doc, logoUri, terms, qrImage, bankName);
   const cfg = DOC_TYPE_CONFIG[doc.documentType];
   const hasItems = !!(doc.items && doc.items.length > 0);
   const hasEntries = !!(doc.ledgerEntries && doc.ledgerEntries.length > 0);
@@ -173,9 +173,8 @@ export function generateDocumentHTML(doc: VoucherDocument, logoUri?: string | nu
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <style>
-  @page { size: A4; margin: 15mm; }
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{font-family:Arial,sans-serif;font-size:11px;color:#000;padding:0;background:#fff;width:210mm;}
+  body{font-family:Arial,sans-serif;font-size:11px;color:#000;padding:14mm 14mm 14mm 14mm;background:#fff;}
   .page{width:100%;border:2px solid #000;}
   table{width:100%;border-collapse:collapse;}
 </style>
@@ -265,7 +264,9 @@ ${mainTable}
     </td>
     <td style="width:40%;border:1px solid #999;padding:6px 10px;vertical-align:top">
       <div style="font-size:9px;text-align:right;color:#777">E. &amp; O.E</div>
-      <br/><br/><br/>
+      <br/>
+      ${qrImage ? `<div style="text-align:right;margin-bottom:6px"><img src="${qrImage}" style="width:70px;height:70px;object-fit:contain" /></div>` : ''}
+      ${bankName && bankName !== 'Cash' ? `<div style="font-size:9px;color:#444;text-align:right;margin-bottom:8px">Bank: <b>${bankName}</b></div>` : ''}
       <div style="text-align:right">
         <div style="font-size:11px">for <b>${doc.company?.name||''}</b></div>
         <br/><br/>
@@ -296,7 +297,7 @@ ${mainTable}
 
 
 // ── Format 2 — Modern layout ─────────────────────────────────────────────────
-function _generateFormat2HTML(doc: VoucherDocument, logoUri?: string | null, terms?: string[]): string {
+function _generateFormat2HTML(doc: VoucherDocument, logoUri?: string | null, terms?: string[], qrImage?: string | null, bankName?: string | null): string {
   const cfg = DOC_TYPE_CONFIG[doc.documentType];
   const t = doc.totals;
   const hasItems = !!(doc.items && doc.items.length > 0);
@@ -364,9 +365,8 @@ function _generateFormat2HTML(doc: VoucherDocument, logoUri?: string | null, ter
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <style>
-  @page { size: A4; margin: 10mm 15mm; }
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{font-family:Arial,sans-serif;font-size:11px;color:#111;background:#fff;width:210mm;}
+  body{font-family:Arial,sans-serif;font-size:11px;color:#111;background:#fff;padding:12mm 14mm;}
   table{width:100%;border-collapse:collapse;}
 </style>
 </head><body>
@@ -449,7 +449,8 @@ function _generateFormat2HTML(doc: VoucherDocument, logoUri?: string | null, ter
       ${doc.company?.gstin ? `<br/>PAN: ${doc.company.gstin.slice(2,12)}` : ''}
     </div>
     <div style="text-align:center;min-width:150px;">
-      <div style="height:40px;"></div>
+      ${qrImage ? `<img src="${qrImage}" style="width:60px;height:60px;object-fit:contain;margin-bottom:4px;display:block;margin-left:auto;margin-right:auto" />` : '<div style="height:40px;"></div>'}
+      ${bankName && bankName !== 'Cash' ? `<div style="font-size:9px;color:#aaa;margin-bottom:6px;">Bank: ${bankName}</div>` : ''}
       <div style="border-top:1px solid #333;padding-top:6px;">
         <div style="font-size:10px;font-weight:bold;">for ${doc.company?.name || ''}</div>
         <div style="font-size:9px;color:#666;margin-top:2px;">Authorised Signatory</div>
@@ -462,7 +463,7 @@ function _generateFormat2HTML(doc: VoucherDocument, logoUri?: string | null, ter
 }
 
 // ── Format 3 — Detailed layout ────────────────────────────────────────────────
-function _generateFormat3HTML(doc: VoucherDocument, logoUri?: string | null, terms?: string[]): string {
+function _generateFormat3HTML(doc: VoucherDocument, logoUri?: string | null, terms?: string[], qrImage?: string | null, bankName?: string | null): string {
   const cfg = DOC_TYPE_CONFIG[doc.documentType];
   const t = doc.totals;
   const hasItems = !!(doc.items && doc.items.length > 0);
@@ -559,9 +560,8 @@ function _generateFormat3HTML(doc: VoucherDocument, logoUri?: string | null, ter
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <style>
-  @page { size: A4; margin: 12mm 15mm; }
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{font-family:Arial,sans-serif;font-size:11px;color:#000;background:#fff;width:210mm;}
+  body{font-family:Arial,sans-serif;font-size:11px;color:#000;background:#fff;padding:12mm 14mm;}
   .page{width:100%;border:2px solid #333;}
   table{width:100%;border-collapse:collapse;}
 </style>
@@ -627,7 +627,8 @@ ${mainTable}
       </div>
       <div style="margin-top:24px;text-align:center;">
         <div style="font-size:10px;font-style:italic;color:#777;margin-bottom:8px;">for ${doc.company?.name || ''}</div>
-        <div style="width:60px;height:60px;border-radius:50%;border:1px dashed #aaa;margin:0 auto 8px auto;"></div>
+        ${qrImage ? `<img src="${qrImage}" style="width:60px;height:60px;object-fit:contain;margin:0 auto 8px auto;display:block" />` : '<div style="width:60px;height:60px;border-radius:50%;border:1px dashed #aaa;margin:0 auto 8px auto;"></div>'}
+        ${bankName && bankName !== 'Cash' ? `<div style="font-size:9px;color:#777;margin-bottom:6px;">Bank: ${bankName}</div>` : ''}
         <div style="border-top:1px solid #333;padding-top:5px;font-size:10px;font-weight:bold;">Authorised Signatory</div>
       </div>
     </td>

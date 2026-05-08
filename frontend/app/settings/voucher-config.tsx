@@ -359,8 +359,15 @@ export default function VoucherConfigScreen() {
         terms: cfg.terms.join('\n'),
         bankDetails: null,
       };
-      const html = generateDocumentHTML(sampleDoc, companyLogoRef.current, cfg.format, cfg.terms);
-      const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
+      const html = generateDocumentHTML(
+        sampleDoc,
+        companyLogoRef.current,
+        cfg.format,
+        cfg.terms,
+        cfg.qrEnabled ? cfg.qrImage : null,
+        cfg.bank && cfg.bank !== 'Cash' ? cfg.bank : null,
+      );
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
         await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `${label} Preview` });
