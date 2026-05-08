@@ -721,7 +721,7 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
         upiId:     vCfg.qrEnabled && vCfg.qrType === 'upi'  ? vCfg.qrUpiId || null : null,
       } : null;
       const html = generateDocumentHTML(doc, logoUriRef.current, format, terms, qrImage, bankInfo);
-      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
       setLoading(false); // Reset BEFORE shareAsync (shareAsync blocks until sheet dismissed)
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {

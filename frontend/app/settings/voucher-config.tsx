@@ -373,7 +373,7 @@ export default function VoucherConfigScreen() {
         cfg.qrEnabled ? cfg.qrImage : null,
         bankInfo,
       );
-      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
         await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `${label} Preview` });
