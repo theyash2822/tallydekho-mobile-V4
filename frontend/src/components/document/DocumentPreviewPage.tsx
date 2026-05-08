@@ -15,6 +15,7 @@ import { VoucherDocument } from '../../types/document';
 import { formatCurrency, amountInWords, DOC_TYPE_CONFIG, generateDocumentHTML } from '../../utils/documentHelpers';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
+import { getUserSettings, getCompanyLogo } from '../../services/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Voucher config constants (mirrors voucher-config.tsx)
@@ -680,13 +681,24 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
     }
   }, [company?.guid]);
 
-  // Load voucher config from AsyncStorage once
+  // Load voucher config: backend first (cross-device), then AsyncStorage fallback
   useEffect(() => {
-    AsyncStorage.getItem(VOUCHER_CONFIG_KEY)
-      .then(json => {
-        if (json) voucherConfigRef.current = JSON.parse(json);
-      })
-      .catch(() => {});
+    getUserSettings().then((res: any) => {
+      const serverConfig = res?.data?.voucher_config;
+      if (serverConfig) {
+        const parsed = typeof serverConfig === 'string' ? JSON.parse(serverConfig) : serverConfig;
+        voucherConfigRef.current = parsed;
+        AsyncStorage.setItem(VOUCHER_CONFIG_KEY, JSON.stringify(parsed)).catch(() => {});
+      } else {
+        AsyncStorage.getItem(VOUCHER_CONFIG_KEY)
+          .then(json => { if (json) voucherConfigRef.current = JSON.parse(json); })
+          .catch(() => {});
+      }
+    }).catch(() => {
+      AsyncStorage.getItem(VOUCHER_CONFIG_KEY)
+        .then(json => { if (json) voucherConfigRef.current = JSON.parse(json); })
+        .catch(() => {});
+    });
   }, []);
 
   // Shared PDF helper — loading reset BEFORE shareAsync to prevent UI hang

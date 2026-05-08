@@ -109,7 +109,9 @@ export const getTallySyncStatus = () => get<any>('/tally-sync/status');
 export const unpairDevice     = () => post<any>('/tally-sync/unpair', {});
 export const getCompanies     = () => get<any>('/companies');
 export const getCompanyYears   = (companyGuid?: string) => get<any>(withCompany('/company/years', companyGuid));
-export const getCompanyProfile = (companyGuid?: string) => get<any>(withCompany('/company/profile', companyGuid));
+export const getCompanyProfile  = (companyGuid?: string) => get<any>(withCompany('/company/profile', companyGuid));
+export const uploadCompanyLogo  = (companyGuid: string, logo: string) => post<any>(`/company/${companyGuid}/logo`, { logo });
+export const getCompanyLogo     = (companyGuid: string) => get<any>(`/company/${companyGuid}/logo`);
 
 export const getNotificationSettings  = () => get<any>('/notification-settings');
 export const updateNotificationSettings = (data: any) => patch<any>('/notification-settings', data);

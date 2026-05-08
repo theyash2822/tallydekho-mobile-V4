@@ -12,7 +12,7 @@ import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { getCompanyProfile, updateCompanyProfile } from '../../src/services/api';
+import { getCompanyProfile, updateCompanyProfile, uploadCompanyLogo, getCompanyLogo } from '../../src/services/api';
 import { useTranslation } from 'react-i18next';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -192,16 +192,26 @@ export default function CompanyScreen() {
   const [state,           setState]           = useState('');
   const [showStatePicker, setShowStatePicker] = useState(false);
 
-  // Logo — load from AsyncStorage on mount
+  // Logo — load from backend (cross-device), fallback to AsyncStorage cache
   const [logoUri, setLogoUri] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
   const logoKey = company?.guid ? `company_logo_${company.guid}` : null;
 
   useEffect(() => {
-    if (!logoKey) return;
-    AsyncStorage.getItem(logoKey).then(uri => {
-      if (uri) setLogoUri(uri);
-    }).catch(() => {});
-  }, [logoKey]);
+    if (!company?.guid) return;
+    // Try backend first for cross-device sync
+    getCompanyLogo(company.guid).then((res: any) => {
+      const url = res?.data?.logo_url;
+      if (url) {
+        setLogoUri(url);
+        if (logoKey) AsyncStorage.setItem(logoKey, url).catch(() => {});
+      } else if (logoKey) {
+        AsyncStorage.getItem(logoKey).then(uri => { if (uri) setLogoUri(uri); }).catch(() => {});
+      }
+    }).catch(() => {
+      if (logoKey) AsyncStorage.getItem(logoKey).then(uri => { if (uri) setLogoUri(uri); }).catch(() => {});
+    });
+  }, [company?.guid]);
 
   const pickLogo = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -212,15 +222,17 @@ export default function CompanyScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      aspect: [1, 1],
       quality: 0.7,
-      base64: false,
+      base64: true,
     });
     if (!result.canceled && result.assets[0]) {
-      const uri = result.assets[0].uri;
-      setLogoUri(uri);
-      if (logoKey) {
-        await AsyncStorage.setItem(logoKey, uri).catch(() => {});
+      const asset = result.assets[0];
+      const dataUri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      setLogoUri(dataUri);
+      if (logoKey) AsyncStorage.setItem(logoKey, dataUri).catch(() => {});
+      if (company?.guid) {
+        setLogoUploading(true);
+        uploadCompanyLogo(company.guid, dataUri).catch(() => {}).finally(() => setLogoUploading(false));
       }
       markDirty();
     }
@@ -230,7 +242,7 @@ export default function CompanyScreen() {
   const handleSave = async () => {
     try {
       setSaving(true);
-      // Save logo locally (device-side storage until backend upload is built)
+      // Logo uploaded on pick — just refresh local cache
       if (logoKey && logoUri) await AsyncStorage.setItem(logoKey, logoUri).catch(() => {});
       // Save editable fields to backend
       if (company?.guid) {
@@ -283,15 +295,19 @@ export default function CompanyScreen() {
           <View style={s.logoSection}>
             <TouchableOpacity style={s.logoWrap} onPress={pickLogo} activeOpacity={0.85}>
               {logoUri ? (
-                <Image source={{ uri: logoUri }} style={s.logoImg} />
+                <Image source={{ uri: logoUri }} style={s.logoImg} resizeMode="contain" />
               ) : (
                 <View style={s.logoPlaceholder}>
-                  <Ionicons name="business-outline" size={34} color={COLORS.textTertiary} />
+                  <Text style={s.logoInitials}>
+                    {(company?.name || 'CO').replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase()}
+                  </Text>
                 </View>
               )}
-              <View style={s.cameraBadge}>
-                <Ionicons name="camera" size={13} color={COLORS.white} />
-              </View>
+              {logoUploading ? (
+                <View style={s.cameraBadge}><ActivityIndicator size="small" color={COLORS.white} /></View>
+              ) : (
+                <View style={s.cameraBadge}><Ionicons name="camera" size={13} color={COLORS.white} /></View>
+              )}
             </TouchableOpacity>
             <Text style={s.logoLabel}>{t('company.logo')}</Text>
             <Text style={s.logoHint}>{t('company.logoHint')}</Text>
@@ -510,14 +526,17 @@ const s = StyleSheet.create({
   },
   logoWrap: { position: 'relative', marginBottom: 8 },
   logoImg: {
-    width: 90, height: 90, borderRadius: 45,
+    width: 90, height: 90, borderRadius: 12,
     backgroundColor: COLORS.borderDefault,
   },
   logoPlaceholder: {
-    width: 90, height: 90, borderRadius: 45,
+    width: 90, height: 90, borderRadius: 12,
     backgroundColor: COLORS.cardBg,
     borderWidth: 2, borderColor: COLORS.borderDefault, borderStyle: 'dashed',
     alignItems: 'center', justifyContent: 'center',
+  },
+  logoInitials: {
+    fontSize: 28, fontWeight: '800', color: COLORS.textSecondary, letterSpacing: 1,
   },
   cameraBadge: {
     position: 'absolute', bottom: 2, right: 2,

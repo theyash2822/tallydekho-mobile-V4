@@ -186,7 +186,10 @@ export function generateDocumentHTML(doc: VoucherDocument, logoUri?: string | nu
 <table>
   <tr>
     <td style="width:50%;border:1px solid #999;padding:8px 10px;vertical-align:top">
-      ${logoUri ? `<img src="${logoUri}" style="max-height:60px;max-width:130px;object-fit:contain;display:block;margin-bottom:6px" />` : ''}
+      ${logoUri
+        ? `<img src="${logoUri}" style="max-height:70px;max-width:140px;object-fit:contain;display:block;margin-bottom:6px" />`
+        : `<div style="display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:8px;background:#F0F0F0;font-size:18px;font-weight:800;color:#555;margin-bottom:6px">${(doc.company?.name||'CO').replace(/[^A-Za-z]/g,'').slice(0,2).toUpperCase()}</div>`
+      }
       <div style="font-size:14px;font-weight:bold">${doc.company?.name || ''}</div>
       <div style="font-size:9px;color:#444;margin-top:3px">${(doc.company?.address || '').replace(/,/g,',\n')}</div>
       ${doc.company?.gstin ? `<div style="font-size:9px;margin-top:3px"><b>GSTIN/UIN:</b> ${doc.company.gstin}</div>` : ''}
@@ -372,7 +375,10 @@ function _generateFormat2HTML(doc: VoucherDocument, logoUri?: string | null, ter
 <div style="background:#1A1A1A;color:#fff;padding:20px 24px;">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;">
     <div style="flex:1;">
-      ${logoUri ? `<img src="${logoUri}" style="max-height:48px;max-width:100px;object-fit:contain;display:block;margin-bottom:8px;" />` : ''}
+      ${logoUri
+        ? `<img src="${logoUri}" style="max-height:56px;max-width:120px;object-fit:contain;display:block;margin-bottom:8px;" />`
+        : `<div style="display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:6px;background:rgba(255,255,255,0.15);font-size:16px;font-weight:800;color:#fff;margin-bottom:8px">${(doc.company?.name||'CO').replace(/[^A-Za-z]/g,'').slice(0,2).toUpperCase()}</div>`
+      }
       <div style="font-size:17px;font-weight:bold;line-height:1.2;">${doc.company?.name || ''}</div>
       <div style="font-size:9px;color:#aaa;margin-top:4px;line-height:1.5;">${doc.company?.address || ''}</div>
       ${doc.company?.gstin ? `<div style="font-size:9px;color:#ccc;margin-top:3px;">GSTIN: ${doc.company.gstin}</div>` : ''}
@@ -566,7 +572,10 @@ function _generateFormat3HTML(doc: VoucherDocument, logoUri?: string | null, ter
 <table>
   <tr>
     <td style="width:50%;border:1px solid #ccc;padding:10px 12px;vertical-align:top;border-right:2px solid #333;">
-      ${logoUri ? `<img src="${logoUri}" style="max-height:60px;max-width:130px;object-fit:contain;display:block;margin-bottom:8px;" />` : ''}
+      ${logoUri
+        ? `<img src="${logoUri}" style="max-height:60px;max-width:130px;object-fit:contain;display:block;margin-bottom:8px;" />`
+        : `<div style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:8px;background:#F0F0F0;font-size:16px;font-weight:800;color:#555;margin-bottom:8px">${(doc.company?.name||'CO').replace(/[^A-Za-z]/g,'').slice(0,2).toUpperCase()}</div>`
+      }
       <div style="font-size:15px;font-weight:bold;margin-bottom:3px;">${doc.company?.name || ''}</div>
       <div style="font-size:9px;color:#444;line-height:1.5;margin-bottom:4px;">${(doc.company?.address || '').replace(/,/g, ', ')}</div>
       ${doc.company?.gstin ? `<div style="font-size:9px;margin-top:3px;"><b>GSTIN/UIN:</b> ${doc.company.gstin}</div>` : ''}
