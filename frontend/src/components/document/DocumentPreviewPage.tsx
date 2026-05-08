@@ -15,7 +15,7 @@ import { VoucherDocument } from '../../types/document';
 import { formatCurrency, amountInWords, DOC_TYPE_CONFIG, generateDocumentHTML } from '../../utils/documentHelpers';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
-import { getUserSettings, getCompanyLogo } from '../../services/api';
+import { getUserSettings } from '../../services/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Voucher config constants (mirrors voucher-config.tsx)
