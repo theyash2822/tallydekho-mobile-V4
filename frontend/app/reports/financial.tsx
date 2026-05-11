@@ -9,13 +9,48 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import DateRangePickerModal, { fmtDMY } from '../../src/components/DateRangePickerModal';
 import { getFullFinancialReport } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
-import { useSettings } from '../../src/context/SettingsContext';
 
-// (Mock data removed — all data comes from real API)
+// ── Mock Data (Tally Prime format) — shown when no real data available ───────
+const MOCK_PL = {
+  openingStock:     150000,
+  closingStock:    7400000,
+  purchase:         150000,
+  sales:           7400000,
+  directExpense:    150000,
+  indirectExpense: 7400000,
+  indirectIncome:   150000,
+  directIncome:    7400000,
+  grossProfit:      150000,
+  grossLoss:       7400000,
+  netProfit:        150000,
+  netLoss:         7400000,
+};
+
+const MOCK_LIABILITIES = [
+  { name: 'Capital Account',        opening: 500000, current: 520000 },
+  { name: 'Current Liability',      opening: 120000, current: 100000 },
+  { name: 'Loan Liabilities',       opening: 300000, current: 280000 },
+  { name: 'Miscellaneous Expenses', opening:  25000, current:  30000 },
+  { name: 'Profit & Loss',          opening:      0, current:  40000 },
+];
+const MOCK_TOTAL_LIAB = 970000;
+
+const MOCK_ASSETS = [
+  { name: 'Fixed Asset',                   amount: 600000 },
+  { name: 'Current Assets',                amount: 250000 },
+  { name: 'Investments',                   amount:  50000 },
+  { name: 'Difference in Opening Balance', amount:  70000 },
+];
+const MOCK_TOTAL_ASSETS = 970000;
+
+const MOCK_TRIAL = [
+  { left: 'Current Assets',  leftAmt: 250000, right: 'Miscellaneous Expenses', rightAmt:  15000 },
+  { left: 'Sales Account',   leftAmt: 480000, right: 'Purchase Accounts',      rightAmt: 320000 },
+];
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function fmtInr(n: number): string {
-  return '\u20b9' + n.toLocaleString('en-IN');
+  return '₹' + Math.abs(n).toLocaleString('en-IN');
 }
 
 type SectionKey = 'pl' | 'bs' | 'tb';
@@ -82,18 +117,35 @@ const acc = StyleSheet.create({
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Profit & Loss — real data summary
+// Profit & Loss — 2-column card grid
 // ══════════════════════════════════════════════════════════════════════════════
 function PLCardGrid({ pl }: { pl?: any }) {
-  const income   = pl?.totalIncome   ?? 0;
-  const expenses = pl?.totalExpenses ?? 0;
-  const net      = pl?.netProfit     ?? (income - expenses);
-  const rows = [
-    { left: 'Total Income',   leftAmt: income,   right: 'Total Expenses', rightAmt: expenses },
-    { left: net >= 0 ? 'Net Profit' : 'Net Loss', leftAmt: Math.abs(net), right: 'Income Ledgers', rightAmt: pl?.income?.length ?? 0 },
+  // Use real data if available, otherwise mock
+  const hasRealData = pl && (pl.sales > 0 || pl.purchase > 0 || pl.openingStock > 0);
+
+  const rows = hasRealData ? [
+    { left: 'Opening Stock',   leftAmt: pl.openingStock   ?? 0, right: 'Closing Stock',    rightAmt: pl.closingStock   ?? 0 },
+    { left: 'Purchase',        leftAmt: pl.purchase       ?? 0, right: 'Sales',            rightAmt: pl.sales          ?? 0 },
+    { left: 'Direct Expense',  leftAmt: pl.directExpenses ?? 0, right: 'Indirect Expense', rightAmt: pl.indirectExpenses ?? 0 },
+    { left: 'Indirect Income', leftAmt: pl.indirectIncome ?? 0, right: 'Direct Income',    rightAmt: pl.directIncome   ?? 0 },
+    { left: 'Gross Profit',    leftAmt: pl.grossProfit    ?? 0, right: 'Gross Loss',       rightAmt: pl.grossLoss      ?? 0 },
+    { left: 'Net Profit',      leftAmt: pl.netProfit      ?? 0, right: 'Net Loss',         rightAmt: pl.netLoss        ?? 0 },
+  ] : [
+    { left: 'Opening Stock',   leftAmt: MOCK_PL.openingStock,   right: 'Closing Stock',    rightAmt: MOCK_PL.closingStock    },
+    { left: 'Purchase',        leftAmt: MOCK_PL.purchase,       right: 'Sales',            rightAmt: MOCK_PL.sales           },
+    { left: 'Direct Expense',  leftAmt: MOCK_PL.directExpense,  right: 'Indirect Expense', rightAmt: MOCK_PL.indirectExpense },
+    { left: 'Indirect Income', leftAmt: MOCK_PL.indirectIncome, right: 'Direct Income',    rightAmt: MOCK_PL.directIncome   },
+    { left: 'Gross Profit',    leftAmt: MOCK_PL.grossProfit,    right: 'Gross Loss',       rightAmt: MOCK_PL.grossLoss      },
+    { left: 'Net Profit',      leftAmt: MOCK_PL.netProfit,      right: 'Net Loss',         rightAmt: MOCK_PL.netLoss        },
   ];
+
   return (
     <View style={plg.grid}>
+      {!hasRealData && (
+        <View style={plg.demoBanner}>
+          <Text style={plg.demoTxt}>Showing sample data — sync Tally to see real figures</Text>
+        </View>
+      )}
       {rows.map((row, i) => (
         <View key={i} style={plg.row}>
           <View style={plg.card}>
@@ -104,12 +156,6 @@ function PLCardGrid({ pl }: { pl?: any }) {
             <Text style={plg.lbl}>{row.right}</Text>
             <Text style={plg.val}>{fmtInr(row.rightAmt)}</Text>
           </View>
-        </View>
-      ))}
-      {pl?.income?.slice(0, 5).map((l: any, i: number) => (
-        <View key={`inc-${i}`} style={[plg.row]}>
-          <View style={[plg.card, { flex: 2 }]}><Text style={plg.lbl} numberOfLines={1}>{l.name}</Text></View>
-          <View style={[plg.card, { flex: 1 }]}><Text style={[plg.val, { color: COLORS.positive }]}>{fmtInr(l.amount)}</Text></View>
         </View>
       ))}
     </View>
@@ -130,6 +176,16 @@ const plg = StyleSheet.create({
   },
   lbl: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginBottom: 5 },
   val: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  demoBanner: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: RADIUS.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginBottom: SPACING.xs,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  demoTxt: { fontSize: TYPOGRAPHY.xs, color: '#92400E', textAlign: 'center' },
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -137,14 +193,19 @@ const plg = StyleSheet.create({
 // ══════════════════════════════════════════════════════════════════════════════
 function BalanceSheetSection({ bs }: { bs?: any }) {
   const [tab, setTab] = useState<'liability' | 'assets'>('liability');
-  const liabilities = bs?.liabilities ?? [];
-  const assets      = bs?.assets      ?? [];
-  const totalLiab   = bs?.totalLiabilities ?? 0;
-  const totalAssets = bs?.totalAssets      ?? 0;
+
+  const hasRealData = bs && (bs.assets?.length > 0 || bs.liabilities?.length > 0);
+  const liabilities = hasRealData
+    ? (bs.liabilities || []).map((l: any) => ({ name: l.name, opening: 0, current: l.amount ?? l.closing_balance ?? 0 }))
+    : MOCK_LIABILITIES;
+  const assets = hasRealData
+    ? (bs.assets || []).map((l: any) => ({ name: l.name, amount: l.amount ?? l.closing_balance ?? 0 }))
+    : MOCK_ASSETS;
+  const totalLiab   = hasRealData ? (bs.totalLiabilities ?? 0) : MOCK_TOTAL_LIAB;
+  const totalAssets = hasRealData ? (bs.totalAssets ?? 0)      : MOCK_TOTAL_ASSETS;
 
   return (
     <View>
-      {/* Tab switcher */}
       <View style={bss.tabs}>
         {(['liability', 'assets'] as const).map(t => (
           <TouchableOpacity
@@ -160,50 +221,46 @@ function BalanceSheetSection({ bs }: { bs?: any }) {
         ))}
       </View>
 
-      {/* Table */}
       <View style={bss.table}>
         {tab === 'liability' ? (
           <>
-            {/* Header row */}
             <View style={[bss.tableRow, bss.hdrRow]}>
               <Text style={[bss.cell, bss.hdrTxt, { flex: 2 }]}>Liability</Text>
               <Text style={[bss.cell, bss.hdrTxt, bss.right, { flex: 1.2 }]}>Opening Bal.</Text>
               <Text style={[bss.cell, bss.hdrTxt, bss.right, { flex: 1.3 }]}>Current Period</Text>
             </View>
-            {/* Data rows */}
             {liabilities.map((row: any, i: number) => (
               <View key={i} style={[bss.tableRow, i % 2 !== 0 && bss.altRow]}>
                 <Text style={[bss.cell, bss.rowName, { flex: 2 }]} numberOfLines={1}>{row.name}</Text>
+                <Text style={[bss.cell, bss.rowVal, bss.right, { flex: 1.2 }]}>
+                  {row.opening === 0 ? '₹0' : fmtInr(row.opening)}
+                </Text>
                 <Text style={[bss.cell, bss.rowVal, bss.right, { flex: 1.3 }]}>
-                  {fmtInr(row.amount ?? row.current ?? 0)}
+                  {fmtInr(row.current)}
                 </Text>
               </View>
             ))}
-            {/* Total row */}
             <View style={[bss.tableRow, bss.totalRow]}>
               <Text style={[bss.cell, bss.totalName, { flex: 2 }]}>Total Liabilities</Text>
-              <Text style={[bss.cell, bss.totalVal, bss.right, { flex: 1.3 }]}>
+              <Text style={[bss.cell, bss.totalVal, bss.right, { flex: 2.5 }]}>
                 {fmtInr(totalLiab)}
               </Text>
             </View>
           </>
         ) : (
           <>
-            {/* Header row */}
             <View style={[bss.tableRow, bss.hdrRow]}>
               <Text style={[bss.cell, bss.hdrTxt, { flex: 2 }]}>Asset</Text>
               <Text style={[bss.cell, bss.hdrTxt, bss.right, { flex: 1 }]}>Amount (INR)</Text>
             </View>
-            {/* Data rows */}
             {assets.map((row: any, i: number) => (
               <View key={i} style={[bss.tableRow, i % 2 !== 0 && bss.altRow]}>
                 <Text style={[bss.cell, bss.rowName, { flex: 2 }]} numberOfLines={1}>{row.name}</Text>
                 <Text style={[bss.cell, bss.rowVal, bss.right, { flex: 1 }]}>
-                  {fmtInr(row.amount ?? 0)}
+                  {fmtInr(row.amount)}
                 </Text>
               </View>
             ))}
-            {/* Total row */}
             <View style={[bss.tableRow, bss.totalRow]}>
               <Text style={[bss.cell, bss.totalName, { flex: 2 }]}>Total Assets</Text>
               <Text style={[bss.cell, bss.totalVal, bss.right, { flex: 1 }]}>
@@ -231,7 +288,6 @@ const bss = StyleSheet.create({
   tabActive:   { backgroundColor: COLORS.brandPrimary },
   tabTxt:      { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
   tabTxtActive:{ color: COLORS.white, fontWeight: '700' },
-
   table: {
     borderRadius: RADIUS.md,
     borderWidth: 1,
@@ -255,7 +311,6 @@ const bss = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: COLORS.borderDefault,
   },
-
   cell:      { fontSize: TYPOGRAPHY.sm },
   right:     { textAlign: 'right' },
   hdrTxt:    { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.3 },
@@ -266,33 +321,50 @@ const bss = StyleSheet.create({
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Trial Balance — 2-column card grid (4 cards, 2 rows)
+// Trial Balance — 2-column card grid
 // ══════════════════════════════════════════════════════════════════════════════
 function TrialBalanceGrid({ tb }: { tb?: any }) {
-  const ledgers     = tb?.ledgers    ?? [];
-  const totalDebit  = tb?.totalDebit  ?? 0;
-  const totalCredit = tb?.totalCredit ?? 0;
-  if (ledgers.length === 0) {
+  const hasRealData = tb?.ledgers?.length > 0;
+
+  if (!hasRealData) {
     return (
       <View style={tbg.grid}>
-        <Text style={{ color: COLORS.textSecondary, textAlign: 'center', padding: 16 }}>No trial balance data</Text>
+        {MOCK_TRIAL.map((row, i) => (
+          <View key={i} style={tbg.row}>
+            <View style={tbg.card}>
+              <Text style={tbg.lbl}>{row.left}</Text>
+              <Text style={tbg.val}>{fmtInr(row.leftAmt)}</Text>
+            </View>
+            <View style={tbg.card}>
+              <Text style={tbg.lbl}>{row.right}</Text>
+              <Text style={tbg.val}>{fmtInr(row.rightAmt)}</Text>
+            </View>
+          </View>
+        ))}
       </View>
     );
   }
+
+  // Real data: show debit/credit columns
   return (
-    <View style={tbg.grid}>
-      <View style={[tbg.row, { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, paddingBottom: 8, marginBottom: 4 }]}>
-        <View style={tbg.card}><Text style={tbg.lbl}>Total Debit</Text><Text style={[tbg.val, { color: COLORS.negative }]}>{fmtInr(totalDebit)}</Text></View>
-        <View style={tbg.card}><Text style={tbg.lbl}>Total Credit</Text><Text style={[tbg.val, { color: COLORS.positive }]}>{fmtInr(totalCredit)}</Text></View>
+    <View style={tbg.table}>
+      <View style={[tbg.tableRow, tbg.hdrRow]}>
+        <Text style={[tbg.cell, tbg.hdrTxt, { flex: 2 }]}>Ledger</Text>
+        <Text style={[tbg.cell, tbg.hdrTxt, tbg.right, { flex: 1 }]}>Debit</Text>
+        <Text style={[tbg.cell, tbg.hdrTxt, tbg.right, { flex: 1 }]}>Credit</Text>
       </View>
-      {ledgers.slice(0, 10).map((l: any, i: number) => (
-        <View key={i} style={tbg.row}>
-          <View style={[tbg.card, { flex: 2 }]}><Text style={tbg.lbl} numberOfLines={1}>{l.name}</Text></View>
-          <View style={tbg.card}><Text style={tbg.lbl}>Dr</Text><Text style={tbg.val}>{fmtInr(l.debit)}</Text></View>
-          <View style={tbg.card}><Text style={tbg.lbl}>Cr</Text><Text style={tbg.val}>{fmtInr(l.credit)}</Text></View>
+      {(tb.ledgers || []).slice(0, 50).map((l: any, i: number) => (
+        <View key={i} style={[tbg.tableRow, i % 2 !== 0 && tbg.altRow]}>
+          <Text style={[tbg.cell, tbg.rowName, { flex: 2 }]} numberOfLines={1}>{l.name}</Text>
+          <Text style={[tbg.cell, tbg.rowVal, tbg.right, { flex: 1 }]}>{l.debit > 0 ? fmtInr(l.debit) : '-'}</Text>
+          <Text style={[tbg.cell, tbg.rowVal, tbg.right, { flex: 1 }]}>{l.credit > 0 ? fmtInr(l.credit) : '-'}</Text>
         </View>
       ))}
-
+      <View style={[tbg.tableRow, tbg.totalRow]}>
+        <Text style={[tbg.cell, tbg.totalName, { flex: 2 }]}>Total</Text>
+        <Text style={[tbg.cell, tbg.totalVal, tbg.right, { flex: 1 }]}>{fmtInr(tb.totalDebit ?? 0)}</Text>
+        <Text style={[tbg.cell, tbg.totalVal, tbg.right, { flex: 1 }]}>{fmtInr(tb.totalCredit ?? 0)}</Text>
+      </View>
     </View>
   );
 }
@@ -311,6 +383,19 @@ const tbg = StyleSheet.create({
   },
   lbl: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginBottom: 5 },
   val: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  // Table styles for real data
+  table: { borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
+  tableRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 10 },
+  hdrRow: { backgroundColor: COLORS.pageBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  altRow: { backgroundColor: COLORS.pageBg },
+  totalRow: { backgroundColor: COLORS.activeBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
+  cell: { fontSize: TYPOGRAPHY.sm },
+  right: { textAlign: 'right' },
+  hdrTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.3 },
+  rowName: { color: COLORS.textPrimary, fontWeight: '500' },
+  rowVal: { color: COLORS.textPrimary, fontWeight: '600' },
+  totalName: { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
+  totalVal: { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -318,38 +403,46 @@ const tbg = StyleSheet.create({
 // ══════════════════════════════════════════════════════════════════════════════
 export default function FinancialReportScreen() {
   const router = useRouter();
-  const { company } = useAuth();
+  const { company: selectedCompany, selectedFY } = useAuth();
 
-  // Accordion — 'pl' open by default
   const [openSection, setOpenSection] = useState<SectionKey | null>('pl');
   const toggleSection = (k: SectionKey) =>
     setOpenSection(prev => (prev === k ? null : k));
 
-  // Date range — default to current FY (Apr 1 → Mar 31)
-  const today     = new Date();
-  const fyYear    = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1;
-  const fyStart   = new Date(fyYear, 3, 1);
-  const fyEnd     = new Date(fyYear + 1, 2, 31);
+  const today   = new Date();
+  const fyYear  = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1;
+  const fyStart = new Date(fyYear, 3, 1);
+  const fyEnd   = new Date(fyYear + 1, 2, 31);
   const [fromDate, setFromDate]           = useState(fmtDMY(fyStart));
   const [toDate,   setToDate]             = useState(fmtDMY(fyEnd));
   const [showDateSheet, setShowDateSheet] = useState(false);
 
-  // Real financial data from backend
-  const [reportData, setReportData] = useState<any>(null);
-  const [loading, setLoading]       = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [plData, setPlData]   = useState<any>(null);
+  const [bsData, setBsData]   = useState<any>(null);
+  const [tbData, setTbData]   = useState<any>(null);
+  const [error,  setError]    = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    if (!selectedCompany?.guid) return;
     setLoading(true);
-    getFullFinancialReport(company?.guid).then((res: any) => {
-      if (!cancelled && res?.success && res.data) setReportData(res.data);
-    }).catch(() => {}).finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [company?.guid]);
+    setError(null);
+    getFullFinancialReport(selectedCompany.guid)
+      .then((res: any) => {
+        const d = res?.data;
+        if (d?.pl)           setPlData(d.pl);
+        if (d?.bs)           setBsData(d.bs);
+        if (d?.trialBalance) setTbData(d.trialBalance);
+      })
+      .catch((err: any) => {
+        setError(err?.message || 'Failed to load financial data');
+      })
+      .finally(() => setLoading(false));
+  }, [selectedCompany?.guid, selectedFY?.finYear]);
 
   return (
     <SafeAreaView style={s.safe}>
-      {/* ── Header ──────────────────────────────────────────────────── */}
+      {/* ── Header ── */}
       <View style={s.header}>
         <TouchableOpacity style={s.iconBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
@@ -360,71 +453,62 @@ export default function FinancialReportScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ── Date range strip ────────────────────────────────────────── */}
+      {/* ── Date range strip ── */}
       <TouchableOpacity style={s.dateStrip} onPress={() => setShowDateSheet(true)} activeOpacity={0.8}>
         <Ionicons name="calendar-outline" size={13} color={COLORS.textTertiary} />
         <Text style={s.dateStripTxt}>{fromDate}{'  →  '}{toDate}</Text>
         <Ionicons name="chevron-down" size={13} color={COLORS.textTertiary} />
       </TouchableOpacity>
 
-      {/* ── Scroll content ──────────────────────────────────────────── */}
+      {/* ── Error banner ── */}
+      {error && (
+        <View style={s.errorBanner}>
+          <Text style={s.errorTxt}>⚠️ {error}</Text>
+        </View>
+      )}
+
+      {/* ── Loading ── */}
+      {loading && (
+        <View style={s.loadingRow}>
+          <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+          <Text style={s.loadingTxt}>Loading financial data…</Text>
+        </View>
+      )}
+
+      {/* ── Scroll content ── */}
       <ScrollView
         style={s.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingTop: SPACING.md, paddingBottom: 60 }}
       >
-        {/* 1. Profit & Loss */}
         <AccSection
           sectionKey="pl"
           title="Profit & Loss"
           open={openSection === 'pl'}
           onToggle={toggleSection}
         >
-          {loading ? (
-            <ActivityIndicator color={COLORS.brandPrimary} style={{ padding: 20 }} />
-          ) : !reportData?.pl ? (
-            <View style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-              <Text style={{ fontSize: 14, color: COLORS.textSecondary, textAlign: 'center' }}>
-                No financial data — sync your Tally data first
-              </Text>
-            </View>
-          ) : (
-            <PLCardGrid pl={reportData?.pl} />
-          )}
+          <PLCardGrid pl={plData} />
         </AccSection>
 
-        {/* 2. Balance Sheet */}
         <AccSection
           sectionKey="bs"
           title="Balance Sheet"
           open={openSection === 'bs'}
           onToggle={toggleSection}
         >
-          {loading ? (
-            <ActivityIndicator color={COLORS.brandPrimary} style={{ padding: 20 }} />
-          ) : !reportData?.bs ? (
-            <View style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
-              <Text style={{ fontSize: 14, color: COLORS.textSecondary, textAlign: 'center' }}>
-                No financial data — sync your Tally data first
-              </Text>
-            </View>
-          ) : (
-            <BalanceSheetSection bs={reportData?.bs} />
-          )}
+          <BalanceSheetSection bs={bsData} />
         </AccSection>
 
-        {/* 3. Trial Balance */}
         <AccSection
           sectionKey="tb"
           title="Trial Balance"
           open={openSection === 'tb'}
           onToggle={toggleSection}
         >
-          {loading ? <ActivityIndicator color={COLORS.brandPrimary} style={{ padding: 20 }} /> : <TrialBalanceGrid tb={reportData?.trialBalance} />}
+          <TrialBalanceGrid tb={tbData} />
         </AccSection>
       </ScrollView>
 
-      {/* ── Date Range Picker (shared full-calendar component) ── */}
       <DateRangePickerModal
         visible={showDateSheet}
         fromDate={fromDate}
@@ -456,4 +540,15 @@ const s = StyleSheet.create({
   },
   dateStripTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
   scroll: { flex: 1 },
+  errorBanner: {
+    backgroundColor: '#FEF2F2', borderBottomWidth: 1, borderBottomColor: '#FECACA',
+    paddingHorizontal: SPACING.md, paddingVertical: 8,
+  },
+  errorTxt: { fontSize: TYPOGRAPHY.xs, color: '#DC2626' },
+  loadingRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: SPACING.md, paddingVertical: 10,
+    backgroundColor: COLORS.cardBg,
+  },
+  loadingTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
 });
