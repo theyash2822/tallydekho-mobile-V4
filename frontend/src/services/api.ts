@@ -225,7 +225,7 @@ export const createParty           = (payload: any) => tallyPost<any>('/master/p
 export const getReports          = (companyGuid?: string) => get<any>(withCompany('/reports/financial', companyGuid));
 export const getFinancialData    = (companyGuid?: string, from?: string, to?: string) => get<any>(withCompany('/reports/financial', companyGuid, from && to ? { from, to } : {}));
 export const getFinancialReport  = (companyGuid?: string, from?: string, to?: string) => get<any>(withCompany('/reports/financial-report', companyGuid, from && to ? { from, to } : {}));
-export const getFullFinancialReport = (companyGuid?: string) => get<any>(withCompany('/reports/pl-bs', companyGuid));
+export const getFullFinancialReport = (companyGuid?: string, fy?: string) => get<any>(withCompany('/reports/pl-bs', companyGuid, fy ? { fy } : undefined));
 export const getGSTReport        = (companyGuid?: string, from?: string, to?: string) => get<any>(withCompany('/reports/gst', companyGuid, from && to ? { from, to } : {}));
 
 // ══════════════════════════════════════════════════════════════

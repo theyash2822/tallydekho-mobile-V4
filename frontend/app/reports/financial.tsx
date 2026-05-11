@@ -427,7 +427,7 @@ export default function FinancialReportScreen() {
     if (!selectedCompany?.guid) return;
     setLoading(true);
     setError(null);
-    getFullFinancialReport(selectedCompany.guid)
+    getFullFinancialReport(selectedCompany.guid, selectedFY?.finYear)
       .then((res: any) => {
         const d = res?.data;
         if (d?.pl)           setPlData(d.pl);
