@@ -449,9 +449,17 @@ export default function FinancialReportScreen() {
     if (!selectedCompany?.guid) return;
     setLoading(true);
     setError(null);
-    // Pass from/to dates so backend filters to exact date range within the FY
-    const from = toISO(fromDate);
-    const to   = toISO(toDate);
+
+    // Only pass custom from/to when user has explicitly changed the date range
+    // i.e., dates differ from the full FY range
+    // When FY changes, dates may not have reset yet (race condition) — use fy only
+    const fyFromDMY = fmtDMY(new Date(fyStartISO + 'T00:00:00'));
+    const fyToDMY   = fmtDMY(new Date(fyEndISO   + 'T00:00:00'));
+    const isCustomRange = fromDate !== fyFromDMY || toDate !== fyToDMY;
+
+    const from = isCustomRange ? toISO(fromDate) : undefined;
+    const to   = isCustomRange ? toISO(toDate)   : undefined;
+
     getFullFinancialReport(selectedCompany.guid, selectedFY?.finYear, from, to)
       .then((res: any) => {
         const d = res?.data;
