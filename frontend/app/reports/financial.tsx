@@ -195,15 +195,20 @@ const plg = StyleSheet.create({
 function BalanceSheetSection({ bs }: { bs?: any }) {
   const [tab, setTab] = useState<'liability' | 'assets'>('liability');
 
-  const hasRealData = bs && (bs.assets?.length > 0 || bs.liabilities?.length > 0);
-  const liabilities = hasRealData
-    ? (bs.liabilities || []).map((l: any) => ({ name: l.name, opening: 0, current: l.amount ?? l.closing_balance ?? 0 }))
-    : MOCK_LIABILITIES;
-  const assets = hasRealData
-    ? (bs.assets || []).map((l: any) => ({ name: l.name, amount: l.amount ?? l.closing_balance ?? 0 }))
-    : MOCK_ASSETS;
-  const totalLiab   = hasRealData ? (bs.totalLiabilities ?? 0) : MOCK_TOTAL_LIAB;
-  const totalAssets = hasRealData ? (bs.totalAssets ?? 0)      : MOCK_TOTAL_ASSETS;
+  // Always use real data — no mock fallback (mock data was removed per Strict Production Data Rule)
+  const liabilities = (bs?.liabilities || []).map((l: any) => ({
+    name:    l.name,
+    parent:  l.parent,
+    opening: 0, // opening balance not yet available per ledger
+    current: Math.abs(parseFloat(l.amount ?? l.closing_balance ?? 0)),
+  }));
+  const assets = (bs?.assets || []).map((l: any) => ({
+    name:   l.name,
+    parent: l.parent,
+    amount: Math.abs(parseFloat(l.amount ?? l.closing_balance ?? 0)),
+  }));
+  const totalLiab   = Math.abs(bs?.totalLiabilities ?? 0);
+  const totalAssets = Math.abs(bs?.totalAssets      ?? 0);
 
   return (
     <View>
@@ -230,12 +235,17 @@ function BalanceSheetSection({ bs }: { bs?: any }) {
               <Text style={[bss.cell, bss.hdrTxt, bss.right, { flex: 1.2 }]}>Opening Bal.</Text>
               <Text style={[bss.cell, bss.hdrTxt, bss.right, { flex: 1.3 }]}>Current Period</Text>
             </View>
+            {liabilities.length === 0 && (
+              <View style={bss.tableRow}>
+                <Text style={[bss.cell, { color: '#AEACA8', textAlign: 'center', flex: 1 }]}>No data — sync Tally to load</Text>
+              </View>
+            )}
             {liabilities.map((row: any, i: number) => (
               <View key={i} style={[bss.tableRow, i % 2 !== 0 && bss.altRow]}>
-                <Text style={[bss.cell, bss.rowName, { flex: 2 }]} numberOfLines={1}>{row.name}</Text>
-                <Text style={[bss.cell, bss.rowVal, bss.right, { flex: 1.2 }]}>
-                  {row.opening === 0 ? '₹0' : fmtInr(row.opening)}
-                </Text>
+                <View style={{ flex: 2 }}>
+                  <Text style={[bss.cell, bss.rowName]} numberOfLines={1}>{row.name}</Text>
+                  {row.parent ? <Text style={{ fontSize: 10, color: '#AEACA8', paddingLeft: 10 }} numberOfLines={1}>{row.parent}</Text> : null}
+                </View>
                 <Text style={[bss.cell, bss.rowVal, bss.right, { flex: 1.3 }]}>
                   {fmtInr(row.current)}
                 </Text>
