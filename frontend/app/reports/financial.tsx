@@ -421,16 +421,22 @@ export default function FinancialReportScreen() {
     return `${y + 1}-03-31`;
   })();
 
-  // Date range — initialised from selectedFY, resets when FY changes
-  const [fromDate, setFromDate] = useState(fmtDMY(new Date(fyStartISO + 'T00:00:00')));
-  const [toDate,   setToDate]   = useState(fmtDMY(new Date(fyEndISO   + 'T00:00:00')));
+  // Custom date range — null means "use full FY" (no custom selection)
+  // Stored as ISO strings (YYYY-MM-DD)
+  const [customFrom, setCustomFrom] = useState<string | null>(null);
+  const [customTo,   setCustomTo]   = useState<string | null>(null);
+
+  // Display dates for the date strip (DD/MM/YY format)
+  const fromDate = fmtDMY(new Date((customFrom ?? fyStartISO) + 'T00:00:00'));
+  const toDate   = fmtDMY(new Date((customTo   ?? fyEndISO)   + 'T00:00:00'));
+
   const [showDateSheet, setShowDateSheet] = useState(false);
 
-  // When FY changes from dropdown → reset date range to full FY
+  // When FY changes → clear custom range so next fetch uses full FY
   useEffect(() => {
-    setFromDate(fmtDMY(new Date(fyStartISO + 'T00:00:00')));
-    setToDate(fmtDMY(new Date(fyEndISO + 'T00:00:00')));
-  }, [fyStartISO, fyEndISO]);
+    setCustomFrom(null);
+    setCustomTo(null);
+  }, [selectedFY?.finYear]);
 
   const [loading, setLoading] = useState(false);
   const [plData, setPlData]   = useState<any>(null);
@@ -438,7 +444,7 @@ export default function FinancialReportScreen() {
   const [tbData, setTbData]   = useState<any>(null);
   const [error,  setError]    = useState<string | null>(null);
 
-  // Convert DD/MM/YY to ISO YYYY-MM-DD for API
+  // Convert DD/MM/YY display to ISO for API (only used for custom range)
   const toISO = (dmy: string): string => {
     const [d, m, y] = dmy.split('/');
     const fullYear = parseInt(y) < 50 ? `20${y}` : `19${y}`;
@@ -449,18 +455,14 @@ export default function FinancialReportScreen() {
     if (!selectedCompany?.guid) return;
     setLoading(true);
     setError(null);
-
-    // Only pass custom from/to when user has explicitly changed the date range
-    // i.e., dates differ from the full FY range
-    // When FY changes, dates may not have reset yet (race condition) — use fy only
-    const fyFromDMY = fmtDMY(new Date(fyStartISO + 'T00:00:00'));
-    const fyToDMY   = fmtDMY(new Date(fyEndISO   + 'T00:00:00'));
-    const isCustomRange = fromDate !== fyFromDMY || toDate !== fyToDMY;
-
-    const from = isCustomRange ? toISO(fromDate) : undefined;
-    const to   = isCustomRange ? toISO(toDate)   : undefined;
-
-    getFullFinancialReport(selectedCompany.guid, selectedFY?.finYear, from, to)
+    // Pass from/to ONLY when user explicitly picked a custom range
+    // When FY changes: customFrom/customTo are null → API uses fy= only → no stale dates
+    getFullFinancialReport(
+      selectedCompany.guid,
+      selectedFY?.finYear,
+      customFrom ?? undefined,
+      customTo   ?? undefined
+    )
       .then((res: any) => {
         const d = res?.data;
         if (d?.pl)           setPlData(d.pl);
@@ -471,7 +473,7 @@ export default function FinancialReportScreen() {
         setError(err?.message || 'Failed to load financial data');
       })
       .finally(() => setLoading(false));
-  }, [selectedCompany?.guid, selectedFY?.finYear, fromDate, toDate, lastSyncAt]);
+  }, [selectedCompany?.guid, selectedFY?.finYear, customFrom, customTo, lastSyncAt]);
 
   return (
     <SafeAreaView style={s.safe}>
@@ -549,7 +551,16 @@ export default function FinancialReportScreen() {
         minDate={fyStartISO}  // constrain calendar to FY start
         maxDate={fyEndISO}    // constrain calendar to FY end
         onApply={(from, to) => {
-          if (from && to) { setFromDate(from); setToDate(to); }
+          if (from && to) {
+            // from/to from the picker are DD/MM/YY — convert to ISO for state
+            const conv = (dmy: string) => {
+              const [d, m, y] = dmy.split('/');
+              const fullYear = parseInt(y) < 50 ? `20${y}` : `19${y}`;
+              return `${fullYear}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+            };
+            setCustomFrom(conv(from));
+            setCustomTo(conv(to));
+          }
         }}
         onClose={() => setShowDateSheet(false)}
       />
