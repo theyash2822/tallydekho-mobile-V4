@@ -228,10 +228,11 @@ function BalanceSheetSection({ bs }: { bs?: any }) {
       <View style={bss.table}>
         {tab === 'liability' ? (
           <>
+            {/* 3-column liability table: Particular | Opening | Current */}
             <View style={[bss.tableRow, bss.hdrRow]}>
-              <Text style={[bss.cell, bss.hdrTxt, { flex: 2 }]}>Liability</Text>
-              <Text style={[bss.cell, bss.hdrTxt, bss.right, { flex: 1.2 }]}>Opening Bal.</Text>
-              <Text style={[bss.cell, bss.hdrTxt, bss.right, { flex: 1.3 }]}>Current Period</Text>
+              <Text style={[bss.cell, bss.hdrTxt, { flex: 2.5 }]}>Particular</Text>
+              <Text style={[bss.cell, bss.amtHdrTxt, bss.right, { flex: 1.5 }]}>Opening</Text>
+              <Text style={[bss.cell, bss.amtHdrTxt, bss.right, { flex: 1.5 }]}>Current</Text>
             </View>
             {liabilities.length === 0 && (
               <View style={bss.tableRow}>
@@ -240,18 +241,18 @@ function BalanceSheetSection({ bs }: { bs?: any }) {
             )}
             {liabilities.map((row: any, i: number) => (
               <View key={i} style={[bss.tableRow, i % 2 !== 0 && bss.altRow]}>
-                <Text style={[bss.cell, bss.rowName, { flex: 2 }]} numberOfLines={1}>{row.name}</Text>
-                <Text style={[bss.cell, bss.rowVal, bss.right, { flex: 1.2 }]}>
+                <Text style={[bss.cell, bss.rowName, { flex: 2.5 }]} numberOfLines={2}>{row.name}</Text>
+                <Text style={[bss.cell, bss.amtTxt, bss.right, { flex: 1.5 }]} numberOfLines={1}>
                   {row.opening > 0 ? fmtInr(row.opening) : '—'}
                 </Text>
-                <Text style={[bss.cell, bss.rowVal, bss.right, { flex: 1.3 }]}>
+                <Text style={[bss.cell, bss.amtTxt, bss.right, { flex: 1.5 }]} numberOfLines={1}>
                   {fmtInr(row.current)}
                 </Text>
               </View>
             ))}
             <View style={[bss.tableRow, bss.totalRow]}>
-              <Text style={[bss.cell, bss.totalName, { flex: 2 }]}>Total Liabilities</Text>
-              <Text style={[bss.cell, bss.totalVal, bss.right, { flex: 2.5 }]}>
+              <Text style={[bss.cell, bss.totalName, { flex: 2.5 }]}>Total Liabilities</Text>
+              <Text style={[bss.cell, bss.totalVal, bss.right, { flex: 3 }]}>
                 {fmtInr(totalLiab)}
               </Text>
             </View>
@@ -323,8 +324,10 @@ const bss = StyleSheet.create({
   cell:      { fontSize: TYPOGRAPHY.sm },
   right:     { textAlign: 'right' },
   hdrTxt:    { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.3 },
+  amtHdrTxt: { fontSize: 9, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.3 },
   rowName:   { color: COLORS.textPrimary, fontWeight: '500' },
   rowVal:    { color: COLORS.textPrimary, fontWeight: '600' },
+  amtTxt:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary, fontWeight: '600' },
   totalName: { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
   totalVal:  { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
 });
@@ -400,11 +403,11 @@ const tbg = StyleSheet.create({
   totalRow: { backgroundColor: COLORS.activeBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
   cell: { fontSize: TYPOGRAPHY.sm },
   right: { textAlign: 'right' },
-  hdrTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.3 },
-  rowName: { color: COLORS.textPrimary, fontWeight: '500' },
-  rowVal: { color: COLORS.textPrimary, fontWeight: '600' },
+  hdrTxt:    { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.3 },
+  rowName:   { color: COLORS.textPrimary, fontWeight: '500' },
+  rowVal:    { color: COLORS.textPrimary, fontWeight: '600' },
   totalName: { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
-  totalVal: { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
+  totalVal:  { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
