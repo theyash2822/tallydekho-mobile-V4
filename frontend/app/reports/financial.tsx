@@ -336,46 +336,40 @@ const bss = StyleSheet.create({
 // Trial Balance — 2-column card grid
 // ══════════════════════════════════════════════════════════════════════════════
 function TrialBalanceGrid({ tb }: { tb?: any }) {
-  const hasRealData = tb?.ledgers?.length > 0;
+  // Trial Balance shows GROUP-level totals (real data, no mock fallback)
+  const ledgers = tb?.ledgers || [];
 
-  if (!hasRealData) {
+  if (ledgers.length === 0) {
     return (
-      <View style={tbg.grid}>
-        {MOCK_TRIAL.map((row, i) => (
-          <View key={i} style={tbg.row}>
-            <View style={tbg.card}>
-              <Text style={tbg.lbl}>{row.left}</Text>
-              <Text style={tbg.val}>{fmtInr(row.leftAmt)}</Text>
-            </View>
-            <View style={tbg.card}>
-              <Text style={tbg.lbl}>{row.right}</Text>
-              <Text style={tbg.val}>{fmtInr(row.rightAmt)}</Text>
-            </View>
-          </View>
-        ))}
+      <View style={tbg.table}>
+        <View style={tbg.tableRow}>
+          <Text style={[tbg.cell, { color: '#AEACA8', textAlign: 'center', flex: 1 }]}>
+            No data — sync Tally to load
+          </Text>
+        </View>
       </View>
     );
   }
 
-  // Real data: show debit/credit columns
   return (
     <View style={tbg.table}>
       <View style={[tbg.tableRow, tbg.hdrRow]}>
-        <Text style={[tbg.cell, tbg.hdrTxt, { flex: 2 }]}>Ledger</Text>
-        <Text style={[tbg.cell, tbg.hdrTxt, tbg.right, { flex: 1 }]}>Debit</Text>
-        <Text style={[tbg.cell, tbg.hdrTxt, tbg.right, { flex: 1 }]}>Credit</Text>
+        <Text style={[tbg.cell, tbg.hdrTxt, { flex: 2.5 }]}>Trial Balance Item</Text>
+        <Text style={[tbg.cell, tbg.hdrTxt, tbg.right, { flex: 1.5 }]}>Amount</Text>
       </View>
-      {(tb.ledgers || []).slice(0, 50).map((l: any, i: number) => (
+      {ledgers.map((l: any, i: number) => (
         <View key={i} style={[tbg.tableRow, i % 2 !== 0 && tbg.altRow]}>
-          <Text style={[tbg.cell, tbg.rowName, { flex: 2 }]} numberOfLines={1}>{l.name}</Text>
-          <Text style={[tbg.cell, tbg.rowVal, tbg.right, { flex: 1 }]}>{l.debit > 0 ? fmtInr(l.debit) : '-'}</Text>
-          <Text style={[tbg.cell, tbg.rowVal, tbg.right, { flex: 1 }]}>{l.credit > 0 ? fmtInr(l.credit) : '-'}</Text>
+          <Text style={[tbg.cell, tbg.rowName, { flex: 2.5 }]} numberOfLines={2}>{l.name.trim()}</Text>
+          <Text style={[tbg.cell, tbg.rowVal, tbg.right, { flex: 1.5 }]} numberOfLines={1}>
+            {fmtInr(l.amount ?? (l.debit > 0 ? l.debit : l.credit))}
+          </Text>
         </View>
       ))}
       <View style={[tbg.tableRow, tbg.totalRow]}>
-        <Text style={[tbg.cell, tbg.totalName, { flex: 2 }]}>Total</Text>
-        <Text style={[tbg.cell, tbg.totalVal, tbg.right, { flex: 1 }]}>{fmtInr(tb.totalDebit ?? 0)}</Text>
-        <Text style={[tbg.cell, tbg.totalVal, tbg.right, { flex: 1 }]}>{fmtInr(tb.totalCredit ?? 0)}</Text>
+        <Text style={[tbg.cell, tbg.totalName, { flex: 2.5 }]}>Total</Text>
+        <Text style={[tbg.cell, tbg.totalVal, tbg.right, { flex: 1.5 }]}>
+          {fmtInr(Math.max(tb?.totalDebit ?? 0, tb?.totalCredit ?? 0))}
+        </Text>
       </View>
     </View>
   );
