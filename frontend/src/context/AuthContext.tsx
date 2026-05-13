@@ -200,9 +200,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setIsDesktopOnlineState(desktop_online);
         }
         // Track last_seen changes — when desktop syncs, last_seen advances
+        // Use Date.now() (always unique) to guarantee useEffect deps change each sync
         const deviceLastSeen = json.data?.device?.last_seen;
         if (deviceLastSeen && typeof deviceLastSeen === 'number') {
-          setLastSyncAt(prev => deviceLastSeen > prev ? deviceLastSeen : prev);
+          setLastSyncAt(prev => deviceLastSeen > prev ? Date.now() : prev);
         }
       } catch {
         // Network error — don't change state, keep showing cached

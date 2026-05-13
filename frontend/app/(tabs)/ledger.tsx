@@ -420,7 +420,7 @@ function FilterModal({ visible, onClose, activeNature, onApply }: FilterModalPro
 export default function LedgerScreen() {
   const router = useRouter();
   const { t } = useTranslation();
-  const { company, selectedFY } = useAuth();
+  const { company, selectedFY, lastSyncAt } = useAuth();
   const { formatAmount } = useSettings();
   const companyGuid = company?.guid;
   const filterBtnRef = useRef<View>(null);
@@ -507,7 +507,7 @@ export default function LedgerScreen() {
   useEffect(() => {
     setIsLoading(true);
     loadLedgers().finally(() => setIsLoading(false));
-  }, [companyGuid, selectedFY?.startDate]);
+  }, [companyGuid, selectedFY?.startDate, lastSyncAt]);
 
   const onRefresh = async () => {
     setRefreshing(true);
