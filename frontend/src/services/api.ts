@@ -7,7 +7,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.241:3001';
+const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.247:3001';
 
 // ── Token helpers ────────────────────────────────────────────
 const getToken = async (): Promise<string | null> => {

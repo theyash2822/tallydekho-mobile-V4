@@ -403,7 +403,7 @@ const tbg = StyleSheet.create({
 // ══════════════════════════════════════════════════════════════════════════════
 export default function FinancialReportScreen() {
   const router = useRouter();
-  const { company: selectedCompany, selectedFY } = useAuth();
+  const { company: selectedCompany, selectedFY, lastSyncAt } = useAuth();
 
   const [openSection, setOpenSection] = useState<SectionKey | null>('pl');
   const toggleSection = (k: SectionKey) =>
@@ -438,7 +438,7 @@ export default function FinancialReportScreen() {
         setError(err?.message || 'Failed to load financial data');
       })
       .finally(() => setLoading(false));
-  }, [selectedCompany?.guid, selectedFY?.finYear]);
+  }, [selectedCompany?.guid, selectedFY?.finYear, lastSyncAt]);
 
   return (
     <SafeAreaView style={s.safe}>

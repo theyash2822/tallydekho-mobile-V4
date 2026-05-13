@@ -50,7 +50,7 @@ export default function SalesScreen() {
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
-  const { company } = useAuth();
+  const { company, lastSyncAt } = useAuth();
   const companyGuid = company?.guid;
   const [liveRecent, setLiveRecent] = useState<any[]>([]);
   const [liveTopParties, setLiveTopParties] = useState<any[]>([]);
@@ -82,7 +82,7 @@ export default function SalesScreen() {
       setApiError(err?.message || 'Failed to load sales data');
       console.error('[Sales]', err?.message);
     });
-  }, [companyGuid]);
+  }, [companyGuid, lastSyncAt]);
 
   // ─ Tab & filter state
   const [tab,      setTab]      = useState<'recent' | 'parties'>('recent');

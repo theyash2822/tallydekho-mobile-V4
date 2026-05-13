@@ -42,7 +42,7 @@ const MOCK_VOICE_SEARCHES = ['Sales Invoice', 'Mehta Enterprises', 'Payment Rece
 export default function HomeScreen() {
   const router = useRouter();
   const { t } = useTranslation();
-  const { isPaired, company, user, selectedFY } = useAuth();
+  const { isPaired, company, user, selectedFY, lastSyncAt } = useAuth();
   const companyGuid = company?.guid;
   const [activeFY, setActiveFY] = useState('');
   const [activeFilter, setActiveFilter] = useState<TimeFilter>('7D');
@@ -164,7 +164,7 @@ export default function HomeScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [isPaired, activeFilter, activeFY, companyGuid, parseFYDates, selectedFY]);
+  }, [isPaired, activeFilter, activeFY, companyGuid, parseFYDates, selectedFY, lastSyncAt]);
 
   useEffect(() => { loadData(); }, [loadData]);
 

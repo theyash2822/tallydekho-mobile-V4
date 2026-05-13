@@ -834,7 +834,7 @@ const sc = StyleSheet.create({
 export default function ReportsScreen() {
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
-  const { company, selectedFY } = useAuth();
+  const { company, selectedFY, lastSyncAt } = useAuth();
   const companyGuid = company?.guid;
 
   // Financial chart data — fetched from API (falls back to mock data)
@@ -885,7 +885,7 @@ export default function ReportsScreen() {
       setAuditCount(pending);
       setAuditTotal(Math.max(total, pending));
     }).catch((err: any) => console.error('[API Error]', err?.message));
-  }, [companyGuid, selectedFY?.startDate]);
+  }, [companyGuid, selectedFY?.startDate, lastSyncAt]);
 
   return (
     <SafeAreaView testID="reports-screen" style={styles.safe}>

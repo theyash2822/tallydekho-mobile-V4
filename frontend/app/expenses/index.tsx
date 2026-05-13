@@ -45,7 +45,7 @@ const TOP_CATEGORIES = [
 export default function ExpenseScreen() {
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
-  const { company, selectedFY } = useAuth();
+  const { company, selectedFY, lastSyncAt } = useAuth();
   const companyGuid = company?.guid;
   const [liveExpenses, setLiveExpenses] = useState<any[]>([]);
   const [expenseSummary, setExpenseSummary] = useState<any>(null);
@@ -72,7 +72,7 @@ export default function ExpenseScreen() {
       if (res?.summary) setExpenseSummary(res.summary);
       setExpensesLoaded(true);
     }).catch(() => { setExpensesLoaded(true); });
-  }, [companyGuid, fromDate, toDate, fyFrom, fyTo]);
+  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, lastSyncAt]);
 
   const [tab,      setTab]      = useState<'recent' | 'categories'>('recent');
   const [filter,   setFilter]   = useState('All');

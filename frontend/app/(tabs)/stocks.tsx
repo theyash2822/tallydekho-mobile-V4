@@ -71,7 +71,7 @@ const WIDGET_TILES = [
 
 export default function StocksDashboard() {
   const router = useRouter();
-  const { company } = useAuth();
+  const { company, lastSyncAt } = useAuth();
   const companyGuid = company?.guid;
   const [stockSummary, setStockSummary] = useState<any>(null);
   const [apiError, setApiError]          = useState<string | null>(null);
@@ -92,7 +92,7 @@ export default function StocksDashboard() {
     });
   };
 
-  useEffect(() => { loadStock(); }, [companyGuid]);
+  useEffect(() => { loadStock(); }, [companyGuid, lastSyncAt]);
 
   const data = stockSummary;
 
