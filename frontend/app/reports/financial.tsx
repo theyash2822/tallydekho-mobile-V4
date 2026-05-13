@@ -195,17 +195,15 @@ const plg = StyleSheet.create({
 function BalanceSheetSection({ bs }: { bs?: any }) {
   const [tab, setTab] = useState<'liability' | 'assets'>('liability');
 
-  // Always use real data — no mock fallback (mock data was removed per Strict Production Data Rule)
+  // Real data from API — group-level totals matching Tally BS format
   const liabilities = (bs?.liabilities || []).map((l: any) => ({
     name:    l.name,
-    parent:  l.parent,
-    opening: 0, // opening balance not yet available per ledger
-    current: Math.abs(parseFloat(l.amount ?? l.closing_balance ?? 0)),
+    opening: Math.abs(parseFloat(l.opening ?? 0)),
+    current: Math.abs(parseFloat(l.amount  ?? 0)),
   }));
   const assets = (bs?.assets || []).map((l: any) => ({
     name:   l.name,
-    parent: l.parent,
-    amount: Math.abs(parseFloat(l.amount ?? l.closing_balance ?? 0)),
+    amount: Math.abs(parseFloat(l.amount ?? 0)),
   }));
   const totalLiab   = Math.abs(bs?.totalLiabilities ?? 0);
   const totalAssets = Math.abs(bs?.totalAssets      ?? 0);
@@ -242,10 +240,10 @@ function BalanceSheetSection({ bs }: { bs?: any }) {
             )}
             {liabilities.map((row: any, i: number) => (
               <View key={i} style={[bss.tableRow, i % 2 !== 0 && bss.altRow]}>
-                <View style={{ flex: 2 }}>
-                  <Text style={[bss.cell, bss.rowName]} numberOfLines={1}>{row.name}</Text>
-                  {row.parent ? <Text style={{ fontSize: 10, color: '#AEACA8', paddingLeft: 10 }} numberOfLines={1}>{row.parent}</Text> : null}
-                </View>
+                <Text style={[bss.cell, bss.rowName, { flex: 2 }]} numberOfLines={1}>{row.name}</Text>
+                <Text style={[bss.cell, bss.rowVal, bss.right, { flex: 1.2 }]}>
+                  {row.opening > 0 ? fmtInr(row.opening) : '—'}
+                </Text>
                 <Text style={[bss.cell, bss.rowVal, bss.right, { flex: 1.3 }]}>
                   {fmtInr(row.current)}
                 </Text>
