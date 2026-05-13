@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator,
 } from 'react-native';
@@ -454,15 +455,14 @@ export default function FinancialReportScreen() {
   // Resolve FY param — finYear (e.g. '2025-2026') or derived from startDate
   const fyParam = fyInfoToParam(selectedFY) ?? selectedFY?.finYear;
 
-  useEffect(() => {
+  // Core fetch function — called on mount, dep changes, and screen focus
+  const fetchReport = useCallback(() => {
     if (!selectedCompany?.guid) return;
     setLoading(true);
     setError(null);
-    // Pass from/to ONLY when user explicitly picked a custom range
-    // When FY changes: customFrom/customTo are null → API uses fy= only → no stale dates
     getFullFinancialReport(
       selectedCompany.guid,
-      fyParam,           // always correctly derived, never undefined
+      fyParam,
       customFrom ?? undefined,
       customTo   ?? undefined
     )
@@ -476,8 +476,19 @@ export default function FinancialReportScreen() {
         setError(err?.message || 'Failed to load financial data');
       })
       .finally(() => setLoading(false));
-  // Use selectedFY?.startDate as dep (always changes when FY changes, even when finYear was missing)
-  }, [selectedCompany?.guid, selectedFY?.startDate, fyParam, customFrom, customTo, lastSyncAt]);
+  }, [selectedCompany?.guid, fyParam, customFrom, customTo]);
+
+  // Re-fetch whenever FY, date range, or sync status changes
+  useEffect(() => {
+    fetchReport();
+  }, [fetchReport, selectedFY?.startDate, lastSyncAt]);
+
+  // Also re-fetch whenever screen gains focus (catches FY change from home screen)
+  useFocusEffect(
+    useCallback(() => {
+      fetchReport();
+    }, [fetchReport])
+  );
 
   return (
     <SafeAreaView style={s.safe}>
