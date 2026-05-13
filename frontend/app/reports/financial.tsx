@@ -409,13 +409,28 @@ export default function FinancialReportScreen() {
   const toggleSection = (k: SectionKey) =>
     setOpenSection(prev => (prev === k ? null : k));
 
-  const today   = new Date();
-  const fyYear  = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1;
-  const fyStart = new Date(fyYear, 3, 1);
-  const fyEnd   = new Date(fyYear + 1, 2, 31);
-  const [fromDate, setFromDate]           = useState(fmtDMY(fyStart));
-  const [toDate,   setToDate]             = useState(fmtDMY(fyEnd));
+  // FY boundaries — derived from selectedFY (dropdown), fallback to current FY
+  const fyStartISO = selectedFY?.startDate ?? (() => {
+    const today = new Date();
+    const y = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1;
+    return `${y}-04-01`;
+  })();
+  const fyEndISO = selectedFY?.endDate ?? (() => {
+    const today = new Date();
+    const y = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1;
+    return `${y + 1}-03-31`;
+  })();
+
+  // Date range — initialised from selectedFY, resets when FY changes
+  const [fromDate, setFromDate] = useState(fmtDMY(new Date(fyStartISO + 'T00:00:00')));
+  const [toDate,   setToDate]   = useState(fmtDMY(new Date(fyEndISO   + 'T00:00:00')));
   const [showDateSheet, setShowDateSheet] = useState(false);
+
+  // When FY changes from dropdown → reset date range to full FY
+  useEffect(() => {
+    setFromDate(fmtDMY(new Date(fyStartISO + 'T00:00:00')));
+    setToDate(fmtDMY(new Date(fyEndISO + 'T00:00:00')));
+  }, [fyStartISO, fyEndISO]);
 
   const [loading, setLoading] = useState(false);
   const [plData, setPlData]   = useState<any>(null);
@@ -423,11 +438,21 @@ export default function FinancialReportScreen() {
   const [tbData, setTbData]   = useState<any>(null);
   const [error,  setError]    = useState<string | null>(null);
 
+  // Convert DD/MM/YY to ISO YYYY-MM-DD for API
+  const toISO = (dmy: string): string => {
+    const [d, m, y] = dmy.split('/');
+    const fullYear = parseInt(y) < 50 ? `20${y}` : `19${y}`;
+    return `${fullYear}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  };
+
   useEffect(() => {
     if (!selectedCompany?.guid) return;
     setLoading(true);
     setError(null);
-    getFullFinancialReport(selectedCompany.guid, selectedFY?.finYear)
+    // Pass from/to dates so backend filters to exact date range within the FY
+    const from = toISO(fromDate);
+    const to   = toISO(toDate);
+    getFullFinancialReport(selectedCompany.guid, selectedFY?.finYear, from, to)
       .then((res: any) => {
         const d = res?.data;
         if (d?.pl)           setPlData(d.pl);
@@ -438,7 +463,7 @@ export default function FinancialReportScreen() {
         setError(err?.message || 'Failed to load financial data');
       })
       .finally(() => setLoading(false));
-  }, [selectedCompany?.guid, selectedFY?.finYear, lastSyncAt]);
+  }, [selectedCompany?.guid, selectedFY?.finYear, fromDate, toDate, lastSyncAt]);
 
   return (
     <SafeAreaView style={s.safe}>
@@ -513,6 +538,8 @@ export default function FinancialReportScreen() {
         visible={showDateSheet}
         fromDate={fromDate}
         toDate={toDate}
+        minDate={fyStartISO}  // constrain calendar to FY start
+        maxDate={fyEndISO}    // constrain calendar to FY end
         onApply={(from, to) => {
           if (from && to) { setFromDate(from); setToDate(to); }
         }}
