@@ -81,9 +81,10 @@ const Header: React.FC<HeaderProps> = ({
       if (rows.length) {
         // Store full objects with dates
         const fyObjs = rows.map((r: any) => ({
-          label: r.label,
+          label:     r.label,
           startDate: r.begin_date,
-          endDate: r.end_date,
+          endDate:   r.end_date,
+          finYear:   r.fin_year,   // e.g. '2025-2026' — used by all screens for API fy= param
         }));
         setLiveFYObjects(fyObjs);
         const labels = fyObjs.map((f: any) => f.label);

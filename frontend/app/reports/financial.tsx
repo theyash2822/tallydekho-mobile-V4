@@ -8,7 +8,7 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal, { fmtDMY } from '../../src/components/DateRangePickerModal';
 import { getFullFinancialReport } from '../../src/services/api';
-import { useAuth } from '../../src/context/AuthContext';
+import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 
 // ── Mock Data (Tally Prime format) — shown when no real data available ───────
 const MOCK_PL = {
@@ -436,7 +436,7 @@ export default function FinancialReportScreen() {
   useEffect(() => {
     setCustomFrom(null);
     setCustomTo(null);
-  }, [selectedFY?.finYear]);
+  }, [selectedFY?.startDate]);  // startDate always changes on FY switch (finYear was unreliable)
 
   const [loading, setLoading] = useState(false);
   const [plData, setPlData]   = useState<any>(null);
@@ -451,6 +451,9 @@ export default function FinancialReportScreen() {
     return `${fullYear}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
   };
 
+  // Resolve FY param — finYear (e.g. '2025-2026') or derived from startDate
+  const fyParam = fyInfoToParam(selectedFY) ?? selectedFY?.finYear;
+
   useEffect(() => {
     if (!selectedCompany?.guid) return;
     setLoading(true);
@@ -459,7 +462,7 @@ export default function FinancialReportScreen() {
     // When FY changes: customFrom/customTo are null → API uses fy= only → no stale dates
     getFullFinancialReport(
       selectedCompany.guid,
-      selectedFY?.finYear,
+      fyParam,           // always correctly derived, never undefined
       customFrom ?? undefined,
       customTo   ?? undefined
     )
@@ -473,7 +476,8 @@ export default function FinancialReportScreen() {
         setError(err?.message || 'Failed to load financial data');
       })
       .finally(() => setLoading(false));
-  }, [selectedCompany?.guid, selectedFY?.finYear, customFrom, customTo, lastSyncAt]);
+  // Use selectedFY?.startDate as dep (always changes when FY changes, even when finYear was missing)
+  }, [selectedCompany?.guid, selectedFY?.startDate, fyParam, customFrom, customTo, lastSyncAt]);
 
   return (
     <SafeAreaView style={s.safe}>
