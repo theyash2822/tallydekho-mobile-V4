@@ -441,17 +441,17 @@ const tbg = StyleSheet.create({
   drLine: {
     fontSize: TYPOGRAPHY.sm,
     fontWeight: '600',
-    color: '#C0392B',
+    color: COLORS.textPrimary,   // amount in black
     lineHeight: 20,
   },
   crLine: {
     fontSize: TYPOGRAPHY.sm,
     fontWeight: '600',
-    color: '#27AE60',
+    color: COLORS.textPrimary,   // amount in black
     lineHeight: 20,
   },
-  drTag: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: '#C0392B' },
-  crTag: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: '#27AE60' },
+  drTag: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: '#C0392B' },  // Dr tag red
+  crTag: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: '#27AE60' },  // Cr tag green
   totalAmt: { fontWeight: '800', fontSize: TYPOGRAPHY.sm },
   dashTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
   // Imbalance
