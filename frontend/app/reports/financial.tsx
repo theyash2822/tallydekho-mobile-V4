@@ -333,12 +333,9 @@ const bss = StyleSheet.create({
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Trial Balance — Horizontal-scroll table (Particulars | Debit | Credit)
-// Fixed pixel widths so large Indian numbers never truncate or overflow.
+// Trial Balance — 2-line stacked rows (name on top, Dr / Cr side-by-side below)
+// Full numbers always visible, no truncation, no horizontal scroll.
 // ══════════════════════════════════════════════════════════════════════════════
-const TB_COL = { name: 190, dr: 150, cr: 150 }; // fixed px widths per column
-const TB_TOTAL_WIDTH = TB_COL.name + TB_COL.dr + TB_COL.cr;
-
 function fmtTb(n: number): string {
   if (!n || n < 0.01) return '—';
   return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -349,10 +346,8 @@ function TrialBalanceGrid({ tb }: { tb?: any }) {
 
   if (ledgers.length === 0) {
     return (
-      <View style={tbg.outerContainer}>
-        <View style={tbg.emptyRow}>
-          <Text style={tbg.emptyTxt}>No data — sync Tally to load</Text>
-        </View>
+      <View style={tbg.container}>
+        <Text style={tbg.emptyTxt}>No data — sync Tally to load</Text>
       </View>
     );
   }
@@ -362,104 +357,132 @@ function TrialBalanceGrid({ tb }: { tb?: any }) {
   const isBalanced  = Math.abs(totalDebit - totalCredit) < 1;
 
   return (
-    <View style={tbg.outerContainer}>
-      {/* Hint that table scrolls */}
-      <Text style={tbg.scrollHint}>← scroll to see full table →</Text>
+    <View style={tbg.container}>
+      {/* Column label header */}
+      <View style={tbg.hdrRow}>
+        <Text style={[tbg.hdrLbl, { flex: 1 }]}>Particulars</Text>
+        <Text style={[tbg.hdrLbl, tbg.right, { width: 120 }]}>Debit</Text>
+        <Text style={[tbg.hdrLbl, tbg.right, { width: 120 }]}>Credit</Text>
+      </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator
-        style={tbg.hScroll}
-        contentContainerStyle={{ width: TB_TOTAL_WIDTH }}
-      >
-        <View style={{ width: TB_TOTAL_WIDTH }}>
-          {/* Header */}
-          <View style={[tbg.row, tbg.hdrRow]}>
-            <Text style={[tbg.hdrTxt, { width: TB_COL.name }]}>Particulars</Text>
-            <Text style={[tbg.hdrTxt, tbg.right, { width: TB_COL.dr }]}>Debit</Text>
-            <Text style={[tbg.hdrTxt, tbg.right, { width: TB_COL.cr }]}>Credit</Text>
-          </View>
-
-          {/* Data rows */}
-          {ledgers.map((l: any, i: number) => (
-            <View key={i} style={[tbg.row, i % 2 !== 0 && tbg.altRow]}>
-              <Text style={[tbg.nameTxt, { width: TB_COL.name }]} numberOfLines={2}>
-                {l.name.trim()}
-              </Text>
-              <Text style={[tbg.drTxt, tbg.right, { width: TB_COL.dr }]}>
-                {fmtTb(l.debit)}
-              </Text>
-              <Text style={[tbg.crTxt, tbg.right, { width: TB_COL.cr }]}>
-                {fmtTb(l.credit)}
-              </Text>
+      {/* Data rows — stacked: name full-width on top, Dr/Cr inline below */}
+      {ledgers.map((l: any, i: number) => (
+        <View key={i} style={[tbg.card, i % 2 !== 0 && tbg.cardAlt]}>
+          {/* Row 1: group name */}
+          <Text style={tbg.cardName}>{l.name.trim()}</Text>
+          {/* Row 2: Dr | Cr side by side */}
+          <View style={tbg.amtRow}>
+            <View style={tbg.amtBlock}>
+              <Text style={tbg.amtLbl}>DR</Text>
+              <Text style={tbg.drAmt}>{fmtTb(l.debit)}</Text>
             </View>
-          ))}
-
-          {/* Grand Total */}
-          <View style={[tbg.row, tbg.totalRow]}>
-            <Text style={[tbg.totalName, { width: TB_COL.name }]}>Grand Total</Text>
-            <Text style={[tbg.totalVal, tbg.right, { width: TB_COL.dr }]}>
-              {fmtTb(totalDebit)}
-            </Text>
-            <Text style={[tbg.totalVal, tbg.right, { width: TB_COL.cr }]}>
-              {fmtTb(totalCredit)}
-            </Text>
-          </View>
-
-          {/* Imbalance warning — shown only if TB doesn't balance */}
-          {!isBalanced && (
-            <View style={tbg.imbalanceRow}>
-              <Text style={tbg.imbalanceTxt}>
-                ⚠️ Difference: ₹{Math.abs(totalDebit - totalCredit).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-              </Text>
+            <View style={[tbg.amtBlock, tbg.amtBlockRight]}>
+              <Text style={[tbg.amtLbl, tbg.right]}>CR</Text>
+              <Text style={[tbg.crAmt, tbg.right]}>{fmtTb(l.credit)}</Text>
             </View>
-          )}
+          </View>
         </View>
-      </ScrollView>
+      ))}
+
+      {/* Grand Total */}
+      <View style={tbg.totalCard}>
+        <Text style={tbg.totalLabel}>Grand Total</Text>
+        <View style={tbg.amtRow}>
+          <View style={tbg.amtBlock}>
+            <Text style={tbg.amtLbl}>DR</Text>
+            <Text style={tbg.totalAmt}>{fmtTb(totalDebit)}</Text>
+          </View>
+          <View style={[tbg.amtBlock, tbg.amtBlockRight]}>
+            <Text style={[tbg.amtLbl, tbg.right]}>CR</Text>
+            <Text style={[tbg.totalAmt, tbg.right]}>{fmtTb(totalCredit)}</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Imbalance warning — only if data issue */}
+      {!isBalanced && (
+        <View style={tbg.imbalanceRow}>
+          <Text style={tbg.imbalanceTxt}>
+            ⚠️ Difference: ₹{Math.abs(totalDebit - totalCredit).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
 
 const tbg = StyleSheet.create({
-  outerContainer: {
+  container: {
     borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: COLORS.borderDefault,
     overflow: 'hidden',
   },
-  scrollHint: {
-    fontSize: TYPOGRAPHY.xs,
-    color: COLORS.textTertiary,
-    textAlign: 'center',
-    paddingVertical: 4,
+  emptyTxt: { color: '#AEACA8', textAlign: 'center', fontSize: TYPOGRAPHY.sm, padding: 16 },
+  // Header bar
+  hdrRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     backgroundColor: COLORS.pageBg,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderDefault,
   },
-  hScroll: { width: '100%' },
-  emptyRow: { padding: 16 },
-  emptyTxt: { color: '#AEACA8', textAlign: 'center', fontSize: TYPOGRAPHY.sm },
-  // Shared row
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
+  hdrLbl: {
+    fontSize: TYPOGRAPHY.xs,
+    fontWeight: '700',
+    color: COLORS.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  right: { textAlign: 'right' },
+  // Data card (each group = one card)
+  card: {
+    paddingHorizontal: 12,
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderDefault,
   },
-  hdrRow:   { backgroundColor: COLORS.pageBg },
-  altRow:   { backgroundColor: COLORS.pageBg },
-  totalRow: { backgroundColor: COLORS.activeBg, borderTopWidth: 2, borderTopColor: COLORS.borderDefault },
-  imbalanceRow: { backgroundColor: '#FFF3CD', paddingHorizontal: 10, paddingVertical: 6 },
-  // Text styles
-  right: { textAlign: 'right' },
-  hdrTxt:    { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.3 },
-  nameTxt:   { fontSize: TYPOGRAPHY.xs + 1, color: COLORS.textPrimary, fontWeight: '500', paddingRight: 8 },
-  drTxt:     { fontSize: TYPOGRAPHY.xs + 1, color: '#C0392B', fontWeight: '600' },
-  crTxt:     { fontSize: TYPOGRAPHY.xs + 1, color: '#27AE60', fontWeight: '600' },
-  totalName: { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
-  totalVal:  { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
+  cardAlt: { backgroundColor: COLORS.pageBg },
+  cardName: {
+    fontSize: TYPOGRAPHY.sm,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 6,
+  },
+  // Dr / Cr amount row
+  amtRow: { flexDirection: 'row' },
+  amtBlock: { flex: 1 },
+  amtBlockRight: { alignItems: 'flex-end' },
+  amtLbl: {
+    fontSize: TYPOGRAPHY.xs,
+    fontWeight: '700',
+    color: COLORS.textTertiary,
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  drAmt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: '#C0392B' },
+  crAmt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: '#27AE60' },
+  // Grand Total card
+  totalCard: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: COLORS.activeBg,
+    borderTopWidth: 2,
+    borderTopColor: COLORS.borderDefault,
+  },
+  totalLabel: {
+    fontSize: TYPOGRAPHY.sm,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  totalAmt: { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
+  // Imbalance
+  imbalanceRow: { backgroundColor: '#FFF3CD', paddingHorizontal: 12, paddingVertical: 8 },
   imbalanceTxt: { fontSize: TYPOGRAPHY.xs, color: '#856404', textAlign: 'center' },
 });
 
