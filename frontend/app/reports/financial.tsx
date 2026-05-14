@@ -333,11 +333,15 @@ const bss = StyleSheet.create({
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Trial Balance — 2-column card grid
+// Trial Balance — Tally-standard 3-column table (Particulars | Debit | Credit)
 // ══════════════════════════════════════════════════════════════════════════════
+function fmtTb(n: number): string {
+  if (!n || n < 0.01) return '—';
+  return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function TrialBalanceGrid({ tb }: { tb?: any }) {
-  // Trial Balance shows GROUP-level totals (real data, no mock fallback)
-  const ledgers = tb?.ledgers || [];
+  const ledgers: any[] = tb?.ledgers || [];
 
   if (ledgers.length === 0) {
     return (
@@ -351,55 +355,66 @@ function TrialBalanceGrid({ tb }: { tb?: any }) {
     );
   }
 
+  const totalDebit  = tb?.totalDebit  ?? 0;
+  const totalCredit = tb?.totalCredit ?? 0;
+  const isBalanced  = Math.abs(totalDebit - totalCredit) < 1; // within ₹1 rounding tolerance
+
   return (
     <View style={tbg.table}>
+      {/* Header */}
       <View style={[tbg.tableRow, tbg.hdrRow]}>
-        <Text style={[tbg.cell, tbg.hdrTxt, { flex: 2.5 }]}>Trial Balance Item</Text>
-        <Text style={[tbg.cell, tbg.hdrTxt, tbg.right, { flex: 1.5 }]}>Amount</Text>
+        <Text style={[tbg.cell, tbg.hdrTxt, { flex: 2.8 }]}>Particulars</Text>
+        <Text style={[tbg.cell, tbg.hdrTxt, tbg.right, { flex: 1.6 }]}>Debit</Text>
+        <Text style={[tbg.cell, tbg.hdrTxt, tbg.right, { flex: 1.6 }]}>Credit</Text>
       </View>
+      {/* Rows */}
       {ledgers.map((l: any, i: number) => (
         <View key={i} style={[tbg.tableRow, i % 2 !== 0 && tbg.altRow]}>
-          <Text style={[tbg.cell, tbg.rowName, { flex: 2.5 }]} numberOfLines={2}>{l.name.trim()}</Text>
-          <Text style={[tbg.cell, tbg.rowVal, tbg.right, { flex: 1.5 }]} numberOfLines={1}>
-            {fmtInr(l.amount ?? (l.debit > 0 ? l.debit : l.credit))}
+          <Text style={[tbg.cell, tbg.rowName, { flex: 2.8 }]} numberOfLines={2}>{l.name.trim()}</Text>
+          <Text style={[tbg.cell, tbg.rowDr,  tbg.right, { flex: 1.6 }]} numberOfLines={1}>
+            {fmtTb(l.debit)}
+          </Text>
+          <Text style={[tbg.cell, tbg.rowCr,  tbg.right, { flex: 1.6 }]} numberOfLines={1}>
+            {fmtTb(l.credit)}
           </Text>
         </View>
       ))}
+      {/* Grand Total */}
       <View style={[tbg.tableRow, tbg.totalRow]}>
-        <Text style={[tbg.cell, tbg.totalName, { flex: 2.5 }]}>Total</Text>
-        <Text style={[tbg.cell, tbg.totalVal, tbg.right, { flex: 1.5 }]}>
-          {fmtInr(Math.max(tb?.totalDebit ?? 0, tb?.totalCredit ?? 0))}
+        <Text style={[tbg.cell, tbg.totalName, { flex: 2.8 }]}>Grand Total</Text>
+        <Text style={[tbg.cell, tbg.totalVal, tbg.right, { flex: 1.6 }]}>
+          {fmtTb(totalDebit)}
+        </Text>
+        <Text style={[tbg.cell, tbg.totalVal, tbg.right, { flex: 1.6 }]}>
+          {fmtTb(totalCredit)}
         </Text>
       </View>
+      {/* Balance indicator */}
+      {!isBalanced && (
+        <View style={tbg.imbalanceRow}>
+          <Text style={tbg.imbalanceTxt}>
+            ⚠️ Difference: ₹{Math.abs(totalDebit - totalCredit).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
 
 const tbg = StyleSheet.create({
-  grid: { gap: SPACING.sm },
-  row:  { flexDirection: 'row', gap: SPACING.sm },
-  card: {
-    flex: 1,
-    backgroundColor: COLORS.pageBg,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderDefault,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  lbl: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginBottom: 5 },
-  val: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  // Table styles for real data
   table: { borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
-  tableRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 10 },
+  tableRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 9 },
   hdrRow: { backgroundColor: COLORS.pageBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   altRow: { backgroundColor: COLORS.pageBg },
-  totalRow: { backgroundColor: COLORS.activeBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
-  cell: { fontSize: TYPOGRAPHY.sm },
+  totalRow: { backgroundColor: COLORS.activeBg, borderTopWidth: 2, borderTopColor: COLORS.borderDefault },
+  imbalanceRow: { backgroundColor: '#FFF3CD', paddingHorizontal: 10, paddingVertical: 6 },
+  imbalanceTxt: { fontSize: TYPOGRAPHY.xs, color: '#856404', textAlign: 'center' },
+  cell: { fontSize: TYPOGRAPHY.xs + 1 },
   right: { textAlign: 'right' },
   hdrTxt:    { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.3 },
-  rowName:   { color: COLORS.textPrimary, fontWeight: '500' },
-  rowVal:    { color: COLORS.textPrimary, fontWeight: '600' },
+  rowName:   { color: COLORS.textPrimary, fontWeight: '500', fontSize: TYPOGRAPHY.xs + 1 },
+  rowDr:     { color: '#C0392B', fontWeight: '600', fontSize: TYPOGRAPHY.xs + 1 },  // Dr in red
+  rowCr:     { color: '#27AE60', fontWeight: '600', fontSize: TYPOGRAPHY.xs + 1 },  // Cr in green
   totalName: { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
   totalVal:  { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
 });
