@@ -357,10 +357,10 @@ function TrialBalanceGrid({ tb }: { tb?: any }) {
   const isBalanced  = Math.abs(totalDebit - totalCredit) < 1;
 
   // Each row: name on left, Dr amount (red) + Cr amount (green) stacked on right
-  const TbRow = ({ name, debit, credit, isTotal = false }: {
-    name: string; debit: number; credit: number; isTotal?: boolean;
+  const TbRow = ({ name, debit, credit, isTotal = false, alt = false }: {
+    name: string; debit: number; credit: number; isTotal?: boolean; alt?: boolean;
   }) => (
-    <View style={[tbg.row, isTotal && tbg.totalRow]}>
+    <View style={[tbg.row, alt && tbg.rowAlt, isTotal && tbg.totalRow]}>
       <Text style={[tbg.name, isTotal && tbg.totalName]} numberOfLines={2}>{name}</Text>
       <View style={tbg.amts}>
         {debit > 0.01 && (
@@ -383,7 +383,7 @@ function TrialBalanceGrid({ tb }: { tb?: any }) {
   return (
     <View style={tbg.container}>
       {ledgers.map((l: any, i: number) => (
-        <TbRow key={i} name={l.name.trim()} debit={l.debit} credit={l.credit} />
+        <TbRow key={i} name={l.name.trim()} debit={l.debit} credit={l.credit} alt={i % 2 !== 0} />
       ))}
 
       {/* Grand Total */}
@@ -409,7 +409,7 @@ const tbg = StyleSheet.create({
     overflow: 'hidden',
   },
   emptyTxt: { color: '#AEACA8', textAlign: 'center', fontSize: TYPOGRAPHY.sm, padding: 16 },
-  // Each list row
+  // Each list row — alternating white / cream (same as Balance Sheet)
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -418,7 +418,9 @@ const tbg = StyleSheet.create({
     paddingVertical: 11,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderDefault,
+    backgroundColor: COLORS.cardBg,       // even rows: white
   },
+  rowAlt:   { backgroundColor: COLORS.pageBg },  // odd rows: cream
   totalRow: {
     backgroundColor: COLORS.activeBg,
     borderTopWidth: 2,
