@@ -37,6 +37,9 @@ export default function GSTScreen() {
   const [isGSTApplicable, setIsGSTApplicable] = useState(true);
   const [gstNotApplicableMsg, setGstNotApplicableMsg] = useState('');
   const [liveInvoices, setLiveInvoices] = useState<any[]>([]);
+  const [tabNotApplicable, setTabNotApplicable] = useState(false);
+  const [tabNotApplicableMsg, setTabNotApplicableMsg] = useState('');
+  const [gstr3bSummary, setGstr3bSummary] = useState<any>(null);
 
   const [activeTab,       setActiveTab]       = useState('GSTR-1');
   const [fromDate,        setFromDate]        = useState('');
@@ -46,10 +49,27 @@ export default function GSTScreen() {
 
   useEffect(() => {
     if (!companyGuid) return;
+    // Reset tab-specific state on tab change
+    setLiveInvoices([]);
+    setTabNotApplicable(false);
+    setTabNotApplicableMsg('');
+    setGstr3bSummary(null);
+
     getGSTDetail(companyGuid, { type: activeTab }).then((res: any) => {
       if (res?.meta?.country_applicable === false) {
         setIsGSTApplicable(false);
         setGstNotApplicableMsg(res.meta.message || 'GST reports not applicable for your country');
+        return;
+      }
+      // Tab-specific: GSTR-4, GSTR-6 etc.
+      if (res?.meta?.not_applicable) {
+        setTabNotApplicable(true);
+        setTabNotApplicableMsg(res.meta.message || `${activeTab} not applicable`);
+        return;
+      }
+      // GSTR-3B summary
+      if (res?.meta?.is_summary && res?.summary) {
+        setGstr3bSummary(res.summary);
         return;
       }
       const rows = res?.data ?? [];
@@ -215,13 +235,42 @@ export default function GSTScreen() {
           ))}
         </ScrollView>
 
+        {/* ── Tab Not Applicable ───────────────────────────────────────── */}
+        {tabNotApplicable && (
+          <View style={s.emptyBox}>
+            <Ionicons name="information-circle-outline" size={44} color={COLORS.textTertiary} />
+            <Text style={[s.emptyTxt, {fontWeight:'700',color:COLORS.textPrimary}]}>{activeTab} — Not Applicable</Text>
+            <Text style={[s.emptyTxt,{fontSize:12,marginTop:4}]}>{tabNotApplicableMsg}</Text>
+          </View>
+        )}
+
+        {/* ── GSTR-3B Summary ─────────────────────────────────────────── */}
+        {gstr3bSummary && (
+          <ScrollView style={{flex:1}} contentContainerStyle={{padding:16,gap:12}}>
+            <Text style={{fontSize:14,fontWeight:'700',color:COLORS.textSecondary,marginBottom:4}}>GSTR-3B Summary</Text>
+            {[
+              {label:'Total Outward Supply (Sales)',value:gstr3bSummary.outwardSupply,color:COLORS.positive},
+              {label:'Total Inward Supply (Purchase)',value:gstr3bSummary.inwardSupply,color:COLORS.textSecondary},
+              {label:'Estimated Output Tax (18%)',value:gstr3bSummary.outputTax,color:COLORS.negative||'#E53935'},
+              {label:'Input Tax Credit (18%)',value:gstr3bSummary.inputTaxCredit,color:COLORS.positive},
+              {label:'Net GST Payable',value:gstr3bSummary.netTaxPayable,color:COLORS.negative||'#E53935'},
+            ].map(row => (
+              <View key={row.label} style={{flexDirection:'row',justifyContent:'space-between',paddingVertical:10,borderBottomWidth:1,borderBottomColor:COLORS.borderDefault}}>
+                <Text style={{fontSize:13,color:COLORS.textSecondary,flex:1}}>{row.label}</Text>
+                <Text style={{fontSize:13,fontWeight:'700',color:row.color}}>₹{row.value?.toLocaleString('en-IN',{minimumFractionDigits:2})}</Text>
+              </View>
+            ))}
+            <Text style={{fontSize:11,color:COLORS.textTertiary,marginTop:8}}>* Tax amounts are approximate (18% GST). Actual rates may vary per item.</Text>
+          </ScrollView>
+        )}
+
         {/* ── Invoice List ─────────────────────────────────────────────── */}
-        {filteredInvoices.length === 0 ? (
+        {!tabNotApplicable && !gstr3bSummary && filteredInvoices.length === 0 ? (
           <View style={s.emptyBox}>
             <Ionicons name="checkmark-circle-outline" size={44} color={COLORS.positive} />
-            <Text style={s.emptyTxt}>All invoices matched</Text>
+            <Text style={s.emptyTxt}>No invoices found</Text>
           </View>
-        ) : (
+        ) : !tabNotApplicable && !gstr3bSummary && (
           filteredInvoices.map((inv) => {
             const isSelected = selected.includes(inv.id);
             return (
