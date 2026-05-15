@@ -12,7 +12,11 @@ import { getGSTDetail, getCompanyCapabilities } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 
 // ── GSTR Tabs ─────────────────────────────────────────────────────────────────
-const GSTR_TABS = ['GSTR-1', 'GSTR-2A', 'GSTR-9', 'GSTR-4', 'GSTR-3B', 'GSTR-6'];
+const GSTR_TABS = [
+  'GSTR-1', 'GSTR-2A', 'GSTR-2B', 'GSTR-3B',
+  'GSTR-4', 'GSTR-5', 'GSTR-5A', 'GSTR-6',
+  'GSTR-7', 'GSTR-8', 'GSTR-9', 'GSTR-10', 'GSTR-11',
+];
 
 // (Mock invoice data removed — real API only)
 interface Invoice {
