@@ -53,8 +53,9 @@ export default function GSTScreen() {
         return;
       }
       const rows = res?.data ?? [];
-      if (rows.length) setLiveInvoices(rows.map((r: any) => ({
-        id: String(r.id), invoiceNo: r.voucher_number||'', type: r.voucher_type||'Sales',
+      if (rows.length) setLiveInvoices(rows.map((r: any, idx: number) => ({
+        id: r.guid || r.id ? `${r.guid || r.id}` : `row-${activeTab}-${idx}`,
+        invoiceNo: r.voucher_number||'', type: r.voucher_type||'Sales',
         party: r.party_name||'', date: r.date||'', dateObj: new Date(r.date||Date.now()),
         amount: formatAmount(Math.abs(+r.amount||0)),
         matched: !!(r.irn), gstr: [activeTab],
