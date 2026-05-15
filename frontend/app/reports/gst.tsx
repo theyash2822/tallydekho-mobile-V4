@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
@@ -10,6 +10,7 @@ import DateRangePickerModal, { parseDMY, fmtDMY } from '../../src/components/Dat
 import { useAuth } from '../../src/context/AuthContext';
 import { getGSTDetail, getCompanyCapabilities } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
+import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 
 // ── GSTR Tabs ─────────────────────────────────────────────────────────────────
 const GSTR_TABS = [
@@ -17,6 +18,14 @@ const GSTR_TABS = [
   'GSTR-4', 'GSTR-5', 'GSTR-5A', 'GSTR-6',
   'GSTR-7', 'GSTR-8', 'GSTR-9', 'GSTR-10', 'GSTR-11',
 ];
+
+// ── Month label helpers ───────────────────────────────────────────────────────
+const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+/** Returns e.g. "Apr 24" from a Date object */
+function monthLabel(d: Date): string {
+  return `${MONTH_ABBR[d.getMonth()]} ${String(d.getFullYear()).slice(-2)}`;
+}
 
 // (Mock invoice data removed — real API only)
 interface Invoice {
@@ -45,6 +54,12 @@ export default function GSTScreen() {
   const [tabNotApplicableMsg, setTabNotApplicableMsg] = useState('');
   const [gstr3bSummary, setGstr3bSummary] = useState<any>(null);
 
+  // ── Feature 1: shimmer loading state ──────────────────────────────────────
+  const [loading, setLoading] = useState(false);
+
+  // ── Feature 2: month filter state ─────────────────────────────────────────
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+
   const [activeTab,       setActiveTab]       = useState('GSTR-1');
   const [fromDate,        setFromDate]        = useState('');
   const [toDate,          setToDate]          = useState('');
@@ -63,17 +78,20 @@ export default function GSTScreen() {
       if (res?.meta?.country_applicable === false) {
         setIsGSTApplicable(false);
         setGstNotApplicableMsg(res.meta.message || 'GST reports not applicable for your country');
+        setLoading(false);
         return;
       }
       // Tab-specific: GSTR-4, GSTR-6 etc.
       if (res?.meta?.not_applicable) {
         setTabNotApplicable(true);
         setTabNotApplicableMsg(res.meta.message || `${activeTab} not applicable`);
+        setLoading(false);
         return;
       }
       // GSTR-3B summary
       if (res?.meta?.is_summary && res?.summary) {
         setGstr3bSummary(res.summary);
+        setLoading(false);
         return;
       }
       const rows = res?.data ?? [];
@@ -84,23 +102,46 @@ export default function GSTScreen() {
         amount: formatAmount(Math.abs(+r.amount||0)),
         matched: !!(r.irn), gstr: [activeTab],
       })));
-    }).catch(() => {});
+      setLoading(false);
+    }).catch(() => { setLoading(false); });
   }, [companyGuid, activeTab]);
+
+  // ── Feature 2: derive available months from current tab's invoices ─────────
+  const availableMonths = useMemo<string[]>(() => {
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    // Sort by date ascending before deriving order
+    const sorted = [...liveInvoices].sort(
+      (a, b) => a.dateObj.getTime() - b.dateObj.getTime()
+    );
+    for (const inv of sorted) {
+      const label = monthLabel(inv.dateObj);
+      if (!seen.has(label)) { seen.add(label); ordered.push(label); }
+    }
+    return ordered;
+  }, [liveInvoices]);
 
   const isDateActive = fromDate.length > 0 && toDate.length > 0;
   const sourceInvoices = liveInvoices;
 
-  // Filter by tab + date range
+  // Filter by tab + date range + selected month
   const filteredInvoices = sourceInvoices.filter((inv: any) => {
     if (!inv.gstr.includes(activeTab)) return false;
     if (isDateActive) {
       const from = parseDMY(fromDate);
       const to   = parseDMY(toDate);
-      if (from && to) return inv.dateObj >= from && inv.dateObj <= to;
+      if (from && to) {
+        if (!(inv.dateObj >= from && inv.dateObj <= to)) return false;
+      }
+    }
+    // ── Feature 2: month filter ────────────────────────────────────────────
+    if (selectedMonth !== null) {
+      if (monthLabel(inv.dateObj) !== selectedMonth) return false;
     }
     return true;
   });
 
+  // ── Feature 3: unmatched count reflects current tab's invoices ────────────
   const unmatchedCount = sourceInvoices.filter(
     (inv: any) => !inv.matched && (inv.gstr||[]).includes(activeTab)
   ).length;
@@ -127,9 +168,12 @@ export default function GSTScreen() {
     );
   };
 
+  // ── Feature 1: set loading=true on tab change ──────────────────────────────
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
     setSelected([]);
+    setSelectedMonth(null); // reset month filter on tab change
+    setLoading(true);
   };
 
   return (
@@ -204,7 +248,7 @@ export default function GSTScreen() {
           </View>
         </View>
 
-        {/* ── Unmatched CTA ───────────────────────────────────────────── */}
+        {/* ── Unmatched CTA (Feature 3: reflects current tab) ─────────── */}
         {unmatchedCount > 0 && (
           <TouchableOpacity
             style={s.unmatchedBtn}
@@ -239,6 +283,40 @@ export default function GSTScreen() {
           ))}
         </ScrollView>
 
+        {/* ── Feature 2: Month Filter Chips ───────────────────────────── */}
+        {!loading && availableMonths.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.monthBarContent}
+            style={s.monthBarWrap}
+          >
+            {/* "All" chip */}
+            <TouchableOpacity
+              style={[s.monthChip, selectedMonth === null && s.monthChipActive]}
+              onPress={() => setSelectedMonth(null)}
+              activeOpacity={0.7}
+            >
+              <Text style={[s.monthChipTxt, selectedMonth === null && s.monthChipTxtActive]}>
+                All
+              </Text>
+            </TouchableOpacity>
+
+            {availableMonths.map((mon) => (
+              <TouchableOpacity
+                key={mon}
+                style={[s.monthChip, selectedMonth === mon && s.monthChipActive]}
+                onPress={() => setSelectedMonth(selectedMonth === mon ? null : mon)}
+                activeOpacity={0.7}
+              >
+                <Text style={[s.monthChipTxt, selectedMonth === mon && s.monthChipTxtActive]}>
+                  {mon}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+
         {/* ── Tab Not Applicable ───────────────────────────────────────── */}
         {tabNotApplicable && (
           <View style={s.emptyBox}>
@@ -268,13 +346,22 @@ export default function GSTScreen() {
           </ScrollView>
         )}
 
+        {/* ── Feature 1: Shimmer skeleton while loading ───────────────── */}
+        {loading && !tabNotApplicable && !gstr3bSummary && (
+          <View style={s.shimmerWrap}>
+            {[...Array(6)].map((_, i) => (
+              <LedgerRowSkeleton key={`shimmer-${i}`} />
+            ))}
+          </View>
+        )}
+
         {/* ── Invoice List ─────────────────────────────────────────────── */}
-        {!tabNotApplicable && !gstr3bSummary && filteredInvoices.length === 0 ? (
+        {!loading && !tabNotApplicable && !gstr3bSummary && filteredInvoices.length === 0 ? (
           <View style={s.emptyBox}>
             <Ionicons name="checkmark-circle-outline" size={44} color={COLORS.positive} />
             <Text style={s.emptyTxt}>No invoices found</Text>
           </View>
-        ) : !tabNotApplicable && !gstr3bSummary && (
+        ) : !loading && !tabNotApplicable && !gstr3bSummary && (
           filteredInvoices.map((inv) => {
             const isSelected = selected.includes(inv.id);
             return (
@@ -285,7 +372,8 @@ export default function GSTScreen() {
                   if (selected.length > 0) {
                     toggleSelect(inv.id);
                   } else {
-                    router.push(`/document/${inv.id}` as any);
+                    // ── Feature 4: open document screen with type param ──
+                    router.push(`/document/${inv.id}?type=${encodeURIComponent(inv.type)}` as any);
                   }
                 }}
                 onLongPress={() => toggleSelect(inv.id)}
@@ -438,6 +526,31 @@ const s = StyleSheet.create({
   },
   tabPillTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
   tabPillTxtActive: { color: COLORS.brandPrimary, fontWeight: '700' },
+
+  // Month filter bar
+  monthBarWrap: { marginBottom: SPACING.sm },
+  monthBarContent: { gap: 8, paddingRight: SPACING.md },
+  monthChip: {
+    paddingHorizontal: 14, paddingVertical: 7,
+    borderRadius: RADIUS.full,
+    backgroundColor: 'transparent',
+    borderWidth: 1.5, borderColor: COLORS.borderDefault,
+  },
+  monthChipActive: {
+    backgroundColor: COLORS.brandPrimary,
+    borderColor: COLORS.brandPrimary,
+  },
+  monthChipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
+  monthChipTxtActive: { color: '#FFFFFF', fontWeight: '700' },
+
+  // Shimmer wrap
+  shimmerWrap: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    overflow: 'hidden',
+    marginBottom: SPACING.sm,
+  },
 
   // Empty state
   emptyBox: { alignItems: 'center', paddingVertical: 48, gap: 10 },
