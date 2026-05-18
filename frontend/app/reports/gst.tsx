@@ -392,6 +392,8 @@ export default function GSTScreen() {
         visible={showDatePicker}
         fromDate={fromDate}
         toDate={toDate}
+        minDate={selectedFY?.startDate}
+        maxDate={selectedFY?.endDate}
         onApply={(from, to) => {
           if (from && to) { setFromDate(from); setToDate(to); }
         }}
