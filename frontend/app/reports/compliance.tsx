@@ -10,6 +10,7 @@ import Svg, { Path, Circle } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getAlerts } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
+import { fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 
 const W = Dimensions.get('window').width;
@@ -188,21 +189,24 @@ const EWB_SEGMENTS = [
 export default function ComplianceHubScreen() {
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
-  const { company } = useAuth();
+  const { company, selectedFY } = useAuth();
 
-  // Real alert counts from backend
+  // Real alert counts from backend — re-fetch when FY changes
   const [alerts, setAlerts] = useState<any>(null);
   useEffect(() => {
     if (company?.guid) {
-      getAlerts(company.guid).then((res: any) => {
+      const fyParam = fyInfoToParam(selectedFY);
+      getAlerts(company.guid, fyParam ? { fy: fyParam } : undefined).then((res: any) => {
         if (res?.data) setAlerts(res.data);
       }).catch(() => {});
     }
-  }, [company?.guid]);
+  }, [company?.guid, selectedFY]);
 
-  const pendingIRN  = alerts?.pendingIRNCount  ?? 0;
-  const pendingEWB  = alerts?.pendingEWBCount  ?? 0;
+  const pendingIRN   = alerts?.pendingIRNCount   ?? 0;
+  const pendingEWB   = alerts?.pendingEWBCount   ?? 0;
   const unmatchedGST = alerts?.unmatchedGSTCount ?? 0;
+  const gstPercent   = alerts?.gstPercent        ?? 0;
+  const gstStatus    = alerts?.gstStatus         ?? 'Pending';
 
   // GST tooltips
   const pendingTip  = useToggleTip();
@@ -247,14 +251,19 @@ export default function ComplianceHubScreen() {
 
               <View style={s.gstSep} />
 
-              {/* Pending badge — tap for invoice count tooltip */}
+              {/* Filing status badge — dynamic: Filed / Partial / Pending */}
               <View style={s.gstCell}>
                 <Pressable
-                  style={s.pendingBadge}
+                  style={[s.pendingBadge,
+                    gstStatus === 'Filed'   && s.pendingBadgeFiled,
+                    gstStatus === 'Partial' && s.pendingBadgePartial,
+                  ]}
                   onPress={pendingTip.visible ? pendingTip.hide : pendingTip.show}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Text style={s.pendingTxt}>Pending</Text>
+                  <Text style={s.pendingTxt}>
+                    {gstStatus === 'Partial' ? `${gstPercent}%` : gstStatus}
+                  </Text>
                 </Pressable>
               </View>
 
@@ -434,7 +443,9 @@ const s = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 5,
     borderRadius: RADIUS.full,
   },
-  pendingTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white, letterSpacing: 0.3 },
+  pendingTxt:          { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white, letterSpacing: 0.3 },
+  pendingBadgeFiled:   { backgroundColor: COLORS.positive },
+  pendingBadgePartial: { backgroundColor: '#A89060' },
 
   // E-Way Bill
   ewbBody: {
