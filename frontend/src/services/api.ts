@@ -249,6 +249,7 @@ export const getUnmatchedInvoices = (companyGuid?: string, params?: any) => get<
 export const getEInvoicePending  = (companyGuid?: string) => get<any>(withCompany('/einvoice/pending', companyGuid));
 export const getEInvoiceGenerated = (companyGuid?: string) => get<any>(withCompany('/einvoice/generated', companyGuid));
 export const getGSTDetail        = (companyGuid?: string, params?: any) => get<any>(withCompany('/reports/gst-detail', companyGuid, params));
+export const getGSTSummary       = (companyGuid?: string, params?: any) => get<any>(withCompany('/reports/gst-summary', companyGuid, params));
 
 // ══════════════════════════════════════════════════════════════
 // KPI DETAIL VIEWS

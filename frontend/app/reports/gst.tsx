@@ -10,7 +10,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import DateRangePickerModal, { parseDMY } from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { fyInfoToParam } from '../../src/context/AuthContext';
-import { getGSTDetail } from '../../src/services/api';
+import { getGSTDetail, getGSTSummary } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 
@@ -36,6 +36,18 @@ interface Invoice {
   amount: string;
   matched: boolean;
   gstr: string[];
+  gstSection?: string;
+  partyRegistrationType?: string;
+}
+
+function getSectionBadgeStyle(section: string) {
+  if (section === 'B2B' || section === 'B2B Interstate') return { backgroundColor: '#EEF2FF' };
+  if (section === 'B2C') return { backgroundColor: '#F0FDF4' };
+  if (section === 'Export') return { backgroundColor: '#FFF7ED' };
+  if (section === 'SEZ') return { backgroundColor: '#F0F9FF' };
+  if (section === 'RCM') return { backgroundColor: '#FEF2F2' };
+  if (section?.startsWith('ITC')) return { backgroundColor: '#F5F3FF' };
+  return { backgroundColor: '#F3F4F6' };
 }
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
@@ -50,6 +62,7 @@ export default function GSTScreen() {
   const [gstNotApplicableMsg, setGstNotApplicableMsg] = useState('');
   const [liveInvoices, setLiveInvoices] = useState<Invoice[]>([]);
   const [gstr3bSummary, setGstr3bSummary] = useState<any>(null);
+  const [gstSummaryData, setGstSummaryData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   const [activeTab,      setActiveTab]      = useState('GSTR-1');
@@ -69,6 +82,15 @@ export default function GSTScreen() {
       return next;
     });
   }, []);
+
+  // ── Fetch GST summary card data ───────────────────────────────────────────
+  useEffect(() => {
+    if (!companyGuid) return;
+    const fyParam = fyInfoToParam(selectedFY);
+    getGSTSummary(companyGuid, fyParam ? { fy: fyParam } : {})
+      .then((res: any) => { if (res?.summary) setGstSummaryData(res.summary); })
+      .catch(() => {});
+  }, [companyGuid, selectedFY]);
 
   // ── Fetch on tab/FY change ────────────────────────────────────────────────
   useEffect(() => {
@@ -106,6 +128,8 @@ export default function GSTScreen() {
         amount: formatAmount(Math.abs(+r.amount || 0)),
         matched: !!(r.irn),
         gstr: [activeTab],
+        gstSection: r.gst_section || undefined,
+        partyRegistrationType: r.party_registration_type || undefined,
       })));
       setLoading(false);
     }).catch(() => { setLoading(false); });
@@ -140,7 +164,7 @@ export default function GSTScreen() {
     return groups;
   }, [filteredInvoices]);
 
-  const unmatchedCount = liveInvoices.filter(inv => !inv.matched).length;
+  const unmatchedCount = gstSummaryData?.unmatchedCount ?? liveInvoices.filter(inv => !inv.matched).length;
 
   // ── Not applicable for country ────────────────────────────────────────────
   if (!isGSTApplicable) {
@@ -210,17 +234,17 @@ export default function GSTScreen() {
         <View style={s.summaryCard}>
           <View style={s.summaryRow}>
             <Text style={s.summaryLabel}>GST Collected</Text>
-            <Text style={s.summaryValue}>₹4,75,000</Text>
+            <Text style={s.summaryValue}>{gstSummaryData ? formatAmount(gstSummaryData.gstCollected) : '—'}</Text>
           </View>
           <View style={s.summaryDivider} />
           <View style={s.summaryRow}>
             <Text style={s.summaryLabel}>ITC Balance</Text>
-            <Text style={s.summaryValue}>₹3,92,000</Text>
+            <Text style={s.summaryValue}>{gstSummaryData ? formatAmount(gstSummaryData.itcBalance) : '—'}</Text>
           </View>
           <View style={s.summaryDivider} />
           <View style={s.summaryRow}>
             <Text style={s.summaryLabel}>Net Payable</Text>
-            <Text style={s.summaryValue}>₹83,000</Text>
+            <Text style={s.summaryValue}>{gstSummaryData ? formatAmount(gstSummaryData.netPayable) : '—'}</Text>
           </View>
         </View>
 
@@ -346,6 +370,11 @@ export default function GSTScreen() {
                         <Text style={s.invSep}> • </Text>
                         <Text style={s.invType}>{inv.type}</Text>
                       </View>
+                      {inv.gstSection && (
+                        <View style={[s.sectionBadge, getSectionBadgeStyle(inv.gstSection)]}>
+                          <Text style={s.sectionBadgeTxt}>{inv.gstSection}</Text>
+                        </View>
+                      )}
                       <View style={s.invBodyRow}>
                         <View style={[s.statusIcon, { backgroundColor: inv.matched ? '#F0FBF4' : '#FEF2F2' }]}>
                           <Ionicons
@@ -529,6 +558,12 @@ const s = StyleSheet.create({
   invParty:   { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
   invDate:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
   invAmount:  { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+
+  sectionBadge: {
+    alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2,
+    borderRadius: 4, marginTop: 2,
+  },
+  sectionBadgeTxt: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
 
   shareBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
