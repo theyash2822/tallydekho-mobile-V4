@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
@@ -20,10 +21,7 @@ const GSTR_TABS = [
   'GSTR-7', 'GSTR-8', 'GSTR-9', 'GSTR-10', 'GSTR-11',
 ];
 
-// ── Month label helpers ───────────────────────────────────────────────────────
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-/** Returns e.g. "Apr 2024" from a Date object */
 function monthLabel(d: Date): string {
   return `${MONTH_ABBR[d.getMonth()]} ${d.getFullYear()}`;
 }
@@ -51,8 +49,6 @@ export default function GSTScreen() {
   const [isGSTApplicable, setIsGSTApplicable] = useState(true);
   const [gstNotApplicableMsg, setGstNotApplicableMsg] = useState('');
   const [liveInvoices, setLiveInvoices] = useState<Invoice[]>([]);
-  const [tabNotApplicable, setTabNotApplicable] = useState(false);
-  const [tabNotApplicableMsg, setTabNotApplicableMsg] = useState('');
   const [gstr3bSummary, setGstr3bSummary] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
@@ -62,7 +58,7 @@ export default function GSTScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selected,       setSelected]       = useState<string[]>([]);
 
-  // ── Collapsible months: Set of month labels that are currently collapsed ──
+  // ── Collapsible months ────────────────────────────────────────────────────
   const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
 
   const toggleMonth = useCallback((month: string) => {
@@ -74,15 +70,13 @@ export default function GSTScreen() {
     });
   }, []);
 
-  // ── Fetch on tab change or FY change ──────────────────────────────────────
+  // ── Fetch on tab/FY change ────────────────────────────────────────────────
   useEffect(() => {
     if (!companyGuid) return;
     setLiveInvoices([]);
-    setTabNotApplicable(false);
-    setTabNotApplicableMsg('');
     setGstr3bSummary(null);
     setLoading(true);
-    setCollapsedMonths(new Set()); // reset collapsed on every refetch
+    setCollapsedMonths(new Set());
 
     const fyParam = fyInfoToParam(selectedFY);
 
@@ -96,57 +90,45 @@ export default function GSTScreen() {
         setLoading(false);
         return;
       }
-      if (res?.meta?.not_applicable) {
-        setTabNotApplicable(true);
-        setTabNotApplicableMsg(res.meta.message || `${activeTab} not applicable`);
-        setLoading(false);
-        return;
-      }
+      // GSTR-3B: set summary card data (shown above the list)
       if (res?.meta?.is_summary && res?.summary) {
         setGstr3bSummary(res.summary);
-        setLoading(false);
-        return;
       }
+      // ALL tabs: populate voucher list from data array
       const rows: any[] = res?.data ?? [];
-      if (rows.length) {
-        setLiveInvoices(rows.map((r: any, idx: number) => ({
-          id: r.guid || r.id ? `${r.guid || r.id}` : `row-${activeTab}-${idx}`,
-          invoiceNo: r.voucher_number || '',
-          type: r.voucher_type || 'Sales',
-          party: r.party_name || '',
-          date: r.date || '',
-          dateObj: new Date(r.date || Date.now()),
-          amount: formatAmount(Math.abs(+r.amount || 0)),
-          matched: !!(r.irn),
-          gstr: [activeTab],
-        })));
-      }
+      setLiveInvoices(rows.map((r: any, idx: number) => ({
+        id: r.guid || r.id ? `${r.guid || r.id}` : `row-${activeTab}-${idx}`,
+        invoiceNo: r.voucher_number || '',
+        type: r.voucher_type || 'Sales',
+        party: r.party_name || '',
+        date: r.date || '',
+        dateObj: new Date(r.date || Date.now()),
+        amount: formatAmount(Math.abs(+r.amount || 0)),
+        matched: !!(r.irn),
+        gstr: [activeTab],
+      })));
       setLoading(false);
     }).catch(() => { setLoading(false); });
   }, [companyGuid, activeTab, selectedFY]);
 
   const isDateActive = fromDate.length > 0 && toDate.length > 0;
 
-  // ── Filter by tab + date range ────────────────────────────────────────────
+  // ── Filter by date range ──────────────────────────────────────────────────
   const filteredInvoices = useMemo(() => {
     return liveInvoices.filter((inv) => {
-      if (!inv.gstr.includes(activeTab)) return false;
-      if (isDateActive) {
-        const from = parseDMY(fromDate);
-        const to   = parseDMY(toDate);
-        if (from && to && !(inv.dateObj >= from && inv.dateObj <= to)) return false;
-      }
+      if (!isDateActive) return true;
+      const from = parseDMY(fromDate);
+      const to   = parseDMY(toDate);
+      if (from && to && !(inv.dateObj >= from && inv.dateObj <= to)) return false;
       return true;
     });
-  }, [liveInvoices, activeTab, isDateActive, fromDate, toDate]);
+  }, [liveInvoices, isDateActive, fromDate, toDate]);
 
-  // ── Group filtered invoices by month (chronological order) ───────────────
+  // ── Group by month (chronological) ───────────────────────────────────────
   const groupedInvoices = useMemo(() => {
     const groups: { month: string; invoices: Invoice[] }[] = [];
     const monthMap = new Map<string, Invoice[]>();
-    const sorted = [...filteredInvoices].sort(
-      (a, b) => a.dateObj.getTime() - b.dateObj.getTime()
-    );
+    const sorted = [...filteredInvoices].sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
     for (const inv of sorted) {
       const m = monthLabel(inv.dateObj);
       if (!monthMap.has(m)) {
@@ -158,11 +140,9 @@ export default function GSTScreen() {
     return groups;
   }, [filteredInvoices]);
 
-  // ── Unmatched count for current tab ──────────────────────────────────────
-  const unmatchedCount = liveInvoices.filter(
-    (inv) => !inv.matched && inv.gstr.includes(activeTab)
-  ).length;
+  const unmatchedCount = liveInvoices.filter(inv => !inv.matched).length;
 
+  // ── Not applicable for country ────────────────────────────────────────────
   if (!isGSTApplicable) {
     return (
       <SafeAreaView style={s.safe} edges={['top']}>
@@ -183,7 +163,7 @@ export default function GSTScreen() {
   }
 
   const toggleSelect = (id: string) => {
-    setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
+    setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
   const handleTabChange = (tab: string) => {
@@ -277,52 +257,49 @@ export default function GSTScreen() {
           ))}
         </ScrollView>
 
-        {/* ── Tab Not Applicable ───────────────────────────────────────── */}
-        {tabNotApplicable && (
-          <View style={s.emptyBox}>
-            <Ionicons name="information-circle-outline" size={44} color={COLORS.textTertiary} />
-            <Text style={[s.emptyTxt, {fontWeight:'700',color:COLORS.textPrimary}]}>{activeTab} — Not Applicable</Text>
-            <Text style={[s.emptyTxt, {fontSize:12,marginTop:4}]}>{tabNotApplicableMsg}</Text>
-          </View>
-        )}
-
-        {/* ── GSTR-3B Summary ─────────────────────────────────────────── */}
+        {/* ── GSTR-3B Summary Card (above voucher list) ────────────────── */}
         {gstr3bSummary && (
-          <View style={{gap:12}}>
-            <Text style={{fontSize:14,fontWeight:'700',color:COLORS.textSecondary,marginBottom:4}}>GSTR-3B Summary</Text>
+          <View style={s.gst3bCard}>
+            <Text style={s.gst3bTitle}>GSTR-3B Summary</Text>
             {[
-              {label:'Total Outward Supply (Sales)',    value:gstr3bSummary.outwardSupply,   color:COLORS.positive},
-              {label:'Total Inward Supply (Purchase)',  value:gstr3bSummary.inwardSupply,    color:COLORS.textSecondary},
-              {label:'Estimated Output Tax (18%)',      value:gstr3bSummary.outputTax,       color:COLORS.negative||'#E53935'},
-              {label:'Input Tax Credit (18%)',          value:gstr3bSummary.inputTaxCredit,  color:COLORS.positive},
-              {label:'Net GST Payable',                 value:gstr3bSummary.netTaxPayable,   color:COLORS.negative||'#E53935'},
+              { label: 'Total Outward Supply', value: gstr3bSummary.outwardSupply,  color: COLORS.positive },
+              { label: 'Total Inward Supply',  value: gstr3bSummary.inwardSupply,   color: COLORS.textSecondary },
+              { label: 'Output Tax (~18%)',    value: gstr3bSummary.outputTax,      color: (COLORS as any).negative || '#E53935' },
+              { label: 'Input Tax Credit',     value: gstr3bSummary.inputTaxCredit, color: COLORS.positive },
+              { label: 'Net GST Payable',      value: gstr3bSummary.netTaxPayable,  color: (COLORS as any).negative || '#E53935' },
             ].map(row => (
-              <View key={row.label} style={{flexDirection:'row',justifyContent:'space-between',paddingVertical:10,borderBottomWidth:1,borderBottomColor:COLORS.borderDefault}}>
-                <Text style={{fontSize:13,color:COLORS.textSecondary,flex:1}}>{row.label}</Text>
-                <Text style={{fontSize:13,fontWeight:'700',color:row.color}}>₹{row.value?.toLocaleString('en-IN',{minimumFractionDigits:2})}</Text>
+              <View key={row.label} style={s.gst3bRow}>
+                <Text style={s.gst3bLabel}>{row.label}</Text>
+                <Text style={[s.gst3bValue, { color: row.color }]}>
+                  ₹{row.value?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </Text>
               </View>
             ))}
-            <Text style={{fontSize:11,color:COLORS.textTertiary,marginTop:8}}>* Tax amounts are approximate (18% GST). Actual rates may vary per item.</Text>
           </View>
         )}
 
         {/* ── Shimmer skeleton while loading ──────────────────────────── */}
-        {loading && !tabNotApplicable && !gstr3bSummary && (
+        {loading && (
           <View style={s.shimmerWrap}>
             {[...Array(6)].map((_, i) => <LedgerRowSkeleton key={`sk-${i}`} />)}
           </View>
         )}
 
-        {/* ── Empty state ──────────────────────────────────────────────── */}
-        {!loading && !tabNotApplicable && !gstr3bSummary && filteredInvoices.length === 0 && (
+        {/* ── No Vouchers empty state ───────────────────────────────────── */}
+        {!loading && filteredInvoices.length === 0 && (
           <View style={s.emptyBox}>
-            <Ionicons name="checkmark-circle-outline" size={44} color={COLORS.positive} />
-            <Text style={s.emptyTxt}>No invoices found</Text>
+            <Ionicons name="document-outline" size={48} color={COLORS.textTertiary} />
+            <Text style={[s.emptyTxt, { fontWeight: '700', color: COLORS.textPrimary, marginTop: 4 }]}>
+              No Vouchers
+            </Text>
+            <Text style={[s.emptyTxt, { fontSize: 12, marginTop: 2 }]}>
+              No transactions found for {activeTab}
+            </Text>
           </View>
         )}
 
         {/* ── Invoice List — grouped by month with collapsible headers ── */}
-        {!loading && !tabNotApplicable && !gstr3bSummary && groupedInvoices.length > 0 && (
+        {!loading && groupedInvoices.length > 0 && (
           groupedInvoices.map(({ month, invoices: monthInvoices }) => {
             const isCollapsed = collapsedMonths.has(month);
             return (
@@ -335,7 +312,9 @@ export default function GSTScreen() {
                 >
                   <Text style={s.monthHeaderTxt}>{month}</Text>
                   <View style={s.monthHeaderRight}>
-                    <Text style={s.monthHeaderCount}>{monthInvoices.length} invoice{monthInvoices.length !== 1 ? 's' : ''}</Text>
+                    <Text style={s.monthHeaderCount}>
+                      {monthInvoices.length} voucher{monthInvoices.length !== 1 ? 's' : ''}
+                    </Text>
                     <Ionicons
                       name={isCollapsed ? 'chevron-forward' : 'chevron-down'}
                       size={15}
@@ -344,7 +323,7 @@ export default function GSTScreen() {
                   </View>
                 </TouchableOpacity>
 
-                {/* Invoice cards — hidden when collapsed */}
+                {/* Voucher cards */}
                 {!isCollapsed && monthInvoices.map((inv) => {
                   const isSelected = selected.includes(inv.id);
                   return (
@@ -369,7 +348,11 @@ export default function GSTScreen() {
                       </View>
                       <View style={s.invBodyRow}>
                         <View style={[s.statusIcon, { backgroundColor: inv.matched ? '#F0FBF4' : '#FEF2F2' }]}>
-                          <Ionicons name={inv.matched ? 'checkmark' : 'warning'} size={15} color={inv.matched ? COLORS.positive : '#DC2626'} />
+                          <Ionicons
+                            name={inv.matched ? 'checkmark' : 'warning'}
+                            size={15}
+                            color={inv.matched ? COLORS.positive : '#DC2626'}
+                          />
                         </View>
                         <View style={s.invInfo}>
                           <Text style={s.invParty}>{inv.party}</Text>
@@ -388,7 +371,7 @@ export default function GSTScreen() {
         <View style={{ height: selected.length > 0 ? 90 : 40 }} />
       </ScrollView>
 
-      {/* ── Share Bar (long-press selection) ─────────────────────────── */}
+      {/* ── Share Bar ────────────────────────────────────────────────────── */}
       {selected.length > 0 && (
         <View style={[s.shareBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={s.shareLeft}>
@@ -404,7 +387,7 @@ export default function GSTScreen() {
         </View>
       )}
 
-      {/* ── Date Range Modal ─────────────────────────────────────────── */}
+      {/* ── Date Range Modal ─────────────────────────────────────────────── */}
       <DateRangePickerModal
         visible={showDatePicker}
         fromDate={fromDate}
@@ -483,6 +466,26 @@ const s = StyleSheet.create({
   tabPillTxt:       { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
   tabPillTxtActive: { color: COLORS.brandPrimary, fontWeight: '700' },
 
+  // GSTR-3B summary card
+  gst3bCard: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, paddingBottom: SPACING.xs,
+    marginBottom: SPACING.md,
+  },
+  gst3bTitle: {
+    fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textSecondary,
+    marginBottom: 8, letterSpacing: 0.3,
+  },
+  gst3bRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  gst3bLabel: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, flex: 1 },
+  gst3bValue: { fontSize: TYPOGRAPHY.sm, fontWeight: '700' },
+
   // Month section header
   monthHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -503,8 +506,8 @@ const s = StyleSheet.create({
     overflow: 'hidden', marginBottom: SPACING.sm,
   },
 
-  emptyBox: { alignItems: 'center', paddingVertical: 48, gap: 10 },
-  emptyTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary, fontWeight: '500' },
+  emptyBox: { alignItems: 'center', paddingVertical: 48, gap: 4 },
+  emptyTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary, fontWeight: '500', textAlign: 'center' },
 
   invoiceCard: {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
@@ -533,9 +536,9 @@ const s = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
     gap: 12,
   },
-  shareLeft:       { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  shareCount:      { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  shareCancelTxt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textSecondary },
+  shareLeft:      { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  shareCount:     { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  shareCancelTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textSecondary },
   shareActionBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: COLORS.brandPrimary,
