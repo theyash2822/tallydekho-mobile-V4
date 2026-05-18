@@ -396,6 +396,18 @@ export default function GSTScreen() {
           ))}
         </ScrollView>
 
+
+        {/* ── GSTR-2A/2B: Portal info banner ─────────────────────────── */}
+        {(activeTab === 'GSTR-2A' || activeTab === 'GSTR-2B') && (
+          <View style={s.portalInfoBanner}>
+            <Ionicons name="cloud-outline" size={16} color={COLORS.brandPrimary} />
+            <Text style={s.portalInfoTxt}>
+              Showing book-side purchase vouchers from registered suppliers.{' '}
+              <Text style={s.portalInfoLink}>GST portal reconciliation coming soon.</Text>
+            </Text>
+          </View>
+        )}
+
         {/* ── GSTR-3B Summary Card (above voucher list) ────────────────── */}
         {gstr3bSummary && (
           <View style={s.gst3bCard}>
@@ -656,6 +668,19 @@ const s = StyleSheet.create({
   },
   sectionBadgeTxt: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
 
+  portalInfoBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: COLORS.brandPrimary + '12',
+    borderRadius: RADIUS.md, padding: SPACING.sm,
+    marginBottom: SPACING.sm,
+    borderWidth: 1, borderColor: COLORS.brandPrimary + '30',
+  },
+  portalInfoTxt: {
+    flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, lineHeight: 18,
+  },
+  portalInfoLink: {
+    color: COLORS.brandPrimary, fontWeight: '600',
+  },
   sectionGroupHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingVertical: 12, paddingHorizontal: 4,
