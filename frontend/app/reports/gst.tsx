@@ -37,7 +37,20 @@ interface Invoice {
   matched: boolean;
   gstr: string[];
   gstSection?: string;
+  gstr3bSection?: string;
+  partyGstin?: string;
+  isNilRated?: boolean;
+  isExempt?: boolean;
   partyRegistrationType?: string;
+}
+
+function getSectionDotStyle(section: string) {
+  if (section === 'B2B' || section === 'B2B Interstate') return { backgroundColor: '#6366F1' };
+  if (section === 'B2C') return { backgroundColor: '#22C55E' };
+  if (section === 'Export') return { backgroundColor: '#F97316' };
+  if (section === 'SEZ') return { backgroundColor: '#0EA5E9' };
+  if (section === 'Nil/Exempt') return { backgroundColor: '#94A3B8' };
+  return { backgroundColor: '#D1D5DB' };
 }
 
 function getSectionBadgeStyle(section: string) {
@@ -80,6 +93,15 @@ export default function GSTScreen() {
       if (next.has(month)) next.delete(month);
       else next.add(month);
       return next;
+    });
+  }, []);
+
+  // ── Collapsible GSTR-1 sections ───────────────────────────────────────────
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+
+  const toggleSection = useCallback((sec: string) => {
+    setCollapsedSections(prev => {
+      const next = new Set(prev); next.has(sec) ? next.delete(sec) : next.add(sec); return next;
     });
   }, []);
 
@@ -129,6 +151,10 @@ export default function GSTScreen() {
         matched: !!(r.irn),
         gstr: [activeTab],
         gstSection: r.gst_section || undefined,
+        gstr3bSection: r.gstr3b_section || undefined,
+        partyGstin: r.party_gstin || undefined,
+        isNilRated: !!(r.is_nil_rated),
+        isExempt: !!(r.is_exempt),
         partyRegistrationType: r.party_registration_type || undefined,
       })));
       setLoading(false);
@@ -164,6 +190,19 @@ export default function GSTScreen() {
     return groups;
   }, [filteredInvoices]);
 
+  // ── GSTR-1 section sub-groups ────────────────────────────────────────────────
+  const gstr1Sections = useMemo(() => {
+    if (activeTab !== 'GSTR-1') return null;
+    const order = ['B2B', 'B2B Interstate', 'B2C', 'Export', 'SEZ', 'Nil/Exempt', 'Other'];
+    const map = new Map<string, Invoice[]>();
+    for (const inv of filteredInvoices) {
+      const sec = inv.gstSection || 'Other';
+      if (!map.has(sec)) map.set(sec, []);
+      map.get(sec)!.push(inv);
+    }
+    return order.filter(s => map.has(s)).map(s => ({ section: s, invoices: map.get(s)! }));
+  }, [activeTab, filteredInvoices]);
+
   const unmatchedCount = gstSummaryData?.unmatchedCount ?? liveInvoices.filter(inv => !inv.matched).length;
 
   // ── Not applicable for country ────────────────────────────────────────────
@@ -194,6 +233,54 @@ export default function GSTScreen() {
     setActiveTab(tab);
     setSelected([]);
     setLoading(true);
+    setCollapsedSections(new Set());
+  };
+
+  // ── Render individual invoice card ───────────────────────────────────────
+  const renderInvoiceCard = (inv: Invoice) => {
+    const isSelected = selected.includes(inv.id);
+    const sectionToShow = activeTab === 'GSTR-3B' ? inv.gstr3bSection : inv.gstSection;
+    return (
+      <TouchableOpacity
+        key={inv.id}
+        style={[s.invoiceCard, isSelected && s.invoiceCardSelected]}
+        onPress={() => {
+          if (selected.length > 0) {
+            toggleSelect(inv.id);
+          } else {
+            router.push(`/document/${inv.id}?type=${encodeURIComponent(inv.type)}` as any);
+          }
+        }}
+        onLongPress={() => toggleSelect(inv.id)}
+        delayLongPress={500}
+        activeOpacity={0.8}
+      >
+        <View style={s.invTopRow}>
+          <Text style={s.invId}>{inv.invoiceNo}</Text>
+          <Text style={s.invSep}> • </Text>
+          <Text style={s.invType}>{inv.type}</Text>
+        </View>
+        {sectionToShow && (
+          <View style={[s.sectionBadge, getSectionBadgeStyle(sectionToShow)]}>
+            <Text style={s.sectionBadgeTxt}>{sectionToShow}</Text>
+          </View>
+        )}
+        <View style={s.invBodyRow}>
+          <View style={[s.statusIcon, { backgroundColor: inv.matched ? '#F0FBF4' : '#FEF2F2' }]}>
+            <Ionicons
+              name={inv.matched ? 'checkmark' : 'warning'}
+              size={15}
+              color={inv.matched ? COLORS.positive : '#DC2626'}
+            />
+          </View>
+          <View style={s.invInfo}>
+            <Text style={s.invParty}>{inv.party}</Text>
+            <Text style={s.invDate}>{inv.date}</Text>
+          </View>
+          <Text style={s.invAmount}>{inv.amount}</Text>
+        </View>
+      </TouchableOpacity>
+    );
   };
 
   return (
@@ -322,13 +409,34 @@ export default function GSTScreen() {
           </View>
         )}
 
-        {/* ── Invoice List — grouped by month with collapsible headers ── */}
-        {!loading && groupedInvoices.length > 0 && (
+        {/* ── GSTR-1: section sub-groups (B2B / B2C / Export / Nil) ── */}
+        {!loading && activeTab === 'GSTR-1' && gstr1Sections && gstr1Sections.length > 0 && (
+          gstr1Sections.map(({ section, invoices: secInvoices }) => {
+            const isCollapsed = collapsedSections.has(section);
+            return (
+              <View key={section}>
+                <TouchableOpacity style={s.sectionGroupHeader} onPress={() => toggleSection(section)} activeOpacity={0.75}>
+                  <View style={s.sectionGroupLeft}>
+                    <View style={[s.sectionDot, getSectionDotStyle(section)]} />
+                    <Text style={s.sectionGroupTxt}>{section}</Text>
+                  </View>
+                  <View style={s.monthHeaderRight}>
+                    <Text style={s.monthHeaderCount}>{secInvoices.length} invoice{secInvoices.length !== 1 ? 's' : ''}</Text>
+                    <Ionicons name={isCollapsed ? 'chevron-forward' : 'chevron-down'} size={15} color={COLORS.textSecondary} />
+                  </View>
+                </TouchableOpacity>
+                {!isCollapsed && secInvoices.map((inv) => renderInvoiceCard(inv))}
+              </View>
+            );
+          })
+        )}
+
+        {/* ── All other tabs: month-based grouping ── */}
+        {!loading && activeTab !== 'GSTR-1' && groupedInvoices.length > 0 && (
           groupedInvoices.map(({ month, invoices: monthInvoices }) => {
             const isCollapsed = collapsedMonths.has(month);
             return (
               <View key={month}>
-                {/* Month section header */}
                 <TouchableOpacity
                   style={s.monthHeader}
                   onPress={() => toggleMonth(month)}
@@ -346,52 +454,7 @@ export default function GSTScreen() {
                     />
                   </View>
                 </TouchableOpacity>
-
-                {/* Voucher cards */}
-                {!isCollapsed && monthInvoices.map((inv) => {
-                  const isSelected = selected.includes(inv.id);
-                  return (
-                    <TouchableOpacity
-                      key={inv.id}
-                      style={[s.invoiceCard, isSelected && s.invoiceCardSelected]}
-                      onPress={() => {
-                        if (selected.length > 0) {
-                          toggleSelect(inv.id);
-                        } else {
-                          router.push(`/document/${inv.id}?type=${encodeURIComponent(inv.type)}` as any);
-                        }
-                      }}
-                      onLongPress={() => toggleSelect(inv.id)}
-                      delayLongPress={500}
-                      activeOpacity={0.8}
-                    >
-                      <View style={s.invTopRow}>
-                        <Text style={s.invId}>{inv.invoiceNo}</Text>
-                        <Text style={s.invSep}> • </Text>
-                        <Text style={s.invType}>{inv.type}</Text>
-                      </View>
-                      {inv.gstSection && (
-                        <View style={[s.sectionBadge, getSectionBadgeStyle(inv.gstSection)]}>
-                          <Text style={s.sectionBadgeTxt}>{inv.gstSection}</Text>
-                        </View>
-                      )}
-                      <View style={s.invBodyRow}>
-                        <View style={[s.statusIcon, { backgroundColor: inv.matched ? '#F0FBF4' : '#FEF2F2' }]}>
-                          <Ionicons
-                            name={inv.matched ? 'checkmark' : 'warning'}
-                            size={15}
-                            color={inv.matched ? COLORS.positive : '#DC2626'}
-                          />
-                        </View>
-                        <View style={s.invInfo}>
-                          <Text style={s.invParty}>{inv.party}</Text>
-                          <Text style={s.invDate}>{inv.date}</Text>
-                        </View>
-                        <Text style={s.invAmount}>{inv.amount}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
+                {!isCollapsed && monthInvoices.map((inv) => renderInvoiceCard(inv))}
               </View>
             );
           })
@@ -564,6 +627,17 @@ const s = StyleSheet.create({
     borderRadius: 4, marginTop: 2,
   },
   sectionBadgeTxt: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
+
+  sectionGroupHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 12, paddingHorizontal: 4,
+    marginTop: SPACING.md, marginBottom: 6,
+    backgroundColor: COLORS.pageBg,
+    borderBottomWidth: 2, borderBottomColor: COLORS.brandPrimary + '30',
+  },
+  sectionGroupLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sectionGroupTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  sectionDot: { width: 10, height: 10, borderRadius: 5 },
 
   shareBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
