@@ -42,6 +42,32 @@ interface Invoice {
   isNilRated?: boolean;
   isExempt?: boolean;
   partyRegistrationType?: string;
+  itcEligibility?: string;
+  gstLedgerNames?: string;
+  classificationReason?: string;
+}
+
+function mapVoucher(r: any, idx: number, tab: string, fmt: (n: number) => string): Invoice {
+  return {
+    id: r.guid || r.id ? `${r.guid || r.id}` : `row-${tab}-${idx}`,
+    invoiceNo: r.voucher_number || '',
+    type: r.voucher_type || 'Sales',
+    party: r.party_name || '',
+    date: r.date || '',
+    dateObj: new Date(r.date || Date.now()),
+    amount: fmt(Math.abs(+r.amount || 0)),
+    matched: !!(r.irn),
+    gstr: [tab],
+    gstSection: r.gst_section || undefined,
+    gstr3bSection: r.gstr3b_section || undefined,
+    partyGstin: r.party_gstin || undefined,
+    isNilRated: !!(r.is_nil_rated),
+    isExempt: !!(r.is_exempt),
+    partyRegistrationType: r.party_registration_type || undefined,
+    itcEligibility: r.itc_eligibility || undefined,
+    gstLedgerNames: r.gst_ledger_names || undefined,
+    classificationReason: r.classification_reason || undefined,
+  };
 }
 
 function getSectionDotStyle(section: string) {
@@ -74,6 +100,7 @@ export default function GSTScreen() {
   const [isGSTApplicable, setIsGSTApplicable] = useState(true);
   const [gstNotApplicableMsg, setGstNotApplicableMsg] = useState('');
   const [liveInvoices, setLiveInvoices] = useState<Invoice[]>([]);
+  const [apiGroups, setApiGroups] = useState<{ month: string; invoices: Invoice[] }[]>([]);
   const [gstr3bSummary, setGstr3bSummary] = useState<any>(null);
   const [gstSummaryData, setGstSummaryData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -118,6 +145,7 @@ export default function GSTScreen() {
   useEffect(() => {
     if (!companyGuid) return;
     setLiveInvoices([]);
+    setApiGroups([]);
     setGstr3bSummary(null);
     setLoading(true);
     setCollapsedMonths(new Set());
@@ -140,23 +168,19 @@ export default function GSTScreen() {
       }
       // ALL tabs: populate voucher list from data array
       const rows: any[] = res?.data ?? [];
-      setLiveInvoices(rows.map((r: any, idx: number) => ({
-        id: r.guid || r.id ? `${r.guid || r.id}` : `row-${activeTab}-${idx}`,
-        invoiceNo: r.voucher_number || '',
-        type: r.voucher_type || 'Sales',
-        party: r.party_name || '',
-        date: r.date || '',
-        dateObj: new Date(r.date || Date.now()),
-        amount: formatAmount(Math.abs(+r.amount || 0)),
-        matched: !!(r.irn),
-        gstr: [activeTab],
-        gstSection: r.gst_section || undefined,
-        gstr3bSection: r.gstr3b_section || undefined,
-        partyGstin: r.party_gstin || undefined,
-        isNilRated: !!(r.is_nil_rated),
-        isExempt: !!(r.is_exempt),
-        partyRegistrationType: r.party_registration_type || undefined,
-      })));
+      setLiveInvoices(rows.map((r: any, idx: number) => mapVoucher(r, idx, activeTab, formatAmount)));
+      // Use API pre-grouped data if available
+      if (res?.groups?.length > 0) {
+        const mapped = (res.groups as any[]).map((g: any) => ({
+          month: g.month,
+          invoices: (g.vouchers as any[]).map((r: any, idx: number) =>
+            mapVoucher(r, idx, activeTab, formatAmount)
+          ),
+        }));
+        setApiGroups(mapped);
+      } else {
+        setApiGroups([]);
+      }
       setLoading(false);
     }).catch(() => { setLoading(false); });
   }, [companyGuid, activeTab, selectedFY]);
@@ -174,8 +198,12 @@ export default function GSTScreen() {
     });
   }, [liveInvoices, isDateActive, fromDate, toDate]);
 
-  // ── Group by month (chronological) ───────────────────────────────────────
+  // ── Group by month: use API groups if available, else group client-side ──
   const groupedInvoices = useMemo(() => {
+    if (activeTab === 'GSTR-1') return []; // GSTR-1 uses gstr1Sections instead
+    // Use API groups if available (already grouped by backend)
+    if (apiGroups.length > 0) return apiGroups;
+    // Fallback: group on client from filteredInvoices
     const groups: { month: string; invoices: Invoice[] }[] = [];
     const monthMap = new Map<string, Invoice[]>();
     const sorted = [...filteredInvoices].sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
@@ -188,7 +216,7 @@ export default function GSTScreen() {
       monthMap.get(m)!.push(inv);
     }
     return groups;
-  }, [filteredInvoices]);
+  }, [activeTab, filteredInvoices, apiGroups]);
 
   // ── GSTR-1 section sub-groups ────────────────────────────────────────────────
   const gstr1Sections = useMemo(() => {
