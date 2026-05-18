@@ -670,16 +670,16 @@ const s = StyleSheet.create({
 
   portalInfoBanner: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    backgroundColor: COLORS.brandPrimary + '12',
+    backgroundColor: COLORS.cardBg,
     borderRadius: RADIUS.md, padding: SPACING.sm,
     marginBottom: SPACING.sm,
-    borderWidth: 1, borderColor: COLORS.brandPrimary + '30',
+    borderWidth: 1, borderColor: COLORS.borderDefault,
   },
   portalInfoTxt: {
     flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, lineHeight: 18,
   },
   portalInfoLink: {
-    color: COLORS.brandPrimary, fontWeight: '600',
+    color: COLORS.textPrimary, fontWeight: '600',
   },
   sectionGroupHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
