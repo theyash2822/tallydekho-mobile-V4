@@ -175,13 +175,7 @@ function CardHeader({ icon, title, onPress }: { icon: string; title: string; onP
 function Divider() { return <View style={s.divider} />; }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EWB SEGMENT DATA  (with bill counts)
-// ─────────────────────────────────────────────────────────────────────────────
-const EWB_SEGMENTS = [
-  { pct: 0, color: COLORS.brandPrimary, label: 'Active',        value: '0%', count: '0 bills active' },
-  { pct: 0, color: '#A89060',           label: 'Expiring soon', value: '0%', count: '0 bills · — days left' },
-  { pct: 100, color: COLORS.borderStrong, label: 'No Data',     value: '—',  count: 'Sync EWB data first' },
-];
+// EWB segments computed dynamically inside component
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN SCREEN
@@ -202,11 +196,28 @@ export default function ComplianceHubScreen() {
     }
   }, [company?.guid, selectedFY]);
 
-  const pendingIRN   = alerts?.pendingIRNCount   ?? 0;
-  const pendingEWB   = alerts?.pendingEWBCount   ?? 0;
-  const unmatchedGST = alerts?.unmatchedGSTCount ?? 0;
-  const gstPercent   = alerts?.gstPercent        ?? 0;
-  const gstStatus    = alerts?.gstStatus         ?? 'Pending';
+  const pendingIRN      = alerts?.pendingIRNCount   ?? 0;
+  const pendingEWB      = alerts?.pendingEWBCount   ?? 0;
+  const expiredEWB      = alerts?.expiredEWBCount   ?? 0;
+  const ewbGenerated    = alerts?.ewbGeneratedCount ?? 0;
+  const irnGenerated    = alerts?.irnGeneratedCount ?? 0;
+  const unmatchedGST    = alerts?.unmatchedGSTCount ?? 0;
+  const gstPercent      = alerts?.gstPercent        ?? 0;
+  const gstStatus       = alerts?.gstStatus         ?? 'Pending';
+
+  // E-Invoice: pending IRN + progress %
+  const irnTotal       = pendingIRN + irnGenerated;
+  const irnProgressPct = irnTotal > 0 ? Math.round((irnGenerated / irnTotal) * 100) : 0;
+
+  // EWB: compute donut segments from real data
+  const ewbTotal = ewbGenerated + pendingEWB + expiredEWB;
+  const ewbDonutSegs = ewbTotal > 0
+    ? [
+        ...(ewbGenerated > 0 ? [{ pct: Math.round((ewbGenerated / ewbTotal) * 100), color: '#2D7D46',          label: 'Generated',  value: `${ewbGenerated}`,  count: `${ewbGenerated} bills generated` }] : []),
+        ...(pendingEWB   > 0 ? [{ pct: Math.round((pendingEWB   / ewbTotal) * 100), color: '#D97706',          label: 'Pending',    value: `${pendingEWB}`,    count: `${pendingEWB} bills pending` }] : []),
+        ...(expiredEWB   > 0 ? [{ pct: Math.round((expiredEWB   / ewbTotal) * 100), color: '#DC2626',          label: 'Expired',    value: `${expiredEWB}`,    count: `${expiredEWB} bills expired` }] : []),
+      ]
+    : [{ pct: 100, color: COLORS.borderStrong, label: 'No Data', value: '—', count: 'No EWBs in this period' }];
 
   // GST tooltips
   const pendingTip  = useToggleTip();
@@ -217,10 +228,8 @@ export default function ComplianceHubScreen() {
   const toggleEwb = (i: number) => setActiveEwb(prev => prev === i ? null : i);
 
   // E-Invoicing count tooltip
-  const einvTip = useToggleTip();
 
   // Other Taxes count tooltip
-  const otherTip = useToggleTip();
 
   return (
     <SafeAreaView style={s.safe}>
@@ -295,11 +304,11 @@ export default function ComplianceHubScreen() {
           <Divider />
 
           <View style={s.ewbBody}>
-            <DonutChart segments={EWB_SEGMENTS} />
+            <DonutChart segments={ewbDonutSegs} />
 
             {/* Tappable legend rows */}
             <View style={s.legendCol}>
-              {EWB_SEGMENTS.map((seg, i) => (
+              {ewbDonutSegs.map((seg, i) => (
                 <Pressable
                   key={seg.label}
                   style={[s.legendRow, activeEwb === i && s.legendRowActive]}
@@ -321,7 +330,7 @@ export default function ComplianceHubScreen() {
               {activeEwb !== null && (
                 <View style={s.ewbCountRow}>
                   <Ionicons name="information-circle-outline" size={13} color={COLORS.textTertiary} />
-                  <Text style={s.ewbCountTxt}>{EWB_SEGMENTS[activeEwb].count}</Text>
+                  <Text style={s.ewbCountTxt}>{ewbDonutSegs[activeEwb].count}</Text>
                 </View>
               )}
             </View>
@@ -335,18 +344,18 @@ export default function ComplianceHubScreen() {
 
           <View style={s.progressBody}>
             <View style={s.progressRow}>
-              <Text style={s.progressLbl}>Unreconciled vouchers</Text>
-              <Pressable
-                onPress={einvTip.visible ? einvTip.hide : einvTip.show}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text style={[s.progressNum, s.numTappable]}>14</Text>
-              </Pressable>
+              <Text style={s.progressLbl}>Pending IRN</Text>
+              <Text style={s.progressNum}>{pendingIRN}</Text>
             </View>
-
-            {einvTip.visible && <TooltipChip text="14 of 70 vouchers unreconciled · 80% matched" />}
-
-            <ProgressBar pct={80} tooltipText="80% vouchers reconciled" />
+            {irnTotal > 0 && (
+              <ProgressBar
+                pct={irnProgressPct}
+                tooltipText={`${irnGenerated} of ${irnTotal} invoices have IRN · ${irnProgressPct}% generated`}
+              />
+            )}
+            {irnTotal === 0 && (
+              <Text style={s.progressEmptyTxt}>No eligible invoices (≥₹50K) in this period</Text>
+            )}
           </View>
         </View>
 
@@ -358,17 +367,10 @@ export default function ComplianceHubScreen() {
           <View style={s.progressBody}>
             <View style={s.progressRow}>
               <Text style={s.progressLbl}>TDS Pending</Text>
-              <Pressable
-                onPress={otherTip.visible ? otherTip.hide : otherTip.show}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text style={[s.progressNum, s.numTappable]}>14</Text>
-              </Pressable>
+              <Text style={s.progressNum}>0</Text>
             </View>
 
-            {otherTip.visible && <TooltipChip text="TDS: ₹24,500 pending · Due 15 May" />}
-
-            <ProgressBar pct={40} tooltipText="40% TDS challans filed" />
+            <ProgressBar pct={0} tooltipText="No TDS data available" />
           </View>
         </View>
 
@@ -459,6 +461,6 @@ const s = StyleSheet.create({
   progressRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   progressLbl:  { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '500' },
   progressNum:  { fontSize: TYPOGRAPHY.xl, fontWeight: '800', color: COLORS.textPrimary },
-  numTappable:  { textDecorationLine: 'underline', textDecorationStyle: 'dotted' },
+  progressEmptyTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 6 },
 });
 
