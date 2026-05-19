@@ -5,8 +5,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { getEInvoiceGenerated } from '../../src/services/api';
 import { fyInfoToParam } from '../../src/context/AuthContext';
+import { getEInvoiceGenerated } from '../../src/services/api';
+import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useSettings } from '../../src/context/SettingsContext';
 
 // Data loaded from API
@@ -24,16 +25,30 @@ export default function EInvoiceListScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
-  const [invoiceData, setInvoiceData] = useState<any[]>([]);
-  const [loading,     setLoading]     = useState(false);
-  const [selected, setSelected] = useState<string[]>([]);
+  const [invoiceData,    setInvoiceData]    = useState<any[]>([]);
+  const [loading,        setLoading]        = useState(false);
+  const [selected,       setSelected]       = useState<string[]>([]);
+  const [fromDate,       setFromDate]       = useState(selectedFY?.startDate || '');
+  const [toDate,         setToDate]         = useState(selectedFY?.endDate   || '');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Sync dates when selectedFY loads
+  const fySynced = React.useRef(false);
+  useEffect(() => {
+    if (selectedFY?.startDate && !fySynced.current) {
+      fySynced.current = true;
+      setFromDate(selectedFY.startDate);
+      setToDate(selectedFY.endDate || new Date().toISOString().split('T')[0]);
+    }
+  }, [selectedFY?.startDate]);
   const selectMode = selected.length > 0;
 
   useEffect(() => {
     if (!company?.guid) return;
     setLoading(true);
     const fyParam = fyInfoToParam(selectedFY);
-    getEInvoiceGenerated(company.guid, fyParam ? { fy: fyParam } : {})
+    const dateParams = fromDate && toDate ? { from: fromDate, to: toDate } : (fyParam ? { fy: fyParam } : {});
+    getEInvoiceGenerated(company.guid, dateParams)
       .then((res: any) => {
         const rows = (res?.data || []).map((i: any, idx: number) => ({
           id: i.id?.toString() || `g${idx}`,
@@ -48,7 +63,7 @@ export default function EInvoiceListScreen() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [company?.guid, selectedFY]);
+  }, [company?.guid, selectedFY, fromDate, toDate]);
 
   const toggleSelect = (id: string) =>
     setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
@@ -87,7 +102,11 @@ export default function EInvoiceListScreen() {
             <Text style={s.headerTextBtnTxt}>Select All</Text>
           </TouchableOpacity>
         ) : (
-          <View style={{ width: 44 }} />
+          <TouchableOpacity style={s.backBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
+            <Ionicons name="calendar-outline" size={20}
+              color={fromDate ? COLORS.brandPrimary : COLORS.textSecondary}
+            />
+          </TouchableOpacity>
         )}
       </View>
 
@@ -157,6 +176,15 @@ export default function EInvoiceListScreen() {
           </TouchableOpacity>
         </View>
       )}
+      <DateRangePickerModal
+        visible={showDatePicker}
+        fromDate={fromDate}
+        toDate={toDate}
+        minDate={selectedFY?.startDate}
+        maxDate={selectedFY?.endDate}
+        onApply={(f, t) => { setFromDate(f); setToDate(t); setShowDatePicker(false); }}
+        onClose={() => setShowDatePicker(false)}
+      />
     </SafeAreaView>
   );
 }

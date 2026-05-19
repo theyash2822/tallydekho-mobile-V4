@@ -154,6 +154,7 @@ export default function EWBComplianceScreen() {
   const expiringCount      = ewbStatus?.expiring_count    ?? 0;
   const errorCount         = ewbStatus?.error_count       ?? 0;
   const transportBreakdown: { mode: string; count: number }[] = ewbStatus?.transport_breakdown ?? [];
+  const dailyCounts: number[]  = ewbStatus?.daily_counts ?? [];
 
   // Merge transport breakdown with defaults (always show 4 modes)
   const transportDisplay = DEFAULT_TRANSPORT.map(def => ({
@@ -263,7 +264,7 @@ export default function EWBComplianceScreen() {
         {/* ── Bar Chart ──────────────────────────────────────────────────── */}
         <View style={s.card}>
           <Text style={s.cardTitle}>Bills Generated Per Day</Text>
-          <EWBBarChart data={[]} />
+          <EWBBarChart data={dailyCounts} />
           {generatedCount === 0 && (
             <Text style={s.chartEmptyTxt}>No bills generated in this period</Text>
           )}

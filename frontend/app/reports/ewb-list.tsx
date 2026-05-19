@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
+import { fyInfoToParam } from '../../src/context/AuthContext';
 import { getEWBList } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 
@@ -30,10 +31,21 @@ export default function EWBListScreen() {
   const [fromDate, setFromDate] = useState(selectedFY?.startDate || '');
   const [toDate,   setToDate]   = useState(selectedFY?.endDate   || '');
 
+  // Sync dates when selectedFY loads asynchronously
+  const fySynced = React.useRef(false);
+  useEffect(() => {
+    if (selectedFY?.startDate && !fySynced.current) {
+      fySynced.current = true;
+      setFromDate(selectedFY.startDate);
+      setToDate(selectedFY.endDate || new Date().toISOString().split('T')[0]);
+    }
+  }, [selectedFY?.startDate]);
+
   useEffect(() => {
     if (!company?.guid) return;
     setLoading(true);
-    getEWBList(company.guid).then((res: any) => {
+    const fyParam = fyInfoToParam(selectedFY);
+    getEWBList(company.guid, fyParam ? { fy: fyParam } : {}).then((res: any) => {
       const list = res?.data || [];
       if (list.length > 0) {
         setEwbData(list.map((item: any, idx: number) => ({
