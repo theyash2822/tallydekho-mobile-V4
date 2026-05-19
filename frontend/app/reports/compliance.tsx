@@ -228,8 +228,10 @@ export default function ComplianceHubScreen() {
   const toggleEwb = (i: number) => setActiveEwb(prev => prev === i ? null : i);
 
   // E-Invoicing count tooltip
+  const einvTip = useToggleTip();
 
   // Other Taxes count tooltip
+  const otherTip = useToggleTip();
 
   return (
     <SafeAreaView style={s.safe}>
@@ -345,17 +347,22 @@ export default function ComplianceHubScreen() {
           <View style={s.progressBody}>
             <View style={s.progressRow}>
               <Text style={s.progressLbl}>Pending IRN</Text>
-              <Text style={s.progressNum}>{pendingIRN}</Text>
+              <Pressable
+                onPress={einvTip.visible ? einvTip.hide : einvTip.show}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={s.progressNum}>{pendingIRN}</Text>
+              </Pressable>
             </View>
-            {irnTotal > 0 && (
-              <ProgressBar
-                pct={irnProgressPct}
-                tooltipText={`${irnGenerated} of ${irnTotal} invoices have IRN · ${irnProgressPct}% generated`}
-              />
+
+            {einvTip.visible && (
+              <TooltipChip text={irnTotal > 0 ? `${irnGenerated} of ${irnTotal} invoices have IRN · ${irnProgressPct}% generated` : 'No eligible invoices (≥₹50K) in this period'} />
             )}
-            {irnTotal === 0 && (
-              <Text style={s.progressEmptyTxt}>No eligible invoices (≥₹50K) in this period</Text>
-            )}
+
+            <ProgressBar
+              pct={irnProgressPct}
+              tooltipText={`${irnGenerated} of ${irnTotal} invoices have IRN · ${irnProgressPct}% generated`}
+            />
           </View>
         </View>
 
@@ -367,10 +374,17 @@ export default function ComplianceHubScreen() {
           <View style={s.progressBody}>
             <View style={s.progressRow}>
               <Text style={s.progressLbl}>TDS Pending</Text>
-              <Text style={s.progressNum}>0</Text>
+              <Pressable
+                onPress={otherTip.visible ? otherTip.hide : otherTip.show}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={s.progressNum}>0</Text>
+              </Pressable>
             </View>
 
-            <ProgressBar pct={0} tooltipText="No TDS data available" />
+            {otherTip.visible && <TooltipChip text="No TDS data available for this period" />}
+
+            <ProgressBar pct={0} tooltipText="0% TDS challans filed" />
           </View>
         </View>
 
