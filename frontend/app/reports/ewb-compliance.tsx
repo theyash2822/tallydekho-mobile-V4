@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Dimensions,
+  Dimensions, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -283,14 +283,14 @@ export default function EWBComplianceScreen() {
           </View>
         </View>
 
-        {/* ── View Details ───────────────────────────────────────────────── */}
+        {/* ── View Details — opens NIC portal externally ───────────────────── */}
         <TouchableOpacity
           style={s.viewDetailsBtn}
-          onPress={() => router.push('/reports/ewb-list' as any)}
+          onPress={() => Linking.openURL('https://ewaybillgst.gov.in/')}
           activeOpacity={0.85}
         >
-          <Text style={s.viewDetailsTxt}>View Details</Text>
-          <Ionicons name="chevron-forward" size={18} color={COLORS.white} />
+          <Ionicons name="open-outline" size={16} color={COLORS.white} />
+          <Text style={s.viewDetailsTxt}>View on NIC Portal</Text>
         </TouchableOpacity>
 
         <View style={{ height: 40 }} />
