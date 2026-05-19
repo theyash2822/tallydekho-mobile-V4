@@ -43,6 +43,17 @@ const mapVoucherType = (raw: string): VType => {
   return 'Journal';
 };
 
+// Cr = money in / revenue received (from company's perspective)
+// Dr = money out / expense / purchase
+const isCreditVoucher = (voucherType: string): boolean => {
+  const t = (voucherType || '').toLowerCase();
+  if (t.includes('receipt'))     return true;  // Cash/bank receipt = Cr
+  if (t.includes('credit note')) return true;  // Credit note = Cr
+  if (t.includes('sales') && !t.includes('return') && !t.includes('order')) return true; // Sales = Cr
+  // Payment, Purchase, Debit Note, Journal, Contra, Orders = Dr
+  return false;
+};
+
 const TYPE_COLORS: Record<string,string> = {
   Sales: COLORS.positive, Purchase: COLORS.info, Payment: COLORS.negative,
   Receipt: COLORS.positive, Journal: COLORS.warning, Contra: '#7C3AED',
@@ -77,7 +88,7 @@ export default function DaybookScreen() {
     ref: r.voucher_number || '',
     party: r.party_name || '',
     amount: formatAmount(Math.abs(+r.amount || 0)),
-    isCredit: +r.amount < 0,
+    isCredit: isCreditVoucher(r.voucher_type),
     status: 'posted' as const,
     isMine: true,
   });

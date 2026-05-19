@@ -51,6 +51,14 @@ const formatMonth = (dateStr: string) => {
   return d.toLocaleString('en-IN', { month: 'short', year: '2-digit' });
 };
 
+const isCreditVoucher = (voucherType: string): boolean => {
+  const t = (voucherType || '').toLowerCase();
+  if (t.includes('receipt'))     return true;
+  if (t.includes('credit note')) return true;
+  if (t.includes('sales') && !t.includes('return') && !t.includes('order')) return true;
+  return false;
+};
+
 const mapVoucherType = (raw: string): Exclude<VoucherType, 'ALL'> => {
   const s = (raw || '').toLowerCase();
   if (s.includes('sales')) return 'Sales';
@@ -74,7 +82,7 @@ const mapApiRow = (r: any, fmt: (n: number) => string = (n) => String(n)): Vouch
   party: r.party_name || '',
   description: r.voucher_type || '',
   amount: fmt(Math.abs(+r.amount || 0)),
-  isCredit: +r.amount < 0,
+  isCredit: isCreditVoucher(r.voucher_type),
   syncStatus: 'synced' as const,
   isMine: true,
 });
