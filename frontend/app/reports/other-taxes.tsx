@@ -39,8 +39,10 @@ interface SummaryRow {
 
 interface TaxTxn {
   id: number;
+  voucher_guid: string;
   voucher_date: string;
   voucher_number: string | null;
+  voucher_type: string | null;
   party_ledger_name: string | null;
   tax_ledger_name: string;
   tax_amount: number;
@@ -327,7 +329,12 @@ export default function OtherTaxesScreen() {
           ) : (
             <>
               {txns.map((txn, idx) => (
-                <View key={txn.id} style={[s.txnRow, idx < txns.length - 1 && s.txnBorder]}>
+                <TouchableOpacity
+                  key={txn.id}
+                  style={[s.txnRow, idx < txns.length - 1 && s.txnBorder]}
+                  activeOpacity={0.7}
+                  onPress={() => router.push(`/document/${txn.voucher_guid}` as any)}
+                >
                   <View style={{ flex: 1 }}>
                     <Text style={s.txnParty} numberOfLines={1}>
                       {txn.party_ledger_name || txn.tax_ledger_name || '-'}
@@ -337,13 +344,14 @@ export default function OtherTaxesScreen() {
                       {fmtDate(txn.voucher_date)}
                     </Text>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
+                  <View style={{ alignItems: 'flex-end', gap: 2 }}>
                     <Text style={s.txnAmt}>{fmt(txn.tax_amount)}</Text>
                     {txn.transaction_nature && (
                       <Text style={s.txnNature}>{txn.transaction_nature}</Text>
                     )}
+                    <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
                   </View>
-                </View>
+                </TouchableOpacity>
               ))}
 
               {/* Load More */}
