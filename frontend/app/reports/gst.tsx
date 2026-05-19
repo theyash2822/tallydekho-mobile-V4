@@ -400,10 +400,13 @@ export default function GSTScreen() {
         {/* ── GSTR-2A/2B: Portal info banner ─────────────────────────── */}
         {(activeTab === 'GSTR-2A' || activeTab === 'GSTR-2B') && (
           <View style={s.portalInfoBanner}>
-            <Ionicons name="cloud-outline" size={16} color={COLORS.brandPrimary} />
+            <View style={s.portalInfoIconRow}>
+              <Ionicons name="cloud-outline" size={18} color={COLORS.brandPrimary} />
+              <Text style={s.portalInfoTitle}>Portal Reconciliation — Coming Soon</Text>
+            </View>
             <Text style={s.portalInfoTxt}>
-              Showing book-side purchase vouchers from registered suppliers.{' '}
-              <Text style={s.portalInfoLink}>GST portal reconciliation coming soon.</Text>
+              Currently showing book-side purchase vouchers from registered suppliers in Tally.{' '}
+              Live GST portal 2A/2B reconciliation requires GSP/ASP integration and will be available in a future update.
             </Text>
           </View>
         )}
@@ -669,14 +672,20 @@ const s = StyleSheet.create({
   sectionBadgeTxt: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
 
   portalInfoBanner: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    backgroundColor: COLORS.cardBg,
-    borderRadius: RADIUS.md, padding: SPACING.sm,
+    flexDirection: 'column', gap: 6,
+    backgroundColor: '#EEF6FF',
+    borderRadius: RADIUS.md, padding: SPACING.md,
     marginBottom: SPACING.sm,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderWidth: 1, borderColor: '#BFDBFE',
+  },
+  portalInfoIconRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+  },
+  portalInfoTitle: {
+    fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.brandPrimary,
   },
   portalInfoTxt: {
-    flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, lineHeight: 18,
+    fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, lineHeight: 18,
   },
   portalInfoLink: {
     color: COLORS.textPrimary, fontWeight: '600',

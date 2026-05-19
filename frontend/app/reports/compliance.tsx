@@ -251,20 +251,11 @@ export default function ComplianceHubScreen() {
 
               <View style={s.gstSep} />
 
-              {/* Filing status badge — dynamic: Filed / Partial / Pending */}
+              {/* Filing status badge — N/A until GST portal integration is live */}
               <View style={s.gstCell}>
-                <Pressable
-                  style={[s.pendingBadge,
-                    gstStatus === 'Filed'   && s.pendingBadgeFiled,
-                    gstStatus === 'Partial' && s.pendingBadgePartial,
-                  ]}
-                  onPress={pendingTip.visible ? pendingTip.hide : pendingTip.show}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Text style={s.pendingTxt}>
-                    {gstStatus === 'Partial' ? `${gstPercent}%` : gstStatus}
-                  </Text>
-                </Pressable>
+                <View style={[s.pendingBadge, s.pendingBadgeNA]}>
+                  <Text style={s.pendingTxt}>N/A</Text>
+                </View>
               </View>
 
               <View style={s.gstSep} />
@@ -285,7 +276,7 @@ export default function ComplianceHubScreen() {
                 onPress={() => router.push('/reports/unmatched-list' as any)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Text style={[s.gstBigNum, s.gstNumLink]}>{unmatchedGST}</Text>
+                <Text style={s.gstBigNum}>{unmatchedGST}</Text>
               </Pressable>
             </View>
 
@@ -446,6 +437,7 @@ const s = StyleSheet.create({
   pendingTxt:          { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white, letterSpacing: 0.3 },
   pendingBadgeFiled:   { backgroundColor: COLORS.positive },
   pendingBadgePartial: { backgroundColor: '#A89060' },
+  pendingBadgeNA:      { backgroundColor: COLORS.textTertiary },
 
   // E-Way Bill
   ewbBody: {
