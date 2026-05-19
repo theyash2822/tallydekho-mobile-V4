@@ -1,20 +1,136 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Dimensions, Linking,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-
+import Svg, { Path, Circle, G, Rect, Line, Text as SvgText } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { getEWBStatus } from '../../src/services/api';
 import { fyInfoToParam } from '../../src/context/AuthContext';
 
+const { width: W } = Dimensions.get('window');
+const CARD_INNER = W - SPACING.md * 2 - SPACING.md * 2;
+const DONUT_W   = Math.min(140, CARD_INNER * 0.42);
+const BAR_H     = 140;
+const BAR_PAD_T = 18;
+const BAR_PAD_B = 18;
+const CHART_H   = BAR_H - BAR_PAD_T - BAR_PAD_B;
+const BAR_W     = 18;
+const BAR_GAP   = 6;
+const MAX_Y     = 100;
+const Y_AXIS_W  = 28;
+const Y_LEVELS  = [0, 25, 50, 75, 100];
 
+// ── Transport defaults (always show 4 modes, 0 if no data) ──────────────────
+const DEFAULT_TRANSPORT = [
+  { mode: 'Road', color: '#2D7D46' },
+  { mode: 'Rail', color: '#2563EB' },
+  { mode: 'Air',  color: '#D97706' },
+  { mode: 'Sea',  color: '#7C3AED' },
+];
 
+// ── Donut: shows grey ring when total=0, real segments when data exists ──────
+function EWBDonut({
+  generated, pending, errors, expiring,
+}: { generated: number; pending: number; errors: number; expiring: number }) {
+  const total = generated + pending + errors + expiring;
+  const r = DONUT_W * 0.38; const ir = DONUT_W * 0.26;
+  const cx = DONUT_W / 2;   const cy = DONUT_W / 2;
+
+  if (total === 0) {
+    // Show grey empty ring
+    return (
+      <Svg width={DONUT_W} height={DONUT_W}>
+        <Circle cx={cx} cy={cy} r={r} fill="none" stroke={COLORS.borderDefault} strokeWidth={r - ir} />
+        <Circle cx={cx} cy={cy} r={ir - 1} fill={COLORS.cardBg} />
+        <SvgText x={cx} y={cy - 4} textAnchor="middle" fontSize={16} fontWeight="700" fill={COLORS.textTertiary}>0</SvgText>
+        <SvgText x={cx} y={cy + 11} textAnchor="middle" fontSize={9} fill={COLORS.textTertiary}>Total</SvgText>
+      </Svg>
+    );
+  }
+
+  const segs = [
+    { label: 'Generated', count: generated, color: '#2D7D46' },
+    { label: 'Pending',   count: pending,   color: '#D97706' },
+    { label: 'Errors',    count: errors,    color: '#DC2626' },
+    { label: 'Expiring',  count: expiring,  color: '#2563EB' },
+  ].filter(s => s.count > 0);
+
+  let angle = -Math.PI / 2;
+  const paths = segs.map((seg) => {
+    const pct    = seg.count / total;
+    const sweep  = pct * 2 * Math.PI;
+    const startA = angle;
+    angle       += sweep;
+    const endA   = angle;
+    const large  = sweep > Math.PI ? 1 : 0;
+    const x1 = cx + r * Math.cos(startA); const y1 = cy + r * Math.sin(startA);
+    const x2 = cx + r * Math.cos(endA);   const y2 = cy + r * Math.sin(endA);
+    const xi1 = cx + ir * Math.cos(startA); const yi1 = cy + ir * Math.sin(startA);
+    const xi2 = cx + ir * Math.cos(endA);   const yi2 = cy + ir * Math.sin(endA);
+    const d = `M ${x1.toFixed(1)} ${y1.toFixed(1)} A ${r} ${r} 0 ${large} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} L ${xi2.toFixed(1)} ${yi2.toFixed(1)} A ${ir} ${ir} 0 ${large} 0 ${xi1.toFixed(1)} ${yi1.toFixed(1)} Z`;
+    return <Path key={seg.label} d={d} fill={seg.color} />;
+  });
+
+  return (
+    <Svg width={DONUT_W} height={DONUT_W}>
+      {paths}
+      <Circle cx={cx} cy={cy} r={ir - 1} fill={COLORS.cardBg} />
+      <SvgText x={cx} y={cy - 4} textAnchor="middle" fontSize={16} fontWeight="700" fill={COLORS.textPrimary}>{total}</SvgText>
+      <SvgText x={cx} y={cy + 11} textAnchor="middle" fontSize={9} fill={COLORS.textSecondary}>Total</SvgText>
+    </Svg>
+  );
+}
+
+// ── Bar Chart: shows flat baseline when no data ──────────────────────────────
+function EWBBarChart({ data }: { data: number[] }) {
+  const bars = data.length > 0 ? data : Array(10).fill(0);
+  const totalW = bars.length * (BAR_W + BAR_GAP);
+  const maxVal = Math.max(...bars, 1);
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+      <View style={{ width: Y_AXIS_W, height: BAR_H, paddingBottom: BAR_PAD_B, paddingTop: BAR_PAD_T, justifyContent: 'space-between', alignItems: 'flex-end', paddingRight: 4 }}>
+        {[100, 75, 50, 25, 0].map(v => (
+          <Text key={v} style={{ fontSize: 8, color: COLORS.textTertiary, lineHeight: 10 }}>{v}</Text>
+        ))}
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+        <Svg width={totalW} height={BAR_H}>
+          {Y_LEVELS.map(v => {
+            const gy = BAR_PAD_T + CHART_H - (v / MAX_Y) * CHART_H;
+            return (
+              <Line key={v} x1={0} y1={gy} x2={totalW} y2={gy}
+                stroke={COLORS.borderDefault} strokeWidth={1}
+                strokeDasharray={v === 0 ? undefined : '4,4'}
+              />
+            );
+          })}
+          {bars.map((v, i) => {
+            const pct = v / maxVal;
+            const bh  = data.length === 0 ? 0 : Math.max(pct * CHART_H, v > 0 ? 2 : 0);
+            const x   = i * (BAR_W + BAR_GAP);
+            const y   = BAR_PAD_T + CHART_H - bh;
+            return (
+              <G key={i}>
+                <Rect x={x} y={y} width={BAR_W} height={bh} rx={3}
+                  fill={data.length === 0 ? COLORS.borderDefault : '#A89060'}
+                />
+              </G>
+            );
+          })}
+        </Svg>
+      </ScrollView>
+    </View>
+  );
+}
+
+// ── Main Screen ───────────────────────────────────────────────────────────────
 export default function EWBComplianceScreen() {
   const router = useRouter();
   const { company, selectedFY } = useAuth();
@@ -22,27 +138,35 @@ export default function EWBComplianceScreen() {
   const [toDate,         setToDate]         = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [ewbStatus,      setEwbStatus]      = useState<any>(null);
-  const [loading,        setLoading]        = useState(true);
 
   const isDateActive = fromDate.length > 0 && toDate.length > 0;
 
   useEffect(() => {
     if (!company?.guid) return;
-    setLoading(true);
     const fyParam = fyInfoToParam(selectedFY);
     getEWBStatus(company.guid, fyParam ? { fy: fyParam } : {})
       .then((res: any) => { if (res?.data) setEwbStatus(res.data); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => {});
   }, [company?.guid, selectedFY]);
 
-  const generatedCount  = ewbStatus?.generated_count  ?? 0;
-  const pendingCount    = ewbStatus?.pending_count     ?? 0;
-  const expiringCount   = ewbStatus?.expiring_count    ?? 0;
-  const errorCount      = ewbStatus?.error_count       ?? 0;
-  const isConnected     = ewbStatus?.integration_connected ?? false;
-  const transportBreakdown = ewbStatus?.transport_breakdown ?? [];
-  const hasAnyData      = generatedCount > 0;
+  const generatedCount     = ewbStatus?.generated_count  ?? 0;
+  const pendingCount       = ewbStatus?.pending_count     ?? 0;
+  const expiringCount      = ewbStatus?.expiring_count    ?? 0;
+  const errorCount         = ewbStatus?.error_count       ?? 0;
+  const transportBreakdown: { mode: string; count: number }[] = ewbStatus?.transport_breakdown ?? [];
+
+  // Merge transport breakdown with defaults (always show 4 modes)
+  const transportDisplay = DEFAULT_TRANSPORT.map(def => ({
+    ...def,
+    count: transportBreakdown.find(t => t.mode === def.mode)?.count ?? 0,
+  }));
+
+  const donutSegs = [
+    { label: 'Generated', count: generatedCount, color: '#2D7D46' },
+    { label: 'Pending',   count: pendingCount,   color: '#D97706' },
+    { label: 'Errors',    count: errorCount,     color: '#DC2626' },
+    { label: 'Expiring',  count: expiringCount,  color: '#2563EB' },
+  ];
 
   return (
     <SafeAreaView style={s.safe}>
@@ -54,8 +178,7 @@ export default function EWBComplianceScreen() {
         </TouchableOpacity>
         <Text style={s.headerTitle}>E-Way Bill</Text>
         <TouchableOpacity style={s.iconBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
-          <Ionicons
-            name="calendar-outline" size={20}
+          <Ionicons name="calendar-outline" size={20}
             color={isDateActive ? COLORS.brandPrimary : COLORS.textSecondary}
           />
         </TouchableOpacity>
@@ -77,91 +200,98 @@ export default function EWBComplianceScreen() {
 
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
 
-        {/* ── Empty State: no EWBs + portal not connected ── */}
-        {!loading && !hasAnyData && !isConnected && (
-          <View style={s.emptyState}>
-            <Ionicons name="document-outline" size={56} color={COLORS.borderStrong} />
-            <Text style={s.emptyTitle}>No E-Way Bills Found</Text>
-            <Text style={s.emptyMsg}>
-              Connect your E-Way Bill portal in Settings to view and manage E-Way Bills.
-            </Text>
-          </View>
-        )}
-
-        {/* ── Empty State: portal connected but no EWBs yet ── */}
-        {!loading && !hasAnyData && isConnected && (
-          <View style={s.emptyState}>
-            <Ionicons name="cloud-done-outline" size={56} color={COLORS.brandPrimary} />
-            <Text style={s.emptyTitle}>Portal Connected</Text>
-            <Text style={s.emptyMsg}>No E-Way Bills generated yet for this period.</Text>
-          </View>
-        )}
-
-        {/* ── Real data (generated > 0) ── */}
-        {hasAnyData && (
-          <>
-            {/* Stats 2×2 grid */}
-            <View style={s.statsCard}>
-              <View style={s.statsRow}>
-                <View style={s.statCell}>
-                  <Text style={s.statLabel}>Pending Gen</Text>
-                  <Text style={s.statValue}>{pendingCount}</Text>
-                </View>
-                <View style={s.statDivV} />
-                <View style={s.statCell}>
-                  <Text style={s.statLabel}>Errors</Text>
-                  <Text style={[s.statValue, { color: '#DC2626' }]}>{errorCount}</Text>
-                </View>
-              </View>
-              <View style={s.statDivH} />
-              <View style={s.statsRow}>
-                <View style={s.statCell}>
-                  <Text style={s.statLabel}>Expiring {'<'}24h</Text>
-                  <Text style={[s.statValue, { color: '#D97706' }]}>{expiringCount}</Text>
-                </View>
-                <View style={s.statDivV} />
-                <View style={s.statCell}>
-                  <Text style={s.statLabel}>Generated</Text>
-                  <Text style={[s.statValue, { color: '#2D7D46' }]}>{generatedCount}</Text>
-                </View>
-              </View>
+        {/* ── KPI Stats 2×2 ──────────────────────────────────────────────── */}
+        <View style={s.statsCard}>
+          <View style={s.statsRow}>
+            <View style={s.statCell}>
+              <Text style={s.statLabel}>Pending Gen</Text>
+              <Text style={s.statValue}>{pendingCount}</Text>
             </View>
+            <View style={s.statDivV} />
+            <View style={s.statCell}>
+              <Text style={s.statLabel}>Errors</Text>
+              <Text style={[s.statValue, { color: errorCount > 0 ? '#DC2626' : COLORS.textPrimary }]}>{errorCount}</Text>
+            </View>
+          </View>
+          <View style={s.statDivH} />
+          <View style={s.statsRow}>
+            <View style={s.statCell}>
+              <Text style={s.statLabel}>Expiring {'<'}24h</Text>
+              <Text style={[s.statValue, { color: expiringCount > 0 ? '#D97706' : COLORS.textPrimary }]}>{expiringCount}</Text>
+            </View>
+            <View style={s.statDivV} />
+            <View style={s.statCell}>
+              <Text style={s.statLabel}>Generated</Text>
+              <Text style={[s.statValue, { color: generatedCount > 0 ? '#2D7D46' : COLORS.textPrimary }]}>{generatedCount}</Text>
+            </View>
+          </View>
+        </View>
 
-            {/* Generated CTA */}
-            <TouchableOpacity
-              style={s.generatedBtn}
-              onPress={() => router.push('/reports/ewb-list' as any)}
-              activeOpacity={0.85}
-            >
-              <Text style={s.generatedBtnTxt}>Generated  {generatedCount}</Text>
-              <Ionicons name="chevron-forward" size={18} color={COLORS.white} />
-            </TouchableOpacity>
+        {/* ── Generated CTA ──────────────────────────────────────────────── */}
+        <TouchableOpacity
+          style={s.generatedBtn}
+          onPress={() => router.push('/reports/ewb-list' as any)}
+          activeOpacity={0.85}
+        >
+          <Text style={s.generatedBtnTxt}>Generated  {generatedCount}</Text>
+          <Ionicons name="chevron-forward" size={18} color={COLORS.white} />
+        </TouchableOpacity>
 
-            {/* Transport Mode (real data) */}
-            {transportBreakdown.length > 0 && (
-              <View style={s.card}>
-                <Text style={s.cardTitle}>Transport Mode</Text>
-                <View style={s.modesGrid}>
-                  {transportBreakdown.map((tm: any) => (
-                    <View key={tm.mode} style={s.modeCell}>
-                      <Text style={s.modeName}>{tm.mode}</Text>
-                      <Text style={s.modeCount}>{tm.count}</Text>
-                    </View>
-                  ))}
+        {/* ── Donut + Legend ─────────────────────────────────────────────── */}
+        <View style={s.card}>
+          <View style={s.donutRow}>
+            <EWBDonut
+              generated={generatedCount}
+              pending={pendingCount}
+              errors={errorCount}
+              expiring={expiringCount}
+            />
+            <View style={s.legendList}>
+              {donutSegs.map(seg => (
+                <View key={seg.label} style={s.legendItem}>
+                  <View style={[s.legendDot, { backgroundColor: seg.count > 0 ? seg.color : COLORS.borderStrong }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.legendLbl}>{seg.label}</Text>
+                    <Text style={[s.legendCount, { color: seg.count > 0 ? seg.color : COLORS.textTertiary }]}>{seg.count}</Text>
+                  </View>
                 </View>
-              </View>
-            )}
+              ))}
+            </View>
+          </View>
+        </View>
 
-            {/* View Details — opens portal */}
-            <TouchableOpacity
-              style={s.viewDetailsBtn}
-              onPress={() => Linking.openURL('https://ewaybillgst.gov.in/')}
-              activeOpacity={0.85}
-            >
-              <Text style={s.viewDetailsTxt}>View on Portal</Text>
-            </TouchableOpacity>
-          </>
-        )}
+        {/* ── Bar Chart ──────────────────────────────────────────────────── */}
+        <View style={s.card}>
+          <Text style={s.cardTitle}>Bills Generated Per Day</Text>
+          <EWBBarChart data={[]} />
+          {generatedCount === 0 && (
+            <Text style={s.chartEmptyTxt}>No bills generated in this period</Text>
+          )}
+        </View>
+
+        {/* ── Transport Mode ─────────────────────────────────────────────── */}
+        <View style={s.card}>
+          <Text style={s.cardTitle}>Transport Mode</Text>
+          <View style={s.modesGrid}>
+            {transportDisplay.map(tm => (
+              <View key={tm.mode} style={s.modeCell}>
+                <View style={[s.modeDot, { backgroundColor: tm.color }]} />
+                <Text style={s.modeName}>{tm.mode}</Text>
+                <Text style={[s.modeCount, { color: tm.count > 0 ? COLORS.textPrimary : COLORS.textTertiary }]}>{tm.count}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* ── View Details ───────────────────────────────────────────────── */}
+        <TouchableOpacity
+          style={s.viewDetailsBtn}
+          onPress={() => router.push('/reports/ewb-list' as any)}
+          activeOpacity={0.85}
+        >
+          <Text style={s.viewDetailsTxt}>View Details</Text>
+          <Ionicons name="chevron-forward" size={18} color={COLORS.white} />
+        </TouchableOpacity>
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -179,8 +309,8 @@ export default function EWBComplianceScreen() {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: COLORS.pageBg },
-  header: {
+  safe:        { flex: 1, backgroundColor: COLORS.pageBg },
+  header:      {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: SPACING.xs, paddingVertical: 10,
     backgroundColor: COLORS.cardBg,
@@ -195,19 +325,6 @@ const s = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
   dateStripTxt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
-
-  emptyState: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-    paddingTop: 80, paddingHorizontal: SPACING.xl,
-  },
-  emptyTitle: {
-    fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary,
-    marginTop: 16, textAlign: 'center',
-  },
-  emptyMsg: {
-    fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary,
-    marginTop: 8, textAlign: 'center', lineHeight: 20,
-  },
   dateStripActive: { color: COLORS.brandPrimary },
 
   scroll:        { flex: 1 },
@@ -219,10 +336,10 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: COLORS.borderDefault,
     marginBottom: SPACING.sm, overflow: 'hidden',
   },
-  statsRow: { flexDirection: 'row' },
-  statCell: { flex: 1, paddingHorizontal: SPACING.md, paddingVertical: 14 },
-  statDivV: { width: 1, backgroundColor: COLORS.borderDefault },
-  statDivH: { height: 1, backgroundColor: COLORS.borderDefault },
+  statsRow:  { flexDirection: 'row' },
+  statCell:  { flex: 1, paddingHorizontal: SPACING.md, paddingVertical: 14 },
+  statDivV:  { width: 1, backgroundColor: COLORS.borderDefault },
+  statDivH:  { height: 1, backgroundColor: COLORS.borderDefault },
   statLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500', marginBottom: 4 },
   statValue: { fontSize: 22, fontWeight: '800', color: COLORS.textPrimary },
 
@@ -242,50 +359,37 @@ const s = StyleSheet.create({
   },
   cardTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 12 },
 
-  // Donut layout
-  donutRow:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  // Donut
+  donutRow:  { flexDirection: 'row', alignItems: 'center', gap: 12 },
   legendList: { flex: 1, gap: 8 },
-  legendItem: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingVertical: 3, paddingHorizontal: 6, borderRadius: 6,
-  },
-  legendItemActive: { backgroundColor: COLORS.pageBg },
-  legendDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
-  legendLbl: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500' },
-  legendPct: { fontSize: TYPOGRAPHY.sm, fontWeight: '800' },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  legendDot:  { width: 10, height: 10, borderRadius: 5 },
+  legendLbl:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500' },
+  legendCount: { fontSize: TYPOGRAPHY.sm, fontWeight: '800' },
 
-  // Tooltip (shared for both charts)
-  tooltip: {
-    marginTop: 12, borderLeftWidth: 3, borderLeftColor: COLORS.brandPrimary,
-    paddingLeft: 10, paddingVertical: 9,
-    backgroundColor: COLORS.pageBg, borderRadius: 6,
+  // Bar chart empty
+  chartEmptyTxt: {
+    fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary,
+    textAlign: 'center', marginTop: 6,
   },
-  tooltipTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
 
   // Transport
   modesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  modeCell: {
-    width: '47%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  modeCell:  {
+    width: '47%', flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md,
     borderWidth: 1, borderColor: COLORS.borderDefault,
-    paddingHorizontal: SPACING.md, paddingVertical: 12,
+    paddingHorizontal: SPACING.sm, paddingVertical: 12,
   },
-  modeName:  { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textSecondary },
-  modeCount: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary },
-
-  // Activity
-  actRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 12,
-  },
-  actBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  actTxt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textPrimary, flex: 1 },
-  actTime:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  modeDot:   { width: 8, height: 8, borderRadius: 4 },
+  modeName:  { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textSecondary },
+  modeCount: { fontSize: TYPOGRAPHY.lg, fontWeight: '800' },
 
   // View Details
   viewDetailsBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md,
-    paddingVertical: 15, alignItems: 'center', marginBottom: SPACING.sm,
+    paddingVertical: 15, marginBottom: SPACING.sm,
   },
-  viewDetailsTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white, letterSpacing: 0.2 },
+  viewDetailsTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
 });
