@@ -209,15 +209,22 @@ export default function ComplianceHubScreen() {
   const irnTotal       = pendingIRN + irnGenerated;
   const irnProgressPct = irnTotal > 0 ? Math.round((irnGenerated / irnTotal) * 100) : 0;
 
-  // EWB: compute donut segments from real data
+  // EWB: always show all 3 segments — use 0 when no data, grey ring when total=0
   const ewbTotal = ewbGenerated + pendingEWB + expiredEWB;
   const ewbDonutSegs = ewbTotal > 0
     ? [
-        ...(ewbGenerated > 0 ? [{ pct: Math.round((ewbGenerated / ewbTotal) * 100), color: '#2D7D46',          label: 'Generated',  value: `${ewbGenerated}`,  count: `${ewbGenerated} bills generated` }] : []),
-        ...(pendingEWB   > 0 ? [{ pct: Math.round((pendingEWB   / ewbTotal) * 100), color: '#D97706',          label: 'Pending',    value: `${pendingEWB}`,    count: `${pendingEWB} bills pending` }] : []),
-        ...(expiredEWB   > 0 ? [{ pct: Math.round((expiredEWB   / ewbTotal) * 100), color: '#DC2626',          label: 'Expired',    value: `${expiredEWB}`,    count: `${expiredEWB} bills expired` }] : []),
-      ]
+        { pct: Math.round((ewbGenerated / ewbTotal) * 100), color: '#2D7D46', label: 'Generated',  value: `${ewbGenerated}`,  count: `${ewbGenerated} bill${ewbGenerated !== 1 ? 's' : ''} generated` },
+        { pct: Math.round((pendingEWB   / ewbTotal) * 100), color: '#D97706', label: 'Pending',    value: `${pendingEWB}`,    count: `${pendingEWB} bill${pendingEWB !== 1 ? 's' : ''} pending` },
+        { pct: Math.round((expiredEWB   / ewbTotal) * 100), color: '#DC2626', label: 'Expired',    value: `${expiredEWB}`,    count: `${expiredEWB} bill${expiredEWB !== 1 ? 's' : ''} expired` },
+      ].filter(s => s.pct > 0) // remove 0-pct slices from donut only; pills still rendered below
     : [{ pct: 100, color: COLORS.borderStrong, label: 'No Data', value: '—', count: 'No EWBs in this period' }];
+
+  // Always 3 pill rows regardless of data
+  const ewbPillRows = [
+    { color: '#2D7D46', label: 'Generated',  value: ewbGenerated > 0 ? `${ewbGenerated}` : '0', count: `${ewbGenerated} bills generated` },
+    { color: '#D97706', label: 'Pending',    value: pendingEWB   > 0 ? `${pendingEWB}`   : '0', count: `${pendingEWB} bills pending` },
+    { color: '#DC2626', label: 'Expired',    value: expiredEWB   > 0 ? `${expiredEWB}`   : '0', count: `${expiredEWB} bills expired` },
+  ];
 
   // GST tooltips
   const pendingTip  = useToggleTip();
@@ -310,21 +317,18 @@ export default function ComplianceHubScreen() {
 
             {/* Tappable legend rows */}
             <View style={s.legendCol}>
-              {ewbDonutSegs.map((seg, i) => (
+              {ewbPillRows.map((seg, i) => (
                 <Pressable
                   key={seg.label}
                   style={[s.legendRow, activeEwb === i && s.legendRowActive]}
                   onPress={() => toggleEwb(i)}
                 >
-                  <View style={[s.legendDot, { backgroundColor: seg.color }]} />
+                  <View style={[s.legendDot, { backgroundColor: seg.value === '0' ? COLORS.borderStrong : seg.color }]} />
                   <Text style={s.legendLbl}>{seg.label}</Text>
-                  <Text style={s.legendVal}>{seg.value}</Text>
-                  {activeEwb === i && (
-                    <Ionicons name="chevron-up" size={12} color={COLORS.textTertiary} />
-                  )}
-                  {activeEwb !== i && (
-                    <Ionicons name="chevron-down" size={12} color={COLORS.textTertiary} />
-                  )}
+                  <Text style={[s.legendVal, { color: seg.value === '0' ? COLORS.textTertiary : COLORS.textPrimary }]}>{seg.value}</Text>
+                  {activeEwb === i
+                    ? <Ionicons name="chevron-up"   size={12} color={COLORS.textTertiary} />
+                    : <Ionicons name="chevron-down" size={12} color={COLORS.textTertiary} />}
                 </Pressable>
               ))}
 
@@ -332,7 +336,7 @@ export default function ComplianceHubScreen() {
               {activeEwb !== null && (
                 <View style={s.ewbCountRow}>
                   <Ionicons name="information-circle-outline" size={13} color={COLORS.textTertiary} />
-                  <Text style={s.ewbCountTxt}>{ewbDonutSegs[activeEwb].count}</Text>
+                  <Text style={s.ewbCountTxt}>{ewbPillRows[activeEwb].count}</Text>
                 </View>
               )}
             </View>
