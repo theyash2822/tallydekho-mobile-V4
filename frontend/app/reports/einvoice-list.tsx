@@ -32,15 +32,13 @@ export default function EInvoiceListScreen() {
   const [toDate,         setToDate]         = useState(selectedFY?.endDate   || '');
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  // Sync dates when selectedFY loads
-  const fySynced = React.useRef(false);
+  // Always sync dates when selectedFY changes (user may switch FY from home screen)
   useEffect(() => {
-    if (selectedFY?.startDate && !fySynced.current) {
-      fySynced.current = true;
+    if (selectedFY?.startDate) {
       setFromDate(selectedFY.startDate);
       setToDate(selectedFY.endDate || new Date().toISOString().split('T')[0]);
     }
-  }, [selectedFY?.startDate]);
+  }, [selectedFY?.startDate, selectedFY?.endDate]);
   const selectMode = selected.length > 0;
 
   useEffect(() => {

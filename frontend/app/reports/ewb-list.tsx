@@ -32,15 +32,13 @@ export default function EWBListScreen() {
   const [fromDate, setFromDate] = useState(selectedFY?.startDate || '');
   const [toDate,   setToDate]   = useState(selectedFY?.endDate   || '');
 
-  // Sync dates when selectedFY loads asynchronously
-  const fySynced = React.useRef(false);
+  // Always sync dates when selectedFY changes
   useEffect(() => {
-    if (selectedFY?.startDate && !fySynced.current) {
-      fySynced.current = true;
+    if (selectedFY?.startDate) {
       setFromDate(selectedFY.startDate);
       setToDate(selectedFY.endDate || new Date().toISOString().split('T')[0]);
     }
-  }, [selectedFY?.startDate]);
+  }, [selectedFY?.startDate, selectedFY?.endDate]);
 
   useEffect(() => {
     if (!company?.guid) return;
