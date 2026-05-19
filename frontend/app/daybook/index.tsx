@@ -29,6 +29,7 @@ interface Entry {
   id: string; date: string; month: string; type: VType;
   party: string; ref: string; amount: string;
   isCredit: boolean; status: 'posted' | 'pending'; isMine: boolean;
+  isOptional: boolean;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -91,6 +92,7 @@ export default function DaybookScreen() {
     isCredit: isCreditVoucher(r.voucher_type),
     status: 'posted' as const,
     isMine: true,
+    isOptional: !!(r.is_optional),
   });
 
   useEffect(() => {
@@ -272,6 +274,9 @@ export default function DaybookScreen() {
                             {entry.status === 'pending' && (
                               <View style={s.pendingBadge}><Text style={s.pendingTxt}>Pending</Text></View>
                             )}
+                            {entry.isOptional && (
+                              <View style={s.draftBadge}><Text style={s.draftTxt}>Draft</Text></View>
+                            )}
                           </View>
                           <Text style={s.partyTxt}>{entry.party}</Text>
                           <Text style={s.dateTxt}>{entry.date}</Text>
@@ -354,6 +359,8 @@ const s = StyleSheet.create({
   refTxt:{fontSize:TYPOGRAPHY.xs,color:COLORS.textSecondary},
   pendingBadge:{backgroundColor:COLORS.warningBg,paddingHorizontal:6,paddingVertical:2,borderRadius:RADIUS.sm},
   pendingTxt:{fontSize:10,fontWeight:'600',color:COLORS.warning},
+  draftBadge:{backgroundColor:'#EDE9FE',paddingHorizontal:6,paddingVertical:2,borderRadius:RADIUS.sm,borderWidth:1,borderColor:'#C4B5FD'},
+  draftTxt:{fontSize:10,fontWeight:'600',color:'#7C3AED'},
   partyTxt:{fontSize:TYPOGRAPHY.sm,fontWeight:'600',color:COLORS.textPrimary},
   dateTxt:{fontSize:TYPOGRAPHY.xs,color:COLORS.textTertiary},
   amtCol:{alignItems:'flex-end',gap:2},
