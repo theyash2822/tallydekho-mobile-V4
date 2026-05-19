@@ -247,8 +247,9 @@ export const askHelpAI = (message: string, history?: any[]) => post<any>('/ai/he
 export const sendPaymentReminder = (companyGuid: string, data: any) => post<any>('/reminders/send', { companyGuid, ...data });
 
 export const getUnmatchedInvoices = (companyGuid?: string, params?: any) => get<any>(withCompany('/reports/unmatched', companyGuid, params));
-export const getEInvoicePending  = (companyGuid?: string) => get<any>(withCompany('/einvoice/pending', companyGuid));
-export const getEInvoiceGenerated = (companyGuid?: string) => get<any>(withCompany('/einvoice/generated', companyGuid));
+export const getEInvoiceStatus    = (companyGuid?: string, params?: any) => get<any>(withCompany('/einvoice/status', companyGuid, params));
+export const getEInvoicePending   = (companyGuid?: string, params?: any) => get<any>(withCompany('/einvoice/pending', companyGuid, params));
+export const getEInvoiceGenerated = (companyGuid?: string, params?: any) => get<any>(withCompany('/einvoice/generated', companyGuid, params));
 export const getGSTDetail        = (companyGuid?: string, params?: any) => get<any>(withCompany('/reports/gst-detail', companyGuid, params));
 export const getGSTSummary       = (companyGuid?: string, params?: any) => get<any>(withCompany('/reports/gst-summary', companyGuid, params));
 

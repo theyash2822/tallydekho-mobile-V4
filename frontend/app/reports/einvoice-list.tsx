@@ -5,7 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { getEInvoicePending, getEInvoiceGenerated } from '../../src/services/api';
+import { getEInvoiceGenerated } from '../../src/services/api';
+import { fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 
 // Data loaded from API
@@ -22,39 +23,32 @@ export default function EInvoiceListScreen() {
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { company } = useAuth();
+  const { company, selectedFY } = useAuth();
   const [invoiceData, setInvoiceData] = useState<any[]>([]);
+  const [loading,     setLoading]     = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const selectMode = selected.length > 0;
 
   useEffect(() => {
     if (!company?.guid) return;
-    Promise.all([
-      getEInvoicePending(company.guid),
-      getEInvoiceGenerated(company.guid),
-    ]).then(([pendingRes, generatedRes]: any[]) => {
-      const pending = (pendingRes?.data || []).map((i: any, idx: number) => ({
-        id: i.id?.toString() || `p${idx}`,
-        irn: i.irn || '',
-        invoiceNo: i.voucher_no || i.invoice_no || `INV-${idx}`,
-        party: i.party_name || i.party || 'Unknown',
-        date: i.date || '',
-        amount: i.amount?.toLocaleString('en-IN') || '0',
-        status: 'Pending',
-      }));
-      const generated = (generatedRes?.data || []).map((i: any, idx: number) => ({
-        id: i.id?.toString() || `g${idx}`,
-        irn: i.irn || '',
-        invoiceNo: i.voucher_no || i.invoice_no || `INV-${idx}`,
-        party: i.party_name || i.party || 'Unknown',
-        date: i.date || '',
-        amount: i.amount?.toLocaleString('en-IN') || '0',
-        status: 'Generated',
-      }));
-      const combined = [...pending, ...generated];
-      if (combined.length > 0) setInvoiceData(combined);
-    }).catch(() => {});
-  }, [company?.guid]);
+    setLoading(true);
+    const fyParam = fyInfoToParam(selectedFY);
+    getEInvoiceGenerated(company.guid, fyParam ? { fy: fyParam } : {})
+      .then((res: any) => {
+        const rows = (res?.data || []).map((i: any, idx: number) => ({
+          id: i.id?.toString() || `g${idx}`,
+          irn: i.irn || '',
+          invoiceNo: i.voucher_number || i.voucher_no || `INV-${idx}`,
+          party: i.party_name || 'Unknown',
+          date: i.date || '',
+          amount: Math.abs(+i.amount || 0).toLocaleString('en-IN'),
+          status: 'Generated',
+        }));
+        setInvoiceData(rows);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [company?.guid, selectedFY]);
 
   const toggleSelect = (id: string) =>
     setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
@@ -98,11 +92,11 @@ export default function EInvoiceListScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listContent}>
-        {invoiceData.length === 0 && !(false) && (
+        {invoiceData.length === 0 && !loading && (
           <View style={{ alignItems: 'center', padding: 48, gap: 12 }}>
             <Ionicons name="receipt-outline" size={40} color={COLORS.textTertiary} />
             <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.textSecondary }}>No E-Invoices found</Text>
-            <Text style={{ fontSize: 12, color: COLORS.textTertiary, textAlign: 'center' }}>This feature requires GSTIN-enabled company and valid E-Way Bill API credentials</Text>
+            <Text style={{ fontSize: 12, color: COLORS.textTertiary, textAlign: 'center' }}>IRNs generated from Tally Prime will appear here once synced.</Text>
           </View>
         )}
         {invoiceData.map((item) => {
