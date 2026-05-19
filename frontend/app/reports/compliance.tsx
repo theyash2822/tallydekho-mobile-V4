@@ -185,7 +185,7 @@ export default function ComplianceHubScreen() {
   const router = useRouter();
   const { company, selectedFY } = useAuth();
 
-  // Real alert counts from backend — re-fetch when FY changes OR screen comes into focus
+  // Real alert counts from backend — re-fetch when FY changes
   const [alerts, setAlerts] = useState<any>(null);
 
   const fetchAlerts = useCallback(() => {
@@ -196,11 +196,15 @@ export default function ComplianceHubScreen() {
       .catch(() => {});
   }, [company?.guid, selectedFY]);
 
-  // Re-fetch when deps change
+  // Re-fetch when FY or company changes
   useEffect(() => { fetchAlerts(); }, [fetchAlerts]);
 
-  // Re-fetch every time screen comes back into focus (catches FY changes made on other screens)
-  useFocusEffect(useCallback(() => { fetchAlerts(); }, [fetchAlerts]));
+  // Re-fetch when screen comes back into focus (catches FY changes on other screens)
+  useFocusEffect(
+    useCallback(() => {
+      fetchAlerts();
+    }, [fetchAlerts])
+  );
 
   const pendingIRN      = alerts?.pendingIRNCount   ?? 0;
   const pendingEWB      = alerts?.pendingEWBCount   ?? 0;
@@ -254,7 +258,12 @@ export default function ComplianceHubScreen() {
         <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Compliance</Text>
+        <View style={{ alignItems: 'center' }}>
+          <Text style={s.headerTitle}>Compliance</Text>
+          {selectedFY && (
+            <Text style={s.headerFY}>{selectedFY.finYear || (selectedFY.startDate ? `FY ${selectedFY.startDate.slice(0,4)}-${(parseInt(selectedFY.startDate.slice(0,4))+1).toString().slice(2)}` : '')}</Text>
+          )}
+        </View>
         <View style={s.backBtn} />
       </View>
 
@@ -418,6 +427,7 @@ const s = StyleSheet.create({
   },
   backBtn:     { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary },
+  headerFY:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 1 },
 
   scroll:        { flex: 1 },
   scrollContent: { padding: SPACING.md, gap: SPACING.sm },
