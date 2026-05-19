@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getAlerts } from '../../src/services/api';
@@ -185,16 +185,22 @@ export default function ComplianceHubScreen() {
   const router = useRouter();
   const { company, selectedFY } = useAuth();
 
-  // Real alert counts from backend — re-fetch when FY changes
+  // Real alert counts from backend — re-fetch when FY changes OR screen comes into focus
   const [alerts, setAlerts] = useState<any>(null);
-  useEffect(() => {
-    if (company?.guid) {
-      const fyParam = fyInfoToParam(selectedFY);
-      getAlerts(company.guid, fyParam ? { fy: fyParam } : undefined).then((res: any) => {
-        if (res?.data) setAlerts(res.data);
-      }).catch(() => {});
-    }
+
+  const fetchAlerts = useCallback(() => {
+    if (!company?.guid) return;
+    const fyParam = fyInfoToParam(selectedFY);
+    getAlerts(company.guid, fyParam ? { fy: fyParam } : undefined)
+      .then((res: any) => { if (res?.data) setAlerts(res.data); })
+      .catch(() => {});
   }, [company?.guid, selectedFY]);
+
+  // Re-fetch when deps change
+  useEffect(() => { fetchAlerts(); }, [fetchAlerts]);
+
+  // Re-fetch every time screen comes back into focus (catches FY changes made on other screens)
+  useFocusEffect(useCallback(() => { fetchAlerts(); }, [fetchAlerts]));
 
   const pendingIRN      = alerts?.pendingIRNCount   ?? 0;
   const pendingEWB      = alerts?.pendingEWBCount   ?? 0;

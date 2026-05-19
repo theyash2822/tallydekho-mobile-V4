@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { fyInfoToParam } from '../../src/context/AuthContext';
-import { getEInvoiceGenerated } from '../../src/services/api';
+import { getEInvoiceGenerated, getEInvoicePending } from '../../src/services/api';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useSettings } from '../../src/context/SettingsContext';
 
@@ -48,18 +48,25 @@ export default function EInvoiceListScreen() {
     setLoading(true);
     const fyParam = fyInfoToParam(selectedFY);
     const dateParams = fromDate && toDate ? { from: fromDate, to: toDate } : (fyParam ? { fy: fyParam } : {});
-    getEInvoiceGenerated(company.guid, dateParams)
-      .then((res: any) => {
-        const rows = (res?.data || []).map((i: any, idx: number) => ({
-          id: i.id?.toString() || `g${idx}`,
+    // Load both generated + pending and combine
+    Promise.all([
+      getEInvoiceGenerated(company.guid, dateParams).catch(() => ({ data: [] })),
+      getEInvoicePending(company.guid, dateParams).catch(() => ({ data: [] })),
+    ]).then(([genRes, pendRes]: any[]) => {
+        const mapRow = (i: any, idx: number, status: string) => ({
+          id: i.id?.toString() || `${status[0]}${idx}`,
           irn: i.irn || '',
           invoiceNo: i.voucher_number || i.voucher_no || `INV-${idx}`,
           party: i.party_name || 'Unknown',
           date: i.date || '',
           amount: Math.abs(+i.amount || 0).toLocaleString('en-IN'),
-          status: 'Generated',
-        }));
-        setInvoiceData(rows);
+          status,
+        });
+        const generated = (genRes?.data  || []).map((i: any, idx: number) => mapRow(i, idx, 'Generated'));
+        const pending   = (pendRes?.data || []).map((i: any, idx: number) => mapRow(i, idx, 'Pending'));
+        // Sort combined by date desc
+        const combined  = [...generated, ...pending].sort((a, b) => b.date.localeCompare(a.date));
+        setInvoiceData(combined);
       })
       .catch(() => {})
       .finally(() => setLoading(false));

@@ -7,7 +7,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { fyInfoToParam } from '../../src/context/AuthContext';
-import { getEWBList } from '../../src/services/api';
+import { getEWBList, getEWBPending } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 
 // Data loaded from API
@@ -16,6 +16,7 @@ const STATUS_CFG: Record<string, { bg: string; text: string }> = {
   Active:   { bg: '#F0FBF4', text: '#2D7D46' },
   Expiring: { bg: '#FEF3C7', text: '#D97706' },
   Expired:  { bg: '#FEF2F2', text: '#DC2626' },
+  Pending:  { bg: '#FEF3C7', text: '#D97706' },
 };
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
@@ -45,22 +46,27 @@ export default function EWBListScreen() {
     if (!company?.guid) return;
     setLoading(true);
     const fyParam = fyInfoToParam(selectedFY);
-    getEWBList(company.guid, fyParam ? { fy: fyParam } : {}).then((res: any) => {
-      const list = res?.data || [];
-      if (list.length > 0) {
-        setEwbData(list.map((item: any, idx: number) => ({
-          id: item.id?.toString() || `e${idx}`,
-          ewbNo: item.ewb_no || item.voucher_no || `EWB-${idx}`,
-          type: item.type || 'Outward',
-          party: item.party_name || item.party || 'Unknown',
-          route: item.route || '',
-          date: item.date || '',
-          amount: item.amount?.toLocaleString('en-IN') || '0',
-          status: item.status || 'Active',
-        })));
-      }
+    const dateParams = fromDate && toDate ? { from: fromDate, to: toDate } : (fyParam ? { fy: fyParam } : {});
+    const mapItem = (item: any, idx: number, defaultStatus: string) => ({
+      id: item.guid || item.id?.toString() || `e${idx}`,
+      ewbNo: item.ewb_number || item.ewb_no || '',
+      type: item.voucher_type || 'Outward',
+      party: item.party_name || 'Unknown',
+      route: item.route || '',
+      date: item.date || '',
+      amount: Math.abs(+item.amount || 0).toLocaleString('en-IN'),
+      status: item.ewb_status || defaultStatus,
+    });
+    Promise.all([
+      getEWBList(company.guid, dateParams).catch(() => ({ data: [] })),
+      getEWBPending(company.guid, dateParams).catch(() => ({ data: [] })),
+    ]).then(([genRes, pendRes]: any[]) => {
+      const generated = (genRes?.data  || []).map((i: any, idx: number) => mapItem(i, idx, 'Active'));
+      const pending   = (pendRes?.data || []).map((i: any, idx: number) => mapItem(i, idx, 'Pending'));
+      const combined  = [...generated, ...pending].sort((a, b) => b.date.localeCompare(a.date));
+      setEwbData(combined);
     }).catch(() => {}).finally(() => setLoading(false));
-  }, [company?.guid]);
+  }, [company?.guid, selectedFY, fromDate, toDate]);
   const selectMode = selected.length > 0;
 
   const toggleSelect = (id: string) =>

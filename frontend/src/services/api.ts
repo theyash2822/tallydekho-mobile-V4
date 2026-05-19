@@ -242,6 +242,7 @@ export const markAllNotificationsRead = () => patch<any>('/notifications/read-al
 
 export const getAlerts           = (companyGuid?: string, params?: any) => get<any>(withCompany('/alerts', companyGuid, params));
 export const getEWBStatus        = (companyGuid?: string, params?: any) => get<any>(withCompany('/ewaybills/status', companyGuid, params));
+export const getEWBPending       = (companyGuid?: string, params?: any) => get<any>(withCompany('/ewaybills/pending', companyGuid, params));
 export const getEWBList          = (companyGuid?: string, params?: any) => get<any>(withCompany('/ewaybills', companyGuid, params));
 export const askHelpAI = (message: string, history?: any[]) => post<any>('/ai/help', { message, history });
 export const sendPaymentReminder = (companyGuid: string, data: any) => post<any>('/reminders/send', { companyGuid, ...data });
