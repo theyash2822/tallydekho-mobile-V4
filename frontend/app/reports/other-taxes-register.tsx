@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Share, Alert,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Share, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,27 +31,53 @@ export default function OtherTaxesRegisterScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
+  const PAGE_SIZE = 50;
+  const [page,          setPage]          = useState(1);
+  const [hasMore,       setHasMore]       = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const mapInvoice = (r: any) => ({
+    id: r.guid || String(r.id),
+    invoiceNo: r.voucher_number || '',
+    type: (r.voucher_type||'').toLowerCase().includes('purchase') ? 'Purchase' : 'Sales',
+    party: r.party_name || '—',
+    date: r.date || '',
+    amount: Math.abs(+r.amount||0).toLocaleString('en-IN'),
+    status: r.is_cancelled ? 'Cancelled' : 'Posted',
+  });
+
   React.useEffect(() => {
     if (!companyGuid) return;
     setIsLoading(true);
+    setPage(1);
+    setHasMore(false);
     const fyParams = selectedFY ? { from: selectedFY.startDate, to: selectedFY.endDate } : {};
-    getVouchers(companyGuid, undefined, { ...fyParams, limit: '200' }).then((res: any) => {
+    getVouchers(companyGuid, undefined, { ...fyParams, limit: PAGE_SIZE, page: 1 }).then((res: any) => {
       const rows = (res?.data ?? []).filter((r: any) =>
         (r.voucher_type||'').toLowerCase().includes('sales') ||
         (r.voucher_type||'').toLowerCase().includes('purchase')
       );
-      setInvoices(rows.map((r: any) => ({
-        id: r.guid || String(r.id),
-        invoiceNo: r.voucher_number || '',
-        type: (r.voucher_type||'').toLowerCase().includes('purchase') ? 'Purchase' : 'Sales',
-        party: r.party_name || '—',
-        date: r.date || '',
-        amount: Math.abs(+r.amount||0).toLocaleString('en-IN'),
-        status: r.is_cancelled ? 'Cancelled' : 'Posted',
-      })));
+      setInvoices(rows.map(mapInvoice));
+      setHasMore(rows.length === PAGE_SIZE);
     }).catch((err: any) => setApiError(err?.message || 'Failed'))
       .finally(() => setIsLoading(false));
   }, [companyGuid, selectedFY?.startDate]);
+
+  const loadMore = () => {
+    if (!companyGuid || isLoadingMore || !hasMore) return;
+    const nextPage = page + 1;
+    setIsLoadingMore(true);
+    const fyParams = selectedFY ? { from: selectedFY.startDate, to: selectedFY.endDate } : {};
+    getVouchers(companyGuid, undefined, { ...fyParams, limit: PAGE_SIZE, page: nextPage }).then((res: any) => {
+      const rows = (res?.data ?? []).filter((r: any) =>
+        (r.voucher_type||'').toLowerCase().includes('sales') ||
+        (r.voucher_type||'').toLowerCase().includes('purchase')
+      );
+      setInvoices(prev => [...prev, ...rows.map(mapInvoice)]);
+      setHasMore(rows.length === PAGE_SIZE);
+      setPage(nextPage);
+    }).finally(() => setIsLoadingMore(false));
+  };
 
   const [selected,    setSelected]    = useState<string[]>([]);
   const selectMode = selected.length > 0;
@@ -144,6 +170,17 @@ export default function OtherTaxesRegisterScreen() {
           );
         })}
 
+        {hasMore && (
+          <TouchableOpacity style={s.loadMoreBtn} onPress={loadMore} disabled={isLoadingMore} activeOpacity={0.8}>
+            {isLoadingMore
+              ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+              : <Text style={s.loadMoreTxt}>Load More</Text>
+            }
+          </TouchableOpacity>
+        )}
+        {!hasMore && invoices.length > 0 && (
+          <Text style={s.endTxt}>All {invoices.length} entries loaded</Text>
+        )}
         <View style={{ height: selectMode ? 100 : 40 }} />
       </ScrollView>
 
@@ -233,4 +270,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 18, paddingVertical: 12, borderRadius: RADIUS.md,
   },
   exportActionTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
+  loadMoreBtn: { margin:16,padding:14,borderRadius:10,backgroundColor:COLORS.cardBg,borderWidth:1,borderColor:COLORS.borderDefault,alignItems:'center',justifyContent:'center' },
+  loadMoreTxt: { fontSize:14,fontWeight:'600',color:COLORS.brandPrimary },
+  endTxt:      { textAlign:'center',fontSize:12,color:COLORS.textTertiary,padding:16 },
 });

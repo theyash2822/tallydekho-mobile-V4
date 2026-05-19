@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Dimensions, Share, Alert,
+  TextInput, Dimensions, Share, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -52,29 +52,54 @@ export default function ExpenseRegisterScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
+  const PAGE_SIZE = 50;
+  const [page,          setPage]          = useState(1);
+  const [hasMore,       setHasMore]       = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const mapExpenseItem = (r: any) => ({
+    id: r.guid || String(r.id),
+    voucher: r.voucher_number || '',
+    desc: r.narration || r.party_name || r.voucher_type || '',
+    date: r.date || '',
+    amount: formatAmount(Math.abs(+r.amount||0)),
+    positive: (r.voucher_type||'').toLowerCase().includes('receipt'),
+    type: (r.voucher_type||'').toLowerCase().includes('payment') ? 'payment' :
+          (r.voucher_type||'').toLowerCase().includes('receipt') ? 'receipt' : 'contra',
+  });
+
   useEffect(() => {
     if (!companyGuid) return;
     setIsLoading(true);
     setApiError(null);
+    setPage(1);
+    setHasMore(false);
     const fyParams = selectedFY ? { from: selectedFY.startDate, to: selectedFY.endDate } : {};
     // Expenses = payment + receipt + contra vouchers
-    getVouchers(companyGuid, undefined, { ...fyParams, limit: '500' }).then((res: any) => {
+    getVouchers(companyGuid, undefined, { ...fyParams, limit: PAGE_SIZE, page: 1 }).then((res: any) => {
       const rows = (res?.data ?? []).filter((r: any) =>
         ['Payment','Receipt','Contra'].some(t => (r.voucher_type||'').toLowerCase().includes(t.toLowerCase()))
       );
-      setLiveItems(rows.map((r: any) => ({
-        id: r.guid || String(r.id),
-        voucher: r.voucher_number || '',
-        desc: r.narration || r.party_name || r.voucher_type || '',
-        date: r.date || '',
-        amount: formatAmount(Math.abs(+r.amount||0)),
-        positive: (r.voucher_type||'').toLowerCase().includes('receipt'),
-        type: (r.voucher_type||'').toLowerCase().includes('payment') ? 'payment' :
-              (r.voucher_type||'').toLowerCase().includes('receipt') ? 'receipt' : 'contra',
-      })));
+      setLiveItems(rows.map(mapExpenseItem));
+      setHasMore(rows.length === PAGE_SIZE);
     }).catch((err: any) => setApiError(err?.message || 'Failed to load'))
       .finally(() => setIsLoading(false));
   }, [companyGuid, selectedFY?.startDate]);
+
+  const loadMore = () => {
+    if (!companyGuid || isLoadingMore || !hasMore) return;
+    const nextPage = page + 1;
+    setIsLoadingMore(true);
+    const fyParams = selectedFY ? { from: selectedFY.startDate, to: selectedFY.endDate } : {};
+    getVouchers(companyGuid, undefined, { ...fyParams, limit: PAGE_SIZE, page: nextPage }).then((res: any) => {
+      const rows = (res?.data ?? []).filter((r: any) =>
+        ['Payment','Receipt','Contra'].some(t => (r.voucher_type||'').toLowerCase().includes(t.toLowerCase()))
+      );
+      setLiveItems(prev => [...prev, ...rows.map(mapExpenseItem)]);
+      setHasMore(rows.length === PAGE_SIZE);
+      setPage(nextPage);
+    }).finally(() => setIsLoadingMore(false));
+  };
   const fyFrom = selectedFY?.startDate ?? '';
   const fyTo   = selectedFY?.endDate   ?? '';
 
@@ -360,6 +385,18 @@ export default function ExpenseRegisterScreen() {
           });
         })()}
 
+        {hasMore && (
+          <TouchableOpacity style={s.loadMoreBtn} onPress={loadMore} disabled={isLoadingMore} activeOpacity={0.8}>
+            {isLoadingMore
+              ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+              : <Text style={s.loadMoreTxt}>Load More</Text>
+            }
+          </TouchableOpacity>
+        )}
+        {!hasMore && liveItems.length > 0 && (
+          <Text style={s.endTxt}>All {liveItems.length} entries loaded</Text>
+        )}
+
       </ScrollView>
 
       {/* ── Multi-select Bottom Bar ──────────────────────────── */}
@@ -471,4 +508,7 @@ const s = StyleSheet.create({
   actionBtnTxt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
   actionBtnOutline:    { backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault },
   actionBtnOutlineTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  loadMoreBtn: { margin:16,padding:14,borderRadius:10,backgroundColor:COLORS.cardBg,borderWidth:1,borderColor:COLORS.borderDefault,alignItems:'center',justifyContent:'center' },
+  loadMoreTxt: { fontSize:14,fontWeight:'600',color:COLORS.brandPrimary },
+  endTxt:      { textAlign:'center',fontSize:12,color:COLORS.textTertiary,padding:16 },
 });

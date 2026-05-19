@@ -35,15 +35,32 @@ export default function UnmatchedListScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
 
+  const PAGE_SIZE = 50;
+  const [page,          setPage]          = useState(1);
+  const [hasMore,       setHasMore]       = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   const load = () => {
     if (!companyGuid) return;
     setIsLoading(true);
     setApiError(null);
+    setPage(1);
+    setHasMore(false);
     const fyParams = selectedFY ? { from: selectedFY.startDate, to: selectedFY.endDate } : {};
-    getUnmatchedInvoices(companyGuid, { ...fyParams, limit: '200' })
-      .then((res: any) => setItems(res?.data ?? []))
+    getUnmatchedInvoices(companyGuid, { ...fyParams, limit: PAGE_SIZE, page: 1 })
+      .then((res: any) => { const rows = res?.data ?? []; setItems(rows); setHasMore(rows.length === PAGE_SIZE); })
       .catch((err: any) => setApiError(err?.message || 'Failed to load'))
       .finally(() => setIsLoading(false));
+  };
+
+  const loadMore = () => {
+    if (!companyGuid || isLoadingMore || !hasMore) return;
+    const nextPage = page + 1;
+    setIsLoadingMore(true);
+    const fyParams = selectedFY ? { from: selectedFY.startDate, to: selectedFY.endDate } : {};
+    getUnmatchedInvoices(companyGuid, { ...fyParams, limit: PAGE_SIZE, page: nextPage })
+      .then((res: any) => { const rows = res?.data ?? []; setItems(prev => [...prev, ...rows]); setHasMore(rows.length === PAGE_SIZE); setPage(nextPage); })
+      .finally(() => setIsLoadingMore(false));
   };
 
   useEffect(() => { load(); }, [companyGuid, selectedFY?.startDate]);
@@ -86,6 +103,7 @@ export default function UnmatchedListScreen() {
               <Text style={{ fontSize: 13, color: COLORS.textTertiary, textAlign: 'center' }}>No GST issues found for this period</Text>
             </View>
           ) : (
+            <>
             <View style={s.card}>
               {items.map((item, idx) => {
                 const cfg = ERROR_CFG[item.issue] || DEFAULT_ERR;
@@ -110,6 +128,18 @@ export default function UnmatchedListScreen() {
                 );
               })}
             </View>
+            {hasMore && (
+              <TouchableOpacity style={s.loadMoreBtn} onPress={loadMore} disabled={isLoadingMore} activeOpacity={0.8}>
+                {isLoadingMore
+                  ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+                  : <Text style={s.loadMoreTxt}>Load More</Text>
+                }
+              </TouchableOpacity>
+            )}
+            {!hasMore && items.length > 0 && (
+              <Text style={s.endTxt}>All {items.length} entries loaded</Text>
+            )}
+            </>
           )}
         </ScrollView>
       )}
@@ -138,4 +168,7 @@ const s = StyleSheet.create({
   date:       { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
   amount:     { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   divider:    { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 27 },
+  loadMoreBtn:{ margin:16,padding:14,borderRadius:10,backgroundColor:COLORS.cardBg,borderWidth:1,borderColor:COLORS.borderDefault,alignItems:'center',justifyContent:'center' },
+  loadMoreTxt:{ fontSize:14,fontWeight:'600',color:COLORS.brandPrimary },
+  endTxt:     { textAlign:'center',fontSize:12,color:COLORS.textTertiary,padding:16 },
 });

@@ -63,31 +63,55 @@ export default function DaybookScreen() {
   const [isLoading,   setIsLoading]   = useState(false);
   const [apiError,    setApiError]    = useState<string | null>(null);
 
+  const PAGE_SIZE = 50;
+  const [page,          setPage]          = useState(1);
+  const [hasMore,       setHasMore]       = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const mapEntry = (r: any): Entry => ({
+    id: r.guid || String(r.id),
+    date: r.date || today,
+    month: new Date(r.date || today).toLocaleString('en-IN', { month: 'short', year: '2-digit' }),
+    type: mapVoucherType(r.voucher_type) as VType,
+    ref: r.voucher_number || '',
+    party: r.party_name || '',
+    amount: formatAmount(Math.abs(+r.amount || 0)),
+    isCredit: +r.amount < 0,
+    status: 'posted' as const,
+    isMine: true,
+  });
+
   useEffect(() => {
     if (!companyGuid) return;
     setIsLoading(true);
     setApiError(null);
-    getVouchers(companyGuid, undefined, { from: fromDate, to: toDate, limit: 500 })
+    setPage(1);
+    setHasMore(false);
+    getVouchers(companyGuid, undefined, { from: fromDate, to: toDate, limit: PAGE_SIZE, page: 1 })
       .then((res: any) => {
         const rows = res?.data ?? [];
-        setLiveEntries(rows.map((r: any) => ({
-          id: r.guid || String(r.id),
-          date: r.date || today,
-          month: new Date(r.date || today).toLocaleString('en-IN', { month: 'short', year: '2-digit' }),
-          type: mapVoucherType(r.voucher_type) as VType,
-          ref: r.voucher_number || '',
-          party: r.party_name || '',
-          amount: formatAmount(Math.abs(+r.amount || 0)),
-          isCredit: +r.amount < 0,
-          status: 'posted' as const,
-          isMine: true,
-        })));
+        setLiveEntries(rows.map(mapEntry));
+        setHasMore(rows.length === PAGE_SIZE);
       })
       .catch((err: any) => {
         setApiError(err?.message || 'Failed to load entries');
       })
       .finally(() => setIsLoading(false));
   }, [companyGuid, fromDate, toDate]);
+
+  const loadMore = () => {
+    if (!companyGuid || isLoadingMore || !hasMore) return;
+    const nextPage = page + 1;
+    setIsLoadingMore(true);
+    getVouchers(companyGuid, undefined, { from: fromDate, to: toDate, limit: PAGE_SIZE, page: nextPage })
+      .then((res: any) => {
+        const rows = res?.data ?? [];
+        setLiveEntries(prev => [...prev, ...rows.map(mapEntry)]);
+        setHasMore(rows.length === PAGE_SIZE);
+        setPage(nextPage);
+      })
+      .finally(() => setIsLoadingMore(false));
+  };
 
   const [mode, setMode] = useState<ViewMode>('daybook');
   const [vType, setVType] = useState<VType>('ALL');
@@ -252,6 +276,17 @@ export default function DaybookScreen() {
               </View>
             </View>
           ))}
+          {hasMore && (
+            <TouchableOpacity style={s.loadMoreBtn} onPress={loadMore} disabled={isLoadingMore} activeOpacity={0.8}>
+              {isLoadingMore
+                ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+                : <Text style={s.loadMoreTxt}>Load More</Text>
+              }
+            </TouchableOpacity>
+          )}
+          {!hasMore && liveEntries.length > 0 && (
+            <Text style={s.endTxt}>All {liveEntries.length} entries loaded</Text>
+          )}
           {filtered.length === 0 && (
             <View style={s.empty}>
               <Ionicons name="document-text-outline" size={48} color={COLORS.borderStrong} />
@@ -315,4 +350,7 @@ const s = StyleSheet.create({
   divider:{height:1,backgroundColor:COLORS.borderDefault,marginLeft:60},
   empty:{alignItems:'center',paddingVertical:60,gap:12},
   emptyTxt:{fontSize:TYPOGRAPHY.base,color:COLORS.textSecondary},
+  loadMoreBtn:{ margin:16,padding:14,borderRadius:10,backgroundColor:COLORS.cardBg,borderWidth:1,borderColor:COLORS.borderDefault,alignItems:'center',justifyContent:'center' },
+  loadMoreTxt:{ fontSize:14,fontWeight:'600',color:COLORS.brandPrimary },
+  endTxt:{ textAlign:'center',fontSize:12,color:COLORS.textTertiary,padding:16 },
 });

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Dimensions, Share, Alert,
+  TextInput, Dimensions, Share, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
@@ -85,6 +85,11 @@ export default function PurchaseRegisterScreen() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  const PAGE_SIZE = 50;
+  const [page,          setPage]          = useState(1);
+  const [hasMore,       setHasMore]       = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   const fyFrom = selectedFY?.startDate ?? '';
   const fyTo   = selectedFY?.endDate   ?? '';
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -95,6 +100,15 @@ export default function PurchaseRegisterScreen() {
     if (fyFrom && fyTo) { setFromDate(isoToDMY(fyFrom)); setToDate(isoToDMY(fyTo)); }
   }, [fyFrom, fyTo]);
 
+  const mapPurchaseInv = (r: any): PurchaseInvoice => ({
+    id: r.voucher_number || String(r.id),
+    vendor: r.party_name || '',
+    date: r.date || '',
+    time: '',
+    amount: formatAmount(Math.abs(+r.amount||0)),
+    status: r.is_cancelled ? 'unpaid' : 'paid',
+  });
+
   useEffect(() => {
     if (!companyGuid) return;
     const from = dmyToISO(fromDate) || fyFrom;
@@ -102,18 +116,29 @@ export default function PurchaseRegisterScreen() {
     const fyParams = from && to ? { from, to } : {};
     setIsLoading(true);
     setApiError(null);
-    getPurchaseInvoices(companyGuid, fyParams).then((res: any) => {
+    setPage(1);
+    setHasMore(false);
+    getPurchaseInvoices(companyGuid, { ...fyParams, limit: PAGE_SIZE, page: 1 }).then((res: any) => {
       const rows = res?.data ?? [];
-      setLiveInvoices(rows.map((r: any) => ({
-        id: r.voucher_number || String(r.id),
-        vendor: r.party_name || '',
-        date: r.date || '',
-        time: '',
-        amount: formatAmount(Math.abs(+r.amount||0)),
-        status: r.is_cancelled ? 'unpaid' : 'paid',
-      })));
+      setLiveInvoices(rows.map(mapPurchaseInv));
+      setHasMore(rows.length === PAGE_SIZE);
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); }).finally(() => setIsLoading(false));
   }, [companyGuid, fromDate, toDate, fyFrom, fyTo]);
+
+  const loadMore = () => {
+    if (!companyGuid || isLoadingMore || !hasMore) return;
+    const nextPage = page + 1;
+    setIsLoadingMore(true);
+    const from = dmyToISO(fromDate) || fyFrom;
+    const to   = dmyToISO(toDate)   || fyTo;
+    const fyParams = from && to ? { from, to } : {};
+    getPurchaseInvoices(companyGuid, { ...fyParams, limit: PAGE_SIZE, page: nextPage }).then((res: any) => {
+      const rows = res?.data ?? [];
+      setLiveInvoices(prev => [...prev, ...rows.map(mapPurchaseInv)]);
+      setHasMore(rows.length === PAGE_SIZE);
+      setPage(nextPage);
+    }).finally(() => setIsLoadingMore(false));
+  };
 
   const [search,         setSearch]         = useState('');
   const [statusFilter,   setStatusFilter]   = useState('All');
@@ -376,6 +401,18 @@ export default function PurchaseRegisterScreen() {
           );
         })}
 
+        {hasMore && (
+          <TouchableOpacity style={s.loadMoreBtn} onPress={loadMore} disabled={isLoadingMore} activeOpacity={0.8}>
+            {isLoadingMore
+              ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+              : <Text style={s.loadMoreTxt}>Load More</Text>
+            }
+          </TouchableOpacity>
+        )}
+        {!hasMore && liveInvoices.length > 0 && (
+          <Text style={s.endTxt}>All {liveInvoices.length} invoices loaded</Text>
+        )}
+
       </ScrollView>
 
       {/* ── Multi-select Bottom Bar ───────────────────────────── */}
@@ -485,4 +522,7 @@ const s = StyleSheet.create({
   actionBtnTxt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
   actionBtnOutline:    { backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault },
   actionBtnOutlineTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  loadMoreBtn: { margin:16,padding:14,borderRadius:10,backgroundColor:COLORS.cardBg,borderWidth:1,borderColor:COLORS.borderDefault,alignItems:'center',justifyContent:'center' },
+  loadMoreTxt: { fontSize:14,fontWeight:'600',color:COLORS.brandPrimary },
+  endTxt:      { textAlign:'center',fontSize:12,color:COLORS.textTertiary,padding:16 },
 });

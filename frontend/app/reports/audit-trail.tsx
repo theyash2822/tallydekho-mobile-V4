@@ -215,24 +215,49 @@ export default function AuditTrailScreen() {
   const [isLoading,  setIsLoading]  = useState(false);
   const [apiError,   setApiError]   = useState<string | null>(null);
 
+  const PAGE_SIZE = 50;
+  const [page,          setPage]          = useState(1);
+  const [hasMore,       setHasMore]       = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   // ── Fetch data ────────────────────────────────────────────
   useEffect(() => {
     if (!companyGuid) return;
     setIsLoading(true);
     setApiError(null);
+    setPage(1);
+    setHasMore(false);
     const fetchFn = activeTab === 'myentries'
-      ? getMyEntries(companyGuid, { from: fromDate, to: toDate, limit: '500' })
-      : getVouchers(companyGuid, undefined, { from: fromDate, to: toDate, limit: 500 });
+      ? getMyEntries(companyGuid, { from: fromDate, to: toDate, limit: String(PAGE_SIZE), page: 1 })
+      : getVouchers(companyGuid, undefined, { from: fromDate, to: toDate, limit: PAGE_SIZE, page: 1 });
     fetchFn
       .then((res: any) => {
         const rows = res?.data ?? [];
         setApiEntries(rows.map((r: any) => ({ ...mapApiRow(r, formatAmount), isMine: activeTab === 'myentries' })));
+        setHasMore(rows.length === PAGE_SIZE);
       })
       .catch((err: any) => {
         setApiError(err?.message || 'Failed to load vouchers');
       })
       .finally(() => setIsLoading(false));
   }, [companyGuid, fromDate, toDate, activeTab]);
+
+  const loadMore = () => {
+    if (!companyGuid || isLoadingMore || !hasMore) return;
+    const nextPage = page + 1;
+    setIsLoadingMore(true);
+    const fetchFn = activeTab === 'myentries'
+      ? getMyEntries(companyGuid, { from: fromDate, to: toDate, limit: String(PAGE_SIZE), page: nextPage })
+      : getVouchers(companyGuid, undefined, { from: fromDate, to: toDate, limit: PAGE_SIZE, page: nextPage });
+    fetchFn
+      .then((res: any) => {
+        const rows = res?.data ?? [];
+        setApiEntries(prev => [...prev, ...rows.map((r: any) => ({ ...mapApiRow(r, formatAmount), isMine: activeTab === 'myentries' }))]);
+        setHasMore(rows.length === PAGE_SIZE);
+        setPage(nextPage);
+      })
+      .finally(() => setIsLoadingMore(false));
+  };
 
   const isDateActive = fromDate.length > 0 && toDate.length > 0;
   // Both tabs use the same live data
@@ -525,7 +550,7 @@ export default function AuditTrailScreen() {
                   </Text>
                 )}
               </View>
-            ) : grouped.map(([month, entries]) => (
+            ) : <>{grouped.map(([month, entries]) => (
               <View key={month}>
                 {/* Month Header — tap to collapse */}
                 <TouchableOpacity
@@ -639,6 +664,18 @@ export default function AuditTrailScreen() {
                 )}
               </View>
             ))}
+            {hasMore && (
+              <TouchableOpacity style={s.loadMoreBtn} onPress={loadMore} disabled={isLoadingMore} activeOpacity={0.8}>
+                {isLoadingMore
+                  ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+                  : <Text style={s.loadMoreTxt}>Load More</Text>
+                }
+              </TouchableOpacity>
+            )}
+            {!hasMore && apiEntries.length > 0 && (
+              <Text style={s.endTxt}>All {apiEntries.length} entries loaded</Text>
+            )}
+          </> }
           </>
         )}
       </ScrollView>
@@ -685,6 +722,8 @@ export default function AuditTrailScreen() {
         visible={showDatePicker}
         fromDate={fromDate}
         toDate={toDate}
+        minDate={selectedFY?.startDate}
+        maxDate={selectedFY?.endDate}
         onApply={(f, t) => { if (f && t) { setFromDate(f); setToDate(t); } }}
         onClose={() => setShowDatePicker(false)}
       />
@@ -839,6 +878,9 @@ const s = StyleSheet.create({
 
   empty:    { alignItems: 'center', paddingVertical: 60, gap: 12 },
   emptyTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
+  loadMoreBtn: { margin:16,padding:14,borderRadius:10,backgroundColor:COLORS.cardBg,borderWidth:1,borderColor:COLORS.borderDefault,alignItems:'center',justifyContent:'center' },
+  loadMoreTxt: { fontSize:14,fontWeight:'600',color:COLORS.brandPrimary },
+  endTxt:      { textAlign:'center',fontSize:12,color:COLORS.textTertiary,padding:16 },
 
   // Bottom Bar
   bottomBar: {

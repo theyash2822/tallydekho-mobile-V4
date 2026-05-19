@@ -3,7 +3,7 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, RefreshControl, Modal, KeyboardAvoidingView,
-  Platform, Linking, Animated, Alert, Share,
+  Platform, Linking, Animated, Alert, Share, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
@@ -480,34 +480,66 @@ export default function LedgerScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError]   = useState<string | null>(null);
 
+  const PAGE_SIZE = 50;
+  const [page,          setPage]          = useState(1);
+  const [hasMore,       setHasMore]       = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const mapLedger = (r: any): LedgerItem => ({
+    id: r.guid || r.id || String(r.id),
+    name: r.name,
+    group: r.parent || r.group || '',
+    balance: r.closing_balance != null ? formatAmount(Math.abs(+r.closing_balance)) : (r.balance || formatAmount(0)),
+    type: (r.balance_type === 'Cr') ? 'credit' : 'debit',
+    nature: r.nature || '',
+    phone: r.mobile || r.phone || '',
+    lastUpdated: r.updated_at || r.alter_date || '',
+  });
+
   const loadLedgers = async () => {
     setApiError(null);
+    setPage(1);
+    setHasMore(false);
     try {
       const fyParams = selectedFY?.startDate && selectedFY?.endDate
         ? { from: selectedFY.startDate, to: selectedFY.endDate }
         : {};
-      const res = await getLedgers(companyGuid, { search, limit: '500', ...fyParams }) as any;
+      const res = await getLedgers(companyGuid, { search, limit: String(PAGE_SIZE), page: 1, ...fyParams }) as any;
       const rows = res?.data ?? (Array.isArray(res) ? res : []);
-      setData(Array.isArray(rows) ? rows.map((r: any) => ({
-        id: r.guid || r.id || String(r.id),
-        name: r.name,
-        group: r.parent || r.group || '',
-        balance: r.closing_balance != null ? formatAmount(Math.abs(+r.closing_balance)) : (r.balance || formatAmount(0)),
-        type: (r.balance_type === 'Cr') ? 'credit' : 'debit',
-        nature: r.nature || '',
-        phone: r.mobile || r.phone || '',
-        lastUpdated: r.updated_at || r.alter_date || '',
-      })) : []);
+      setData(Array.isArray(rows) ? rows.map(mapLedger) : []);
+      setHasMore(Array.isArray(rows) && rows.length === PAGE_SIZE);
     } catch (err: any) {
       setApiError(err?.message || 'Failed to load ledgers');
       console.error('[Ledgers]', err?.message);
     }
   };
 
+  const loadMoreLedgers = async () => {
+    if (!companyGuid || isLoadingMore || !hasMore) return;
+    const nextPage = page + 1;
+    setIsLoadingMore(true);
+    try {
+      const fyParams = selectedFY?.startDate && selectedFY?.endDate
+        ? { from: selectedFY.startDate, to: selectedFY.endDate }
+        : {};
+      const res = await getLedgers(companyGuid, { search, limit: String(PAGE_SIZE), page: nextPage, ...fyParams }) as any;
+      const rows = res?.data ?? (Array.isArray(res) ? res : []);
+      if (Array.isArray(rows)) {
+        setData(prev => [...prev, ...rows.map(mapLedger)]);
+        setHasMore(rows.length === PAGE_SIZE);
+        setPage(nextPage);
+      }
+    } catch (err: any) {
+      console.error('[Ledgers loadMore]', err?.message);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
   useEffect(() => {
     setIsLoading(true);
     loadLedgers().finally(() => setIsLoading(false));
-  }, [companyGuid, selectedFY?.startDate, lastSyncAt]);
+  }, [companyGuid, selectedFY?.startDate, lastSyncAt, search]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -877,6 +909,17 @@ export default function LedgerScreen() {
               <Text style={styles.emptyText}>{data.length === 0 ? t('ledger.noLedgers') : t('ledger.noMatch')}</Text>
             </View>
           )}
+          {!isLoading && hasMore && (
+            <TouchableOpacity style={styles.loadMoreBtn} onPress={loadMoreLedgers} disabled={isLoadingMore} activeOpacity={0.8}>
+              {isLoadingMore
+                ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+                : <Text style={styles.loadMoreTxt}>Load More</Text>
+              }
+            </TouchableOpacity>
+          )}
+          {!isLoading && !hasMore && data.length > 0 && (
+            <Text style={styles.endTxt}>All {data.length} ledgers loaded</Text>
+          )}
         </View>
 
         <View style={{ height: selectMode ? 100 : 80 }} />
@@ -1136,6 +1179,9 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md,
   },
   shareActionTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
+  loadMoreBtn: { margin: 16, padding: 14, borderRadius: 10, backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, alignItems: 'center' as const, justifyContent: 'center' as const },
+  loadMoreTxt: { fontSize: 14, fontWeight: '600' as const, color: COLORS.brandPrimary },
+  endTxt: { textAlign: 'center' as const, fontSize: 12, color: COLORS.textTertiary, padding: 16 },
 });
 
 // Create Ledger Modal Styles
