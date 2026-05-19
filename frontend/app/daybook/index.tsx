@@ -56,8 +56,9 @@ export default function DaybookScreen() {
   const companyGuid = company?.guid;
 
   const today = new Date().toISOString().split('T')[0];
-  const [fromDate, setFromDate] = useState(selectedFY?.startDate || today);
-  const [toDate,   setToDate]   = useState(today);
+  // Derive dates directly from selectedFY so they update when FY changes (no stale init)
+  const fromDate = selectedFY?.startDate || today;
+  const toDate   = today;
 
   const [liveEntries, setLiveEntries] = useState<Entry[]>([]);
   const [isLoading,   setIsLoading]   = useState(false);

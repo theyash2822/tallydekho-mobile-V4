@@ -201,6 +201,16 @@ export default function AuditTrailScreen() {
   const [activeTab,      setActiveTab]      = useState<TabType>('myentries');
   const [fromDate,       setFromDate]       = useState(defaultFrom);
   const [toDate,         setToDate]         = useState(defaultTo);
+
+  // Sync dates when selectedFY loads asynchronously (prevents stale initial state)
+  const fySynced = React.useRef(false);
+  useEffect(() => {
+    if (selectedFY?.startDate && !fySynced.current) {
+      fySynced.current = true;
+      setFromDate(selectedFY.startDate);
+      setToDate(selectedFY.endDate || new Date().toISOString().split('T')[0]);
+    }
+  }, [selectedFY?.startDate]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [voucherType,    setVoucherType]    = useState<VoucherType>('ALL');
   const [showVTypeModal, setShowVTypeModal] = useState(false);
