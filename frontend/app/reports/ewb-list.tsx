@@ -22,13 +22,13 @@ export default function EWBListScreen() {
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { company } = useAuth();
+  const { company, selectedFY } = useAuth();
   const [ewbData, setEwbData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [fromDate, setFromDate] = useState('01/07/25');
-  const [toDate,   setToDate]   = useState('31/07/25');
+  const [fromDate, setFromDate] = useState(selectedFY?.startDate || '');
+  const [toDate,   setToDate]   = useState(selectedFY?.endDate   || '');
 
   useEffect(() => {
     if (!company?.guid) return;
@@ -180,6 +180,8 @@ export default function EWBListScreen() {
         visible={showDatePicker}
         fromDate={fromDate}
         toDate={toDate}
+        minDate={selectedFY?.startDate}
+        maxDate={selectedFY?.endDate}
         onApply={(from, to) => { setFromDate(from); setToDate(to); setShowDatePicker(false); }}
         onClose={() => setShowDatePicker(false)}
       />

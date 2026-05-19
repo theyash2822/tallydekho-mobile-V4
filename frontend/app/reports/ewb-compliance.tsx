@@ -300,6 +300,8 @@ export default function EWBComplianceScreen() {
         visible={showDatePicker}
         fromDate={fromDate}
         toDate={toDate}
+        minDate={selectedFY?.startDate}
+        maxDate={selectedFY?.endDate}
         onApply={(f, t) => { if (f && t) { setFromDate(f); setToDate(t); } }}
         onClose={() => setShowDatePicker(false)}
       />
