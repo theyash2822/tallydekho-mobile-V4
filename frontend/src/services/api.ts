@@ -339,3 +339,12 @@ export const resetPin    = (pin: string, preAuthToken: string) =>
 export const removePin   = (pin: string) => request<any>('DELETE', '/auth/remove-pin', { pin });
 export const setBiometric = (enabled: boolean) => patch<any>('/auth/set-biometric', { enabled });
 export const get2FAStatus = () => get<any>('/auth/two-fa-status');
+
+
+// ── Other Taxes ─────────────────────────────────────────────────────────────
+export const getOtherTaxesSummary      = (companyGuid?: string, params?: any) =>
+  get<any>(withCompany('/reports/other-taxes/summary', companyGuid, params));
+export const getOtherTaxesTransactions = (companyGuid?: string, params?: any) =>
+  get<any>(withCompany('/reports/other-taxes/transactions', companyGuid, params));
+export const getOtherTaxesLateChallans = (companyGuid?: string, params?: any) =>
+  get<any>(withCompany('/reports/other-taxes/late-challans', companyGuid, params));
