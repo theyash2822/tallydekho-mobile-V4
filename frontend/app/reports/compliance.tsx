@@ -214,6 +214,9 @@ export default function ComplianceHubScreen() {
   const unmatchedGST    = alerts?.unmatchedGSTCount ?? 0;
   const gstPercent      = alerts?.gstPercent        ?? 0;
   const gstStatus       = alerts?.gstStatus         ?? 'Pending';
+  const otherTaxCount   = alerts?.otherTaxCount     ?? 0;
+  const otherTaxTotal   = alerts?.otherTaxTotal     ?? 0;
+  const otherTaxTopType = alerts?.otherTaxTopType   ?? null;
 
   // E-Invoice: pending IRN + progress %
   const irnTotal       = pendingIRN + irnGenerated;
@@ -392,18 +395,29 @@ export default function ComplianceHubScreen() {
 
           <View style={s.progressBody}>
             <View style={s.progressRow}>
-              <Text style={s.progressLbl}>TDS Pending</Text>
+              <Text style={s.progressLbl}>
+                {otherTaxTopType ? `${otherTaxTopType} Transactions` : 'Tax Transactions'}
+              </Text>
               <Pressable
                 onPress={otherTip.visible ? otherTip.hide : otherTip.show}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Text style={s.progressNum}>0</Text>
+                <Text style={s.progressNum}>{otherTaxCount}</Text>
               </Pressable>
             </View>
 
-            {otherTip.visible && <TooltipChip text="No TDS data available for this period" />}
+            {otherTip.visible && (
+              <TooltipChip text={
+                otherTaxCount > 0
+                  ? `${otherTaxCount} ${otherTaxTopType || 'tax'} transaction${otherTaxCount !== 1 ? 's' : ''} · ₹${Math.round(otherTaxTotal).toLocaleString('en-IN')}`
+                  : 'No other tax data in synced Tally vouchers'
+              } />
+            )}
 
-            <ProgressBar pct={0} tooltipText="0% TDS challans filed" />
+            <ProgressBar
+              pct={otherTaxCount > 0 ? 100 : 0}
+              tooltipText={otherTaxCount > 0 ? `₹${Math.round(otherTaxTotal).toLocaleString('en-IN')} total ${otherTaxTopType || 'tax'}` : 'No tax data'}
+            />
           </View>
         </View>
 
