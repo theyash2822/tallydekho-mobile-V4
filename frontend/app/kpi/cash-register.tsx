@@ -306,16 +306,15 @@ export default function CashRegisterScreen() {
               </TouchableOpacity>
 
               {/* Transaction Cards */}
-              {!isCollapsed && <View style={s.cardGroup}>
-                {group.items.map((item, idx) => {
+              {!isCollapsed && group.items.map((item) => {
                   const isSel = selected.has(item.id);
                   const typeColor  = item.type === 'receipt' ? COLORS.positive : item.type === 'contra' ? '#A89060' : COLORS.negative;
                   const typeLabel  = item.type === 'receipt' ? 'Cr' : 'Dr';
                   const typeBg     = item.type === 'receipt' ? COLORS.positiveBg : item.type === 'contra' ? '#FDF9F4' : COLORS.negativeBg;
 
                   return (
-                    <View key={item.id}>
                       <TouchableOpacity
+                        key={item.id}
                         style={[s.itemCard, isSel && s.itemCardSel]}
                         activeOpacity={0.7}
                         onPress={() => {
@@ -363,11 +362,8 @@ export default function CashRegisterScreen() {
                           </View>
                         </View>
                       </TouchableOpacity>
-                      {idx < group.items.length - 1 && <View style={s.divider} />}
-                    </View>
                   );
                 })}
-              </View>}
             </View>
             );
           })
@@ -468,9 +464,9 @@ const s = StyleSheet.create({
   monthHeaderCount: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500' },
 
   // Ledger-style card group
-  cardGroup:  { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
-  itemCard:   { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: SPACING.md, paddingVertical: 14 },
-  itemCardSel:{ backgroundColor: '#A8906010' },
+  cardGroup:  {},
+  itemCard:   { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: SPACING.md, paddingVertical: 14, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, marginHorizontal: SPACING.md, marginBottom: 8 },
+  itemCardSel:{ borderColor: COLORS.brandPrimary, borderWidth: 2, backgroundColor: COLORS.brandPrimary + '06' },
 
   // Avatar circle (like Ledger tab)
   avatar:     { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
