@@ -368,31 +368,30 @@ export default function OtherTaxesScreen() {
           )}
         </View>
 
-        {/* Transactions List — grouped by month */}
-        <View style={s.card}>
-          <View style={s.cardHeader}>
-            <Text style={s.cardTitle}>{activeTab.label} Transactions</Text>
-            {txnsTotal > 0 && (
-              <Text style={s.cardCount}>{txnsTotal} records</Text>
-            )}
+        {/* Transactions section — tiles directly on pageBg */}
+        {(txnsTotal > 0 || txnsLoading) && (
+          <View style={s.txnSectionHeader}>
+            <Text style={s.txnSectionTitle}>{activeTab.label} Transactions</Text>
+            {txnsTotal > 0 && <Text style={s.txnSectionCount}>{txnsTotal} records</Text>}
           </View>
+        )}
 
-          {txnsLoading ? (
-            <ActivityIndicator size="small" color={COLORS.brandPrimary} style={{ marginVertical: 16 }} />
-          ) : txnsError ? (
-            <View style={s.errorBanner}>
-              <Ionicons name="alert-circle-outline" size={14} color={'#E74C3C'} />
-              <Text style={s.errorTxt}>{txnsError}</Text>
-              <TouchableOpacity onPress={() => loadTxns(activeTab)}>
-                <Text style={s.retryTxt}>Retry</Text>
-              </TouchableOpacity>
-            </View>
-          ) : txns.length === 0 ? (
-            <View style={s.emptyInline}>
-              <Text style={s.emptyInlineTxt}>No {activeTab.label} data in synced Tally vouchers</Text>
-            </View>
-          ) : (
-            groupedTxns.map((group) => {
+        {txnsLoading ? (
+          <ActivityIndicator size="small" color={COLORS.brandPrimary} style={{ marginVertical: 16 }} />
+        ) : txnsError ? (
+          <View style={[s.errorBanner, { marginHorizontal: SPACING.md }]}>
+            <Ionicons name="alert-circle-outline" size={14} color={'#E74C3C'} />
+            <Text style={s.errorTxt}>{txnsError}</Text>
+            <TouchableOpacity onPress={() => loadTxns(activeTab)}>
+              <Text style={s.retryTxt}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : txns.length === 0 ? (
+          <View style={s.emptyInline}>
+            <Text style={s.emptyInlineTxt}>No {activeTab.label} data in synced Tally vouchers</Text>
+          </View>
+        ) : (
+          groupedTxns.map((group) => {
               const collapsed = collapsedMonths.has(group.month);
               return (
                 <View key={group.month} style={s.monthGroup}>
@@ -472,7 +471,6 @@ export default function OtherTaxesScreen() {
               );
             })
           )}
-        </View>
 
         <View style={{ height: selected.size > 0 ? 90 : 32 }} />
       </ScrollView>
@@ -556,7 +554,7 @@ const s = StyleSheet.create({
   tabBadgeTxtActive:{ color: COLORS.brandPrimary },
 
   scroll:        { flex: 1 },
-  scrollContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.md },
+  scrollContent: { paddingTop: SPACING.md },
 
   centered: { alignItems: 'center', paddingVertical: 24 },
 
@@ -572,7 +570,7 @@ const s = StyleSheet.create({
   statsCard: {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
     borderWidth: 1, borderColor: COLORS.borderDefault,
-    marginBottom: SPACING.sm, overflow: 'hidden',
+    marginHorizontal: SPACING.md, marginBottom: SPACING.sm, overflow: 'hidden',
   },
   statsRow:  { flexDirection: 'row' },
   statCell:  { flex: 1, paddingHorizontal: SPACING.md, paddingVertical: 16 },
@@ -584,7 +582,8 @@ const s = StyleSheet.create({
   emptyCard: {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
     borderWidth: 1, borderColor: COLORS.borderDefault,
-    alignItems: 'center', padding: 32, gap: 8, marginBottom: SPACING.sm,
+    alignItems: 'center', padding: 32, gap: 8,
+    marginHorizontal: SPACING.md, marginBottom: SPACING.sm,
   },
   emptyTitle:    { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
   emptySubtitle: { fontSize: 12, color: COLORS.textTertiary, textAlign: 'center' },
@@ -592,7 +591,7 @@ const s = StyleSheet.create({
   card: {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
     borderWidth: 1, borderColor: COLORS.borderDefault,
-    padding: SPACING.md, marginBottom: SPACING.sm,
+    padding: SPACING.md, marginHorizontal: SPACING.md, marginBottom: SPACING.sm,
   },
   cardHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12,
@@ -635,11 +634,18 @@ const s = StyleSheet.create({
     fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary,
   },
 
+  txnSectionHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md, paddingBottom: 6, paddingTop: 2,
+  },
+  txnSectionTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  txnSectionCount: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+
   // ── Tile cards ────────────────────────────────────────────────────────────────────
   txnCard: {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
     borderWidth: 1, borderColor: COLORS.borderDefault,
-    padding: SPACING.md, marginBottom: 8, gap: 8,
+    padding: SPACING.md, marginHorizontal: SPACING.md, marginBottom: 8, gap: 8,
   },
   txnCardSelected: { borderColor: COLORS.brandPrimary, borderWidth: 2, backgroundColor: COLORS.brandPrimary + '06' },
   txnCardTop:  { flexDirection: 'row', alignItems: 'center' },

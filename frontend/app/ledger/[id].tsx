@@ -589,8 +589,7 @@ export default function LedgerDetailScreen() {
       </View>{/* end stickyTop */}
 
       {/* ── Scrollable transaction list only ── */}
-      <ScrollView style={styles.txnScroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        <View style={styles.txnContainer}>
+      <ScrollView style={styles.txnScroll} contentContainerStyle={{ paddingHorizontal: SPACING.md, paddingBottom: 24 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {sortedMonths.length === 0 ? (
             <View style={styles.emptySearch}>
               <Ionicons name="search-outline" size={28} color={COLORS.textTertiary} />
@@ -617,14 +616,13 @@ export default function LedgerDetailScreen() {
                   </TouchableOpacity>
 
                   {/* Rows — only rendered when expanded */}
-                  {isOpen && monTxns.map((txn, idx) => {
+                  {isOpen && monTxns.map((txn) => {
                     const isTxnSelected = selectedTxns.includes(txn.id);
                     return (
                     <TouchableOpacity
                       key={txn.id}
                       style={[
                         styles.txnRow,
-                        idx === monTxns.length - 1 && { borderBottomWidth: 0 },
                         isTxnSelected && styles.txnRowSelected,
                       ]}
                       activeOpacity={0.75}
@@ -683,7 +681,6 @@ export default function LedgerDetailScreen() {
               );
             })
           )}
-        </View>
 
         {/* ── Action buttons ── */}
         <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -832,20 +829,13 @@ const styles = StyleSheet.create({
   filterPillTextActive: { color: COLORS.brandPrimary },
 
   // Month accordion
-  txnContainer: {
-    marginHorizontal: SPACING.md, borderRadius: RADIUS.lg,
-    overflow: 'hidden', borderWidth: 1,
-    borderColor: COLORS.borderDefault,
-    backgroundColor: COLORS.cardBg,
-    marginBottom: SPACING.md,
-  },
+  txnContainer: {},
   monthGroup: {},
   monthHeader: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.md, paddingVertical: 11,
     backgroundColor: COLORS.pageBg,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
   monthHeaderText: {
     fontSize: TYPOGRAPHY.sm, fontWeight: '700',
@@ -856,8 +846,10 @@ const styles = StyleSheet.create({
   txnRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingHorizontal: SPACING.md, paddingVertical: 13,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
     backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    marginBottom: 8,
   },
   txnDateCol:  { width: 36, alignItems: 'center' },
   txnDay:      { fontSize: 12, fontWeight: '700', color: COLORS.textPrimary },
@@ -916,8 +908,8 @@ const styles = StyleSheet.create({
 
   // ── Transaction row selection ──────────────────────────────────────────────
   txnRowSelected: {
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.brandPrimary,
+    borderColor: COLORS.brandPrimary,
+    borderWidth: 2,
     backgroundColor: COLORS.brandPrimary + '06',
   },
   txnCheckbox: {
