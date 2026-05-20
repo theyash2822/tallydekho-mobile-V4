@@ -1,14 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  ActivityIndicator, FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
-import { useSettings } from '../../src/context/SettingsContext';
+import { useAuth, fyInfoToParam, FYInfo } from '../../src/context/AuthContext';
 import {
   getOtherTaxesSummary,
   getOtherTaxesTransactions,
@@ -49,13 +48,21 @@ interface TaxTxn {
   transaction_nature: string | null;
 }
 
+interface MonthChip {
+  label: string; // 'Apr 2024'
+  from:  string; // '2024-04-01'
+  to:    string; // '2024-04-30'
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
+const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
 function fmt(n: number | string | null | undefined): string {
   const num = parseFloat(String(n ?? 0));
   if (isNaN(num)) return '0';
   if (Math.abs(num) >= 1_00_00_000) return `₹${(num / 1_00_00_000).toFixed(2)}Cr`;
-  if (Math.abs(num) >= 1_00_000) return `₹${(num / 1_00_000).toFixed(2)}L`;
-  if (Math.abs(num) >= 1_000) return `₹${(num / 1_000).toFixed(1)}K`;
+  if (Math.abs(num) >= 1_00_000)    return `₹${(num / 1_00_000).toFixed(2)}L`;
+  if (Math.abs(num) >= 1_000)       return `₹${(num / 1_000).toFixed(1)}K`;
   return `₹${num.toFixed(0)}`;
 }
 
@@ -67,34 +74,86 @@ function fmtDate(d: string | null | undefined): string {
   return s;
 }
 
+/** Generate month chips for a given FY */
+function buildFYMonths(fy: FYInfo | null): MonthChip[] {
+  if (!fy?.startDate || !fy?.endDate) return [];
+  const chips: MonthChip[] = [];
+  const start = new Date(fy.startDate);
+  const end   = new Date(fy.endDate);
+  const cur   = new Date(start.getFullYear(), start.getMonth(), 1);
+  while (cur <= end) {
+    const y  = cur.getFullYear();
+    const m  = cur.getMonth(); // 0-indexed
+    const mm = String(m + 1).padStart(2, '0');
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    chips.push({
+      label: `${MONTH_ABBR[m]} ${y}`,
+      from:  `${y}-${mm}-01`,
+      to:    `${y}-${mm}-${lastDay}`,
+    });
+    cur.setMonth(cur.getMonth() + 1);
+  }
+  return chips;
+}
+
+/** Group flat TaxTxn array into [{month, items}] sorted newest first */
+function groupByMonth(txns: TaxTxn[]): Array<{ month: string; items: TaxTxn[] }> {
+  const map = new Map<string, TaxTxn[]>();
+  // Insert in order so sort is stable
+  for (const txn of txns) {
+    const raw = txn.voucher_date ? String(txn.voucher_date).replace(/T.*/, '') : '';
+    const d   = raw ? new Date(raw) : null;
+    const key = d && !isNaN(d.getTime())
+      ? `${MONTH_ABBR[d.getMonth()]} ${d.getFullYear()}`
+      : 'Unknown Date';
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(txn);
+  }
+  return Array.from(map.entries()).map(([month, items]) => ({ month, items }));
+}
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function OtherTaxesScreen() {
   const router = useRouter();
   const { company: selectedCompany, selectedFY } = useAuth();
 
-  const [activeTab, setActiveTab]       = useState<TabItem>(TABS[0]);
+  const [activeTab, setActiveTab] = useState<TabItem>(TABS[0]);
+
+  // Month filter: null = "All" (full FY)
+  const [selectedMonth, setSelectedMonth] = useState<MonthChip | null>(null);
 
   // Summary
-  const [summary, setSummary]           = useState<SummaryRow[]>([]);
+  const [summary, setSummary]               = useState<SummaryRow[]>([]);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [summaryError, setSummaryError]     = useState<string | null>(null);
 
   // Transactions
-  const [txns, setTxns]                 = useState<TaxTxn[]>([]);
-  const [txnsLoading, setTxnsLoading]   = useState(false);
-  const [txnsError, setTxnsError]       = useState<string | null>(null);
-  const [txnsPage, setTxnsPage]         = useState(1);
-  const [txnsTotal, setTxnsTotal]       = useState(0);
+  const [txns, setTxns]           = useState<TaxTxn[]>([]);
+  const [txnsLoading, setTxnsLoading] = useState(false);
+  const [txnsError, setTxnsError] = useState<string | null>(null);
+  const [txnsTotal, setTxnsTotal] = useState(0);
+
+  // Collapsible months
+  const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
 
   // Late challans
-  const [challans, setChallans]         = useState<any[]>([]);
-  const [hasChallans, setHasChallans]   = useState(false);
+  const [challans, setChallans]               = useState<any[]>([]);
+  const [hasChallans, setHasChallans]         = useState(false);
   const [challansLoading, setChallansLoading] = useState(false);
 
-  const companyGuid  = selectedCompany?.guid;
-  const fyParam      = fyInfoToParam(selectedFY);
+  const companyGuid = selectedCompany?.guid;
+  const fyParam     = fyInfoToParam(selectedFY);
 
-  // ── Load Summary ────────────────────────────────────────────────────────────
+  // ── FY month chips ──────────────────────────────────────────────────────────
+  const fyMonths = useMemo(() => buildFYMonths(selectedFY), [selectedFY]);
+
+  // Reset month selection when FY changes
+  useEffect(() => { setSelectedMonth(null); }, [selectedFY]);
+
+  // ── Grouped txns (derived) ──────────────────────────────────────────────────
+  const groupedTxns = useMemo(() => groupByMonth(txns), [txns]);
+
+  // ── Load Summary (FY-level, unaffected by month filter) ─────────────────────
   const loadSummary = useCallback(async () => {
     if (!companyGuid) return;
     setSummaryLoading(true);
@@ -110,17 +169,23 @@ export default function OtherTaxesScreen() {
   }, [companyGuid, fyParam]);
 
   // ── Load Transactions ───────────────────────────────────────────────────────
-  const loadTxns = useCallback(async (tab: TabItem, page = 1) => {
+  const loadTxns = useCallback(async (tab: TabItem, month: MonthChip | null) => {
     if (!companyGuid) return;
     setTxnsLoading(true);
     setTxnsError(null);
     try {
-      const params: any = { taxType: tab.taxType, page, limit: 50, ...(fyParam ? { fy: fyParam } : {}) };
-      const res = await getOtherTaxesTransactions(companyGuid, params);
+      const params: any = {
+        taxType: tab.taxType,
+        limit:   month ? 200 : 500,
+        page:    1,
+        // Month selected → pass exact from/to; otherwise use full FY param
+        ...(month  ? { from: month.from, to: month.to } : {}),
+        ...(!month && fyParam ? { fy: fyParam } : {}),
+      };
+      const res  = await getOtherTaxesTransactions(companyGuid, params);
       const rows: TaxTxn[] = res?.data ?? [];
-      setTxns(page === 1 ? rows : (prev) => [...prev, ...rows]);
+      setTxns(rows);
       setTxnsTotal(res?.meta?.total ?? rows.length);
-      setTxnsPage(page);
     } catch (e: any) {
       setTxnsError(e?.message ?? 'Failed to load transactions');
     } finally {
@@ -138,29 +203,43 @@ export default function OtherTaxesScreen() {
       setChallans(res?.data ?? []);
       setHasChallans(res?.has_challan_data ?? false);
     } catch {
-      setChallans([]);
-      setHasChallans(false);
+      setChallans([]); setHasChallans(false);
     } finally {
       setChallansLoading(false);
     }
   }, [companyGuid, fyParam]);
 
-  // ── Initial Load ────────────────────────────────────────────────────────────
-  useEffect(() => {
-    loadSummary();
-  }, [loadSummary]);
+  // ── Initial + FY change ─────────────────────────────────────────────────────
+  useEffect(() => { loadSummary(); }, [loadSummary]);
 
+  // ── Tab / month change → reload txns + challans ─────────────────────────────
   useEffect(() => {
     setTxns([]);
-    setTxnsPage(1);
-    loadTxns(activeTab, 1);
+    setCollapsedMonths(new Set());
+    loadTxns(activeTab, selectedMonth);
     loadChallans(activeTab);
-  }, [activeTab, loadTxns, loadChallans]);
+  }, [activeTab, selectedMonth, loadTxns, loadChallans]);
 
-  // ── Tab switch ──────────────────────────────────────────────────────────────
+  // ── Handlers ────────────────────────────────────────────────────────────────
   const handleTabPress = (tab: TabItem) => {
     if (tab.taxType === activeTab.taxType) return;
     setActiveTab(tab);
+  };
+
+  const handleMonthPress = (chip: MonthChip | null) => {
+    setSelectedMonth(prev =>
+      chip === null
+        ? null
+        : prev?.label === chip.label ? null : chip   // toggle: tap same month = back to All
+    );
+  };
+
+  const toggleMonth = (month: string) => {
+    setCollapsedMonths(prev => {
+      const next = new Set(prev);
+      next.has(month) ? next.delete(month) : next.add(month);
+      return next;
+    });
   };
 
   // ── Summary stats for active tab ────────────────────────────────────────────
@@ -190,13 +269,12 @@ export default function OtherTaxesScreen() {
       {/* Tax Tab Bar */}
       <View style={s.tabBarWrapper}>
         <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
+          horizontal showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.tabBarContent}
         >
           {TABS.map((tab) => {
             const tabSummary = summary.find(s => s.taxType === tab.taxType);
-            const isActive = activeTab.taxType === tab.taxType;
+            const isActive   = activeTab.taxType === tab.taxType;
             return (
               <TouchableOpacity
                 key={tab.taxType}
@@ -218,6 +296,43 @@ export default function OtherTaxesScreen() {
         </ScrollView>
       </View>
 
+      {/* Month Filter Strip */}
+      {fyMonths.length > 0 && (
+        <View style={s.monthBarWrapper}>
+          <ScrollView
+            horizontal showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.monthBarContent}
+          >
+            {/* "All" chip */}
+            <TouchableOpacity
+              style={[s.monthChip, selectedMonth === null && s.monthChipActive]}
+              onPress={() => handleMonthPress(null)}
+              activeOpacity={0.7}
+            >
+              <Text style={[s.monthChipTxt, selectedMonth === null && s.monthChipTxtActive]}>
+                All
+              </Text>
+            </TouchableOpacity>
+
+            {fyMonths.map((chip) => {
+              const isActive = selectedMonth?.label === chip.label;
+              return (
+                <TouchableOpacity
+                  key={chip.label}
+                  style={[s.monthChip, isActive && s.monthChipActive]}
+                  onPress={() => handleMonthPress(chip)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[s.monthChipTxt, isActive && s.monthChipTxtActive]}>
+                    {chip.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
       <ScrollView
         style={s.scroll}
         showsVerticalScrollIndicator={false}
@@ -234,11 +349,13 @@ export default function OtherTaxesScreen() {
           <View style={s.errorBanner}>
             <Ionicons name="alert-circle-outline" size={16} color={'#E74C3C'} />
             <Text style={s.errorTxt}>{summaryError}</Text>
-            <TouchableOpacity onPress={loadSummary}><Text style={s.retryTxt}>Retry</Text></TouchableOpacity>
+            <TouchableOpacity onPress={loadSummary}>
+              <Text style={s.retryTxt}>Retry</Text>
+            </TouchableOpacity>
           </View>
         )}
 
-        {/* Stats Card */}
+        {/* Stats Card (always FY-level) */}
         {!summaryLoading && !summaryError && (
           activeSummary ? (
             <View style={s.statsCard}>
@@ -266,7 +383,7 @@ export default function OtherTaxesScreen() {
                 </View>
               </View>
             </View>
-          ) : !summaryLoading && (
+          ) : (
             <View style={s.emptyCard}>
               <Ionicons name="receipt-outline" size={40} color={COLORS.textTertiary} />
               <Text style={s.emptyTitle}>No {activeTab.label} data found</Text>
@@ -303,73 +420,83 @@ export default function OtherTaxesScreen() {
           )}
         </View>
 
-        {/* Transactions List */}
+        {/* Transactions List — grouped by month */}
         <View style={s.card}>
           <View style={s.cardHeader}>
-            <Text style={s.cardTitle}>{activeTab.label} Transactions</Text>
+            <Text style={s.cardTitle}>
+              {selectedMonth ? `${selectedMonth.label} · ${activeTab.label}` : `${activeTab.label} Transactions`}
+            </Text>
             {txnsTotal > 0 && (
               <Text style={s.cardCount}>{txnsTotal} records</Text>
             )}
           </View>
 
-          {txnsLoading && txns.length === 0 ? (
+          {txnsLoading ? (
             <ActivityIndicator size="small" color={COLORS.brandPrimary} style={{ marginVertical: 16 }} />
           ) : txnsError ? (
             <View style={s.errorBanner}>
               <Ionicons name="alert-circle-outline" size={14} color={'#E74C3C'} />
               <Text style={s.errorTxt}>{txnsError}</Text>
-              <TouchableOpacity onPress={() => loadTxns(activeTab, 1)}>
+              <TouchableOpacity onPress={() => loadTxns(activeTab, selectedMonth)}>
                 <Text style={s.retryTxt}>Retry</Text>
               </TouchableOpacity>
             </View>
           ) : txns.length === 0 ? (
             <View style={s.emptyInline}>
-              <Text style={s.emptyInlineTxt}>No {activeTab.label} data found in synced Tally vouchers</Text>
+              <Text style={s.emptyInlineTxt}>
+                No {activeTab.label} data{selectedMonth ? ` for ${selectedMonth.label}` : ''} in synced Tally vouchers
+              </Text>
             </View>
           ) : (
-            <>
-              {txns.map((txn, idx) => (
-                <TouchableOpacity
-                  key={txn.id}
-                  style={[s.txnRow, idx < txns.length - 1 && s.txnBorder]}
-                  activeOpacity={0.7}
-                  onPress={() => router.push(`/document/${txn.voucher_guid}` as any)}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.txnParty} numberOfLines={1}>
-                      {txn.party_ledger_name || txn.tax_ledger_name || '-'}
-                    </Text>
-                    <Text style={s.txnMeta}>
-                      {txn.voucher_number ? `${txn.voucher_number} · ` : ''}
-                      {fmtDate(txn.voucher_date)}
-                    </Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                    <Text style={s.txnAmt}>{fmt(txn.tax_amount)}</Text>
-                    {txn.transaction_nature && (
-                      <Text style={s.txnNature}>{txn.transaction_nature}</Text>
-                    )}
-                    <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
-                  </View>
-                </TouchableOpacity>
-              ))}
+            groupedTxns.map((group) => {
+              const collapsed = collapsedMonths.has(group.month);
+              return (
+                <View key={group.month} style={s.monthGroup}>
+                  {/* Month header (collapsible) */}
+                  <TouchableOpacity
+                    style={s.monthGroupHeader}
+                    onPress={() => toggleMonth(group.month)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={s.monthGroupLabel}>{group.month}</Text>
+                    <View style={s.monthGroupRight}>
+                      <Text style={s.monthGroupCount}>{group.items.length} entries</Text>
+                      <Ionicons
+                        name={collapsed ? 'chevron-down' : 'chevron-up'}
+                        size={14} color={COLORS.textSecondary}
+                      />
+                    </View>
+                  </TouchableOpacity>
 
-              {/* Load More */}
-              {txns.length < txnsTotal && (
-                <TouchableOpacity
-                  style={s.loadMoreBtn}
-                  onPress={() => loadTxns(activeTab, txnsPage + 1)}
-                  disabled={txnsLoading}
-                  activeOpacity={0.7}
-                >
-                  {txnsLoading ? (
-                    <ActivityIndicator size="small" color={COLORS.brandPrimary} />
-                  ) : (
-                    <Text style={s.loadMoreTxt}>Load More ({txnsTotal - txns.length} remaining)</Text>
-                  )}
-                </TouchableOpacity>
-              )}
-            </>
+                  {/* Rows */}
+                  {!collapsed && group.items.map((txn, idx) => (
+                    <TouchableOpacity
+                      key={txn.id}
+                      style={[s.txnRow, idx < group.items.length - 1 && s.txnBorder]}
+                      activeOpacity={0.7}
+                      onPress={() => router.push(`/document/${txn.voucher_guid}` as any)}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.txnParty} numberOfLines={1}>
+                          {txn.party_ledger_name || txn.tax_ledger_name || '-'}
+                        </Text>
+                        <Text style={s.txnMeta}>
+                          {txn.voucher_number ? `${txn.voucher_number} · ` : ''}
+                          {fmtDate(txn.voucher_date)}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                        <Text style={s.txnAmt}>{fmt(txn.tax_amount)}</Text>
+                        {txn.transaction_nature && (
+                          <Text style={s.txnNature}>{txn.transaction_nature}</Text>
+                        )}
+                        <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              );
+            })
           )}
         </View>
 
@@ -426,16 +553,34 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.pageBg, justifyContent: 'center',
     alignItems: 'center', flexShrink: 0, flexDirection: 'row', gap: 6,
   },
-  tabPillActive: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.cardBg },
-  tabTxt:        { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
-  tabTxtActive:  { color: COLORS.brandPrimary, fontWeight: '700' },
+  tabPillActive:    { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.cardBg },
+  tabTxt:           { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+  tabTxtActive:     { color: COLORS.brandPrimary, fontWeight: '700' },
   tabBadge: {
     backgroundColor: COLORS.borderDefault, borderRadius: 8,
     paddingHorizontal: 5, paddingVertical: 1,
   },
-  tabBadgeActive: { backgroundColor: COLORS.brandPrimary + '22' },
-  tabBadgeTxt:    { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary },
-  tabBadgeTxtActive: { color: COLORS.brandPrimary },
+  tabBadgeActive:   { backgroundColor: COLORS.brandPrimary + '22' },
+  tabBadgeTxt:      { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary },
+  tabBadgeTxtActive:{ color: COLORS.brandPrimary },
+
+  // ── Month strip ──────────────────────────────────────────────────────────────
+  monthBarWrapper: {
+    height: 46, backgroundColor: COLORS.pageBg,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  monthBarContent: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: SPACING.sm, paddingVertical: 8, gap: 6,
+  },
+  monthChip: {
+    height: 30, paddingHorizontal: 12, borderRadius: RADIUS.full,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    backgroundColor: COLORS.cardBg, justifyContent: 'center', alignItems: 'center',
+  },
+  monthChipActive:  { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary + '15' },
+  monthChipTxt:     { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
+  monthChipTxtActive: { color: COLORS.brandPrimary },
 
   scroll:        { flex: 1 },
   scrollContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.md },
@@ -448,8 +593,8 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: '#FED7D7',
     padding: SPACING.sm, marginBottom: SPACING.sm,
   },
-  errorTxt:  { flex: 1, fontSize: TYPOGRAPHY.sm, color: '#C53030' },
-  retryTxt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.brandPrimary },
+  errorTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, color: '#C53030' },
+  retryTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.brandPrimary },
 
   statsCard: {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
@@ -476,18 +621,18 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: COLORS.borderDefault,
     padding: SPACING.md, marginBottom: SPACING.sm,
   },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  cardTitle:  { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-  cardCount:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  cardHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12,
+  },
+  cardTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  cardCount: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
 
   challansUnavailable: {
     fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary,
     fontStyle: 'italic', paddingVertical: 8,
   },
-
   challanRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 11, gap: 8,
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 11, gap: 8,
   },
   challanBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   challanRank:   { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textTertiary, width: 18 },
@@ -499,21 +644,32 @@ const s = StyleSheet.create({
   emptyInline:    { paddingVertical: 16, alignItems: 'center' },
   emptyInlineTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary, textAlign: 'center' },
 
+  // ── Month groups ─────────────────────────────────────────────────────────────
+  monthGroup: {
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault, marginTop: 4,
+  },
+  monthGroupHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 10,
+  },
+  monthGroupLabel: {
+    fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary,
+  },
+  monthGroupRight: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+  },
+  monthGroupCount: {
+    fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary,
+  },
+
   txnRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 11, gap: 8,
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 11, gap: 8,
   },
   txnBorder:  { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   txnParty:   { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
   txnMeta:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
   txnAmt:     { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   txnNature:  { fontSize: 10, color: COLORS.textTertiary, marginTop: 2 },
-
-  loadMoreBtn: {
-    alignItems: 'center', paddingVertical: 12,
-    marginTop: 4,
-  },
-  loadMoreTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.brandPrimary },
 
   bottomBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
