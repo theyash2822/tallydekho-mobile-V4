@@ -379,19 +379,29 @@ export default function AIInsightsScreen() {
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { company } = useAuth();
+  const { company, selectedFY } = useAuth();
   const [fromDate,       setFromDate]       = useState('');
   const [toDate,         setToDate]         = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [refreshing,     setRefreshing]     = useState(false);
   const [aiData,         setAiData]         = useState<any>(null);
 
-  // Derive display data from aiData (API) with sensible fallbacks
-  const forecastData   = aiData?.salesForecast?.map((v: number, i: number) => ({ week: aiData?.weekLabels?.[i] || `W${i+1}`, sales: v, forecast: aiData?.salesActual?.[i] || v })) || [];
-  const topCustomers   = aiData?.topCustomers || [];
-  const inventoryData  = aiData?.inventory    || null;
-  const growthData     = aiData?.growth       || null;
-  const forecastNext   = aiData?.forecast     || null;
+  // Real data from API
+  const revenueForecast: any[] = aiData?.revenueForecast || FORECAST_DATA;
+  const expenseDataReal: any[] = aiData?.expenseData     || EXPENSE_DATA;
+  const receivablesAging: any[]= aiData?.receivablesAging|| RECEIVABLES;
+  const topSuppliers: any[]    = aiData?.topSuppliers    || TOP_SUPPLIERS;
+  const topCustomers: any[]    = aiData?.topCustomers    || [];
+  const stockoutData: any[]    = aiData?.stockout        || STOCKOUT;
+  const recommendations: any[] = aiData?.recommendations || AI_RECS;
+  const summaryData: any       = aiData?.summary         || {};
+
+  // Cashflow from summary (inflows = revenue, outflows = expenses)
+  const cashflowData = aiData?.summary ? [
+    { label: 'Revenue (Inflows)',   value: `+${formatAmountCompact(summaryData.totalRevenue  || 0)}`, color: COLORS.positive },
+    { label: 'Expenses (Outflows)', value: `-${formatAmountCompact(summaryData.totalExpenses || 0)}`, color: COLORS.negative },
+    { label: 'Net',                 value: `${(summaryData.totalRevenue||0)-(summaryData.totalExpenses||0) >= 0 ? '+' : ''}${formatAmountCompact((summaryData.totalRevenue||0)-(summaryData.totalExpenses||0))}`, color: AMBER },
+  ] : CASHFLOW;
 
   const isDateActive = fromDate.length > 0 && toDate.length > 0;
 
@@ -399,17 +409,19 @@ export default function AIInsightsScreen() {
     if (!company?.guid) return;
     setRefreshing(true);
     try {
-      const res: any = await getAIInsights(company.guid, fromDate || undefined, toDate || undefined);
+      // Use date range picker if active, otherwise pass FY
+      const from = fromDate || selectedFY?.startDate || undefined;
+      const to   = toDate   || selectedFY?.endDate   || undefined;
+      const res: any = await getAIInsights(company.guid, from, to);
       if (res?.data) setAiData(res.data);
-      Toast.show({ type: 'success', text1: 'Insights Updated', text2: 'AI models refreshed with latest data', visibilityTime: 2200 });
     } catch {
-      Toast.show({ type: 'info', text1: 'Using cached data', text2: 'Connect to Tally for live AI insights' });
+      Toast.show({ type: 'error', text1: 'Failed to load insights', text2: 'Check your connection' });
     } finally {
       setRefreshing(false);
     }
-  }, [company?.guid, fromDate, toDate]);
+  }, [company?.guid, fromDate, toDate, selectedFY?.startDate]);
 
-  useEffect(() => { fetchInsights(); }, [company?.guid]);
+  useEffect(() => { fetchInsights(); }, [company?.guid, selectedFY?.startDate]);
 
   const handleRefresh = () => fetchInsights();
 
@@ -495,7 +507,7 @@ export default function AIInsightsScreen() {
             <View style={[s.legendDot, { backgroundColor: COLORS.borderDefault, opacity: 0.5 }]} />
             <Text style={s.legendTxt}>Forecast Zone</Text>
           </View>
-          <ForecastLineChart data={forecastData.length > 0 ? forecastData : FORECAST_DATA} />
+          <ForecastLineChart data={revenueForecast} />
         </View>
 
         {/* ──────────────────────────────────────────────────────────────── */}
@@ -503,9 +515,9 @@ export default function AIInsightsScreen() {
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
           <Text style={s.cardTitle}>Cash-Flow Projection</Text>
-          {CASHFLOW.map((row: any, i: number) => (
+          {cashflowData.map((row: any, i: number) => (
             <View key={row.label}
-              style={[s.cashRow, i < CASHFLOW.length - 1 ? s.cashRowBorder : null]}
+              style={[s.cashRow, i < cashflowData.length - 1 ? s.cashRowBorder : null]}
             >
               <Text style={s.cashLabel}>{row.label}</Text>
               <Text style={[s.cashValue, { color: row.color }]}>{row.value}</Text>
@@ -522,27 +534,25 @@ export default function AIInsightsScreen() {
             <View style={[s.kpiBadge, { backgroundColor: '#FEE2E2' }]}>
               <Ionicons name="warning" size={12} color={COLORS.negative} />
               <Text style={[s.kpiBadgeTxt, { color: COLORS.negative }]}>
-                {STOCKOUT.filter(i => i.critical).length} critical
+                {stockoutData.filter((i: any) => i.critical).length} critical
               </Text>
             </View>
           </View>
-          {STOCKOUT.map((item: any, i: number) => (
-            <View key={item.item}
-              style={[s.stockRow, i < STOCKOUT.length - 1 ? s.stockRowBorder : null]}
+          {stockoutData.length === 0 ? (
+            <Text style={{ fontSize: 13, color: COLORS.textSecondary, paddingVertical: 8 }}>No low-stock items detected</Text>
+          ) : stockoutData.map((item: any, i: number) => (
+            <View key={item.item ?? item.name}
+              style={[s.stockRow, i < stockoutData.length - 1 ? s.stockRowBorder : null]}
             >
               <View style={s.stockLeft}>
-                <Text style={s.stockItem}>{item.item}</Text>
-                <Text style={s.stockCat}>{item.category}</Text>
+                <Text style={s.stockItem}>{item.item ?? item.name}</Text>
+                <Text style={s.stockCat}>{item.category ?? `${item.qty ?? 0} ${item.unit ?? ''} left`}</Text>
               </View>
               <View style={s.stockRight}>
                 <Text style={[s.stockDays, { color: item.critical ? COLORS.negative : AMBER }]}>
-                  {item.days} days stock left
+                  {item.days ? `${item.days} days left` : (item.critical ? 'Out of stock' : `${item.qty} ${item.unit}`)}
                 </Text>
-                <Ionicons
-                  name="warning"
-                  size={16}
-                  color={item.critical ? COLORS.negative : AMBER}
-                />
+                <Ionicons name="warning" size={16} color={item.critical ? COLORS.negative : AMBER} />
               </View>
             </View>
           ))}
@@ -554,12 +564,14 @@ export default function AIInsightsScreen() {
         <View style={s.card}>
           <View style={s.cardHeader}>
             <Text style={s.cardTitle}>Expense Spike Alert</Text>
-            <View style={s.spikeBadge}>
-              <Ionicons name="warning" size={11} color={COLORS.negative} />
-              <Text style={s.spikeBadgeTxt}>Utilities up 42% vs avg</Text>
-            </View>
+            {expenseDataReal.some((d: any) => d.isSpike) && (
+              <View style={s.spikeBadge}>
+                <Ionicons name="warning" size={11} color={COLORS.negative} />
+                <Text style={s.spikeBadgeTxt}>{expenseDataReal.filter((d: any) => d.isSpike).length} spike{expenseDataReal.filter((d: any) => d.isSpike).length > 1 ? 's' : ''} detected</Text>
+              </View>
+            )}
           </View>
-          <ExpenseSpikeChart data={EXPENSE_DATA} />
+          <ExpenseSpikeChart data={expenseDataReal} />
         </View>
 
         {/* ──────────────────────────────────────────────────────────────── */}
@@ -567,25 +579,27 @@ export default function AIInsightsScreen() {
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
           <Text style={s.cardTitle}>Receivables Risk</Text>
-          <ReceivablesDonut segments={RECEIVABLES} />
+          {receivablesAging.length === 0 ? (
+            <Text style={{ fontSize: 13, color: COLORS.textSecondary, paddingVertical: 8 }}>No outstanding receivables</Text>
+          ) : (
+            <ReceivablesDonut segments={receivablesAging} />
+          )}
         </View>
 
         {/* ──────────────────────────────────────────────────────────────── */}
         {/* 6. Top 3 Suppliers */}
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
-          <Text style={s.cardTitle}>Top 3 Suppliers</Text>
-          {(topCustomers.length > 0 ? topCustomers.map((sup: any) => ({ name: sup.name, amount: formatAmount(Math.round(sup.total||0)), count: String(sup.count||0) })) : TOP_SUPPLIERS).map((sup: any, i: number) => (
-            <View key={sup.name}
-              style={[s.supRow, i < TOP_SUPPLIERS.length - 1 ? s.supRowBorder : null]}
+          <Text style={s.cardTitle}>Top Suppliers</Text>
+          {topSuppliers.map((sup: any, i: number) => (
+            <View key={sup.name ?? i}
+              style={[s.supRow, i < topSuppliers.length - 1 ? s.supRowBorder : null]}
             >
-              <View style={s.supRankBox}>
-                <Text style={s.supRank}>{i + 1}</Text>
-              </View>
-              <Text style={s.supName}>{sup.name}</Text>
+              <View style={s.supRankBox}><Text style={s.supRank}>{i + 1}</Text></View>
+              <Text style={s.supName} numberOfLines={1}>{sup.name}</Text>
               <View style={s.supRight}>
                 <Text style={s.supPct}>{sup.pct}% of spend</Text>
-                <Text style={s.supSpend}>{sup.spend}</Text>
+                <Text style={s.supSpend}>{sup.spend ? `₹${(sup.spend/100000).toFixed(1)}L` : ''}</Text>
               </View>
             </View>
           ))}
@@ -596,16 +610,19 @@ export default function AIInsightsScreen() {
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
           <Text style={s.cardTitle}>AI Recommendations</Text>
-          {AI_RECS.map((rec, i) => (
-            <View key={i}
-              style={[s.recRow, i < AI_RECS.length - 1 ? s.recRowBorder : null]}
-            >
-              <View style={[s.recIcon, { backgroundColor: AMBER + '18' }]}>
-                <Ionicons name={rec.icon} size={16} color={AMBER} />
+          {recommendations.map((rec: any, i: number) => {
+            const severity = rec.severity || 'info';
+            const iconColor = severity === 'critical' ? COLORS.negative : severity === 'warning' ? AMBER : severity === 'success' ? COLORS.positive : COLORS.brandPrimary;
+            const iconBg = severity === 'critical' ? '#FEE2E2' : severity === 'warning' ? AMBER + '18' : severity === 'success' ? '#F0FBF4' : COLORS.brandPrimary + '15';
+            return (
+              <View key={i} style={[s.recRow, i < recommendations.length - 1 ? s.recRowBorder : null]}>
+                <View style={[s.recIcon, { backgroundColor: iconBg }]}>
+                  <Ionicons name={rec.icon as any} size={16} color={iconColor} />
+                </View>
+                <Text style={s.recTxt}>{rec.text}</Text>
               </View>
-              <Text style={s.recTxt}>{rec.text}</Text>
-            </View>
-          ))}
+            );
+          })}
         </View>
       </ScrollView>
 
