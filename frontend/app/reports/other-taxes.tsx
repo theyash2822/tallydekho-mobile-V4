@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   ActivityIndicator,
@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { useAuth, fyInfoToParam, FYInfo } from '../../src/context/AuthContext';
+import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import {
   getOtherTaxesSummary,
   getOtherTaxesTransactions,
@@ -46,6 +46,7 @@ interface TaxTxn {
   tax_ledger_name: string;
   tax_amount: number;
   transaction_nature: string | null;
+  financial_year?: string | null;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -71,13 +72,19 @@ function fmtDate(d: string | null | undefined): string {
 /** Group flat TaxTxn array into [{month, items}] sorted newest first */
 function groupByMonth(txns: TaxTxn[]): Array<{ month: string; items: TaxTxn[] }> {
   const map = new Map<string, TaxTxn[]>();
-  // Insert in order so sort is stable
   for (const txn of txns) {
     const raw = txn.voucher_date ? String(txn.voucher_date).replace(/T.*/, '') : '';
     const d   = raw ? new Date(raw) : null;
-    const key = d && !isNaN(d.getTime())
-      ? `${MONTH_ABBR[d.getMonth()]} ${d.getFullYear()}`
-      : 'Unknown Date';
+    let key: string;
+    if (d && !isNaN(d.getTime())) {
+      key = `${MONTH_ABBR[d.getMonth()]} ${d.getFullYear()}`;
+    } else if (txn.financial_year) {
+      // No date — fall back to FY label e.g. '2017-2018' → 'FY 2017-18'
+      const parts = String(txn.financial_year).split('-');
+      key = parts.length === 2 ? `FY ${parts[0]}-${parts[1].slice(2)}` : `FY ${txn.financial_year}`;
+    } else {
+      key = 'Undated Entries';
+    }
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(txn);
   }
