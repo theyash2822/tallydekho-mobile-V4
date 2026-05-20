@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { socketService } from '../services/socketService';
 
 // ── Storage helpers ──────────────────────────────────────────
 const storeToken = async (token: string) => {
@@ -133,9 +134,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUserState(userInfo);
       AsyncStorage.setItem('user_info', JSON.stringify(userInfo)).catch(() => {});
     }
+    // Connect socket immediately after login
+    socketService.connect(BASE_URL, token);
+    socketService.setOnSynced(() => {
+      setLastSyncAt(Date.now()); // instant bump → all screens refetch
+    });
   };
 
   const signOut = async () => {
+    socketService.disconnect();
     await removeToken();
     setIsAuthenticated(false);
     setIsPairedState(false);
@@ -158,7 +165,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     AsyncStorage.setItem('user_info', JSON.stringify(u)).catch(() => {});
   };
 
-  // ── Poll pairing + desktop status every 30s ───────────────────────────────
+  // ── Connect socket when already authenticated (app restart / token restore) ─
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    (async () => {
+      const token = await getToken();
+      if (!token) return;
+      socketService.connect(BASE_URL, token);
+      socketService.setOnSynced(() => {
+        setLastSyncAt(Date.now()); // instant bump → all screens refetch
+      });
+    })();
+    return () => socketService.disconnect();
+  }, [isAuthenticated, BASE_URL]);
+
+  // ── Poll pairing + desktop status every 10s ───────────────────────────────
   // Keeps isPaired + isDesktopOnline in sync with server truth.
   // Uses /api/tally-sync/status (lightweight, no websocket needed).
   useEffect(() => {
