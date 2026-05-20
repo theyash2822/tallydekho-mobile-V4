@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   ActivityIndicator,
@@ -48,12 +48,6 @@ interface TaxTxn {
   transaction_nature: string | null;
 }
 
-interface MonthChip {
-  label: string; // 'Apr 2024'
-  from:  string; // '2024-04-01'
-  to:    string; // '2024-04-30'
-}
-
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -72,28 +66,6 @@ function fmtDate(d: string | null | undefined): string {
   const parts = s.split('-');
   if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0].slice(2)}`;
   return s;
-}
-
-/** Generate month chips for a given FY */
-function buildFYMonths(fy: FYInfo | null): MonthChip[] {
-  if (!fy?.startDate || !fy?.endDate) return [];
-  const chips: MonthChip[] = [];
-  const start = new Date(fy.startDate);
-  const end   = new Date(fy.endDate);
-  const cur   = new Date(start.getFullYear(), start.getMonth(), 1);
-  while (cur <= end) {
-    const y  = cur.getFullYear();
-    const m  = cur.getMonth(); // 0-indexed
-    const mm = String(m + 1).padStart(2, '0');
-    const lastDay = new Date(y, m + 1, 0).getDate();
-    chips.push({
-      label: `${MONTH_ABBR[m]} ${y}`,
-      from:  `${y}-${mm}-01`,
-      to:    `${y}-${mm}-${lastDay}`,
-    });
-    cur.setMonth(cur.getMonth() + 1);
-  }
-  return chips;
 }
 
 /** Group flat TaxTxn array into [{month, items}] sorted newest first */
@@ -119,9 +91,6 @@ export default function OtherTaxesScreen() {
 
   const [activeTab, setActiveTab] = useState<TabItem>(TABS[0]);
 
-  // Month filter: null = "All" (full FY)
-  const [selectedMonth, setSelectedMonth] = useState<MonthChip | null>(null);
-
   // Summary
   const [summary, setSummary]               = useState<SummaryRow[]>([]);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -133,7 +102,7 @@ export default function OtherTaxesScreen() {
   const [txnsError, setTxnsError] = useState<string | null>(null);
   const [txnsTotal, setTxnsTotal] = useState(0);
 
-  // Collapsible months
+  // Collapsible months — all expanded by default
   const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
 
   // Late challans
@@ -143,12 +112,6 @@ export default function OtherTaxesScreen() {
 
   const companyGuid = selectedCompany?.guid;
   const fyParam     = fyInfoToParam(selectedFY);
-
-  // ── FY month chips ──────────────────────────────────────────────────────────
-  const fyMonths = useMemo(() => buildFYMonths(selectedFY), [selectedFY]);
-
-  // Reset month selection when FY changes
-  useEffect(() => { setSelectedMonth(null); }, [selectedFY]);
 
   // ── Grouped txns (derived) ──────────────────────────────────────────────────
   const groupedTxns = useMemo(() => groupByMonth(txns), [txns]);
@@ -169,18 +132,16 @@ export default function OtherTaxesScreen() {
   }, [companyGuid, fyParam]);
 
   // ── Load Transactions ───────────────────────────────────────────────────────
-  const loadTxns = useCallback(async (tab: TabItem, month: MonthChip | null) => {
+  const loadTxns = useCallback(async (tab: TabItem) => {
     if (!companyGuid) return;
     setTxnsLoading(true);
     setTxnsError(null);
     try {
       const params: any = {
         taxType: tab.taxType,
-        limit:   month ? 200 : 500,
+        limit:   500,
         page:    1,
-        // Month selected → pass exact from/to; otherwise use full FY param
-        ...(month  ? { from: month.from, to: month.to } : {}),
-        ...(!month && fyParam ? { fy: fyParam } : {}),
+        ...(fyParam ? { fy: fyParam } : {}),
       };
       const res  = await getOtherTaxesTransactions(companyGuid, params);
       const rows: TaxTxn[] = res?.data ?? [];
@@ -212,26 +173,18 @@ export default function OtherTaxesScreen() {
   // ── Initial + FY change ─────────────────────────────────────────────────────
   useEffect(() => { loadSummary(); }, [loadSummary]);
 
-  // ── Tab / month change → reload txns + challans ─────────────────────────────
+  // ── Tab change → reload txns + challans ────────────────────────────────────
   useEffect(() => {
     setTxns([]);
     setCollapsedMonths(new Set());
-    loadTxns(activeTab, selectedMonth);
+    loadTxns(activeTab);
     loadChallans(activeTab);
-  }, [activeTab, selectedMonth, loadTxns, loadChallans]);
+  }, [activeTab, loadTxns, loadChallans]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleTabPress = (tab: TabItem) => {
     if (tab.taxType === activeTab.taxType) return;
     setActiveTab(tab);
-  };
-
-  const handleMonthPress = (chip: MonthChip | null) => {
-    setSelectedMonth(prev =>
-      chip === null
-        ? null
-        : prev?.label === chip.label ? null : chip   // toggle: tap same month = back to All
-    );
   };
 
   const toggleMonth = (month: string) => {
@@ -296,42 +249,7 @@ export default function OtherTaxesScreen() {
         </ScrollView>
       </View>
 
-      {/* Month Filter Strip */}
-      {fyMonths.length > 0 && (
-        <View style={s.monthBarWrapper}>
-          <ScrollView
-            horizontal showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.monthBarContent}
-          >
-            {/* "All" chip */}
-            <TouchableOpacity
-              style={[s.monthChip, selectedMonth === null && s.monthChipActive]}
-              onPress={() => handleMonthPress(null)}
-              activeOpacity={0.7}
-            >
-              <Text style={[s.monthChipTxt, selectedMonth === null && s.monthChipTxtActive]}>
-                All
-              </Text>
-            </TouchableOpacity>
 
-            {fyMonths.map((chip) => {
-              const isActive = selectedMonth?.label === chip.label;
-              return (
-                <TouchableOpacity
-                  key={chip.label}
-                  style={[s.monthChip, isActive && s.monthChipActive]}
-                  onPress={() => handleMonthPress(chip)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[s.monthChipTxt, isActive && s.monthChipTxtActive]}>
-                    {chip.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-      )}
 
       <ScrollView
         style={s.scroll}
@@ -423,9 +341,7 @@ export default function OtherTaxesScreen() {
         {/* Transactions List — grouped by month */}
         <View style={s.card}>
           <View style={s.cardHeader}>
-            <Text style={s.cardTitle}>
-              {selectedMonth ? `${selectedMonth.label} · ${activeTab.label}` : `${activeTab.label} Transactions`}
-            </Text>
+            <Text style={s.cardTitle}>{activeTab.label} Transactions</Text>
             {txnsTotal > 0 && (
               <Text style={s.cardCount}>{txnsTotal} records</Text>
             )}
@@ -437,15 +353,13 @@ export default function OtherTaxesScreen() {
             <View style={s.errorBanner}>
               <Ionicons name="alert-circle-outline" size={14} color={'#E74C3C'} />
               <Text style={s.errorTxt}>{txnsError}</Text>
-              <TouchableOpacity onPress={() => loadTxns(activeTab, selectedMonth)}>
+              <TouchableOpacity onPress={() => loadTxns(activeTab)}>
                 <Text style={s.retryTxt}>Retry</Text>
               </TouchableOpacity>
             </View>
           ) : txns.length === 0 ? (
             <View style={s.emptyInline}>
-              <Text style={s.emptyInlineTxt}>
-                No {activeTab.label} data{selectedMonth ? ` for ${selectedMonth.label}` : ''} in synced Tally vouchers
-              </Text>
+              <Text style={s.emptyInlineTxt}>No {activeTab.label} data in synced Tally vouchers</Text>
             </View>
           ) : (
             groupedTxns.map((group) => {
@@ -563,24 +477,6 @@ const s = StyleSheet.create({
   tabBadgeActive:   { backgroundColor: COLORS.brandPrimary + '22' },
   tabBadgeTxt:      { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary },
   tabBadgeTxtActive:{ color: COLORS.brandPrimary },
-
-  // ── Month strip ──────────────────────────────────────────────────────────────
-  monthBarWrapper: {
-    height: 46, backgroundColor: COLORS.pageBg,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-  },
-  monthBarContent: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: SPACING.sm, paddingVertical: 8, gap: 6,
-  },
-  monthChip: {
-    height: 30, paddingHorizontal: 12, borderRadius: RADIUS.full,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-    backgroundColor: COLORS.cardBg, justifyContent: 'center', alignItems: 'center',
-  },
-  monthChipActive:  { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary + '15' },
-  monthChipTxt:     { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
-  monthChipTxtActive: { color: COLORS.brandPrimary },
 
   scroll:        { flex: 1 },
   scrollContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.md },

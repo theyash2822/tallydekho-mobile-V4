@@ -159,6 +159,15 @@ export default function DaybookScreen() {
     setSelected(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
   };
 
+  const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
+  const toggleMonth = (month: string) => {
+    setCollapsedMonths(prev => {
+      const next = new Set(prev);
+      next.has(month) ? next.delete(month) : next.add(month);
+      return next;
+    });
+  };
+
   const handlePush = () => {
     if (selected.length === 0) return;
     setSelected([]);
@@ -230,15 +239,19 @@ export default function DaybookScreen() {
         </View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom: Math.max(insets.bottom,20)+16}} keyboardShouldPersistTaps="handled">
-          {grouped.map(([month, entries]) => (
+          {grouped.map(([month, entries]) => {
+            const isCollapsed = collapsedMonths.has(month);
+            return (
             <View key={month}>
-              {/* Month header */}
-              <View style={s.monthHdr}>
+              {/* Month header — collapsible */}
+              <TouchableOpacity style={s.monthHdr} onPress={() => toggleMonth(month)} activeOpacity={0.7}>
                 <Text style={s.monthTxt}>{month}</Text>
                 <View style={s.monthLine} />
-              </View>
+                <Text style={s.monthCount}>{entries.length}</Text>
+                <Ionicons name={isCollapsed ? 'chevron-forward' : 'chevron-down'} size={14} color={COLORS.textTertiary} />
+              </TouchableOpacity>
               {/* Entries */}
-              <View style={s.card}>
+              {!isCollapsed && <View style={s.card}>
                 {entries.map((entry, idx) => {
                   const isSel = selected.includes(entry.id);
                   const tc = TYPE_COLORS[entry.type] || COLORS.textSecondary;
@@ -290,9 +303,10 @@ export default function DaybookScreen() {
                     </View>
                   );
                 })}
-              </View>
+              </View>}
             </View>
-          ))}
+            );
+          })}
           {hasMore && (
             <TouchableOpacity style={s.loadMoreBtn} onPress={loadMore} disabled={isLoadingMore} activeOpacity={0.8}>
               {isLoadingMore
@@ -346,6 +360,7 @@ const s = StyleSheet.create({
   monthHdr:{flexDirection:'row',alignItems:'center',gap:10,marginHorizontal:SPACING.md,marginTop:SPACING.lg,marginBottom:SPACING.sm},
   monthTxt:{fontSize:TYPOGRAPHY.sm,fontWeight:'700',color:COLORS.textSecondary},
   monthLine:{flex:1,height:1,backgroundColor:COLORS.borderDefault},
+  monthCount:{fontSize:TYPOGRAPHY.xs,color:COLORS.textTertiary,fontWeight:'600'},
   card:{backgroundColor:COLORS.cardBg,marginHorizontal:SPACING.md,borderRadius:RADIUS.lg,borderWidth:1,borderColor:COLORS.borderDefault,overflow:'hidden'},
   row:{flexDirection:'row',alignItems:'center',paddingHorizontal:SPACING.md,paddingVertical:13,gap:12},
   rowSelected:{backgroundColor:COLORS.infoBg},

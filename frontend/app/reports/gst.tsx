@@ -200,7 +200,7 @@ export default function GSTScreen() {
 
   // ── Group by month: use API groups if available, else group client-side ──
   const groupedInvoices = useMemo(() => {
-    if (activeTab === 'GSTR-1') return []; // GSTR-1 uses gstr1Sections instead
+    // All tabs including GSTR-1 now use month-based collapsible grouping
     // Use API groups if available (already grouped by backend)
     if (apiGroups.length > 0) return apiGroups;
     // Fallback: group on client from filteredInvoices
@@ -452,30 +452,8 @@ export default function GSTScreen() {
           </View>
         )}
 
-        {/* ── GSTR-1: section sub-groups (B2B / B2C / Export / Nil) ── */}
-        {!loading && activeTab === 'GSTR-1' && gstr1Sections && gstr1Sections.length > 0 && (
-          gstr1Sections.map(({ section, invoices: secInvoices }) => {
-            const isCollapsed = collapsedSections.has(section);
-            return (
-              <View key={section}>
-                <TouchableOpacity style={s.sectionGroupHeader} onPress={() => toggleSection(section)} activeOpacity={0.75}>
-                  <View style={s.sectionGroupLeft}>
-                    <View style={[s.sectionDot, getSectionDotStyle(section)]} />
-                    <Text style={s.sectionGroupTxt}>{section}</Text>
-                  </View>
-                  <View style={s.monthHeaderRight}>
-                    <Text style={s.monthHeaderCount}>{secInvoices.length} invoice{secInvoices.length !== 1 ? 's' : ''}</Text>
-                    <Ionicons name={isCollapsed ? 'chevron-forward' : 'chevron-down'} size={15} color={COLORS.textSecondary} />
-                  </View>
-                </TouchableOpacity>
-                {!isCollapsed && secInvoices.map((inv) => renderInvoiceCard(inv))}
-              </View>
-            );
-          })
-        )}
-
-        {/* ── All other tabs: month-based grouping ── */}
-        {!loading && activeTab !== 'GSTR-1' && groupedInvoices.length > 0 && (
+        {/* ── All tabs: month-based collapsible grouping ── */}
+        {!loading && groupedInvoices.length > 0 && (
           groupedInvoices.map(({ month, invoices: monthInvoices }) => {
             const isCollapsed = collapsedMonths.has(month);
             return (

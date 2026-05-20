@@ -149,6 +149,11 @@ export default function CashRegisterScreen() {
     setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
 
+  const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
+  const toggleMonth = (id: string) => {
+    setCollapsedMonths(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+
     // Group live items by month dynamically
   const monthMap: Record<string, MonthGroup> = {};
   liveItems.forEach(item => {
@@ -288,17 +293,20 @@ export default function CashRegisterScreen() {
             <Text style={s.emptyTxt}>No transactions found</Text>
           </View>
         ) : (
-          filteredGroups.map(group => (
+          filteredGroups.map(group => {
+            const isCollapsed = collapsedMonths.has(group.id);
+            return (
             <View key={group.id} style={s.groupWrap}>
-              {/* Month Section Header */}
-              <View style={s.monthHeader}>
+              {/* Month Section Header — collapsible */}
+              <TouchableOpacity style={s.monthHeader} onPress={() => toggleMonth(group.id)} activeOpacity={0.7}>
                 <View style={s.monthDot} />
                 <Text style={s.monthHeaderLabel}>{group.label}</Text>
-                <Text style={s.monthHeaderCount}>{group.items.length} entries</Text>
-              </View>
+                <Text style={[s.monthHeaderCount, {flex:1}]}>{group.items.length} entries</Text>
+                <Ionicons name={isCollapsed ? 'chevron-forward' : 'chevron-down'} size={14} color={COLORS.textSecondary} />
+              </TouchableOpacity>
 
               {/* Transaction Cards */}
-              <View style={s.cardGroup}>
+              {!isCollapsed && <View style={s.cardGroup}>
                 {group.items.map((item, idx) => {
                   const isSel = selected.has(item.id);
                   const typeColor  = item.type === 'receipt' ? COLORS.positive : item.type === 'contra' ? '#A89060' : COLORS.negative;
@@ -359,9 +367,10 @@ export default function CashRegisterScreen() {
                     </View>
                   );
                 })}
-              </View>
+              </View>}
             </View>
-          ))
+            );
+          })
         )}
 
         {hasMore && (
