@@ -421,21 +421,8 @@ export default function OtherTaxesScreen() {
           )}
         </View>
 
-        <View style={{ height: 110 }} />
+        <View style={{ height: 32 }} />
       </ScrollView>
-
-      {/* Sticky Bottom — Open Register */}
-      <View style={s.bottomBar}>
-        <TouchableOpacity
-          style={s.openRegBtn}
-          onPress={() =>
-            router.push({ pathname: '/reports/other-taxes-register', params: { tab: activeTab.taxType } } as any)
-          }
-          activeOpacity={0.85}
-        >
-          <Text style={s.openRegTxt}>Open Register</Text>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 }
@@ -574,17 +561,5 @@ const s = StyleSheet.create({
   txnAmt:     { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   txnNature:  { fontSize: 10, color: COLORS.textTertiary, marginTop: 2 },
 
-  bottomBar: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    paddingHorizontal: SPACING.md, paddingVertical: 14, paddingBottom: 20,
-    backgroundColor: COLORS.cardBg,
-    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
-    shadowColor: '#000', shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.06, shadowRadius: 6, elevation: 6,
-  },
-  openRegBtn: {
-    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md,
-    paddingVertical: 15, alignItems: 'center',
-  },
-  openRegTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white, letterSpacing: 0.3 },
+
 });
