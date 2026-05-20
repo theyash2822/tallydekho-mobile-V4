@@ -203,7 +203,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Use Date.now() (always unique) to guarantee useEffect deps change each sync
         const deviceLastSeen = json.data?.device?.last_seen;
         if (deviceLastSeen && typeof deviceLastSeen === 'number') {
-          setLastSyncAt(prev => deviceLastSeen > prev ? Date.now() : prev);
+          // deviceLastSeen is Unix seconds; convert to ms for comparison
+          setLastSyncAt(prev => (deviceLastSeen * 1000) > prev ? (deviceLastSeen * 1000) : prev);
         }
       } catch {
         // Network error — don't change state, keep showing cached
