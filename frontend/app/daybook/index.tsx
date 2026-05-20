@@ -213,13 +213,30 @@ export default function DaybookScreen() {
       </View>
 
       {/* Multi-select action bar */}
-      {multiSelect && selected.length > 0 && mode === 'myentries' && (
+      {multiSelect && selected.length > 0 && (
         <View style={s.actionBar}>
-          <Text style={s.actionTxt}>{selected.length} selected</Text>
-          <TouchableOpacity style={s.pushBtn} onPress={handlePush} activeOpacity={0.8}>
-            <Ionicons name="cloud-upload-outline" size={16} color={COLORS.white} />
-            <Text style={s.pushTxt}>Push to Tally</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 }}>
+            <Text style={s.actionTxt}>{selected.length} selected</Text>
+            <TouchableOpacity onPress={() => { setSelected([]); setMultiSelect(false); }} hitSlop={{top:8,bottom:8,left:8,right:8}} activeOpacity={0.7}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: '#888' }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+          {mode === 'myentries' && (
+            <TouchableOpacity style={s.pushBtn} onPress={handlePush} activeOpacity={0.8}>
+              <Ionicons name="cloud-upload-outline" size={16} color={COLORS.white} />
+              <Text style={s.pushTxt}>Push to Tally</Text>
+            </TouchableOpacity>
+          )}
+          {mode === 'daybook' && (
+            <TouchableOpacity style={s.pushBtn} activeOpacity={0.8} onPress={() => {
+              const lines = liveEntries.filter(e => selected.includes(e.id)).map(e => `${e.ref}  ${e.party}  ${e.amount}  ${e.isCredit?'Cr':'Dr'}`);
+              require('react-native').Share.share({ message: `TallyDekho — Day Book\n${lines.join('\n')}` }).catch(() => {});
+              setSelected([]); setMultiSelect(false);
+            }}>
+              <Ionicons name="share-outline" size={16} color={COLORS.white} />
+              <Text style={s.pushTxt}>Export</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -251,59 +268,56 @@ export default function DaybookScreen() {
                 <Ionicons name={isCollapsed ? 'chevron-forward' : 'chevron-down'} size={14} color={COLORS.textTertiary} />
               </TouchableOpacity>
               {/* Entries */}
-              {!isCollapsed && <View style={s.card}>
-                {entries.map((entry, idx) => {
-                  const isSel = selected.includes(entry.id);
-                  const tc = TYPE_COLORS[entry.type] || COLORS.textSecondary;
-                  return (
-                    <View key={entry.id}>
-                      <TouchableOpacity
-                        style={[s.row, isSel && s.rowSelected]}
-                        activeOpacity={0.7}
-                        onPress={() => {
-                          if (multiSelect) {
-                            toggleSelect(entry.id);
-                          } else {
-                            const docType = DAYBOOK_TYPE_MAP[entry.type] || 'sales_invoice';
-                            router.push(`/document/${entry.ref}?type=${docType}` as any);
-                          }
-                        }}
-                        onLongPress={() => { if (mode==='myentries') { setMultiSelect(true); toggleSelect(entry.id); } }}
-                      >
-                        {multiSelect && mode==='myentries' && (
-                          <View style={[s.checkbox, isSel && s.checkboxActive]}>
-                            {isSel && <Ionicons name="checkmark" size={12} color={COLORS.white} />}
-                          </View>
-                        )}
-                        <View style={[s.typeIcon, {backgroundColor: tc+'15'}]}>
-                          <Ionicons name={entry.isCredit ? 'arrow-down-circle-outline' : 'arrow-up-circle-outline'} size={18} color={tc} />
-                        </View>
-                        <View style={s.entryInfo}>
-                          <View style={s.entryTop}>
-                            <View style={[s.vTypePill, {backgroundColor: tc+'18'}]}>
-                              <Text style={[s.vTypeTxt, {color:tc}]}>{entry.type}</Text>
-                            </View>
-                            <Text style={s.refTxt}>{entry.ref}</Text>
-                            {entry.status === 'pending' && (
-                              <View style={s.pendingBadge}><Text style={s.pendingTxt}>Pending</Text></View>
-                            )}
-                            {entry.isOptional && (
-                              <View style={s.draftBadge}><Text style={s.draftTxt}>Draft</Text></View>
-                            )}
-                          </View>
-                          <Text style={s.partyTxt}>{entry.party}</Text>
-                          <Text style={s.dateTxt}>{entry.date}</Text>
-                        </View>
-                        <View style={s.amtCol}>
-                          <Text style={[s.amtTxt, {color: entry.isCredit ? COLORS.negative : COLORS.positive}]}>{entry.amount}</Text>
-                          <Text style={[s.drCrTxt, {color: entry.isCredit ? COLORS.negative : COLORS.positive}]}>{entry.isCredit?'Cr':'Dr'}</Text>
-                        </View>
-                      </TouchableOpacity>
-                      {idx < entries.length-1 && <View style={s.divider} />}
+              {!isCollapsed && entries.map((entry) => {
+                const isSel = selected.includes(entry.id);
+                const tc = TYPE_COLORS[entry.type] || COLORS.textSecondary;
+                return (
+                  <TouchableOpacity
+                    key={entry.id}
+                    style={[s.entryCard, isSel && s.entryCardSel]}
+                    activeOpacity={0.8}
+                    delayLongPress={500}
+                    onPress={() => {
+                      if (multiSelect) {
+                        toggleSelect(entry.id);
+                      } else {
+                        const docType = DAYBOOK_TYPE_MAP[entry.type] || 'sales_invoice';
+                        router.push(`/document/${entry.ref}?type=${docType}` as any);
+                      }
+                    }}
+                    onLongPress={() => { setMultiSelect(true); toggleSelect(entry.id); }}
+                  >
+                    {multiSelect && (
+                      <View style={[s.checkbox, isSel && s.checkboxActive]}>
+                        {isSel && <Ionicons name="checkmark" size={12} color={COLORS.white} />}
+                      </View>
+                    )}
+                    <View style={[s.typeIcon, {backgroundColor: tc+'15'}]}>
+                      <Ionicons name={entry.isCredit ? 'arrow-down-circle-outline' : 'arrow-up-circle-outline'} size={18} color={tc} />
                     </View>
-                  );
-                })}
-              </View>}
+                    <View style={s.entryInfo}>
+                      <View style={s.entryTop}>
+                        <View style={[s.vTypePill, {backgroundColor: tc+'18'}]}>
+                          <Text style={[s.vTypeTxt, {color:tc}]}>{entry.type}</Text>
+                        </View>
+                        <Text style={s.refTxt}>{entry.ref}</Text>
+                        {entry.status === 'pending' && (
+                          <View style={s.pendingBadge}><Text style={s.pendingTxt}>Pending</Text></View>
+                        )}
+                        {entry.isOptional && (
+                          <View style={s.draftBadge}><Text style={s.draftTxt}>Draft</Text></View>
+                        )}
+                      </View>
+                      <Text style={s.partyTxt}>{entry.party}</Text>
+                      <Text style={s.dateTxt}>{entry.date}</Text>
+                    </View>
+                    <View style={s.amtCol}>
+                      <Text style={[s.amtTxt, {color: entry.isCredit ? COLORS.negative : COLORS.positive}]}>{entry.amount}</Text>
+                      <Text style={[s.drCrTxt, {color: entry.isCredit ? COLORS.negative : COLORS.positive}]}>{entry.isCredit?'Cr':'Dr'}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
             );
           })}
@@ -361,6 +375,8 @@ const s = StyleSheet.create({
   monthTxt:{fontSize:TYPOGRAPHY.sm,fontWeight:'700',color:COLORS.textSecondary},
   monthLine:{flex:1,height:1,backgroundColor:COLORS.borderDefault},
   monthCount:{fontSize:TYPOGRAPHY.xs,color:COLORS.textTertiary,fontWeight:'600'},
+  entryCard:{backgroundColor:COLORS.cardBg,borderRadius:RADIUS.lg,borderWidth:1,borderColor:COLORS.borderDefault,padding:SPACING.md,marginHorizontal:SPACING.md,marginBottom:8,flexDirection:'row',alignItems:'center',gap:12},
+  entryCardSel:{borderColor:COLORS.brandPrimary,borderWidth:2,backgroundColor:COLORS.brandPrimary+'06'},
   card:{backgroundColor:COLORS.cardBg,marginHorizontal:SPACING.md,borderRadius:RADIUS.lg,borderWidth:1,borderColor:COLORS.borderDefault,overflow:'hidden'},
   row:{flexDirection:'row',alignItems:'center',paddingHorizontal:SPACING.md,paddingVertical:13,gap:12},
   rowSelected:{backgroundColor:COLORS.infoBg},
