@@ -10,6 +10,7 @@ import Svg, {
 } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 import { getFinancialData, getGSTReport, getAuditTrail } from '../../src/services/api';
@@ -886,6 +887,22 @@ export default function ReportsScreen() {
       setAuditTotal(Math.max(total, pending));
     }).catch((err: any) => console.error('[API Error]', err?.message));
   }, [companyGuid, selectedFY?.startDate, lastSyncAt]);
+
+  // Re-fetch when tab comes into focus (catches backend restarts / FY changes on other screens)
+  useFocusEffect(useCallback(() => {
+    if (!companyGuid) return;
+    const from = selectedFY?.startDate;
+    const to   = selectedFY?.endDate;
+    getGSTReport(companyGuid, from, to).then((res: any) => {
+      const d = res?.data ?? res;
+      const filed = d?.filed_months ?? d?.months_filed ?? 0;
+      setGstFiledCount(typeof filed === 'number' ? Math.min(filed, 12) : 0);
+    }).catch(() => {});
+    getFinancialData(companyGuid, from, to).then((res: any) => {
+      const d = res?.data ?? res;
+      if (d?.months) { setFinData(d); setFinLoading(false); }
+    }).catch(() => {});
+  }, [companyGuid, selectedFY?.startDate]));
 
   return (
     <SafeAreaView testID="reports-screen" style={styles.safe}>
