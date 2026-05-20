@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   ActivityIndicator,
@@ -45,9 +45,21 @@ interface TaxTxn {
   party_ledger_name: string | null;
   tax_ledger_name: string;
   tax_amount: number;
+  taxable_amount?: number | null;
   transaction_nature: string | null;
   financial_year?: string | null;
 }
+
+// ── Nature badge config ──────────────────────────────────────────────────────────────────
+const NATURE_CFG: Record<string, { bg: string; text: string; icon: string; label: string }> = {
+  input:      { bg: '#F0FBF4', text: '#2D7D46', icon: 'arrow-down-circle-outline', label: 'Input'      },
+  output:     { bg: '#FFF7ED', text: '#D97706', icon: 'arrow-up-circle-outline',   label: 'Output'     },
+  settlement: { bg: '#EFF6FF', text: '#1D4ED8', icon: 'checkmark-circle-outline',  label: 'Settlement' },
+  adjustment: { bg: '#F5F3FF', text: '#7C3AED', icon: 'swap-horizontal-outline',   label: 'Adjustment' },
+};
+const getNatureCfg = (n: string | null) =>
+  NATURE_CFG[(n || 'other').toLowerCase()] ??
+  { bg: '#F4F4F5', text: '#71717A', icon: 'ellipse-outline', label: n || 'Other' };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -97,6 +109,17 @@ export default function OtherTaxesScreen() {
   const { company: selectedCompany, selectedFY } = useAuth();
 
   const [activeTab, setActiveTab] = useState<TabItem>(TABS[0]);
+
+  // Select mode
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const toggleSelect = useCallback((id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
+  const clearSelect = () => setSelected(new Set());
 
   // Summary
   const [summary, setSummary]               = useState<SummaryRow[]>([]);
@@ -389,40 +412,100 @@ export default function OtherTaxesScreen() {
                     </View>
                   </TouchableOpacity>
 
-                  {/* Rows */}
-                  {!collapsed && group.items.map((txn, idx) => (
-                    <TouchableOpacity
-                      key={txn.id}
-                      style={[s.txnRow, idx < group.items.length - 1 && s.txnBorder]}
-                      activeOpacity={0.7}
-                      onPress={() => router.push(`/document/${txn.voucher_guid}` as any)}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.txnParty} numberOfLines={1}>
-                          {txn.party_ledger_name || txn.tax_ledger_name || '-'}
-                        </Text>
-                        <Text style={s.txnMeta}>
-                          {txn.voucher_number ? `${txn.voucher_number} · ` : ''}
-                          {fmtDate(txn.voucher_date)}
-                        </Text>
-                      </View>
-                      <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                        <Text style={s.txnAmt}>{fmt(txn.tax_amount)}</Text>
-                        {txn.transaction_nature && (
-                          <Text style={s.txnNature}>{txn.transaction_nature}</Text>
-                        )}
-                        <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
-                      </View>
-                    </TouchableOpacity>
-                  ))}
+                  {/* Tile cards */}
+                  {!collapsed && group.items.map((txn) => {
+                    const nat   = getNatureCfg(txn.transaction_nature);
+                    const isSel = selected.has(String(txn.id));
+                    const base  = parseFloat(String(txn.taxable_amount ?? 0));
+                    return (
+                      <TouchableOpacity
+                        key={txn.id}
+                        style={[s.txnCard, isSel && s.txnCardSelected]}
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          if (selected.size > 0) { toggleSelect(String(txn.id)); }
+                          else { router.push(`/document/${txn.voucher_guid}` as any); }
+                        }}
+                        onLongPress={() => toggleSelect(String(txn.id))}
+                        delayLongPress={500}
+                      >
+                        {/* Top row: voucher# • type */}
+                        <View style={s.txnCardTop}>
+                          <Text style={s.txnCardRef}>
+                            {txn.voucher_number || '—'}
+                          </Text>
+                          <Text style={s.txnCardSep}> • </Text>
+                          <Text style={s.txnCardType}>{txn.voucher_type || '—'}</Text>
+                        </View>
+
+                        {/* Nature badge */}
+                        <View style={[s.natureBadge, { backgroundColor: nat.bg }]}>
+                          <Ionicons name={nat.icon as any} size={11} color={nat.text} />
+                          <Text style={[s.natureBadgeTxt, { color: nat.text }]}>{nat.label}</Text>
+                        </View>
+
+                        {/* Body: icon + party/ledger/date + amount */}
+                        <View style={s.txnCardBody}>
+                          <View style={[s.txnCardIcon, { backgroundColor: nat.bg }]}>
+                            <Ionicons name={nat.icon as any} size={20} color={nat.text} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.txnCardParty} numberOfLines={1}>
+                              {txn.party_ledger_name || '—'}
+                            </Text>
+                            <Text style={s.txnCardLedger} numberOfLines={1}>
+                              {txn.tax_ledger_name}
+                            </Text>
+                            <Text style={s.txnCardDate}>{fmtDate(txn.voucher_date)}</Text>
+                          </View>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={s.txnCardAmt}>{fmt(txn.tax_amount)}</Text>
+                            {base > 0 && (
+                              <Text style={s.txnCardBase}>Base: {fmt(base)}</Text>
+                            )}
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               );
             })
           )}
         </View>
 
-        <View style={{ height: 32 }} />
+        <View style={{ height: selected.size > 0 ? 90 : 32 }} />
       </ScrollView>
+
+      {/* Select / Export bar */}
+      {selected.size > 0 && (
+        <View style={s.selectBar}>
+          <View style={s.selectLeft}>
+            <Text style={s.selectCount}>{selected.size} selected</Text>
+            <TouchableOpacity onPress={clearSelect} hitSlop={{top:8,bottom:8,left:8,right:8}} activeOpacity={0.7}>
+              <Text style={s.selectCancelTxt}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            style={s.selectExportBtn}
+            activeOpacity={0.85}
+            onPress={() => {
+              const lines = txns
+                .filter(t => selected.has(String(t.id)))
+                .map(t => `${t.voucher_number || '-'}  ${t.party_ledger_name || '-'}  ${fmt(t.tax_amount)}  ${t.transaction_nature || '-'}`);
+              const { Share } = require('react-native');
+              Share.share({
+                message: `TallyDekho — ${activeTab.label} Transactions\n${lines.join('\n')}`,
+                title: `${activeTab.label} Export`,
+              }).catch(() => {});
+              clearSelect();
+            }}
+          >
+            <Ionicons name="share-outline" size={16} color={COLORS.white} />
+            <Text style={s.selectExportTxt}>Export</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -552,14 +635,51 @@ const s = StyleSheet.create({
     fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary,
   },
 
-  txnRow: {
-    flexDirection: 'row', alignItems: 'center', paddingVertical: 11, gap: 8,
+  // ── Tile cards ────────────────────────────────────────────────────────────────────
+  txnCard: {
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    padding: SPACING.md, marginBottom: 8, gap: 8,
   },
-  txnBorder:  { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  txnParty:   { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  txnMeta:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
-  txnAmt:     { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  txnNature:  { fontSize: 10, color: COLORS.textTertiary, marginTop: 2 },
+  txnCardSelected: { borderColor: COLORS.brandPrimary, borderWidth: 2, backgroundColor: COLORS.brandPrimary + '06' },
+  txnCardTop:  { flexDirection: 'row', alignItems: 'center' },
+  txnCardRef:  { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary },
+  txnCardSep:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  txnCardType: { fontSize: TYPOGRAPHY.xs, fontWeight: '500', color: COLORS.textSecondary },
+  natureBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: RADIUS.full,
+  },
+  natureBadgeTxt: { fontSize: 10, fontWeight: '700' },
+  txnCardBody: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  txnCardIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  txnCardParty:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  txnCardLedger: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+  txnCardDate:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
+  txnCardAmt:    { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
+  txnCardBase:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 3 },
+
+  // ── Select / Export bar ────────────────────────────────────────────────────────────────────
+  selectBar: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: SPACING.md, paddingVertical: 14, paddingBottom: 20,
+    backgroundColor: COLORS.cardBg,
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
+    gap: 12,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.08, shadowRadius: 6, elevation: 8,
+  },
+  selectLeft:      { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  selectCount:     { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  selectCancelTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+  selectExportBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    backgroundColor: COLORS.brandPrimary,
+    paddingHorizontal: 18, paddingVertical: 12, borderRadius: RADIUS.md,
+  },
+  selectExportTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
 
 
 });
