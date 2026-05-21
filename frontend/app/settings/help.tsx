@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, KeyboardAvoidingView, Platform, Linking,
+  TextInput, KeyboardAvoidingView, Platform, Linking, type TextInput as TextInputType,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -174,6 +174,7 @@ const sd = StyleSheet.create({
 export default function HelpCenterScreen() {
   const router    = useRouter();
   const scrollRef = useRef<ScrollView>(null);
+  const inputRef   = useRef<TextInputType>(null);
   const { user }  = useAuth();
 
   const chatKey = `td_help_chat_${user?.phone || 'guest'}`;
@@ -227,6 +228,8 @@ export default function HelpCenterScreen() {
     const userMsg: Message = { id: Date.now().toString(), role: 'user', text: trimmed, time: timestamp() };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
+    // Force-clear the TextInput (needed for multiline on React Native)
+    setTimeout(() => inputRef.current?.clear(), 0);
     setSending(true);
     setShowFAQ(false);
 
@@ -377,6 +380,7 @@ export default function HelpCenterScreen() {
         <View style={s.inputBar}>
           <View style={s.inputRow}>
             <TextInput
+              ref={inputRef}
               style={s.inputBox}
               value={input}
               onChangeText={setInput}
@@ -387,6 +391,7 @@ export default function HelpCenterScreen() {
               selectionColor={COLORS.brandPrimary}
               onSubmitEditing={handleSend}
               returnKeyType="send"
+              blurOnSubmit={false}
             />
             <TouchableOpacity
               style={[s.sendBtn, (!input.trim() || sending) && s.sendBtnDisabled]}
