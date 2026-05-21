@@ -386,6 +386,15 @@ export default function AIInsightsScreen() {
   const [refreshing,     setRefreshing]     = useState(false);
   const [aiData,         setAiData]         = useState<any>(null);
 
+  // Cache disclaimer helpers
+  const fmtDate = (iso: string) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+  const generatedAt  = aiData?._cacheGeneratedAt ? fmtDate(aiData._cacheGeneratedAt) : null;
+  const nextUpdateAt = aiData?._cacheValidUntil  ? fmtDate(aiData._cacheValidUntil)  : null;
+
   // Real data from API
   const revenueForecast: any[] = aiData?.revenueForecast || FORECAST_DATA;
   const expenseDataReal: any[] = aiData?.expenseData     || EXPENSE_DATA;
@@ -478,15 +487,26 @@ export default function AIInsightsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[s.scrollContent, { paddingBottom: 96 + insets.bottom }]}
       >
-        {/* Last updated */}
+        {/* Last updated + AI disclaimer */}
         <View style={s.updatedRow}>
           <Ionicons name="time-outline" size={12} color={COLORS.textTertiary} />
           <Text style={s.updatedTxt}>
             {isDateActive
               ? `Forecasts for ${fromDate} → ${toDate}`
-              : 'Updated 5 mins ago · AI-powered forecasts'}
+              : generatedAt
+                ? `AI insights generated on ${generatedAt}`
+                : 'AI-powered business insights'}
           </Text>
         </View>
+        {/* Next update disclaimer (only when cached, not on custom date range) */}
+        {!isDateActive && nextUpdateAt && (
+          <View style={s.disclaimerRow}>
+            <Ionicons name="information-circle-outline" size={11} color={COLORS.textTertiary} />
+            <Text style={s.disclaimerTxt}>
+              Recommendations refresh on {nextUpdateAt} · Live analytics update on every sync
+            </Text>
+          </View>
+        )}
 
         {/* ──────────────────────────────────────────────────────────────── */}
         {/* 1. Revenue Forecast */}
@@ -678,8 +698,10 @@ const s = StyleSheet.create({
   scroll:        { flex: 1 },
   scrollContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.xs },
 
-  updatedRow: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 8 },
-  updatedTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, flex: 1 },
+  updatedRow:     { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 6 },
+  updatedTxt:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, flex: 1 },
+  disclaimerRow:  { flexDirection: 'row', alignItems: 'center', gap: 4, paddingBottom: 8, opacity: 0.75 },
+  disclaimerTxt:  { fontSize: 10, color: COLORS.textTertiary, flex: 1, fontStyle: 'italic' },
 
   // Card shell
   card: {
