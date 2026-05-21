@@ -1,17 +1,21 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, KeyboardAvoidingView, Platform, Linking,
-  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
-import * as DocumentPicker from 'expo-document-picker';
-import * as ImagePicker from 'expo-image-picker';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { askHelpAI } from '../../src/services/api';
+import { useAuth } from '../../src/context/AuthContext';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+const CHAT_TTL_MS    = 24 * 60 * 60 * 1000; // 24 hours
+const MAX_HISTORY    = 8;                      // messages to send to LLM
+const AMBER          = '#F5A623';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Role = 'user' | 'bot';
@@ -21,51 +25,45 @@ interface Message { id: string; role: Role; text: string; time: string; }
 const FAQS = [
   {
     q: 'How do I pair with Tally?',
-    a: 'Go to Settings → Integrations → Tally Prime Sync. Download the TallyDekho Desktop Agent, open it and note the 6-digit pairing code, then enter it in the Pair Device section.',
+    a: 'Download TallyDekho Desktop Agent → open it → note the 6-digit pairing code → go to Settings → Tally Prime Sync → enter the code.',
   },
   {
-    q: 'How to change GSTIN?',
-    a: 'Go to Settings → Tax Information, then tap Edit GSTIN. Enter your new GSTIN and upload the required proof. Changes will reflect after verification.',
+    q: 'Where do I find a voucher by number?',
+    a: 'Go to the Sales or Purchase tab → tap the search icon → type the voucher number (e.g. 101). You can also search from Daybook in Reports.',
+  },
+  {
+    q: 'How do I set payment reminders?',
+    a: 'Go to Settings → Payment Reminders. Set the number of days before due date and enable WhatsApp notifications.',
   },
   {
     q: 'Can I use the app offline?',
-    a: 'Yes! All data entry features work offline. Your entries will automatically sync to Tally when your device reconnects to the internet.',
+    a: 'Yes — all entry features work offline. Data automatically syncs to Tally when your device reconnects to the internet.',
   },
   {
-    q: 'How do I create a Sales Invoice?',
-    a: 'Tap the + button on the Dashboard, select Sales Invoice, fill in the party name, items, and amounts, then tap Save.',
+    q: 'How to change GSTIN?',
+    a: 'Go to Settings → Tax Information → Edit GSTIN. Enter your new GSTIN and upload required proof.',
   },
   {
     q: 'What are Optional entries?',
-    a: 'Optional entries are saved in TallyDekho but not posted to Tally books until you manually approve and push them.',
+    a: 'Optional entries are saved in TallyDekho but not posted to Tally books until you approve and push them.',
+  },
+  {
+    q: 'Desktop not connecting / sync issues?',
+    a: 'Make sure the Desktop Agent is running and both devices are on the same WiFi. Check Settings → Tally Prime Sync → Connection Status.',
   },
 ];
 
-// ─── Mock bot response ────────────────────────────────────────────────────────
-const getBotResponse = (msg: string): string => {
-  const m = msg.toLowerCase();
-  if (m.includes('pair') || m.includes('sync') || m.includes('connect') || m.includes('tally'))
-    return 'To pair with Tally:\n1. Go to Settings → Tally Prime Sync\n2. Download the TallyDekho Desktop Agent\n3. Open the agent and note the 6-digit code\n4. Enter the code in the Pair Device section on your phone ✓';
-  if (m.includes('invoice') || m.includes('bill') || m.includes('voucher') || m.includes('sales'))
-    return 'To create a Sales Invoice:\n1. Tap the + button on the Dashboard\n2. Select Sales Invoice\n3. Fill in party name, items, and amounts\n4. Tap Save — it syncs to Tally automatically 📄';
-  if (m.includes('gstin') || m.includes('gst') || m.includes('tax'))
-    return 'To update your GSTIN:\nGo to Settings → Tax Information → Edit GSTIN. Enter your new GSTIN and upload proof. Changes reflect after verification.';
-  if (m.includes('offline'))
-    return 'Yes! TallyDekho works fully offline 📵\nAll entry features work without internet and automatically sync when you reconnect.';
-  if (m.includes('ledger') || m.includes('party') || m.includes('account'))
-    return 'To add a party/ledger:\n1. Go to the Ledger tab\n2. Tap + to add new\n3. Fill in name, group, and contact info\n4. Save — syncs to Tally automatically';
-  if (m.includes('stock') || m.includes('inventory') || m.includes('item'))
-    return 'To manage stock:\n• Go to Stock tab from the bottom navigation\n• Tap any item to view/edit details\n• Use + to add new stock items\n• Stock levels sync automatically with Tally';
-  if (m.includes('plan') || m.includes('upgrade') || m.includes('price') || m.includes('credit'))
-    return 'TallyDekho offers Free, Professional, and Enterprise plans.\nTo upgrade: Go to Settings → License & Plans and choose your plan.';
-  if (m.match(/^(hi|hello|hey|namaste)/i))
-    return "Hello! \uD83D\uDC4B I'm the TallyDekho assistant. Ask me anything about:\n\u2022 Pairing with Tally\n\u2022 Creating invoices\n\u2022 Managing inventory\n\u2022 GSTIN & tax settings\n\u2022 Plans & billing";
-  return 'I can help you with TallyDekho! Try asking about:\n• Pairing with Tally\n• Creating invoices or vouchers\n• GSTIN updates\n• Offline usage\n• Plans & pricing';
-};
-
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 const timestamp = () => {
   const d = new Date();
   return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+};
+
+const WELCOME_MSG: Message = {
+  id: 'welcome',
+  role: 'bot',
+  text: "Hi! I'm the TallyDekho Support Assistant.\nAsk me anything — pairing with Tally, creating vouchers, payment reminders, GST, reports, and more.",
+  time: timestamp(),
 };
 
 // ─── Message Bubble ───────────────────────────────────────────────────────────
@@ -75,7 +73,7 @@ function MessageBubble({ msg }: { msg: Message }) {
     <View style={[mb.wrap, isUser ? mb.wrapUser : mb.wrapBot]}>
       {!isUser && (
         <View style={mb.botAvatar}>
-          <Ionicons name="chatbubbles-outline" size={14} color={COLORS.white} />
+          <Ionicons name="sparkles" size={13} color={COLORS.white} />
         </View>
       )}
       <View style={[mb.bubble, isUser ? mb.bubbleUser : mb.bubbleBot]}>
@@ -86,147 +84,229 @@ function MessageBubble({ msg }: { msg: Message }) {
   );
 }
 const mb = StyleSheet.create({
-  wrap:       { flexDirection:'row', alignItems:'flex-end', gap:8, marginBottom:12 },
-  wrapUser:   { justifyContent:'flex-end' },
-  wrapBot:    { justifyContent:'flex-start' },
-  botAvatar:  { width:28, height:28, borderRadius:14, backgroundColor:COLORS.brandPrimary, alignItems:'center', justifyContent:'center', marginBottom:4, flexShrink:0 },
-  bubble:     { maxWidth:'78%', borderRadius:18, paddingHorizontal:14, paddingVertical:10 },
-  bubbleUser: { backgroundColor:COLORS.brandPrimary, borderBottomRightRadius:4 },
-  bubbleBot:  { backgroundColor:COLORS.cardBg, borderWidth:1, borderColor:COLORS.borderDefault, borderBottomLeftRadius:4 },
-  text:       { fontSize:TYPOGRAPHY.sm, lineHeight:20 },
-  textUser:   { color:COLORS.white },
-  textBot:    { color:COLORS.textPrimary },
-  time:       { fontSize:10, marginTop:4 },
-  timeUser:   { color:'rgba(255,255,255,0.65)', textAlign:'right' },
-  timeBot:    { color:COLORS.textTertiary },
+  wrap:       { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 10 },
+  wrapUser:   { justifyContent: 'flex-end' },
+  wrapBot:    { justifyContent: 'flex-start' },
+  botAvatar:  {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: COLORS.brandPrimary,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 4, flexShrink: 0,
+  },
+  bubble:     { maxWidth: '78%', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10 },
+  bubbleUser: { backgroundColor: COLORS.brandPrimary, borderBottomRightRadius: 4 },
+  bubbleBot:  {
+    backgroundColor: COLORS.cardBg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderBottomLeftRadius: 4,
+  },
+  text:     { fontSize: TYPOGRAPHY.sm, lineHeight: 20 },
+  textUser: { color: COLORS.white },
+  textBot:  { color: COLORS.textPrimary },
+  time:     { fontSize: 10, marginTop: 3 },
+  timeUser: { color: 'rgba(255,255,255,0.6)', textAlign: 'right' },
+  timeBot:  { color: COLORS.textTertiary },
 });
 
-// ─── FAQ Item (accordion) ─────────────────────────────────────────────────────
-function FaqItem({ q, a, isLast }: { q: string; a: string; isLast: boolean }) {
+// ─── Typing Indicator ─────────────────────────────────────────────────────────
+function TypingIndicator() {
+  return (
+    <View style={[mb.wrap, mb.wrapBot]}>
+      <View style={mb.botAvatar}>
+        <Ionicons name="sparkles" size={13} color={COLORS.white} />
+      </View>
+      <View style={[mb.bubble, mb.bubbleBot, { paddingVertical: 12 }]}>
+        <Text style={{ fontSize: 18, color: COLORS.textTertiary, letterSpacing: 4 }}>· · ·</Text>
+      </View>
+    </View>
+  );
+}
+
+// ─── FAQ Item ─────────────────────────────────────────────────────────────────
+function FaqItem({ q, a, isLast, onPress }: { q: string; a: string; isLast: boolean; onPress: (q: string) => void }) {
   const [open, setOpen] = useState(false);
   return (
     <View style={[fq.item, !isLast && fq.border]}>
-      <TouchableOpacity style={fq.row} onPress={()=>setOpen(v=>!v)} activeOpacity={0.7}>
+      <TouchableOpacity style={fq.row} onPress={() => setOpen(v => !v)} activeOpacity={0.7}>
         <Text style={fq.question}>{q}</Text>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.textTertiary} />
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textTertiary} />
       </TouchableOpacity>
-      {open && <Text style={fq.answer}>{a}</Text>}
+      {open && (
+        <View style={fq.answerWrap}>
+          <Text style={fq.answer}>{a}</Text>
+          <TouchableOpacity style={fq.askBtn} onPress={() => onPress(q)} activeOpacity={0.75}>
+            <Ionicons name="chatbubble-outline" size={13} color={COLORS.brandPrimary} />
+            <Text style={fq.askBtnTxt}>Ask follow-up</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
 const fq = StyleSheet.create({
-  item:     { paddingVertical:2 },
-  border:   { borderBottomWidth:1, borderBottomColor:COLORS.borderDefault },
-  row:      { flexDirection:'row', alignItems:'center', justifyContent:'space-between', paddingVertical:14, gap:12 },
-  question: { flex:1, fontSize:TYPOGRAPHY.base, fontWeight:'600', color:COLORS.textPrimary },
-  answer:   { fontSize:TYPOGRAPHY.sm, color:COLORS.textSecondary, lineHeight:20, paddingBottom:14, paddingRight:8 },
+  item:       { paddingVertical: 2 },
+  border:     { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  row:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, gap: 12 },
+  question:   { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  answerWrap: { paddingBottom: 14, paddingRight: 8 },
+  answer:     { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, lineHeight: 20, marginBottom: 10 },
+  askBtn:     { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start' },
+  askBtnTxt:  { fontSize: TYPOGRAPHY.xs, color: COLORS.brandPrimary, fontWeight: '600' },
+});
+
+// ─── Section Divider ──────────────────────────────────────────────────────────
+function SectionLabel({ label }: { label: string }) {
+  return (
+    <View style={sd.row}>
+      <View style={sd.line} />
+      <Text style={sd.txt}>{label}</Text>
+      <View style={sd.line} />
+    </View>
+  );
+}
+const sd = StyleSheet.create({
+  row:  { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 12 },
+  line: { flex: 1, height: 1, backgroundColor: COLORS.borderDefault },
+  txt:  { fontSize: 10, color: COLORS.textTertiary, fontWeight: '600', letterSpacing: 0.5 },
 });
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function HelpCenterScreen() {
-  const router = useRouter();
+  const router    = useRouter();
   const scrollRef = useRef<ScrollView>(null);
+  const { user }  = useAuth();
 
-  const [messages, setMessages] = useState<Message[]>([
-    { id:'0', role:'bot', text:"Hi! I'm the TallyDekho assistant.\nAsk me anything about the app \u2014 pairing, invoices, stock, GSTIN, plans, and more!", time: timestamp() },
-  ]);
-  const [input, setInput] = useState('');
-  const [sending, setSending] = useState(false);
+  const chatKey = `td_help_chat_${user?.phone || 'guest'}`;
 
-  const handleSend = useCallback(() => {
-    const text = input.trim();
-    if (!text || sending) return;
+  const [messages,     setMessages]     = useState<Message[]>([WELCOME_MSG]);
+  const [input,        setInput]        = useState('');
+  const [sending,      setSending]      = useState(false);
+  const [chatRestored, setChatRestored] = useState(false);
+  const [showFAQ,      setShowFAQ]      = useState(true);
 
-    const userMsg: Message = { id: Date.now().toString(), role:'user', text, time: timestamp() };
+  // ── Load persisted chat on mount (24-hour TTL) ────────────────────────────
+  useEffect(() => {
+    AsyncStorage.getItem(chatKey).then(raw => {
+      if (!raw) return;
+      try {
+        const { messages: saved, savedAt }: { messages: Message[]; savedAt: number } = JSON.parse(raw);
+        const age = Date.now() - savedAt;
+        if (age < CHAT_TTL_MS && saved.length > 1) {
+          setMessages(saved);
+          setChatRestored(true);
+          setShowFAQ(false);
+          setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 200);
+        } else {
+          // expired — clear it
+          AsyncStorage.removeItem(chatKey);
+        }
+      } catch { /* corrupted, ignore */ }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatKey]);
+
+  // ── Persist chat whenever messages change ─────────────────────────────────
+  useEffect(() => {
+    if (messages.length <= 1) return; // don't persist welcome-only state
+    AsyncStorage.setItem(chatKey, JSON.stringify({ messages, savedAt: Date.now() })).catch(() => {});
+  }, [messages, chatKey]);
+
+  // ── Clear chat ────────────────────────────────────────────────────────────
+  const handleClear = useCallback(() => {
+    setMessages([WELCOME_MSG]);
+    setChatRestored(false);
+    setShowFAQ(true);
+    AsyncStorage.removeItem(chatKey);
+  }, [chatKey]);
+
+  // ── Send message ──────────────────────────────────────────────────────────
+  const doSend = useCallback((text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || sending) return;
+
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', text: trimmed, time: timestamp() };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setSending(true);
+    setShowFAQ(false);
 
-    // Call real AI help endpoint
-    askHelpAI(text, messages.slice(-6)).then((res: any) => {
-      const reply = res?.data?.reply || getBotResponse(text); // fallback to keyword bot
-      const botMsg: Message = {
-        id: (Date.now()+1).toString(),
-        role: 'bot',
-        text: reply,
-        time: timestamp(),
-      };
-      setMessages(prev => [...prev, botMsg]);
+    // Pass last N messages as history (excluding welcome)
+    const historyMsgs = [...messages, userMsg]
+      .filter(m => m.id !== 'welcome')
+      .slice(-MAX_HISTORY);
+
+    askHelpAI(trimmed, historyMsgs).then((res: any) => {
+      const reply = res?.data?.reply || "I'm having trouble right now. Please try again or contact support.";
+      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'bot', text: reply, time: timestamp() }]);
       setSending(false);
-      setTimeout(()=>scrollRef.current?.scrollToEnd({animated:true}), 100);
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
     }).catch(() => {
-      // Fallback to keyword bot on API error
-      const botMsg: Message = { id: (Date.now()+1).toString(), role: 'bot', text: getBotResponse(text), time: timestamp() };
-      setMessages(prev => [...prev, botMsg]);
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(), role: 'bot',
+        text: "I'm offline right now. Try WhatsApp support or email us at support@tallydekho.com",
+        time: timestamp(),
+      }]);
       setSending(false);
     });
 
-    setTimeout(()=>scrollRef.current?.scrollToEnd({animated:true}), 80);
-  }, [input, sending]);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+  }, [input, sending, messages]);
 
-  const handleAttach = async () => {
-    try {
-      // Show action sheet style: try document picker first (opens Files + images on iOS)
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['image/*', 'application/pdf', '*/*'],
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-      if (!result.canceled && result.assets?.length > 0) {
-        const file = result.assets[0];
-        const attachMsg: Message = {
-          id: Date.now().toString(),
-          role: 'user',
-          text: `📎 Attached: ${file.name}`,
-          time: timestamp(),
-        };
-        setMessages(prev => [...prev, attachMsg]);
-        setTimeout(() => {
-          const botMsg: Message = {
-            id: (Date.now()+1).toString(),
-            role: 'bot',
-            text: `I received your file "${file.name}". Our support team will review it and get back to you shortly.`,
-            time: timestamp(),
-          };
-          setMessages(prev => [...prev, botMsg]);
-          setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
-        }, 800);
-        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
-      }
-    } catch {
-      Toast.show({ type: 'error', text1: 'Could not open files', text2: 'Please try again.' });
-    }
-  };
+  const handleSend = useCallback(() => doSend(input), [doSend, input]);
+  const handleFAQAsk = useCallback((q: string) => {
+    setShowFAQ(false);
+    doSend(q);
+  }, [doSend]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      {/* Header */}
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <View style={s.hdr}>
-        <TouchableOpacity onPress={()=>router.back()} style={s.back} activeOpacity={0.7}>
+        <TouchableOpacity onPress={() => router.back()} style={s.iconBtn} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.hdrTitle}>Help Center</Text>
-        {/* WhatsApp + Mail icon buttons — top right */}
-        <View style={s.hdrIcons}>
+
+        <View style={s.hdrCenter}>
+          <View style={s.hdrBadgeRow}>
+            <View style={s.aiBadge}>
+              <Ionicons name="sparkles" size={10} color={COLORS.white} />
+              <Text style={s.aiBadgeTxt}>AI Support</Text>
+            </View>
+          </View>
+          <Text style={s.hdrTitle}>Help Center</Text>
+          <Text style={s.hdrSub}>TallyDekho & Tally Prime support</Text>
+        </View>
+
+        <View style={s.hdrRight}>
+          {messages.length > 1 && (
+            <TouchableOpacity style={s.iconBtn} onPress={handleClear} activeOpacity={0.7}>
+              <Ionicons name="refresh-outline" size={20} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
-            style={s.hdrIconBtn}
-            onPress={()=>Linking.openURL('https://wa.me/919024466791')}
+            style={s.iconBtn}
+            onPress={() => Linking.openURL('https://wa.me/919024466791')}
             activeOpacity={0.75}
           >
-            <Ionicons name="logo-whatsapp" size={22} color={'#25D366'} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={s.hdrIconBtn}
-            onPress={()=>Linking.openURL('mailto:project@tallydekho.com')}
-            activeOpacity={0.75}
-          >
-            <Ionicons name="mail-outline" size={22} color={COLORS.textSecondary} />
+            <Ionicons name="logo-whatsapp" size={22} color="#25D366" />
           </TouchableOpacity>
         </View>
       </View>
 
+      {/* ── Chat restored banner ───────────────────────────────────────────── */}
+      {chatRestored && (
+        <View style={s.restoredBanner}>
+          <Ionicons name="time-outline" size={13} color={COLORS.brandPrimary} />
+          <Text style={s.restoredTxt}>Chat restored from your last session</Text>
+          <TouchableOpacity onPress={handleClear} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={s.restoredClear}>Clear</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <KeyboardAvoidingView
-        style={{flex:1}}
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
@@ -235,99 +315,186 @@ export default function HelpCenterScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={s.scroll}
           keyboardShouldPersistTaps="handled"
-          onContentSizeChange={()=>scrollRef.current?.scrollToEnd({animated:false})}
+          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
         >
-          {/* ── Chat messages ────────────────────────────────────── */}
+          {/* ── Chat messages ─────────────────────────────────────────────── */}
           <View style={s.messagesArea}>
             {messages.map(msg => <MessageBubble key={msg.id} msg={msg} />)}
-            {sending && (
-              <View style={[mb.wrap, mb.wrapBot]}>
-                <View style={mb.botAvatar}>
-                  <Ionicons name="chatbubbles-outline" size={14} color={COLORS.white} />
-                </View>
-                <View style={[mb.bubble, mb.bubbleBot, s.typingBubble]}>
-                  <Text style={s.typingDots}>· · ·</Text>
-                </View>
-              </View>
-            )}
+            {sending && <TypingIndicator />}
           </View>
 
-          <View style={{height:8}} />
+          {/* ── FAQs (collapsible, shown when no real conversation yet) ───── */}
+          {showFAQ && (
+            <View style={s.faqSection}>
+              <SectionLabel label="FREQUENTLY ASKED" />
+              <View style={s.faqCard}>
+                {FAQS.map((item, i) => (
+                  <FaqItem
+                    key={item.q}
+                    q={item.q}
+                    a={item.a}
+                    isLast={i === FAQS.length - 1}
+                    onPress={handleFAQAsk}
+                  />
+                ))}
+              </View>
+
+              {/* Contact row */}
+              <SectionLabel label="DIRECT SUPPORT" />
+              <View style={s.contactRow}>
+                <TouchableOpacity
+                  style={s.contactBtn}
+                  onPress={() => Linking.openURL('https://wa.me/919024466791')}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+                  <Text style={s.contactBtnTxt}>WhatsApp</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={s.contactBtn}
+                  onPress={() => Linking.openURL('mailto:support@tallydekho.com')}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="mail-outline" size={20} color={COLORS.brandPrimary} />
+                  <Text style={s.contactBtnTxt}>Email</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Show FAQ toggle when in chat mode */}
+          {!showFAQ && (
+            <TouchableOpacity style={s.faqToggle} onPress={() => setShowFAQ(true)} activeOpacity={0.7}>
+              <Ionicons name="help-circle-outline" size={15} color={COLORS.brandPrimary} />
+              <Text style={s.faqToggleTxt}>Browse FAQ topics</Text>
+            </TouchableOpacity>
+          )}
+
+          <View style={{ height: 8 }} />
         </ScrollView>
 
-        {/* ── Input Bar ────────────────────────────────────────────── */}
+        {/* ── Input Bar ──────────────────────────────────────────────────────── */}
         <View style={s.inputBar}>
-          <TextInput
-            style={s.inputBox}
-            value={input}
-            onChangeText={setInput}
-            placeholder="Ask anything…"
-            placeholderTextColor={COLORS.textTertiary}
-            multiline
-            maxLength={500}
-            selectionColor={COLORS.brandPrimary}
-          />
-          <View style={s.inputActions}>
-            <TouchableOpacity style={s.iconBtn} onPress={handleAttach} activeOpacity={0.7}>
-              <Ionicons name="attach" size={20} color={COLORS.textSecondary} />
-            </TouchableOpacity>
+          <View style={s.inputRow}>
+            <TextInput
+              style={s.inputBox}
+              value={input}
+              onChangeText={setInput}
+              placeholder="Ask anything about TallyDekho…"
+              placeholderTextColor={COLORS.textTertiary}
+              multiline
+              maxLength={500}
+              selectionColor={COLORS.brandPrimary}
+              onSubmitEditing={handleSend}
+              returnKeyType="send"
+            />
             <TouchableOpacity
               style={[s.sendBtn, (!input.trim() || sending) && s.sendBtnDisabled]}
               onPress={handleSend}
               activeOpacity={0.85}
               disabled={!input.trim() || sending}
             >
-              <Text style={s.sendTxt}>Send</Text>
-              <Ionicons name="chevron-forward" size={15} color={COLORS.white} />
+              <Ionicons name="send" size={18} color={COLORS.white} />
             </TouchableOpacity>
           </View>
+          <Text style={s.inputDisclaimer}>
+            AI may make mistakes · Chat history saved for 24 hours
+          </Text>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  safe:     { flex:1, backgroundColor:COLORS.pageBg },
-  hdr:      { flexDirection:'row', alignItems:'center', backgroundColor:COLORS.cardBg, paddingHorizontal:SPACING.sm, paddingVertical:10, borderBottomWidth:1, borderBottomColor:COLORS.borderDefault },
-  back:     { width:40, height:40, alignItems:'center', justifyContent:'center' },
-  hdrTitle: { flex:1, fontSize:TYPOGRAPHY.md, fontWeight:'700', color:COLORS.textPrimary, textAlign:'center' },
-  hdrIcons: { flexDirection:'row', alignItems:'center', gap:2 },
-  hdrIconBtn:{ width:40, height:40, alignItems:'center', justifyContent:'center', borderRadius:20 },
-  scroll:   { padding:SPACING.md, paddingBottom:8 },
+  safe: { flex: 1, backgroundColor: COLORS.pageBg },
 
-  // Chat
-  messagesArea: { marginBottom:SPACING.md },
-  typingBubble: { paddingVertical:12, paddingHorizontal:16 },
-  typingDots:   { fontSize:18, color:COLORS.textTertiary, letterSpacing:4 },
+  // Header
+  hdr: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: COLORS.cardBg,
+    paddingHorizontal: SPACING.sm, paddingVertical: 8,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+    gap: 4,
+  },
+  iconBtn:    { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  hdrCenter:  { flex: 1, alignItems: 'center' },
+  hdrBadgeRow:{ flexDirection: 'row', marginBottom: 2 },
+  aiBadge:    {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.full,
+    paddingHorizontal: 8, paddingVertical: 2,
+  },
+  aiBadgeTxt: { fontSize: 10, color: COLORS.white, fontWeight: '700', letterSpacing: 0.3 },
+  hdrTitle:   { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  hdrSub:     { fontSize: 10, color: COLORS.textTertiary, marginTop: 1 },
+  hdrRight:   { flexDirection: 'row', alignItems: 'center' },
+
+  // Restored banner
+  restoredBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: COLORS.brandPrimary + '12',
+    paddingHorizontal: SPACING.md, paddingVertical: 8,
+    borderBottomWidth: 1, borderBottomColor: COLORS.brandPrimary + '20',
+  },
+  restoredTxt:   { flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.brandPrimary },
+  restoredClear: { fontSize: TYPOGRAPHY.xs, color: COLORS.brandPrimary, fontWeight: '700' },
+
+  // Scroll
+  scroll:      { padding: SPACING.md, paddingBottom: 8 },
+  messagesArea:{ marginBottom: 4 },
 
   // FAQ
-  card: { backgroundColor:COLORS.cardBg, borderRadius:RADIUS.lg, paddingHorizontal:SPACING.md, marginBottom:SPACING.md, borderWidth:1, borderColor:COLORS.borderDefault },
+  faqSection: { marginTop: 4 },
+  faqCard: {
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACING.md, marginBottom: SPACING.sm,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  faqToggle: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 16,
+    marginTop: 4,
+  },
+  faqToggleTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.brandPrimary, fontWeight: '600' },
 
   // Contact
-  contactRow: { flexDirection:'row', gap:12, marginBottom:SPACING.sm },
+  contactRow: { flexDirection: 'row', gap: 12, marginBottom: SPACING.md },
   contactBtn: {
-    flex:1, flexDirection:'row', alignItems:'center', justifyContent:'center', gap:8,
-    backgroundColor:COLORS.cardBg, borderRadius:RADIUS.md, paddingVertical:14,
-    borderWidth:1.5, borderColor:COLORS.borderStrong,
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, paddingVertical: 13,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
   },
-  contactBtnTxt: { fontSize:TYPOGRAPHY.sm, fontWeight:'700', color:COLORS.textPrimary },
+  contactBtnTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
 
   // Input bar
   inputBar: {
-    flexDirection:'column',
-    backgroundColor:COLORS.cardBg,
-    borderTopWidth:1, borderTopColor:COLORS.borderDefault,
-    paddingHorizontal:SPACING.md, paddingTop:10, paddingBottom:12,
+    backgroundColor: COLORS.cardBg,
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
+    paddingHorizontal: SPACING.md, paddingTop: 10, paddingBottom: 12,
+  },
+  inputRow: {
+    flexDirection: 'row', alignItems: 'flex-end', gap: 10,
   },
   inputBox: {
-    fontSize:TYPOGRAPHY.base, color:COLORS.textPrimary,
-    minHeight:44, maxHeight:100,
-    paddingVertical:8,
+    flex: 1,
+    fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary,
+    minHeight: 42, maxHeight: 100,
+    paddingVertical: 10, paddingHorizontal: 14,
+    backgroundColor: COLORS.pageBg,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
   },
-  inputActions: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', marginTop:4 },
-  iconBtn:    { width:38, height:38, alignItems:'center', justifyContent:'center', borderRadius:19, backgroundColor:COLORS.activeBg },
-  sendBtn:    { flexDirection:'row', alignItems:'center', gap:5, backgroundColor:COLORS.brandPrimary, paddingHorizontal:18, paddingVertical:10, borderRadius:RADIUS.full },
-  sendBtnDisabled: { opacity:0.4 },
-  sendTxt:    { fontSize:TYPOGRAPHY.sm, fontWeight:'700', color:COLORS.white },
+  sendBtn: {
+    width: 42, height: 42, borderRadius: 21,
+    backgroundColor: COLORS.brandPrimary,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  sendBtnDisabled: { opacity: 0.35 },
+  inputDisclaimer: {
+    fontSize: 10, color: COLORS.textTertiary,
+    textAlign: 'center', marginTop: 6,
+    fontStyle: 'italic',
+  },
 });
