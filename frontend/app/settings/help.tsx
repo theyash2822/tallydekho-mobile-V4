@@ -17,6 +17,30 @@ const CHAT_TTL_MS    = 24 * 60 * 60 * 1000; // 24 hours
 const MAX_HISTORY    = 8;                      // messages to send to LLM
 const AMBER          = '#F5A623';
 
+// ─── Safe URL opener ─────────────────────────────────────────────────────────
+const openLink = async (url: string, fallbackMsg?: string) => {
+  try {
+    const canOpen = await Linking.canOpenURL(url);
+    if (canOpen) {
+      await Linking.openURL(url);
+    } else {
+      Toast.show({
+        type: 'info',
+        text1: fallbackMsg || 'Cannot open link',
+        text2: 'Try opening manually: ' + url.replace(/^mailto:|^https?:\/\//, ''),
+        visibilityTime: 4000,
+      });
+    }
+  } catch {
+    Toast.show({
+      type: 'info',
+      text1: fallbackMsg || 'Cannot open link',
+      text2: url.replace(/^mailto:/, '').replace(/^https:\/\/wa\.me\//, '+'),
+      visibilityTime: 4000,
+    });
+  }
+};
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Role = 'user' | 'bot';
 interface Message { id: string; role: Role; text: string; time: string; }
@@ -289,14 +313,14 @@ export default function HelpCenterScreen() {
           )}
           <TouchableOpacity
             style={s.iconBtn}
-            onPress={() => Linking.openURL('mailto:support@tallydekho.com')}
+            onPress={() => openLink('mailto:support@tallydekho.com', 'Email: support@tallydekho.com')}
             activeOpacity={0.75}
           >
             <Ionicons name="mail-outline" size={21} color={COLORS.brandPrimary} />
           </TouchableOpacity>
           <TouchableOpacity
             style={s.iconBtn}
-            onPress={() => Linking.openURL('https://wa.me/919024466791')}
+            onPress={() => openLink('https://wa.me/919024466791', 'WhatsApp: +91 90244 66791')}
             activeOpacity={0.75}
           >
             <Ionicons name="logo-whatsapp" size={22} color="#25D366" />
