@@ -48,32 +48,40 @@ interface Message { id: string; role: Role; text: string; time: string; }
 // ─── FAQs ─────────────────────────────────────────────────────────────────────
 const FAQS = [
   {
-    q: 'How do I pair with Tally?',
-    a: 'Download TallyDekho Desktop Agent → open it → note the 6-digit pairing code → go to Settings → Tally Prime Sync → enter the code.',
+    q: 'How do I pair TallyDekho with Tally Prime?',
+    a: '1. Install TallyDekho mobile app on your phone.\n2. Download and install the TallyDekho Desktop App on the same Windows PC where Tally Prime is installed.\n3. Open Tally Prime and select your company.\n4. Open the Desktop App → select your company → enable Auto Sync → tap Start Sync.\n5. A 6-digit pairing code will appear on the Desktop App.\n6. In the mobile app, go to Settings → Tally Prime Sync → Enter Pairing Code → enter the code.\n7. Your Tally data will start appearing in the app within 1–5 minutes.',
+  },
+  {
+    q: 'Data is not showing after pairing — what to do?',
+    a: 'Wait 2–5 minutes after pairing for the first sync to complete. Make sure:\n• Tally Prime is open on the PC\n• TallyDekho Desktop App is running\n• Your phone and PC are on the same WiFi network\nIf still not showing, go to Settings → Tally Prime Sync → Sync Now.',
+  },
+  {
+    q: 'Pairing code not showing in Desktop App?',
+    a: 'Make sure you have clicked “Start Sync” in the TallyDekho Desktop App. The pairing code only appears after the sync process has started. Also ensure Tally Prime is open before starting.',
   },
   {
     q: 'Where do I find a voucher by number?',
-    a: 'Go to the Sales or Purchase tab → tap the search icon → type the voucher number (e.g. 101). You can also search from Daybook in Reports.',
+    a: 'Go to the Sales or Purchase tab → tap the search icon → type the voucher number (e.g. 101). You can also search from Daybook under Reports.',
   },
   {
     q: 'How do I set payment reminders?',
-    a: 'Go to Settings → Payment Reminders. Set the number of days before due date and enable WhatsApp notifications.',
+    a: 'Go to Settings → Payment Reminders. Enable the toggle, set the number of days before due date, and choose WhatsApp as the notification channel.',
   },
   {
-    q: 'Can I use the app offline?',
-    a: 'Yes — all entry features work offline. Data automatically syncs to Tally when your device reconnects to the internet.',
+    q: 'What are Optional entries (Draft entries)?',
+    a: 'Optional entries are saved in TallyDekho with a purple “Draft” badge but are NOT posted to Tally books yet. To post, open the voucher and tap “Post to Tally”. Useful for entries that need approval before going live.',
   },
   {
-    q: 'How to change GSTIN?',
-    a: 'Go to Settings → Tax Information → Edit GSTIN. Enter your new GSTIN and upload required proof.',
+    q: 'Desktop App not detecting Tally Prime?',
+    a: 'Make sure Tally Prime is already open before launching the Desktop App. Both must be installed on the same Windows PC. If still not detected, try restarting the Desktop App as Administrator.',
   },
   {
-    q: 'What are Optional entries?',
-    a: 'Optional entries are saved in TallyDekho but not posted to Tally books until you approve and push them.',
+    q: 'How to generate a PDF invoice?',
+    a: 'Open any voucher from the Sales or Purchase list → tap the Share icon → the PDF is generated automatically with your company logo and details. Configure the format from Settings → Voucher Config.',
   },
   {
-    q: 'Desktop not connecting / sync issues?',
-    a: 'Make sure the Desktop Agent is running and both devices are on the same WiFi. Check Settings → Tally Prime Sync → Connection Status.',
+    q: 'Can I use the app without Tally / while offline?',
+    a: 'Yes — you can create vouchers and view cached data offline. Data syncs to Tally once your connection is restored and the Desktop App is running.',
   },
 ];
 
