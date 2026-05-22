@@ -702,7 +702,9 @@ export default function AIInsightsScreen() {
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
           <Text style={s.cardTitle}>{isCurrFY || isDateActive ? 'AI Recommendations' : 'Business Highlights'}</Text>
-          {recommendations.map((rec: any, i: number) => {
+          {recommendations.length === 0 ? (
+            <Text style={s.emptyTxt}>{isCurrFY || isDateActive ? 'No recommendations available' : 'No highlights available for this period'}</Text>
+          ) : recommendations.map((rec: any, i: number) => {
             const severity = rec.severity || 'info';
             const iconColor = severity === 'critical' ? COLORS.negative : severity === 'warning' ? AMBER : severity === 'success' ? COLORS.positive : COLORS.brandPrimary;
             const iconBg = severity === 'critical' ? '#FEE2E2' : severity === 'warning' ? AMBER + '18' : severity === 'success' ? '#F0FBF4' : COLORS.brandPrimary + '15';
