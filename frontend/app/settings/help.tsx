@@ -289,6 +289,13 @@ export default function HelpCenterScreen() {
           )}
           <TouchableOpacity
             style={s.iconBtn}
+            onPress={() => Linking.openURL('mailto:support@tallydekho.com')}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="mail-outline" size={21} color={COLORS.brandPrimary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={s.iconBtn}
             onPress={() => Linking.openURL('https://wa.me/919024466791')}
             activeOpacity={0.75}
           >
@@ -342,26 +349,7 @@ export default function HelpCenterScreen() {
                 ))}
               </View>
 
-              {/* Contact row */}
-              <SectionLabel label="DIRECT SUPPORT" />
-              <View style={s.contactRow}>
-                <TouchableOpacity
-                  style={s.contactBtn}
-                  onPress={() => Linking.openURL('https://wa.me/919024466791')}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
-                  <Text style={s.contactBtnTxt}>WhatsApp</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={s.contactBtn}
-                  onPress={() => Linking.openURL('mailto:support@tallydekho.com')}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="mail-outline" size={20} color={COLORS.brandPrimary} />
-                  <Text style={s.contactBtnTxt}>Email</Text>
-                </TouchableOpacity>
-              </View>
+
             </View>
           )}
 
@@ -463,15 +451,6 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   faqToggleTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.brandPrimary, fontWeight: '600' },
-
-  // Contact
-  contactRow: { flexDirection: 'row', gap: 12, marginBottom: SPACING.md },
-  contactBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, paddingVertical: 13,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  contactBtnTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
 
   // Input bar
   inputBar: {
