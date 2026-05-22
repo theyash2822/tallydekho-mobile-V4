@@ -314,11 +314,6 @@ export default function HelpCenterScreen() {
         </View>
 
         <View style={s.hdrRight}>
-          {messages.length > 1 && (
-            <TouchableOpacity style={s.iconBtn} onPress={handleClear} activeOpacity={0.7}>
-              <Ionicons name="refresh-outline" size={20} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-          )}
           <TouchableOpacity
             style={s.iconBtn}
             onPress={() => openLink('mailto:support@tallydekho.com', 'Email: support@tallydekho.com')}
