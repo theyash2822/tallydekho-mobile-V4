@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Dimensions, ActivityIndicator,
@@ -11,7 +11,8 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../../src/context/AuthContext';
-import { getAIInsights } from '../../src/services/api';
+import { getAIInsights, getAIInsightsHistory } from '../../src/services/api';
+import { fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 
 const AMBER       = '#A89060';
@@ -38,65 +39,16 @@ function donutArc(cx: number, cy: number, outerR: number, innerR: number, startD
   ].join(' ');
 }
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const FORECAST_DATA = [
-  { month: 'Jan', actual: 9.2,  forecast: 9.5  },
-  { month: 'Feb', actual: 10.5, forecast: 10.2 },
-  { month: 'Mar', actual: 9.8,  forecast: 10.5 },
-  { month: 'Apr', actual: 11.2, forecast: 11.0 },
-  { month: 'May', actual: null, forecast: 12.8 },
-  { month: 'Jun', actual: null, forecast: 13.5 },
-  { month: 'Jul', actual: null, forecast: 14.2 },
-  { month: 'Aug', actual: null, forecast: 15.1 },
-];
-
-const EXPENSE_DATA = [
-  { month: 'Jan', amount: 3.8,  isSpike: false },
-  { month: 'Feb', amount: 4.2,  isSpike: false },
-  { month: 'Mar', amount: 4.6,  isSpike: false },
-  { month: 'Apr', amount: 6.8,  isSpike: true  },
-  { month: 'May', amount: 4.4,  isSpike: false },
-  { month: 'Jun', amount: 5.1,  isSpike: false },
-];
-
-const RECEIVABLES = [
-  { label: '0–30 Days',  pct: 11, color: AMBER_LIGHT },
-  { label: '31–60 Days', pct: 42, color: AMBER       },
-  { label: '61+ Days',   pct: 47, color: AMBER_DARK  },
-];
-
-const CASHFLOW = [
-  { label: 'Inflows',  value: '+₹1.3M', color: COLORS.positive },
-  { label: 'Outflows', value: '-₹0.9M', color: COLORS.negative },
-  { label: 'Net',      value: '+₹0.4M', color: AMBER           },
-];
-
-const STOCKOUT = [
-  { item: 'A101', category: 'Electronics', days: 7,  critical: true  },
-  { item: 'B204', category: 'Components',  days: 9,  critical: false },
-  { item: 'C305', category: 'Packaging',   days: 14, critical: false },
-];
-
-const TOP_SUPPLIERS = [
-  { name: 'Alliance Agency',      pct: 58, spend: '₹12.4L' },
-  { name: 'Indian Grocery House', pct: 22, spend: '₹4.8L'  },
-  { name: 'Netaji Industries',    pct:  9, spend: '₹1.9L'  },
-];
-
-const AI_RECS = [
-  { icon: 'rocket-outline'       as const, text: 'Increase JBL Speaker stock by 20% before festive season' },
-  { icon: 'card-outline'         as const, text: 'Offer 2% early payment discount to reduce receivables aging' },
-  { icon: 'alert-circle-outline' as const, text: 'Review Samsung Galaxy BT pricing — 8% sales decline detected' },
-  { icon: 'layers-outline'       as const, text: 'Bundle headphones + speakers to increase avg. order value' },
-];
+// No mock data — real data only or empty state
 
 // ─── Revenue Forecast Line Chart ──────────────────────────────────────────────
-function ForecastLineChart({ data }: { data: typeof FORECAST_DATA }) {
+type ForecastPoint = { month: string; actual: number | null; forecast: number | null };
+function ForecastLineChart({ data }: { data: ForecastPoint[] }) {
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
   const MONTH_W = 70; const YAXIS_W = 40;
   const H = 155; const PAD_B = 26; const PAD_T = 38;
   const chartH = H - PAD_B - PAD_T;
-  const niceMax = Math.ceil(Math.max(...data.map(d => d.forecast)) / 5) * 5 || 20;
+  const niceMax = Math.ceil(Math.max(...data.map(d => d.forecast ?? 0)) / 5) * 5 || 20;
   const yTicks  = [0, Math.round(niceMax * 0.5), niceMax];
   const chartW  = data.length * MONTH_W;
   const xAt = (i: number) => i * MONTH_W + MONTH_W / 2;
@@ -112,7 +64,7 @@ function ForecastLineChart({ data }: { data: typeof FORECAST_DATA }) {
 
   // Forecast path (all points)
   const forecastPath = data
-    .map((d, i) => `${i === 0 ? 'M' : 'L'}${xAt(i).toFixed(1)},${yAt(d.forecast).toFixed(1)}`)
+    .map((d, i) => `${i === 0 ? 'M' : 'L'}${xAt(i).toFixed(1)},${yAt(d.forecast ?? 0).toFixed(1)}`)
     .join(' ');
 
   return (
@@ -168,7 +120,7 @@ function ForecastLineChart({ data }: { data: typeof FORECAST_DATA }) {
           {/* Interactive dots + labels */}
           {data.map((d, i) => {
             const isActual = d.actual !== null;
-            const val      = isActual ? d.actual! : d.forecast;
+            const val      = isActual ? d.actual! : (d.forecast ?? 0);
             const x        = xAt(i);
             const y        = yAt(val);
             const isActive = activeIdx === i;
@@ -216,7 +168,8 @@ function ForecastLineChart({ data }: { data: typeof FORECAST_DATA }) {
 }
 
 // ─── Expense Spike Bar Chart ──────────────────────────────────────────────────
-function ExpenseSpikeChart({ data }: { data: typeof EXPENSE_DATA }) {
+type ExpensePoint = { month: string; amount: number; isSpike: boolean };
+function ExpenseSpikeChart({ data }: { data: ExpensePoint[] }) {
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
   const YAXIS_W = 40; const BAR_W = 36; const GAP = 16;
   const H = 130; const PAD_B = 24; const PAD_T = 30;
@@ -293,7 +246,8 @@ function ExpenseSpikeChart({ data }: { data: typeof EXPENSE_DATA }) {
 }
 
 // ─── Receivables Donut Chart ──────────────────────────────────────────────────
-function ReceivablesDonut({ segments }: { segments: typeof RECEIVABLES }) {
+type DonutSegment = { label: string; pct: number; color: string };
+function ReceivablesDonut({ segments }: { segments: DonutSegment[] }) {
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
   const SIZE = 130; const cx = SIZE / 2; const cy = SIZE / 2;
   const outerR = 52; const innerR = 30;
@@ -395,40 +349,82 @@ export default function AIInsightsScreen() {
   const generatedAt  = aiData?._cacheGeneratedAt ? fmtDate(aiData._cacheGeneratedAt) : null;
   const nextUpdateAt = aiData?._cacheValidUntil  ? fmtDate(aiData._cacheValidUntil)  : null;
 
-  // Real data from API
-  const revenueForecast: any[] = aiData?.revenueForecast || FORECAST_DATA;
-  const expenseDataReal: any[] = aiData?.expenseData     || EXPENSE_DATA;
-  const receivablesAging: any[]= aiData?.receivablesAging|| RECEIVABLES;
-  const topSuppliers: any[]    = aiData?.topSuppliers    || TOP_SUPPLIERS;
-  const topCustomers: any[]    = aiData?.topCustomers    || [];
-  const stockoutData: any[]    = aiData?.stockout        || STOCKOUT;
-  const recommendations: any[] = aiData?.recommendations || AI_RECS;
-  const summaryData: any       = aiData?.summary         || {};
+  const isDateActive = fromDate.length > 0 && toDate.length > 0;
 
-  // Cashflow from summary (inflows = revenue, outflows = expenses)
+  // Detect if selectedFY is the current (active) financial year
+  const isCurrFY = useMemo(() => {
+    if (!selectedFY?.endDate) return true;
+    const today = new Date().toISOString().slice(0, 10);
+    return today <= selectedFY.endDate;
+  }, [selectedFY?.endDate]);
+
+  // Real data from API — no mock fallbacks, show empty state when null
+  const revenueForecast: any[] = aiData?.revenueForecast ?? [];
+  const expenseDataRaw: any[]  = aiData?.expenseData     ?? [];
+  const receivablesAging: any[]= aiData?.receivablesAging?? [];
+  const topSuppliers: any[]    = aiData?.topSuppliers    ?? [];
+  const topCustomers: any[]    = aiData?.topCustomers    ?? [];
+  const stockoutData: any[]    = aiData?.stockout        ?? [];
+  const recommendations: any[] = aiData?.recommendations ?? [];
+  const summaryData: any       = aiData?.summary         ?? {};
+
+  // ── Chart data: convert raw rupees → Lakhs for chart rendering ──────────────
+  const revenueForecastForChart = useMemo(() =>
+    revenueForecast.map((d: any) => ({
+      ...d,
+      actual:   d.actual   != null ? d.actual   / 100000 : null,
+      forecast: d.forecast != null ? d.forecast / 100000 : null,
+    })),
+  [revenueForecast]);
+
+  const expenseDataForChart = useMemo(() =>
+    expenseDataRaw.map((d: any) => ({ ...d, amount: (d.amount || 0) / 100000 })),
+  [expenseDataRaw]);
+
+  // ── Revenue KPI badge from real summary data ─────────────────────────────────
+  const revenueKPI = useMemo(() => {
+    if (!aiData?.summary) return null;
+    const total = summaryData.totalRevenue || 0;
+    const actuals = revenueForecast.filter((d: any) => d.actual != null);
+    let pctChange: number | null = null;
+    if (actuals.length >= 2) {
+      const last = actuals[actuals.length - 1].actual;
+      const prev = actuals[actuals.length - 2].actual;
+      if (prev > 50000) pctChange = Math.round(((last - prev) / prev) * 100);
+    }
+    return { total, pctChange };
+  }, [aiData?.summary, revenueForecast]);
+
+  // ── Cashflow from real summary ───────────────────────────────────────────────
   const cashflowData = aiData?.summary ? [
     { label: 'Revenue (Inflows)',   value: `+${formatAmountCompact(summaryData.totalRevenue  || 0)}`, color: COLORS.positive },
     { label: 'Expenses (Outflows)', value: `-${formatAmountCompact(summaryData.totalExpenses || 0)}`, color: COLORS.negative },
     { label: 'Net',                 value: `${(summaryData.totalRevenue||0)-(summaryData.totalExpenses||0) >= 0 ? '+' : ''}${formatAmountCompact((summaryData.totalRevenue||0)-(summaryData.totalExpenses||0))}`, color: AMBER },
-  ] : CASHFLOW;
-
-  const isDateActive = fromDate.length > 0 && toDate.length > 0;
+  ] : [];
 
   const fetchInsights = useCallback(async () => {
     if (!company?.guid) return;
     setRefreshing(true);
     try {
-      // Use date range picker if active, otherwise pass FY
-      const from = fromDate || selectedFY?.startDate || undefined;
-      const to   = toDate   || selectedFY?.endDate   || undefined;
-      const res: any = await getAIInsights(company.guid, from, to);
+      let res: any;
+      if (isCurrFY || isDateActive) {
+        // Current FY or custom date range — use main endpoint
+        const from = fromDate || selectedFY?.startDate || undefined;
+        const to   = toDate   || selectedFY?.endDate   || undefined;
+        res = await getAIInsights(company.guid, from, to);
+      } else {
+        // Historical FY — use dedicated deterministic endpoint (no LLM, no forecast)
+        const fyParam = fyInfoToParam(selectedFY);
+        if (!fyParam) throw new Error('Invalid FY');
+        res = await getAIInsightsHistory(company.guid, fyParam);
+      }
       if (res?.data) setAiData(res.data);
     } catch {
       Toast.show({ type: 'error', text1: 'Failed to load insights', text2: 'Check your connection' });
     } finally {
       setRefreshing(false);
     }
-  }, [company?.guid, fromDate, toDate, selectedFY?.startDate]);
+  }, [company?.guid, fromDate, toDate, selectedFY?.startDate, isCurrFY, isDateActive]);
 
   useEffect(() => { fetchInsights(); }, [company?.guid, selectedFY?.startDate]);
 
@@ -452,10 +448,10 @@ export default function AIInsightsScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <View style={s.headerCenter}>
-          <Text style={s.headerTitle}>AI Insights</Text>
-          <View style={s.aiBadge}>
-            <Ionicons name="sparkles" size={10} color={COLORS.white} />
-            <Text style={s.aiBadgeTxt}>Powered by AI</Text>
+          <Text style={s.headerTitle}>{isCurrFY || isDateActive ? 'AI Insights' : 'FY Summary'}</Text>
+          <View style={[s.aiBadge, !isCurrFY && !isDateActive ? s.aiBadgeHistory : null]}>
+            <Ionicons name={isCurrFY || isDateActive ? 'sparkles' : 'bar-chart-outline'} size={10} color={COLORS.white} />
+            <Text style={s.aiBadgeTxt}>{isCurrFY || isDateActive ? 'Powered by AI' : 'Historical Analysis'}</Text>
           </View>
         </View>
         <TouchableOpacity style={s.iconBtn} onPress={handleRefresh} activeOpacity={0.7}>
@@ -487,19 +483,34 @@ export default function AIInsightsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[s.scrollContent, { paddingBottom: 96 + insets.bottom }]}
       >
+        {/* ── Loading Skeleton (first load, no data yet) ── */}
+        {refreshing && !aiData && [
+          { h: 180 }, { h: 100 }, { h: 120 }, { h: 140 }, { h: 100 }
+        ].map((card, ci) => (
+          <View key={ci} style={[s.card, { gap: 10, paddingVertical: 20 }]}>
+            <View style={{ height: 14, width: '55%', backgroundColor: COLORS.borderDefault, borderRadius: 6, opacity: 0.5 }} />
+            <View style={{ height: card.h, width: '100%', backgroundColor: COLORS.borderDefault, borderRadius: 8, opacity: 0.25, marginTop: 4 }} />
+          </View>
+        ))}
+
+        {/* ── Content (only when data loaded) ── */}
+        {(!refreshing || aiData) && <>
+
         {/* Last updated + AI disclaimer */}
         <View style={s.updatedRow}>
           <Ionicons name="time-outline" size={12} color={COLORS.textTertiary} />
           <Text style={s.updatedTxt}>
             {isDateActive
-              ? `Forecasts for ${fromDate} → ${toDate}`
-              : generatedAt
-                ? `AI insights generated on ${generatedAt}`
-                : 'AI-powered business insights'}
+              ? `Custom range: ${fromDate} → ${toDate}`
+              : !isCurrFY
+                ? `Historical highlights — ${selectedFY?.label ?? 'Past FY'} · Deterministic analysis`
+                : generatedAt
+                  ? `AI insights generated on ${generatedAt}`
+                  : 'Smart insights based on your current business activity'}
           </Text>
         </View>
-        {/* Next update disclaimer (only when cached, not on custom date range) */}
-        {!isDateActive && nextUpdateAt && (
+        {/* Next update disclaimer (current FY only, when cached, not on custom date range) */}
+        {isCurrFY && !isDateActive && nextUpdateAt && (
           <View style={s.disclaimerRow}>
             <Ionicons name="information-circle-outline" size={11} color={COLORS.textTertiary} />
             <Text style={s.disclaimerTxt}>
@@ -509,33 +520,61 @@ export default function AIInsightsScreen() {
         )}
 
         {/* ──────────────────────────────────────────────────────────────── */}
-        {/* 1. Revenue Forecast */}
+        {/* 1. Revenue {isCurrFY ? 'Forecast' : 'Trend'} */}
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
           <View style={s.cardHeader}>
-            <Text style={s.cardTitle}>Revenue Forecast</Text>
-            <View style={s.kpiBadge}>
-              <Ionicons name="trending-up" size={13} color={COLORS.positive} />
-              <Text style={s.kpiBadgeTxt}>₹7.8M  +12%</Text>
-            </View>
+            <Text style={s.cardTitle}>{isCurrFY || isDateActive ? 'Revenue Forecast' : 'Revenue Trend'}</Text>
+            {revenueKPI ? (
+              <View style={[
+                s.kpiBadge,
+                revenueKPI.pctChange != null && revenueKPI.pctChange < 0
+                  ? { backgroundColor: '#FEE2E2' } : null,
+              ]}>
+                <Ionicons
+                  name={revenueKPI.pctChange != null && revenueKPI.pctChange < 0 ? 'trending-down' : 'trending-up'}
+                  size={13}
+                  color={revenueKPI.pctChange != null && revenueKPI.pctChange < 0 ? COLORS.negative : COLORS.positive}
+                />
+                <Text style={[
+                  s.kpiBadgeTxt,
+                  revenueKPI.pctChange != null && revenueKPI.pctChange < 0 ? { color: COLORS.negative } : null,
+                ]}>
+                  {formatAmountCompact(revenueKPI.total)}
+                  {revenueKPI.pctChange != null ? `  ${revenueKPI.pctChange > 0 ? '+' : ''}${revenueKPI.pctChange}%` : ''}
+                </Text>
+              </View>
+            ) : refreshing ? null : null}
           </View>
-          <View style={s.legendRow}>
-            <View style={[s.legendDot, { backgroundColor: AMBER }]} />
-            <Text style={s.legendTxt}>Actual</Text>
-            <View style={[s.legendDash, { backgroundColor: COLORS.textPrimary }]} />
-            <Text style={s.legendTxt}>AI Forecast</Text>
-            <View style={[s.legendDot, { backgroundColor: COLORS.borderDefault, opacity: 0.5 }]} />
-            <Text style={s.legendTxt}>Forecast Zone</Text>
-          </View>
-          <ForecastLineChart data={revenueForecast} />
+          {revenueForecastForChart.length === 0 ? (
+            <Text style={s.emptyTxt}>No revenue data for this period</Text>
+          ) : (
+            <>
+              <View style={s.legendRow}>
+                <View style={[s.legendDot, { backgroundColor: AMBER }]} />
+                <Text style={s.legendTxt}>Actual</Text>
+                {(isCurrFY || isDateActive) && revenueForecastForChart.some((d: any) => d.actual == null) && (
+                  <>
+                    <View style={[s.legendDash, { backgroundColor: COLORS.textPrimary }]} />
+                    <Text style={s.legendTxt}>AI Forecast</Text>
+                    <View style={[s.legendDot, { backgroundColor: COLORS.borderDefault, opacity: 0.5 }]} />
+                    <Text style={s.legendTxt}>Forecast Zone</Text>
+                  </>
+                )}
+              </View>
+              <ForecastLineChart data={revenueForecastForChart} />
+            </>
+          )}
         </View>
 
         {/* ──────────────────────────────────────────────────────────────── */}
         {/* 2. Cash-Flow Projection */}
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
-          <Text style={s.cardTitle}>Cash-Flow Projection</Text>
-          {cashflowData.map((row: any, i: number) => (
+          <Text style={s.cardTitle}>{isCurrFY || isDateActive ? 'Cash-Flow Projection' : 'Cash Flow Summary'}</Text>
+          {cashflowData.length === 0 ? (
+            <Text style={s.emptyTxt}>No cash flow data for this period</Text>
+          ) : cashflowData.map((row: any, i: number) => (
             <View key={row.label}
               style={[s.cashRow, i < cashflowData.length - 1 ? s.cashRowBorder : null]}
             >
@@ -584,14 +623,18 @@ export default function AIInsightsScreen() {
         <View style={s.card}>
           <View style={s.cardHeader}>
             <Text style={s.cardTitle}>Expense Spike Alert</Text>
-            {expenseDataReal.some((d: any) => d.isSpike) && (
+            {expenseDataForChart.some((d: any) => d.isSpike) && (
               <View style={s.spikeBadge}>
                 <Ionicons name="warning" size={11} color={COLORS.negative} />
-                <Text style={s.spikeBadgeTxt}>{expenseDataReal.filter((d: any) => d.isSpike).length} spike{expenseDataReal.filter((d: any) => d.isSpike).length > 1 ? 's' : ''} detected</Text>
+                <Text style={s.spikeBadgeTxt}>{expenseDataForChart.filter((d: any) => d.isSpike).length} spike{expenseDataForChart.filter((d: any) => d.isSpike).length > 1 ? 's' : ''} detected</Text>
               </View>
             )}
           </View>
-          <ExpenseSpikeChart data={expenseDataReal} />
+          {expenseDataForChart.length === 0 ? (
+            <Text style={s.emptyTxt}>No expense data for this period</Text>
+          ) : (
+            <ExpenseSpikeChart data={expenseDataForChart} />
+          )}
         </View>
 
         {/* ──────────────────────────────────────────────────────────────── */}
@@ -607,11 +650,38 @@ export default function AIInsightsScreen() {
         </View>
 
         {/* ──────────────────────────────────────────────────────────────── */}
-        {/* 6. Top 3 Suppliers */}
+        {/* 6. Top Customers */}
+        {/* ──────────────────────────────────────────────────────────────── */}
+        <View style={s.card}>
+          <Text style={s.cardTitle}>Top Customers</Text>
+          {topCustomers.length === 0 ? (
+            <Text style={s.emptyTxt}>No sales data for this period</Text>
+          ) : topCustomers.map((cust: any, i: number) => (
+            <View key={cust.name ?? i}
+              style={[s.supRow, i < topCustomers.length - 1 ? s.supRowBorder : null]}
+            >
+              <View style={[s.supRankBox, { backgroundColor: AMBER + '15', borderColor: AMBER + '40' }]}>
+                <Text style={[s.supRank, { color: AMBER_DARK }]}>{i + 1}</Text>
+              </View>
+              <Text style={s.supName} numberOfLines={1}>{cust.name}</Text>
+              <View style={s.supRight}>
+                <Text style={s.supPct}>{cust.pct}% of revenue</Text>
+                <Text style={s.supSpend}>
+                  {cust.revenue ? `₹${(cust.revenue / 100000).toFixed(1)}L` : ''}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* ──────────────────────────────────────────────────────────────── */}
+        {/* 7. Top Suppliers */}
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
           <Text style={s.cardTitle}>Top Suppliers</Text>
-          {topSuppliers.map((sup: any, i: number) => (
+          {topSuppliers.length === 0 ? (
+            <Text style={s.emptyTxt}>No purchase data for this period</Text>
+          ) : topSuppliers.map((sup: any, i: number) => (
             <View key={sup.name ?? i}
               style={[s.supRow, i < topSuppliers.length - 1 ? s.supRowBorder : null]}
             >
@@ -619,17 +689,19 @@ export default function AIInsightsScreen() {
               <Text style={s.supName} numberOfLines={1}>{sup.name}</Text>
               <View style={s.supRight}>
                 <Text style={s.supPct}>{sup.pct}% of spend</Text>
-                <Text style={s.supSpend}>{sup.spend ? `₹${(sup.spend/100000).toFixed(1)}L` : ''}</Text>
+                <Text style={s.supSpend}>
+                  {sup.spend ? `₹${(typeof sup.spend === 'number' ? sup.spend / 100000 : parseFloat(sup.spend)).toFixed(1)}L` : ''}
+                </Text>
               </View>
             </View>
           ))}
         </View>
 
         {/* ──────────────────────────────────────────────────────────────── */}
-        {/* 7. AI Recommendations */}
+        {/* 9. Recommendations */}
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
-          <Text style={s.cardTitle}>AI Recommendations</Text>
+          <Text style={s.cardTitle}>{isCurrFY || isDateActive ? 'AI Recommendations' : 'Business Highlights'}</Text>
           {recommendations.map((rec: any, i: number) => {
             const severity = rec.severity || 'info';
             const iconColor = severity === 'critical' ? COLORS.negative : severity === 'warning' ? AMBER : severity === 'success' ? COLORS.positive : COLORS.brandPrimary;
@@ -644,6 +716,8 @@ export default function AIInsightsScreen() {
             );
           })}
         </View>
+
+        </> }{/* end: (!refreshing || aiData) block */}
       </ScrollView>
 
       {/* ── Share PDF Button ── */}
@@ -684,6 +758,7 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.textPrimary,
     paddingHorizontal: 8, paddingVertical: 3, borderRadius: RADIUS.full,
   },
+  aiBadgeHistory: { backgroundColor: AMBER_DARK },
   aiBadgeTxt: { fontSize: 10, fontWeight: '700', color: COLORS.white },
 
   // Date strip
@@ -771,6 +846,7 @@ const s = StyleSheet.create({
   recRowBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   recIcon:      { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   recTxt:       { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, lineHeight: 20 },
+  emptyTxt:     { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary, paddingVertical: 10, textAlign: 'center' },
 
   // Bottom bar
   bottomBar: {

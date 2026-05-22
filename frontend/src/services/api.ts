@@ -294,6 +294,9 @@ export const getMyEntries     = (companyGuid?: string, params?: any) => get<any>
 export const getAIInsights = (companyGuid?: string, from?: string, to?: string) =>
   get<any>(withCompany('/ai/insights', companyGuid, from && to ? { from, to } : {}));
 
+export const getAIInsightsHistory = (companyGuid: string, financialYear: string) =>
+  get<any>(withCompany(`/ai/insights/history/${financialYear}`, companyGuid));
+
 // ════════════════════════════════════════════════════════════
 // USER SETTINGS
 // ════════════════════════════════════════════════════════════
