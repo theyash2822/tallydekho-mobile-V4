@@ -238,6 +238,34 @@ export default function AuditTrailScreen() {
   const [hasMore,       setHasMore]       = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
+  // ── write_queue entry_type → display label ─────────────────
+  const WQ_ENTRY_LABEL: Record<string, string> = {
+    sales: 'Sales', purchase: 'Purchase', payment: 'Payment',
+    receipt: 'Receipt', journal: 'Journal', contra: 'Contra',
+    stock_transfer: 'Stock Transfer', stock_adjustment: 'Adjustment',
+    alter_stock_item: 'Stock Edit', item: 'New Item',
+    party: 'New Party', bank: 'Bank', warehouse: 'Warehouse',
+    sales_order: 'Sales Order', purchase_order: 'Purchase Order',
+    credit_note: 'Credit Note', debit_note: 'Debit Note',
+    delivery_note: 'Delivery Note',
+  };
+
+  const mapQueueRow = (p: any): VoucherEntry => ({
+    id: 'wq_' + String(p._queue_id),
+    ref:  p.voucher_number || '',
+    date: p.date || '',
+    month: formatMonth(p.date),
+    type: mapVoucherType(WQ_ENTRY_LABEL[p.voucher_type || ''] || p.voucher_type || 'Journal'),
+    party: p.party_name || '',
+    description: WQ_ENTRY_LABEL[p.voucher_type || ''] || (p.voucher_type || '').replace(/_/g, ' '),
+    amount: formatAmount(Math.abs(+(p.amount || 0))),
+    isCredit: false,
+    syncStatus: p._queue_status === 'success' ? 'synced'
+      : p._queue_status === 'failed' ? 'failed' : 'pending',
+    action: 'Created',
+    isMine: true,
+  });
+
   // ── Fetch data ────────────────────────────────────────────
   useEffect(() => {
     if (!companyGuid) return;
@@ -245,32 +273,44 @@ export default function AuditTrailScreen() {
     setApiError(null);
     setPage(1);
     setHasMore(false);
-    const fetchFn = activeTab === 'myentries'
-      ? getMyEntries(companyGuid, { from: fromDate, to: toDate, limit: String(PAGE_SIZE), page: 1 })
-      : getVouchers(companyGuid, undefined, { from: fromDate, to: toDate, limit: PAGE_SIZE, page: 1 });
-    fetchFn
-      .then((res: any) => {
-        const rows = res?.data ?? [];
-        setApiEntries(rows.map((r: any) => ({ ...mapApiRow(r, formatAmount), isMine: activeTab === 'myentries' })));
-        setHasMore(rows.length === PAGE_SIZE);
-      })
-      .catch((err: any) => {
-        setApiError(err?.message || 'Failed to load vouchers');
-      })
-      .finally(() => setIsLoading(false));
+
+    if (activeTab === 'myentries') {
+      // My Entries: merge posted vouchers (res.data) + ALL write_queue entries (res.pending)
+      getMyEntries(companyGuid, { from: fromDate, to: toDate, limit: String(PAGE_SIZE), page: 1 })
+        .then((res: any) => {
+          const postedRows = (res?.data ?? []).map((r: any) => ({ ...mapApiRow(r, formatAmount), isMine: true }));
+          const queueRows  = (res?.pending ?? []).map(mapQueueRow);
+          // If same voucher_number appears in both, keep queue row (has status info)
+          const postedFiltered = postedRows.filter((p: VoucherEntry) =>
+            !queueRows.some((q: VoucherEntry) => q.ref && q.ref === p.ref)
+          );
+          const merged = [...queueRows, ...postedFiltered]
+            .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+          setApiEntries(merged);
+          setHasMore(false);
+        })
+        .catch((err: any) => setApiError(err?.message || 'Failed to load entries'))
+        .finally(() => setIsLoading(false));
+    } else {
+      getVouchers(companyGuid, undefined, { from: fromDate, to: toDate, limit: PAGE_SIZE, page: 1 })
+        .then((res: any) => {
+          const rows = res?.data ?? [];
+          setApiEntries(rows.map((r: any) => ({ ...mapApiRow(r, formatAmount), isMine: false })));
+          setHasMore(rows.length === PAGE_SIZE);
+        })
+        .catch((err: any) => setApiError(err?.message || 'Failed to load vouchers'))
+        .finally(() => setIsLoading(false));
+    }
   }, [companyGuid, fromDate, toDate, activeTab]);
 
   const loadMore = () => {
-    if (!companyGuid || isLoadingMore || !hasMore) return;
+    if (!companyGuid || isLoadingMore || !hasMore || activeTab === 'myentries') return;
     const nextPage = page + 1;
     setIsLoadingMore(true);
-    const fetchFn = activeTab === 'myentries'
-      ? getMyEntries(companyGuid, { from: fromDate, to: toDate, limit: String(PAGE_SIZE), page: nextPage })
-      : getVouchers(companyGuid, undefined, { from: fromDate, to: toDate, limit: PAGE_SIZE, page: nextPage });
-    fetchFn
+    getVouchers(companyGuid, undefined, { from: fromDate, to: toDate, limit: PAGE_SIZE, page: nextPage })
       .then((res: any) => {
         const rows = res?.data ?? [];
-        setApiEntries(prev => [...prev, ...rows.map((r: any) => ({ ...mapApiRow(r, formatAmount), isMine: activeTab === 'myentries' }))]);
+        setApiEntries(prev => [...prev, ...rows.map((r: any) => ({ ...mapApiRow(r, formatAmount), isMine: false }))]);
         setHasMore(rows.length === PAGE_SIZE);
         setPage(nextPage);
       })
