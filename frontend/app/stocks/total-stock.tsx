@@ -16,6 +16,7 @@ import { AddItemModal } from '../../src/components/forms/AddItemModal';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { EditStockModal } from '../../src/components/forms/EditStockModal';
 import { StockTransferModal } from '../../src/components/forms/StockTransferModal';
+import { StockAdjustmentModal } from '../../src/components/forms/StockAdjustmentModal';
 import { BulkTransferModal } from '../../src/components/forms/BulkTransferModal';
 import FilterBottomSheet, { FilterChipGroup } from '../../src/components/FilterBottomSheet';
 import { StockItem, ALL_WAREHOUSES, ALL_CATEGORIES, ALL_GROUPS } from '../../src/data/stockData';
@@ -29,6 +30,7 @@ const _stockCache: Record<string, { data: StockItem[]; ts: number }> = {};
 const sw = StyleSheet.create({
   actionWrap: { width: 88, justifyContent: 'center', alignItems: 'center', borderRadius: RADIUS.md, overflow: 'hidden' },
   transferBg: { backgroundColor: COLORS.brandPrimary },
+  adjustBg:   { backgroundColor: '#A89060' },
   editBg:     { backgroundColor: '#A89060' },
   actionInner:{ flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center', gap: 5 },
   actionTxt:  { fontSize: 11, fontWeight: '700', color: COLORS.white },
@@ -48,19 +50,29 @@ const sc = StyleSheet.create({
   qtyTxt:        { fontSize: 10, fontWeight: '600', color: COLORS.textSecondary },
 });
 
-function SwipeableStockCard({ item, isMultiSelectMode, isSelected, onPress, onLongPress, onEditStock, onTransfer }: {
+function SwipeableStockCard({ item, isMultiSelectMode, isSelected, onPress, onLongPress, onEditStock, onTransfer, onAdjust }: {
   item: StockItem; isMultiSelectMode: boolean; isSelected: boolean;
-  onPress: () => void; onLongPress: () => void; onEditStock: () => void; onTransfer: () => void;
+  onPress: () => void; onLongPress: () => void; onEditStock: () => void; onTransfer: () => void; onAdjust: () => void;
 }) {
   const swipeRef = useRef<any>(null);
   const renderLeftActions = (_: Animated.AnimatedInterpolation<number>, dragX: Animated.AnimatedInterpolation<number>) => {
-    const scale = dragX.interpolate({ inputRange: [0, 80], outputRange: [0.85, 1], extrapolate: 'clamp' });
+    const scale = dragX.interpolate({ inputRange: [0, 176], outputRange: [0.85, 1], extrapolate: 'clamp' });
     return (
-      <Animated.View style={[sw.actionWrap, sw.transferBg, { transform: [{ scale }] }]}>
-        <TouchableOpacity style={sw.actionInner} onPress={() => { swipeRef.current?.close(); onTransfer(); }} activeOpacity={0.85}>
-          <Ionicons name="swap-horizontal-outline" size={22} color={COLORS.white} />
-          <Text style={sw.actionTxt}>Transfer</Text>
-        </TouchableOpacity>
+      <Animated.View style={[{ flexDirection: 'row', gap: 6 }, { transform: [{ scale }] }]}>
+        {/* Transfer */}
+        <View style={[sw.actionWrap, sw.transferBg]}>
+          <TouchableOpacity style={sw.actionInner} onPress={() => { swipeRef.current?.close(); onTransfer(); }} activeOpacity={0.85}>
+            <Ionicons name="swap-horizontal-outline" size={22} color={COLORS.white} />
+            <Text style={sw.actionTxt}>Transfer</Text>
+          </TouchableOpacity>
+        </View>
+        {/* Adjust */}
+        <View style={[sw.actionWrap, sw.adjustBg]}>
+          <TouchableOpacity style={sw.actionInner} onPress={() => { swipeRef.current?.close(); onAdjust(); }} activeOpacity={0.85}>
+            <Ionicons name="options-outline" size={22} color={COLORS.white} />
+            <Text style={sw.actionTxt}>Adjust</Text>
+          </TouchableOpacity>
+        </View>
       </Animated.View>
     );
   };
@@ -96,7 +108,7 @@ function SwipeableStockCard({ item, isMultiSelectMode, isSelected, onPress, onLo
   );
   if (isMultiSelectMode) return cardInner;
   return (
-    <Swipeable ref={swipeRef} renderLeftActions={renderLeftActions} renderRightActions={renderRightActions} friction={2} leftThreshold={40} rightThreshold={40} overshootLeft={false} overshootRight={false}>
+    <Swipeable ref={swipeRef} renderLeftActions={renderLeftActions} renderRightActions={renderRightActions} friction={2} leftThreshold={88} rightThreshold={40} overshootLeft={false} overshootRight={false}>
       {cardInner}
     </Swipeable>
   );
@@ -222,6 +234,7 @@ export default function TotalStockScreen() {
   const [addItemOpen,   setAddItemOpen]   = useState(false);
   const [editItem,      setEditItem]      = useState<StockItem | null>(null);
   const [transferItem,  setTransferItem]  = useState<StockItem | null>(null);
+  const [adjustItem,    setAdjustItem]    = useState<StockItem | null>(null);
   const [bulkOpen,      setBulkOpen]      = useState(false);
   const [bulkPreItems,  setBulkPreItems]  = useState<StockItem[]>([]);
 
@@ -476,6 +489,7 @@ export default function TotalStockScreen() {
             onLongPress={() => handleLongPress(item.id)}
             onEditStock={() => setEditItem(item)}
             onTransfer={() => setTransferItem(item)}
+            onAdjust={() => setAdjustItem(item)}
           />
         )}
       />
@@ -485,6 +499,7 @@ export default function TotalStockScreen() {
       <AddItemModal visible={addItemOpen} onClose={() => setAddItemOpen(false)} />
       <EditStockModal visible={!!editItem} item={editItem} onClose={() => setEditItem(null)} />
       <StockTransferModal visible={!!transferItem} item={transferItem} onClose={() => setTransferItem(null)} />
+      <StockAdjustmentModal visible={!!adjustItem} item={adjustItem} onClose={() => setAdjustItem(null)} />
       <BulkTransferModal visible={bulkOpen} preselectedItems={bulkPreItems} onClose={() => { setBulkOpen(false); exitMultiSelect(); }} />
     </SafeAreaView>
   );
