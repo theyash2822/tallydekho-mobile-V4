@@ -11,7 +11,7 @@ import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 import { useAuth } from '../../src/context/AuthContext';
-import { getStocks } from '../../src/services/api';
+import { getStocks, getWarehouses } from '../../src/services/api';
 import { AddItemModal } from '../../src/components/forms/AddItemModal';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { EditStockModal } from '../../src/components/forms/EditStockModal';
@@ -19,7 +19,7 @@ import { StockTransferModal } from '../../src/components/forms/StockTransferModa
 import { StockAdjustmentModal } from '../../src/components/forms/StockAdjustmentModal';
 import { BulkTransferModal } from '../../src/components/forms/BulkTransferModal';
 import FilterBottomSheet, { FilterChipGroup } from '../../src/components/FilterBottomSheet';
-import { StockItem, ALL_WAREHOUSES, ALL_CATEGORIES, ALL_GROUPS } from '../../src/data/stockData';
+import { StockItem } from '../../src/data/stockData';
 import { useSettings } from '../../src/context/SettingsContext';
 
 // ─── Module-level stock cache (persists across navigation, clears on sync) ─────
@@ -116,10 +116,13 @@ function SwipeableStockCard({ item, isMultiSelectMode, isSelected, onPress, onLo
 
 // ─── FILTER MODAL (uses shared FilterBottomSheet + FilterChipGroup) ──────────
 
-function FilterModal({ visible, onClose, onApply, initWh, initCat, initGrp }: {
+function FilterModal({ visible, onClose, onApply, initWh, initCat, initGrp, whOptions, catOptions, grpOptions }: {
   visible: boolean; onClose: () => void;
   onApply: (wh: string[], cat: string[], grp: string[]) => void;
   initWh: string[]; initCat: string[]; initGrp: string[];
+  whOptions: { id: string; label: string }[];
+  catOptions: { id: string; label: string }[];
+  grpOptions: { id: string; label: string }[];
 }) {
   const [selWh, setSelWh]   = useState<string[]>(initWh);
   const [selCat, setSelCat] = useState<string[]>(initCat);
@@ -134,30 +137,36 @@ function FilterModal({ visible, onClose, onApply, initWh, initCat, initGrp }: {
       title="Filter Items"
       activeCount={total}
       onClear={() => { setSelWh([]); setSelCat([]); setSelGrp([]); }}
-      onApply={() => onApply(selWh, selCat, selGrp)}
+      onApply={() => { onApply(selWh, selCat, selGrp); onClose(); }}
       applyLabel="Apply Filters"
     >
-      <FilterChipGroup
-        label="Warehouse"
-        options={ALL_WAREHOUSES}
-        selected={selWh}
-        multi
-        onSelect={setSelWh}
-      />
-      <FilterChipGroup
-        label="Category"
-        options={ALL_CATEGORIES.map(c => ({ id: c, label: c }))}
-        selected={selCat}
-        multi
-        onSelect={setSelCat}
-      />
-      <FilterChipGroup
-        label="Item Group"
-        options={ALL_GROUPS.map(g => ({ id: g, label: g }))}
-        selected={selGrp}
-        multi
-        onSelect={setSelGrp}
-      />
+      {whOptions.length > 0 && (
+        <FilterChipGroup
+          label="Warehouse"
+          options={whOptions}
+          selected={selWh}
+          multi
+          onSelect={setSelWh}
+        />
+      )}
+      {catOptions.length > 0 && (
+        <FilterChipGroup
+          label="Category"
+          options={catOptions}
+          selected={selCat}
+          multi
+          onSelect={setSelCat}
+        />
+      )}
+      {grpOptions.length > 0 && (
+        <FilterChipGroup
+          label="Item Group"
+          options={grpOptions}
+          selected={selGrp}
+          multi
+          onSelect={setSelGrp}
+        />
+      )}
       <View style={{ height: 16 }} />
     </FilterBottomSheet>
   );
@@ -176,6 +185,34 @@ export default function TotalStockScreen() {
   const companyGuid = company?.guid;
   const [liveStocks, setLiveStocks] = useState<StockItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // ─ Real filter options from API ─────────────────────────────────────
+  const [whOptions,  setWhOptions]  = useState<{ id: string; label: string }[]>([]);
+  const [catOptions, setCatOptions] = useState<{ id: string; label: string }[]>([]);
+  const [grpOptions, setGrpOptions] = useState<{ id: string; label: string }[]>([]);
+
+  // Fetch real filter options once stocks are loaded
+  useEffect(() => {
+    if (!companyGuid || !liveStocks.length) return;
+    // Warehouses from API
+    getWarehouses(companyGuid).then((res: any) => {
+      const wh = (res?.data ?? []).map((w: any) => ({ id: w.name, label: w.name })).filter((w: any) => w.id);
+      if (wh.length) setWhOptions(wh);
+      else {
+        // Fallback: derive from loaded stocks
+        const names = [...new Set(liveStocks.map(s => s.warehouse).filter(Boolean))];
+        setWhOptions(names.map(n => ({ id: n, label: n })));
+      }
+    }).catch(() => {
+      const names = [...new Set(liveStocks.map(s => s.warehouse).filter(Boolean))];
+      setWhOptions(names.map(n => ({ id: n, label: n })));
+    });
+    // Categories + groups from loaded stocks
+    const cats = [...new Set(liveStocks.map(s => s.category).filter(Boolean))];
+    const grps = [...new Set(liveStocks.map(s => s.group).filter(Boolean))];
+    setCatOptions(cats.map(c => ({ id: c, label: c })));
+    setGrpOptions(grps.map(g => ({ id: g, label: g })));
+  }, [companyGuid, liveStocks.length]);
 
   useEffect(() => {
     if (!companyGuid) return;
@@ -372,12 +409,12 @@ export default function TotalStockScreen() {
       {/* ── Active filter chips ── */}
       {activeFilterCount > 0 && !multiSelectMode && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.activeFiltersRow}>
-          {selWh.map(w => { const f = ALL_WAREHOUSES.find(x => x.id === w); return (
+          {selWh.map(w => (
             <TouchableOpacity key={w} style={styles.activeChip} onPress={() => setSelWh(p => p.filter(x => x !== w))} activeOpacity={0.7}>
-              <Text style={styles.activeChipTxt}>{f?.label.split(' – ')[0] ?? w}</Text>
+              <Text style={styles.activeChipTxt}>{w}</Text>
               <Ionicons name="close" size={11} color="#A89060" />
             </TouchableOpacity>
-          ); })}
+          ))}
           {selCat.map(c => (
             <TouchableOpacity key={c} style={styles.activeChip} onPress={() => setSelCat(p => p.filter(x => x !== c))} activeOpacity={0.7}>
               <Text style={styles.activeChipTxt}>{c}</Text><Ionicons name="close" size={11} color="#A89060" />
@@ -495,7 +532,13 @@ export default function TotalStockScreen() {
       />
 
       {/* ── Modals ── */}
-      <FilterModal visible={filterOpen} onClose={() => setFilterOpen(false)} onApply={(wh, cat, grp) => { setSelWh(wh); setSelCat(cat); setSelGrp(grp); }} initWh={selWh} initCat={selCat} initGrp={selGrp} />
+      <FilterModal
+        visible={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        onApply={(wh, cat, grp) => { setSelWh(wh); setSelCat(cat); setSelGrp(grp); }}
+        initWh={selWh} initCat={selCat} initGrp={selGrp}
+        whOptions={whOptions} catOptions={catOptions} grpOptions={grpOptions}
+      />
       <AddItemModal visible={addItemOpen} onClose={() => setAddItemOpen(false)} />
       <EditStockModal visible={!!editItem} item={editItem} onClose={() => setEditItem(null)} />
       <StockTransferModal visible={!!transferItem} item={transferItem} onClose={() => setTransferItem(null)} />

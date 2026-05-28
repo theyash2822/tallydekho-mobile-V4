@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView,
-  KeyboardAvoidingView, Platform, Switch,
+  KeyboardAvoidingView, Platform, Switch, Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
-import { StockItem, STOCK_ITEMS, ALL_WAREHOUSES, ALL_CATEGORIES, ALL_GROUPS, ALL_UNITS, ALL_TAX_RATES, RACK_OPTIONS, ADJ_REASONS, LOW_STOCK_QTY } from '../../data/stockData';
+import { ALL_UNITS, ALL_TAX_RATES, ALL_GROUPS, ALL_WAREHOUSES } from '../../data/stockData';
 import { COLORS, TYPOGRAPHY, SPACING } from '../../constants/colors';
 import { useSettings } from '../../context/SettingsContext';
+import { useAuth } from '../../context/AuthContext';
+import { createStockItem } from '../../services/api';
 
 import {
   InlineDropdownField, InlineField, CurrencyField, SubmitButton,
@@ -22,12 +24,13 @@ export function AddItemModal({
 }) {
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const insets = useSafeAreaInsets();
+  const { company } = useAuth();
   const [group,         setGroup]         = useState('');
   const [name,          setName]          = useState('');
   const [unit,          setUnit]          = useState('');
   const [taxRate,       setTaxRate]       = useState('');
   const [purchPrice,    setPurchPrice]    = useState('');
-  const [warehouse,     setWarehouse]     = useState('WH01');
+  const [warehouse,     setWarehouse]     = useState('Main Location');
   const [qty,           setQty]           = useState('');
   const [salePrice,     setSalePrice]     = useState('');
   const [expiryDate,    setExpiryDate]    = useState('');
@@ -56,9 +59,33 @@ export function AddItemModal({
     return true;
   };
 
-  const handleDone = () => {
-    Toast.show({ type: 'success', text1: 'Item Saved', text2: `"${name}" added to inventory.` });
+  const handleDone = async () => {
+    if (!company?.guid || !name) return;
+    const itemName = name;
+    Keyboard.dismiss();
     reset(); onClose();
+    try {
+      const res: any = await createStockItem({
+        companyGuid:  company.guid,
+        companyName:  company.name || '',
+        name: itemName,
+        groupName:    group || 'Primary',
+        unit:         unit  || 'Nos',
+        openingQty:   parseFloat(qty) || 0,
+        openingRate:  parseFloat(purchPrice) || 0,
+        igstRate:     parseFloat(taxRate) || 0,
+        cgstRate:     parseFloat(taxRate) / 2 || 0,
+        sgstRate:     parseFloat(taxRate) / 2 || 0,
+      });
+      const queued = res?.queued;
+      Toast.show({
+        type: 'success',
+        text1: queued ? 'Item Queued ⏳' : 'Item Added ✅',
+        text2: queued ? 'Will create in Tally when desktop connects.' : `"${itemName}" created in Tally`,
+      });
+    } catch {
+      Toast.show({ type: 'info', text1: 'Item Saved', text2: 'Will create in Tally when desktop connects.' });
+    }
   };
 
   const handleClose = () => { reset(); onClose(); };

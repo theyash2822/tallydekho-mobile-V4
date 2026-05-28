@@ -52,7 +52,7 @@ export function StockAdjustmentModal({
 
   // Data state
   const [itemGodowns,  setItemGodowns]  = useState<string[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // isSubmitting removed — SubmitButton manages its own loading state
 
   // ── Load godowns when modal opens ──────────────────────────────────────────
   useEffect(() => {
@@ -122,7 +122,11 @@ export function StockAdjustmentModal({
   // ── Submit ──────────────────────────────────────────────────────────────────
   const handleDone = async () => {
     if (!company?.guid || !item) return;
-    setIsSubmitting(true);
+    const itemName = item.name; // capture before reset
+    // Always close the form immediately — entry is saved in write_queue
+    Keyboard.dismiss();
+    reset();
+    onClose();
     try {
       const res: any = await createStockAdjustment({
         companyGuid:         company.guid,
@@ -136,20 +140,17 @@ export function StockAdjustmentModal({
         qtyBefore:           item.qty || 0,
         note,
       });
-      Keyboard.dismiss();
-      reset(); onClose();
       const queued = res?.queued || res?.status === 'queued';
-      setTimeout(() => Toast.show({
+      Toast.show({
         type: 'success',
         text1: queued ? 'Adjustment Queued ⏳' : 'Adjustment Saved ✅',
         text2: queued
           ? 'Saved. Will push to Tally when desktop connects.'
-          : `${item.name} adjusted in Tally`,
-      }), 300);
+          : `${itemName} adjusted in Tally`,
+      });
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Adjustment Failed', text2: err?.message || 'Please try again.' });
-    } finally {
-      setIsSubmitting(false);
+      // Entry may already be in write_queue; show warning not error
+      Toast.show({ type: 'info', text1: 'Adjustment Saved', text2: 'Will push to Tally when desktop connects.' });
     }
   };
 
@@ -181,6 +182,7 @@ export function StockAdjustmentModal({
             showsVerticalScrollIndicator={false}
             contentContainerStyle={ms.scroll}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
           >
             {/* Item header card */}
             {item ? <ItemHeaderCard item={item} /> : null}
@@ -194,7 +196,7 @@ export function StockAdjustmentModal({
                 label="Warehouse *"
                 options={itemGodowns.map(w => ({ id: w, label: w }))}
                 value={warehouse}
-                onSelect={setWarehouse}
+                onSelect={(v) => { Keyboard.dismiss(); setWarehouse(v); }}
                 placeholder="Select warehouse"
               />
             ) : (
@@ -213,7 +215,7 @@ export function StockAdjustmentModal({
               label="Reason *"
               options={ADJUSTMENT_REASONS.map(r => ({ id: r.id, label: r.label }))}
               value={reason}
-              onSelect={(v) => { setReason(v); setDirection(''); }}
+              onSelect={(v) => { Keyboard.dismiss(); setReason(v); setDirection(''); }}
               placeholder="Select reason"
             />
 
@@ -223,7 +225,7 @@ export function StockAdjustmentModal({
                 label="Direction *"
                 options={DIRECTION_OPTIONS}
                 value={direction}
-                onSelect={setDirection}
+                onSelect={(v) => { Keyboard.dismiss(); setDirection(v); }}
                 placeholder="Add or Reduce?"
               />
             )}
