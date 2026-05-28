@@ -10,6 +10,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { getVouchers } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
 // ── Mock Data ────────────────────────────────────────────────────────────────
@@ -71,6 +72,7 @@ export default function CashRegisterScreen() {
   const companyGuid = company?.guid;
   const [liveItems, setLiveItems] = useState<TxItem[]>([]);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const PAGE_SIZE = 50;
   const [page,          setPage]          = useState(1);
@@ -92,6 +94,7 @@ export default function CashRegisterScreen() {
     if (!companyGuid) return;
     setPage(1);
     setHasMore(false);
+    setIsLoading(true);
     const fyParams = selectedFY ? { from: selectedFY.startDate, to: selectedFY.endDate } : {};
     getVouchers(companyGuid, undefined, { ...fyParams, limit: PAGE_SIZE, page: 1 }).then((res: any) => {
       const rows = (res?.data ?? []).filter((r: any) =>
@@ -99,7 +102,7 @@ export default function CashRegisterScreen() {
       );
       setLiveItems(rows.map(mapCashItem));
       setHasMore(rows.length === PAGE_SIZE);
-    }).catch((err: any) => setApiError(err?.message || 'Failed to load'));
+    }).catch((err: any) => setApiError(err?.message || 'Failed to load')).finally(() => setIsLoading(false));
   }, [companyGuid, selectedFY?.startDate]);
 
   const loadMore = () => {
@@ -287,7 +290,12 @@ export default function CashRegisterScreen() {
           </TouchableOpacity>
         </View>
 
-        {filteredGroups.length === 0 ? (
+        {isLoading ? (
+          <View style={{ paddingHorizontal: 16 }}>
+            <CardSkeleton height={120} />
+            {[...Array(4)].map((_, i) => <LedgerRowSkeleton key={i} />)}
+          </View>
+        ) : filteredGroups.length === 0 ? (
           <View style={s.emptyWrap}>
             <Ionicons name="document-outline" size={48} color={COLORS.borderDefault} />
             <Text style={s.emptyTxt}>No transactions found</Text>

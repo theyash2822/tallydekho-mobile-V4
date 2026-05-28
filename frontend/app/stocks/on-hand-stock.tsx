@@ -8,6 +8,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useSettings } from '../../src/context/SettingsContext';
+import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 // No mock data — real API data only (V2 rule)
 // ON_HAND_ITEMS now populated from API response
 
@@ -57,6 +58,7 @@ export default function OnHandStockScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ whId?: string }>();
 
+  const [isLoading, setIsLoading] = useState(false);
   const [query,    setQuery]    = useState('');
   const [calOpen,  setCalOpen]  = useState(false);
   const [dateFrom, setDateFrom] = useState('');
@@ -139,7 +141,16 @@ export default function OnHandStockScreen() {
         contentContainerStyle={styles.content}
       >
         <Text style={styles.sectionLabel}>{filtered.length} items</Text>
-        {filtered.map(item => (
+        {isLoading && (
+          <>
+            <LedgerRowSkeleton />
+            <LedgerRowSkeleton />
+            <LedgerRowSkeleton />
+            <LedgerRowSkeleton />
+            <LedgerRowSkeleton />
+          </>
+        )}
+        {!isLoading && filtered.map(item => (
           <OnHandCard
             key={item.id}
             item={item}

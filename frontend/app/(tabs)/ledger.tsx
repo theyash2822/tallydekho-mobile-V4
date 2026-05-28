@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, FlatList, TouchableOpacity, StyleSheet,
   TextInput, RefreshControl, Modal, KeyboardAvoidingView,
   Platform, Linking, Animated, Alert, Share, ActivityIndicator,
 } from 'react-native';
@@ -33,6 +33,9 @@ interface LedgerItem {
   phone?: string;
   lastUpdated: string;
 }
+
+// Module-level ledger cache — persists across navigation, cleared on sync
+const _ledgerCache: Record<string, { data: LedgerItem[]; total: number; ts: number }> = {};
 
 // ─── Ledger Creation Sheet ────────────────────────────────────────────────────
 interface SectionProps {
@@ -425,6 +428,7 @@ export default function LedgerScreen() {
   const companyGuid = company?.guid;
   const filterBtnRef = useRef<View>(null);
   const [data, setData] = useState<LedgerItem[]>([]);
+  const [totalLedgers, setTotalLedgers] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('All');
   const [activeNature, setActiveNature] = useState<NatureType>('All');
@@ -500,14 +504,30 @@ export default function LedgerScreen() {
     setApiError(null);
     setPage(1);
     setHasMore(false);
+
+    // Cache check — key: companyGuid + lastSyncAt + selectedFY
+    const cacheKey = `${companyGuid}:${lastSyncAt}:${selectedFY?.startDate ?? ''}`;
+    const cached = _ledgerCache[cacheKey];
+    if (cached && Date.now() - cached.ts < 5 * 60 * 1000) {
+      setData(cached.data);
+      setTotalLedgers(cached.total);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const fyParams = selectedFY?.startDate && selectedFY?.endDate
         ? { from: selectedFY.startDate, to: selectedFY.endDate }
         : {};
       const res = await getLedgers(companyGuid, { search, limit: String(PAGE_SIZE), page: 1, ...fyParams }) as any;
       const rows = res?.data ?? (Array.isArray(res) ? res : []);
-      setData(Array.isArray(rows) ? rows.map(mapLedger) : []);
+      const mappedRows = Array.isArray(rows) ? rows.map(mapLedger) : [];
+      setData(mappedRows);
       setHasMore(Array.isArray(rows) && rows.length === PAGE_SIZE);
+      // API returns total inside res.meta.total (api-v1 shape)
+      const total = res?.meta?.total ?? res?.total ?? null;
+      if (total != null) setTotalLedgers(total);
+      _ledgerCache[cacheKey] = { data: mappedRows, total: total ?? mappedRows.length, ts: Date.now() };
     } catch (err: any) {
       setApiError(err?.message || 'Failed to load ledgers');
       console.error('[Ledgers]', err?.message);
@@ -570,7 +590,7 @@ export default function LedgerScreen() {
     return v;
   };
 
-  const filtered = data
+  const filtered = useMemo(() => data
     .filter(item => {
       const matchSearch = item.name.toLowerCase().includes(search.toLowerCase()) ||
         item.group.toLowerCase().includes(search.toLowerCase());
@@ -593,7 +613,8 @@ export default function LedgerScreen() {
         const bAmt = parseInt(b.balance.replace(/[^0-9]/g, ''), 10) || 0;
         return sortDir === 'asc' ? aAmt - bAmt : bAmt - aAmt;
       }
-    });
+    }),
+  [data, search, filter, hideZero, activeNature, sortType, sortDir]);
 
   return (
     <SafeAreaView testID="ledger-screen" style={styles.safe}>
@@ -789,141 +810,154 @@ export default function LedgerScreen() {
       </Modal>
 
       {/* Ledger List */}
-      <ScrollView
+      <FlatList
+        data={isLoading ? [] : filtered}
+        keyExtractor={item => item.id}
         style={styles.scroll}
+        contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.brandPrimary} />
         }
-      >
-        <View style={styles.list}>
-          {isLoading
-            ? Array.from({ length: 8 }).map((_, i) => <LedgerRowSkeleton key={i} />)
-            : filtered.map(item => {
-            const hasPhone = !!(item.phone);
-            const isSelected = selected.includes(item.id);
-
-            const renderRightActions = (
-              _progress: Animated.AnimatedInterpolation<number>,
-              dragX: Animated.AnimatedInterpolation<number>
-            ) => {
-              const scale = dragX.interpolate({
-                inputRange: [-160, 0],
-                outputRange: [1, 0.5],
-                extrapolate: 'clamp',
-              });
-              return (
-                <Animated.View style={[styles.swipeActions, { transform: [{ scale }] }]}>
-                  {/* Call button */}
-                  <TouchableOpacity
-                    style={styles.callAction}
-                    onPress={() => {
-                      const digits = (item.phone||'').replace(/[^0-9+]/g,'');
-                      if (!digits) { Alert.alert('No phone', 'Phone number not available'); return; }
-                      Linking.openURL(`tel:${digits}`).catch(() => Alert.alert('Error', 'Could not open phone app'));
-                    }}
-                    activeOpacity={0.85}
-                  >
-                    <Ionicons name="call" size={22} color="#fff" />
-                    <Text style={styles.actionLabel}>Call</Text>
-                  </TouchableOpacity>
-                  {/* WhatsApp button */}
-                  <TouchableOpacity
-                    style={styles.waAction}
-                    onPress={() => {
-                      const digits = (item.phone||'').replace(/[^0-9]/g,'');
-                      const num = digits.startsWith('91') && digits.length > 10 ? digits : `91${digits}`;
-                      if (!digits) { Alert.alert('No phone', 'Phone number not available'); return; }
-                      Linking.openURL(`https://wa.me/${num}`).catch(() => Alert.alert('Error', 'Could not open WhatsApp'));
-                    }}
-                    activeOpacity={0.85}
-                  >
-                    <FontAwesome5 name="whatsapp" size={22} color="#fff" />
-                    <Text style={styles.actionLabel}>WhatsApp</Text>
-                  </TouchableOpacity>
-                </Animated.View>
-              );
-            };
-
-            const cardContent = (
-              <TouchableOpacity
-                testID={`ledger-item-${item.id}`}
-                style={[styles.itemCard, isSelected && styles.itemCardSelected]}
-                activeOpacity={0.7}
-                onPress={() => {
-                  if (selectMode) { toggleSelect(item.id); }
-                  else { router.push(`/ledger/${item.id}` as any); }
-                }}
-                onLongPress={() => enterSelectMode(item.id)}
-                delayLongPress={500}
-              >
-                {/* Avatar / Checkbox */}
-                <View style={[styles.avatar, isSelected && styles.avatarSelected]}>
-                  {isSelected
-                    ? <Ionicons name="checkmark" size={20} color={COLORS.white} />
-                    : <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
-                  }
-                </View>
-                {/* Info */}
-                <View style={styles.itemInfo}>
-                  <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-                  <Text style={styles.itemGroup}>{item.group}</Text>
-                </View>
-                {/* Right: balance + Cr/Dr badge */}
-                <View style={styles.itemRight}>
-                  <Text style={styles.itemBalance}>{item.balance}</Text>
-                  <View style={[
-                    styles.typeBadge,
-                    { backgroundColor: item.type === 'credit' ? COLORS.positiveBg : COLORS.negativeBg }
-                  ]}>
-                    <Text style={[
-                      styles.typeText,
-                      { color: item.type === 'credit' ? COLORS.positive : COLORS.negative }
-                    ]}>
-                      {item.type === 'credit' ? 'Cr' : 'Dr'}
-                    </Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            );
-
-            return hasPhone && !selectMode ? (
-              <Swipeable
-                key={item.id}
-                renderRightActions={renderRightActions}
-                rightThreshold={40}
-                overshootRight={false}
-                friction={2}
-                containerStyle={{ borderRadius: RADIUS.md, overflow: 'hidden' }}
-              >
-                {cardContent}
-              </Swipeable>
-            ) : (
-              <View key={item.id}>{cardContent}</View>
-            );
-          })}
-
-          {!isLoading && filtered.length === 0 && (
-            <View style={styles.emptyState}>
-              <Ionicons name="journal-outline" size={48} color={COLORS.textTertiary} />
-              <Text style={styles.emptyText}>{data.length === 0 ? t('ledger.noLedgers') : t('ledger.noMatch')}</Text>
-            </View>
-          )}
-          {!isLoading && hasMore && (
-            <TouchableOpacity style={styles.loadMoreBtn} onPress={loadMoreLedgers} disabled={isLoadingMore} activeOpacity={0.8}>
-              {isLoadingMore
-                ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
-                : <Text style={styles.loadMoreTxt}>Load More</Text>
+        ListHeaderComponent={!isLoading ? (
+          <View style={styles.listHeader}>
+            <Text style={styles.sectionLabel}>
+              {totalLedgers != null
+                ? `${totalLedgers} ledger${totalLedgers !== 1 ? 's' : ''}`
+                : `${data.length} ledger${data.length !== 1 ? 's' : ''}`
               }
-            </TouchableOpacity>
-          )}
-          {!isLoading && !hasMore && data.length > 0 && (
-            <Text style={styles.endTxt}>All {data.length} ledgers loaded</Text>
-          )}
-        </View>
+            </Text>
+          </View>
+        ) : null}
+        ListEmptyComponent={isLoading ? (
+          <View style={styles.list}>
+            {Array.from({ length: 8 }).map((_, i) => <LedgerRowSkeleton key={i} />)}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Ionicons name="journal-outline" size={48} color={COLORS.textTertiary} />
+            <Text style={styles.emptyText}>{data.length === 0 ? t('ledger.noLedgers') : t('ledger.noMatch')}</Text>
+          </View>
+        )}
+        ListFooterComponent={() => (
+          <>
+            {!isLoading && hasMore && (
+              <TouchableOpacity style={styles.loadMoreBtn} onPress={loadMoreLedgers} disabled={isLoadingMore} activeOpacity={0.8}>
+                {isLoadingMore
+                  ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+                  : <Text style={styles.loadMoreTxt}>Load More</Text>
+                }
+              </TouchableOpacity>
+            )}
+            {!isLoading && !hasMore && data.length > 0 && (
+              <Text style={styles.endTxt}>All {data.length} ledgers loaded</Text>
+            )}
+            <View style={{ height: selectMode ? 100 : 80 }} />
+          </>
+        )}
+        renderItem={({ item }) => {
+          const hasPhone = !!(item.phone);
+          const isSelected = selected.includes(item.id);
 
-        <View style={{ height: selectMode ? 100 : 80 }} />
-      </ScrollView>
+          const renderRightActions = (
+            _progress: Animated.AnimatedInterpolation<number>,
+            dragX: Animated.AnimatedInterpolation<number>
+          ) => {
+            const scale = dragX.interpolate({
+              inputRange: [-160, 0],
+              outputRange: [1, 0.5],
+              extrapolate: 'clamp',
+            });
+            return (
+              <Animated.View style={[styles.swipeActions, { transform: [{ scale }] }]}>
+                {/* Call button */}
+                <TouchableOpacity
+                  style={styles.callAction}
+                  onPress={() => {
+                    const digits = (item.phone||'').replace(/[^0-9+]/g,'');
+                    if (!digits) { Alert.alert('No phone', 'Phone number not available'); return; }
+                    Linking.openURL(`tel:${digits}`).catch(() => Alert.alert('Error', 'Could not open phone app'));
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="call" size={22} color="#fff" />
+                  <Text style={styles.actionLabel}>Call</Text>
+                </TouchableOpacity>
+                {/* WhatsApp button */}
+                <TouchableOpacity
+                  style={styles.waAction}
+                  onPress={() => {
+                    const digits = (item.phone||'').replace(/[^0-9]/g,'');
+                    const num = digits.startsWith('91') && digits.length > 10 ? digits : `91${digits}`;
+                    if (!digits) { Alert.alert('No phone', 'Phone number not available'); return; }
+                    Linking.openURL(`https://wa.me/${num}`).catch(() => Alert.alert('Error', 'Could not open WhatsApp'));
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <FontAwesome5 name="whatsapp" size={22} color="#fff" />
+                  <Text style={styles.actionLabel}>WhatsApp</Text>
+                </TouchableOpacity>
+              </Animated.View>
+            );
+          };
+
+          const cardContent = (
+            <TouchableOpacity
+              testID={`ledger-item-${item.id}`}
+              style={[styles.itemCard, isSelected && styles.itemCardSelected]}
+              activeOpacity={0.7}
+              onPress={() => {
+                if (selectMode) { toggleSelect(item.id); }
+                else { router.push(`/ledger/${item.id}` as any); }
+              }}
+              onLongPress={() => enterSelectMode(item.id)}
+              delayLongPress={500}
+            >
+              {/* Avatar / Checkbox */}
+              <View style={[styles.avatar, isSelected && styles.avatarSelected]}>
+                {isSelected
+                  ? <Ionicons name="checkmark" size={20} color={COLORS.white} />
+                  : <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
+                }
+              </View>
+              {/* Info */}
+              <View style={styles.itemInfo}>
+                <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+                <Text style={styles.itemGroup}>{item.group}</Text>
+              </View>
+              {/* Right: balance + Cr/Dr badge */}
+              <View style={styles.itemRight}>
+                <Text style={styles.itemBalance}>{item.balance}</Text>
+                <View style={[
+                  styles.typeBadge,
+                  { backgroundColor: item.type === 'credit' ? COLORS.positiveBg : COLORS.negativeBg }
+                ]}>
+                  <Text style={[
+                    styles.typeText,
+                    { color: item.type === 'credit' ? COLORS.positive : COLORS.negative }
+                  ]}>
+                    {item.type === 'credit' ? 'Cr' : 'Dr'}
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          );
+
+          return hasPhone && !selectMode ? (
+            <Swipeable
+              renderRightActions={renderRightActions}
+              rightThreshold={40}
+              overshootRight={false}
+              friction={2}
+              containerStyle={{ borderRadius: RADIUS.md, overflow: 'hidden' }}
+            >
+              {cardContent}
+            </Swipeable>
+          ) : (
+            <View>{cardContent}</View>
+          );
+        }}
+      />
 
       {/* ── Multi-select Share Bar ─────────────────────────────────────── */}
       {selectMode && (
@@ -1099,6 +1133,8 @@ const styles = StyleSheet.create({
   sortBtnLabelActive: { color: COLORS.brandPrimary },
   scroll: { flex: 1 },
   list: { padding: SPACING.md, gap: 8 },
+  listHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: SPACING.md, paddingTop: 10, paddingBottom: 2 },
+  sectionLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500' as const },
   itemCard: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     backgroundColor: COLORS.cardBg,

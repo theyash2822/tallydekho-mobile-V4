@@ -10,7 +10,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
 import { useAuth } from '../../src/context/AuthContext';
-import { getStockItem } from '../../src/services/api';
+import { getStockItem, getStockMovements } from '../../src/services/api';
 import { STOCK_ITEMS } from '../../src/data/stockData';
 import { useSettings } from '../../src/context/SettingsContext';
 
@@ -127,6 +127,8 @@ export default function ItemDetailScreen() {
   const { company } = useAuth();
   const companyGuid = company?.guid;
   const [liveItem, setLiveItem] = useState<any>(null);
+  const [movements, setMovements] = useState<any[]>([]);
+  const [rateData, setRateData] = useState<any>(null);
 
   useEffect(() => {
     if (!companyGuid || !id) return;
@@ -135,8 +137,38 @@ export default function ItemDetailScreen() {
     }).catch(() => {});
   }, [companyGuid, id]);
 
+  useEffect(() => {
+    if (!companyGuid || !id) return;
+    getStockMovements(companyGuid, id as string, { limit: '20' }).then((res: any) => {
+      if (res?.data) {
+        setMovements(res.data.movements || []);
+        setRateData(res.data);
+      }
+    }).catch(() => {});
+  }, [companyGuid, id]);
+
   const stockItem = liveItem || STOCK_ITEMS.find(i => i.id === id) || STOCK_ITEMS[0];
-  const detail    = ITEM_DETAILS[id || ''] || ITEM_DETAILS.default;
+  const mockDetail = ITEM_DETAILS[id || ''] || ITEM_DETAILS.default;
+
+  // Use real API data when available, fall back to mock only for fields not yet in backend
+  const detail = liveItem ? {
+    ...mockDetail,
+    totalQty:         +(liveItem.closing_qty  ?? mockDetail.totalQty),
+    stockValue:       liveItem.closing_value != null
+                        ? `₹${(+liveItem.closing_value).toLocaleString('en-IN')}`
+                        : mockDetail.stockValue,
+    reorderLevel:     +(liveItem.reorder_level ?? mockDetail.reorderLevel),
+    lastPurchaseRate: rateData?.lastPurchaseRate
+                        ? `₹${(+rateData.lastPurchaseRate).toLocaleString('en-IN')}/unit`
+                        : (liveItem.closing_rate != null ? `₹${(+liveItem.closing_rate).toLocaleString('en-IN')}/unit` : mockDetail.lastPurchaseRate),
+    avgPurchaseRate:  rateData?.avgPurchaseRate
+                        ? `₹${Math.round(+rateData.avgPurchaseRate).toLocaleString('en-IN')}/unit`
+                        : mockDetail.avgPurchaseRate,
+    sellingPrice:     rateData?.lastSellRate && +rateData.lastSellRate > 0
+                        ? `₹${(+rateData.lastSellRate).toLocaleString('en-IN')}/unit`
+                        : '—',
+    narration:        liveItem.alias || '—',
+  } : mockDetail;
 
   const [calOpen,  setCalOpen]  = useState(false);
   const [dateFrom, setDateFrom] = useState('');
@@ -221,22 +253,32 @@ export default function ItemDetailScreen() {
               <Text style={styles.calBtnTxt}>{dateLabel}</Text>
             </TouchableOpacity>
           </View>
-          {detail.movement.map(m => {
-            const cfg = MOV_CONFIG[m.type as keyof typeof MOV_CONFIG] || MOV_CONFIG.Transfer;
-            const isPos = m.qty.startsWith('+');
+          {(movements.length > 0 ? movements : detail.movement).map((m: any, i: number) => {
+            // Real movement fields: m.voucher_number, m.type, m.date, m.qty, m.rate
+            // Mock movement fields: m.id, m.type, m.ref, m.date, m.qty (string)
+            const isReal = !!m.voucher_number || (m.qty !== undefined && typeof m.qty === 'number');
+            const qtyNum  = isReal ? +(m.qty || 0) : 0;
+            const isInward = isReal
+              ? (m.type || '').toLowerCase().includes('purchase')
+              : (m.qty || '').startsWith('+');
+            const qtyLabel = isReal
+              ? (isInward ? `+${qtyNum}` : `-${qtyNum}`)
+              : m.qty;
+            const isPos = qtyLabel?.toString().startsWith('+');
+            const cfg = MOV_CONFIG[(m.type || m.voucher_type) as keyof typeof MOV_CONFIG] || MOV_CONFIG.Transfer;
+
             return (
-              <View key={m.id} style={styles.movRow}>
-                <View style={[styles.movIcon, { backgroundColor: cfg.bg }]}>
-                  <Ionicons name={cfg.icon as any} size={15} color={cfg.color} />
+              <View key={`mv-${i}-${m.voucher_number || m.id || i}`} style={styles.mvRow}>
+                <View style={[styles.mvDot, { backgroundColor: isPos ? COLORS.positive : COLORS.negative }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.mvType}>{m.type || m.voucher_type || '—'}</Text>
+                  <Text style={styles.mvRef}>{m.ref || m.voucher_number || '—'} · {
+                    isReal && m.date ? new Date(m.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : m.date
+                  }</Text>
                 </View>
-                <View style={styles.movInfo}>
-                  <Text style={styles.movType}>{m.type}</Text>
-                  <Text style={styles.movRef}>{m.ref}</Text>
-                </View>
-                <Text style={[styles.movQty, { color: isPos ? COLORS.positive : COLORS.negative }]}>
-                  {m.qty}
+                <Text style={[styles.mvQty, { color: isPos ? COLORS.positive : COLORS.negative }]}>
+                  {qtyLabel}
                 </Text>
-                <Text style={styles.movDate}>{m.date}</Text>
               </View>
             );
           })}
@@ -304,4 +346,10 @@ const styles = StyleSheet.create({
   movRef:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 1 },
   movQty:    { fontSize: TYPOGRAPHY.base, fontWeight: '800', minWidth: 46, textAlign: 'right' },
   movDate:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, minWidth: 42, textAlign: 'right' },
+  // real-movement row styles
+  mvRow:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
+  mvDot:     { width: 8, height: 8, borderRadius: 4 },
+  mvType:    { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  mvRef:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 1 },
+  mvQty:     { fontSize: TYPOGRAPHY.base, fontWeight: '800', minWidth: 46, textAlign: 'right' as const },
 });

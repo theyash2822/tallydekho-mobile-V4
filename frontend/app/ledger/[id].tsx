@@ -15,6 +15,7 @@ import * as Sharing from 'expo-sharing';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { getLedgerDetail, getLedgerStatement, sendPaymentReminder } from '../../src/services/api';
+import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import DateRangePickerModal, { parseDMY } from '../../src/components/DateRangePickerModal';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -225,6 +226,7 @@ export default function LedgerDetailScreen() {
   const [liveTxns, setLiveTxns] = useState<any[]>([]);
   const [fyOpening, setFyOpening] = useState<{ balance: number; type: string } | null>(null);
   const [fyClosing, setFyClosing] = useState<{ balance: number; type: string } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!companyGuid || !id) return;
@@ -274,7 +276,7 @@ export default function LedgerDetailScreen() {
           }
         }).catch(() => {});
       }
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setIsLoading(false));
   }, [companyGuid, id, selectedFY?.startDate]);
 
   const [showDrOnly, setShowDrOnly] = useState(false);
@@ -590,7 +592,11 @@ export default function LedgerDetailScreen() {
 
       {/* ── Scrollable transaction list only ── */}
       <ScrollView style={styles.txnScroll} contentContainerStyle={{ paddingHorizontal: SPACING.md, paddingBottom: 24 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          {sortedMonths.length === 0 ? (
+          {isLoading ? (
+            <View style={{ paddingTop: 8 }}>
+              {[...Array(5)].map((_, i) => <LedgerRowSkeleton key={i} />)}
+            </View>
+          ) : sortedMonths.length === 0 ? (
             <View style={styles.emptySearch}>
               <Ionicons name="search-outline" size={28} color={COLORS.textTertiary} />
               <Text style={styles.emptySearchText}>No transactions match "{searchQuery}"</Text>

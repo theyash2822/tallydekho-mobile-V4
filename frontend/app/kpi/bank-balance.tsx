@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getKPIBankBalance } from '../../src/services/api';
+import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { useSettings } from '../../src/context/SettingsContext';
 
 const { width: SW } = Dimensions.get('window');
@@ -79,9 +80,10 @@ export default function BankBalanceScreen() {
   const { company } = useAuth();
   const companyGuid = company?.guid;
   const [apiData, setApiData] = React.useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
   React.useEffect(() => {
     if (!companyGuid) return;
-    getKPIBankBalance(companyGuid).then((res: any) => { if (res?.data) setApiData(res.data); }).catch(() => {});
+    getKPIBankBalance(companyGuid).then((res: any) => { if (res?.data) setApiData(res.data); }).catch(() => {}).finally(() => setIsLoading(false));
   }, [companyGuid]);
 
   const router  = useRouter();
@@ -115,6 +117,12 @@ export default function BankBalanceScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+        {isLoading ? (
+          <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+            <CardSkeleton height={100} />
+            {[...Array(4)].map((_, i) => <LedgerRowSkeleton key={i} />)}
+          </View>
+        ) : <>
 
         {/* ── KPI Carousel ───────────────────────────────────────────────── */}
         <View style={s.kpiSection}>
@@ -243,6 +251,8 @@ export default function BankBalanceScreen() {
           })}
         </View>
 
+        </>
+        }
         <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>

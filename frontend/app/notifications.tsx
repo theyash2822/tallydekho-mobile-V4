@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { ErrorBanner } from '../src/components/ApiStateViews';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../src/constants/colors';
 
 import { useAuth } from '../src/context/AuthContext';
 import { getNotifications } from '../src/services/api';
+import { LedgerRowSkeleton } from '../src/components/ShimmerPlaceholder';
 
 const TYPE_CONFIG: Record<string, { icon: any; color: string; bg: string }> = {
   warning: { icon: 'warning-outline',          color: COLORS.warning,  bg: COLORS.warningBg },
@@ -64,8 +65,8 @@ export default function NotificationsScreen() {
       {apiError && <ErrorBanner message={apiError} />}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32, paddingTop: SPACING.sm }}>
         {isLoading ? (
-          <View style={s.empty}>
-            <ActivityIndicator size="large" color={COLORS.brandPrimary} />
+          <View style={{ paddingTop: 8 }}>
+            {[...Array(5)].map((_, i) => <LedgerRowSkeleton key={i} />)}
           </View>
         ) : notifications.length === 0 ? (
           <View style={s.empty}>

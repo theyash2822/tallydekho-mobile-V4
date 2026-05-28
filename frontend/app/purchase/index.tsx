@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal, { isoToDMY } from '../../src/components/DateRangePickerModal';
+import { KPICardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 
@@ -69,6 +70,7 @@ export default function PurchaseScreen() {
   const fyFrom = selectedFY?.startDate ?? '';
   const fyTo   = selectedFY?.endDate   ?? '';
 
+  const [isLoading, setIsLoading] = useState(false);
   const [tab,      setTab]      = useState<'recent' | 'vendors'>('recent');
   const [filter,   setFilter]   = useState('All');
   const [dropdown, setDropdown] = useState(false);
@@ -207,6 +209,15 @@ export default function PurchaseScreen() {
             ))}
           </View>
         </View>
+
+        {isLoading && (
+          <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
+              <KPICardSkeleton /><KPICardSkeleton />
+            </View>
+            {[...Array(4)].map((_, i) => <LedgerRowSkeleton key={i} />)}
+          </View>
+        )}
 
         {/* ── Tabs ─────────────────────────────────────────────────── */}
         <View style={s.tabRow}>

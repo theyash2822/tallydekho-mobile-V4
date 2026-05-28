@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Modal, Dimensions, ActivityIndicator,
+  TextInput, Modal, Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import { getStocks } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
+import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 
 const { width: SW } = Dimensions.get('window');
 const CHART_MAX = 100;
@@ -158,10 +159,14 @@ export default function FastSlowMovingScreen() {
 
       {/* ── Loading ──────────────────────────────────────────────────────── */}
       {isLoading ? (
-        <View style={s.loadingWrap}>
-          <ActivityIndicator size="large" color={COLORS.brandPrimary} />
-          <Text style={s.loadingTxt}>Analysing stock movement…</Text>
-        </View>
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+          <CardSkeleton height={60} />
+          <LedgerRowSkeleton />
+          <LedgerRowSkeleton />
+          <LedgerRowSkeleton />
+          <LedgerRowSkeleton />
+          <LedgerRowSkeleton />
+        </ScrollView>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
 

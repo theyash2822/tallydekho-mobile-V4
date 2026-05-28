@@ -10,6 +10,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { getExpenses } from '../../src/services/api';
+import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { useSettings } from '../../src/context/SettingsContext';
 
 const AMBER    = '#A89060';
@@ -154,7 +155,14 @@ export default function ExpenseScreen() {
       )}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+        {!expensesLoaded ? (
+          <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+            <CardSkeleton height={80} />
+            {[...Array(4)].map((_, i) => <LedgerRowSkeleton key={i} />)}
+          </View>
+        ) : <>
 
+        
         {/* ── Metric Cards Carousel ────────────────────────────────── */}
         <View style={s.carouselWrap}>
           <FlatList
@@ -281,6 +289,8 @@ export default function ExpenseScreen() {
           </View>
         )}
 
+        </>
+        }
       </ScrollView>
 
       {/* ── Date Range Picker ────────────────────────────────────── */}

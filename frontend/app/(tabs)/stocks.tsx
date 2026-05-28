@@ -3,13 +3,14 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
+import { KPICardSkeleton, CardSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 // No mock data imports — real data only (V2 rule)
 import { useAuth } from '../../src/context/AuthContext';
-import { getStocks } from '../../src/services/api';
+import { getStockDashboard, getWarehouses } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 
 const DARK = '#1A1A1A';
@@ -29,8 +30,8 @@ const WIDGET_TILES = [
     icon: 'cube-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
     route: '/stocks/total-stock',
     getValue: (d: any) => [
-      { label: 'QTY',   value: d?.totalQty   ?? '0' },
-      { label: 'Value', value: d?.totalValue ?? '0' },
+      { label: 'SKUs',  value: d?.totalQty  ?? '0' },
+      { label: 'Value', value: d?.totalValue ?? '₹0' },
     ],
   },
   {
@@ -38,33 +39,32 @@ const WIDGET_TILES = [
     icon: 'business-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
     route: '/stocks/warehouses',
     getValue: (d: any) => [
-      { label: 'Total',       value: String(d?.warehouses?.total ?? 0)         },
-      { label: 'Utilisation', value: `${d?.warehouses?.utilization ?? 0}%`     },
+      { label: 'Total', value: String(d?.warehouseCount ?? 0) },
     ],
   },
   {
-    id: 'low_stock', title: 'Low-Stock Items',
+    id: 'low_stock', title: 'Low-Stock Alerts',
     icon: 'alert-circle-outline', iconColor: '#DC2626', iconBg: '#FEF2F2',
     route: '/stocks/reorder-queue',
     getValue: (d: any) => [
-      { label: 'Items', value: String(d?.lowStockCount ?? 0) },
+      { label: 'Low Stock',   value: String(d?.lowStockCount ?? 0) },
+      { label: 'Out of Stock', value: String(d?.outOfStock   ?? 0) },
     ],
   },
   {
-    id: 'aged', title: 'Aged Inventory',
-    icon: 'time-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
-    route: '/stocks/aged-items',
-    getValue: (d: any) => [
-      { label: 'Value', value: d?.agedInventory?.value ?? '₹0'                },
-      { label: 'Age',   value: `${d?.agedInventory?.days ?? 0} days`         },
-    ],
-  },
-  {
-    id: 'fast_moving', title: 'Fast-Moving Items',
+    id: 'fast_moving', title: 'Fast / Slow Moving',
     icon: 'flash-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
-    route: '/stocks/movement-analytics',
-    getValue: (d: any) => [
-      { label: 'Items', value: String(d?.fastMovingCount ?? 0) },
+    route: '/stocks/fast-slow',
+    getValue: (_d: any) => [
+      { label: 'View Analysis', value: '→' },
+    ],
+  },
+  {
+    id: 'negative', title: 'Negative Stock',
+    icon: 'trending-down-outline', iconColor: '#DC2626', iconBg: '#FEF2F2',
+    route: '/stocks/negative-stock',
+    getValue: (_d: any) => [
+      { label: 'View Items', value: '→' },
     ],
   },
 ];
@@ -75,21 +75,33 @@ export default function StocksDashboard() {
   const companyGuid = company?.guid;
   const [stockSummary, setStockSummary] = useState<any>(null);
   const [apiError, setApiError]          = useState<string | null>(null);
+  const [isLoading, setIsLoading]        = useState(true);
 
-  const loadStock = () => {
+  const { formatAmount } = useSettings();
+
+  const loadStock = async () => {
     if (!companyGuid) return;
     setApiError(null);
-    getStocks(companyGuid, { limit: '1000' }).then((res: any) => {
-      const s = res?.data?.summary;
-      if (s) setStockSummary({
-        totalValue:    s.total_value    ?? '0',
-        totalSKUs:     s.total_skus     ?? 0,
-        lowStockCount: s.low_stock_count ?? 0,
+    setIsLoading(true);
+    try {
+      const [dashRes, whRes] = await Promise.all([
+        getStockDashboard(companyGuid),
+        getWarehouses(companyGuid),
+      ]);
+      const d = dashRes?.data;
+      const warehouses = Array.isArray(whRes?.data) ? whRes.data : [];
+      setStockSummary({
+        totalValue:      d?.totalValue  != null ? formatAmount(Math.round(+d.totalValue)) : '₹0',
+        totalQty:        String(d?.totalItems  ?? 0),
+        lowStockCount:   d?.lowStock    ?? 0,
+        outOfStock:      d?.outOfStock  ?? 0,
+        warehouseCount:  warehouses.length,
       });
-    }).catch((err: any) => {
+    } catch (err: any) {
       setApiError(err?.message || 'Failed to load stock data');
-      console.error('[Stocks]', err?.message);
-    });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => { loadStock(); }, [companyGuid, lastSyncAt]);
@@ -127,7 +139,18 @@ export default function StocksDashboard() {
         </View>
 
         {/* Widget Tiles */}
-        {WIDGET_TILES.map(tile => {
+        {isLoading ? (
+          <>
+            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 4 }}>
+              <View style={{ flex: 1 }}><KPICardSkeleton /></View>
+              <View style={{ flex: 1 }}><KPICardSkeleton /></View>
+            </View>
+            <CardSkeleton height={100} />
+            <CardSkeleton height={100} />
+            <CardSkeleton height={100} />
+          </>
+        ) : null}
+        {!isLoading && WIDGET_TILES.map(tile => {
           const metrics = tile.getValue(data);
           return (
             <TouchableOpacity

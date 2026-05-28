@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import { getStocks } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
+import ShimmerPlaceholder, { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 
 const SLICE_COLORS = ['#A89060', '#3A3A3A', '#7C5C3A', '#1A1A1A', '#5A7A5A', '#5A5A9A', '#9A5A5A', '#5A8A9A'];
 
@@ -129,10 +130,14 @@ export default function ValuationSummaryScreen() {
       )}
 
       {isLoading ? (
-        <View style={s.loadingWrap}>
-          <ActivityIndicator size="large" color={COLORS.brandPrimary} />
-          <Text style={s.loadingTxt}>Computing valuation…</Text>
-        </View>
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+          <CardSkeleton height={80} />
+          <CardSkeleton height={220} />
+          <LedgerRowSkeleton />
+          <LedgerRowSkeleton />
+          <LedgerRowSkeleton />
+          <LedgerRowSkeleton />
+        </ScrollView>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
 

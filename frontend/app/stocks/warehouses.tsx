@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getWarehouses } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
+import { CardSkeleton } from '../../src/components/ShimmerPlaceholder';
 
 // ─── RING CHART (outside screen component) ───────────────────────────────────────
 
@@ -156,9 +157,11 @@ export default function WarehousesScreen() {
         contentContainerStyle={styles.content}
       >
         {isLoading ? (
-          <View style={styles.centerBox}>
-            <ActivityIndicator size="large" color={COLORS.brandPrimary} />
-            <Text style={styles.centerTxt}>Loading warehouses...</Text>
+          <View style={{ gap: 12 }}>
+            <CardSkeleton height={110} />
+            <CardSkeleton height={110} />
+            <CardSkeleton height={110} />
+            <CardSkeleton height={110} />
           </View>
         ) : error ? (
           <View style={styles.centerBox}>

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput,
+  View, Text, ScrollView, FlatList, TouchableOpacity, StyleSheet, TextInput,
   Modal, Animated,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,6 +13,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { getStocks } from '../../src/services/api';
 import { AddItemModal } from '../../src/components/forms/AddItemModal';
+import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { EditStockModal } from '../../src/components/forms/EditStockModal';
 import { StockTransferModal } from '../../src/components/forms/StockTransferModal';
 import { BulkTransferModal } from '../../src/components/forms/BulkTransferModal';
@@ -20,7 +21,8 @@ import FilterBottomSheet, { FilterChipGroup } from '../../src/components/FilterB
 import { StockItem, ALL_WAREHOUSES, ALL_CATEGORIES, ALL_GROUPS } from '../../src/data/stockData';
 import { useSettings } from '../../src/context/SettingsContext';
 
-// ─── (Types, mock data, and constants are now in src/data/stockData.ts) ────────
+// ─── Module-level stock cache (persists across navigation, clears on sync) ─────
+const _stockCache: Record<string, { data: StockItem[]; ts: number }> = {};
 
 // ─── SWIPEABLE STOCK CARD ─────────────────────────────────────────────────────
 
@@ -158,15 +160,27 @@ function FilterModal({ visible, onClose, onApply, initWh, initCat, initGrp }: {
 export default function TotalStockScreen() {
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
-  const { company } = useAuth();
+  const { company, lastSyncAt } = useAuth();
   const companyGuid = company?.guid;
   const [liveStocks, setLiveStocks] = useState<StockItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!companyGuid) return;
+
+    // ── Module-level cache: 5-min TTL, invalidated on every Tally sync ──
+    const cacheKey = `${companyGuid}:${lastSyncAt}`;
+    const cached = _stockCache[cacheKey];
+    if (cached && Date.now() - cached.ts < 5 * 60 * 1000) {
+      setLiveStocks(cached.data);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
     getStocks(companyGuid, { limit: '1000' }).then((res: any) => {
       const items = res?.data?.items ?? [];
-      if (items.length) setLiveStocks(items.map((r: any) => ({
+      const mapped: StockItem[] = items.map((r: any) => ({
         id: r.guid || String(r.id),
         name: r.name || '',
         sku: r.hsn || '',
@@ -179,9 +193,11 @@ export default function TotalStockScreen() {
         warehouseId: r.warehouse_name || 'WH01',
         reorderLevel: +(r.reorder_level || 0),
         status: +r.closing_qty <= 0 ? 'out_of_stock' : +r.closing_qty <= +(r.reorder_level||0) ? 'low_stock' : 'in_stock',
-      })));
-    }).catch(() => {});
-  }, [companyGuid]);
+      }));
+      _stockCache[cacheKey] = { data: mapped, ts: Date.now() };
+      if (mapped.length) setLiveStocks(mapped);
+    }).catch(() => {}).finally(() => setIsLoading(false));
+  }, [companyGuid, lastSyncAt]);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const params = useLocalSearchParams<{ whId?: string }>();
@@ -209,15 +225,40 @@ export default function TotalStockScreen() {
   const [bulkOpen,      setBulkOpen]      = useState(false);
   const [bulkPreItems,  setBulkPreItems]  = useState<StockItem[]>([]);
 
+  // Sort state
+  const [sortType, setSortType] = useState<'alpha' | 'amount'>('alpha');
+  const [sortDir,  setSortDir]  = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (type: 'alpha' | 'amount') => {
+    if (sortType === type) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortType(type);
+      setSortDir('asc');
+    }
+  };
+
   // Derived
-  const filtered = sourceItems.filter(item => {
-    const q = query.toLowerCase();
-    const qMatch  = !query || item.name.toLowerCase().includes(q) || item.sku.toLowerCase().includes(q);
-    const whMatch  = selWh.length  === 0 || selWh.includes(item.warehouse);
-    const catMatch = selCat.length === 0 || selCat.includes(item.category);
-    const grpMatch = selGrp.length === 0 || selGrp.includes(item.group);
-    return qMatch && whMatch && catMatch && grpMatch;
-  });
+  const filtered = sourceItems
+    .filter(item => {
+      const q = query.toLowerCase();
+      const qMatch  = !query || item.name.toLowerCase().includes(q) || item.sku.toLowerCase().includes(q);
+      const whMatch  = selWh.length  === 0 || selWh.includes(item.warehouse);
+      const catMatch = selCat.length === 0 || selCat.includes(item.category);
+      const grpMatch = selGrp.length === 0 || selGrp.includes(item.group);
+      return qMatch && whMatch && catMatch && grpMatch;
+    })
+    .sort((a, b) => {
+      if (sortType === 'alpha') {
+        return sortDir === 'asc'
+          ? a.name.localeCompare(b.name)
+          : b.name.localeCompare(a.name);
+      }
+      // amount sort — parse numeric value from formatted string
+      const aVal = +(a.value.replace(/[^0-9.]/g, '')) || 0;
+      const bVal = +(b.value.replace(/[^0-9.]/g, '')) || 0;
+      return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
+    });
 
   const totalQty          = sourceItems.reduce((s, i) => s + i.qty, 0);
   const activeFilterCount = selWh.length + selCat.length + selGrp.length;
@@ -363,34 +404,60 @@ export default function TotalStockScreen() {
       </View>
 
       {/* ── Item list ── */}
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        <View style={styles.listHeader}>
-          <Text style={styles.sectionLabel}>{filtered.length} item{filtered.length !== 1 ? 's' : ''}</Text>
-          {multiSelectMode ? (
-            <TouchableOpacity onPress={() => setSelectedIds(allSelected ? [] : filtered.map(i => i.id))} activeOpacity={0.7}>
-              <Text style={styles.selectAllTxt}>{allSelected ? 'Deselect All' : 'Select All'}</Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.swipeHint}>
-              <Ionicons name="swap-horizontal-outline" size={12} color={COLORS.textTertiary} />
-              <Text style={styles.swipeHintTxt}>Swipe for actions</Text>
-            </View>
-          )}
-        </View>
-
-        {filtered.map(item => (
-          <SwipeableStockCard
-            key={item.id} item={item}
-            isMultiSelectMode={multiSelectMode}
-            isSelected={selectedIds.includes(item.id)}
-            onPress={() => handleItemPress(item)}
-            onLongPress={() => handleLongPress(item.id)}
-            onEditStock={() => setEditItem(item)}
-            onTransfer={() => setTransferItem(item)}
-          />
-        ))}
-
-        {filtered.length === 0 && (
+      <FlatList
+        data={isLoading ? [] : filtered}
+        keyExtractor={item => item.id}
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <View style={styles.listHeader}>
+            <Text style={styles.sectionLabel}>{filtered.length} item{filtered.length !== 1 ? 's' : ''}</Text>
+            {multiSelectMode ? (
+              <TouchableOpacity onPress={() => setSelectedIds(allSelected ? [] : filtered.map(i => i.id))} activeOpacity={0.7}>
+                <Text style={styles.selectAllTxt}>{allSelected ? 'Deselect All' : 'Select All'}</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.sortBtns}>
+                <TouchableOpacity
+                  style={[styles.sortBtn, sortType === 'alpha' && styles.sortBtnActive]}
+                  onPress={() => handleSort('alpha')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.sortBtnLabel, sortType === 'alpha' && styles.sortBtnLabelActive]}>
+                    {sortType === 'alpha' && sortDir === 'desc' ? 'Z–A' : 'A–Z'}
+                  </Text>
+                  <Ionicons
+                    name={sortType === 'alpha' && sortDir === 'desc' ? 'arrow-up' : 'arrow-down'}
+                    size={11}
+                    color={sortType === 'alpha' ? COLORS.brandPrimary : COLORS.textTertiary}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.sortBtn, sortType === 'amount' && styles.sortBtnActive]}
+                  onPress={() => handleSort('amount')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.sortBtnLabel, sortType === 'amount' && styles.sortBtnLabelActive]}>₹</Text>
+                  <Ionicons
+                    name={sortType === 'amount' && sortDir === 'desc' ? 'arrow-down' : 'arrow-up'}
+                    size={11}
+                    color={sortType === 'amount' ? COLORS.brandPrimary : COLORS.textTertiary}
+                  />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        }
+        ListEmptyComponent={isLoading ? (
+          <>
+            <LedgerRowSkeleton />
+            <LedgerRowSkeleton />
+            <LedgerRowSkeleton />
+            <LedgerRowSkeleton />
+            <LedgerRowSkeleton />
+          </>
+        ) : (
           <View style={styles.emptyState}>
             <Ionicons name="cube-outline" size={40} color={COLORS.textTertiary} />
             <Text style={styles.emptyTxt}>No items match your filters</Text>
@@ -399,8 +466,19 @@ export default function TotalStockScreen() {
             </TouchableOpacity>
           </View>
         )}
-        <View style={{ height: 60 }} />
-      </ScrollView>
+        ListFooterComponent={() => <View style={{ height: 60 }} />}
+        renderItem={({ item }) => (
+          <SwipeableStockCard
+            item={item}
+            isMultiSelectMode={multiSelectMode}
+            isSelected={selectedIds.includes(item.id)}
+            onPress={() => handleItemPress(item)}
+            onLongPress={() => handleLongPress(item.id)}
+            onEditStock={() => setEditItem(item)}
+            onTransfer={() => setTransferItem(item)}
+          />
+        )}
+      />
 
       {/* ── Modals ── */}
       <FilterModal visible={filterOpen} onClose={() => setFilterOpen(false)} onApply={(wh, cat, grp) => { setSelWh(wh); setSelCat(cat); setSelGrp(grp); }} initWh={selWh} initCat={selCat} initGrp={selGrp} />
@@ -462,6 +540,11 @@ const styles = StyleSheet.create({
   selectAllTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: '#A89060' },
   swipeHint:    { flexDirection: 'row', alignItems: 'center', gap: 4 },
   swipeHintTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  sortBtns:         { flexDirection: 'row', gap: 4 },
+  sortBtn:          { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 9, paddingVertical: 7, borderRadius: RADIUS.sm, backgroundColor: COLORS.pageBg, borderWidth: 1.5, borderColor: COLORS.borderDefault },
+  sortBtnActive:    { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary + '12' },
+  sortBtnLabel:     { fontSize: 12, fontWeight: '700', color: COLORS.textTertiary },
+  sortBtnLabelActive: { color: COLORS.brandPrimary },
 
   // Empty
   emptyState: { alignItems: 'center', paddingVertical: 48, gap: 10 },

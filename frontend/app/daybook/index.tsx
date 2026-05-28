@@ -8,7 +8,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { getVouchers } from '../../src/services/api';
+import { getVouchers, getMyEntries, retryMyEntry } from '../../src/services/api';
+import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
+import Toast from 'react-native-toast-message';
 import { useSettings } from '../../src/context/SettingsContext';
 
 const DAYBOOK_TYPE_MAP: Record<string, string> = {
@@ -18,12 +20,13 @@ const DAYBOOK_TYPE_MAP: Record<string, string> = {
   Receipt:  'receipt_voucher',
   Journal:  'journal_voucher',
   Contra:   'contra_voucher',
+  Transfer: 'stock_journal',
 };
 
 type ViewMode = 'daybook' | 'myentries';
-type VType = 'ALL' | 'Sales' | 'Purchase' | 'Payment' | 'Receipt' | 'Journal' | 'Contra';
+type VType = 'ALL' | 'Sales' | 'Purchase' | 'Payment' | 'Receipt' | 'Journal' | 'Contra' | 'Transfer';
 
-const VTYPES: VType[] = ['ALL', 'Sales', 'Purchase', 'Payment', 'Receipt', 'Journal', 'Contra'];
+const VTYPES: VType[] = ['ALL', 'Sales', 'Purchase', 'Payment', 'Receipt', 'Journal', 'Contra', 'Transfer'];
 
 interface Entry {
   id: string; date: string; month: string; type: VType;
@@ -35,6 +38,7 @@ interface Entry {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const mapVoucherType = (raw: string): VType => {
   const s = (raw || '').toLowerCase();
+  if (s.includes('stock journal') || s.includes('stock_transfer') || s.includes('stock transfer')) return 'Transfer';
   if (s.includes('sales')) return 'Sales';
   if (s.includes('purchase')) return 'Purchase';
   if (s.includes('payment')) return 'Payment';
@@ -48,6 +52,7 @@ const mapVoucherType = (raw: string): VType => {
 // Dr = money out / expense / purchase
 const isCreditVoucher = (voucherType: string): boolean => {
   const t = (voucherType || '').toLowerCase();
+  if (t.includes('stock journal') || t.includes('stock_transfer')) return false; // Transfer = neutral, show as Dr
   if (t.includes('receipt'))     return true;  // Cash/bank receipt = Cr
   if (t.includes('credit note')) return true;  // Credit note = Cr
   if (t.includes('sales') && !t.includes('return') && !t.includes('order')) return true; // Sales = Cr
@@ -57,7 +62,7 @@ const isCreditVoucher = (voucherType: string): boolean => {
 
 const TYPE_COLORS: Record<string,string> = {
   Sales: COLORS.positive, Purchase: COLORS.info, Payment: COLORS.negative,
-  Receipt: COLORS.positive, Journal: COLORS.warning, Contra: '#7C3AED',
+  Receipt: COLORS.positive, Journal: COLORS.warning, Contra: '#7C3AED', Transfer: '#0891B2',
 };
 
 export default function DaybookScreen() {
@@ -73,6 +78,7 @@ export default function DaybookScreen() {
   const toDate   = today;
 
   const [liveEntries, setLiveEntries] = useState<Entry[]>([]);
+  const [pendingEntries, setPendingEntries] = useState<any[]>([]);
   const [isLoading,   setIsLoading]   = useState(false);
   const [apiError,    setApiError]    = useState<string | null>(null);
 
@@ -81,19 +87,24 @@ export default function DaybookScreen() {
   const [hasMore,       setHasMore]       = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const mapEntry = (r: any): Entry => ({
-    id: r.guid || String(r.id),
-    date: r.date || today,
-    month: new Date(r.date || today).toLocaleString('en-IN', { month: 'short', year: '2-digit' }),
-    type: mapVoucherType(r.voucher_type) as VType,
-    ref: r.voucher_number || '',
-    party: r.party_name || '',
-    amount: formatAmount(Math.abs(+r.amount || 0)),
-    isCredit: isCreditVoucher(r.voucher_type),
-    status: 'posted' as const,
-    isMine: true,
-    isOptional: !!(r.is_optional),
-  });
+  const mapEntry = (r: any): Entry => {
+    const vtype = mapVoucherType(r.voucher_type) as VType;
+    // For Stock Journal / transfer: show narration or entry_label as party (no party_name exists)
+    const partyDisplay = r.party_name || r.narration || r.entry_label || '';
+    return {
+      id: r.guid || String(r.id),
+      date: r.date || today,
+      month: new Date(r.date || today).toLocaleString('en-IN', { month: 'short', year: '2-digit' }),
+      type: vtype,
+      ref: r.voucher_number || '',
+      party: partyDisplay,
+      amount: formatAmount(Math.abs(+r.amount || 0)),
+      isCredit: isCreditVoucher(r.voucher_type),
+      status: 'posted' as const,
+      isMine: true,
+      isOptional: !!(r.is_optional),
+    };
+  };
 
   useEffect(() => {
     if (!companyGuid) return;
@@ -132,6 +143,26 @@ export default function DaybookScreen() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [multiSelect, setMultiSelect] = useState(false);
+
+  // Fetch pending write_queue entries for My Entries tab
+  const loadPendingEntries = () => {
+    if (!companyGuid) return;
+    getMyEntries(companyGuid).then((res: any) => {
+      setPendingEntries(Array.isArray(res?.pending) ? res.pending : []);
+    }).catch(() => {});
+  };
+
+  useEffect(() => {
+    if (mode === 'myentries') loadPendingEntries();
+  }, [mode, companyGuid]);
+
+  const handleRetry = async (queueId: string) => {
+    try {
+      await retryMyEntry(queueId);
+      Toast.show({ type: 'info', text1: 'Retrying…', text2: 'Will push to Tally if desktop is connected.' });
+      setTimeout(loadPendingEntries, 2000);
+    } catch { Toast.show({ type: 'error', text1: 'Retry failed' }); }
+  };
 
   const sourceEntries = liveEntries;
 
@@ -250,9 +281,8 @@ export default function DaybookScreen() {
 
       {/* Loading */}
       {isLoading ? (
-        <View style={s.loadingBox}>
-          <ActivityIndicator size="large" color={COLORS.brandPrimary} />
-          <Text style={s.loadingTxt}>Loading entries...</Text>
+        <View style={{ paddingTop: 8 }}>
+          {[...Array(6)].map((_, i) => <LedgerRowSkeleton key={i} />)}
         </View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom: Math.max(insets.bottom,20)+16}} keyboardShouldPersistTaps="handled">
@@ -293,7 +323,7 @@ export default function DaybookScreen() {
                       </View>
                     )}
                     <View style={[s.typeIcon, {backgroundColor: tc+'15'}]}>
-                      <Ionicons name={entry.isCredit ? 'arrow-down-circle-outline' : 'arrow-up-circle-outline'} size={18} color={tc} />
+                      <Ionicons name={entry.type === 'Transfer' ? 'swap-horizontal-outline' : entry.isCredit ? 'arrow-down-circle-outline' : 'arrow-up-circle-outline'} size={18} color={tc} />
                     </View>
                     <View style={s.entryInfo}>
                       <View style={s.entryTop}>
@@ -332,7 +362,54 @@ export default function DaybookScreen() {
           {!hasMore && liveEntries.length > 0 && (
             <Text style={s.endTxt}>All {liveEntries.length} entries loaded</Text>
           )}
-          {filtered.length === 0 && (
+
+          {/* Pending / Queued / Done write_queue entries (My Entries only) */}
+          {mode === 'myentries' && pendingEntries.length > 0 && (
+            <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+              <Text style={[s.endTxt, { textAlign: 'left', paddingLeft: 0, fontWeight: '700', color: COLORS.textPrimary }]}>
+                My Transactions ({pendingEntries.length})
+              </Text>
+              {pendingEntries.map((p: any) => {
+                const isSuccess = p._queue_status === 'success';
+                const isFailed  = p._queue_status === 'failed';
+                const typeLabel = (p.voucher_type || '').replace(/_/g, ' ');
+                const borderColor = isFailed ? COLORS.negative : isSuccess ? COLORS.positive : COLORS.warning;
+                const badgeBg    = isFailed ? '#FEE2E2' : isSuccess ? '#D1FAE5' : '#FEF9C3';
+                const badgeColor = isFailed ? COLORS.negative : isSuccess ? '#065F46' : '#A16207';
+                const badgeText  = isFailed ? 'Failed' : isSuccess ? '✓ In Tally' : 'Queued ⏳';
+                return (
+                  <View key={String(p._queue_id)} style={[{ flexDirection: 'row' as const, alignItems: 'flex-start' as const, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: COLORS.borderDefault }, { borderLeftWidth: 3, borderLeftColor: borderColor }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.partyTxt}>{typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)}</Text>
+                      <Text style={s.refTxt}>{p.party_name}{p.voucher_number ? ` · #${p.voucher_number}` : ''}</Text>
+                      <Text style={s.dateTxt}>{p.date}</Text>
+                      {p._queue_error && !isSuccess && (
+                        <Text style={{ fontSize: 11, color: COLORS.negative, marginTop: 2 }} numberOfLines={2}>
+                          {p._queue_error}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                      <View style={[s.pendingBadge, { backgroundColor: badgeBg }]}>
+                        <Text style={[s.pendingTxt, { color: badgeColor }]}>{badgeText}</Text>
+                      </View>
+                      {!isSuccess && (
+                        <TouchableOpacity
+                          style={[s.pushBtn, { paddingHorizontal: 10, paddingVertical: 4 }]}
+                          onPress={() => handleRetry(String(p._queue_id))}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={[s.pushTxt, { fontSize: 11 }]}>Retry ↻</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {filtered.length === 0 && pendingEntries.length === 0 && (
             <View style={s.empty}>
               <Ionicons name="document-text-outline" size={48} color={COLORS.borderStrong} />
               <Text style={s.emptyTxt}>No entries found</Text>

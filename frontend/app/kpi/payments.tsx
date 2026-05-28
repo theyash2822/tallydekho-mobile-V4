@@ -12,6 +12,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { getKPIPayments } from '../../src/services/api';
+import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -253,9 +254,10 @@ export default function PaymentsScreen() {
   const fmtAmt = (v: number) => formatAmountCompact(Math.round(v));
   const companyGuid = company?.guid;
   const [apiData, setApiData] = React.useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
   React.useEffect(() => {
     if (!companyGuid) return;
-    getKPIPayments(companyGuid).then((res: any) => { if (res?.data) setApiData(res.data); }).catch(() => {});
+    getKPIPayments(companyGuid).then((res: any) => { if (res?.data) setApiData(res.data); }).catch(() => {}).finally(() => setIsLoading(false));
   }, [companyGuid]);
 
   const router     = useRouter();
@@ -293,6 +295,12 @@ export default function PaymentsScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+        {isLoading ? (
+          <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+            <CardSkeleton height={100} />
+            {[...Array(4)].map((_, i) => <LedgerRowSkeleton key={i} />)}
+          </View>
+        ) : <>
 
         {/* KPI Carousel */}
         <View style={s.kpiSection}>
@@ -394,6 +402,8 @@ export default function PaymentsScreen() {
           ))}
         </View>
 
+        </>
+        }
         <View style={{ height: 110 }} />
       </ScrollView>
     </SafeAreaView>

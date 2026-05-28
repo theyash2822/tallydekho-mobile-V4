@@ -7,7 +7,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.145:3001';
+const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.243:3001';
 
 // ── Token helpers ────────────────────────────────────────────
 const getToken = async (): Promise<string | null> => {
@@ -20,7 +20,7 @@ async function request<T>(
   endpoint: string,
   body?: object,
   requiresAuth = true,
-  basePrefix: 'api' | 'tally' = 'api'
+  basePrefix: 'api' | 'tally' | 'app' = 'api'
 ): Promise<T> {
   const token = requiresAuth ? await getToken() : null;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -43,6 +43,7 @@ const post = <T>(endpoint: string, body: object, auth = true) => request<T>('POS
 const patch = <T>(endpoint: string, body: object) => request<T>('PATCH', endpoint, body);
 const del   = <T>(endpoint: string, body?: object) => request<T>('DELETE', endpoint, body);
 const tallyPost = <T>(endpoint: string, body: object) => request<T>('POST', endpoint, body, true, 'tally');
+const appPost   = <T>(endpoint: string, body: object) => request<T>('POST', endpoint, body, true, 'app');
 
 // Helper: append companyGuid + optional fy= param to query string
 // fy = financial year in backend format e.g. '2025-2026'
@@ -206,7 +207,8 @@ export const createLedger      = (payload: any) => tallyPost<any>('/master/party
 // STOCKS
 // ══════════════════════════════════════════════════════════════
 
-export const getStocks       = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/items', companyGuid, params));
+export const getStocks          = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/items', companyGuid, params));
+export const getStockDashboard  = (companyGuid: string) => appPost<any>('/stock-dashboard', { companyGuid });
 export const getStockItem    = (companyGuid?: string, id?: string) => get<any>(withCompany(`/stocks/items/${id}`, companyGuid));
 export const getWarehouses       = (companyGuid?: string) => get<any>(withCompany('/stocks/warehouses', companyGuid));
 export const getWarehouseDetail  = (companyGuid?: string, id?: string) => get<any>(withCompany(`/stocks/warehouses/${id}`, companyGuid));
@@ -351,3 +353,8 @@ export const getOtherTaxesTransactions = (companyGuid?: string, params?: any) =>
   get<any>(withCompany('/reports/other-taxes/transactions', companyGuid, params));
 export const getOtherTaxesLateChallans = (companyGuid?: string, params?: any) =>
   get<any>(withCompany('/reports/other-taxes/late-challans', companyGuid, params));
+
+export const getStockMovements = (companyGuid?: string, id?: string, params?: any) => get<any>(withCompany(`/stocks/items/${id}/movements`, companyGuid, params));
+export const getStockGodowns = (companyGuid?: string, id?: string) => get<any>(withCompany(`/stocks/items/${id}/godowns`, companyGuid));
+export const retryMyEntry = (id: string) => post<any>(`/vouchers/my-entries/${id}/retry`, {});
+export const alterStockItem    = (payload: any) => tallyPost<any>('/master/stock-item-alter', payload);

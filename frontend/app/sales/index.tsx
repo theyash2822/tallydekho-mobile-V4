@@ -13,6 +13,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { getSalesInvoices, getKPIStrip } from '../../src/services/api';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useSettings } from '../../src/context/SettingsContext';
+import { KPICardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 
 const AMBER      = '#A89060';
 const AMBER_BG   = '#FDF9F4';
@@ -56,6 +57,7 @@ export default function SalesScreen() {
   const [liveTopParties, setLiveTopParties] = useState<any[]>([]);
   const [liveBanners, setLiveBanners] = useState<any[]>([]);
   const [apiError, setApiError]       = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!companyGuid) return;
@@ -81,7 +83,7 @@ export default function SalesScreen() {
     }).catch((err: any) => {
       setApiError(err?.message || 'Failed to load sales data');
       console.error('[Sales]', err?.message);
-    });
+    }).finally(() => setIsLoading(false));
   }, [companyGuid, lastSyncAt]);
 
   // ─ Tab & filter state
@@ -245,7 +247,16 @@ export default function SalesScreen() {
           </View>
         </View>
 
-        {/* ── Tabs ─────────────────────────────────────────────────── */}
+        {isLoading && (
+          <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
+              <KPICardSkeleton /><KPICardSkeleton />
+            </View>
+            {[...Array(4)].map((_, i) => <LedgerRowSkeleton key={i} />)}
+          </View>
+        )}
+
+                {/* ── Tabs ─────────────────────────────────────────────────── */}
         <View style={s.tabRow}>
           {(['recent', 'parties'] as const).map(t => (
             <TouchableOpacity

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { getWarehouseDetail } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useSettings } from '../../src/context/SettingsContext';
+import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 
 const DIR_CONFIG: Record<string, { icon: string; color: string; bg: string }> = {
   inward:  { icon: 'arrow-down-outline',        color: COLORS.positive, bg: COLORS.positiveBg },
@@ -64,9 +65,12 @@ export default function WarehouseDetailScreen() {
       {apiError && <ErrorBanner message={apiError} onRetry={load} />}
 
       {isLoading ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator size="large" color={COLORS.brandPrimary} />
-        </View>
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+          <CardSkeleton height={120} />
+          <LedgerRowSkeleton />
+          <LedgerRowSkeleton />
+          <LedgerRowSkeleton />
+        </ScrollView>
       ) : !wh ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
           <Ionicons name="business-outline" size={48} color={COLORS.textTertiary} />

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import { getStocks } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
+import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 
 const AMBER = '#A89060';
 
@@ -149,10 +150,13 @@ export default function NegativeStockScreen() {
 
       {/* ── Loading */}
       {isLoading && (
-        <View style={s.loadingWrap}>
-          <ActivityIndicator size="large" color={COLORS.brandPrimary} />
-          <Text style={s.loadingTxt}>Loading stock data…</Text>
-        </View>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, gap: 12 }}>
+          <LedgerRowSkeleton />
+          <LedgerRowSkeleton />
+          <LedgerRowSkeleton />
+          <LedgerRowSkeleton />
+          <LedgerRowSkeleton />
+        </ScrollView>
       )}
 
       {/* ── Hint */}

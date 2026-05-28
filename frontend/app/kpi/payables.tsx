@@ -10,6 +10,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { getKPIPayables } from '../../src/services/api';
+import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -45,9 +46,10 @@ export default function PayablesScreen() {
   const { company } = useAuth();
   const companyGuid = company?.guid;
   const [apiData, setApiData] = React.useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
   React.useEffect(() => {
     if (!companyGuid) return;
-    getKPIPayables(companyGuid).then((res: any) => { if (res?.data) setApiData(res.data); }).catch(() => {});
+    getKPIPayables(companyGuid).then((res: any) => { if (res?.data) setApiData(res.data); }).catch(() => {}).finally(() => setIsLoading(false));
   }, [companyGuid]);
 
   const router = useRouter();
@@ -134,6 +136,12 @@ export default function PayablesScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+        {isLoading ? (
+          <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+            <CardSkeleton height={100} />
+            {[...Array(4)].map((_, i) => <LedgerRowSkeleton key={i} />)}
+          </View>
+        ) : <>
 
         {/* ── Aging Bucket Carousel ───────────────────────────────────────── */}
         <View style={s.agingSection}>
@@ -258,6 +266,8 @@ export default function PayablesScreen() {
           )}
         </View>
 
+        </>
+        }
         <View style={{ height: 100 }} />
       </ScrollView>
 

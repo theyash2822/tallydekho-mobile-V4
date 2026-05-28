@@ -2,8 +2,9 @@
 
 export type StockItem = {
   id: string; name: string; sku: string; category: string;
-  group: string; warehouse: string; qty: number; value: string;
+  group: string; warehouse: string; warehouseId?: string; qty: number; value: string;
   icon: string; iconColor: string; iconBg: string;
+  unit?: string; reorderLevel?: number; status?: string;
 };
 
 export const STOCK_ITEMS: StockItem[] = [
