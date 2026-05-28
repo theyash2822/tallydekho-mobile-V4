@@ -78,7 +78,8 @@ export default function DaybookScreen() {
   const toDate   = today;
 
   const [liveEntries, setLiveEntries] = useState<Entry[]>([]);
-  const [pendingEntries, setPendingEntries] = useState<any[]>([]);
+  const [pendingEntries,       setPendingEntries]       = useState<any[]>([]);
+  const [isLoadingMyEntries,   setIsLoadingMyEntries]   = useState(false);
   const [isLoading,   setIsLoading]   = useState(false);
   const [apiError,    setApiError]    = useState<string | null>(null);
 
@@ -144,12 +145,13 @@ export default function DaybookScreen() {
   const [selected, setSelected] = useState<string[]>([]);
   const [multiSelect, setMultiSelect] = useState(false);
 
-  // Fetch pending write_queue entries for My Entries tab
+  // Fetch write_queue entries for My Entries tab
   const loadPendingEntries = () => {
     if (!companyGuid) return;
+    setIsLoadingMyEntries(true);
     getMyEntries(companyGuid).then((res: any) => {
       setPendingEntries(Array.isArray(res?.pending) ? res.pending : []);
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setIsLoadingMyEntries(false));
   };
 
   useEffect(() => {
@@ -204,6 +206,55 @@ export default function DaybookScreen() {
     setSelected([]);
     setMultiSelect(false);
   };
+
+  // ─── My Entries — map write_queue entry_type to display label + type chip ────
+  const WQ_TYPE_MAP: Record<string, { label: string; vtype: VType; icon: string }> = {
+    sales:              { label: 'Sales',       vtype: 'Sales',    icon: 'arrow-down-circle-outline' },
+    purchase:           { label: 'Purchase',    vtype: 'Purchase', icon: 'arrow-up-circle-outline' },
+    payment:            { label: 'Payment',     vtype: 'Payment',  icon: 'arrow-up-circle-outline' },
+    receipt:            { label: 'Receipt',     vtype: 'Receipt',  icon: 'arrow-down-circle-outline' },
+    journal:            { label: 'Journal',     vtype: 'Journal',  icon: 'document-text-outline' },
+    contra:             { label: 'Contra',      vtype: 'Contra',   icon: 'shuffle-outline' },
+    stock_transfer:     { label: 'Transfer',    vtype: 'Transfer', icon: 'swap-horizontal-outline' },
+    stock_adjustment:   { label: 'Adjustment',  vtype: 'Transfer', icon: 'options-outline' },
+    alter_stock_item:   { label: 'Stock Edit',  vtype: 'Journal',  icon: 'create-outline' },
+    item:               { label: 'New Item',    vtype: 'Journal',  icon: 'cube-outline' },
+    party:              { label: 'New Party',   vtype: 'Journal',  icon: 'person-add-outline' },
+    bank:               { label: 'Bank',        vtype: 'Journal',  icon: 'card-outline' },
+    warehouse:          { label: 'Warehouse',   vtype: 'Journal',  icon: 'business-outline' },
+    sales_order:        { label: 'Sales Order', vtype: 'Sales',    icon: 'receipt-outline' },
+    purchase_order:     { label: 'PO',          vtype: 'Purchase', icon: 'receipt-outline' },
+    credit_note:        { label: 'Credit Note', vtype: 'Receipt',  icon: 'arrow-down-circle-outline' },
+    debit_note:         { label: 'Debit Note',  vtype: 'Payment',  icon: 'arrow-up-circle-outline' },
+    delivery_note:      { label: 'Delivery',    vtype: 'Sales',    icon: 'cube-outline' },
+  };
+
+  const myEntriesFiltered = useMemo(() => {
+    let arr = pendingEntries;
+    if (vType !== 'ALL') {
+      arr = arr.filter((p: any) => {
+        const mapped = WQ_TYPE_MAP[p.voucher_type || '']?.vtype;
+        return mapped === vType;
+      });
+    }
+    if (search) {
+      arr = arr.filter((p: any) =>
+        (p.party_name || '').toLowerCase().includes(search.toLowerCase()) ||
+        (p.voucher_number || '').toLowerCase().includes(search.toLowerCase())
+      );
+    }
+    return arr;
+  }, [pendingEntries, vType, search]);
+
+  const myEntriesGrouped = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    myEntriesFiltered.forEach((p: any) => {
+      const month = new Date(p.date || new Date()).toLocaleString('en-IN', { month: 'short', year: '2-digit' });
+      if (!map[month]) map[month] = [];
+      map[month].push(p);
+    });
+    return Object.entries(map);
+  }, [myEntriesFiltered]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -280,24 +331,23 @@ export default function DaybookScreen() {
       ) : null}
 
       {/* Loading */}
-      {isLoading ? (
+      {(mode === 'daybook' ? isLoading : isLoadingMyEntries) ? (
         <View style={{ paddingTop: 8 }}>
           {[...Array(6)].map((_, i) => <LedgerRowSkeleton key={i} />)}
         </View>
-      ) : (
+      ) : mode === 'daybook' ? (
+        /* ─── DAY BOOK — all Tally vouchers ─────────────────────────────────── */
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom: Math.max(insets.bottom,20)+16}} keyboardShouldPersistTaps="handled">
           {grouped.map(([month, entries]) => {
             const isCollapsed = collapsedMonths.has(month);
             return (
             <View key={month}>
-              {/* Month header — collapsible */}
               <TouchableOpacity style={s.monthHdr} onPress={() => toggleMonth(month)} activeOpacity={0.7}>
                 <Text style={s.monthTxt}>{month}</Text>
                 <View style={s.monthLine} />
                 <Text style={s.monthCount}>{entries.length}</Text>
                 <Ionicons name={isCollapsed ? 'chevron-forward' : 'chevron-down'} size={14} color={COLORS.textTertiary} />
               </TouchableOpacity>
-              {/* Entries */}
               {!isCollapsed && entries.map((entry) => {
                 const isSel = selected.includes(entry.id);
                 const tc = TYPE_COLORS[entry.type] || COLORS.textSecondary;
@@ -308,12 +358,8 @@ export default function DaybookScreen() {
                     activeOpacity={0.8}
                     delayLongPress={500}
                     onPress={() => {
-                      if (multiSelect) {
-                        toggleSelect(entry.id);
-                      } else {
-                        const docType = DAYBOOK_TYPE_MAP[entry.type] || 'sales_invoice';
-                        router.push(`/document/${entry.ref}?type=${docType}` as any);
-                      }
+                      if (multiSelect) { toggleSelect(entry.id); }
+                      else { const docType = DAYBOOK_TYPE_MAP[entry.type] || 'sales_invoice'; router.push(`/document/${entry.ref}?type=${docType}` as any); }
                     }}
                     onLongPress={() => { setMultiSelect(true); toggleSelect(entry.id); }}
                   >
@@ -331,12 +377,7 @@ export default function DaybookScreen() {
                           <Text style={[s.vTypeTxt, {color:tc}]}>{entry.type}</Text>
                         </View>
                         <Text style={s.refTxt}>{entry.ref}</Text>
-                        {entry.status === 'pending' && (
-                          <View style={s.pendingBadge}><Text style={s.pendingTxt}>Pending</Text></View>
-                        )}
-                        {entry.isOptional && (
-                          <View style={s.draftBadge}><Text style={s.draftTxt}>Draft</Text></View>
-                        )}
+                        {entry.isOptional && <View style={s.draftBadge}><Text style={s.draftTxt}>Draft</Text></View>}
                       </View>
                       <Text style={s.partyTxt}>{entry.party}</Text>
                       <Text style={s.dateTxt}>{entry.date}</Text>
@@ -353,66 +394,95 @@ export default function DaybookScreen() {
           })}
           {hasMore && (
             <TouchableOpacity style={s.loadMoreBtn} onPress={loadMore} disabled={isLoadingMore} activeOpacity={0.8}>
-              {isLoadingMore
-                ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
-                : <Text style={s.loadMoreTxt}>Load More</Text>
-              }
+              {isLoadingMore ? <ActivityIndicator size="small" color={COLORS.brandPrimary} /> : <Text style={s.loadMoreTxt}>Load More</Text>}
             </TouchableOpacity>
           )}
-          {!hasMore && liveEntries.length > 0 && (
-            <Text style={s.endTxt}>All {liveEntries.length} entries loaded</Text>
-          )}
-
-          {/* Pending / Queued / Done write_queue entries (My Entries only) */}
-          {mode === 'myentries' && pendingEntries.length > 0 && (
-            <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
-              <Text style={[s.endTxt, { textAlign: 'left', paddingLeft: 0, fontWeight: '700', color: COLORS.textPrimary }]}>
-                My Transactions ({pendingEntries.length})
-              </Text>
-              {pendingEntries.map((p: any) => {
-                const isSuccess = p._queue_status === 'success';
-                const isFailed  = p._queue_status === 'failed';
-                const typeLabel = (p.voucher_type || '').replace(/_/g, ' ');
-                const borderColor = isFailed ? COLORS.negative : isSuccess ? COLORS.positive : COLORS.warning;
-                const badgeBg    = isFailed ? '#FEE2E2' : isSuccess ? '#D1FAE5' : '#FEF9C3';
-                const badgeColor = isFailed ? COLORS.negative : isSuccess ? '#065F46' : '#A16207';
-                const badgeText  = isFailed ? 'Failed' : isSuccess ? '✓ In Tally' : 'Queued ⏳';
-                return (
-                  <View key={String(p._queue_id)} style={[{ flexDirection: 'row' as const, alignItems: 'flex-start' as const, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: COLORS.borderDefault }, { borderLeftWidth: 3, borderLeftColor: borderColor }]}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.partyTxt}>{typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)}</Text>
-                      <Text style={s.refTxt}>{p.party_name}{p.voucher_number ? ` · #${p.voucher_number}` : ''}</Text>
-                      <Text style={s.dateTxt}>{p.date}</Text>
-                      {p._queue_error && !isSuccess && (
-                        <Text style={{ fontSize: 11, color: COLORS.negative, marginTop: 2 }} numberOfLines={2}>
-                          {p._queue_error}
-                        </Text>
-                      )}
-                    </View>
-                    <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                      <View style={[s.pendingBadge, { backgroundColor: badgeBg }]}>
-                        <Text style={[s.pendingTxt, { color: badgeColor }]}>{badgeText}</Text>
-                      </View>
-                      {!isSuccess && (
-                        <TouchableOpacity
-                          style={[s.pushBtn, { paddingHorizontal: 10, paddingVertical: 4 }]}
-                          onPress={() => handleRetry(String(p._queue_id))}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={[s.pushTxt, { fontSize: 11 }]}>Retry ↻</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          )}
-
-          {filtered.length === 0 && pendingEntries.length === 0 && (
+          {filtered.length === 0 && (
             <View style={s.empty}>
               <Ionicons name="document-text-outline" size={48} color={COLORS.borderStrong} />
               <Text style={s.emptyTxt}>No entries found</Text>
+            </View>
+          )}
+        </ScrollView>
+      ) : (
+        /* ─── MY ENTRIES — ONLY write_queue (app-created) entries ─────────── */
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom: Math.max(insets.bottom,20)+16}} keyboardShouldPersistTaps="handled">
+          {myEntriesGrouped.map(([month, entries]) => {
+            const isCollapsed = collapsedMonths.has(month);
+            return (
+              <View key={month}>
+                <TouchableOpacity style={s.monthHdr} onPress={() => toggleMonth(month)} activeOpacity={0.7}>
+                  <Text style={s.monthTxt}>{month}</Text>
+                  <View style={s.monthLine} />
+                  <Text style={s.monthCount}>{entries.length}</Text>
+                  <Ionicons name={isCollapsed ? 'chevron-forward' : 'chevron-down'} size={14} color={COLORS.textTertiary} />
+                </TouchableOpacity>
+                {!isCollapsed && entries.map((p: any) => {
+                  const isSuccess = p._queue_status === 'success';
+                  const isFailed  = p._queue_status === 'failed';
+                  const wqInfo    = WQ_TYPE_MAP[p.voucher_type || ''] || { label: p.voucher_type || 'Entry', vtype: 'Journal' as VType, icon: 'document-text-outline' };
+                  const tc        = TYPE_COLORS[wqInfo.vtype] || COLORS.textSecondary;
+                  const borderColor = isFailed ? COLORS.negative : isSuccess ? COLORS.positive : COLORS.warning;
+                  const badgeBg    = isFailed ? '#FEE2E2' : isSuccess ? '#D1FAE5' : '#FEF9C3';
+                  const badgeColor = isFailed ? COLORS.negative : isSuccess ? '#065F46' : '#A16207';
+                  const badgeText  = isFailed ? 'Failed' : isSuccess ? '✓ In Tally' : 'Queued ⏳';
+                  return (
+                    <View
+                      key={String(p._queue_id)}
+                      style={[s.entryCard, { borderLeftWidth: 3, borderLeftColor: borderColor }]}
+                    >
+                      {/* Type icon */}
+                      <View style={[s.typeIcon, { backgroundColor: tc + '15' }]}>
+                        <Ionicons name={wqInfo.icon as any} size={18} color={tc} />
+                      </View>
+                      {/* Info */}
+                      <View style={s.entryInfo}>
+                        <View style={s.entryTop}>
+                          <View style={[s.vTypePill, { backgroundColor: tc + '18' }]}>
+                            <Text style={[s.vTypeTxt, { color: tc }]}>{wqInfo.label}</Text>
+                          </View>
+                          {p.voucher_number ? <Text style={s.refTxt}>#{p.voucher_number}</Text> : null}
+                          <View style={[s.pendingBadge, { backgroundColor: badgeBg }]}>
+                            <Text style={[s.pendingTxt, { color: badgeColor }]}>{badgeText}</Text>
+                          </View>
+                        </View>
+                        <Text style={s.partyTxt} numberOfLines={1}>{p.party_name || '—'}</Text>
+                        <Text style={s.dateTxt}>{p.date}</Text>
+                        {isFailed && p._queue_error && (
+                          <Text style={{ fontSize: 11, color: COLORS.negative, marginTop: 2 }} numberOfLines={1}>
+                            {p._queue_error}
+                          </Text>
+                        )}
+                      </View>
+                      {/* Right col — amount + retry */}
+                      <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                        {p.amount ? (
+                          <Text style={[s.amtTxt, { color: COLORS.textPrimary }]}>
+                            {formatAmount(Math.abs(+p.amount || 0))}
+                          </Text>
+                        ) : null}
+                        {!isSuccess && (
+                          <TouchableOpacity
+                            style={[s.pushBtn, { paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#1A1A1A' }]}
+                            onPress={() => handleRetry(String(p._queue_id))}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="refresh-outline" size={12} color={COLORS.white} />
+                            <Text style={[s.pushTxt, { fontSize: 11 }]}>Retry</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            );
+          })}
+          {myEntriesGrouped.length === 0 && (
+            <View style={s.empty}>
+              <Ionicons name="cloud-upload-outline" size={48} color={COLORS.borderStrong} />
+              <Text style={s.emptyTxt}>No entries yet</Text>
+              <Text style={[s.emptyTxt, { fontSize: 12, marginTop: 4 }]}>Entries you create from the app{`\n`}will appear here</Text>
             </View>
           )}
         </ScrollView>
