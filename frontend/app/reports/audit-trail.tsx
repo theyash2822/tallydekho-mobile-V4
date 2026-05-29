@@ -10,7 +10,7 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
-import { getVouchers, getMyEntries } from '../../src/services/api';
+import { getVouchers, getMyEntries, retryMyEntry } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -21,7 +21,8 @@ type TabType = 'myentries' | 'daybook';
 type SyncStatus = 'synced' | 'pending' | 'failed';
 type VoucherType =
   | 'ALL' | 'Sales' | 'Purchase' | 'Payment' | 'Receipt'
-  | 'Journal' | 'Contra' | 'Debit Note' | 'Credit Note' | 'Delivery Note';
+  | 'Journal' | 'Contra' | 'Debit Note' | 'Credit Note' | 'Delivery Note'
+  | 'Stock Transfer' | 'Adjustment';
 
 interface VoucherEntry {
   id: string;
@@ -42,6 +43,7 @@ interface VoucherEntry {
 const VOUCHER_TYPES: VoucherType[] = [
   'ALL', 'Sales', 'Purchase', 'Payment', 'Receipt',
   'Journal', 'Contra', 'Debit Note', 'Credit Note', 'Delivery Note',
+  'Stock Transfer', 'Adjustment',
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -70,6 +72,8 @@ const mapVoucherType = (raw: string): Exclude<VoucherType, 'ALL'> => {
   if (s.includes('debit')) return 'Debit Note';
   if (s.includes('credit')) return 'Credit Note';
   if (s.includes('delivery')) return 'Delivery Note';
+  if (s.includes('transfer')) return 'Stock Transfer';
+  if (s.includes('adjustment')) return 'Adjustment';
   return 'Journal';
 };
 
@@ -384,41 +388,31 @@ export default function AuditTrailScreen() {
     return                           { icon: 'checkmark-circle-outline' as const, color: COLORS.positive, borderColor: 'transparent' };
   };
 
-  const handleSinglePush = (entry: VoucherEntry) => {
-    Toast.show({
-      type: 'info',
-      text1: 'Pushing to Tally...',
-      text2: `${entry.ref} — ${entry.party}`,
-      visibilityTime: 1400,
-    });
-    setTimeout(() => {
-      Toast.show({
-        type: 'success',
-        text1: 'Pushed Successfully!',
-        text2: `${entry.ref} synced to Tally Prime`,
-        visibilityTime: 2500,
-      });
-    }, 1600);
+  const handleSinglePush = async (entry: VoucherEntry) => {
+    const rawId = (entry.id || '').replace('wq_', '');
+    if (!rawId) return;
+    Toast.show({ type: 'info', text1: 'Retrying...', text2: `${entry.ref} — ${entry.party}`, visibilityTime: 1400 });
+    try {
+      await retryMyEntry(rawId);
+      Toast.show({ type: 'info', text1: 'Retry queued', text2: 'Will push when desktop connects.', visibilityTime: 2500 });
+    } catch {
+      Toast.show({ type: 'error', text1: 'Retry failed', text2: 'Please try again.', visibilityTime: 2500 });
+    }
   };
 
-  const handleBulkPush = () => {
+  const handleBulkPush = async () => {
     if (selected.length === 0) return;
     const count = selected.length;
-    Toast.show({
-      type: 'info',
-      text1: `Pushing ${count} entr${count === 1 ? 'y' : 'ies'}...`,
-      text2: 'Syncing to Tally Prime',
-      visibilityTime: 1600,
-    });
-    setTimeout(() => {
-      Toast.show({
-        type: 'success',
-        text1: `${count} Entr${count === 1 ? 'y' : 'ies'} Pushed!`,
-        text2: `All vouchers synced to Tally Prime`,
-        visibilityTime: 3000,
-      });
-      clearSelection();
-    }, 1800);
+    Toast.show({ type: 'info', text1: `Retrying ${count} entr${count === 1 ? 'y' : 'ies'}...`, text2: 'Syncing to Tally Prime', visibilityTime: 1600 });
+    const ids = selected.map(id => (id || '').replace('wq_', '')).filter(Boolean);
+    let failed = 0;
+    await Promise.allSettled(ids.map(id => retryMyEntry(id).catch(() => { failed++; })));
+    if (failed === 0) {
+      Toast.show({ type: 'info', text1: `${count} entr${count === 1 ? 'y' : 'ies'} queued`, text2: 'Will push when desktop connects.', visibilityTime: 3000 });
+    } else {
+      Toast.show({ type: 'error', text1: `${failed} failed`, text2: `${count - failed} queued, ${failed} errored. Try again.`, visibilityTime: 3000 });
+    }
+    clearSelection();
   };
 
   const handleShare = () =>
