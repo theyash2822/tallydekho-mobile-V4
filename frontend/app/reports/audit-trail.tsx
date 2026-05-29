@@ -18,7 +18,7 @@ const AMBER = '#A89060';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type TabType = 'myentries' | 'daybook';
-type SyncStatus = 'synced' | 'pending' | 'failed';
+type SyncStatus = 'synced' | 'pending' | 'processing' | 'failed';
 type VoucherType =
   | 'ALL' | 'Sales' | 'Purchase' | 'Payment' | 'Receipt'
   | 'Journal' | 'Contra' | 'Debit Note' | 'Credit Note' | 'Delivery Note'
@@ -265,7 +265,8 @@ export default function AuditTrailScreen() {
     amount: formatAmount(Math.abs(+(p.amount || 0))),
     isCredit: false,
     syncStatus: p._queue_status === 'success' ? 'synced'
-      : p._queue_status === 'failed' ? 'failed' : 'pending',
+      : p._queue_status === 'failed' ? 'failed'
+      : p._queue_status === 'processing' ? 'processing' : 'pending',
     action: 'Created',
     isMine: true,
   });
@@ -383,9 +384,10 @@ export default function AuditTrailScreen() {
     });
 
   const getSyncInfo = (status?: SyncStatus) => {
-    if (status === 'pending') return { icon: 'time-outline'         as const, color: AMBER,             borderColor: AMBER };
-    if (status === 'failed')  return { icon: 'alert-circle-outline' as const, color: COLORS.negative,   borderColor: COLORS.negative };
-    return                           { icon: 'checkmark-circle-outline' as const, color: COLORS.positive, borderColor: 'transparent' };
+    if (status === 'pending')    return { icon: 'time-outline'            as const, color: AMBER,           borderColor: AMBER };
+    if (status === 'processing') return { icon: 'sync-outline'            as const, color: AMBER,           borderColor: AMBER };
+    if (status === 'failed')     return { icon: 'alert-circle-outline'    as const, color: COLORS.negative, borderColor: COLORS.negative };
+    return                              { icon: 'checkmark-circle-outline' as const, color: COLORS.positive, borderColor: 'transparent' };
   };
 
   const handleSinglePush = async (entry: VoucherEntry) => {
