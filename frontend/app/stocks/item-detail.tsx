@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,32 +11,23 @@ import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getStockItem, getStockMovements } from '../../src/services/api';
-import { STOCK_ITEMS } from '../../src/data/stockData';
 import { useSettings } from '../../src/context/SettingsContext';
 
-// ─── DETAILED ITEM DATA ───────────────────────────────────────────────────────────
-
-const ITEM_DETAILS: Record<string, {
-  totalQty: number; stockValue: string; availableQty: number;
-  reorderLevel: number; leadTime: number; committedQty: number;
-  lastPurchaseRate: string; avgPurchaseRate: string; sellingPrice: string; marginPct: number;
-  narration: string;
-  movement: { id: string; type: string; ref: string; date: string; qty: string }[];
-}> = {
-  SI01: { totalQty: 85, stockValue: '₹3,57,000', availableQty: 70, reorderLevel: 20, leadTime: 14, committedQty: 15, lastPurchaseRate: '₹3,800/unit', avgPurchaseRate: '₹3,950/unit', sellingPrice: '₹4,200/unit', marginPct: 6, narration: 'Premium portable Bluetooth speaker. Handle with care.', movement: [ { id: 'M1', type: 'Purchase', ref: 'PO-789', date: '23 Jun', qty: '+100' }, { id: 'M2', type: 'Sale', ref: 'INV-172', date: '19 Jun', qty: '-20' }, { id: 'M3', type: 'Transfer', ref: 'WH-B', date: '14 Jun', qty: '-30' }, { id: 'M4', type: 'Transfer', ref: 'WH-B', date: '14 Jun', qty: '-30' } ] },
-  SI02: { totalQty: 320, stockValue: '₹1,44,000', availableQty: 300, reorderLevel: 50, leadTime: 7,  committedQty: 20, lastPurchaseRate: '₹380/unit',   avgPurchaseRate: '₹400/unit',   sellingPrice: '₹450/unit',   marginPct: 12, narration: 'Fast-charging USB-C cable, bulk stock.', movement: [ { id: 'M1', type: 'Purchase', ref: 'PO-812', date: '22 Jun', qty: '+200' }, { id: 'M2', type: 'Sale', ref: 'INV-195', date: '20 Jun', qty: '-50' }, { id: 'M3', type: 'Sale', ref: 'INV-181', date: '16 Jun', qty: '-30' } ] },
-  default: { totalQty: 562, stockValue: '₹53,000', availableQty: 85, reorderLevel: 10, leadTime: 35, committedQty: 15, lastPurchaseRate: '₹11.87/unit', avgPurchaseRate: '₹12.50/unit', sellingPrice: '₹18.00/unit', marginPct: 44, narration: '-', movement: [ { id: 'M1', type: 'Purchase', ref: 'PO-789', date: '23 Jun', qty: '+100' }, { id: 'M2', type: 'Sale', ref: 'INV-172', date: '19 Jun', qty: '-20' }, { id: 'M3', type: 'Transfer', ref: 'WH-B', date: '14 Jun', qty: '-30' }, { id: 'M4', type: 'Transfer', ref: 'WH-B', date: '14 Jun', qty: '-30' } ] },
-};
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+// STRICT PRODUCTION DATA RULE: No mock/fallback data. Real data or — only.
+const fmtRs = (n: number | null | undefined, unit = '') =>
+  n != null && !isNaN(+n) && +n > 0
+    ? `₹${(+n).toLocaleString('en-IN')}${unit}`
+    : '—';
 
 const MOV_CONFIG = {
-  Purchase: { icon: 'arrow-down-outline',      color: COLORS.positive, bg: COLORS.positiveBg },
-  Sale:     { icon: 'arrow-up-outline',         color: COLORS.negative, bg: COLORS.negativeBg },
-  Transfer: { icon: 'swap-horizontal-outline',  color: COLORS.info,     bg: COLORS.infoBg     },
+  Purchase:     { color: COLORS.positive },
+  Sale:         { color: COLORS.negative },
+  Transfer:     { color: COLORS.info     },
+  'Stock Journal': { color: COLORS.info  },
 };
 
-// ─── BARCODE STRIP (outside screen) ───────────────────────────────────────────────
-
-// Fixed bar-width pattern for a realistic barcode look
+// ─── BARCODE STRIP ───────────────────────────────────────────────────────────
 const BAR_W   = [3,1,2,1,3,2,1,1,2,1,3,1,1,2,1,2,1,3,2,1,1,2,1,3,2,1,1,2,3,1,1,2,1,3,1,2,1,1,3,2];
 const SCALE   = 3;
 const B_H     = 50;
@@ -46,65 +37,45 @@ function BarcodeStrip({ value }: { value: string }) {
   let cx = 0;
   const bars: { x: number; w: number; h: number }[] = [];
   BAR_W.forEach((w, i) => {
-    if (i % 2 === 0) {
-      bars.push({ x: cx, w: w * SCALE, h: i % 6 === 0 ? B_H + 8 : B_H });
-    }
+    if (i % 2 === 0) bars.push({ x: cx, w: w * SCALE, h: i % 6 === 0 ? B_H + 8 : B_H });
     cx += w * SCALE;
   });
-
   return (
     <View style={bc.wrap}>
       <Svg width={B_TOTAL} height={B_H + 24}>
         {bars.map((b, i) => (
           <Rect key={i} x={b.x} y={0} width={b.w} height={b.h} fill={COLORS.brandPrimary} />
         ))}
-        <SvgText
-          x={B_TOTAL / 2} y={B_H + 18}
-          textAnchor="middle" fontSize="10"
-          fill={COLORS.textSecondary}
-          letterSpacing="2"
-        >
+        <SvgText x={B_TOTAL / 2} y={B_H + 18} textAnchor="middle" fontSize="10" fill={COLORS.textSecondary} letterSpacing="2">
           {value}
         </SvgText>
       </Svg>
     </View>
   );
 }
-const bc = StyleSheet.create({
-  wrap: { alignItems: 'center', paddingVertical: SPACING.md },
-});
+const bc = StyleSheet.create({ wrap: { alignItems: 'center', paddingVertical: SPACING.md } });
 
-// ─── KEY MATRIX CELL (outside screen) ──────────────────────────────────────────────
-
-function MatrixCell({
-  label, value, valueColor, chevron, onPress,
-}: {
+// ─── MATRIX CELL ─────────────────────────────────────────────────────────────
+function MatrixCell({ label, value, valueColor, chevron, onPress }: {
   label: string; value: string; valueColor?: string; chevron?: boolean; onPress?: () => void;
 }) {
   return (
-    <TouchableOpacity
-      style={mc.cell}
-      activeOpacity={chevron ? 0.7 : 1}
-      onPress={onPress}
-      disabled={!chevron}
-    >
+    <TouchableOpacity style={mc.cell} onPress={onPress} activeOpacity={onPress ? 0.7 : 1} disabled={!onPress}>
       <Text style={mc.label}>{label}</Text>
-      <View style={mc.valRow}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
         <Text style={[mc.value, valueColor ? { color: valueColor } : {}]}>{value}</Text>
-        {chevron && <Ionicons name="chevron-forward" size={13} color={COLORS.textTertiary} />}
+        {chevron && <Ionicons name="chevron-forward" size={12} color={COLORS.textTertiary} />}
       </View>
     </TouchableOpacity>
   );
 }
 const mc = StyleSheet.create({
-  cell:   { flex: 1, padding: SPACING.sm, gap: 4, borderRightWidth: 1, borderRightColor: COLORS.borderDefault },
-  label:  { fontSize: 10, color: COLORS.textTertiary, fontWeight: '600', textTransform: 'uppercase' },
-  valRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  value:  { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
+  cell:  { flex: 1, padding: SPACING.sm, alignItems: 'center' },
+  label: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, textAlign: 'center', marginBottom: 4 },
+  value: { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary, textAlign: 'center' },
 });
 
-// ─── PRICING ROW (outside screen) ───────────────────────────────────────────────────
-
+// ─── PRICING ROW ─────────────────────────────────────────────────────────────
 function PricingRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
     <View style={pr.row}>
@@ -119,65 +90,61 @@ const pr = StyleSheet.create({
   value: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
 });
 
-// ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
-
+// ─── MAIN SCREEN ─────────────────────────────────────────────────────────────
 export default function ItemDetailScreen() {
   const router = useRouter();
-  const { id }  = useLocalSearchParams<{ id?: string }>();
+  const { id } = useLocalSearchParams<{ id?: string }>();
   const { company } = useAuth();
   const companyGuid = company?.guid;
-  const [liveItem, setLiveItem] = useState<any>(null);
-  const [movements, setMovements] = useState<any[]>([]);
-  const [rateData, setRateData] = useState<any>(null);
+
+  const [liveItem,   setLiveItem]   = useState<any>(null);
+  const [itemLoading, setItemLoading] = useState(true);
+  const [movements,  setMovements]  = useState<any[]>([]);
+  const [movLoading, setMovLoading] = useState(true);
+  const [rateData,   setRateData]   = useState<any>(null);
+  const [calOpen,    setCalOpen]    = useState(false);
+  const [dateFrom,   setDateFrom]   = useState('');
+  const [dateTo,     setDateTo]     = useState('');
 
   useEffect(() => {
     if (!companyGuid || !id) return;
-    getStockItem(companyGuid, id as string).then((res: any) => {
-      if (res?.data) setLiveItem(res.data);
-    }).catch(() => {});
+    setItemLoading(true);
+    getStockItem(companyGuid, id as string)
+      .then((res: any) => { if (res?.data) setLiveItem(res.data); })
+      .catch(() => {})
+      .finally(() => setItemLoading(false));
   }, [companyGuid, id]);
 
   useEffect(() => {
     if (!companyGuid || !id) return;
-    getStockMovements(companyGuid, id as string, { limit: '20' }).then((res: any) => {
-      if (res?.data) {
-        setMovements(res.data.movements || []);
-        setRateData(res.data);
-      }
-    }).catch(() => {});
+    setMovLoading(true);
+    getStockMovements(companyGuid, id as string, { limit: '20' })
+      .then((res: any) => {
+        if (res?.data) { setMovements(res.data.movements || []); setRateData(res.data); }
+      })
+      .catch(() => {})
+      .finally(() => setMovLoading(false));
   }, [companyGuid, id]);
 
-  const stockItem = liveItem || STOCK_ITEMS.find(i => i.id === id) || STOCK_ITEMS[0];
-  const mockDetail = ITEM_DETAILS[id || ''] || ITEM_DETAILS.default;
+  // All data from real API — STRICT PRODUCTION DATA RULE
+  const itemName     = liveItem?.name || (itemLoading ? 'Loading…' : '—');
+  const itemSku      = liveItem?.hsn_code || liveItem?.sku || '—';
+  const totalQty     = liveItem != null ? +(liveItem.closing_qty ?? 0) : null;
+  const stockValue   = fmtRs(liveItem?.closing_value);
+  const reorderLevel = liveItem?.reorder_level != null ? +(liveItem.reorder_level) : null;
+  const lastPurchRate = rateData?.lastPurchaseRate
+    ? fmtRs(rateData.lastPurchaseRate, '/unit')
+    : liveItem?.closing_rate ? fmtRs(liveItem.closing_rate, '/unit') : '—';
+  const avgPurchRate  = rateData?.avgPurchaseRate ? fmtRs(Math.round(+rateData.avgPurchaseRate), '/unit') : '—';
+  const sellingPrice  = rateData?.lastSellRate && +rateData.lastSellRate > 0 ? fmtRs(rateData.lastSellRate, '/unit') : '—';
+  const narration     = liveItem?.alias || '—';
 
-  // Use real API data when available, fall back to mock only for fields not yet in backend
-  const detail = liveItem ? {
-    ...mockDetail,
-    totalQty:         +(liveItem.closing_qty  ?? mockDetail.totalQty),
-    stockValue:       liveItem.closing_value != null
-                        ? `₹${(+liveItem.closing_value).toLocaleString('en-IN')}`
-                        : mockDetail.stockValue,
-    reorderLevel:     +(liveItem.reorder_level ?? mockDetail.reorderLevel),
-    lastPurchaseRate: rateData?.lastPurchaseRate
-                        ? `₹${(+rateData.lastPurchaseRate).toLocaleString('en-IN')}/unit`
-                        : (liveItem.closing_rate != null ? `₹${(+liveItem.closing_rate).toLocaleString('en-IN')}/unit` : mockDetail.lastPurchaseRate),
-    avgPurchaseRate:  rateData?.avgPurchaseRate
-                        ? `₹${Math.round(+rateData.avgPurchaseRate).toLocaleString('en-IN')}/unit`
-                        : mockDetail.avgPurchaseRate,
-    sellingPrice:     rateData?.lastSellRate && +rateData.lastSellRate > 0
-                        ? `₹${(+rateData.lastSellRate).toLocaleString('en-IN')}/unit`
-                        : '—',
-    narration:        liveItem.alias || '—',
-  } : mockDetail;
-
-  const [calOpen,  setCalOpen]  = useState(false);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo,   setDateTo]   = useState('');
-  const dateLabel = dateFrom && dateTo ? `${dateFrom} – ${dateTo}` : 'Last 10d';
-
-  const qtyColor = detail.totalQty < 0 ? COLORS.negative
-    : detail.totalQty < detail.reorderLevel ? COLORS.warning
+  const qtyColor = totalQty == null ? COLORS.textSecondary
+    : totalQty < 0 ? COLORS.negative
+    : reorderLevel != null && totalQty < reorderLevel ? COLORS.warning
     : COLORS.positive;
+
+  const dateLabel = dateFrom && dateTo ? `${dateFrom} – ${dateTo}` : 'Last 20';
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -186,106 +153,103 @@ export default function ItemDetailScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>{stockItem.name}</Text>
-        <TouchableOpacity style={styles.editBtn} activeOpacity={0.7}>
-          <Ionicons name="pencil-outline" size={20} color={COLORS.brandPrimary} />
-        </TouchableOpacity>
+        <Text style={styles.headerTitle} numberOfLines={1}>{itemName}</Text>
+        <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Product hero */}
-        <View style={styles.heroCard}>
-          <Text style={styles.heroName}>{stockItem.name}</Text>
-          <Text style={styles.heroSku}>{stockItem.sku}</Text>
-          {/* Barcode */}
-          <BarcodeStrip value={stockItem.sku} />
+      {itemLoading ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator color={COLORS.brandPrimary} />
         </View>
-
-        {/* Key Matrix */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Key Matrix</Text>
-          <View style={styles.matrixGrid}>
-            <View style={styles.matrixRow}>
-              <MatrixCell label="Total Qty on Hand" value={`${detail.totalQty}`}   valueColor={qtyColor} />
-              <MatrixCell label="Total Stock Value" value={detail.stockValue} />
-            </View>
-            <View style={[styles.matrixRow, styles.matrixRowMid]}>
-              <MatrixCell label="Available Qty"    value={`${detail.availableQty}`} valueColor={COLORS.positive} />
-              <MatrixCell label="Reorder Level"    value={`${detail.reorderLevel}`} />
-            </View>
-            <View style={styles.matrixRow}>
-              <MatrixCell label="Lead-time Days"   value={`${detail.leadTime}d`} />
-              <MatrixCell label="Committed Qty"    value={`${detail.committedQty}`} chevron onPress={() => {}} />
-            </View>
+      ) : !liveItem ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.xl }}>
+          <Ionicons name="cube-outline" size={48} color={COLORS.textTertiary} />
+          <Text style={{ marginTop: 12, color: COLORS.textSecondary, fontSize: TYPOGRAPHY.base, textAlign: 'center' }}>
+            Item not found. It may have been deleted or not yet synced.
+          </Text>
+        </View>
+      ) : (
+        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+          {/* Product hero */}
+          <View style={styles.heroCard}>
+            <Text style={styles.heroName}>{itemName}</Text>
+            <Text style={styles.heroSku}>{itemSku}</Text>
+            <BarcodeStrip value={itemSku !== '—' ? itemSku : '000000000'} />
           </View>
-        </View>
 
-        {/* Pricing & Cost */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Pricing &amp; Cost</Text>
-          <PricingRow label="Last Purchase Rate"        value={detail.lastPurchaseRate} />
-          <PricingRow label="Average Purchase Rate"     value={detail.avgPurchaseRate} />
-          <PricingRow label="Standard Selling Price(s)" value={detail.sellingPrice} />
-          <View style={[pr.row, { borderBottomWidth: 0 }]}>
-            <Text style={pr.label}>Margin %</Text>
-            <View style={styles.marginBadge}>
-              <Text style={styles.marginTxt}>{detail.marginPct}%</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Narration */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Narration</Text>
-          <Text style={styles.narrationTxt}>{detail.narration}</Text>
-        </View>
-
-        {/* Movement History */}
-        <View style={styles.card}>
-          <View style={styles.movHeader}>
-            <Text style={styles.cardTitle}>Movement History</Text>
-            <TouchableOpacity
-              style={styles.calBtn}
-              onPress={() => setCalOpen(true)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="calendar-outline" size={14} color={COLORS.brandPrimary} />
-              <Text style={styles.calBtnTxt}>{dateLabel}</Text>
-            </TouchableOpacity>
-          </View>
-          {(movements.length > 0 ? movements : detail.movement).map((m: any, i: number) => {
-            // Real movement fields: m.voucher_number, m.type, m.date, m.qty, m.rate
-            // Mock movement fields: m.id, m.type, m.ref, m.date, m.qty (string)
-            const isReal = !!m.voucher_number || (m.qty !== undefined && typeof m.qty === 'number');
-            const qtyNum  = isReal ? +(m.qty || 0) : 0;
-            const isInward = isReal
-              ? (m.type || '').toLowerCase().includes('purchase')
-              : (m.qty || '').startsWith('+');
-            const qtyLabel = isReal
-              ? (isInward ? `+${qtyNum}` : `-${qtyNum}`)
-              : m.qty;
-            const isPos = qtyLabel?.toString().startsWith('+');
-            const cfg = MOV_CONFIG[(m.type || m.voucher_type) as keyof typeof MOV_CONFIG] || MOV_CONFIG.Transfer;
-
-            return (
-              <View key={`mv-${i}-${m.voucher_number || m.id || i}`} style={styles.mvRow}>
-                <View style={[styles.mvDot, { backgroundColor: isPos ? COLORS.positive : COLORS.negative }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.mvType}>{m.type || m.voucher_type || '—'}</Text>
-                  <Text style={styles.mvRef}>{m.ref || m.voucher_number || '—'} · {
-                    isReal && m.date ? new Date(m.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : m.date
-                  }</Text>
-                </View>
-                <Text style={[styles.mvQty, { color: isPos ? COLORS.positive : COLORS.negative }]}>
-                  {qtyLabel}
-                </Text>
+          {/* Key Matrix */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Key Matrix</Text>
+            <View style={styles.matrixGrid}>
+              <View style={styles.matrixRow}>
+                <MatrixCell label="Total Qty on Hand"  value={totalQty != null ? String(totalQty) : '—'} valueColor={qtyColor} />
+                <MatrixCell label="Total Stock Value"  value={stockValue} />
               </View>
-            );
-          })}
-        </View>
+              <View style={[styles.matrixRow, styles.matrixRowMid]}>
+                <MatrixCell label="Reorder Level"      value={reorderLevel != null ? String(reorderLevel) : '—'} />
+                <MatrixCell label="Warehouse"          value={liveItem?.warehouse_name || '—'} />
+              </View>
+            </View>
+          </View>
 
-        <View style={{ height: 60 }} />
-      </ScrollView>
+          {/* Pricing & Cost */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Pricing &amp; Cost</Text>
+            <PricingRow label="Last Purchase Rate"         value={lastPurchRate} />
+            <PricingRow label="Average Purchase Rate"      value={avgPurchRate} />
+            <PricingRow label="Last Selling Price"         value={sellingPrice} />
+          </View>
+
+          {/* Narration / Alias */}
+          {narration !== '—' && (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Narration</Text>
+              <Text style={styles.narrationTxt}>{narration}</Text>
+            </View>
+          )}
+
+          {/* Movement History */}
+          <View style={styles.card}>
+            <View style={styles.movHeader}>
+              <Text style={styles.cardTitle}>Movement History</Text>
+              <TouchableOpacity style={styles.calBtn} onPress={() => setCalOpen(true)} activeOpacity={0.7}>
+                <Ionicons name="calendar-outline" size={14} color={COLORS.brandPrimary} />
+                <Text style={styles.calBtnTxt}>{dateLabel}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {movLoading ? (
+              <ActivityIndicator color={COLORS.brandPrimary} style={{ marginVertical: 16 }} />
+            ) : movements.length === 0 ? (
+              <Text style={{ color: COLORS.textTertiary, fontSize: TYPOGRAPHY.sm, textAlign: 'center', paddingVertical: 16 }}>
+                No movement history found.
+              </Text>
+            ) : (
+              movements.map((m: any, i: number) => {
+                const qty      = +(m.qty || 0);
+                const isInward = (m.type || '').toLowerCase().includes('purchase') || qty > 0;
+                const qtyLabel = `${isInward ? '+' : '-'}${Math.abs(qty)}`;
+                const isPos    = isInward;
+                const cfg      = (MOV_CONFIG as any)[m.type || m.voucher_type] || MOV_CONFIG.Transfer;
+                return (
+                  <View key={`mv-${i}-${m.voucher_number || i}`} style={styles.mvRow}>
+                    <View style={[styles.mvDot, { backgroundColor: isPos ? COLORS.positive : COLORS.negative }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.mvType}>{m.type || m.voucher_type || '—'}</Text>
+                      <Text style={styles.mvRef}>
+                        {m.voucher_number || '—'} · {m.date ? new Date(m.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'}
+                      </Text>
+                    </View>
+                    <Text style={[styles.mvQty, { color: isPos ? COLORS.positive : COLORS.negative }]}>{qtyLabel}</Text>
+                  </View>
+                );
+              })
+            )}
+          </View>
+
+          <View style={{ height: 60 }} />
+        </ScrollView>
+      )}
 
       <DateRangePickerModal
         visible={calOpen}
@@ -298,8 +262,7 @@ export default function ItemDetailScreen() {
   );
 }
 
-// ─── STYLES ───────────────────────────────────────────────────────────────
-
+// ─── STYLES ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: COLORS.pageBg },
   header: {
@@ -310,46 +273,28 @@ const styles = StyleSheet.create({
   },
   backBtn:    { width: 40, alignItems: 'flex-start' },
   headerTitle:{ flex: 1, fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
-  editBtn:    { width: 40, alignItems: 'flex-end' },
   scroll:     { flex: 1 },
 
-  // Hero
   heroCard: { backgroundColor: COLORS.cardBg, margin: SPACING.md, borderRadius: RADIUS.lg, padding: SPACING.md, alignItems: 'center', borderWidth: 1, borderColor: COLORS.borderDefault },
-  heroIcon: { width: 72, height: 72, borderRadius: RADIUS.xl, alignItems: 'center', justifyContent: 'center', marginBottom: SPACING.sm },
   heroName: { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary, textAlign: 'center' },
   heroSku:  { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary, marginTop: 4, letterSpacing: 0.5 },
 
-  // Shared card
   card:      { backgroundColor: COLORS.cardBg, marginHorizontal: SPACING.md, marginBottom: 10, borderRadius: RADIUS.lg, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
   cardTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginBottom: SPACING.sm },
 
-  // Key Matrix
   matrixGrid:   { borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, overflow: 'hidden' },
   matrixRow:    { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   matrixRowMid: { backgroundColor: COLORS.pageBg },
 
-  // Pricing
-  marginBadge: { backgroundColor: COLORS.positiveBg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
-  marginTxt:   { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.positive },
-
-  // Narration
   narrationTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, lineHeight: 20 },
 
-  // Movement history
   movHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.sm },
   calBtn:    { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.pageBg, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: COLORS.borderDefault },
   calBtnTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary, fontWeight: '600' },
-  movRow:    { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
-  movIcon:   { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  movInfo:   { flex: 1 },
-  movType:   { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  movRef:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 1 },
-  movQty:    { fontSize: TYPOGRAPHY.base, fontWeight: '800', minWidth: 46, textAlign: 'right' },
-  movDate:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, minWidth: 42, textAlign: 'right' },
-  // real-movement row styles
-  mvRow:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
-  mvDot:     { width: 8, height: 8, borderRadius: 4 },
-  mvType:    { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  mvRef:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 1 },
-  mvQty:     { fontSize: TYPOGRAPHY.base, fontWeight: '800', minWidth: 46, textAlign: 'right' as const },
+
+  mvRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
+  mvDot:  { width: 8, height: 8, borderRadius: 4 },
+  mvType: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  mvRef:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 1 },
+  mvQty:  { fontSize: TYPOGRAPHY.base, fontWeight: '800', minWidth: 46, textAlign: 'right' as const },
 });
