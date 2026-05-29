@@ -68,6 +68,14 @@ export function AddItemModal({
       Toast.show({ type: 'error', text1: 'Required', text2: 'Select a unit of measure.' });
       return false;
     }
+    if (qty && parseFloat(qty) < 0) {
+      Toast.show({ type: 'error', text1: 'Invalid Qty', text2: 'Opening quantity cannot be negative.' });
+      return false;
+    }
+    if (purchPrice && parseFloat(purchPrice) < 0) {
+      Toast.show({ type: 'error', text1: 'Invalid Price', text2: 'Purchase price cannot be negative.' });
+      return false;
+    }
     return true;
   };
 
@@ -106,8 +114,9 @@ export function AddItemModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+      <View style={{ flex: 1 }}>
         <TouchableOpacity style={ms.overlay} activeOpacity={1} onPress={handleClose} />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
         <View style={[ms.sheet, { paddingBottom: Math.max(insets.bottom, 8) }]}>
           <View style={ms.handle} />
 
@@ -198,7 +207,8 @@ export function AddItemModal({
             />
           </View>
         </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }

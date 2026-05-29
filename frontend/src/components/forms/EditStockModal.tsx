@@ -114,8 +114,9 @@ export function EditStockModal({
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+      <View style={{ flex: 1 }}>
         <TouchableOpacity style={ms.overlay} activeOpacity={1} onPress={handleClose} />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
         <View style={[ms.sheet, { paddingBottom: Math.max(insets.bottom, 8) }]}>
           <View style={ms.handle} />
 
@@ -187,7 +188,8 @@ export function EditStockModal({
             />
           </View>
         </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
