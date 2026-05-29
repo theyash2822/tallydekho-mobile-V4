@@ -839,16 +839,11 @@ export default function LedgerScreen() {
             <Text style={styles.emptyText}>{data.length === 0 ? t('ledger.noLedgers') : t('ledger.noMatch')}</Text>
           </View>
         )}
+        onEndReached={loadMoreLedgers}
+        onEndReachedThreshold={0.3}
         ListFooterComponent={() => (
           <>
-            {!isLoading && hasMore && (
-              <TouchableOpacity style={styles.loadMoreBtn} onPress={loadMoreLedgers} disabled={isLoadingMore} activeOpacity={0.8}>
-                {isLoadingMore
-                  ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
-                  : <Text style={styles.loadMoreTxt}>Load More</Text>
-                }
-              </TouchableOpacity>
-            )}
+            {isLoadingMore && <ActivityIndicator size="small" color={COLORS.brandPrimary} style={{ marginVertical: 12 }} />}
             {!isLoading && !hasMore && data.length > 0 && (
               <Text style={styles.endTxt}>All {data.length} ledgers loaded</Text>
             )}
