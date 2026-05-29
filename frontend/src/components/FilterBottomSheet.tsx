@@ -56,7 +56,8 @@ export default function FilterBottomSheet({
   heightFraction = 0.72,
 }: FilterBottomSheetProps) {
   const insets = useSafeAreaInsets();
-  const sheetH = SCREEN_H * heightFraction;
+  // Dynamic max height — never more than 72% of screen, never less than 30%
+  const sheetH = Math.min(SCREEN_H * heightFraction, SCREEN_H * 0.72);
 
   return (
     <Modal
@@ -104,7 +105,7 @@ export default function FilterBottomSheet({
           </TouchableOpacity>
           <TouchableOpacity
             style={s.applyBtn}
-            onPress={() => { onApply(); onClose(); }}
+            onPress={onApply}
             activeOpacity={0.85}
           >
             <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />

@@ -17,32 +17,26 @@ import {
   modalStyles as ms,
 } from './StockFormHelpers';
 
-// ─── LOCAL TYPE ───────────────────────────────────────────────────────────────
-type TransferRow = { item: StockItem; qty: number; batchSerial: string };
+type TransferRow = { item: StockItem; qty: number };
 
-// ─── COMPONENT ───────────────────────────────────────────────────────────────
 export function BulkTransferModal({
   visible, preselectedItems, onClose,
 }: {
   visible: boolean; preselectedItems: StockItem[]; onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const [rows,       setRows]       = useState<TransferRow[]>([]);
-  const [search,     setSearch]     = useState('');
-  const [sourceWh,        setSourceWh]        = useState('');
-  const [sourceRack,      setSourceRack]      = useState('');
-  const [destWhId,        setDestWhId]        = useState('');
-  const [destRack,        setDestRack]        = useState('');
-  const [narration,       setNarration]       = useState('');
-  const [warehouseOptions, setWarehouseOptions] = useState<{id:string;label:string}[]>([]);
   const { company } = useAuth();
+
+  const [rows,             setRows]             = useState<TransferRow[]>([]);
+  const [search,           setSearch]           = useState('');
+  const [destWhId,         setDestWhId]         = useState('');
+  const [narration,        setNarration]        = useState('');
+  const [warehouseOptions, setWarehouseOptions] = useState<{id:string;label:string}[]>([]);
 
   useEffect(() => {
     if (visible) {
-      setRows(preselectedItems.map(i => ({ item: i, qty: 1, batchSerial: '' })));
-      setSearch(''); setSourceWh(''); setSourceRack('');
-      setDestWhId(''); setDestRack(''); setNarration('');
-      // Load real warehouses
+      setRows(preselectedItems.map(i => ({ item: i, qty: 1 })));
+      setSearch(''); setDestWhId(''); setNarration('');
       if (company?.guid) {
         getWarehouses(company.guid)
           .then((res: any) => {
@@ -54,20 +48,20 @@ export function BulkTransferModal({
     }
   }, [visible]);
 
-  // Search is limited to pre-selected real items only — no mock STOCK_ITEMS
-  const searchResults: StockItem[] = [];
+  // Search filters the pre-selected rows (not adds new items)
+  const filteredRows = search.trim()
+    ? rows.filter(r =>
+        r.item.name.toLowerCase().includes(search.toLowerCase()) ||
+        r.item.sku.toLowerCase().includes(search.toLowerCase())
+      )
+    : rows;
 
-  const addItem    = (i: StockItem)       => { setRows(p => [...p, { item: i, qty: 1, batchSerial: '' }]); setSearch(''); };
-  const removeItem = (id: string)         => setRows(p => p.filter(r => r.item.id !== id));
+  const removeItem = (id: string) => setRows(p => p.filter(r => r.item.id !== id));
   const updQty     = (id: string, q: number) => setRows(p => p.map(r => r.item.id === id ? { ...r, qty: q } : r));
-  const updBatch   = (id: string, b: string) => setRows(p => p.map(r => r.item.id === id ? { ...r, batchSerial: b } : r));
-
-  const shownPills = rows.slice(0, 3);
-  const extraCount = rows.length - 3;
 
   const validate = () => {
     if (rows.length === 0) {
-      Toast.show({ type: 'error', text1: 'No Items', text2: 'Add at least one item to transfer.' });
+      Toast.show({ type: 'error', text1: 'No Items', text2: 'No items selected for transfer.' });
       return false;
     }
     if (!destWhId) {
@@ -93,7 +87,7 @@ export function BulkTransferModal({
         companyName: company.name || '',
         date:        new Date().toISOString().slice(0, 10),
         narration:   narration || `Bulk transfer → ${toLabel}`,
-        fromGodown:  sourceWh || 'Main Location',
+        fromGodown:  preselectedItems[0]?.warehouse || 'Main Location',
         toGodown:    toLabel,
         items:       itemsList,
       });
@@ -110,19 +104,42 @@ export function BulkTransferModal({
     }
   };
 
+  const handleClose = () => { if (onClose) onClose(); };
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <TouchableOpacity style={ms.overlay} activeOpacity={1} onPress={onClose} />
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
+      <View style={{ flex: 1 }}>
+        <TouchableOpacity style={ms.overlay} activeOpacity={1} onPress={handleClose} />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
         <View style={[ms.sheet, { paddingBottom: Math.max(insets.bottom, 8) }]}>
           <View style={ms.handle} />
 
           {/* Header */}
           <View style={ms.titleRow}>
-            <Text style={ms.title}>Bulk Transfer</Text>
-            <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
+            <View>
+              <Text style={ms.title}>Bulk Transfer</Text>
+              <Text style={bt.subtitle}>{rows.length} item{rows.length !== 1 ? 's' : ''} selected</Text>
+            </View>
+            <TouchableOpacity onPress={handleClose} activeOpacity={0.7}>
               <Ionicons name="close" size={22} color={COLORS.textSecondary} />
             </TouchableOpacity>
+          </View>
+
+          {/* Search bar — filters pre-selected items */}
+          <View style={bt.searchWrap}>
+            <Ionicons name="search-outline" size={15} color={COLORS.textTertiary} />
+            <TextInput
+              style={bt.searchInput}
+              value={search}
+              onChangeText={setSearch}
+              placeholder={`Search ${rows.length} selected items...`}
+              placeholderTextColor={COLORS.textTertiary}
+            />
+            {search.length > 0 && (
+              <TouchableOpacity onPress={() => setSearch('')}>
+                <Ionicons name="close-circle" size={15} color={COLORS.textTertiary} />
+              </TouchableOpacity>
+            )}
           </View>
 
           <ScrollView
@@ -130,162 +147,57 @@ export function BulkTransferModal({
             contentContainerStyle={ms.scroll}
             keyboardShouldPersistTaps="handled"
           >
-            {/* ── Item Name (SKU) section ─────────────────────── */}
-            <View style={bt.pillSection}>
-              <Text style={ms.sectionLbl}>Item Name (SKU)</Text>
-
-              {/* Pills row */}
-              <View style={bt.pillRow}>
-                {shownPills.map(r => (
-                  <View key={r.item.id} style={bt.pill}>
-                    <Text style={bt.pillTxt} numberOfLines={1}>{r.item.name} ({r.item.sku})</Text>
-                    <TouchableOpacity
-                      onPress={() => removeItem(r.item.id)}
-                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    >
-                      <Ionicons name="close" size={13} color={COLORS.textSecondary} />
-                    </TouchableOpacity>
+            {/* Items list */}
+            {filteredRows.map(r => (
+              <View key={r.item.id} style={bt.itemCard}>
+                <View style={bt.itemHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={bt.itemName} numberOfLines={1}>{r.item.name}</Text>
+                    <Text style={bt.itemSku}>{r.item.sku} · {r.item.qty} {r.item.unit || 'units'} on hand</Text>
                   </View>
-                ))}
-                {extraCount > 0 ? (
-                  <View style={bt.pillExtra}>
-                    <Text style={bt.pillExtraTxt}>+{extraCount} more</Text>
-                  </View>
-                ) : null}
-                {rows.length === 0 ? (
-                  <Text style={bt.emptyPill}>No items selected — search below to add</Text>
-                ) : null}
-              </View>
-
-              {/* Search to add items */}
-              <View style={bt.searchWrap}>
-                <Ionicons name="search-outline" size={14} color={COLORS.textTertiary} />
-                <TextInput
-                  style={bt.searchInput}
-                  value={search}
-                  onChangeText={setSearch}
-                  placeholder="Search & add items..."
-                  placeholderTextColor={COLORS.textTertiary}
-                />
-                {search.length > 0 ? (
-                  <TouchableOpacity onPress={() => setSearch('')}>
-                    <Ionicons name="close-circle" size={15} color={COLORS.textTertiary} />
+                  <TouchableOpacity
+                    onPress={() => removeItem(r.item.id)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="trash-outline" size={16} color={COLORS.negative} />
                   </TouchableOpacity>
-                ) : null}
-              </View>
-
-              {/* Search results */}
-              {searchResults.length > 0 ? (
-                <View style={bt.results}>
-                  {searchResults.map((i: StockItem, idx: number) => (
-                    <TouchableOpacity
-                      key={i.id}
-                      style={[bt.resultItem, idx < searchResults.length - 1 && { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault }]}
-                      onPress={() => addItem(i)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={bt.resultIcon}>
-                        <Ionicons name="cube-outline" size={14} color={COLORS.textPrimary} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={bt.resultName} numberOfLines={1}>{i.name}</Text>
-                        <Text style={bt.resultSku}>{i.sku}</Text>
-                      </View>
-                      <Ionicons name="add-circle-outline" size={18} color={COLORS.brandPrimary} />
-                    </TouchableOpacity>
-                  ))}
                 </View>
-              ) : null}
-            </View>
-
-            {/* ── Source Location ──────────────────────────────── */}
-            <InlineField
-              label="Source Warehouse"
-              value={sourceWh}
-              onChange={setSourceWh}
-              placeholder="Search warehouse..."
-            />
-            <InlineField
-              label="Source Rack"
-              value={sourceRack}
-              onChange={setSourceRack}
-              placeholder="Search rack..."
-            />
-
-            {/* ── Per-item transfer sections ───────────────────── */}
-            {rows.length > 0 ? (
-              <View>
-                <View style={ms.divider} />
-                <Text style={[ms.sectionLbl, { marginBottom: 10 }]}>Items to Transfer</Text>
-                {rows.map(r => (
-                  <View key={r.item.id} style={bt.itemCard}>
-                    {/* Item card header */}
-                    <View style={bt.itemHeader}>
-                      <View style={bt.itemIcon}>
-                        <Ionicons name="cube-outline" size={16} color={COLORS.textPrimary} />
-                      </View>
-                      <Text style={bt.itemName} numberOfLines={1}>{r.item.name}</Text>
-                      <TouchableOpacity
-                        onPress={() => removeItem(r.item.id)}
-                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                        style={{ padding: 2 }}
-                      >
-                        <Ionicons name="close" size={16} color={COLORS.textTertiary} />
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* On-hand Qty + Batch/Serial (side-by-side) */}
-                    <View style={ms.row}>
-                      <ReadonlyField label="On-hand Qty" value={String(r.item.qty)} />
-                      <InlineField
-                        label="Batch / Serial"
-                        value={r.batchSerial}
-                        onChange={v => updBatch(r.item.id, v)}
-                        placeholder="SN2024-01"
-                      />
-                    </View>
-
-                    {/* Qty to Transfer stepper (full width) */}
-                    <QtyStepperField
-                      label="Quantity to Transfer"
-                      subLabel="(required)"
-                      value={r.qty}
-                      onChange={q => updQty(r.item.id, q)}
-                    />
-                  </View>
-                ))}
-                <View style={ms.divider} />
+                <QtyStepperField
+                  label="Qty to Transfer"
+                  value={r.qty}
+                  onChange={q => updQty(r.item.id, q)}
+                />
               </View>
-            ) : null}
+            ))}
 
-            {/* ── Destination Location ─────────────────────────── */}
+            {filteredRows.length === 0 && search.trim() && (
+              <Text style={bt.emptyTxt}>No items match "{search}"</Text>
+            )}
+
+            <View style={ms.divider} />
+
+            {/* Destination */}
             <InlineDropdownField
-              label="Destination Warehouse"
+              label="Destination Warehouse *"
               options={warehouseOptions}
               value={destWhId}
-              placeholder={warehouseOptions.length > 0 ? 'Select warehouse' : 'Loading...'}
+              placeholder={warehouseOptions.length > 0 ? 'Select destination' : 'Loading...'}
               onSelect={setDestWhId}
               icon="home-outline"
               required
             />
             <InlineField
-              label="Destination Rack"
-              value={destRack}
-              onChange={setDestRack}
-              placeholder="Search rack..."
-            />
-            <InlineField
               label="Narration"
               value={narration}
               onChange={setNarration}
-              placeholder="—"
+              placeholder="Optional note"
               multiline
             />
           </ScrollView>
 
           <View style={ms.footer}>
             <SubmitButton
-              idleLabel="Transfer All"
+              idleLabel={`Transfer ${rows.length} Item${rows.length !== 1 ? 's' : ''}`}
               loadingLabel="Transferring..."
               successLabel="✓ Transferred"
               onValidate={validate}
@@ -293,29 +205,19 @@ export function BulkTransferModal({
             />
           </View>
         </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
 
-// ─── STYLES ───────────────────────────────────────────────────────────────────
 const bt = StyleSheet.create({
-  pillSection:  { marginBottom: SPACING.md },
-  pillRow:      { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
-  pill:         { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#E8E7E1', borderRadius: RADIUS.full, maxWidth: 200 },
-  pillTxt:      { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textPrimary, flex: 1 },
-  pillExtra:    { paddingHorizontal: 10, paddingVertical: 6, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.full },
-  pillExtraTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white },
-  emptyPill:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontStyle: 'italic' },
-  searchWrap:   { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: COLORS.borderDefault },
-  searchInput:  { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, padding: 0 },
-  results:      { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, marginTop: 6, overflow: 'hidden' },
-  resultItem:   { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
-  resultIcon:   { width: 28, height: 28, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E8E7E1' },
-  resultName:   { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  resultSku:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
-  itemCard:     { backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, padding: SPACING.sm, marginBottom: 10, borderWidth: 1, borderColor: COLORS.borderDefault },
-  itemHeader:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  itemIcon:     { width: 28, height: 28, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E8E7E1' },
-  itemName:     { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  subtitle:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
+  searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 8, marginHorizontal: SPACING.md, marginBottom: 4, borderWidth: 1, borderColor: COLORS.borderDefault },
+  searchInput:{ flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, padding: 0 },
+  itemCard:   { backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, padding: SPACING.sm, marginBottom: 10, borderWidth: 1, borderColor: COLORS.borderDefault },
+  itemHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
+  itemName:   { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  itemSku:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
+  emptyTxt:   { textAlign: 'center', color: COLORS.textTertiary, fontSize: TYPOGRAPHY.sm, paddingVertical: 16 },
 });

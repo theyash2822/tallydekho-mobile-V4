@@ -116,19 +116,23 @@ function SwipeableStockCard({ item, isMultiSelectMode, isSelected, onPress, onLo
 
 // ─── FILTER MODAL (uses shared FilterBottomSheet + FilterChipGroup) ──────────
 
-function FilterModal({ visible, onClose, onApply, initWh, initCat, initGrp, whOptions, catOptions, grpOptions }: {
+function FilterModal({ visible, onClose, onApply, initWh, initGrp, whOptions, grpOptions }: {
   visible: boolean; onClose: () => void;
-  onApply: (wh: string[], cat: string[], grp: string[]) => void;
-  initWh: string[]; initCat: string[]; initGrp: string[];
+  onApply: (wh: string[], grp: string[]) => void;
+  initWh: string[]; initGrp: string[];
   whOptions: { id: string; label: string }[];
-  catOptions: { id: string; label: string }[];
   grpOptions: { id: string; label: string }[];
 }) {
-  const [selWh, setSelWh]   = useState<string[]>(initWh);
-  const [selCat, setSelCat] = useState<string[]>(initCat);
+  const [selWh,  setSelWh]  = useState<string[]>(initWh);
   const [selGrp, setSelGrp] = useState<string[]>(initGrp);
-  useEffect(() => { if (visible) { setSelWh(initWh); setSelCat(initCat); setSelGrp(initGrp); } }, [visible]);
-  const total = selWh.length + selCat.length + selGrp.length;
+  // Sync state when modal opens
+  useEffect(() => { if (visible) { setSelWh(initWh); setSelGrp(initGrp); } }, [visible]);
+  const total = selWh.length + selGrp.length;
+
+  const handleApply = () => {
+    onApply(selWh, selGrp);
+    onClose();
+  };
 
   return (
     <FilterBottomSheet
@@ -136,9 +140,9 @@ function FilterModal({ visible, onClose, onApply, initWh, initCat, initGrp, whOp
       onClose={onClose}
       title="Filter Items"
       activeCount={total}
-      onClear={() => { setSelWh([]); setSelCat([]); setSelGrp([]); }}
-      onApply={() => { onApply(selWh, selCat, selGrp); onClose(); }}
-      applyLabel="Apply Filters"
+      onClear={() => { setSelWh([]); setSelGrp([]); }}
+      onApply={handleApply}
+      applyLabel={total > 0 ? `Apply (${total} active)` : 'Apply'}
     >
       {whOptions.length > 0 && (
         <FilterChipGroup
@@ -149,15 +153,6 @@ function FilterModal({ visible, onClose, onApply, initWh, initCat, initGrp, whOp
           onSelect={setSelWh}
         />
       )}
-      {catOptions.length > 0 && (
-        <FilterChipGroup
-          label="Category"
-          options={catOptions}
-          selected={selCat}
-          multi
-          onSelect={setSelCat}
-        />
-      )}
       {grpOptions.length > 0 && (
         <FilterChipGroup
           label="Item Group"
@@ -166,6 +161,11 @@ function FilterModal({ visible, onClose, onApply, initWh, initCat, initGrp, whOp
           multi
           onSelect={setSelGrp}
         />
+      )}
+      {whOptions.length === 0 && grpOptions.length === 0 && (
+        <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+          <Text style={{ color: COLORS.textSecondary, fontSize: 14 }}>No filter options available. Sync Tally first.</Text>
+        </View>
       )}
       <View style={{ height: 16 }} />
     </FilterBottomSheet>
@@ -378,11 +378,6 @@ export default function TotalStockScreen() {
             <Ionicons name="add-circle-outline" size={18} color={COLORS.textPrimary} />
             <Text style={styles.popoverItemTxt}>Add New Item</Text>
           </TouchableOpacity>
-          <View style={styles.popoverDivider} />
-          <TouchableOpacity style={styles.popoverItem} onPress={openBulkFromMenu} activeOpacity={0.8}>
-            <Ionicons name="swap-vertical-outline" size={18} color={COLORS.textPrimary} />
-            <Text style={styles.popoverItemTxt}>Bulk Transfer</Text>
-          </TouchableOpacity>
         </View>
       )}
 
@@ -535,9 +530,9 @@ export default function TotalStockScreen() {
       <FilterModal
         visible={filterOpen}
         onClose={() => setFilterOpen(false)}
-        onApply={(wh, cat, grp) => { setSelWh(wh); setSelCat(cat); setSelGrp(grp); }}
-        initWh={selWh} initCat={selCat} initGrp={selGrp}
-        whOptions={whOptions} catOptions={catOptions} grpOptions={grpOptions}
+        onApply={(wh, grp) => { setSelWh(wh); setSelGrp(grp); }}
+        initWh={selWh} initGrp={selGrp}
+        whOptions={whOptions} grpOptions={grpOptions}
       />
       <AddItemModal visible={addItemOpen} onClose={() => setAddItemOpen(false)} />
       <EditStockModal visible={!!editItem} item={editItem} onClose={() => setEditItem(null)} />
