@@ -140,7 +140,7 @@ export function StockTransferModal({
       <View style={{ flex: 1 }}>
         <TouchableOpacity style={ms.overlay} activeOpacity={1} onPress={handleClose} />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
-        <View style={[ms.sheet, { paddingBottom: insets.bottom }]}>
+        <View style={[ms.sheet, { paddingBottom: 0 }]}>
           <View style={ms.handle} />
 
           <View style={ms.titleRow}>
@@ -210,7 +210,7 @@ export function StockTransferModal({
             />
           </ScrollView>
 
-          <View style={ms.footer}>
+          <View style={[ms.footer, { paddingBottom: Math.max(insets.bottom, 8) }]}>
             <SubmitButton
               idleLabel="Transfer"
               loadingLabel="Transferring..."
