@@ -22,7 +22,7 @@ type SyncStatus = 'synced' | 'pending' | 'processing' | 'failed';
 type VoucherType =
   | 'ALL' | 'Sales' | 'Purchase' | 'Payment' | 'Receipt'
   | 'Journal' | 'Contra' | 'Debit Note' | 'Credit Note' | 'Delivery Note'
-  | 'Stock Transfer' | 'Adjustment';
+  | 'Stock Transfer' | 'Adjustment' | 'Stock Edit' | 'New Item' | 'New Ledger' | 'New Warehouse';
 
 interface VoucherEntry {
   id: string;
@@ -43,7 +43,7 @@ interface VoucherEntry {
 const VOUCHER_TYPES: VoucherType[] = [
   'ALL', 'Sales', 'Purchase', 'Payment', 'Receipt',
   'Journal', 'Contra', 'Debit Note', 'Credit Note', 'Delivery Note',
-  'Stock Transfer', 'Adjustment',
+  'Stock Transfer', 'Adjustment', 'Stock Edit', 'New Item', 'New Ledger', 'New Warehouse',
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -74,6 +74,10 @@ const mapVoucherType = (raw: string): Exclude<VoucherType, 'ALL'> => {
   if (s.includes('delivery')) return 'Delivery Note';
   if (s.includes('transfer')) return 'Stock Transfer';
   if (s.includes('adjustment')) return 'Adjustment';
+  if (s.includes('stock edit') || s.includes('alter')) return 'Stock Edit';
+  if (s.includes('new item')) return 'New Item';
+  if (s.includes('new ledger') || s.includes('party')) return 'New Ledger';
+  if (s.includes('new warehouse') || s.includes('warehouse')) return 'New Warehouse';
   return 'Journal';
 };
 
