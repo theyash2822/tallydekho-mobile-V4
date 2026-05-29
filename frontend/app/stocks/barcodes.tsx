@@ -314,8 +314,8 @@ export default function BarcodesScreen() {
           IMPORT BULK BARCODES MODAL
       ══════════════════════════════════════════ */}
       <Modal visible={importVisible} animationType="slide" transparent onRequestClose={() => setImportVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-          <Pressable style={s.modalOverlay} onPress={() => setImportVisible(false)}>
+        <Pressable style={s.modalOverlay} onPress={() => setImportVisible(false)}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
             <Pressable style={s.importSheet} onPress={e => e.stopPropagation()}>
               <View style={s.modalHandle} />
               <View style={s.importHeader}>
@@ -370,8 +370,8 @@ export default function BarcodesScreen() {
                 <View style={{ height: 40 }} />
               </ScrollView>
             </Pressable>
-          </Pressable>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </Pressable>
       </Modal>
     </SafeAreaView>
   );

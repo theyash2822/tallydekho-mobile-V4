@@ -572,12 +572,9 @@ function OTPVerifySheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: COLORS.overlay }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
-      >
+      <View style={{ flex: 1, backgroundColor: COLORS.overlay }}>
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
         <View style={ps.modalSheet}>
           <View style={ps.handle} />
 
@@ -602,7 +599,8 @@ function OTPVerifySheet({
           {step === 3 && renderInput(false)}
           {step === 4 && renderOTP(false)}
         </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }

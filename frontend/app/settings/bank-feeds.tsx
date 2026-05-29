@@ -148,11 +148,9 @@ function BankFormSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={bfs.overlay}
-      >
+      <View style={bfs.overlay}>
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
         <View style={bfs.sheet}>
           <View style={bfs.handle} />
 
@@ -259,7 +257,8 @@ function BankFormSheet({
           </TouchableOpacity>
           <View style={{ height: 24 }} />
         </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }

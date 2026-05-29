@@ -231,11 +231,9 @@ function PartySelectorSheet({ visible, currentSelection, onClose, onConfirm }: {
     setChecked(prev => { const n = new Set(prev); n.has(name) ? n.delete(name) : n.add(name); return n; });
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={ps.overlay}
-      >
+      <View style={ps.overlay}>
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
         <View style={ps.sheet}>
           <View style={ps.handle} />
           <Text style={ps.title}>Select Exception Parties</Text>
@@ -287,7 +285,8 @@ function PartySelectorSheet({ visible, currentSelection, onClose, onConfirm }: {
             </TouchableOpacity>
           </View>
         </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
