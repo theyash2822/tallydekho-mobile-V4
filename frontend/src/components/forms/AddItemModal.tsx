@@ -1,16 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView,
-  KeyboardAvoidingView, Platform, Switch, Keyboard,
+  KeyboardAvoidingView, Platform, Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
-import { ALL_UNITS, ALL_TAX_RATES, ALL_GROUPS, ALL_WAREHOUSES } from '../../data/stockData';
+import { ALL_TAX_RATES } from '../../data/stockData';
 import { COLORS, TYPOGRAPHY, SPACING } from '../../constants/colors';
-import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
-import { createStockItem } from '../../services/api';
+import { createStockItem, getStockGroups, getStockUnits, getWarehouses } from '../../services/api';
 
 import {
   InlineDropdownField, InlineField, CurrencyField, SubmitButton,
@@ -22,29 +21,42 @@ export function AddItemModal({
 }: {
   visible: boolean; onClose: () => void;
 }) {
-  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const insets = useSafeAreaInsets();
   const { company } = useAuth();
-  const [group,         setGroup]         = useState('');
-  const [name,          setName]          = useState('');
-  const [unit,          setUnit]          = useState('');
-  const [taxRate,       setTaxRate]       = useState('');
-  const [purchPrice,    setPurchPrice]    = useState('');
-  const [warehouse,     setWarehouse]     = useState('Main Location');
-  const [qty,           setQty]           = useState('');
-  const [salePrice,     setSalePrice]     = useState('');
-  const [expiryDate,    setExpiryDate]    = useState('');
-  const [batchNo,       setBatchNo]       = useState('');
-  const [genBarcode,    setGenBarcode]    = useState(true);
-  const [barcodeFields, setBarcodeFields] = useState({
-    itemName: true, sku: false, salePrice: false,
-  });
+
+  // Real data from Tally — STRICT PRODUCTION DATA RULE
+  const [groupOptions,     setGroupOptions]     = useState<{id:string;label:string}[]>([]);
+  const [unitOptions,      setUnitOptions]      = useState<{id:string;label:string}[]>([]);
+  const [warehouseOptions, setWarehouseOptions] = useState<{id:string;label:string}[]>([]);
+
+  useEffect(() => {
+    if (!visible || !company?.guid) return;
+    getStockGroups(company.guid)
+      .then((res: any) => setGroupOptions((res?.data || []).map((g: string) => ({ id: g, label: g }))))
+      .catch(() => {});
+    getStockUnits(company.guid)
+      .then((res: any) => setUnitOptions((res?.data || []).map((u: string) => ({ id: u, label: u }))))
+      .catch(() => {});
+    getWarehouses(company.guid)
+      .then((res: any) => {
+        const wh = res?.data ?? (Array.isArray(res) ? res : []);
+        setWarehouseOptions(wh.map((w: any) => ({ id: w.name, label: w.name })));
+      })
+      .catch(() => {});
+  }, [visible, company?.guid]);
+
+  const [group,      setGroup]      = useState('');
+  const [name,       setName]       = useState('');
+  const [unit,       setUnit]       = useState('');
+  const [taxRate,    setTaxRate]    = useState('');
+  const [purchPrice, setPurchPrice] = useState('');
+  const [warehouse,  setWarehouse]  = useState('');
+  const [qty,        setQty]        = useState('');
+  const [salePrice,  setSalePrice]  = useState('');
 
   const reset = () => {
-    setGroup(''); setName(''); setUnit(''); setTaxRate(''); setPurchPrice('');
-    setWarehouse('WH01'); setQty(''); setSalePrice(''); setExpiryDate('');
-    setBatchNo(''); setGenBarcode(true);
-    setBarcodeFields({ itemName: true, sku: false, salePrice: false });
+    setGroup(''); setName(''); setUnit(''); setTaxRate('');
+    setPurchPrice(''); setWarehouse(''); setQty(''); setSalePrice('');
   };
 
   const validate = () => {
@@ -65,17 +77,19 @@ export function AddItemModal({
     Keyboard.dismiss();
     reset(); onClose();
     try {
+      const igst = parseFloat(taxRate) || 0;
       const res: any = await createStockItem({
-        companyGuid:  company.guid,
-        companyName:  company.name || '',
-        name: itemName,
-        groupName:    group || 'Primary',
-        unit:         unit  || 'Nos',
-        openingQty:   parseFloat(qty) || 0,
-        openingRate:  parseFloat(purchPrice) || 0,
-        igstRate:     parseFloat(taxRate) || 0,
-        cgstRate:     parseFloat(taxRate) / 2 || 0,
-        sgstRate:     parseFloat(taxRate) / 2 || 0,
+        companyGuid: company.guid,
+        companyName: company.name || '',
+        name:        itemName,
+        groupName:   group || 'Primary',
+        unit:        unit  || 'Nos',
+        openingQty:  parseFloat(qty) || 0,
+        openingRate: parseFloat(purchPrice) || 0,
+        igstRate:    igst,
+        cgstRate:    igst / 2,
+        sgstRate:    igst / 2,
+        hsnCode:     '',
       });
       const queued = res?.queued;
       Toast.show({
@@ -97,7 +111,6 @@ export function AddItemModal({
         <View style={[ms.sheet, { paddingBottom: Math.max(insets.bottom, 8) }]}>
           <View style={ms.handle} />
 
-          {/* Header */}
           <View style={ms.titleRow}>
             <Text style={ms.title}>Add New Item</Text>
             <TouchableOpacity onPress={handleClose} activeOpacity={0.7}>
@@ -105,21 +118,16 @@ export function AddItemModal({
             </TouchableOpacity>
           </View>
 
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={ms.scroll}
-            keyboardShouldPersistTaps="handled"
-          >
-            {/* Group dropdown */}
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ms.scroll} keyboardShouldPersistTaps="handled">
+
             <InlineDropdownField
               label="Group"
-              options={ALL_GROUPS.map(g => ({ id: g, label: g }))}
+              options={groupOptions}
               value={group}
               onSelect={setGroup}
-              placeholder="Select group"
+              placeholder={groupOptions.length > 0 ? 'Select group' : 'Loading groups...'}
             />
 
-            {/* Product name (required) */}
             <InlineField
               label="Product name"
               value={name}
@@ -128,26 +136,24 @@ export function AddItemModal({
               required
             />
 
-            {/* Unit of Measure + Tax Rate (side-by-side) */}
             <View style={ms.row}>
               <InlineDropdownField
                 label="Unit of measure *"
-                options={ALL_UNITS}
+                options={unitOptions}
                 value={unit}
                 onSelect={setUnit}
-                placeholder="Select UOM"
+                placeholder={unitOptions.length > 0 ? 'Select unit' : 'Loading...'}
                 required
               />
               <InlineDropdownField
-                label="Tax rate"
+                label="Tax rate (GST %)"
                 options={ALL_TAX_RATES}
                 value={taxRate}
                 onSelect={setTaxRate}
-                placeholder="None"
+                placeholder="Select"
               />
             </View>
 
-            {/* Purchase Price */}
             <CurrencyField
               label="Purchase Price"
               value={purchPrice}
@@ -155,17 +161,15 @@ export function AddItemModal({
               placeholder="₹ 0.00"
             />
 
-            {/* Warehouse Placement */}
             <InlineDropdownField
               label="Warehouse Placement"
-              options={ALL_WAREHOUSES}
+              options={warehouseOptions}
               value={warehouse}
               onSelect={setWarehouse}
-              placeholder="Select warehouse"
+              placeholder={warehouseOptions.length > 0 ? 'Select warehouse' : 'Loading...'}
               icon="home-outline"
             />
 
-            {/* Quantity + Sale Price (side-by-side) */}
             <View style={ms.row}>
               <InlineField
                 label="Opening Qty"
@@ -182,54 +186,6 @@ export function AddItemModal({
               />
             </View>
 
-            {/* Expiry Date + Batch Number (side-by-side) */}
-            <View style={ms.row}>
-              <InlineField
-                label="Expiry Date"
-                value={expiryDate}
-                onChange={setExpiryDate}
-                placeholder="DD/MM/YYYY"
-              />
-              <InlineField
-                label="Batch Number"
-                value={batchNo}
-                onChange={setBatchNo}
-                placeholder="Enter batch no."
-              />
-            </View>
-
-            {/* Generate Barcode toggle */}
-            <View style={ai.switchRow}>
-              <Switch
-                value={genBarcode}
-                onValueChange={setGenBarcode}
-                trackColor={{ false: COLORS.borderDefault, true: COLORS.brandPrimary }}
-                thumbColor={COLORS.white}
-              />
-              <Text style={ai.switchTxt}>Generate Barcode</Text>
-            </View>
-
-            {/* Barcode field checkboxes */}
-            {genBarcode ? (
-              <View style={ai.checkRow}>
-                {(['itemName', 'sku', 'salePrice'] as const).map(k => {
-                  const labelMap = { itemName: 'Item Name', sku: 'SKU', salePrice: 'Sale Price' } as const;
-                  return (
-                    <TouchableOpacity
-                      key={k}
-                      style={ai.checkItem}
-                      onPress={() => setBarcodeFields(p => ({ ...p, [k]: !p[k] }))}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[ai.checkbox, barcodeFields[k] && ai.checkboxActive]}>
-                        {barcodeFields[k] ? <Ionicons name="checkmark" size={12} color={COLORS.white} /> : null}
-                      </View>
-                      <Text style={ai.checkTxt}>{labelMap[k]}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            ) : null}
           </ScrollView>
 
           <View style={ms.footer}>
@@ -250,9 +206,4 @@ export function AddItemModal({
 const ai = StyleSheet.create({
   switchRow:      { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: SPACING.md },
   switchTxt:      { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
-  checkRow:       { flexDirection: 'row', gap: 16, marginBottom: SPACING.md, flexWrap: 'wrap' },
-  checkItem:      { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  checkbox:       { width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: COLORS.borderStrong, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.cardBg },
-  checkboxActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
-  checkTxt:       { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
 });
