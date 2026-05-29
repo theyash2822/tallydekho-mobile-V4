@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, Alert, TextInput, Modal, ActivityIndicator,
@@ -9,15 +9,13 @@ import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { createStockItem } from '../../src/services/api';
+import { createStockItem, getStockGroups, getWarehouses } from '../../src/services/api';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import FormDropdown from '../../src/components/forms/FormDropdown';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 
-const GROUPS = ['Electronics', 'Accessories', 'Raw Materials', 'Finished Goods', 'Services', 'Consumables', 'Spare Parts', 'Packaging'];
 const UNITS = ['Pcs (Pieces)', 'Kg (Kilogram)', 'Ltr (Litre)', 'Mtr (Meter)', 'Box', 'Nos (Numbers)', 'Bag', 'Roll'];
-const TAX_RATES = ['0% - Exempt', '5% GST', '12% GST', '18% GST', '28% GST'];
-const WAREHOUSES = ['Main Warehouse - Mumbai', 'Warehouse B - Delhi', 'Warehouse C - Pune', 'Deltamas Logistics Center'];
+const TAX_RATES = ['0%', '5%', '12%', '18%', '28%']; // Standard GST slabs — not mock data
 const WEB = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
 const todayStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; };
 
@@ -60,6 +58,21 @@ export default function CreateStockItemScreen() {
   const { company, isPaired } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [entryType, setEntryType] = useState<EntryType>('regular');
+  const [groupOptions,     setGroupOptions]     = useState<{label:string;value:string}[]>([]);
+  const [warehouseOptions, setWarehouseOptions] = useState<{label:string;value:string}[]>([]);
+
+  useEffect(() => {
+    if (!company?.guid) return;
+    getStockGroups(company.guid)
+      .then((res: any) => setGroupOptions((res?.data || []).map((g: string) => ({ label: g, value: g }))))
+      .catch(() => {});
+    getWarehouses(company.guid)
+      .then((res: any) => {
+        const wh = res?.data ?? (Array.isArray(res) ? res : []);
+        setWarehouseOptions(wh.map((w: any) => ({ label: w.name, value: w.name })));
+      })
+      .catch(() => {});
+  }, [company?.guid]);
 
   const [group, setGroup] = useState('');
   const [productName, setProductName] = useState('');
@@ -121,8 +134,8 @@ export default function CreateStockItemScreen() {
           <FormDropdown
             label="Group"
             value={group}
-            options={GROUPS.map(s => ({ label: s, value: s }))}
-            placeholder="Select group"
+            options={groupOptions}
+            placeholder={groupOptions.length > 0 ? 'Select group' : 'Loading...'}
             onSelect={o => setGroup(o.value)}
           />
 
@@ -161,8 +174,8 @@ export default function CreateStockItemScreen() {
           <FormDropdown
             label="Warehouse Placement"
             value={warehouse}
-            options={WAREHOUSES.map(s => ({ label: s, value: s }))}
-            placeholder="Select warehouse"
+            options={warehouseOptions}
+            placeholder={warehouseOptions.length > 0 ? 'Select warehouse' : 'Loading...'}
             onSelect={o => setWarehouse(o.value)}
           />
 

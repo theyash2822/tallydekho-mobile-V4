@@ -42,7 +42,7 @@ export function EditStockModal({
       setHsnCode(item.sku || '');
       setReorderLevel(String(item.reorderLevel ?? ''));
       setTaxRateId('');
-      setGroupName('');
+      setGroupName(item.group || '');  // pre-fill current group
       setNotes('');
     }
   }, [visible, item?.id]);
@@ -78,7 +78,7 @@ export function EditStockModal({
       if (hsnCode      && hsnCode !== item.sku)                     changes.hsnCode      = hsnCode;
       if (reorderLevel && reorderLevel !== String(item.reorderLevel)) changes.reorderLevel = parseFloat(reorderLevel);
       if (taxRateId)                                                  changes.taxRate      = parseFloat(taxRateId);
-      if (groupName)                                                  changes.groupName    = groupName;
+      if (groupName && groupName !== (item.group || ''))              changes.groupName    = groupName;
 
       if (Object.keys(changes).length === 0) {
         Toast.show({ type: 'info', text1: 'No changes', text2: 'Values are the same as current.' });

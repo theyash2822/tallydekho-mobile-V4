@@ -187,7 +187,11 @@ export default function ItemDetailScreen() {
               </View>
               <View style={[styles.matrixRow, styles.matrixRowMid]}>
                 <MatrixCell label="Reorder Level"      value={reorderLevel != null ? String(reorderLevel) : '—'} />
-                <MatrixCell label="Warehouse"          value={liveItem?.warehouse_name || '—'} />
+                <MatrixCell label="Warehouse"          value={liveItem?.warehouse_name || liveItem?.warehouse || '—'} />
+              </View>
+              <View style={styles.matrixRow}>
+                <MatrixCell label="Stock Group"        value={liveItem?.group_name || '—'} />
+                <MatrixCell label="Unit"               value={liveItem?.unit || '—'} />
               </View>
             </View>
           </View>
