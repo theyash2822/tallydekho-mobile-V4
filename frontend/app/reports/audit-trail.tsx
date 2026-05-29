@@ -258,14 +258,34 @@ export default function AuditTrailScreen() {
     delivery_note: 'Delivery Note',
   };
 
+  // Build a human-readable changes summary for alter_stock_item tiles
+  const buildChangeSummary = (payload: any): string => {
+    try {
+      const data = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      const changes = data?.changes || {};
+      const parts: string[] = [];
+      if (changes.hsnCode)           parts.push(`HSN → ${changes.hsnCode}`);
+      if (changes.taxRate != null)   parts.push(`GST → ${changes.taxRate}%`);
+      if (changes.groupName)         parts.push(`Group → ${changes.groupName}`);
+      if (changes.reorderLevel != null) parts.push(`Reorder → ${changes.reorderLevel}`);
+      if (changes.name)              parts.push(`Renamed → ${changes.name}`);
+      return parts.length > 0 ? parts.join(' · ') : 'No changes recorded';
+    } catch { return ''; }
+  };
+
   const mapQueueRow = (p: any): VoucherEntry => ({
     id: 'wq_' + String(p._queue_id),
     ref:  p.voucher_number || '',
     date: p.date || '',
     month: formatMonth(p.date),
     type: mapVoucherType(WQ_ENTRY_LABEL[p.voucher_type || ''] || p.voucher_type || 'Journal'),
-    party: p.party_name || '',
-    description: WQ_ENTRY_LABEL[p.voucher_type || ''] || (p.voucher_type || '').replace(/_/g, ' '),
+    // For stock edits: show item name as party, changes as description
+    party: p.voucher_type === 'alter_stock_item'
+      ? (p.party_name || '')
+      : (p.party_name || ''),
+    description: p.voucher_type === 'alter_stock_item'
+      ? buildChangeSummary(p._payload)
+      : (WQ_ENTRY_LABEL[p.voucher_type || ''] || (p.voucher_type || '').replace(/_/g, ' ')),
     amount: formatAmount(Math.abs(+(p.amount || 0))),
     isCredit: false,
     syncStatus: p._queue_status === 'success' ? 'synced'
