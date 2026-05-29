@@ -9,12 +9,11 @@ import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { createStockItem, getStockGroups, getWarehouses } from '../../src/services/api';
+import { createStockItem, getStockGroups, getStockUnits, getWarehouses } from '../../src/services/api';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import FormDropdown from '../../src/components/forms/FormDropdown';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 
-const UNITS = ['Pcs (Pieces)', 'Kg (Kilogram)', 'Ltr (Litre)', 'Mtr (Meter)', 'Box', 'Nos (Numbers)', 'Bag', 'Roll'];
 const TAX_RATES = ['0%', '5%', '12%', '18%', '28%']; // Standard GST slabs — not mock data
 const WEB = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
 const todayStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; };
@@ -60,15 +59,22 @@ export default function CreateStockItemScreen() {
   const [entryType, setEntryType] = useState<EntryType>('regular');
   const [groupOptions,     setGroupOptions]     = useState<{label:string;value:string}[]>([]);
   const [warehouseOptions, setWarehouseOptions] = useState<{label:string;value:string}[]>([]);
+  const [unitOptions,      setUnitOptions]      = useState<{label:string;value:string}[]>([]);
 
   useEffect(() => {
     if (!company?.guid) return;
+    // Load real groups from Tally
     getStockGroups(company.guid)
       .then((res: any) => setGroupOptions((res?.data || []).map((g: string) => ({ label: g, value: g }))))
       .catch(() => {});
+    // Load real units from Tally
+    getStockUnits(company.guid)
+      .then((res: any) => setUnitOptions((res?.data || []).map((u: string) => ({ label: u, value: u }))))
+      .catch(() => {});
+    // Load real warehouses from Tally
     getWarehouses(company.guid)
       .then((res: any) => {
-        const wh = res?.data ?? (Array.isArray(res) ? res : []);
+        const wh = (res?.data ?? (Array.isArray(res) ? res : []));
         setWarehouseOptions(wh.map((w: any) => ({ label: w.name, value: w.name })));
       })
       .catch(() => {});
@@ -150,8 +156,8 @@ export default function CreateStockItemScreen() {
                 label="Unit of measure"
                 required
                 value={unit}
-                options={UNITS.map(s => ({ label: s, value: s }))}
-                placeholder="Select unit"
+                options={unitOptions}
+                placeholder={unitOptions.length > 0 ? 'Select unit' : 'Loading...'}
                 onSelect={o => setUnit(o.value)}
               />
             </View>

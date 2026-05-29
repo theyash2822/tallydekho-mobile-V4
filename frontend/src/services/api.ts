@@ -359,3 +359,4 @@ export const getStockGodowns = (companyGuid?: string, id?: string) => get<any>(w
 export const retryMyEntry = (id: string) => post<any>(`/vouchers/my-entries/${id}/retry`, {});
 export const alterStockItem    = (payload: any) => tallyPost<any>('/master/stock-item-alter', payload);
 export const getStockGroups    = (companyGuid: string) => get<any>(`/stocks/groups?companyGuid=${companyGuid}`);
+export const getStockUnits     = (companyGuid: string) => get<any>(`/stocks/units?companyGuid=${companyGuid}`);
