@@ -108,8 +108,8 @@ export function BulkTransferModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <View style={{ flex: 1 }}>
-        <TouchableOpacity style={ms.overlay} activeOpacity={1} onPress={handleClose} />
+      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+        <TouchableOpacity style={[ms.overlay, StyleSheet.absoluteFillObject]} activeOpacity={1} onPress={handleClose} />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
         <View style={[ms.sheet, { paddingBottom: 0 }]}>
           <View style={ms.handle} />
@@ -151,7 +151,7 @@ export function BulkTransferModal({
             {filteredRows.map(r => (
               <View key={r.item.id} style={bt.itemCard}>
                 <View style={bt.itemHeader}>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, justifyContent: 'flex-end' }}>
                     <Text style={bt.itemName} numberOfLines={1}>{r.item.name}</Text>
                     <Text style={bt.itemSku}>{r.item.sku} · {r.item.qty} {r.item.unit || 'units'} on hand</Text>
                   </View>

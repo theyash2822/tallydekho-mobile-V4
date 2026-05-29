@@ -64,8 +64,12 @@ export function AddItemModal({
       Toast.show({ type: 'error', text1: 'Required', text2: 'Product name is required.' });
       return false;
     }
+    if (!group) {
+      Toast.show({ type: 'error', text1: 'Group Required', text2: 'Select a stock group from the list.' });
+      return false;
+    }
     if (!unit) {
-      Toast.show({ type: 'error', text1: 'Required', text2: 'Select a unit of measure.' });
+      Toast.show({ type: 'error', text1: 'Unit Required', text2: 'Select a unit of measure.' });
       return false;
     }
     if (qty && parseFloat(qty) < 0) {
@@ -90,7 +94,7 @@ export function AddItemModal({
         companyGuid: company.guid,
         companyName: company.name || '',
         name:        itemName,
-        groupName:   group || 'Primary',
+        groupName:   group,   // required — validated above
         unit:        unit  || 'Nos',
         openingQty:  parseFloat(qty) || 0,
         openingRate: parseFloat(purchPrice) || 0,
@@ -114,8 +118,8 @@ export function AddItemModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <View style={{ flex: 1 }}>
-        <TouchableOpacity style={ms.overlay} activeOpacity={1} onPress={handleClose} />
+      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+        <TouchableOpacity style={[ms.overlay, StyleSheet.absoluteFillObject]} activeOpacity={1} onPress={handleClose} />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
         <View style={[ms.sheet, { paddingBottom: 0 }]}>
           <View style={ms.handle} />

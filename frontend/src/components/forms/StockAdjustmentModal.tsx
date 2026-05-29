@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, Modal, ScrollView,
-  KeyboardAvoidingView, Platform, Keyboard,
+  KeyboardAvoidingView, Platform, Keyboard, StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -162,8 +162,8 @@ export function StockAdjustmentModal({
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <View style={{ flex: 1 }}>
-        <TouchableOpacity style={ms.overlay} activeOpacity={1} onPress={handleClose} />
+      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+        <TouchableOpacity style={[ms.overlay, StyleSheet.absoluteFillObject]} activeOpacity={1} onPress={handleClose} />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
         <View style={[ms.sheet, { paddingBottom: 0 }]}>
           <View style={ms.handle} />
