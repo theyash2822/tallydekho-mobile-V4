@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { StockItem, ALL_TAX_RATES } from '../../data/stockData';
-import { alterStockItem } from '../../services/api';
+import { alterStockItem, getStockGroups } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS } from '../../constants/colors';
 
@@ -33,23 +33,37 @@ export function EditStockModal({
   const [hsnCode,      setHsnCode]      = useState('');
   const [reorderLevel, setReorderLevel] = useState('');
   const [taxRateId,    setTaxRateId]    = useState('');
+  const [groupName,    setGroupName]    = useState('');
+  const [groupOptions, setGroupOptions] = useState<{id: string; label: string}[]>([]);
   const [notes,        setNotes]        = useState('');
 
   useEffect(() => {
     if (visible && item) {
-      setHsnCode(item.sku || '');   // sku = HSN in our StockItem type
+      setHsnCode(item.sku || '');
       setReorderLevel(String(item.reorderLevel ?? ''));
       setTaxRateId('');
+      setGroupName('');
       setNotes('');
     }
   }, [visible, item?.id]);
 
+  useEffect(() => {
+    if (visible && company?.guid && groupOptions.length === 0) {
+      getStockGroups(company.guid)
+        .then((res: any) => {
+          const groups = (res?.data || []).map((g: string) => ({ id: g, label: g }));
+          setGroupOptions(groups);
+        })
+        .catch(() => {});
+    }
+  }, [visible, company?.guid]);
+
   const reset = () => {
-    setHsnCode(''); setReorderLevel(''); setTaxRateId(''); setNotes('');
+    setHsnCode(''); setReorderLevel(''); setTaxRateId(''); setGroupName(''); setNotes('');
   };
 
   const validate = () => {
-    if (!hsnCode && !reorderLevel && !taxRateId) {
+    if (!hsnCode && !reorderLevel && !taxRateId && !groupName) {
       Toast.show({ type: 'error', text1: 'Nothing to update', text2: 'Change at least one field.' });
       return false;
     }
@@ -64,6 +78,7 @@ export function EditStockModal({
       if (hsnCode      && hsnCode !== item.sku)                     changes.hsnCode      = hsnCode;
       if (reorderLevel && reorderLevel !== String(item.reorderLevel)) changes.reorderLevel = parseFloat(reorderLevel);
       if (taxRateId)                                                  changes.taxRate      = parseFloat(taxRateId);
+      if (groupName)                                                  changes.groupName    = groupName;
 
       if (Object.keys(changes).length === 0) {
         Toast.show({ type: 'info', text1: 'No changes', text2: 'Values are the same as current.' });
@@ -143,6 +158,14 @@ export function EditStockModal({
               value={taxRateId}
               onSelect={setTaxRateId}
               placeholder="Select GST rate"
+            />
+
+            <InlineDropdownField
+              label="Stock Group"
+              options={groupOptions}
+              value={groupName}
+              onSelect={setGroupName}
+              placeholder={groupOptions.length > 0 ? 'Select group' : 'Loading groups...'}
             />
 
             <InlineField
