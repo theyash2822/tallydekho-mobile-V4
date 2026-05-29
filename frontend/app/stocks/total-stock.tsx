@@ -406,20 +406,27 @@ export default function TotalStockScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.activeFiltersRow}>
           {selWh.map(w => (
             <TouchableOpacity key={w} style={styles.activeChip} onPress={() => setSelWh(p => p.filter(x => x !== w))} activeOpacity={0.7}>
-              <Text style={styles.activeChipTxt}>{w}</Text>
-              <Ionicons name="close" size={11} color="#A89060" />
-            </TouchableOpacity>
-          ))}
-          {selCat.map(c => (
-            <TouchableOpacity key={c} style={styles.activeChip} onPress={() => setSelCat(p => p.filter(x => x !== c))} activeOpacity={0.7}>
-              <Text style={styles.activeChipTxt}>{c}</Text><Ionicons name="close" size={11} color="#A89060" />
+              <Text style={styles.activeChipPrefix}>WH</Text>
+              <Text style={styles.activeChipTxt} numberOfLines={1}>{w.length > 14 ? w.slice(0, 13) + '…' : w}</Text>
+              <Ionicons name="close" size={10} color="#A89060" />
             </TouchableOpacity>
           ))}
           {selGrp.map(g => (
             <TouchableOpacity key={g} style={styles.activeChip} onPress={() => setSelGrp(p => p.filter(x => x !== g))} activeOpacity={0.7}>
-              <Text style={styles.activeChipTxt}>{g}</Text><Ionicons name="close" size={11} color="#A89060" />
+              <Text style={styles.activeChipPrefix}>GRP</Text>
+              <Text style={styles.activeChipTxt} numberOfLines={1}>{g.length > 14 ? g.slice(0, 13) + '…' : g}</Text>
+              <Ionicons name="close" size={10} color="#A89060" />
             </TouchableOpacity>
           ))}
+          {activeFilterCount > 1 && (
+            <TouchableOpacity
+              style={[styles.activeChip, { backgroundColor: '#FFF0F0', borderColor: '#FFCCCC' }]}
+              onPress={() => { setSelWh([]); setSelGrp([]); }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.activeChipTxt, { color: COLORS.negative }]}>Clear all</Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       )}
 
@@ -571,9 +578,10 @@ const styles = StyleSheet.create({
   multiBtnTxt:  { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white },
 
   // Active filter chips
-  activeFiltersRow: { paddingHorizontal: SPACING.md, paddingVertical: 8, gap: 8, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  activeChip:       { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: '#FBF7EE', borderRadius: RADIUS.full, borderWidth: 1, borderColor: '#F0E8D5' },
-  activeChipTxt:    { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: '#A89060' },
+  activeFiltersRow: { paddingHorizontal: SPACING.md, paddingVertical: 6, gap: 6, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, alignItems: 'center' },
+  activeChip:       { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#FBF7EE', borderRadius: RADIUS.full, borderWidth: 1, borderColor: '#F0E8D5', maxWidth: 160 },
+  activeChipPrefix: { fontSize: 9, fontWeight: '800', color: '#C4A96A', letterSpacing: 0.3, backgroundColor: '#F0E8D5', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3 },
+  activeChipTxt:    { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: '#A89060', flexShrink: 1 },
 
   // Summary KPI
   summaryRow:   { flexDirection: 'row', backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, paddingVertical: 12 },
