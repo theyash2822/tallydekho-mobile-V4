@@ -111,7 +111,7 @@ export function BulkTransferModal({
       <View style={{ flex: 1 }}>
         <TouchableOpacity style={ms.overlay} activeOpacity={1} onPress={handleClose} />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
-        <View style={[ms.sheet, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+        <View style={[ms.sheet, { paddingBottom: insets.bottom }]}>
           <View style={ms.handle} />
 
           {/* Header */}

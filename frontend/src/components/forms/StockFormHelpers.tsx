@@ -18,7 +18,7 @@ export const modalStyles = StyleSheet.create({
   titleRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   title:      { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
   scroll:     { padding: SPACING.md },
-  footer:     { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, marginBottom: 4 },
+  footer:     { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, paddingBottom: 4, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
   row:        { flexDirection: 'row', gap: 10, marginBottom: SPACING.md },
   divider:    { height: 1, backgroundColor: COLORS.borderDefault, marginVertical: 12 },
   sectionLbl: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
