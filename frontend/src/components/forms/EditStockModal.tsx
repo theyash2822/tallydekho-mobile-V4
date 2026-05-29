@@ -113,7 +113,7 @@ export function EditStockModal({
   const handleClose = () => { Keyboard.dismiss(); reset(); onClose(); };
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
       <View style={{ flex: 1 }}>
         <TouchableOpacity style={ms.overlay} activeOpacity={1} onPress={handleClose} />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
