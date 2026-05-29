@@ -121,32 +121,29 @@ const acc = StyleSheet.create({
 // Profit & Loss — 2-column card grid
 // ══════════════════════════════════════════════════════════════════════════════
 function PLCardGrid({ pl }: { pl?: any }) {
-  // Use real data if available, otherwise mock
-  const hasRealData = pl && (pl.sales > 0 || pl.purchase > 0 || pl.openingStock > 0);
+  // STRICT PRODUCTION DATA RULE: show real data or zeros. NEVER mock.
+  // pl is null while loading or if API failed — show empty state.
+  if (!pl) {
+    return (
+      <View style={plg.grid}>
+        <View style={plg.demoBanner}>
+          <Text style={plg.demoTxt}>No data — sync Tally to load P&amp;L</Text>
+        </View>
+      </View>
+    );
+  }
 
-  const rows = hasRealData ? [
-    { left: 'Opening Stock',   leftAmt: pl.openingStock   ?? 0, right: 'Closing Stock',    rightAmt: pl.closingStock   ?? 0 },
-    { left: 'Purchase',        leftAmt: pl.purchase       ?? 0, right: 'Sales',            rightAmt: pl.sales          ?? 0 },
-    { left: 'Direct Expense',  leftAmt: pl.directExpenses ?? 0, right: 'Indirect Expense', rightAmt: pl.indirectExpenses ?? 0 },
-    { left: 'Indirect Income', leftAmt: pl.indirectIncome ?? 0, right: 'Direct Income',    rightAmt: pl.directIncome   ?? 0 },
-    { left: 'Gross Profit',    leftAmt: pl.grossProfit    ?? 0, right: 'Gross Loss',       rightAmt: pl.grossLoss      ?? 0 },
-    { left: 'Net Profit',      leftAmt: pl.netProfit      ?? 0, right: 'Net Loss',         rightAmt: pl.netLoss        ?? 0 },
-  ] : [
-    { left: 'Opening Stock',   leftAmt: MOCK_PL.openingStock,   right: 'Closing Stock',    rightAmt: MOCK_PL.closingStock    },
-    { left: 'Purchase',        leftAmt: MOCK_PL.purchase,       right: 'Sales',            rightAmt: MOCK_PL.sales           },
-    { left: 'Direct Expense',  leftAmt: MOCK_PL.directExpense,  right: 'Indirect Expense', rightAmt: MOCK_PL.indirectExpense },
-    { left: 'Indirect Income', leftAmt: MOCK_PL.indirectIncome, right: 'Direct Income',    rightAmt: MOCK_PL.directIncome   },
-    { left: 'Gross Profit',    leftAmt: MOCK_PL.grossProfit,    right: 'Gross Loss',       rightAmt: MOCK_PL.grossLoss      },
-    { left: 'Net Profit',      leftAmt: MOCK_PL.netProfit,      right: 'Net Loss',         rightAmt: MOCK_PL.netLoss        },
+  const rows = [
+    { left: 'Opening Stock',   leftAmt: pl.openingStock    ?? 0, right: 'Closing Stock',    rightAmt: pl.closingStock    ?? 0 },
+    { left: 'Purchase',        leftAmt: pl.purchase        ?? 0, right: 'Sales',            rightAmt: pl.sales           ?? 0 },
+    { left: 'Direct Expense',  leftAmt: pl.directExpenses  ?? 0, right: 'Indirect Expense', rightAmt: pl.indirectExpenses ?? 0 },
+    { left: 'Indirect Income', leftAmt: pl.indirectIncome  ?? 0, right: 'Direct Income',    rightAmt: pl.directIncome    ?? 0 },
+    { left: 'Gross Profit',    leftAmt: pl.grossProfit     ?? 0, right: 'Gross Loss',       rightAmt: pl.grossLoss       ?? 0 },
+    { left: 'Net Profit',      leftAmt: pl.netProfit       ?? 0, right: 'Net Loss',         rightAmt: pl.netLoss         ?? 0 },
   ];
 
   return (
     <View style={plg.grid}>
-      {!hasRealData && (
-        <View style={plg.demoBanner}>
-          <Text style={plg.demoTxt}>Showing sample data — sync Tally to see real figures</Text>
-        </View>
-      )}
       {rows.map((row, i) => (
         <View key={i} style={plg.row}>
           <View style={plg.card}>

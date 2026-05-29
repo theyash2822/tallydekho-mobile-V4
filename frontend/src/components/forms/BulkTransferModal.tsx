@@ -6,7 +6,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
-import { StockItem, STOCK_ITEMS, ALL_WAREHOUSES, ALL_CATEGORIES, ALL_GROUPS, ALL_UNITS, ALL_TAX_RATES, RACK_OPTIONS, ADJ_REASONS, LOW_STOCK_QTY } from '../../data/stockData';
+import { StockItem } from '../../data/stockData';
+import { getWarehouses, createStockTransfer } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 
 import {
@@ -27,29 +29,33 @@ export function BulkTransferModal({
   const insets = useSafeAreaInsets();
   const [rows,       setRows]       = useState<TransferRow[]>([]);
   const [search,     setSearch]     = useState('');
-  const [sourceWh,   setSourceWh]   = useState('');
-  const [sourceRack, setSourceRack] = useState('');
-  const [destWhId,   setDestWhId]   = useState('');
-  const [destRack,   setDestRack]   = useState('');
-  const [narration,  setNarration]  = useState('');
+  const [sourceWh,        setSourceWh]        = useState('');
+  const [sourceRack,      setSourceRack]      = useState('');
+  const [destWhId,        setDestWhId]        = useState('');
+  const [destRack,        setDestRack]        = useState('');
+  const [narration,       setNarration]       = useState('');
+  const [warehouseOptions, setWarehouseOptions] = useState<{id:string;label:string}[]>([]);
+  const { company } = useAuth();
 
   useEffect(() => {
     if (visible) {
-      setRows(preselectedItems.map(i => ({ item: i, qty: 1, batchSerial: 'SN2024-01' })));
+      setRows(preselectedItems.map(i => ({ item: i, qty: 1, batchSerial: '' })));
       setSearch(''); setSourceWh(''); setSourceRack('');
       setDestWhId(''); setDestRack(''); setNarration('');
+      // Load real warehouses
+      if (company?.guid) {
+        getWarehouses(company.guid)
+          .then((res: any) => {
+            const wh = res?.data ?? (Array.isArray(res) ? res : []);
+            setWarehouseOptions(wh.map((w: any) => ({ id: w.name, label: w.name })));
+          })
+          .catch(() => {});
+      }
     }
   }, [visible]);
 
-  const searchResults = search.trim()
-    ? STOCK_ITEMS
-        .filter(i =>
-          (i.name.toLowerCase().includes(search.toLowerCase()) ||
-           i.sku.toLowerCase().includes(search.toLowerCase())) &&
-          !rows.find(r => r.item.id === i.id)
-        )
-        .slice(0, 4)
-    : [];
+  // Search is limited to pre-selected real items only — no mock STOCK_ITEMS
+  const searchResults: StockItem[] = [];
 
   const addItem    = (i: StockItem)       => { setRows(p => [...p, { item: i, qty: 1, batchSerial: '' }]); setSearch(''); };
   const removeItem = (id: string)         => setRows(p => p.filter(r => r.item.id !== id));
@@ -71,14 +77,37 @@ export function BulkTransferModal({
     return true;
   };
 
-  const handleDone = () => {
-    const toLabel = ALL_WAREHOUSES.find(w => w.id === destWhId)?.label ?? destWhId;
-    Toast.show({
-      type: 'success',
-      text1: 'Bulk Transfer Initiated',
-      text2: `${rows.length} item${rows.length !== 1 ? 's' : ''} → ${toLabel}`,
-    });
+  const handleDone = async () => {
+    if (!company?.guid) return;
+    const toLabel = destWhId;
+    const itemsList = rows.map(r => ({
+      itemName: r.item.name,
+      qty:      String(r.qty),
+      rate:     String(+(r.item.value?.replace(/[^0-9.]/g, '') || 0)),
+      amount:   String(r.qty * +(r.item.value?.replace(/[^0-9.]/g, '') || 0)),
+    }));
     onClose();
+    try {
+      const res: any = await createStockTransfer({
+        companyGuid: company.guid,
+        companyName: company.name || '',
+        date:        new Date().toISOString().slice(0, 10),
+        narration:   narration || `Bulk transfer → ${toLabel}`,
+        fromGodown:  sourceWh || 'Main Location',
+        toGodown:    toLabel,
+        items:       itemsList,
+      });
+      const queued = res?.queued;
+      Toast.show({
+        type: 'success',
+        text1: queued ? 'Transfer Queued ⏳' : 'Transfer Created ✅',
+        text2: queued
+          ? 'Will push to Tally when desktop connects.'
+          : `${rows.length} item${rows.length !== 1 ? 's' : ''} → ${toLabel}`,
+      });
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Transfer Failed', text2: err?.message || 'Please try again.' });
+    }
   };
 
   return (
@@ -148,7 +177,7 @@ export function BulkTransferModal({
               {/* Search results */}
               {searchResults.length > 0 ? (
                 <View style={bt.results}>
-                  {searchResults.map((i, idx) => (
+                  {searchResults.map((i: StockItem, idx: number) => (
                     <TouchableOpacity
                       key={i.id}
                       style={[bt.resultItem, idx < searchResults.length - 1 && { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault }]}
@@ -232,10 +261,10 @@ export function BulkTransferModal({
             {/* ── Destination Location ─────────────────────────── */}
             <InlineDropdownField
               label="Destination Warehouse"
-              options={ALL_WAREHOUSES}
+              options={warehouseOptions}
               value={destWhId}
+              placeholder={warehouseOptions.length > 0 ? 'Select warehouse' : 'Loading...'}
               onSelect={setDestWhId}
-              placeholder="Select warehouse"
               icon="home-outline"
               required
             />
