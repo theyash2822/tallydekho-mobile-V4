@@ -311,6 +311,8 @@ export default function TotalStockScreen() {
     });
 
   const totalQty          = sourceItems.reduce((s, i) => s + i.qty, 0);
+  const totalValueRaw      = sourceItems.reduce((s, i) => s + (+(i.value?.replace(/[^0-9.]/g, '') || 0)), 0);
+  const totalValueLabel    = totalValueRaw > 0 ? `₹${(totalValueRaw/100000).toFixed(1)}L` : '—';
   const activeFilterCount = selWh.length + selCat.length + selGrp.length;
   const allSelected       = filtered.length > 0 && filtered.every(i => selectedIds.includes(i.id));
 
@@ -342,9 +344,7 @@ export default function TotalStockScreen() {
     setBulkPreItems(items); setBulkOpen(true);
   }, [selectedIds]);
 
-  const openBulkFromMenu = useCallback(() => {
-    setMenuOpen(false); setBulkPreItems([]); setBulkOpen(true);
-  }, []);
+
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -421,7 +421,7 @@ export default function TotalStockScreen() {
           {activeFilterCount > 1 && (
             <TouchableOpacity
               style={[styles.activeChip, { backgroundColor: '#FFF0F0', borderColor: '#FFCCCC' }]}
-              onPress={() => { setSelWh([]); setSelGrp([]); }}
+              onPress={() => { setSelWh([]); setSelCat([]); setSelGrp([]); }}
               activeOpacity={0.7}
             >
               <Text style={[styles.activeChipTxt, { color: COLORS.negative }]}>Clear all</Text>
@@ -435,7 +435,7 @@ export default function TotalStockScreen() {
         {[
           { label: 'No. of SKUs', value: `${sourceItems.length}` },
           { label: 'Total Qty',   value: totalQty.toLocaleString('en-IN') },
-          { label: 'Value (INR)', value: '₹83,150' },
+          { label: 'Value (INR)', value: totalValueLabel },
         ].map((s, i) => (
           <View key={i} style={styles.summaryItem}>
             <Text style={styles.summaryVal}>{s.value}</Text>
