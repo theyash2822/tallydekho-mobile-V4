@@ -21,12 +21,17 @@ type ReorderItem = {
   warehouse: string;
 };
 
+// Priority per spec:
+// Critical : = 0 OR <= 25% of reorder level
+// High     : <= 50% of reorder level
+// Medium   : <= reorder level (100%)
+// Low      : > reorder level (monitored but not yet below)
 function calcPriority(current: number, reorderAt: number): Priority {
-  if (current <= 0) return 'critical';
+  if (current <= 0)           return 'critical';
   const ratio = current / reorderAt;
-  if (ratio <= 0.33) return 'critical';
-  if (ratio <= 0.6)  return 'high';
-  if (ratio <= 0.85) return 'medium';
+  if (ratio <= 0.25)          return 'critical';
+  if (ratio <= 0.50)          return 'high';
+  if (ratio <= 1.00)          return 'medium';
   return 'low';
 }
 
@@ -69,12 +74,12 @@ export default function ReorderQueueScreen() {
             return {
               id:       r.guid || String(r.id),
               name:     r.name || '—',
-              sku:      r.hsn || r.alias || '—',
+              sku:      r.alias || (r.guid ? r.guid.slice(0, 8).toUpperCase() : '—'),
               current:  qty,
               reorderAt: reorder,
               suggest:  Math.round(suggest),
               priority: calcPriority(qty, reorder),
-              warehouse: r.group_name || '—',
+              warehouse: r.primary_warehouse || r.group_name || '—',
             };
           });
         setItems(lowStock);
@@ -134,7 +139,7 @@ export default function ReorderQueueScreen() {
       </View>
 
       {loading && <LoadingState message="Loading reorder queue…" />}
-      {!loading && error && <ErrorState message={error} onRetry={() => { setLoading(true); setError(null); getStocks(companyGuid!, { limit: '500' }).then((res: any) => { const rows: any[] = res?.data?.items || res?.data || []; setItems(rows.filter((r: any) => parseFloat(r.reorder_level ?? 0) > 0 && parseFloat(r.closing_qty ?? 0) <= parseFloat(r.reorder_level ?? 0)).map((r: any) => { const qty = parseFloat(r.closing_qty ?? 0); const reorder = parseFloat(r.reorder_level ?? 0); return { id: r.guid || String(r.id), name: r.name || '—', sku: r.hsn || r.alias || '—', current: qty, reorderAt: reorder, suggest: Math.round(Math.max(reorder * 2 - qty, reorder)), priority: calcPriority(qty, reorder), warehouse: r.group_name || '—' }; })); }).catch(() => setError('Failed to load reorder queue')).finally(() => setLoading(false)); }} />}
+      {!loading && error && <ErrorState message={error} onRetry={() => { setLoading(true); setError(null); getStocks(companyGuid!, { limit: '500' }).then((res: any) => { const rows: any[] = res?.data?.items || res?.data || []; setItems(rows.filter((r: any) => parseFloat(r.reorder_level ?? 0) > 0 && parseFloat(r.closing_qty ?? 0) <= parseFloat(r.reorder_level ?? 0)).map((r: any) => { const qty = parseFloat(r.closing_qty ?? 0); const reorder = parseFloat(r.reorder_level ?? 0); return { id: r.guid || String(r.id), name: r.name || '—', sku: r.alias || (r.guid ? r.guid.slice(0,8).toUpperCase() : '—'), current: qty, reorderAt: reorder, suggest: Math.round(Math.max(reorder * 2 - qty, reorder)), priority: calcPriority(qty, reorder), warehouse: r.primary_warehouse || r.group_name || '—' }; })); }).catch(() => setError('Failed to load reorder queue')).finally(() => setLoading(false)); }} />}
       {!loading && !error && items.length === 0 && <EmptyState title="No items below reorder level" subtitle="All stock levels are healthy" icon="checkmark-circle-outline" />}
       {!loading && !error && items.length > 0 && (
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
