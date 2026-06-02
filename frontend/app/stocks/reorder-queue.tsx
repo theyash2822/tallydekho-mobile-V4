@@ -1,40 +1,93 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useAuth } from '../../src/context/AuthContext';
+import { getStocks } from '../../src/services/api';
+import { LoadingState, ErrorState, EmptyState } from '../../src/components/ApiStateViews';
 
-const REORDER_ITEMS = [
-  { id: 'RQ001', name: 'JBL Portable Speaker',      sku: 'PRD-1002-ABC', current: 3,  reorderAt: 10, suggest: 50,  priority: 'critical', warehouse: 'Miami' },
-  { id: 'RQ002', name: 'Samsung Galaxy J1',          sku: 'PRD-1003-DEF', current: 0,  reorderAt: 5,  suggest: 25,  priority: 'critical', warehouse: 'Los Angeles' },
-  { id: 'RQ003', name: 'Sony WH-1000XM5',            sku: 'SNY-001',      current: 5,  reorderAt: 8,  suggest: 20,  priority: 'high',     warehouse: 'Delhi' },
-  { id: 'RQ004', name: 'Lycan Wireless Headphone',   sku: 'LWH-789',      current: 7,  reorderAt: 15, suggest: 30,  priority: 'high',     warehouse: 'Mumbai' },
-  { id: 'RQ005', name: 'Logitech MX Keys',           sku: 'LGT-MX2',      current: 12, reorderAt: 20, suggest: 40,  priority: 'medium',   warehouse: 'Miami' },
-  { id: 'RQ006', name: 'HDMI 4K Cable (1.5m)',       sku: 'HDM-4K-001',   current: 8,  reorderAt: 25, suggest: 100, priority: 'medium',   warehouse: 'Delhi' },
-  { id: 'RQ007', name: 'USB-C Hub 7-in-1',           sku: 'USB-C71',      current: 11, reorderAt: 20, suggest: 50,  priority: 'low',      warehouse: 'Mumbai' },
-  { id: 'RQ008', name: 'Apple Magic Mouse',          sku: 'APL-MM3',      current: 4,  reorderAt: 10, suggest: 25,  priority: 'low',      warehouse: 'Miami' },
-];
+type Priority = 'critical' | 'high' | 'medium' | 'low';
 
-const PRIORITY_CONFIG = {
+type ReorderItem = {
+  id: string;
+  name: string;
+  sku: string;
+  current: number;
+  reorderAt: number;
+  suggest: number;
+  priority: Priority;
+  warehouse: string;
+};
+
+function calcPriority(current: number, reorderAt: number): Priority {
+  if (current <= 0) return 'critical';
+  const ratio = current / reorderAt;
+  if (ratio <= 0.33) return 'critical';
+  if (ratio <= 0.6)  return 'high';
+  if (ratio <= 0.85) return 'medium';
+  return 'low';
+}
+
+const PRIORITY_CONFIG: Record<Priority, { label: string; color: string; bg: string; barColor: string }> = {
   critical: { label: 'Critical', color: '#DC2626', bg: '#FEF2F2', barColor: '#DC2626'  },
   high:     { label: 'High',     color: '#A89060', bg: '#F8F4EE', barColor: '#1A1A1A'  },
   medium:   { label: 'Medium',   color: '#2563EB', bg: '#EFF6FF', barColor: '#2563EB'  },
   low:      { label: 'Low',      color: '#6B7280', bg: '#F3F4F6', barColor: '#AEACA8'  },
 };
 
-type Priority = keyof typeof PRIORITY_CONFIG;
 type FilterType = 'All' | 'Critical' | 'High' | 'Medium' | 'Low';
 
 export default function ReorderQueueScreen() {
   const router = useRouter();
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
+
+  const [items,       setItems]       = useState<ReorderItem[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterType>('All');
 
-  const filtered = activeFilter === 'All'
-    ? REORDER_ITEMS
-    : REORDER_ITEMS.filter(i => i.priority === activeFilter.toLowerCase());
+  useEffect(() => {
+    if (!companyGuid) return;
+    setLoading(true);
+    setError(null);
+    getStocks(companyGuid, { limit: '500' })
+      .then((res: any) => {
+        const rows: any[] = res?.data?.items || res?.data || [];
+        const lowStock: ReorderItem[] = rows
+          .filter((r: any) => {
+            const qty    = parseFloat(r.closing_qty  ?? 0);
+            const reorder = parseFloat(r.reorder_level ?? 0);
+            return reorder > 0 && qty <= reorder;
+          })
+          .map((r: any) => {
+            const qty    = parseFloat(r.closing_qty  ?? 0);
+            const reorder = parseFloat(r.reorder_level ?? 0);
+            const suggest = Math.max(reorder * 2 - qty, reorder);
+            return {
+              id:       r.guid || String(r.id),
+              name:     r.name || '—',
+              sku:      r.hsn || r.alias || '—',
+              current:  qty,
+              reorderAt: reorder,
+              suggest:  Math.round(suggest),
+              priority: calcPriority(qty, reorder),
+              warehouse: r.group_name || '—',
+            };
+          });
+        setItems(lowStock);
+      })
+      .catch(() => setError('Failed to load reorder queue'))
+      .finally(() => setLoading(false));
+  }, [companyGuid]);
 
-  const criticalCount = REORDER_ITEMS.filter(i => i.priority === 'critical').length;
+  const filtered = activeFilter === 'All'
+    ? items
+    : items.filter(i => i.priority === activeFilter.toLowerCase());
+
+  const criticalCount = items.filter(i => i.priority === 'critical').length;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -54,10 +107,10 @@ export default function ReorderQueueScreen() {
       {/* Summary strip */}
       <View style={styles.summaryRow}>
         {[
-          { label: 'Critical', count: REORDER_ITEMS.filter(i => i.priority === 'critical').length, color: '#DC2626' },
-          { label: 'High',     count: REORDER_ITEMS.filter(i => i.priority === 'high').length,     color: '#A89060' },
-          { label: 'Medium',   count: REORDER_ITEMS.filter(i => i.priority === 'medium').length,   color: '#2563EB' },
-          { label: 'Total',    count: REORDER_ITEMS.length,                                        color: COLORS.textPrimary },
+          { label: 'Critical', count: items.filter(i => i.priority === 'critical').length, color: '#DC2626' },
+          { label: 'High',     count: items.filter(i => i.priority === 'high').length,     color: '#A89060' },
+          { label: 'Medium',   count: items.filter(i => i.priority === 'medium').length,   color: '#2563EB' },
+          { label: 'Total',    count: items.length,                                        color: COLORS.textPrimary },
         ].map(s => (
           <View key={s.label} style={styles.summaryItem}>
             <Text style={[styles.summaryCount, { color: s.color }]}>{s.count}</Text>
@@ -80,6 +133,10 @@ export default function ReorderQueueScreen() {
         ))}
       </View>
 
+      {loading && <LoadingState message="Loading reorder queue…" />}
+      {!loading && error && <ErrorState message={error} onRetry={() => { setLoading(true); setError(null); getStocks(companyGuid!, { limit: '500' }).then((res: any) => { const rows: any[] = res?.data?.items || res?.data || []; setItems(rows.filter((r: any) => parseFloat(r.reorder_level ?? 0) > 0 && parseFloat(r.closing_qty ?? 0) <= parseFloat(r.reorder_level ?? 0)).map((r: any) => { const qty = parseFloat(r.closing_qty ?? 0); const reorder = parseFloat(r.reorder_level ?? 0); return { id: r.guid || String(r.id), name: r.name || '—', sku: r.hsn || r.alias || '—', current: qty, reorderAt: reorder, suggest: Math.round(Math.max(reorder * 2 - qty, reorder)), priority: calcPriority(qty, reorder), warehouse: r.group_name || '—' }; })); }).catch(() => setError('Failed to load reorder queue')).finally(() => setLoading(false)); }} />}
+      {!loading && !error && items.length === 0 && <EmptyState title="No items below reorder level" subtitle="All stock levels are healthy" icon="checkmark-circle-outline" />}
+      {!loading && !error && items.length > 0 && (
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         {filtered.map(item => {
           const p = PRIORITY_CONFIG[item.priority as Priority];
@@ -131,6 +188,7 @@ export default function ReorderQueueScreen() {
         })}
         <View style={{ height: 80 }} />
       </ScrollView>
+      )}
     </SafeAreaView>
   );
 }

@@ -8,23 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { getAlertSettings, updateAlertSettings } from '../../src/services/api';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Mock data (TallyPrime-style)
-// ─────────────────────────────────────────────────────────────────────────────
-const MOCK_ITEMS = [
-  'Rice (25kg)', 'Sugar (1kg)', 'Wheat Flour (10kg)', 'Mustard Oil (5L)',
-  'Salt (1kg)', 'Tea (250g)', 'Coffee (100g)', 'Dal Toor (1kg)',
-  'Pasta (500g)', 'Biscuits (200g)', 'Soap Bars (6pk)', 'Shampoo (200ml)',
-  'Toothpaste (100g)', 'Cooking Oil (1L)', 'Butter (500g)',
-];
-
-const MOCK_GROUPS = [
-  'Raw Materials', 'Finished Goods', 'FMCG Products',
-  'Beverages', 'Dairy Products', 'Cleaning Supplies',
-  'Packaged Foods', 'Spices & Condiments', 'Electronics', 'Stationery',
-];
+import { getAlertSettings, updateAlertSettings, getStocks, getStockGroups } from '../../src/services/api';
+import { useAuth } from '../../src/context/AuthContext';
 
 const EXPIRY_OPTIONS = ['7 Days', '15 Days', '30 Days', '60 Days', '90 Days'];
 
@@ -292,15 +277,17 @@ const tp = StyleSheet.create({
 // 4. ItemSelectorSheet — multi-select with search
 // ─────────────────────────────────────────────────────────────────────────────
 function ItemSelectorSheet({
-  visible, category, currentSelection, onClose, onConfirm,
+  visible, category, currentSelection, onClose, onConfirm, realItems, realGroups,
 }: {
   visible: boolean;
   category: 'group' | 'item';
   currentSelection: string[];
   onClose: () => void;
   onConfirm: (names: string[]) => void;
+  realItems: string[];
+  realGroups: string[];
 }) {
-  const allItems = category === 'item' ? MOCK_ITEMS : MOCK_GROUPS;
+  const allItems = category === 'item' ? realItems : realGroups;
   const [search,  setSearch]  = useState('');
   const [checked, setChecked] = useState<Set<string>>(new Set(currentSelection));
   const markDirty = () => {};
@@ -480,14 +467,39 @@ type SelectedEntry = { name: string; reorderPoint: number };
 // Main Screen
 // ─────────────────────────────────────────────────────────────────────────────
 export default function StockAlertsScreen() {
-  // Load from backend
+  const { company } = useAuth();
+  const companyGuid = company?.guid;
+
+  // Real items + groups for the selector
+  const [realItems,  setRealItems]  = useState<string[]>([]);
+  const [realGroups, setRealGroups] = useState<string[]>([]);
+
+  // Load alert settings + stock items/groups from backend
   React.useEffect(() => {
     getAlertSettings().then((res: any) => {
       if (res?.data) {
         // Settings loaded — future: populate specific fields when UI is wired
       }
     }).catch(() => {});
-  }, []);
+
+    if (!companyGuid) return;
+
+    // Load real stock items
+    getStocks(companyGuid, { limit: '500' })
+      .then((res: any) => {
+        const rows: any[] = res?.data?.items || res?.data || [];
+        setRealItems(rows.map((r: any) => r.name).filter(Boolean));
+      })
+      .catch(() => {});
+
+    // Load real stock groups
+    getStockGroups(companyGuid)
+      .then((res: any) => {
+        const groups: any[] = res?.data || [];
+        setRealGroups(groups.map((g: any) => g.name).filter(Boolean));
+      })
+      .catch(() => {});
+  }, [companyGuid]);
 
   const saveToBackend = async (extraData?: any) => {
     try {
@@ -777,6 +789,8 @@ export default function StockAlertsScreen() {
         currentSelection={currentNames}
         onClose={() => setShowSelector(false)}
         onConfirm={handleSelectorConfirm}
+        realItems={realItems}
+        realGroups={realGroups}
       />
 
       <PickerSheet
