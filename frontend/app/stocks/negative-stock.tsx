@@ -32,8 +32,9 @@ interface NegStockItem {
 export default function NegativeStockScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { company } = useAuth();
+  const { company, selectedFY, fyInfoToParam } = useAuth();
   const companyGuid = company?.guid;
+  const fyParam = fyInfoToParam ? fyInfoToParam(selectedFY) : undefined;
 
   const [search,      setSearch]      = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -46,7 +47,7 @@ export default function NegativeStockScreen() {
     if (!companyGuid) return;
     setIsLoading(true);
     setApiError(null);
-    getNegativeStock(companyGuid, { pageSize: 500 })
+    getNegativeStock(companyGuid, { pageSize: 500, ...(fyParam ? { fy: fyParam } : {}) })
       .then((res: any) => {
         const rows: NegStockItem[] = (res?.data?.items ?? []).map((r: any) => ({
           id:         String(r.stockGuid ?? r.id),
@@ -64,7 +65,7 @@ export default function NegativeStockScreen() {
       })
       .catch((err: any) => setApiError(err?.message ?? 'Failed to load negative stock data'))
       .finally(() => setIsLoading(false));
-  }, [companyGuid]);
+  }, [companyGuid, selectedFY]);
 
   const visibleItems = useMemo(() =>
     items.filter(it => {
