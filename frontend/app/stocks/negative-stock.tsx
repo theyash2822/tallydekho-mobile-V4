@@ -46,7 +46,7 @@ export default function NegativeStockScreen() {
     if (!companyGuid) return;
     setIsLoading(true);
     setApiError(null);
-    getNegativeStock(companyGuid)
+    getNegativeStock(companyGuid, { pageSize: 500 })
       .then((res: any) => {
         const rows: NegStockItem[] = (res?.data?.items ?? []).map((r: any) => ({
           id:         String(r.stockGuid ?? r.id),
