@@ -58,7 +58,7 @@ const REPORTS: ReportItem[] = [
   },
   {
     id: 'negative',
-    label: 'Negative Stock Exceptions',
+    label: 'Negative Stock',
     desc: 'Items with below-zero quantities',
     icon: 'alert-circle-outline',
     route: '/stocks/negative-stock',

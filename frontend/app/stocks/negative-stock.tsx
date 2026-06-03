@@ -44,7 +44,7 @@ export default function NegativeStockScreen() {
     setApiError(null);
     getStocks(companyGuid, { limit: '500' })
       .then((res: any) => {
-        const rows: any[] = res?.data ?? [];
+        const rows: any[] = res?.data?.items ?? [];
         const negItems: NegStockItem[] = rows
           .filter((r: any) => Number(r.closing_qty) < 0)
           .map((r: any, idx: number) => ({
@@ -108,7 +108,7 @@ export default function NegativeStockScreen() {
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Negative Stock Exceptions</Text>
+        <Text style={s.headerTitle}>Negative Stock</Text>
         <View style={{ width: 44 }} />
       </View>
 
