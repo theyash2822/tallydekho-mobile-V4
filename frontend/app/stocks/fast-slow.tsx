@@ -299,7 +299,7 @@ export default function FastSlowMovingScreen() {
               <Ionicons
                 name="hourglass-outline"
                 size={14}
-                color={activeTab === 'slow' ? COLORS.textPrimary : COLORS.textSecondary}
+                color={activeTab === 'slow' ? '#fff' : COLORS.textSecondary}
               />
               <Text style={[s.pillTxt, activeTab === 'slow' && s.pillTxtSlowActive]}>
                 Slow ({slowItems.length})
@@ -498,10 +498,10 @@ const s = StyleSheet.create({
   pillToggle:    { flexDirection: 'row', backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
   pillBtn:       { flex: 1, paddingVertical: 13, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 },
   pillBtnFast:   { backgroundColor: COLORS.brandPrimary },
-  pillBtnSlow:   { backgroundColor: COLORS.activeBg },
+  pillBtnSlow:   { backgroundColor: COLORS.brandPrimary },
   pillTxt:       { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
   pillTxtFastActive: { color: '#fff', fontWeight: '700' },
-  pillTxtSlowActive: { color: COLORS.textPrimary, fontWeight: '700' },
+  pillTxtSlowActive: { color: '#fff', fontWeight: '700' },
 
   // Note + hint
   noteRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
