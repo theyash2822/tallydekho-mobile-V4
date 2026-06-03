@@ -211,7 +211,7 @@ export const getStocks          = (companyGuid?: string, params?: any) => get<an
 export const getStockFastSlow    = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/fast-slow', companyGuid, params));
 export const getNegativeStock    = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/negative-stock', companyGuid, params));
 export const getStockDashboard  = (companyGuid: string) => appPost<any>('/stock-dashboard', { companyGuid });
-export const getStockItem    = (companyGuid?: string, id?: string) => get<any>(withCompany(`/stocks/items/${id}`, companyGuid));
+export const getStockItem    = (companyGuid?: string, id?: string, params?: any) => get<any>(withCompany(`/stocks/items/${id}`, companyGuid, params));
 export const getWarehouses       = (companyGuid?: string) => get<any>(withCompany('/stocks/warehouses', companyGuid));
 export const getWarehouseDetail  = (companyGuid?: string, id?: string) => get<any>(withCompany(`/stocks/warehouses/${id}`, companyGuid));
 export const getParties      = (companyGuid?: string, params?: any) => get<any>(withCompany('/parties', companyGuid, params));

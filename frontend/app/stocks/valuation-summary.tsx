@@ -27,8 +27,9 @@ export default function ValuationSummaryScreen() {
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
-  const { company } = useAuth();
+  const { company, selectedFY, fyInfoToParam } = useAuth();
   const companyGuid = company?.guid;
+  const fyParam = fyInfoToParam ? fyInfoToParam(selectedFY) : undefined;
 
   const [isLoading,     setIsLoading]     = useState(false);
   const [apiError,      setApiError]      = useState<string | null>(null);
@@ -43,7 +44,7 @@ export default function ValuationSummaryScreen() {
     if (!companyGuid) return;
     setIsLoading(true);
     setApiError(null);
-    getStocks(companyGuid, { limit: '500' })
+    getStocks(companyGuid, { limit: '500', ...(fyParam ? { fy: fyParam } : {}) })
       .then((res: any) => {
         const rows: any[] = res?.data ?? [];
         // Group by group_name
@@ -73,7 +74,7 @@ export default function ValuationSummaryScreen() {
       })
       .catch((err: any) => setApiError(err?.message ?? 'Failed to load stock data'))
       .finally(() => setIsLoading(false));
-  }, [companyGuid]);
+  }, [companyGuid, selectedFY]);
 
   const pieData = useMemo(() =>
     groups.map(g => ({ value: g.value, color: g.color, label: g.name })),

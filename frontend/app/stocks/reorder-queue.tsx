@@ -46,35 +46,34 @@ type FilterType = 'All' | 'Critical' | 'High' | 'Medium' | 'Low';
 
 export default function ReorderQueueScreen() {
   const router = useRouter();
-  const { company } = useAuth();
+  const { company, selectedFY, fyInfoToParam } = useAuth();
   const companyGuid = company?.guid;
+  const fyParam = fyInfoToParam ? fyInfoToParam(selectedFY) : undefined;
 
   const [items,       setItems]       = useState<ReorderItem[]>([]);
   const [loading,     setLoading]     = useState(true);
   const [error,       setError]       = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterType>('All');
 
-  useEffect(() => {
+  const loadItems = () => {
     if (!companyGuid) return;
     setLoading(true);
     setError(null);
-    getStocks(companyGuid, { limit: '500' })
+    getStocks(companyGuid, { limit: '500', ...(fyParam ? { fy: fyParam } : {}) })
       .then((res: any) => {
         const rows: any[] = res?.data?.items || res?.data || [];
         const lowStock: ReorderItem[] = rows
           .filter((r: any) => {
-            const qty    = parseFloat(r.closing_qty  ?? 0);
+            const qty     = parseFloat(r.closing_qty   ?? 0);
             const reorder = parseFloat(r.reorder_level ?? 0);
             return reorder > 0 && qty <= reorder;
           })
           .map((r: any) => {
-            const qty             = parseFloat(r.closing_qty         ?? 0);
-            const reorder         = parseFloat(r.reorder_level       ?? 0);
-            const avgDaily        = parseFloat(r.avg_daily_consumption ?? 0);
-            // V2: suggest = 30-day replenishment + deficit to cover shortfall
-            // V1 fallback: max(reorderLevel*2 - qty, reorderLevel) when no consumption history
-            const deficit         = Math.max(reorder - qty, 0);
-            const suggest         = avgDaily > 0
+            const qty      = parseFloat(r.closing_qty          ?? 0);
+            const reorder  = parseFloat(r.reorder_level        ?? 0);
+            const avgDaily = parseFloat(r.avg_daily_consumption ?? 0);
+            const deficit  = Math.max(reorder - qty, 0);
+            const suggest  = avgDaily > 0
               ? Math.ceil(avgDaily * 30) + deficit
               : Math.max(reorder * 2 - qty, reorder);
             return {
@@ -92,7 +91,9 @@ export default function ReorderQueueScreen() {
       })
       .catch(() => setError('Failed to load reorder queue'))
       .finally(() => setLoading(false));
-  }, [companyGuid]);
+  };
+
+  useEffect(() => { loadItems(); }, [companyGuid, selectedFY]);
 
   const filtered = activeFilter === 'All'
     ? items
@@ -145,7 +146,7 @@ export default function ReorderQueueScreen() {
       </View>
 
       {loading && <LoadingState message="Loading reorder queue…" />}
-      {!loading && error && <ErrorState message={error} onRetry={() => { setLoading(true); setError(null); getStocks(companyGuid!, { limit: '500' }).then((res: any) => { const rows: any[] = res?.data?.items || res?.data || []; setItems(rows.filter((r: any) => parseFloat(r.reorder_level ?? 0) > 0 && parseFloat(r.closing_qty ?? 0) <= parseFloat(r.reorder_level ?? 0)).map((r: any) => { const qty = parseFloat(r.closing_qty ?? 0); const reorder = parseFloat(r.reorder_level ?? 0); return { id: r.guid || String(r.id), name: r.name || '—', sku: r.alias || (r.guid ? r.guid.slice(0,8).toUpperCase() : '—'), current: qty, reorderAt: reorder, suggest: (() => { const ad = parseFloat(r.avg_daily_consumption ?? 0); const def = Math.max(reorder - qty, 0); return Math.round(ad > 0 ? Math.ceil(ad * 30) + def : Math.max(reorder * 2 - qty, reorder)); })(), priority: calcPriority(qty, reorder), warehouse: r.primary_warehouse || r.group_name || '—' }; })); }).catch(() => setError('Failed to load reorder queue')).finally(() => setLoading(false)); }} />}
+      {!loading && error && <ErrorState message={error} onRetry={loadItems} />}
       {!loading && !error && items.length === 0 && <EmptyState title="No items below reorder level" subtitle="All stock levels are healthy" icon="checkmark-circle-outline" />}
       {!loading && !error && items.length > 0 && (
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>

@@ -94,8 +94,9 @@ const pr = StyleSheet.create({
 export default function ItemDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { company } = useAuth();
+  const { company, selectedFY, fyInfoToParam } = useAuth();
   const companyGuid = company?.guid;
+  const fyParam = fyInfoToParam ? fyInfoToParam(selectedFY) : undefined;
 
   const [liveItem,   setLiveItem]   = useState<any>(null);
   const [itemLoading, setItemLoading] = useState(true);
@@ -109,22 +110,22 @@ export default function ItemDetailScreen() {
   useEffect(() => {
     if (!companyGuid || !id) return;
     setItemLoading(true);
-    getStockItem(companyGuid, id as string)
+    getStockItem(companyGuid, id as string, fyParam ? { fy: fyParam } : undefined)
       .then((res: any) => { if (res?.data) setLiveItem(res.data); })
       .catch(() => {})
       .finally(() => setItemLoading(false));
-  }, [companyGuid, id]);
+  }, [companyGuid, id, selectedFY]);
 
   useEffect(() => {
     if (!companyGuid || !id) return;
     setMovLoading(true);
-    getStockMovements(companyGuid, id as string, { limit: '20' })
+    getStockMovements(companyGuid, id as string, { limit: '20', ...(fyParam ? { fy: fyParam } : {}) })
       .then((res: any) => {
         if (res?.data) { setMovements(res.data.movements || []); setRateData(res.data); }
       })
       .catch(() => {})
       .finally(() => setMovLoading(false));
-  }, [companyGuid, id]);
+  }, [companyGuid, id, selectedFY]);
 
   // All data from real API — STRICT PRODUCTION DATA RULE
   const itemName     = liveItem?.name || (itemLoading ? 'Loading…' : '—');
