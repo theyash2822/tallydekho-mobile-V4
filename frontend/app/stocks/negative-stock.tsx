@@ -49,12 +49,12 @@ export default function NegativeStockScreen() {
     getNegativeStock(companyGuid)
       .then((res: any) => {
         const rows: NegStockItem[] = (res?.data?.items ?? []).map((r: any) => ({
-          id:         String(r.id),
-          name:       r.name ?? 'Unknown',
-          group:      r.group ?? '—',
+          id:         String(r.stockGuid ?? r.id),
+          name:       r.itemName ?? r.name ?? 'Unknown',
+          group:      r.groupName ?? r.group ?? '—',
           unit:       r.unit ?? '',
           rate:       Number(r.rate ?? 0),
-          total_qty:  Number(r.total_qty ?? 0),
+          total_qty:  Number(r.closingQty ?? r.total_qty ?? 0),
           warehouses: (r.warehouses ?? []).map((w: any) => ({
             warehouse: w.warehouse ?? 'Main Location',
             qty:       Number(w.qty ?? 0),
