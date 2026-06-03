@@ -15,6 +15,7 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 
 const { width: SW } = Dimensions.get('window');
+const PAGE_SIZE = 20;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface StockItem {
@@ -54,6 +55,9 @@ export default function FastSlowMovingScreen() {
 
   // Tabs
   const [activeTab, setActiveTab] = useState<'fast' | 'slow'>('fast');
+
+  // Pagination
+  const [page, setPage] = useState(1);
 
   // Multi-select
   const [selectedIds,     setSelectedIds]     = useState<Set<string>>(new Set());
@@ -103,7 +107,9 @@ export default function FastSlowMovingScreen() {
     [chartItems]
   );
 
-  const visibleItems = activeTab === 'fast' ? fastItems : slowItems;
+  const allVisible  = activeTab === 'fast' ? fastItems : slowItems;
+  const visibleItems = allVisible.slice(0, page * PAGE_SIZE);
+  const hasMore      = visibleItems.length < allVisible.length;
 
   const fmtVal = (v: number) => {
     const abs = Math.abs(v);
@@ -119,6 +125,8 @@ export default function FastSlowMovingScreen() {
   };
 
   // ── Selection handlers ────────────────────────────────────────────────────
+  const loadMore = () => setPage(p => p + 1);
+
   const handleLongPress = (id: string) => { setIsSelectionMode(true); setSelectedIds(new Set([id])); };
   const handleCardPress = (id: string) => {
     if (!isSelectionMode) return;
@@ -130,7 +138,7 @@ export default function FastSlowMovingScreen() {
     });
   };
   const cancelSelection = () => { setSelectedIds(new Set()); setIsSelectionMode(false); };
-  const selectAll       = () => { setSelectedIds(new Set(visibleItems.map(i => i.id))); setIsSelectionMode(true); };
+  const selectAll       = () => { setSelectedIds(new Set(allVisible.map(i => i.id))); setIsSelectionMode(true); };
 
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
@@ -184,12 +192,12 @@ export default function FastSlowMovingScreen() {
               </View>
               <View style={s.summaryDivider} />
               <View style={s.summaryItem}>
-                <Text style={[s.summaryVal, { color: '#16A34A' }]}>{fastItems.length}</Text>
+                <Text style={[s.summaryVal, { color: COLORS.positive }]}>{fastItems.length}</Text>
                 <Text style={s.summaryLbl}>Fast Moving</Text>
               </View>
               <View style={s.summaryDivider} />
               <View style={s.summaryItem}>
-                <Text style={[s.summaryVal, { color: '#D97706' }]}>{slowItems.length}</Text>
+                <Text style={[s.summaryVal, { color: COLORS.warning }]}>{slowItems.length}</Text>
                 <Text style={s.summaryLbl}>Slow Moving</Text>
               </View>
               <View style={s.summaryDivider} />
@@ -271,13 +279,13 @@ export default function FastSlowMovingScreen() {
           <View style={s.pillToggle}>
             <TouchableOpacity
               style={[s.pillBtn, activeTab === 'fast' && s.pillBtnFast]}
-              onPress={() => { setActiveTab('fast'); cancelSelection(); }}
+              onPress={() => { setActiveTab('fast'); cancelSelection(); setPage(1); }}
               activeOpacity={0.8}
             >
               <Ionicons
                 name="flash"
                 size={14}
-                color={activeTab === 'fast' ? '#fff' : '#16A34A'}
+                color={activeTab === 'fast' ? '#fff' : COLORS.positive}
               />
               <Text style={[s.pillTxt, activeTab === 'fast' && s.pillTxtActive]}>
                 Fast ({fastItems.length})
@@ -285,13 +293,13 @@ export default function FastSlowMovingScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.pillBtn, activeTab === 'slow' && s.pillBtnSlow]}
-              onPress={() => { setActiveTab('slow'); cancelSelection(); }}
+              onPress={() => { setActiveTab('slow'); cancelSelection(); setPage(1); }}
               activeOpacity={0.8}
             >
               <Ionicons
                 name="hourglass-outline"
                 size={14}
-                color={activeTab === 'slow' ? '#fff' : '#D97706'}
+                color={activeTab === 'slow' ? '#fff' : COLORS.warning}
               />
               <Text style={[s.pillTxt, activeTab === 'slow' && s.pillTxtActive]}>
                 Slow ({slowItems.length})
@@ -339,13 +347,13 @@ export default function FastSlowMovingScreen() {
                 activeOpacity={0.85}
               >
                 {/* Badge */}
-                <View style={[s.badge, { backgroundColor: isFast ? '#DCFCE7' : '#FEF3C7' }]}>
+                <View style={[s.badge, { backgroundColor: isFast ? COLORS.positiveBg : COLORS.warningBg }]}>
                   <Ionicons
                     name={isFast ? 'flash' : 'hourglass-outline'}
                     size={11}
-                    color={isFast ? '#16A34A' : '#D97706'}
+                    color={isFast ? COLORS.positive : COLORS.warning}
                   />
-                  <Text style={[s.badgeTxt, { color: isFast ? '#16A34A' : '#D97706' }]}>
+                  <Text style={[s.badgeTxt, { color: isFast ? COLORS.positive : COLORS.warning }]}>
                     {isFast ? 'Fast' : 'Slow'} #{item.rank}
                   </Text>
                 </View>
@@ -353,7 +361,7 @@ export default function FastSlowMovingScreen() {
                 {/* Top row */}
                 <View style={s.cardTop}>
                   <View style={[s.avatar, isSel && s.avatarSel,
-                    !isSel && { backgroundColor: isFast ? '#16A34A' : '#D97706' }]}>
+                    !isSel && { backgroundColor: isFast ? COLORS.positive : COLORS.warning }]}>
                     {isSel
                       ? <Ionicons name="checkmark" size={20} color="#fff" />
                       : <Text style={s.avatarTxt}>{item.name.charAt(0).toUpperCase()}</Text>
@@ -371,7 +379,7 @@ export default function FastSlowMovingScreen() {
                 <View style={s.statsGrid}>
                   <View style={s.statItem}>
                     <Text style={s.statLbl}>Outward Qty</Text>
-                    <Text style={[s.statVal, { color: isFast ? '#16A34A' : COLORS.textSecondary }]}>
+                    <Text style={[s.statVal, { color: isFast ? COLORS.positive : COLORS.textSecondary }]}>
                       {fmtQty(item.total_outward_qty)}{item.unit ? ` ${item.unit}` : ''}
                     </Text>
                   </View>
@@ -393,9 +401,9 @@ export default function FastSlowMovingScreen() {
 
                 {/* Days remaining banner — only when meaningful */}
                 {item.avg_daily_outward > 0 && item.closing_qty > 0 && item.days_remaining != null && (
-                  <View style={[s.daysRow, { backgroundColor: isFast ? '#F0FDF4' : '#FFFBEB' }]}>
-                    <Ionicons name="time-outline" size={12} color={isFast ? '#16A34A' : '#D97706'} />
-                    <Text style={[s.daysTxt, { color: isFast ? '#16A34A' : '#D97706' }]}>
+                  <View style={[s.daysRow, { backgroundColor: isFast ? COLORS.positiveBg : COLORS.warningBg }]}>
+                    <Ionicons name="time-outline" size={12} color={isFast ? COLORS.positive : COLORS.warning} />
+                    <Text style={[s.daysTxt, { color: isFast ? COLORS.positive : COLORS.warning }]}>
                       ~{item.days_remaining} days stock remaining at current rate
                     </Text>
                   </View>
@@ -403,6 +411,14 @@ export default function FastSlowMovingScreen() {
               </TouchableOpacity>
             );
           })}
+
+          {/* ── Load More ──────────────────────────────────────── */}
+          {hasMore && (
+            <TouchableOpacity style={s.loadMoreBtn} onPress={loadMore} activeOpacity={0.8}>
+              <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+              <Text style={s.loadMoreTxt}>Load More ({allVisible.length - visibleItems.length} remaining)</Text>
+            </TouchableOpacity>
+          )}
 
           <View style={{ height: 100 }} />
         </ScrollView>
@@ -481,8 +497,8 @@ const s = StyleSheet.create({
   // Pill toggle
   pillToggle:    { flexDirection: 'row', backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
   pillBtn:       { flex: 1, paddingVertical: 13, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 },
-  pillBtnFast:   { backgroundColor: '#16A34A' },
-  pillBtnSlow:   { backgroundColor: '#D97706' },
+  pillBtnFast:   { backgroundColor: COLORS.positive },
+  pillBtnSlow:   { backgroundColor: COLORS.warning },
   pillTxt:       { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
   pillTxtActive: { color: '#fff', fontWeight: '700' },
 
@@ -521,6 +537,9 @@ const s = StyleSheet.create({
   daysTxt: { fontSize: 11, fontWeight: '600' },
 
   // Share bar
+  loadMoreBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, paddingVertical: 14 },
+  loadMoreTxt:     { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+
   shareBar:        { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingTop: 12, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, gap: 12 },
   cancelSelFooter: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   cancelSelTxt:    { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
