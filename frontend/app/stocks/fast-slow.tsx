@@ -285,9 +285,9 @@ export default function FastSlowMovingScreen() {
               <Ionicons
                 name="flash"
                 size={14}
-                color={activeTab === 'fast' ? '#fff' : COLORS.positive}
+                color={activeTab === 'fast' ? '#fff' : COLORS.textSecondary}
               />
-              <Text style={[s.pillTxt, activeTab === 'fast' && s.pillTxtActive]}>
+              <Text style={[s.pillTxt, activeTab === 'fast' && s.pillTxtFastActive]}>
                 Fast ({fastItems.length})
               </Text>
             </TouchableOpacity>
@@ -299,9 +299,9 @@ export default function FastSlowMovingScreen() {
               <Ionicons
                 name="hourglass-outline"
                 size={14}
-                color={activeTab === 'slow' ? '#fff' : COLORS.warning}
+                color={activeTab === 'slow' ? COLORS.textPrimary : COLORS.textSecondary}
               />
-              <Text style={[s.pillTxt, activeTab === 'slow' && s.pillTxtActive]}>
+              <Text style={[s.pillTxt, activeTab === 'slow' && s.pillTxtSlowActive]}>
                 Slow ({slowItems.length})
               </Text>
             </TouchableOpacity>
@@ -347,13 +347,13 @@ export default function FastSlowMovingScreen() {
                 activeOpacity={0.85}
               >
                 {/* Badge */}
-                <View style={[s.badge, { backgroundColor: isFast ? COLORS.positiveBg : COLORS.warningBg }]}>
+                <View style={[s.badge, { backgroundColor: isFast ? COLORS.activeBg : COLORS.warningBg }]}>
                   <Ionicons
                     name={isFast ? 'flash' : 'hourglass-outline'}
                     size={11}
-                    color={isFast ? COLORS.positive : COLORS.warning}
+                    color={isFast ? COLORS.textPrimary : COLORS.textSecondary}
                   />
-                  <Text style={[s.badgeTxt, { color: isFast ? COLORS.positive : COLORS.warning }]}>
+                  <Text style={[s.badgeTxt, { color: isFast ? COLORS.textPrimary : COLORS.textSecondary }]}>
                     {isFast ? 'Fast' : 'Slow'} #{item.rank}
                   </Text>
                 </View>
@@ -361,10 +361,10 @@ export default function FastSlowMovingScreen() {
                 {/* Top row */}
                 <View style={s.cardTop}>
                   <View style={[s.avatar, isSel && s.avatarSel,
-                    !isSel && { backgroundColor: isFast ? COLORS.positive : COLORS.warning }]}>
+                    !isSel && { backgroundColor: isFast ? COLORS.brandPrimary : COLORS.activeBg }]}>
                     {isSel
                       ? <Ionicons name="checkmark" size={20} color="#fff" />
-                      : <Text style={s.avatarTxt}>{item.name.charAt(0).toUpperCase()}</Text>
+                      : <Text style={[s.avatarTxt, !isFast && { color: COLORS.textSecondary }]}>{item.name.charAt(0).toUpperCase()}</Text>
                     }
                   </View>
                   <View style={s.cardMeta}>
@@ -379,7 +379,7 @@ export default function FastSlowMovingScreen() {
                 <View style={s.statsGrid}>
                   <View style={s.statItem}>
                     <Text style={s.statLbl}>Outward Qty</Text>
-                    <Text style={[s.statVal, { color: isFast ? COLORS.positive : COLORS.textSecondary }]}>
+                    <Text style={[s.statVal, { color: isFast ? COLORS.textPrimary : COLORS.textSecondary }]}>
                       {fmtQty(item.total_outward_qty)}{item.unit ? ` ${item.unit}` : ''}
                     </Text>
                   </View>
@@ -401,9 +401,9 @@ export default function FastSlowMovingScreen() {
 
                 {/* Days remaining banner — only when meaningful */}
                 {item.avg_daily_outward > 0 && item.closing_qty > 0 && item.days_remaining != null && (
-                  <View style={[s.daysRow, { backgroundColor: isFast ? COLORS.positiveBg : COLORS.warningBg }]}>
-                    <Ionicons name="time-outline" size={12} color={isFast ? COLORS.positive : COLORS.warning} />
-                    <Text style={[s.daysTxt, { color: isFast ? COLORS.positive : COLORS.warning }]}>
+                  <View style={[s.daysRow, { backgroundColor: isFast ? COLORS.activeBg : COLORS.warningBg }]}>
+                    <Ionicons name="time-outline" size={12} color={isFast ? COLORS.textPrimary : COLORS.textSecondary} />
+                    <Text style={[s.daysTxt, { color: isFast ? COLORS.textPrimary : COLORS.textSecondary }]}>
                       ~{item.days_remaining} days stock remaining at current rate
                     </Text>
                   </View>
@@ -497,10 +497,11 @@ const s = StyleSheet.create({
   // Pill toggle
   pillToggle:    { flexDirection: 'row', backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
   pillBtn:       { flex: 1, paddingVertical: 13, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 },
-  pillBtnFast:   { backgroundColor: COLORS.positive },
-  pillBtnSlow:   { backgroundColor: COLORS.warning },
+  pillBtnFast:   { backgroundColor: COLORS.brandPrimary },
+  pillBtnSlow:   { backgroundColor: COLORS.activeBg },
   pillTxt:       { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
-  pillTxtActive: { color: '#fff', fontWeight: '700' },
+  pillTxtFastActive: { color: '#fff', fontWeight: '700' },
+  pillTxtSlowActive: { color: COLORS.textPrimary, fontWeight: '700' },
 
   // Note + hint
   noteRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
