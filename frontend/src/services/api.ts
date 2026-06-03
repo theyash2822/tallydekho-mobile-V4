@@ -208,6 +208,7 @@ export const createLedger      = (payload: any) => tallyPost<any>('/master/party
 // ══════════════════════════════════════════════════════════════
 
 export const getStocks          = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/items', companyGuid, params));
+export const getStockFastSlow   = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/fast-slow', companyGuid, params));
 export const getStockDashboard  = (companyGuid: string) => appPost<any>('/stock-dashboard', { companyGuid });
 export const getStockItem    = (companyGuid?: string, id?: string) => get<any>(withCompany(`/stocks/items/${id}`, companyGuid));
 export const getWarehouses       = (companyGuid?: string) => get<any>(withCompany('/stocks/warehouses', companyGuid));
