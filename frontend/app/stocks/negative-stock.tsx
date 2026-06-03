@@ -196,44 +196,37 @@ export default function NegativeStockScreen() {
 
                     <View style={s.divider} />
 
-                    {/* Total + est. value row */}
-                    <View style={s.infoRow}>
-                      <View style={s.infoGroup}>
-                        <Text style={s.infoLabel}>Total Qty</Text>
-                        <Text style={[s.infoValue, s.negQty]}>
+                    {/* Warehouse breakdown */}
+                    <View style={s.whHeader}>
+                      <Ionicons name="business-outline" size={12} color={COLORS.textTertiary} />
+                      <Text style={s.whHeaderTxt}>
+                        {hasMultiWH ? 'Warehouse Breakdown' : 'Warehouse'}
+                      </Text>
+                    </View>
+
+                    {item.warehouses.length > 0 ? (
+                      <View style={s.whList}>
+                        {item.warehouses.map((wh, idx) => (
+                          <View key={idx} style={s.whRow}>
+                            <View style={s.whDot} />
+                            <Text style={s.whName} numberOfLines={1}>{wh.warehouse}</Text>
+                            <Text style={s.whQty}>
+                              {fmtQty(wh.qty)}{item.unit ? ` ${item.unit}` : ''}
+                            </Text>
+                            {item.rate > 0 && (
+                              <Text style={s.whVal}>{fmtVal(wh.qty, item.rate)}</Text>
+                            )}
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <View style={s.whRow}>
+                        <View style={s.whDot} />
+                        <Text style={s.whName}>All Warehouses</Text>
+                        <Text style={s.whQty}>
                           {fmtQty(item.total_qty)}{item.unit ? ` ${item.unit}` : ''}
                         </Text>
                       </View>
-                      {item.rate > 0 && (
-                        <View style={s.infoGroup}>
-                          <Text style={s.infoLabel}>Est. Value</Text>
-                          <Text style={[s.infoValue, s.negQty]}>{fmtVal(item.total_qty, item.rate)}</Text>
-                        </View>
-                      )}
-                    </View>
-
-                    {/* Warehouse breakdown — shown when data available */}
-                    {item.warehouses.length > 0 && (
-                      <>
-                        <View style={s.whDivider} />
-                        <View style={s.whHeader}>
-                          <Ionicons name="business-outline" size={12} color={COLORS.textTertiary} />
-                          <Text style={s.whHeaderTxt}>
-                            {hasMultiWH ? 'Warehouse Breakdown' : 'Warehouse'}
-                          </Text>
-                        </View>
-                        <View style={s.whList}>
-                          {item.warehouses.map((wh, idx) => (
-                            <View key={idx} style={s.whRow}>
-                              <View style={s.whDot} />
-                              <Text style={s.whName} numberOfLines={1}>{wh.warehouse}</Text>
-                              <Text style={s.whQty}>
-                                {fmtQty(wh.qty)}{item.unit ? ` ${item.unit}` : ''}
-                              </Text>
-                            </View>
-                          ))}
-                        </View>
-                      </>
                     )}
                   </View>
                 </TouchableOpacity>
@@ -309,7 +302,8 @@ const s = StyleSheet.create({
   whRow:        { flexDirection: 'row', alignItems: 'center', gap: 6 },
   whDot:        { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.negative, flexShrink: 0 },
   whName:       { flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
-  whQty:        { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.negative },
+  whQty:        { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.negative, minWidth: 60, textAlign: 'right' },
+  whVal:        { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginLeft: 6 },
 
   // Empty
   empty:       { alignItems: 'center', paddingVertical: 60, gap: 8 },
