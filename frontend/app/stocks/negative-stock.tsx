@@ -7,58 +7,62 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { getStocks } from '../../src/services/api';
+import { getNegativeStock } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth } from '../../src/context/AuthContext';
-import { useSettings } from '../../src/context/SettingsContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 
 const AMBER = '#A89060';
+
+interface WarehouseQty {
+  warehouse: string;
+  qty: number;
+}
 
 interface NegStockItem {
   id: string;
   name: string;
   group: string;
-  qty: number;
-  value: number;
+  unit: string;
+  rate: number;
+  total_qty: number;
+  warehouses: WarehouseQty[];
 }
 
 export default function NegativeStockScreen() {
-  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company } = useAuth();
   const companyGuid = company?.guid;
 
-  const [search,       setSearch]       = useState('');
-  const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set());
-  const [isSelMode,    setIsSelMode]    = useState(false);
-
-  const [isLoading, setIsLoading] = useState(false);
-  const [apiError,  setApiError]  = useState<string | null>(null);
-  const [items,     setItems]     = useState<NegStockItem[]>([]);
+  const [search,      setSearch]      = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isSelMode,   setIsSelMode]   = useState(false);
+  const [isLoading,   setIsLoading]   = useState(false);
+  const [apiError,    setApiError]    = useState<string | null>(null);
+  const [items,       setItems]       = useState<NegStockItem[]>([]);
 
   useEffect(() => {
     if (!companyGuid) return;
     setIsLoading(true);
     setApiError(null);
-    getStocks(companyGuid, { limit: '500' })
+    getNegativeStock(companyGuid)
       .then((res: any) => {
-        const rows: any[] = res?.data?.items ?? [];
-        const negItems: NegStockItem[] = rows
-          .filter((r: any) => Number(r.closing_qty) < 0)
-          .map((r: any, idx: number) => ({
-            id:    String(r.id ?? idx),
-            name:  r.name ?? 'Unknown',
-            group: r.group_name ?? '—',
-            qty:   Number(r.closing_qty),
-            value: Number(r.closing_qty) * Number(r.rate ?? 0),
-          }));
-        setItems(negItems);
+        const rows: NegStockItem[] = (res?.data?.items ?? []).map((r: any) => ({
+          id:         String(r.id),
+          name:       r.name ?? 'Unknown',
+          group:      r.group ?? '—',
+          unit:       r.unit ?? '',
+          rate:       Number(r.rate ?? 0),
+          total_qty:  Number(r.total_qty ?? 0),
+          warehouses: (r.warehouses ?? []).map((w: any) => ({
+            warehouse: w.warehouse ?? 'Main Location',
+            qty:       Number(w.qty ?? 0),
+          })),
+        }));
+        setItems(rows);
       })
-      .catch((err: any) => {
-        setApiError(err?.message ?? 'Failed to load stock data');
-      })
+      .catch((err: any) => setApiError(err?.message ?? 'Failed to load negative stock data'))
       .finally(() => setIsLoading(false));
   }, [companyGuid]);
 
@@ -72,33 +76,25 @@ export default function NegativeStockScreen() {
   );
 
   // ── Multi-select ───────────────────────────────────────────────────────
-  const handleLongPress = (id: string) => {
-    setIsSelMode(true);
-    setSelectedIds(new Set([id]));
-  };
-
+  const handleLongPress = (id: string) => { setIsSelMode(true); setSelectedIds(new Set([id])); };
   const handlePress = (id: string) => {
     if (!isSelMode) return;
     setSelectedIds(prev => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-        if (next.size === 0) setIsSelMode(false);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) { next.delete(id); if (next.size === 0) setIsSelMode(false); }
+      else next.add(id);
       return next;
     });
   };
-
   const cancelSelection = () => { setSelectedIds(new Set()); setIsSelMode(false); };
   const selectAll       = () => { setSelectedIds(new Set(visibleItems.map(i => i.id))); setIsSelMode(true); };
 
-  const fmtValue = (v: number) => {
-    const abs = Math.abs(v);
-    if (abs >= 100000) return `₹${(abs / 100000).toFixed(1)}L`;
-    if (abs >= 1000)   return `₹${(abs / 1000).toFixed(1)}K`;
-    return `₹${abs.toFixed(0)}`;
+  const fmtQty  = (q: number) => `${q}`;
+  const fmtVal  = (qty: number, rate: number) => {
+    const v = Math.abs(qty * rate);
+    if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`;
+    if (v >= 1000)   return `₹${(v / 1000).toFixed(1)}K`;
+    return `₹${v.toFixed(0)}`;
   };
 
   return (
@@ -112,7 +108,6 @@ export default function NegativeStockScreen() {
         <View style={{ width: 44 }} />
       </View>
 
-      {/* ── Error Banner */}
       {apiError && <ErrorBanner message={apiError} />}
 
       {/* ── Selection Banner */}
@@ -151,11 +146,7 @@ export default function NegativeStockScreen() {
       {/* ── Loading */}
       {isLoading && (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, gap: 12 }}>
-          <LedgerRowSkeleton />
-          <LedgerRowSkeleton />
-          <LedgerRowSkeleton />
-          <LedgerRowSkeleton />
-          <LedgerRowSkeleton />
+          {[...Array(5)].map((_, i) => <LedgerRowSkeleton key={i} />)}
         </ScrollView>
       )}
 
@@ -179,6 +170,8 @@ export default function NegativeStockScreen() {
           ) : (
             visibleItems.map(item => {
               const isSel = selectedIds.has(item.id);
+              const hasMultiWH = item.warehouses.length > 1;
+
               return (
                 <TouchableOpacity
                   key={item.id}
@@ -188,7 +181,7 @@ export default function NegativeStockScreen() {
                   delayLongPress={350}
                   activeOpacity={0.85}
                 >
-                  {/* Avatar circle */}
+                  {/* Avatar */}
                   <View style={[s.avatar, isSel && s.avatarSel]}>
                     {isSel
                       ? <Ionicons name="checkmark" size={18} color="#fff" />
@@ -196,23 +189,52 @@ export default function NegativeStockScreen() {
                     }
                   </View>
 
-                  {/* Card content */}
                   <View style={s.cardContent}>
+                    {/* Name + group */}
                     <Text style={s.itemName}>{item.name}</Text>
                     <Text style={s.itemGroup}>{item.group}</Text>
 
                     <View style={s.divider} />
 
+                    {/* Total + est. value row */}
                     <View style={s.infoRow}>
                       <View style={s.infoGroup}>
-                        <Text style={s.infoLabel}>Balance Qty</Text>
-                        <Text style={[s.infoValue, s.negQty]}>{item.qty}</Text>
+                        <Text style={s.infoLabel}>Total Qty</Text>
+                        <Text style={[s.infoValue, s.negQty]}>
+                          {fmtQty(item.total_qty)}{item.unit ? ` ${item.unit}` : ''}
+                        </Text>
                       </View>
-                      <View style={s.infoGroup}>
-                        <Text style={s.infoLabel}>Est. Value</Text>
-                        <Text style={[s.infoValue, s.negQty]}>{fmtValue(item.value)}</Text>
-                      </View>
+                      {item.rate > 0 && (
+                        <View style={s.infoGroup}>
+                          <Text style={s.infoLabel}>Est. Value</Text>
+                          <Text style={[s.infoValue, s.negQty]}>{fmtVal(item.total_qty, item.rate)}</Text>
+                        </View>
+                      )}
                     </View>
+
+                    {/* Warehouse breakdown — shown when data available */}
+                    {item.warehouses.length > 0 && (
+                      <>
+                        <View style={s.whDivider} />
+                        <View style={s.whHeader}>
+                          <Ionicons name="business-outline" size={12} color={COLORS.textTertiary} />
+                          <Text style={s.whHeaderTxt}>
+                            {hasMultiWH ? 'Warehouse Breakdown' : 'Warehouse'}
+                          </Text>
+                        </View>
+                        <View style={s.whList}>
+                          {item.warehouses.map((wh, idx) => (
+                            <View key={idx} style={s.whRow}>
+                              <View style={s.whDot} />
+                              <Text style={s.whName} numberOfLines={1}>{wh.warehouse}</Text>
+                              <Text style={s.whQty}>
+                                {fmtQty(wh.qty)}{item.unit ? ` ${item.unit}` : ''}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </>
+                    )}
                   </View>
                 </TouchableOpacity>
               );
@@ -222,7 +244,7 @@ export default function NegativeStockScreen() {
         </ScrollView>
       )}
 
-      {/* ── Conditional Share Bar */}
+      {/* ── Share Bar */}
       {isSelMode && selectedIds.size > 0 && (
         <View style={[s.shareBar, { paddingBottom: insets.bottom || 16 }]}>
           <TouchableOpacity style={s.cancelSelFooter} onPress={cancelSelection} activeOpacity={0.7}>
@@ -258,21 +280,16 @@ const s = StyleSheet.create({
   searchBox:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: SPACING.md, marginTop: SPACING.md, marginBottom: SPACING.xs, backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md, paddingVertical: 12, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault },
   searchInput: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
 
-  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingTxt:  { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
-
   hintRow: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: SPACING.md, paddingTop: 4, paddingBottom: 6 },
   hintTxt: { fontSize: 11, color: COLORS.textTertiary },
 
   list: { paddingHorizontal: SPACING.md, paddingTop: SPACING.xs },
 
   // Cards
-  card:    { flexDirection: 'row', gap: 12, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, padding: SPACING.md, marginBottom: SPACING.md },
-  cardSel: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.activeBg },
-
-  avatar:    { width: 44, height: 44, borderRadius: 22, backgroundColor: AMBER, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 },
-  avatarSel: { backgroundColor: COLORS.brandPrimary },
-
+  card:        { flexDirection: 'row', gap: 12, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, padding: SPACING.md, marginBottom: SPACING.md },
+  cardSel:     { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.activeBg },
+  avatar:      { width: 44, height: 44, borderRadius: 22, backgroundColor: AMBER, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 },
+  avatarSel:   { backgroundColor: COLORS.brandPrimary },
   cardContent: { flex: 1 },
   itemName:    { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   itemGroup:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
@@ -284,6 +301,17 @@ const s = StyleSheet.create({
   infoValue: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary, marginTop: 2 },
   negQty:    { color: COLORS.negative },
 
+  // Warehouse breakdown
+  whDivider:    { height: 1, backgroundColor: COLORS.borderDefault, marginTop: SPACING.sm, marginBottom: 6 },
+  whHeader:     { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 },
+  whHeaderTxt:  { fontSize: 11, color: COLORS.textTertiary, fontWeight: '600' },
+  whList:       { gap: 4 },
+  whRow:        { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  whDot:        { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.negative, flexShrink: 0 },
+  whName:       { flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  whQty:        { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.negative },
+
+  // Empty
   empty:       { alignItems: 'center', paddingVertical: 60, gap: 8 },
   emptyTxt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textSecondary },
   emptySubTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
