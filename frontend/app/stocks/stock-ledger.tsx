@@ -171,23 +171,6 @@ export default function StockLedgerScreen() {
   const [itemsLoading,   setItemsLoading]   = useState(false);
   const [voucherTypesLoading, setVoucherTypesLoading] = useState(false);
 
-  // Load voucher types for filter (if not yet populated)
-  const loadVoucherTypes = useCallback(async () => {
-    if (!company?.guid || apiVoucherTypes.length > 0 || voucherTypesLoading) return;
-    setVoucherTypesLoading(true);
-    try {
-      const fyParam = fyInfoToParam(selectedFY);
-      const params: Record<string, any> = { mode: 'chronological', page: 1, limit: 1 };
-      if (fyParam) params.fy = fyParam;
-      const res = await getStockLedger(company.guid, params);
-      if (res?.data?.voucherTypes?.length) {
-        setApiVoucherTypes(res.data.voucherTypes);
-      }
-    } catch {}
-    finally { setVoucherTypesLoading(false); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [company?.guid, selectedFY, apiVoucherTypes.length, voucherTypesLoading]);
-
   // Open filter → copy applied → draft
   const openFilter = () => {
     setDraftWH(new Set(selWH));
@@ -298,6 +281,23 @@ export default function StockLedgerScreen() {
   const [warehouses,    setWarehouses]    = useState<string[]>([]);
   const [apiVoucherTypes, setApiVoucherTypes] = useState<string[]>([]);
   const [summary,    setSummary]    = useState({ entries: 0, totalIn: 0, totalOut: 0, value: 0 });
+
+  // Load voucher types for filter (if not yet populated from a fetchLedger response)
+  const loadVoucherTypes = useCallback(async () => {
+    if (!company?.guid || apiVoucherTypes.length > 0 || voucherTypesLoading) return;
+    setVoucherTypesLoading(true);
+    try {
+      const fyParam = fyInfoToParam(selectedFY);
+      const params: Record<string, any> = { mode: 'chronological', page: 1, limit: 1 };
+      if (fyParam) params.fy = fyParam;
+      const res = await getStockLedger(company.guid, params);
+      if (res?.data?.voucherTypes?.length) {
+        setApiVoucherTypes(res.data.voucherTypes);
+      }
+    } catch {}
+    finally { setVoucherTypesLoading(false); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [company?.guid, selectedFY, apiVoucherTypes.length, voucherTypesLoading]);
 
   // Map viewMode → API mode param
   const apiMode = viewMode === 'byItem' ? 'by_item' : viewMode === 'byDocument' ? 'by_document' : 'chronological';
