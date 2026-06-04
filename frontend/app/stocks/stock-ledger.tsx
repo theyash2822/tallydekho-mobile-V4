@@ -141,6 +141,7 @@ export default function StockLedgerScreen() {
   const [selected,    setSelected]    = useState<Set<string>>(new Set());
 
   // Filter modal
+  const [filterApplied,      setFilterApplied]      = useState(0);
   const [showFilter,         setShowFilter]         = useState(false);
   const [showDatePick,       setShowDatePick]        = useState(false);
   const [pendingReopenFilter,setPendingReopenFilter] = useState(false);
@@ -182,8 +183,8 @@ export default function StockLedgerScreen() {
     setDateFrom(draftFrom);
     setDateTo(draftTo);
     setShowFilter(false);
-    // Re-fetch with new filters (tiny delay for state to flush)
-    setTimeout(() => fetchLedger(1, true), 50);
+    // Increment trigger — useEffect fires AFTER re-render when fetchLedger has fresh state
+    setFilterApplied(n => n + 1);
   };
 
   const resetFilters = () => {
@@ -308,6 +309,9 @@ export default function StockLedgerScreen() {
   useEffect(() => { fetchLedger(1, true); }, [company?.guid, selectedFY]);
   // Re-fetch when tab switches
   useEffect(() => { fetchLedger(1, true); }, [apiMode]);
+  // Re-fetch when filters are applied (filterApplied > 0 skips the initial mount)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (filterApplied > 0) fetchLedger(1, true); }, [filterApplied]);
 
   // Chronological: filters already sent to API — just use data as-is
   const filtered = chronoData;
