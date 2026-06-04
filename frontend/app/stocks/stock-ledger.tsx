@@ -338,14 +338,14 @@ export default function StockLedgerScreen() {
   );
 
   // ── Chronological Card ───────────────────────────────────────────────────────
-  const renderChronCard = (tx: TxEntry) => {
+  const renderChronCard = (tx: TxEntry, idx: number = 0) => {
     const isExp  = expanded.has(tx.id);
     const isSel  = selected.has(tx.id);
     const tc     = TYPE_COLOR[tx.type];
     const isIn   = tx.qty > 0;
     return (
       <TouchableOpacity
-        key={tx.id}
+        key={`chron-${tx.id || idx}-${idx}`}
         style={[s.card, isSel && s.cardSel]}
         activeOpacity={0.7}
         onPress={() => selected.size > 0 ? toggleSelect(tx.id) : toggleExpand(tx.id)}
@@ -390,12 +390,12 @@ export default function StockLedgerScreen() {
   };
 
   // ── By Item Card ─────────────────────────────────────────────────────────────
-  const renderByItemCard = (grp: typeof byItemGroups[0]) => {
+  const renderByItemCard = (grp: typeof byItemGroups[0], idx: number = 0) => {
     const isExp = expanded.has(grp.key);
     const isSel = grp.items.length > 0 && grp.items.every(t => selected.has(t.id));
     return (
       <TouchableOpacity
-        key={grp.key}
+        key={`item-${grp.key || idx}-${idx}`}
         style={[s.card, isSel && s.cardSel]}
         activeOpacity={0.7}
         onPress={() => selected.size > 0
@@ -425,7 +425,7 @@ export default function StockLedgerScreen() {
         {isExp && (
           <View style={s.expandBody}>
             {grp.items.map((tx, i) => (
-              <View key={tx.id}>
+              <View key={`bi-${tx.id || grp.key}-${i}`}>
                 {i > 0 && <View style={s.innerDivider} />}
                 <View style={s.expandDivider} />
                 <DetailRow label="Date"     value={tx.date}    label2="Doc Ref"  value2={tx.docRef || '—'}   />
@@ -440,10 +440,10 @@ export default function StockLedgerScreen() {
   };
 
   // ── By Document Card ──────────────────────────────────────────────────────────
-  const renderByDocCard = (grp: typeof byDocGroups[0]) => {
+  const renderByDocCard = (grp: typeof byDocGroups[0], idx: number = 0) => {
     const isExp = expanded.has(grp.docRef);
     return (
-      <View key={grp.docRef} style={s.docGroup}>
+      <View key={`doc-${grp.docRef || idx}-${idx}`} style={s.docGroup}>
         {/* Document Group Header */}
         <View style={s.docHeader}>
           <View style={s.docTypeBadge}>
@@ -478,7 +478,7 @@ export default function StockLedgerScreen() {
           {isExp && (
             <View style={s.expandBody}>
               {grp.items.map((tx, i) => (
-                <View key={tx.id}>
+                <View key={`dl-${tx.id || tx.item}-${i}`}>
                   {i > 0 && <View style={s.innerDivider} />}
                   <View style={s.expandDivider} />
                   <DetailRow label="Item"      value={tx.item}      label2="Batch/Serial" value2={tx.batch}    />
@@ -580,9 +580,9 @@ export default function StockLedgerScreen() {
         </View>
       ) : (
         <ScrollView style={s.list} showsVerticalScrollIndicator={false} contentContainerStyle={s.listContent}>
-          {viewMode === 'chronological' && filtered.map(renderChronCard)}
-          {viewMode === 'byItem'        && byItemGroups.map(renderByItemCard)}
-          {viewMode === 'byDocument'    && byDocGroups.map(renderByDocCard)}
+          {viewMode === 'chronological' && filtered.map((tx, i) => renderChronCard(tx, i))}
+          {viewMode === 'byItem'        && byItemGroups.map((g, i) => renderByItemCard(g, i))}
+          {viewMode === 'byDocument'    && byDocGroups.map((g, i) => renderByDocCard(g, i))}
           {activeCount === 0 && (
             <View style={s.empty}>
               <Ionicons name="document-outline" size={48} color={COLORS.borderDefault} />
