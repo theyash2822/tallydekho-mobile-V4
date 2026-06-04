@@ -183,7 +183,6 @@ export default function StockLedgerScreen() {
     setDraftTo(dateTo);
     setShowFilter(true);
     loadStockItems();
-    loadVoucherTypes();
   };
 
   const applyFilters = () => {
@@ -282,9 +281,9 @@ export default function StockLedgerScreen() {
   const [apiVoucherTypes, setApiVoucherTypes] = useState<string[]>([]);
   const [summary,    setSummary]    = useState({ entries: 0, totalIn: 0, totalOut: 0, value: 0 });
 
-  // Load voucher types for filter (if not yet populated from a fetchLedger response)
+  // Load voucher types independently — called on mount + FY change so filter is always ready
   const loadVoucherTypes = useCallback(async () => {
-    if (!company?.guid || apiVoucherTypes.length > 0 || voucherTypesLoading) return;
+    if (!company?.guid || voucherTypesLoading) return;
     setVoucherTypesLoading(true);
     try {
       const fyParam = fyInfoToParam(selectedFY);
@@ -297,7 +296,7 @@ export default function StockLedgerScreen() {
     } catch {}
     finally { setVoucherTypesLoading(false); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [company?.guid, selectedFY, apiVoucherTypes.length, voucherTypesLoading]);
+  }, [company?.guid, selectedFY]);
 
   // Map viewMode → API mode param
   const apiMode = viewMode === 'byItem' ? 'by_item' : viewMode === 'byDocument' ? 'by_document' : 'chronological';
@@ -372,6 +371,8 @@ export default function StockLedgerScreen() {
   useEffect(() => { fetchLedgerRef.current(1, true); }, [apiMode]);
   // Re-fetch when filters are applied (filterApplied > 0 skips the initial mount)
   useEffect(() => { if (filterApplied > 0) fetchLedgerRef.current(1, true); }, [filterApplied]);
+  // Load voucher types proactively on mount + FY change so filter panel is always ready
+  useEffect(() => { loadVoucherTypes(); }, [company?.guid, selectedFY]);
 
   // Chronological: filters already sent to API — just use data as-is
   const filtered = chronoData;
