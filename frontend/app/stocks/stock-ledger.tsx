@@ -352,31 +352,34 @@ export default function StockLedgerScreen() {
         onLongPress={() => toggleSelect(tx.id)}
       >
         <View style={s.cardTop}>
-          <View style={s.avatar}>
+          <View style={[s.typeBadgeBox, { backgroundColor: tc + '18' }]}>
             {isSel
-              ? <Ionicons name="checkmark" size={16} color="#fff" />
-              : <Text style={s.avatarTxt}>{tx.item.charAt(0)}</Text>
+              ? <Ionicons name="checkmark" size={15} color={tc} />
+              : <Text style={[s.typeBadgeTxt, { color: tc }]}>{tx.type.slice(0, 2).toUpperCase()}</Text>
             }
           </View>
           <View style={s.cardInfo}>
-            <Text style={s.cardTitle}>{tx.sku}</Text>
-            <Text style={s.cardSub}>{tx.date} · {tx.time}</Text>
+            <Text style={s.cardTitle} numberOfLines={1}>{tx.item || tx.docRef || '—'}</Text>
+            <Text style={s.cardSub} numberOfLines={1}>
+              {[tx.docRef, tx.date, tx.warehouse && tx.warehouse !== 'Main' ? tx.warehouse : null]
+                .filter(Boolean).join('  ·  ')}
+            </Text>
           </View>
           <View style={s.cardRight}>
             <Text style={[s.cardQty, { color: isIn ? COLORS.positive : COLORS.negative }]}>
-              {isIn ? '+' : ''}{tx.qty}
+              {isIn ? '+' : '−'}{Math.abs(tx.qty) % 1 === 0 ? Math.abs(tx.qty) : Math.abs(tx.qty).toFixed(2)}
             </Text>
-            <Ionicons name={isExp ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textTertiary} />
+            <Ionicons name={isExp ? 'chevron-up' : 'chevron-down'} size={14} color={COLORS.textTertiary} />
           </View>
         </View>
         {isExp && (
           <View style={s.expandBody}>
             <View style={s.expandDivider} />
-            <DetailRow label="Item"       value={tx.item}      label2="Batch/Serial" value2={tx.batch}    />
-            <DetailRow label="Unit cost"  value={tx.unitCost}  label2="Balance"      value2={tx.balance}  />
-            <DetailRow label="TxN ID"     value={tx.txnId}     label2="Doc Ref"      value2={tx.docRef}   />
-            <DetailRow label="Posted-by"  value={tx.postedBy}                                              />
-            <DetailRow label="Note"       value={tx.note}                                                  />
+            {tx.batch  && tx.batch  !== '' && <DetailRow label="Batch/Serial" value={tx.batch} />}
+            {tx.unitCost && <DetailRow label="Unit cost" value={tx.unitCost} label2="Value" value2={tx.value} />}
+            <DetailRow label="Document" value={tx.docRef || '—'} label2="Type" value2={tx.docType || '—'} />
+            <DetailRow label="Warehouse" value={tx.warehouse || '—'} />
+            {tx.note && tx.note !== '' && <DetailRow label="Note" value={tx.note} />}
             <View style={[s.typePill, { backgroundColor: tc + '18', alignSelf: 'flex-start', marginTop: 6 }]}>
               <Text style={[s.typePillTxt, { color: tc }]}>{tx.type}</Text>
             </View>
@@ -389,7 +392,7 @@ export default function StockLedgerScreen() {
   // ── By Item Card ─────────────────────────────────────────────────────────────
   const renderByItemCard = (grp: typeof byItemGroups[0]) => {
     const isExp = expanded.has(grp.key);
-    const isSel = grp.items.every(t => selected.has(t.id));
+    const isSel = grp.items.length > 0 && grp.items.every(t => selected.has(t.id));
     return (
       <TouchableOpacity
         key={grp.key}
@@ -409,11 +412,13 @@ export default function StockLedgerScreen() {
             }
           </View>
           <View style={s.cardInfo}>
-            <Text style={s.cardTitle}>{grp.item} · {grp.sku}</Text>
-            <Text style={s.cardSub}>{grp.items.length} transaction{grp.items.length !== 1 ? 's' : ''}</Text>
+            <Text style={s.cardTitle} numberOfLines={1}>{grp.item || '—'}</Text>
+            <Text style={s.cardSub} numberOfLines={1}>
+              {grp.sku ? `SKU: ${grp.sku}  ·  ` : ''}{grp.items.length} movement{grp.items.length !== 1 ? 's' : ''}
+            </Text>
           </View>
           <View style={s.cardRight}>
-            <Text style={s.cardValue}>{grp.value}</Text>
+            <Text style={s.cardValue} numberOfLines={1}>{grp.value}</Text>
             <Ionicons name={isExp ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textTertiary} />
           </View>
         </View>
@@ -423,9 +428,9 @@ export default function StockLedgerScreen() {
               <View key={tx.id}>
                 {i > 0 && <View style={s.innerDivider} />}
                 <View style={s.expandDivider} />
-                <DetailRow label="Date"    value={tx.date}    label2="TxN ID"   value2={tx.txnId}   />
-                <DetailRow label="Doc Ref" value={tx.docRef}  label2="Quantity" value2={`${tx.qty > 0 ? '+' : ''}${tx.qty} pcs`} />
-                <DetailRow label="Balance" value={tx.balance}                                        />
+                <DetailRow label="Date"     value={tx.date}    label2="Doc Ref"  value2={tx.docRef || '—'}   />
+                <DetailRow label="Qty"      value={`${tx.qty > 0 ? '+' : '−'}${Math.abs(tx.qty)}`} label2="Warehouse" value2={tx.warehouse || '—'} />
+                <DetailRow label="Type"     value={tx.docType || '—'} />
               </View>
             ))}
           </View>
@@ -519,7 +524,7 @@ export default function StockLedgerScreen() {
             <TouchableOpacity
               key={tab.key}
               style={[s.tab, viewMode === tab.key && s.tabActive]}
-              onPress={() => { setViewMode(tab.key); setExpanded(new Set()); }}
+              onPress={() => { setViewMode(tab.key); setExpanded(new Set()); setSelected(new Set()); }}
               activeOpacity={0.7}
             >
               <Ionicons
@@ -873,6 +878,10 @@ const s = StyleSheet.create({
   // Load More
   loadMoreBtn: { alignSelf: 'center', marginVertical: 16, paddingHorizontal: 24, paddingVertical: 12, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
   loadMoreTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.brandPrimary },
+
+  // Type badge (replaces letter avatar in chronological cards)
+  typeBadgeBox: { width: 40, height: 40, borderRadius: RADIUS.sm, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  typeBadgeTxt: { fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
 
   // Filter Modal
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
