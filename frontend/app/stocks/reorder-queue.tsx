@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
+import { useAuth } from '../../src/context/AuthContext';
 import { getStocks } from '../../src/services/api';
 import { LoadingState, ErrorState, EmptyState } from '../../src/components/ApiStateViews';
 
@@ -46,9 +46,8 @@ type FilterType = 'All' | 'Critical' | 'High' | 'Medium' | 'Low';
 
 export default function ReorderQueueScreen() {
   const router = useRouter();
-  const { company, selectedFY } = useAuth();
+  const { company } = useAuth();
   const companyGuid = company?.guid;
-  const fyParam = fyInfoToParam(selectedFY);
 
   const [items,       setItems]       = useState<ReorderItem[]>([]);
   const [loading,     setLoading]     = useState(true);
@@ -59,7 +58,9 @@ export default function ReorderQueueScreen() {
     if (!companyGuid) return;
     setLoading(true);
     setError(null);
-    getStocks(companyGuid, { limit: '500', ...(fyParam ? { fy: fyParam } : {}) })
+    // No FY param — reorder decisions use current stock (stocks.closing_qty from Tally),
+    // not FY-derived qty. Physical Stock vouchers inflate FY calculations; current stock is authoritative.
+    getStocks(companyGuid, { limit: '500' })
       .then((res: any) => {
         const rows: any[] = res?.data?.items || res?.data || [];
         const lowStock: ReorderItem[] = rows
@@ -93,7 +94,7 @@ export default function ReorderQueueScreen() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadItems(); }, [companyGuid, selectedFY]);
+  useEffect(() => { loadItems(); }, [companyGuid]);
 
   const filtered = activeFilter === 'All'
     ? items
