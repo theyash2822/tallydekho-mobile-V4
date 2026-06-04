@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput, ActivityIndicator,
+  KeyboardAvoidingView, Platform, TextInput, ActivityIndicator,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,10 +10,8 @@ import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { createWarehouse } from '../../src/services/api';
-import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import { createWarehouse, getWarehouses } from '../../src/services/api';
 
-interface RackRow { id: string; rack: string; label: string; }
 const WEB = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
 
 function ThemedInput({
@@ -35,57 +34,72 @@ export default function CreateWarehouseScreen() {
   const insets = useSafeAreaInsets();
   const { company, isPaired } = useAuth();
   const [submitting, setSubmitting] = useState(false);
-  const [entryType, setEntryType] = useState<EntryType>('regular');
 
-  const [code, setCode] = useState('');
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
+  // Form fields — only what Tally needs
+  const [name,    setName]    = useState('');
+  const [parent,  setParent]  = useState('');
   const [address, setAddress] = useState('');
-  const [zipCode, setZipCode] = useState('');
-  const [racks, setRacks] = useState<RackRow[]>([]);
-  const [newRack, setNewRack] = useState('');
-  const [newLabel, setNewLabel] = useState('');
-  const [narration, setNarration] = useState('');
 
-  const addRack = () => {
-    if (!newRack.trim()) return;
-    setRacks(prev => [...prev, { id: Date.now().toString(), rack: newRack.trim(), label: newLabel.trim() }]);
-    setNewRack('');
-    setNewLabel('');
-  };
+  // Parent autocomplete
+  const [warehouseNames, setWarehouseNames] = useState<string[]>(['Primary']);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestions = warehouseNames.filter(w =>
+    w.toLowerCase().includes(parent.toLowerCase()) && w !== parent
+  );
 
-  const removeRack = (id: string) => setRacks(prev => prev.filter(r => r.id !== id));
+  // Load existing warehouses for parent autocomplete
+  useEffect(() => {
+    if (!company?.guid) return;
+    getWarehouses(company.guid).then((res: any) => {
+      const names: string[] = (res?.data ?? []).map((w: any) => w.name).filter(Boolean);
+      // Always include Primary at top
+      const all = ['Primary', ...names.filter(n => n !== 'Primary')];
+      setWarehouseNames(all);
+    }).catch(() => {});
+  }, [company?.guid]);
 
   const handleSave = async () => {
-    if (!name.trim()) { Alert.alert('Required', 'Warehouse name is required.'); return; }
-    if (!isPaired) { Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' }); return; }
+    if (!name.trim()) {
+      Toast.show({ type: 'error', text1: 'Name Required', text2: 'Please enter a warehouse name.' });
+      return;
+    }
+    if (!isPaired) {
+      Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' });
+      return;
+    }
     try {
       setSubmitting(true);
       await createWarehouse({
-        company_guid: company?.guid,
-        name, code: code || undefined,
-        address: address || undefined,
-        phone: phone || undefined,
-        email: email || undefined,
-        zip_code: zipCode || undefined,
-        narration: narration || undefined,
+        companyGuid:  company?.guid,
+        companyName:  company?.name,
+        name:         name.trim(),
+        parentGodown: parent.trim() || 'Primary',
+        address:      address.trim() || undefined,
       });
-      Toast.show({ type: 'success', text1: 'Warehouse Created', text2: `"${name}" added to Tally.` });
-      setTimeout(()=>router.back(),1000);
-    } catch(err:any) {
-      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message||'Could not create warehouse.' });
-    } finally { setSubmitting(false); }
+      Toast.show({ type: 'success', text1: 'Warehouse Created', text2: `"${name}" sent to Tally successfully.` });
+      setTimeout(() => router.back(), 1200);
+    } catch (err: any) {
+      const raw = err?.message || '';
+      // Give user-friendly message for common Tally errors
+      const msg = raw.includes('does not exist')
+        ? `Parent godown not found in Tally. Leave Parent empty or enter an exact godown name from Tally.`
+        : raw.includes('timeout')
+        ? 'Tally not responding. Make sure Tally Prime is open.'
+        : raw || 'Could not create warehouse.';
+      Toast.show({ type: 'error', text1: 'Failed', text2: msg });
+    } finally {
+      setSubmitting(false); }
   };
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
+      {/* Header — no RegularOptionalToggle */}
       <View style={s.header}>
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Add Warehouse</Text>
-        <RegularOptionalToggle value={entryType} onChange={setEntryType} />
+        <View style={{ width: 36 }} />
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -94,91 +108,67 @@ export default function CreateWarehouseScreen() {
           contentContainerStyle={s.form}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Warehouse Code */}
-          <Text style={s.label}>Warehouse Code <Text style={s.star}>*</Text></Text>
-          <ThemedInput placeholder="Add Code" value={code} onChangeText={setCode} />
-
-          {/* Name */}
-          <Text style={s.label}>Name <Text style={s.star}>*</Text></Text>
-          <ThemedInput placeholder="Add Name" value={name} onChangeText={setName} />
-
-          {/* Phone + Email */}
-          <View style={s.row2}>
-            <View style={{ flex: 1 }}>
-              <Text style={s.label}>Phone Number</Text>
-              <ThemedInput placeholder="Enter Phone number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.label}>Email</Text>
-              <ThemedInput placeholder="Enter Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-            </View>
-          </View>
-
-          {/* Address */}
-          <Text style={s.label}>Address</Text>
+          {/* Name — required */}
+          <Text style={s.label}>Warehouse Name <Text style={s.star}>*</Text></Text>
           <ThemedInput
-            placeholder="Enter full address"
-            value={address} onChangeText={setAddress}
-            multiline numberOfLines={3}
+            placeholder="e.g. Delhi Warehouse"
+            value={name}
+            onChangeText={setName}
+            autoCapitalize="words"
+          />
+          <Text style={s.hint}>This name will be created as a Godown in Tally</Text>
+
+          {/* Parent — with autocomplete */}
+          <Text style={s.label}>Parent Godown</Text>
+          <View style={{ position: 'relative', zIndex: 10 }}>
+            <ThemedInput
+              placeholder="Leave empty for top-level warehouse"
+              value={parent}
+              onChangeText={v => { setParent(v); setShowSuggestions(true); }}
+              onFocus={() => setShowSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            />
+            {showSuggestions && suggestions.length > 0 && (
+              <View style={s.suggestions}>
+                {suggestions.slice(0, 6).map(w => (
+                  <TouchableOpacity
+                    key={w}
+                    style={s.suggestionItem}
+                    onPress={() => { setParent(w); setShowSuggestions(false); }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="business-outline" size={14} color={COLORS.textSecondary} />
+                    <Text style={s.suggestionTxt}>{w}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+          <Text style={s.hint}>Leave empty for a top-level warehouse. Type to search existing godowns as parent.</Text>
+
+          {/* Address — optional */}
+          <Text style={s.label}>Address <Text style={s.optional}>(optional)</Text></Text>
+          <ThemedInput
+            placeholder="e.g. Plot 42, Industrial Area, Delhi"
+            value={address}
+            onChangeText={setAddress}
+            multiline
+            numberOfLines={3}
             style={s.textarea}
           />
 
-          {/* Zip Code */}
-          <Text style={s.label}>Zip Code</Text>
-          <ThemedInput placeholder="Zip Code" value={zipCode} onChangeText={setZipCode} keyboardType="numeric" />
-
-          {/* Racks */}
-          <Text style={s.label}>Racks</Text>
-          {racks.map(r => (
-            <View key={r.id} style={s.rackRow}>
-              <View style={[s.rackInput, { flex: 1 }]}>
-                <Text style={s.rackVal}>{r.rack}</Text>
-              </View>
-              <View style={[s.rackInput, { flex: 1 }]}>
-                <Text style={s.rackVal}>{r.label || '—'}</Text>
-              </View>
-              <TouchableOpacity style={s.rackDel} onPress={() => removeRack(r.id)} activeOpacity={0.7}>
-                <Ionicons name="close" size={16} color={COLORS.negative} />
-              </TouchableOpacity>
-            </View>
-          ))}
-          {/* New rack entry row */}
-          <View style={s.rackRow}>
-            <TextInput
-              style={[s.rackInput, { flex: 1 }, WEB]}
-              placeholder="Enter Racks"
-              placeholderTextColor={COLORS.textTertiary}
-              value={newRack}
-              onChangeText={setNewRack}
-            />
-            <TextInput
-              style={[s.rackInput, { flex: 1 }, WEB]}
-              placeholder="Enter Label"
-              placeholderTextColor={COLORS.textTertiary}
-              value={newLabel}
-              onChangeText={setNewLabel}
-            />
-            <TouchableOpacity style={s.rackAdd} onPress={addRack} activeOpacity={0.7}>
-              <Ionicons name="add" size={18} color={COLORS.textPrimary} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Narration */}
-          <Text style={s.label}>Narration</Text>
-          <ThemedInput
-            placeholder="Enter Narration"
-            value={narration} onChangeText={setNarration}
-            multiline numberOfLines={3}
-            style={s.textarea}
-          />
-
-          <View style={{ height: 16 }} />
+          <View style={{ height: 24 }} />
         </ScrollView>
 
         <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-          <TouchableOpacity style={[s.saveBtn,submitting&&{opacity:0.6}]} onPress={handleSave} activeOpacity={0.85} disabled={submitting}>
-            {submitting&&<ActivityIndicator size="small" color={COLORS.white} style={{marginRight:8}}/>}
-            <Text style={s.saveBtnTxt}>{submitting?'Saving...':'Save'}</Text>
+          <TouchableOpacity
+            style={[s.saveBtn, submitting && { opacity: 0.6 }]}
+            onPress={handleSave}
+            activeOpacity={0.85}
+            disabled={submitting}
+          >
+            {submitting && <ActivityIndicator size="small" color={COLORS.white} style={{ marginRight: 8 }} />}
+            <Text style={s.saveBtnTxt}>{submitting ? 'Saving...' : 'Create Warehouse'}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -187,50 +177,25 @@ export default function CreateWarehouseScreen() {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.pageBg },
-  header: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md,
-    paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-  },
-  backBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  safe:        { flex: 1, backgroundColor: COLORS.pageBg },
+  header:      { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  backBtn:     { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
-  form: { padding: SPACING.md },
-  label: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, marginBottom: 8, marginTop: 16 },
-  star: { color: COLORS.negative },
-  input: {
-    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
-    paddingHorizontal: 14, paddingVertical: 13, fontSize: TYPOGRAPHY.base,
-    color: COLORS.textPrimary, backgroundColor: COLORS.cardBg,
-  },
-  inputFocused: { borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
-  textarea: { minHeight: 80, textAlignVertical: 'top', paddingTop: 12 },
-  row2: { flexDirection: 'row', gap: 12 },
-  // Racks
-  rackRow: { flexDirection: 'row', gap: 8, marginBottom: 8, alignItems: 'center' },
-  rackInput: {
-    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
-    paddingHorizontal: 12, paddingVertical: 12, fontSize: TYPOGRAPHY.base,
-    color: COLORS.textPrimary, backgroundColor: COLORS.cardBg,
-  },
-  rackVal: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, fontWeight: '600' },
-  rackDel: {
-    width: 36, height: 44, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: COLORS.negativeBg, borderRadius: RADIUS.md,
-    borderWidth: 1, borderColor: COLORS.negative + '30',
-  },
-  rackAdd: {
-    width: 36, height: 44, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  footer: {
-    paddingHorizontal: SPACING.md, paddingTop: SPACING.md,
-    borderTopWidth: 1, borderTopColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg,
-  },
-  saveBtn: {
-    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md,
-    paddingVertical: 15, alignItems: 'center',
-  },
-  saveBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+  form:        { padding: SPACING.md },
+  label:       { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 8, marginTop: 20 },
+  star:        { color: COLORS.negative },
+  optional:    { fontSize: TYPOGRAPHY.xs, fontWeight: '400', color: COLORS.textTertiary },
+  hint:        { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 6 },
+  input:       { borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 13, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, backgroundColor: COLORS.cardBg },
+  inputFocused:{ borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
+  textarea:    { minHeight: 80, textAlignVertical: 'top', paddingTop: 12 },
+
+  // Autocomplete
+  suggestions:    { position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, marginTop: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 6, zIndex: 999 },
+  suggestionItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  suggestionTxt:  { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
+
+  footer:    { paddingHorizontal: SPACING.md, paddingTop: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
+  saveBtn:   { backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 15, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' },
+  saveBtnTxt:{ fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
 });

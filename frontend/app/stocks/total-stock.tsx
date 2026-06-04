@@ -183,36 +183,59 @@ export default function TotalStockScreen() {
   const router = useRouter();
   const { company, lastSyncAt } = useAuth();
   const companyGuid = company?.guid;
+
+  // ─ Pre-filter params from warehouse-detail navigation (must be before any useEffect that uses them) ─
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const params = useLocalSearchParams<{ whId?: string; warehouse?: string; onhand?: string }>();
+  const preWarehouse = params.warehouse ? decodeURIComponent(params.warehouse) : null;
+  const preOnhand   = params.onhand === 'true';
+
   const [liveStocks, setLiveStocks] = useState<StockItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // ─ Real filter options from API ─────────────────────────────────────
-  const [whOptions,  setWhOptions]  = useState<{ id: string; label: string }[]>([]);
-  const [catOptions, setCatOptions] = useState<{ id: string; label: string }[]>([]);
+  const [whOptions, setWhOptions] = useState<{ id: string; label: string }[]>([]);
+  const [catOptions, setCatOptions] = useState<{ id: string; label: string }[]>([]); // built but not shown in modal yet
   const [grpOptions, setGrpOptions] = useState<{ id: string; label: string }[]>([]);
 
   // Fetch real filter options once stocks are loaded
   useEffect(() => {
     if (!companyGuid || !liveStocks.length) return;
     // Warehouses from API
+    // Warehouses from API — only show warehouses with actual stock (skus > 0)
+    // This prevents empty results when user selects a warehouse with no stock transactions
     getWarehouses(companyGuid).then((res: any) => {
-      const wh = (res?.data ?? []).map((w: any) => ({ id: w.name, label: w.name })).filter((w: any) => w.id);
-      if (wh.length) setWhOptions(wh);
-      else {
-        // Fallback: derive from loaded stocks
-        const names = [...new Set(liveStocks.map(s => s.warehouse).filter(Boolean))];
-        setWhOptions(names.map(n => ({ id: n, label: n })));
-      }
-    }).catch(() => {
-      const names = [...new Set(liveStocks.map(s => s.warehouse).filter(Boolean))];
-      setWhOptions(names.map(n => ({ id: n, label: n })));
-    });
-    // Categories + groups from loaded stocks
-    const cats = [...new Set(liveStocks.map(s => s.category).filter(Boolean))];
-    const grps = [...new Set(liveStocks.map(s => s.group).filter(Boolean))];
+      const wh = (res?.data ?? [])
+        .filter((w: any) => w.skus > 0)  // only warehouses that have stock transactions
+        .map((w: any) => ({ id: w.name, label: w.name }))
+        .filter((w: any) => w.id);
+      setWhOptions(wh);
+    }).catch(() => {});
+    // Groups: trim whitespace to prevent mismatch with Tally-stored values
+    const cats = [...new Set(liveStocks.map(s => s.category?.trim()).filter(Boolean))];
+    const grps = [...new Set(liveStocks.map(s => s.group?.trim()).filter(Boolean))];
     setCatOptions(cats.map(c => ({ id: c, label: c })));
     setGrpOptions(grps.map(g => ({ id: g, label: g })));
   }, [companyGuid, liveStocks.length]);
+
+  // If navigated from warehouse-detail with pre-filter, auto-apply warehouse filter on mount
+  useEffect(() => {
+    if (!preWarehouse || !companyGuid) return;
+    setWhFilterLoading(true);
+    getStocks(companyGuid, { limit: '1000', warehouse: preWarehouse }).then((res: any) => {
+      const items = res?.data?.items ?? [];
+      const mapped: StockItem[] = items.map((r: any) => ({
+        id: r.guid || String(r.id), name: r.name || '', sku: r.hsn || '',
+        category: r.category || '', group: r.group_name || '',
+        qty: +(r.closing_qty || 0),
+        value: r.closing_value ? formatAmount(Math.round(+r.closing_value)) : formatAmount(0),
+        unit: r.unit || 'pcs', warehouse: r.warehouse_name || 'Default',
+        warehouseId: r.warehouse_name || 'WH01', reorderLevel: +(r.reorder_level || 0),
+        status: +r.closing_qty <= 0 ? 'out_of_stock' : +r.closing_qty <= +(r.reorder_level||0) ? 'low_stock' : 'in_stock',
+      }));
+      setWhFilteredStocks(mapped);
+    }).catch(() => {}).finally(() => setWhFilterLoading(false));
+  }, [preWarehouse, companyGuid]);
 
   useEffect(() => {
     if (!companyGuid) return;
@@ -248,17 +271,19 @@ export default function TotalStockScreen() {
     }).catch(() => {}).finally(() => setIsLoading(false));
   }, [companyGuid, lastSyncAt]);
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const params = useLocalSearchParams<{ whId?: string }>();
-
   // Search & filters
   const [query,    setQuery]    = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
-  const [selWh,  setSelWh]  = useState<string[]>([]);
+  const [selWh,  setSelWh]  = useState<string[]>(preWarehouse ? [preWarehouse] : []);
   const [selCat, setSelCat] = useState<string[]>([]);
   const [selGrp, setSelGrp] = useState<string[]>([]);
+  // Warehouse-filtered stocks (re-fetched from backend when warehouse filter applied)
+  const [whFilteredStocks, setWhFilteredStocks] = useState<StockItem[] | null>(null);
+  const [whFilterLoading, setWhFilterLoading] = useState(false);
+  const [onhandOnly, setOnhandOnly] = useState(preOnhand);
 
-  const sourceItems = liveStocks;
+  // Use warehouse-filtered stocks if warehouse filter is active, else use all loaded stocks
+  const sourceItems = whFilteredStocks ?? liveStocks;
 
   // Header "+" popover menu
   const [menuOpen, setMenuOpen] = useState(false);
@@ -293,10 +318,12 @@ export default function TotalStockScreen() {
     .filter(item => {
       const q = query.toLowerCase();
       const qMatch  = !query || item.name.toLowerCase().includes(q) || item.sku.toLowerCase().includes(q);
-      const whMatch  = selWh.length  === 0 || selWh.includes(item.warehouse);
-      const catMatch = selCat.length === 0 || selCat.includes(item.category);
-      const grpMatch = selGrp.length === 0 || selGrp.includes(item.group);
-      return qMatch && whMatch && catMatch && grpMatch;
+      // Warehouse filter handled by API refetch (whFilteredStocks). whMatch always true.
+      const whMatch    = true;
+      const catMatch   = selCat.length === 0 || selCat.includes(item.category?.trim());
+      const grpMatch   = selGrp.length === 0 || selGrp.includes(item.group?.trim());
+      const onhandMatch = !onhandOnly || item.qty > 0;
+      return qMatch && whMatch && catMatch && grpMatch && onhandMatch;
     })
     .sort((a, b) => {
       if (sortType === 'alpha') {
@@ -313,7 +340,7 @@ export default function TotalStockScreen() {
   const totalQty          = sourceItems.reduce((s, i) => s + i.qty, 0);
   const totalValueRaw      = sourceItems.reduce((s, i) => s + (+(i.value?.replace(/[^0-9.]/g, '') || 0)), 0);
   const totalValueLabel    = totalValueRaw > 0 ? `₹${(totalValueRaw/100000).toFixed(1)}L` : '—';
-  const activeFilterCount = selWh.length + selCat.length + selGrp.length;
+  const activeFilterCount = selWh.length + selGrp.length; // warehouse now backed by API re-fetch
   const allSelected       = filtered.length > 0 && filtered.every(i => selectedIds.includes(i.id));
 
   // Handlers
@@ -403,31 +430,36 @@ export default function TotalStockScreen() {
 
       {/* ── Active filter chips ── */}
       {activeFilterCount > 0 && !multiSelectMode && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.activeFiltersRow}>
+        <View style={styles.activeFiltersRow}>
           {selWh.map(w => (
-            <TouchableOpacity key={w} style={styles.activeChip} onPress={() => setSelWh(p => p.filter(x => x !== w))} activeOpacity={0.7}>
-              <Text style={styles.activeChipPrefix}>WH</Text>
-              <Text style={styles.activeChipTxt} numberOfLines={1}>{w.length > 14 ? w.slice(0, 13) + '…' : w}</Text>
-              <Ionicons name="close" size={10} color="#A89060" />
+            <TouchableOpacity key={w} style={styles.activeChip} onPress={() => { setSelWh(p => { const next = p.filter(x => x !== w); if (next.length === 0) setWhFilteredStocks(null); return next; }); }} activeOpacity={0.7}>
+              <Text style={styles.activeChipTxt} numberOfLines={1} ellipsizeMode="tail">{w}</Text>
+              <Ionicons name="close-circle" size={12} color="#A89060" />
             </TouchableOpacity>
           ))}
           {selGrp.map(g => (
             <TouchableOpacity key={g} style={styles.activeChip} onPress={() => setSelGrp(p => p.filter(x => x !== g))} activeOpacity={0.7}>
-              <Text style={styles.activeChipPrefix}>GRP</Text>
-              <Text style={styles.activeChipTxt} numberOfLines={1}>{g.length > 14 ? g.slice(0, 13) + '…' : g}</Text>
-              <Ionicons name="close" size={10} color="#A89060" />
+              <Text style={styles.activeChipTxt} numberOfLines={1} ellipsizeMode="tail">{g}</Text>
+              <Ionicons name="close-circle" size={12} color="#A89060" />
             </TouchableOpacity>
           ))}
           {activeFilterCount > 1 && (
             <TouchableOpacity
               style={[styles.activeChip, { backgroundColor: '#FFF0F0', borderColor: '#FFCCCC' }]}
-              onPress={() => { setSelWh([]); setSelCat([]); setSelGrp([]); }}
+              onPress={() => { setSelWh([]); setSelCat([]); setSelGrp([]); setWhFilteredStocks(null); }}
               activeOpacity={0.7}
             >
               <Text style={[styles.activeChipTxt, { color: COLORS.negative }]}>Clear all</Text>
             </TouchableOpacity>
           )}
-        </ScrollView>
+        </View>
+      )}
+
+      {/* ── Warehouse filter loading indicator ── */}
+      {whFilterLoading && (
+        <View style={{ paddingVertical: 6, alignItems: 'center', backgroundColor: COLORS.cardBg }}>
+          <Text style={{ fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary }}>Filtering by warehouse…</Text>
+        </View>
       )}
 
       {/* ── Summary KPI strip ── */}
@@ -513,7 +545,7 @@ export default function TotalStockScreen() {
           <View style={styles.emptyState}>
             <Ionicons name="cube-outline" size={40} color={COLORS.textTertiary} />
             <Text style={styles.emptyTxt}>No items match your filters</Text>
-            <TouchableOpacity onPress={() => { setSelWh([]); setSelCat([]); setSelGrp([]); setQuery(''); }} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => { setSelWh([]); setSelCat([]); setSelGrp([]); setWhFilteredStocks(null); setQuery(''); }} activeOpacity={0.7}>
               <Text style={styles.emptyAction}>Clear all filters</Text>
             </TouchableOpacity>
           </View>
@@ -537,7 +569,35 @@ export default function TotalStockScreen() {
       <FilterModal
         visible={filterOpen}
         onClose={() => setFilterOpen(false)}
-        onApply={(wh, grp) => { setSelWh(wh); setSelGrp(grp); }}
+        onApply={(wh, grp) => {
+          setSelWh(wh);
+          setSelGrp(grp);
+          // If warehouse selected — re-fetch stocks from backend with ?warehouse= param
+          if (wh.length > 0 && companyGuid) {
+            setWhFilterLoading(true);
+            getStocks(companyGuid, { limit: '1000', warehouse: wh[0] }).then((res: any) => {
+              const items = res?.data?.items ?? [];
+              const mapped: StockItem[] = items.map((r: any) => ({
+                id: r.guid || String(r.id),
+                name: r.name || '',
+                sku: r.hsn || '',
+                category: r.category || '',
+                group: r.group_name || '',
+                qty: +(r.closing_qty || 0),
+                value: r.closing_value ? formatAmount(Math.round(+r.closing_value)) : formatAmount(0),
+                unit: r.unit || 'pcs',
+                warehouse: r.warehouse_name || 'Default',
+                warehouseId: r.warehouse_name || 'WH01',
+                reorderLevel: +(r.reorder_level || 0),
+                status: +r.closing_qty <= 0 ? 'out_of_stock' : +r.closing_qty <= +(r.reorder_level||0) ? 'low_stock' : 'in_stock',
+              }));
+              setWhFilteredStocks(mapped);
+            }).catch(() => setWhFilteredStocks([])).finally(() => setWhFilterLoading(false));
+          } else {
+            // Warehouse filter cleared — revert to all stocks
+            setWhFilteredStocks(null);
+          }
+        }}
         initWh={selWh} initGrp={selGrp}
         whOptions={whOptions} grpOptions={grpOptions}
       />
@@ -578,9 +638,9 @@ const styles = StyleSheet.create({
   multiBtnTxt:  { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white },
 
   // Active filter chips
-  activeFiltersRow: { paddingHorizontal: SPACING.md, paddingVertical: 6, gap: 6, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, alignItems: 'center' },
-  activeChip:       { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#FBF7EE', borderRadius: RADIUS.full, borderWidth: 1, borderColor: '#F0E8D5', maxWidth: 160 },
-  activeChipPrefix: { fontSize: 9, fontWeight: '800', color: '#C4A96A', letterSpacing: 0.3, backgroundColor: '#F0E8D5', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3 },
+  activeFiltersRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 8, gap: 6, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  activeChip:       { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: '#FBF7EE', borderRadius: RADIUS.full, borderWidth: 1, borderColor: '#F0E8D5', maxWidth: 110, alignSelf: 'flex-start' },
+
   activeChipTxt:    { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: '#A89060', flexShrink: 1 },
 
   // Summary KPI

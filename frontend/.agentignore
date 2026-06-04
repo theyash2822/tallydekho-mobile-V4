@@ -1,0 +1,19 @@
+node_modules/
+android/build/
+ios/Pods/
+.metro-cache/
+.expo/cache/
+dist/
+assets/
+.env
+.env.*
+*.log
+src/data/mockData.ts
+src/data/mockDocuments.ts
+
+# Sibling repos — never read from inside mobile
+../../td-backend/
+../../td-web-portal/
+../../td-source/
+../../td-website/
+../../tallydekho-brain/

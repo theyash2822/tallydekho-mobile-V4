@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
@@ -7,47 +7,79 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { getWarehouseDetail } from '../../src/services/api';
+import { getWarehouseDetail, getStocks } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useSettings } from '../../src/context/SettingsContext';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 
-const DIR_CONFIG: Record<string, { icon: string; color: string; bg: string }> = {
-  inward:  { icon: 'arrow-down-outline',        color: COLORS.positive, bg: COLORS.positiveBg },
-  outward: { icon: 'arrow-up-outline',           color: COLORS.negative, bg: COLORS.negativeBg },
-  transfer:{ icon: 'swap-horizontal-outline',    color: COLORS.info,     bg: COLORS.infoBg },
+// ─── Voucher icon map ─────────────────────────────────────────────────────────
+const TYPE_CONFIG: Record<string, { icon: string; color: string; bg: string; dir: string }> = {
+  'Sales':           { icon: 'arrow-up-outline',     color: COLORS.negative, bg: COLORS.negativeBg,  dir: 'outward' },
+  'Sales Invoice':   { icon: 'arrow-up-outline',     color: COLORS.negative, bg: COLORS.negativeBg,  dir: 'outward' },
+  'Purchase':        { icon: 'arrow-down-outline',   color: COLORS.positive, bg: COLORS.positiveBg,  dir: 'inward'  },
+  'Purchase Invoice':{ icon: 'arrow-down-outline',   color: COLORS.positive, bg: COLORS.positiveBg,  dir: 'inward'  },
+  'Stock Transfer':  { icon: 'swap-horizontal-outline', color: COLORS.info, bg: COLORS.infoBg,       dir: 'transfer'},
+  'Stock adjustment':{ icon: 'options-outline',      color: '#A89060',       bg: '#FBF7EE',           dir: 'adjust'  },
+  'default':         { icon: 'document-text-outline',color: COLORS.textSecondary, bg: COLORS.pageBg, dir: 'other'   },
 };
 
-const VOUCHER_ICON: Record<string, string> = {
-  'Sales Invoice': 'arrow-up-outline',
-  'Purchase Invoice': 'arrow-down-outline',
-  'Sales': 'arrow-up-outline',
-  'Purchase': 'arrow-down-outline',
-  'Payment': 'send-outline',
-  'Receipt': 'download-outline',
-};
+function getTypeConfig(type: string) {
+  return TYPE_CONFIG[type] || TYPE_CONFIG['default'];
+}
 
 export default function WarehouseDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string; name?: string }>();
   const { company } = useAuth();
+  const { formatAmountCompact } = useSettings();
   const companyGuid = company?.guid;
 
-  const [wh, setWh] = useState<any>(null);
+  const [wh, setWh]             = useState<any>(null);
+  const [stocks, setStocks]     = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  const load = () => {
+  const warehouseName = wh?.name || decodeURIComponent(params.name || '');
+
+  const load = useCallback(async () => {
     if (!companyGuid || !params.id) return;
     setIsLoading(true);
     setApiError(null);
-    getWarehouseDetail(companyGuid, params.id)
-      .then((res: any) => { if (res?.data) setWh(res.data); })
-      .catch((err: any) => setApiError(err?.message || 'Failed to load warehouse'))
-      .finally(() => setIsLoading(false));
-  };
+    try {
+      // Load warehouse detail (name, address, activity)
+      const detailRes: any = await getWarehouseDetail(companyGuid, params.id);
+      const detail = detailRes?.data;
+      if (!detail) throw new Error('Warehouse not found');
+      setWh(detail);
 
-  useEffect(() => { load(); }, [companyGuid, params.id]);
+      // Load stocks for this warehouse using the warehouse name filter
+      const stocksRes: any = await getStocks(companyGuid, { warehouse: detail.name, limit: '1000' });
+      const items = stocksRes?.data?.items ?? [];
+      setStocks(items);
+    } catch (err: any) {
+      setApiError(err?.message || 'Failed to load warehouse');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [companyGuid, params.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // ── Compute tile stats ──────────────────────────────────────────────────────
+  const totalSkus  = stocks.length;
+  const totalQty   = stocks.reduce((s, r) => s + parseFloat(r.closing_qty || 0), 0);
+  const totalValue = stocks.reduce((s, r) => s + parseFloat(r.closing_value || 0), 0);
+
+  const onHandItems = stocks.filter(r => parseFloat(r.closing_qty || 0) > 0);
+  const onHandSkus  = onHandItems.length;
+  const onHandQty   = onHandItems.reduce((s, r) => s + parseFloat(r.closing_qty || 0), 0);
+  const onHandValue = onHandItems.reduce((s, r) => s + parseFloat(r.closing_value || 0), 0);
+
+  const fmtQty   = (q: number) => Math.round(q).toLocaleString('en-IN');
+  const fmtValue = (v: number) => v >= 1e5 ? `₹${(v / 1e5).toFixed(1)}L` : `₹${Math.round(v).toLocaleString('en-IN')}`;
+
+  // All activity — infinite scroll via ScrollView
+  const recentActivity = wh?.activity || [];
 
   return (
     <SafeAreaView style={s.safe}>
@@ -56,107 +88,135 @@ export default function WarehouseDetailScreen() {
         <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle} numberOfLines={1}>
-          {wh?.name || params.name || 'Warehouse Detail'}
-        </Text>
-        <View style={{ width: 36 }} />
+        <View style={{ flex: 1 }}>
+          <Text style={s.headerTitle} numberOfLines={1}>
+            {warehouseName || 'Warehouse Detail'}
+          </Text>
+          {wh?.address ? (
+            <Text style={s.headerSub} numberOfLines={1}>{wh.address}</Text>
+          ) : null}
+        </View>
       </View>
 
       {apiError && <ErrorBanner message={apiError} onRetry={load} />}
 
       {isLoading ? (
-        <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-          <CardSkeleton height={120} />
+        <ScrollView contentContainerStyle={{ padding: SPACING.md, gap: 12 }}>
+          <CardSkeleton height={160} />
+          <CardSkeleton height={160} />
+          <LedgerRowSkeleton />
           <LedgerRowSkeleton />
           <LedgerRowSkeleton />
           <LedgerRowSkeleton />
         </ScrollView>
-      ) : !wh ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-          <Ionicons name="business-outline" size={48} color={COLORS.textTertiary} />
-          <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textSecondary, marginTop: 12 }}>
-            Warehouse not found
-          </Text>
-        </View>
-      ) : (
+      ) : !wh ? null : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
 
-          {/* Info Card */}
-          <View style={s.infoCard}>
-            <View style={s.infoRow}>
-              <Ionicons name="business-outline" size={18} color={COLORS.textSecondary} />
-              <Text style={s.infoLabel}>Name</Text>
-              <Text style={s.infoValue}>{wh.name}</Text>
-            </View>
-            {!!wh.parent && (
-              <View style={s.infoRow}>
-                <Ionicons name="git-branch-outline" size={18} color={COLORS.textSecondary} />
-                <Text style={s.infoLabel}>Group</Text>
-                <Text style={s.infoValue}>{wh.parent}</Text>
+          {/* ── 2 Big Stock Tiles ── */}
+          <View style={s.tilesRow}>
+
+            {/* Total Stock tile */}
+            <TouchableOpacity
+              style={s.tile}
+              activeOpacity={0.85}
+              onPress={() => router.push(`/stocks/total-stock?warehouse=${encodeURIComponent(wh.name)}` as any)}
+            >
+              <View style={s.tileIconRow}>
+                <View style={[s.tileIcon, { backgroundColor: '#E8F4FF' }]}>
+                  <Ionicons name="cube-outline" size={20} color="#4A90D9" />
+                </View>
+                <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
               </View>
-            )}
-            {!!wh.address && (
-              <View style={s.infoRow}>
-                <Ionicons name="location-outline" size={18} color={COLORS.textSecondary} />
-                <Text style={s.infoLabel}>Address</Text>
-                <Text style={s.infoValue}>{wh.address}</Text>
+              <Text style={s.tileBigNum}>{fmtQty(totalQty)}</Text>
+              <Text style={s.tileName}>Total Stock</Text>
+              <View style={s.tileStats}>
+                <View style={s.tileStat}>
+                  <Text style={s.tileStatVal}>{totalSkus}</Text>
+                  <Text style={s.tileStatLabel}>SKUs</Text>
+                </View>
+                <View style={s.tileStatDivider} />
+                <View style={s.tileStat}>
+                  <Text style={s.tileStatVal}>{fmtValue(totalValue)}</Text>
+                  <Text style={s.tileStatLabel}>Value</Text>
+                </View>
               </View>
-            )}
+            </TouchableOpacity>
+
+            {/* On Hand Stock tile */}
+            <TouchableOpacity
+              style={[s.tile, { borderColor: COLORS.positiveBg }]}
+              activeOpacity={0.85}
+              onPress={() => router.push(`/stocks/total-stock?warehouse=${encodeURIComponent(wh.name)}&onhand=true` as any)}
+            >
+              <View style={s.tileIconRow}>
+                <View style={[s.tileIcon, { backgroundColor: COLORS.positiveBg }]}>
+                  <Ionicons name="checkmark-circle-outline" size={20} color={COLORS.positive} />
+                </View>
+                <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
+              </View>
+              <Text style={[s.tileBigNum, { color: COLORS.positive }]}>{fmtQty(onHandQty)}</Text>
+              <Text style={s.tileName}>On Hand Stock</Text>
+              <View style={s.tileStats}>
+                <View style={s.tileStat}>
+                  <Text style={s.tileStatVal}>{onHandSkus}</Text>
+                  <Text style={s.tileStatLabel}>SKUs</Text>
+                </View>
+                <View style={s.tileStatDivider} />
+                <View style={s.tileStat}>
+                  <Text style={s.tileStatVal}>{fmtValue(onHandValue)}</Text>
+                  <Text style={s.tileStatLabel}>Value</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+
           </View>
 
-          {/* Stats */}
-          <View style={s.statsRow}>
-            <View style={s.statCard}>
-              <Text style={s.statValue}>{Math.round(wh.total_qty).toLocaleString('en-IN')}</Text>
-              <Text style={s.statLabel}>Net Qty</Text>
-            </View>
-            <View style={s.statCard}>
-              <Text style={s.statValue}>{wh.skus}</Text>
-              <Text style={s.statLabel}>Stock Items</Text>
-            </View>
-            <View style={s.statCard}>
-              <Text style={s.statValue}>{wh.activity?.length || 0}</Text>
-              <Text style={s.statLabel}>Transactions</Text>
-            </View>
-          </View>
-
-          {/* Recent Activity */}
+          {/* ── Recent Activity ── */}
           <View style={s.sectionHeader}>
-            <Text style={s.sectionTitle}>Recent Activity</Text>
-            <Text style={s.sectionCount}>{wh.activity?.length || 0} entries</Text>
+            <Text style={s.sectionTitle}>Activity</Text>
+            <Text style={s.sectionCount}>{recentActivity.length} transactions</Text>
           </View>
 
-          {(!wh.activity || wh.activity.length === 0) ? (
+          {recentActivity.length === 0 ? (
             <View style={{ alignItems: 'center', padding: 32, gap: 8 }}>
               <Ionicons name="document-text-outline" size={40} color={COLORS.textTertiary} />
-              <Text style={{ fontSize: 14, color: COLORS.textSecondary }}>No stock activity yet</Text>
+              <Text style={{ fontSize: 14, color: COLORS.textSecondary }}>No activity yet</Text>
             </View>
           ) : (
             <View style={s.activityCard}>
-              {wh.activity.map((a: any, idx: number) => {
-                const dir = DIR_CONFIG[a.direction] || DIR_CONFIG.outward;
-                const icon = VOUCHER_ICON[a.type] || dir.icon;
+              {recentActivity.map((a: any, idx: number) => {
+                const cfg = getTypeConfig(a.type);
                 return (
                   <View key={idx}>
-                    <View style={s.actRow}>
-                      <View style={[s.actIcon, { backgroundColor: dir.bg }]}>
-                        <Ionicons name={icon as any} size={16} color={dir.color} />
+                    <TouchableOpacity
+                      style={s.actRow}
+                      activeOpacity={0.7}
+                      onPress={() => a.ref ? router.push(`/voucher/preview?ref=${a.ref}` as any) : undefined}
+                    >
+                      <View style={[s.actIcon, { backgroundColor: cfg.bg }]}>
+                        <Ionicons name={cfg.icon as any} size={16} color={cfg.color} />
                       </View>
                       <View style={s.actInfo}>
-                        <Text style={s.actType}>{a.type || a.direction}</Text>
-                        <Text style={s.actStock} numberOfLines={1}>{a.stock_name}</Text>
-                        <Text style={s.actDate}>{a.date} · {a.ref}</Text>
+                        <Text style={s.actType}>{a.type}</Text>
+                        {!!a.stock_name && (
+                          <Text style={s.actStock} numberOfLines={1}>{a.stock_name}</Text>
+                        )}
+                        <Text style={s.actDate}>
+                          {a.date ? a.date : ''}
+                          {a.ref ? ` · ${a.ref}` : ''}
+                        </Text>
                       </View>
-                      <Text style={[s.actQty, { color: a.direction === 'inward' ? COLORS.positive : COLORS.negative }]}>
-                        {a.direction === 'inward' ? '+' : '-'}{Math.abs(a.qty).toLocaleString('en-IN')}
+                      <Text style={[s.actQty, { color: cfg.dir === 'inward' ? COLORS.positive : COLORS.negative }]}>
+                        {cfg.dir === 'inward' ? '+' : cfg.dir === 'transfer' ? '' : '-'}{Math.abs(parseFloat(a.qty || 0)).toLocaleString('en-IN')}
                       </Text>
-                    </View>
-                    {idx < wh.activity.length - 1 && <View style={s.divider} />}
+                    </TouchableOpacity>
+                    {idx < recentActivity.length - 1 && <View style={s.divider} />}
                   </View>
                 );
               })}
             </View>
           )}
+
         </ScrollView>
       )}
     </SafeAreaView>
@@ -164,29 +224,36 @@ export default function WarehouseDetailScreen() {
 }
 
 const s = StyleSheet.create({
-  safe:         { flex: 1, backgroundColor: COLORS.pageBg },
-  header:       { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  backBtn:      { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
-  headerTitle:  { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
-  shareBtn:     { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  infoCard:     { backgroundColor: COLORS.cardBg, margin: SPACING.md, borderRadius: RADIUS.lg, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault, gap: 12 },
-  infoRow:      { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  infoLabel:    { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, width: 70 },
-  infoValue:    { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  statsRow:     { flexDirection: 'row', gap: 10, marginHorizontal: SPACING.md, marginBottom: SPACING.md },
-  statCard:     { flex: 1, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: COLORS.borderDefault },
-  statValue:    { fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary },
-  statLabel:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 4 },
-  sectionHeader:{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: SPACING.md, marginBottom: SPACING.sm },
-  sectionTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-  sectionCount: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
-  activityCard: { backgroundColor: COLORS.cardBg, marginHorizontal: SPACING.md, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
-  actRow:       { flexDirection: 'row', alignItems: 'center', padding: SPACING.md, gap: 12 },
-  actIcon:      { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  actInfo:      { flex: 1, gap: 2 },
-  actType:      { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  actStock:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
-  actDate:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
-  actQty:       { fontSize: TYPOGRAPHY.base, fontWeight: '700' },
-  divider:      { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 62 },
+  safe:        { flex: 1, backgroundColor: COLORS.pageBg },
+  header:      { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  backBtn:     { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
+  headerSub:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+
+  // Tiles
+  tilesRow:       { flexDirection: 'row', gap: 10, margin: SPACING.md },
+  tile:           { flex: 1, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.md, borderWidth: 1.5, borderColor: COLORS.borderDefault, gap: 6 },
+  tileIconRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  tileIcon:       { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  tileBigNum:     { fontSize: 28, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.5 },
+  tileName:       { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  tileStats:      { flexDirection: 'row', alignItems: 'center', marginTop: 6, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, paddingTop: 8 },
+  tileStat:       { flex: 1, alignItems: 'center' },
+  tileStatVal:    { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  tileStatLabel:  { fontSize: 9, color: COLORS.textTertiary, marginTop: 2 },
+  tileStatDivider:{ width: 1, height: 28, backgroundColor: COLORS.borderDefault },
+
+  // Activity
+  sectionHeader:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: SPACING.md, marginBottom: SPACING.sm },
+  sectionTitle:   { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  sectionCount:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  activityCard:   { backgroundColor: COLORS.cardBg, marginHorizontal: SPACING.md, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
+  actRow:         { flexDirection: 'row', alignItems: 'center', padding: SPACING.md, gap: 12 },
+  actIcon:        { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  actInfo:        { flex: 1, gap: 2 },
+  actType:        { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  actStock:       { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  actDate:        { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  actQty:         { fontSize: TYPOGRAPHY.base, fontWeight: '700', flexShrink: 0 },
+  divider:        { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 62 },
 });

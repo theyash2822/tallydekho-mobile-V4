@@ -356,6 +356,7 @@ export const getOtherTaxesTransactions = (companyGuid?: string, params?: any) =>
 export const getOtherTaxesLateChallans = (companyGuid?: string, params?: any) =>
   get<any>(withCompany('/reports/other-taxes/late-challans', companyGuid, params));
 
+export const getStockLedger   = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/ledger', companyGuid, params));
 export const getStockMovements = (companyGuid?: string, id?: string, params?: any) => get<any>(withCompany(`/stocks/items/${id}/movements`, companyGuid, params));
 export const getStockGodowns = (companyGuid?: string, id?: string) => get<any>(withCompany(`/stocks/items/${id}/godowns`, companyGuid));
 export const retryMyEntry = (id: string) => post<any>(`/vouchers/my-entries/${id}/retry`, {});

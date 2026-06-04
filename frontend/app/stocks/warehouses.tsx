@@ -13,13 +13,15 @@ import { CardSkeleton } from '../../src/components/ShimmerPlaceholder';
 
 // ─── RING CHART (outside screen component) ───────────────────────────────────────
 
-function RingChart({ pct, size = 72 }: { pct: number; size?: number }) {
+function RingChart({ pct, label, size = 82 }: { pct: number; label: string; size?: number }) {
   const cx   = size / 2;
   const cy   = size / 2;
-  const r    = (size - 14) / 2;
+  const r    = (size - 16) / 2;
   const circ = 2 * Math.PI * r;
-  const off  = circ * (1 - pct / 100);
+  const off  = circ * (1 - Math.min(pct, 100) / 100);
   const arc  = pct >= 85 ? COLORS.negative : '#A89060';
+  // Adaptive font size so large numbers (e.g. 125) fit inside the ring
+  const fontSize = label.length <= 2 ? 17 : label.length === 3 ? 14 : 11;
 
   return (
     <Svg width={size} height={size}>
@@ -28,7 +30,7 @@ function RingChart({ pct, size = 72 }: { pct: number; size?: number }) {
         cx={cx} cy={cy} r={r}
         fill="none" stroke={COLORS.borderDefault} strokeWidth={11}
       />
-      {/* Progress arc */}
+      {/* Progress arc (fill based on qty %) */}
       <Circle
         cx={cx} cy={cy} r={r}
         fill="none"
@@ -39,20 +41,20 @@ function RingChart({ pct, size = 72 }: { pct: number; size?: number }) {
         strokeLinecap="round"
         transform={`rotate(-90, ${cx}, ${cy})`}
       />
-      {/* Percentage */}
+      {/* SKU count — no percentage */}
       <SvgText
-        x={cx} y={cy + 2}
-        textAnchor="middle" fontSize="15" fontWeight="800"
+        x={cx} y={cy + 4}
+        textAnchor="middle" fontSize={String(fontSize)} fontWeight="800"
         fill={COLORS.textPrimary}
       >
-        {pct}%
+        {label}
       </SvgText>
       <SvgText
-        x={cx} y={cy + 14}
-        textAnchor="middle" fontSize="8"
+        x={cx} y={cy + 15}
+        textAnchor="middle" fontSize="7"
         fill={COLORS.textTertiary}
       >
-        util
+        items
       </SvgText>
     </Svg>
   );
@@ -81,8 +83,11 @@ export default function WarehousesScreen() {
           id: r.id || r.guid || r.name,
           name: r.name,
           location: r.address || r.parent || '',
-          utilization: 0,
           parent: r.parent || '',
+          total_qty: parseFloat(r.total_qty || 0),
+          skus: parseInt(r.skus || 0),
+          // utilization not available without capacity data — computed as 0
+          utilization: 0,
         })));
       })
       .catch((err: any) => {
@@ -98,8 +103,10 @@ export default function WarehousesScreen() {
       w.location.toLowerCase().includes(query.toLowerCase()),
   );
 
+  // Compute total qty across all warehouses for relative ring fill
+  const grandTotalQty = warehouses.reduce((s, w) => s + (w.total_qty || 0), 0);
   const avgUtil = warehouses.length > 0
-    ? Math.round(warehouses.reduce((s, w) => s + w.utilization, 0) / warehouses.length)
+    ? Math.round(warehouses.reduce((s, w) => s + (w.utilization || 0), 0) / warehouses.length)
     : 0;
   const utilColor = avgUtil >= 85 ? COLORS.negative : '#A89060';
 
@@ -184,7 +191,7 @@ export default function WarehousesScreen() {
               key={wh.id}
               style={styles.whCard}
               activeOpacity={0.8}
-              onPress={() => router.push(`/stocks/warehouse-detail?id=${wh.id}` as any)}
+              onPress={() => router.push(`/stocks/warehouse-detail?id=${wh.id}&name=${encodeURIComponent(wh.name)}` as any)}
             >
               {/* Main row */}
               <View style={styles.cardMain}>
@@ -212,14 +219,19 @@ export default function WarehousesScreen() {
                   ) : null}
                 </View>
 
-                {/* Ring chart */}
-                <RingChart pct={wh.utilization} />
+                {/* Ring fill = % of total company qty, inner = SKU count */}
+                <RingChart
+                  pct={grandTotalQty > 0 ? Math.round((wh.total_qty / grandTotalQty) * 100) : 0}
+                  label={String(wh.skus)}
+                />
               </View>
 
               {/* Footer */}
               <View style={styles.cardFooter}>
                 <Ionicons name="cube-outline" size={11} color={COLORS.textTertiary} />
-                <Text style={styles.managerTxt}>Tally Godown</Text>
+                <Text style={styles.managerTxt}>
+                  {wh.skus} items · qty {Math.round(wh.total_qty).toLocaleString('en-IN')}
+                </Text>
                 <View style={{ flex: 1 }} />
                 <Ionicons name="chevron-forward" size={13} color={COLORS.textTertiary} />
               </View>

@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Modal,
+  TextInput, Modal, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,9 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useSettings } from '../../src/context/SettingsContext';
+import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
+import { getStockLedger } from '../../src/services/api';
+import { LoadingState, ErrorState } from '../../src/components/ApiStateViews';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ViewMode = 'chronological' | 'byItem' | 'byDocument';
@@ -24,9 +27,62 @@ interface TxEntry {
   type: TxnType;
 }
 
-// Mock data removed — stock transaction history shown as empty state until API is built
-const WAREHOUSES: string[] = [];
 const VOUCHER_TYPES: VoucherType[] = ['Sales Invoice', 'Purchase Invoice', 'Credit Note', 'Debit Note'];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+// Convert dd/mm/yy → ISO (YYYY-MM-DD) for API
+function ddmmyyToISO(d: string): string {
+  const p = d.split('/');
+  if (p.length < 3) return '';
+  const yr = parseInt(p[2]);
+  return `${yr < 50 ? 2000 + yr : 1900 + yr}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+}
+
+// Convert ISO date → dd/mm/yy for display
+function isoToDdmmyy(d: string): string {
+  if (!d) return '--';
+  const raw = d.split('T')[0].split('-');
+  return raw.length < 3 ? d : `${raw[2]}/${raw[1]}/${raw[0].slice(2)}`;
+}
+
+// Derive TxnType from voucher_type string
+function deriveType(vt: string): TxnType {
+  const v = (vt || '').toLowerCase();
+  if (v.includes('sales'))                             return 'Sales';
+  if (v.includes('purchase'))                          return 'Purchase';
+  if (v.includes('journal') || v.includes('transfer')) return 'Transfer';
+  if (v.includes('physical') || v.includes('adjust'))  return 'Adjustment';
+  if (v.includes('opening'))                           return 'Opening';
+  return 'Sales';
+}
+
+// Map API entry → TxEntry
+function mapEntry(e: any): TxEntry {
+  const vt      = (e.voucher_type || '').toLowerCase();
+  const isInward = vt.includes('purchase') || vt.includes('credit note');
+  const isTransfer = vt.includes('journal') || vt.includes('transfer');
+  const qty = isTransfer ? +(e.actual_qty || 0)
+    : isInward ? +Math.abs(e.actual_qty || 0) : -Math.abs(e.actual_qty || 0);
+  return {
+    id:       String(e.id),
+    sku:      e.stock_item_name || '',
+    item:     e.stock_item_name || '',
+    batch:    e.batch_name      || '',
+    txnId:    e.voucher_guid    || String(e.id),
+    docRef:   e.voucher_number  || '',
+    docType:  e.voucher_type    || '',
+    date:     isoToDdmmyy(e.date),
+    time:     '--',
+    qty,
+    unitCost: `₹${(+(e.rate   || 0)).toFixed(2)}`,
+    balance:  '--',
+    value:    `₹${Math.abs(+(e.amount || 0)).toFixed(2)}`,
+    warehouse: e.godown_name   || 'Main',
+    postedBy: '--',
+    note:     '',
+    type:     deriveType(e.voucher_type),
+  };
+}
 
 const TYPE_COLOR: Record<TxnType, string> = {
   Sales: '#A89060', Purchase: COLORS.textPrimary, Transfer: '#7C3AED', Adjustment: '#D97706', Opening: '#3A3A3A',
@@ -85,6 +141,8 @@ export default function StockLedgerScreen() {
     setDateFrom(draftFrom);
     setDateTo(draftTo);
     setShowFilter(false);
+    // Re-fetch with new filters (tiny delay for state to flush)
+    setTimeout(() => fetchLedger(1, true), 50);
   };
 
   const resetFilters = () => {
@@ -126,9 +184,56 @@ export default function StockLedgerScreen() {
     return `${p[0]} ${m[parseInt(p[1])-1]} ${p[2]}`;
   };
 
-  const [txnData] = useState<TxEntry[]>([]);
+  // ── Auth ────────────────────────────────────────────────────────────────
+  const { company, selectedFY } = useAuth();
 
-  // Filtered transactions
+  // ── API state ───────────────────────────────────────────────────────────
+  const [txnData,    setTxnData]    = useState<TxEntry[]>([]);
+  const [loading,    setLoading]    = useState(false);
+  const [isLoadMore, setIsLoadMore] = useState(false);
+  const [error,      setError]      = useState<string | null>(null);
+  const [page,       setPage]       = useState(1);
+  const [hasMore,    setHasMore]    = useState(false);
+  const [warehouses, setWarehouses] = useState<string[]>([]);
+  const [summary,    setSummary]    = useState({ total: 0, totalInQty: 0, totalOutQty: 0, totalValue: 0 });
+
+  // Fetch ledger from API (pg=1 resets list)
+  const fetchLedger = useCallback(async (pg: number, reset = false) => {
+    if (!company?.guid) return;
+    pg === 1 ? setLoading(true) : setIsLoadMore(true);
+    setError(null);
+    try {
+      const fyParam = fyInfoToParam(selectedFY);
+      const params: Record<string, any> = { page: pg, limit: 30 };
+      if (fyParam)    params.fy        = fyParam;
+      if (dateFrom)   { params.from    = ddmmyyToISO(dateFrom); delete params.fy; }
+      if (dateTo)     params.to        = ddmmyyToISO(dateTo);
+      if (itemSearch) params.item      = itemSearch;
+      if (selWH.size === 1)       params.warehouse = [...selWH][0];
+      if (selVouchers.size === 1) params.type      = [...selVouchers][0];
+
+      const res = await getStockLedger(company.guid, params);
+      if (res?.data) {
+        const mapped = (res.data.entries || []).map(mapEntry);
+        setTxnData(prev => (pg === 1 || reset) ? mapped : [...prev, ...mapped]);
+        if (res.data.warehouses?.length) setWarehouses(res.data.warehouses);
+        if (res.data.summary) setSummary(res.data.summary);
+        const { page: p, limit: l, total: t } = res.data.pagination || {};
+        setHasMore(p * l < t);
+        setPage(pg);
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load stock ledger');
+    } finally {
+      setLoading(false);
+      setIsLoadMore(false);
+    }
+  }, [company?.guid, selectedFY, dateFrom, dateTo, itemSearch, selWH, selVouchers]);
+
+  // Initial load on mount / company / FY change
+  useEffect(() => { fetchLedger(1, true); }, [company?.guid, selectedFY]);
+
+  // Filtered transactions (client-side multi-filter for multiple WH / multiple types)
   const filtered = useMemo(() => txnData.filter(t => {
     if (selWH.size       > 0 && ![...selWH].some(w => t.warehouse.includes(w.split(' ')[0]))) return false;
     if (selVouchers.size > 0 && !selVouchers.has(t.docType as VoucherType))                  return false;
@@ -390,27 +495,53 @@ export default function StockLedgerScreen() {
         </View>
         <View style={s.summarySep} />
         <View style={s.summaryItem}>
-          <Text style={s.summaryVal}>₹9.84L</Text>
+          <Text style={s.summaryVal}>
+            {summary.totalValue >= 100000
+              ? `₹${(summary.totalValue/100000).toFixed(1)}L`
+              : summary.totalValue >= 1000
+              ? `₹${(summary.totalValue/1000).toFixed(1)}K`
+              : `₹${summary.totalValue.toFixed(0)}`}
+          </Text>
           <Text style={s.summaryLbl}>Value</Text>
         </View>
       </View>
 
       {/* List */}
-      <ScrollView style={s.list} showsVerticalScrollIndicator={false} contentContainerStyle={s.listContent}>
-        {viewMode === 'chronological' && filtered.map(renderChronCard)}
-        {viewMode === 'byItem'        && byItemGroups.map(renderByItemCard)}
-        {viewMode === 'byDocument'    && byDocGroups.map(renderByDocCard)}
-        {filtered.length === 0 && (
-          <View style={s.empty}>
-            <Ionicons name="document-outline" size={48} color={COLORS.borderDefault} />
-            <Text style={s.emptyTxt}>Stock transaction history not available</Text>
-            <Text style={{ fontSize: 13, color: COLORS.textTertiary, textAlign: 'center', paddingHorizontal: 24 }}>
-              Full stock movement history will be available in a future update
-            </Text>
-          </View>
-        )}
-        <View style={{ height: 100 }} />
-      </ScrollView>
+      {loading ? (
+        <View style={{ flex: 1 }}><LoadingState message="Loading stock ledger..." /></View>
+      ) : error ? (
+        <View style={{ flex: 1 }}>
+          <ErrorState message={error} onRetry={() => fetchLedger(1, true)} />
+        </View>
+      ) : (
+        <ScrollView style={s.list} showsVerticalScrollIndicator={false} contentContainerStyle={s.listContent}>
+          {viewMode === 'chronological' && filtered.map(renderChronCard)}
+          {viewMode === 'byItem'        && byItemGroups.map(renderByItemCard)}
+          {viewMode === 'byDocument'    && byDocGroups.map(renderByDocCard)}
+          {filtered.length === 0 && (
+            <View style={s.empty}>
+              <Ionicons name="document-outline" size={48} color={COLORS.borderDefault} />
+              <Text style={s.emptyTxt}>No stock movements found</Text>
+              <Text style={{ fontSize: 13, color: COLORS.textTertiary, textAlign: 'center', paddingHorizontal: 24 }}>
+                Try adjusting your filters or date range
+              </Text>
+            </View>
+          )}
+          {hasMore && (
+            <TouchableOpacity
+              style={s.loadMoreBtn}
+              onPress={() => fetchLedger(page + 1)}
+              activeOpacity={0.7}
+              disabled={isLoadMore}
+            >
+              {isLoadMore
+                ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+                : <Text style={s.loadMoreTxt}>Load More</Text>}
+            </TouchableOpacity>
+          )}
+          <View style={{ height: 100 }} />
+        </ScrollView>
+      )}
 
       {/* Multi-select bottom bar */}
       {selected.size > 0 && (
@@ -495,7 +626,7 @@ export default function StockLedgerScreen() {
                 {/* Results — only visible when typing */}
                 {draftWHSearch.length > 0 && (
                   <View style={s.whList}>
-                    {WAREHOUSES
+                    {warehouses
                       .filter(w => w.toLowerCase().includes(draftWHSearch.toLowerCase()))
                       .map((w, idx, arr) => {
                         const checked = draftWH.has(w);
@@ -678,6 +809,10 @@ const s = StyleSheet.create({
   // Empty
   empty:    { alignItems: 'center', paddingVertical: 60, gap: 12 },
   emptyTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textSecondary },
+
+  // Load More
+  loadMoreBtn: { alignSelf: 'center', marginVertical: 16, paddingHorizontal: 24, paddingVertical: 12, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
+  loadMoreTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.brandPrimary },
 
   // Filter Modal
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
