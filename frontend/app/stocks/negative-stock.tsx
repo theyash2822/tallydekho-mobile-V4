@@ -9,7 +9,7 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getNegativeStock } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
-import { useAuth } from '../../src/context/AuthContext';
+import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 
 const AMBER = '#A89060';
@@ -32,9 +32,9 @@ interface NegStockItem {
 export default function NegativeStockScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { company, selectedFY, fyInfoToParam } = useAuth();
+  const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
-  const fyParam = fyInfoToParam ? fyInfoToParam(selectedFY) : undefined;
+  const fyParam = fyInfoToParam(selectedFY);
 
   const [search,      setSearch]      = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());

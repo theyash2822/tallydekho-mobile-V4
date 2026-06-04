@@ -9,7 +9,7 @@ import { PieChart } from 'react-native-gifted-charts';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getStocks } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
-import { useAuth } from '../../src/context/AuthContext';
+import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import ShimmerPlaceholder, { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 
@@ -27,9 +27,9 @@ export default function ValuationSummaryScreen() {
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
-  const { company, selectedFY, fyInfoToParam } = useAuth();
+  const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
-  const fyParam = fyInfoToParam ? fyInfoToParam(selectedFY) : undefined;
+  const fyParam = fyInfoToParam(selectedFY);
 
   const [isLoading,     setIsLoading]     = useState(false);
   const [apiError,      setApiError]      = useState<string | null>(null);

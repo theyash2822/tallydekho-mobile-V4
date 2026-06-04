@@ -9,7 +9,7 @@ import Svg, { Rect, Text as SvgText } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
-import { useAuth } from '../../src/context/AuthContext';
+import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { getStockItem, getStockMovements } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 
@@ -94,9 +94,9 @@ const pr = StyleSheet.create({
 export default function ItemDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { company, selectedFY, fyInfoToParam } = useAuth();
+  const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
-  const fyParam = fyInfoToParam ? fyInfoToParam(selectedFY) : undefined;
+  const fyParam = fyInfoToParam(selectedFY);
 
   const [liveItem,   setLiveItem]   = useState<any>(null);
   const [itemLoading, setItemLoading] = useState(true);

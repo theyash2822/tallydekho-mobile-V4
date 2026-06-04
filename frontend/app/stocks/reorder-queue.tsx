@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { useAuth } from '../../src/context/AuthContext';
+import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { getStocks } from '../../src/services/api';
 import { LoadingState, ErrorState, EmptyState } from '../../src/components/ApiStateViews';
 
@@ -46,9 +46,9 @@ type FilterType = 'All' | 'Critical' | 'High' | 'Medium' | 'Low';
 
 export default function ReorderQueueScreen() {
   const router = useRouter();
-  const { company, selectedFY, fyInfoToParam } = useAuth();
+  const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
-  const fyParam = fyInfoToParam ? fyInfoToParam(selectedFY) : undefined;
+  const fyParam = fyInfoToParam(selectedFY);
 
   const [items,       setItems]       = useState<ReorderItem[]>([]);
   const [loading,     setLoading]     = useState(true);
