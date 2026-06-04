@@ -16,7 +16,9 @@ import { LoadingState, ErrorState } from '../../src/components/ApiStateViews';
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ViewMode = 'chronological' | 'byItem' | 'byDocument';
 type TxnType  = 'Sales' | 'Purchase' | 'Transfer' | 'Adjustment' | 'Opening';
-type VoucherType = 'Sales Invoice' | 'Purchase Invoice' | 'Credit Note' | 'Debit Note';
+// VoucherType is now a plain string — actual types come dynamically from the API
+// (Tally companies use custom names like 'Sales GST', 'Purchase GST', not always 'Sales Invoice')
+type VoucherType = string;
 
 interface TxEntry {
   id: string; sku: string; item: string; batch: string;
@@ -27,7 +29,7 @@ interface TxEntry {
   type: TxnType;
 }
 
-const VOUCHER_TYPES: VoucherType[] = ['Sales Invoice', 'Purchase Invoice', 'Credit Note', 'Debit Note'];
+// No hardcoded voucher types — loaded dynamically from API per company
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 // Convert dd/mm/yy → ISO (YYYY-MM-DD) for API
@@ -274,7 +276,8 @@ export default function StockLedgerScreen() {
   const [error,      setError]      = useState<string | null>(null);
   const [page,       setPage]       = useState(1);
   const [hasMore,    setHasMore]    = useState(false);
-  const [warehouses, setWarehouses] = useState<string[]>([]);
+  const [warehouses,    setWarehouses]    = useState<string[]>([]);
+  const [apiVoucherTypes, setApiVoucherTypes] = useState<string[]>([]);
   const [summary,    setSummary]    = useState({ entries: 0, totalIn: 0, totalOut: 0, value: 0 });
 
   // Map viewMode → API mode param
@@ -324,7 +327,8 @@ export default function StockLedgerScreen() {
           setByDocGroups(prev => (pg === 1 || reset) ? mapped : [...prev, ...mapped]);
         }
 
-        if (d.warehouses?.length) setWarehouses(d.warehouses);
+        if (d.warehouses?.length)    setWarehouses(d.warehouses);
+        if (d.voucherTypes?.length)  setApiVoucherTypes(d.voucherTypes);
         if (d.summary)            setSummary(d.summary);
         const { page: p, pageSize: ps, total: t } = d.pagination || {};
         setHasMore(((p || 1) * (ps || 25)) < (t || 0));
@@ -844,27 +848,31 @@ export default function StockLedgerScreen() {
                   )}
                 </View>
               </View>
-              {/* Transaction type */}
+              {/* Transaction type — dynamic from API (actual Tally voucher type names) */}
               <View style={s.filterSection}>
                 <Text style={s.filterSectionTitle}>Transaction type</Text>
-                <View style={s.typeList}>
-                  {VOUCHER_TYPES.map((v, idx) => {
-                    const active = draftVouchers.has(v);
-                    return (
-                      <TouchableOpacity
-                        key={v}
-                        style={[s.typeRow, idx === VOUCHER_TYPES.length - 1 && { borderBottomWidth: 0 }]}
-                        onPress={() => setDraftVouchers(prev => { const n = new Set(prev); active ? n.delete(v) : n.add(v); return n; })}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[s.typeRowTxt, active && s.typeRowTxtActive]}>{v}</Text>
-                        <View style={[s.checkbox, active && s.checkboxActive]}>
-                          {active && <Ionicons name="checkmark" size={12} color="#fff" />}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                {apiVoucherTypes.length === 0 ? (
+                  <Text style={[s.filterSectionTitle, { fontWeight: '400', color: COLORS.textTertiary, marginTop: 4 }]}>Sync data to load types</Text>
+                ) : (
+                  <View style={s.typeList}>
+                    {apiVoucherTypes.map((v, idx) => {
+                      const active = draftVouchers.has(v);
+                      return (
+                        <TouchableOpacity
+                          key={v}
+                          style={[s.typeRow, idx === apiVoucherTypes.length - 1 && { borderBottomWidth: 0 }]}
+                          onPress={() => setDraftVouchers(prev => { const n = new Set(prev); active ? n.delete(v) : n.add(v); return n; })}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[s.typeRowTxt, active && s.typeRowTxtActive]}>{v}</Text>
+                          <View style={[s.checkbox, active && s.checkboxActive]}>
+                            {active && <Ionicons name="checkmark" size={12} color="#fff" />}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
               <View style={{ height: 24 }} />
             </ScrollView>
