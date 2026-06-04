@@ -38,7 +38,7 @@ function calcPriority(current: number, reorderAt: number): Priority {
 const PRIORITY_CONFIG: Record<Priority, { label: string; color: string; bg: string; barColor: string }> = {
   critical: { label: 'Critical', color: '#DC2626', bg: '#FEF2F2', barColor: '#DC2626'  },
   high:     { label: 'High',     color: '#A89060', bg: '#F8F4EE', barColor: '#1A1A1A'  },
-  medium:   { label: 'Medium',   color: '#2563EB', bg: '#EFF6FF', barColor: '#2563EB'  },
+  medium:   { label: 'Medium',   color: '#16A34A', bg: '#F0FDF4', barColor: '#16A34A'  },
   low:      { label: 'Low',      color: '#6B7280', bg: '#F3F4F6', barColor: '#AEACA8'  },
 };
 
