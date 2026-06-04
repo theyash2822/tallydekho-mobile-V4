@@ -56,31 +56,72 @@ function deriveType(vt: string): TxnType {
   return 'Sales';
 }
 
-// Map API entry → TxEntry
-function mapEntry(e: any): TxEntry {
-  const vt      = (e.voucher_type || '').toLowerCase();
-  const isInward = vt.includes('purchase') || vt.includes('credit note');
-  const isTransfer = vt.includes('journal') || vt.includes('transfer');
-  const qty = isTransfer ? +(e.actual_qty || 0)
-    : isInward ? +Math.abs(e.actual_qty || 0) : -Math.abs(e.actual_qty || 0);
+// Map chronological API item → TxEntry
+function mapChronoItem(e: any): TxEntry {
   return {
-    id:       String(e.id),
-    sku:      e.stock_item_name || '',
-    item:     e.stock_item_name || '',
-    batch:    e.batch_name      || '',
-    txnId:    e.voucher_guid    || String(e.id),
-    docRef:   e.voucher_number  || '',
-    docType:  e.voucher_type    || '',
-    date:     isoToDdmmyy(e.date),
-    time:     '--',
-    qty,
-    unitCost: `₹${(+(e.rate   || 0)).toFixed(2)}`,
-    balance:  '--',
-    value:    `₹${Math.abs(+(e.amount || 0)).toFixed(2)}`,
-    warehouse: e.godown_name   || 'Main',
-    postedBy: '--',
-    note:     '',
-    type:     deriveType(e.voucher_type),
+    id:        String(e.transactionId),
+    sku:       e.sku          || '',
+    item:      e.itemName     || '',
+    batch:     e.batchSerial  || '',
+    txnId:     e.voucherGuid  || String(e.transactionId),
+    docRef:    e.documentNumber || '',
+    docType:   e.voucherType  || '',
+    date:      isoToDdmmyy(e.date),
+    time:      '--',
+    qty:       parseFloat(e.quantity || 0),
+    unitCost:  `₹${parseFloat(e.unitCost || 0).toFixed(2)}`,
+    balance:   '--',
+    value:     `₹${Math.abs(parseFloat(e.value || 0)).toFixed(2)}`,
+    warehouse: e.warehouse    || 'Main',
+    postedBy:  '--',
+    note:      e.note         || '',
+    type:      deriveType(e.voucherType),
+  };
+}
+
+// Map by_item transaction row → TxEntry
+function mapItemTxn(t: any): TxEntry {
+  return {
+    id:        String(t.transactionId),
+    sku:       '',
+    item:      '',
+    batch:     '',
+    txnId:     t.voucherGuid  || String(t.transactionId),
+    docRef:    t.docRef       || '',
+    docType:   t.voucherType  || '',
+    date:      isoToDdmmyy(t.date),
+    time:      '--',
+    qty:       parseFloat(t.quantity || 0),
+    unitCost:  `₹${parseFloat(t.rate || 0).toFixed(2)}`,
+    balance:   '--',
+    value:     `₹${Math.abs(parseFloat(t.value || 0)).toFixed(2)}`,
+    warehouse: t.warehouse    || '',
+    postedBy:  '--',
+    note:      '',
+    type:      deriveType(t.voucherType),
+  };
+}
+
+// Map by_document stock line → TxEntry
+function mapDocLine(l: any): TxEntry {
+  return {
+    id:        l.stockGuid    || l.itemName || '',
+    sku:       l.sku          || '',
+    item:      l.itemName     || '',
+    batch:     l.batchSerial  || '',
+    txnId:     '',
+    docRef:    '',
+    docType:   '',
+    date:      '--',
+    time:      '--',
+    qty:       parseFloat(l.quantity || 0),
+    unitCost:  `₹${parseFloat(l.unitCost || 0).toFixed(2)}`,
+    balance:   '--',
+    value:     `₹${Math.abs(parseFloat(l.value || 0)).toFixed(2)}`,
+    warehouse: l.warehouse    || '',
+    postedBy:  '--',
+    note:      '',
+    type:      deriveType(''),
   };
 }
 
@@ -188,38 +229,70 @@ export default function StockLedgerScreen() {
   const { company, selectedFY } = useAuth();
 
   // ── API state ───────────────────────────────────────────────────────────
-  const [txnData,    setTxnData]    = useState<TxEntry[]>([]);
+  // Separate data per mode (API returns different shapes per mode)
+  const [chronoData,   setChronoData]   = useState<TxEntry[]>([]);
+  const [byItemGroups, setByItemGroups] = useState<{ key: string; item: string; sku: string; value: string; items: TxEntry[] }[]>([]);
+  const [byDocGroups,  setByDocGroups]  = useState<{ docRef: string; docType: string; date: string; warehouse: string; items: TxEntry[]; value: string }[]>([]);
+
   const [loading,    setLoading]    = useState(false);
   const [isLoadMore, setIsLoadMore] = useState(false);
   const [error,      setError]      = useState<string | null>(null);
   const [page,       setPage]       = useState(1);
   const [hasMore,    setHasMore]    = useState(false);
   const [warehouses, setWarehouses] = useState<string[]>([]);
-  const [summary,    setSummary]    = useState({ total: 0, totalInQty: 0, totalOutQty: 0, totalValue: 0 });
+  const [summary,    setSummary]    = useState({ entries: 0, totalIn: 0, totalOut: 0, value: 0 });
 
-  // Fetch ledger from API (pg=1 resets list)
+  // Map viewMode → API mode param
+  const apiMode = viewMode === 'byItem' ? 'by_item' : viewMode === 'byDocument' ? 'by_document' : 'chronological';
+
+  // Fetch ledger from API — pg=1 resets list for active mode
   const fetchLedger = useCallback(async (pg: number, reset = false) => {
     if (!company?.guid) return;
     pg === 1 ? setLoading(true) : setIsLoadMore(true);
     setError(null);
     try {
       const fyParam = fyInfoToParam(selectedFY);
-      const params: Record<string, any> = { page: pg, limit: 30 };
-      if (fyParam)    params.fy        = fyParam;
-      if (dateFrom)   { params.from    = ddmmyyToISO(dateFrom); delete params.fy; }
-      if (dateTo)     params.to        = ddmmyyToISO(dateTo);
-      if (itemSearch) params.item      = itemSearch;
-      if (selWH.size === 1)       params.warehouse = [...selWH][0];
-      if (selVouchers.size === 1) params.type      = [...selVouchers][0];
+      const params: Record<string, any> = { mode: apiMode, page: pg, limit: 25 };
+      if (fyParam)     params.fy          = fyParam;
+      if (dateFrom)  { params.from        = ddmmyyToISO(dateFrom); delete params.fy; }
+      if (dateTo)      params.to          = ddmmyyToISO(dateTo);
+      if (itemSearch)  params.item        = itemSearch;
+      if (batchSearch) params.search      = batchSearch;
+      if (selWH.size === 1)       params.warehouse   = [...selWH][0];
+      if (selVouchers.size === 1) params.voucherType = [...selVouchers][0];
 
       const res = await getStockLedger(company.guid, params);
       if (res?.data) {
-        const mapped = (res.data.entries || []).map(mapEntry);
-        setTxnData(prev => (pg === 1 || reset) ? mapped : [...prev, ...mapped]);
-        if (res.data.warehouses?.length) setWarehouses(res.data.warehouses);
-        if (res.data.summary) setSummary(res.data.summary);
-        const { page: p, limit: l, total: t } = res.data.pagination || {};
-        setHasMore(p * l < t);
+        const d = res.data;
+
+        if (apiMode === 'chronological') {
+          const mapped = (d.items || []).map(mapChronoItem);
+          setChronoData(prev => (pg === 1 || reset) ? mapped : [...prev, ...mapped]);
+        } else if (apiMode === 'by_item') {
+          const mapped = (d.items || []).map((it: any) => ({
+            key:   `${it.itemName}|${it.stockGuid || ''}`,
+            item:  it.itemName  || '',
+            sku:   it.sku       || '',
+            value: `₹${parseFloat(it.latestRate || 0).toFixed(2)}`,
+            items: (it.transactions || []).map(mapItemTxn),
+          }));
+          setByItemGroups(prev => (pg === 1 || reset) ? mapped : [...prev, ...mapped]);
+        } else {
+          const mapped = (d.items || []).map((doc: any) => ({
+            docRef:    doc.voucherNumber || doc.voucherGuid || '',
+            docType:   doc.voucherType  || '',
+            date:      isoToDdmmyy(doc.date),
+            warehouse: doc.warehouse    || '',
+            value:     `₹${Math.abs(parseFloat(doc.amount || 0)).toFixed(2)}`,
+            items:     (doc.stockLines  || []).map(mapDocLine),
+          }));
+          setByDocGroups(prev => (pg === 1 || reset) ? mapped : [...prev, ...mapped]);
+        }
+
+        if (d.warehouses?.length) setWarehouses(d.warehouses);
+        if (d.summary)            setSummary(d.summary);
+        const { page: p, pageSize: ps, total: t } = d.pagination || {};
+        setHasMore(((p || 1) * (ps || 25)) < (t || 0));
         setPage(pg);
       }
     } catch (e: any) {
@@ -228,38 +301,25 @@ export default function StockLedgerScreen() {
       setLoading(false);
       setIsLoadMore(false);
     }
-  }, [company?.guid, selectedFY, dateFrom, dateTo, itemSearch, selWH, selVouchers]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [company?.guid, selectedFY, apiMode, dateFrom, dateTo, itemSearch, batchSearch, selWH, selVouchers]);
 
-  // Initial load on mount / company / FY change
+  // Re-fetch on company / FY change
   useEffect(() => { fetchLedger(1, true); }, [company?.guid, selectedFY]);
+  // Re-fetch when tab switches
+  useEffect(() => { fetchLedger(1, true); }, [apiMode]);
 
-  // Filtered transactions (client-side multi-filter for multiple WH / multiple types)
-  const filtered = useMemo(() => txnData.filter(t => {
-    if (selWH.size       > 0 && ![...selWH].some(w => t.warehouse.includes(w.split(' ')[0]))) return false;
-    if (selVouchers.size > 0 && !selVouchers.has(t.docType as VoucherType))                  return false;
-    if (itemSearch  && !t.item.toLowerCase().includes(itemSearch.toLowerCase()))              return false;
-    if (batchSearch && !t.batch.toLowerCase().includes(batchSearch.toLowerCase()))            return false;
-    return true;
-  }), [selWH, selVouchers, itemSearch, batchSearch]);
+  // Chronological: filters already sent to API — just use data as-is
+  const filtered = chronoData;
 
   const activeFilterCount =
     selWH.size + selVouchers.size +
     (itemSearch ? 1 : 0) + (batchSearch ? 1 : 0);
 
-  // ── Grouped data ────────────────────────────────────────────────────────────
-  // By Item: group by sku
-  const byItemGroups = useMemo(() => {
-    const map = new Map<string, TxEntry[]>();
-    filtered.forEach(t => { const k = `${t.item}|${t.sku}`; if (!map.has(k)) map.set(k, []); map.get(k)!.push(t); });
-    return [...map.entries()].map(([key, items]) => ({ key, item: items[0].item, sku: items[0].sku, value: items[0].balance, items }));
-  }, [filtered]);
-
-  // By Document: group by docRef
-  const byDocGroups = useMemo(() => {
-    const map = new Map<string, TxEntry[]>();
-    filtered.forEach(t => { if (!map.has(t.docRef)) map.set(t.docRef, []); map.get(t.docRef)!.push(t); });
-    return [...map.entries()].map(([docRef, items]) => ({ docRef, docType: items[0].docType, date: items[0].date, warehouse: items[0].warehouse, items, value: items[0].value }));
-  }, [filtered]);
+  // Active item count for empty-state check
+  const activeCount = viewMode === 'chronological' ? filtered.length
+    : viewMode === 'byItem' ? byItemGroups.length
+    : byDocGroups.length;
 
   // ── Render helpers ──────────────────────────────────────────────────────────
   const DetailRow = ({ label, value, label2, value2 }: { label: string; value: string; label2?: string; value2?: string }) => (
@@ -473,34 +533,34 @@ export default function StockLedgerScreen() {
         </ScrollView>
       </View>
 
-      {/* Summary Strip */}
+      {/* Summary Strip — from API summary */}
       <View style={s.summaryStrip}>
         <View style={s.summaryItem}>
-          <Text style={s.summaryVal}>{filtered.length}</Text>
+          <Text style={s.summaryVal}>{summary.entries}</Text>
           <Text style={s.summaryLbl}>Entries</Text>
         </View>
         <View style={s.summarySep} />
         <View style={s.summaryItem}>
           <Text style={[s.summaryVal, { color: COLORS.positive }]}>
-            +{filtered.filter(t => t.qty > 0).reduce((a, t) => a + t.qty, 0)}
+            +{summary.totalIn % 1 === 0 ? summary.totalIn : summary.totalIn.toFixed(2)}
           </Text>
           <Text style={s.summaryLbl}>Total In</Text>
         </View>
         <View style={s.summarySep} />
         <View style={s.summaryItem}>
           <Text style={[s.summaryVal, { color: COLORS.negative }]}>
-            {filtered.filter(t => t.qty < 0).reduce((a, t) => a + t.qty, 0)}
+            -{summary.totalOut % 1 === 0 ? summary.totalOut : summary.totalOut.toFixed(2)}
           </Text>
           <Text style={s.summaryLbl}>Total Out</Text>
         </View>
         <View style={s.summarySep} />
         <View style={s.summaryItem}>
           <Text style={s.summaryVal}>
-            {summary.totalValue >= 100000
-              ? `₹${(summary.totalValue/100000).toFixed(1)}L`
-              : summary.totalValue >= 1000
-              ? `₹${(summary.totalValue/1000).toFixed(1)}K`
-              : `₹${summary.totalValue.toFixed(0)}`}
+            {summary.value >= 100000
+              ? `₹${(summary.value/100000).toFixed(1)}L`
+              : summary.value >= 1000
+              ? `₹${(summary.value/1000).toFixed(1)}K`
+              : `₹${summary.value.toFixed(0)}`}
           </Text>
           <Text style={s.summaryLbl}>Value</Text>
         </View>
@@ -518,7 +578,7 @@ export default function StockLedgerScreen() {
           {viewMode === 'chronological' && filtered.map(renderChronCard)}
           {viewMode === 'byItem'        && byItemGroups.map(renderByItemCard)}
           {viewMode === 'byDocument'    && byDocGroups.map(renderByDocCard)}
-          {filtered.length === 0 && (
+          {activeCount === 0 && (
             <View style={s.empty}>
               <Ionicons name="document-outline" size={48} color={COLORS.borderDefault} />
               <Text style={s.emptyTxt}>No stock movements found</Text>

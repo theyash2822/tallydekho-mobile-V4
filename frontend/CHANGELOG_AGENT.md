@@ -246,3 +246,21 @@ _Add new entries at top._
 
 ### api.ts
 - Added `getStockFastSlow` export pointing to `/stocks/fast-slow`
+
+## 2026-06-04 — Stock Ledger Live Data
+
+### Changes
+- `app/stocks/stock-ledger.tsx` — wired to real API
+  - Replaced static empty `txnData` with `getStockLedger()` call
+  - Added `useAuth` + `fyInfoToParam` (direct import, correct pattern)
+  - LoadingState / ErrorState from ApiStateViews
+  - Pagination (30/page, Load More button)
+  - Summary strip: entries, total in, total out, real value from API
+  - Warehouse filter: dynamic from API (no more static empty array)
+  - Apply Filters triggers fresh API fetch
+  - Helper fns: `ddmmyyToISO`, `isoToDdmmyy`, `deriveType`, `mapEntry`
+- `src/services/api.ts` — added `getStockLedger` function
+
+### QA
+- TypeScript: 0 errors
+- ESLint: 0 errors in changed files
