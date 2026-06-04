@@ -169,6 +169,24 @@ export default function StockLedgerScreen() {
   // Item autocomplete list
   const [stockItemsList, setStockItemsList] = useState<string[]>([]);
   const [itemsLoading,   setItemsLoading]   = useState(false);
+  const [voucherTypesLoading, setVoucherTypesLoading] = useState(false);
+
+  // Load voucher types for filter (if not yet populated)
+  const loadVoucherTypes = useCallback(async () => {
+    if (!company?.guid || apiVoucherTypes.length > 0 || voucherTypesLoading) return;
+    setVoucherTypesLoading(true);
+    try {
+      const fyParam = fyInfoToParam(selectedFY);
+      const params: Record<string, any> = { mode: 'chronological', page: 1, limit: 1 };
+      if (fyParam) params.fy = fyParam;
+      const res = await getStockLedger(company.guid, params);
+      if (res?.data?.voucherTypes?.length) {
+        setApiVoucherTypes(res.data.voucherTypes);
+      }
+    } catch {}
+    finally { setVoucherTypesLoading(false); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [company?.guid, selectedFY, apiVoucherTypes.length, voucherTypesLoading]);
 
   // Open filter → copy applied → draft
   const openFilter = () => {
@@ -182,6 +200,7 @@ export default function StockLedgerScreen() {
     setDraftTo(dateTo);
     setShowFilter(true);
     loadStockItems();
+    loadVoucherTypes();
   };
 
   const applyFilters = () => {
@@ -851,8 +870,10 @@ export default function StockLedgerScreen() {
               {/* Transaction type — dynamic from API (actual Tally voucher type names) */}
               <View style={s.filterSection}>
                 <Text style={s.filterSectionTitle}>Transaction type</Text>
-                {apiVoucherTypes.length === 0 ? (
-                  <Text style={[s.filterSectionTitle, { fontWeight: '400', color: COLORS.textTertiary, marginTop: 4 }]}>Sync data to load types</Text>
+                {voucherTypesLoading ? (
+                  <ActivityIndicator size="small" color={COLORS.brandPrimary} style={{ marginTop: 8, alignSelf: 'flex-start' }} />
+                ) : apiVoucherTypes.length === 0 ? (
+                  <Text style={[s.filterSectionTitle, { fontWeight: '400', color: COLORS.textTertiary, marginTop: 4 }]}>No transaction types found</Text>
                 ) : (
                   <View style={s.typeList}>
                     {apiVoucherTypes.map((v, idx) => {
