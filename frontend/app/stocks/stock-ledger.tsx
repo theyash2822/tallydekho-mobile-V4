@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Modal, ActivityIndicator,
@@ -339,13 +339,16 @@ export default function StockLedgerScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [company?.guid, selectedFY, apiMode, dateFrom, dateTo, selItems, batchSearch, selWH, selVouchers]);
 
+  // Always keep a ref to the latest fetchLedger so effects never call a stale closure
+  const fetchLedgerRef = useRef(fetchLedger);
+  useEffect(() => { fetchLedgerRef.current = fetchLedger; }); // runs every render, no deps
+
   // Re-fetch on company / FY change
-  useEffect(() => { fetchLedger(1, true); }, [company?.guid, selectedFY]);
-  // Re-fetch when tab switches
-  useEffect(() => { fetchLedger(1, true); }, [apiMode]);
+  useEffect(() => { fetchLedgerRef.current(1, true); }, [company?.guid, selectedFY]);
+  // Re-fetch when tab switches — uses ref so it always has the latest filter state
+  useEffect(() => { fetchLedgerRef.current(1, true); }, [apiMode]);
   // Re-fetch when filters are applied (filterApplied > 0 skips the initial mount)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (filterApplied > 0) fetchLedger(1, true); }, [filterApplied]);
+  useEffect(() => { if (filterApplied > 0) fetchLedgerRef.current(1, true); }, [filterApplied]);
 
   // Chronological: filters already sent to API — just use data as-is
   const filtered = chronoData;
@@ -726,11 +729,11 @@ export default function StockLedgerScreen() {
                   )}
                 </View>
 
-                {/* Results — always visible, filtered by search text */}
-                {warehouses.length > 0 && (
+                {/* Results — visible only when typing */}
+                {draftWHSearch.length > 0 && (
                   <View style={s.whList}>
                     {warehouses
-                      .filter(w => !draftWHSearch || w.toLowerCase().includes(draftWHSearch.toLowerCase()))
+                      .filter(w => w.toLowerCase().includes(draftWHSearch.toLowerCase()))
                       .map((w, idx, arr) => {
                         const checked = draftWH.has(w);
                         return (
@@ -793,14 +796,14 @@ export default function StockLedgerScreen() {
                   )}
                 </View>
 
-                {/* Item suggestion list */}
-                {(itemsLoading || stockItemsList.length > 0) && (
+                {/* Item suggestion list — visible only when typing */}
+                {draftItemSearch.length > 0 && (
                   <View style={s.whList}>
                     {itemsLoading ? (
                       <ActivityIndicator size="small" color={COLORS.brandPrimary} style={{ padding: 12 }} />
                     ) : (
                       stockItemsList
-                        .filter(itm => !draftItemSearch || itm.toLowerCase().includes(draftItemSearch.toLowerCase()))
+                        .filter(itm => itm.toLowerCase().includes(draftItemSearch.toLowerCase()))
                         .filter(itm => !draftItems.has(itm))
                         .slice(0, 25)
                         .map((itm, idx, arr) => (
