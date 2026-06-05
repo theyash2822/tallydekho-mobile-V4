@@ -270,7 +270,7 @@ export default function StockLedgerScreen() {
   // Separate data per mode (API returns different shapes per mode)
   const [chronoData,   setChronoData]   = useState<TxEntry[]>([]);
   const [byItemGroups, setByItemGroups] = useState<{ key: string; item: string; sku: string; value: string; items: TxEntry[] }[]>([]);
-  const [byDocGroups,  setByDocGroups]  = useState<{ docRef: string; docType: string; date: string; warehouse: string; items: TxEntry[]; value: string }[]>([]);
+  const [byDocGroups,  setByDocGroups]  = useState<{ docRef: string; docType: string; date: string; warehouse: string; note: string; items: TxEntry[]; value: string }[]>([]);
 
   const [loading,    setLoading]    = useState(false);
   const [isLoadMore, setIsLoadMore] = useState(false);
@@ -339,6 +339,7 @@ export default function StockLedgerScreen() {
             docType:   doc.voucherType  || '',
             date:      isoToDdmmyy(doc.date),
             warehouse: doc.warehouse    || '',
+            note:      doc.note         || '',
             value:     `₹${Math.abs(parseFloat(doc.amount || 0)).toFixed(2)}`,
             items:     (doc.stockLines  || []).map(mapDocLine),
           }));
@@ -533,7 +534,7 @@ export default function StockLedgerScreen() {
             </View>
             <View style={s.cardInfo}>
               <Text style={s.cardTitle}>{grp.docRef}</Text>
-              <Text style={s.cardSub}>{grp.items.length} item{grp.items.length !== 1 ? 's' : ''}</Text>
+              <Text style={s.cardSub}>{grp.items.length} item{grp.items.length !== 1 ? 's' : ''}{grp.note ? ` · ${grp.note}` : ''}</Text>
             </View>
             <View style={s.cardRight}>
               <Text style={s.cardValue}>{grp.value}</Text>
