@@ -193,10 +193,7 @@ export default function ItemDetailScreen() {
               </View>
               <View style={[styles.matrixRow, styles.matrixRowMid]}>
                 <MatrixCell label="Reorder Level"      value={reorderLevel != null ? String(reorderLevel) : '—'} />
-                <MatrixCell label="Warehouses"
-                  value={godowns.length > 0
-                    ? godowns.map(g => `${g.name} (${g.qty})`).join(', ')
-                    : '—'} />
+                <MatrixCell label="Warehouses"          value={godowns.length > 0 ? String(godowns.length) : '—'} />
               </View>
               <View style={styles.matrixRow}>
                 <MatrixCell label="Stock Group"        value={liveItem?.group_name || '—'} />
@@ -204,6 +201,16 @@ export default function ItemDetailScreen() {
               </View>
             </View>
           </View>
+
+          {/* Warehouse Breakdown */}
+          {godowns.length > 0 && (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Warehouse Breakdown</Text>
+              {godowns.map((g, i) => (
+                <PricingRow key={`wh-${i}`} label={g.name} value={String(g.qty)} />
+              ))}
+            </View>
+          )}
 
           {/* Pricing & Cost */}
           <View style={styles.card}>
