@@ -134,7 +134,7 @@ export default function ItemDetailScreen() {
 
   // All data from real API — STRICT PRODUCTION DATA RULE
   const itemName     = liveItem?.name || (itemLoading ? 'Loading…' : '—');
-  const itemSku      = liveItem?.hsn_code || liveItem?.sku || '—';
+  const itemSku      = liveItem?.sku || liveItem?.alias || liveItem?.hsn || '—';
   const totalQty     = liveItem != null ? +(liveItem.closing_qty ?? 0) : null;
   const stockValue   = fmtRs(liveItem?.closing_value);
   const reorderLevel = liveItem?.reorder_level != null ? +(liveItem.reorder_level) : null;
