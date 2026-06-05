@@ -21,6 +21,7 @@ const PAGE_SIZE = 20;
 interface StockItem {
   id: string;
   name: string;
+  sku: string;
   group: string;
   unit: string;
   closing_qty: number;
@@ -369,6 +370,7 @@ export default function FastSlowMovingScreen() {
                   </View>
                   <View style={s.cardMeta}>
                     <Text style={s.cardName} numberOfLines={1}>{item.name}</Text>
+                    {item.sku ? <Text style={s.cardGroup} numberOfLines={1}>{item.sku}</Text> : null}
                     <Text style={s.cardGroup} numberOfLines={1}>{item.group}</Text>
                   </View>
                 </View>

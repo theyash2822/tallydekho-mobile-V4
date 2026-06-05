@@ -80,7 +80,7 @@ export default function ReorderQueueScreen() {
             return {
               id:        r.guid || String(r.id),
               name:      r.name || '—',
-              sku:       r.alias || (r.guid ? r.guid.slice(0, 8).toUpperCase() : '—'),
+              sku:       r.sku || r.alias || '',
               current:   qty,
               reorderAt: reorder,
               suggest:   Math.round(suggest),
@@ -159,7 +159,7 @@ export default function ReorderQueueScreen() {
               <View style={styles.cardTop}>
                 <View style={styles.cardLeft}>
                   <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-                  <Text style={styles.itemSku}>{item.sku} · {item.warehouse}</Text>
+                  <Text style={styles.itemSku}>{[item.sku, item.warehouse].filter(Boolean).join(' · ')}</Text>
                 </View>
                 <View style={[styles.priorityBadge, { backgroundColor: p.bg }]}>
                   <Text style={[styles.priorityText, { color: p.color }]}>{p.label}</Text>
