@@ -46,13 +46,13 @@ export default function ValuationSummaryScreen() {
     setApiError(null);
     getStocks(companyGuid, { limit: '500', ...(fyParam ? { fy: fyParam } : {}) })
       .then((res: any) => {
-        const rows: any[] = res?.data ?? [];
+        const rows: any[] = res?.data?.items ?? [];
         // Group by group_name
         const map = new Map<string, { value: number; skus: number }>();
         let tot = 0;
         for (const r of rows) {
           const grp = r.group_name ?? 'Ungrouped';
-          const val = Number(r.closing_qty ?? 0) * Number(r.rate ?? 0);
+          const val = Number(r.closing_value ?? 0);
           if (!map.has(grp)) map.set(grp, { value: 0, skus: 0 });
           const entry = map.get(grp)!;
           entry.value += val;
