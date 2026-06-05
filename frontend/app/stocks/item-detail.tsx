@@ -10,7 +10,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
-import { getStockItem, getStockMovements } from '../../src/services/api';
+import { getStockItem, getStockMovements, getStockGodowns } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -103,6 +103,7 @@ export default function ItemDetailScreen() {
   const [movements,  setMovements]  = useState<any[]>([]);
   const [movLoading, setMovLoading] = useState(true);
   const [rateData,   setRateData]   = useState<any>(null);
+  const [godowns,    setGodowns]    = useState<{ name: string; qty: number }[]>([]);
   const [calOpen,    setCalOpen]    = useState(false);
   const [dateFrom,   setDateFrom]   = useState('');
   const [dateTo,     setDateTo]     = useState('');
@@ -114,6 +115,10 @@ export default function ItemDetailScreen() {
       .then((res: any) => { if (res?.data) setLiveItem(res.data); })
       .catch(() => {})
       .finally(() => setItemLoading(false));
+    // Fetch warehouse breakdown
+    getStockGodowns(companyGuid, id as string)
+      .then((res: any) => { if (res?.data?.warehouses) setGodowns(res.data.warehouses); })
+      .catch(() => {});
   }, [companyGuid, id, selectedFY]);
 
   useEffect(() => {
@@ -188,7 +193,10 @@ export default function ItemDetailScreen() {
               </View>
               <View style={[styles.matrixRow, styles.matrixRowMid]}>
                 <MatrixCell label="Reorder Level"      value={reorderLevel != null ? String(reorderLevel) : '—'} />
-                <MatrixCell label="Warehouse"          value={liveItem?.warehouse_name || liveItem?.warehouse || '—'} />
+                <MatrixCell label="Warehouses"
+                  value={godowns.length > 0
+                    ? godowns.map(g => `${g.name} (${g.qty})`).join(', ')
+                    : '—'} />
               </View>
               <View style={styles.matrixRow}>
                 <MatrixCell label="Stock Group"        value={liveItem?.group_name || '—'} />
