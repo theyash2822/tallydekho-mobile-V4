@@ -212,6 +212,25 @@ export default function ItemDetailScreen() {
             </View>
           )}
 
+          {/* Item Details */}
+          {(liveItem?.sku || liveItem?.alias || liveItem?.hsn || liveItem?.description) && (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Item Details</Text>
+              {(liveItem?.sku || liveItem?.alias) && (
+                <PricingRow label="Part Number" value={liveItem?.sku || liveItem?.alias} />
+              )}
+              {liveItem?.hsn && (
+                <PricingRow label="HSN Code" value={liveItem.hsn} />
+              )}
+              {liveItem?.tax_rate != null && +liveItem.tax_rate > 0 && (
+                <PricingRow label="Tax Rate" value={`${liveItem.tax_rate}%`} />
+              )}
+              {liveItem?.description && (
+                <PricingRow label="Description" value={liveItem.description} />
+              )}
+            </View>
+          )}
+
           {/* Pricing & Cost */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Pricing &amp; Cost</Text>
