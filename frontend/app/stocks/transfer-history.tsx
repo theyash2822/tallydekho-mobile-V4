@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getTransferHistory } from '../../src/services/api';
-import DateRangePickerModal, { dmyToISO, isoToDMY } from '../../src/components/DateRangePickerModal';
+import DateRangePickerModal, { dmyToISO } from '../../src/components/DateRangePickerModal';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
