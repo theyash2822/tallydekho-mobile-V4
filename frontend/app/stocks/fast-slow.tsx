@@ -21,6 +21,7 @@ const PAGE_SIZE = 20;
 interface StockItem {
   id: string;
   name: string;
+  displayName?: string;
   sku: string;
   group: string;
   unit: string;
@@ -96,7 +97,7 @@ export default function FastSlowMovingScreen() {
   const barData = useMemo(() =>
     chartItems.map((item, idx) => ({
       value:      Math.max(item.total_outward_qty, 1),
-      label:      item.name.length > 6 ? item.name.slice(0, 6) + '…' : item.name,
+      label:      (item.displayName || item.name).slice(0, 6) + ((item.displayName || item.name).length > 6 ? '…' : ''),
       frontColor: focusedBar === idx ? '#7C5C3A' : '#A89060',
       onPress:    () => setFocusedBar(prev => prev === idx ? null : idx),
     })),
@@ -242,7 +243,7 @@ export default function FastSlowMovingScreen() {
                   <View style={s.tooltip}>
                     <View style={s.tooltipHeader}>
                       <View style={s.tooltipDot} />
-                      <Text style={s.tooltipTitle} numberOfLines={1}>{it.name}</Text>
+                      <Text style={s.tooltipTitle} numberOfLines={1}>{it.displayName || it.name}</Text>
                       <TouchableOpacity onPress={() => setFocusedBar(null)} activeOpacity={0.7}>
                         <Ionicons name="close" size={14} color={COLORS.textTertiary} />
                       </TouchableOpacity>
@@ -365,11 +366,11 @@ export default function FastSlowMovingScreen() {
                     !isSel && { backgroundColor: isFast ? COLORS.brandPrimary : COLORS.activeBg }]}>
                     {isSel
                       ? <Ionicons name="checkmark" size={20} color="#fff" />
-                      : <Text style={[s.avatarTxt, !isFast && { color: COLORS.textSecondary }]}>{item.name.charAt(0).toUpperCase()}</Text>
+                      : <Text style={[s.avatarTxt, !isFast && { color: COLORS.textSecondary }]}>{(item.displayName || item.name).charAt(0).toUpperCase()}</Text>
                     }
                   </View>
                   <View style={s.cardMeta}>
-                    <Text style={s.cardName} numberOfLines={1}>{item.name}</Text>
+                    <Text style={s.cardName} numberOfLines={1}>{item.displayName || item.name}</Text>
                     {item.sku ? <Text style={s.cardGroup} numberOfLines={1}>{item.sku}</Text> : null}
                     <Text style={s.cardGroup} numberOfLines={1}>{item.group}</Text>
                   </View>

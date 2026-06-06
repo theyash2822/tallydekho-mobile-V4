@@ -80,7 +80,8 @@ export default function ReorderQueueScreen() {
               : Math.max(reorder * 2 - qty, reorder);
             return {
               id:        r.guid || String(r.id),
-              name:      r.displayName || r.name || '—',
+              name:      r.name || '—',
+              displayName: r.displayName || undefined,
               sku:       r.sku || r.alias || '',
               current:   qty,
               reorderAt: reorder,
