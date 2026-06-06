@@ -369,3 +369,9 @@ export const retryMyEntry = (id: string) => post<any>(`/vouchers/my-entries/${id
 export const alterStockItem    = (payload: any) => tallyPost<any>('/master/stock-item-alter', payload);
 export const getStockGroups    = (companyGuid: string) => get<any>(`/stocks/groups?companyGuid=${companyGuid}`);
 export const getStockUnits     = (companyGuid: string) => get<any>(`/stocks/units?companyGuid=${companyGuid}`);
+
+// ── Inventory Settings ─────────────────────────────────────────────────────
+export const getInventorySettings  = (companyGuid: string) =>
+  get<any>(`/inventory/settings?companyGuid=${companyGuid}`);
+export const saveInventorySettings = (companyGuid: string, payload: Record<string, any>) =>
+  post<any>(`/inventory/settings?companyGuid=${companyGuid}`, payload);
