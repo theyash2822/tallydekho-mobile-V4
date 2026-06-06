@@ -44,7 +44,7 @@ const WIDGET_TILES = [
   },
   {
     id: 'low_stock', title: 'Low-Stock Alerts',
-    icon: 'alert-circle-outline', iconColor: '#DC2626', iconBg: '#FEF2F2',
+    icon: 'alert-circle-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
     route: '/stocks/reorder-queue',
     getValue: (d: any) => [
       { label: 'Low Stock',   value: String(d?.lowStockCount ?? 0) },
@@ -53,7 +53,7 @@ const WIDGET_TILES = [
   },
   {
     id: 'aged_inventory', title: 'Aged Inventory',
-    icon: 'time-outline', iconColor: '#D97706', iconBg: '#FFFBEB',
+    icon: 'time-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
     route: '/stocks/aged-items',
     getValue: (_d: any) => [
       { label: 'View Aged Stock', value: '→' },
@@ -61,7 +61,7 @@ const WIDGET_TILES = [
   },
   {
     id: 'movement_analytics', title: 'Movement Analytics',
-    icon: 'trending-up-outline', iconColor: '#2563EB', iconBg: '#EFF6FF',
+    icon: 'trending-up-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
     route: '/stocks/movement-analytics',
     getValue: (_d: any) => [
       { label: 'View Movement', value: '→' },
