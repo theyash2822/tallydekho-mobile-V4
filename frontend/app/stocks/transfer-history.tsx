@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getTransferHistory } from '../../src/services/api';
+import DateRangePickerModal, { dmyToISO, isoToDMY } from '../../src/components/DateRangePickerModal';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
@@ -130,13 +131,19 @@ export default function TransferHistoryScreen() {
   const companyGuid = company?.guid;
   const fyParam     = fyInfoToParam(selectedFY);
 
-  const [entries,   setEntries]   = useState<TransferEntry[]>([]);
-  const [total,     setTotal]     = useState(0);
-  const [page,      setPage]      = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isMore,    setIsMore]    = useState(false);
-  const [apiError,  setApiError]  = useState<string | null>(null);
-  const [search,    setSearch]    = useState('');
+  const [entries,     setEntries]     = useState<TransferEntry[]>([]);
+  const [total,       setTotal]       = useState(0);
+  const [page,        setPage]        = useState(1);
+  const [isLoading,   setIsLoading]   = useState(false);
+  const [isMore,      setIsMore]      = useState(false);
+  const [apiError,    setApiError]    = useState<string | null>(null);
+  const [search,      setSearch]      = useState('');
+  const [dateFrom,    setDateFrom]    = useState('');
+  const [dateTo,      setDateTo]      = useState('');
+  const [showDatePick,setShowDatePick]= useState(false);
+
+  const dateLabel = dateFrom && dateTo ? `${dateFrom} — ${dateTo}` : 'All Dates';
+  const hasCustomDate = !!(dateFrom && dateTo);
 
   const load = useCallback(async (pg = 1, reset = false) => {
     if (!companyGuid) return;
@@ -145,7 +152,13 @@ export default function TransferHistoryScreen() {
     setApiError(null);
     try {
       const params: Record<string, string> = { page: String(pg), limit: String(PAGE_LIMIT) };
-      if (fyParam) params.fy = fyParam;
+      if (hasCustomDate) {
+        // explicit date range overrides FY
+        params.from = dmyToISO(dateFrom);
+        params.to   = dmyToISO(dateTo);
+      } else if (fyParam) {
+        params.fy = fyParam;
+      }
       const res = await getTransferHistory(companyGuid, params);
       const rows: TransferEntry[] = res?.data ?? [];
       setEntries(prev => (reset || pg === 1) ? rows : [...prev, ...rows]);
@@ -157,7 +170,7 @@ export default function TransferHistoryScreen() {
       setIsLoading(false);
       setIsMore(false);
     }
-  }, [companyGuid, fyParam]);
+  }, [companyGuid, fyParam, hasCustomDate, dateFrom, dateTo]);
 
   useEffect(() => { load(1, true); }, [load]);
 
@@ -213,6 +226,24 @@ export default function TransferHistoryScreen() {
         <View style={{ width: 44 }} />
       </View>
 
+      {/* Date filter pill */}
+      <View style={s.filterRow}>
+        <TouchableOpacity
+          style={[s.filterPill, hasCustomDate && s.filterPillActive]}
+          onPress={() => setShowDatePick(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="calendar-outline" size={14} color={hasCustomDate ? COLORS.brandPrimary : COLORS.textSecondary} />
+          <Text style={[s.filterPillTxt, hasCustomDate && s.filterPillTxtActive]} numberOfLines={1}>{dateLabel}</Text>
+          {hasCustomDate
+            ? <TouchableOpacity onPress={() => { setDateFrom(''); setDateTo(''); }} activeOpacity={0.7}>
+                <Ionicons name="close-circle" size={16} color={COLORS.brandPrimary} />
+              </TouchableOpacity>
+            : <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
+          }
+        </TouchableOpacity>
+      </View>
+
       {/* Search bar */}
       <View style={s.searchWrap}>
         <Ionicons name="search-outline" size={18} color={COLORS.textTertiary} style={{ marginRight: 8 }} />
@@ -263,12 +294,23 @@ export default function TransferHistoryScreen() {
             { paddingBottom: insets.bottom + 16 },
           ]}
           ListEmptyComponent={renderEmpty}
-          ListFooterComponent={renderFooter}
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}
+          ListFooterComponent={renderFooter}
           showsVerticalScrollIndicator={false}
         />
       )}
+
+      {/* Date Range Picker */}
+      <DateRangePickerModal
+        visible={showDatePick}
+        fromDate={dateFrom}
+        toDate={dateTo}
+        onApply={(f, t) => { setDateFrom(f); setDateTo(t); setShowDatePick(false); }}
+        onClose={() => setShowDatePick(false)}
+        minDate={selectedFY?.startDate}
+        maxDate={selectedFY?.endDate}
+      />
     </SafeAreaView>
   );
 }
@@ -354,7 +396,22 @@ const s = StyleSheet.create({
   itemValue: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
 
   // ── Empty ─────────────────────────────────────────────────────────
-  emptyContainer: {
+  // ── Date filter ──────────────────────────────────────────────────────
+  filterRow: {
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.xs,
+  },
+  filterPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.full,
+    paddingHorizontal: SPACING.md, paddingVertical: 9,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  filterPillActive:    { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.activeBg },
+  filterPillTxt:       { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+  filterPillTxtActive: { color: COLORS.brandPrimary },
+
+    emptyContainer: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: SPACING.xl, paddingTop: 80,
   },

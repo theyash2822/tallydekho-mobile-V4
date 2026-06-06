@@ -6,7 +6,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useSettings } from '../../src/context/SettingsContext';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
@@ -55,9 +54,6 @@ export default function StockSnapshotScreen() {
 
   const [valuation,    setValuation]    = useState<ValuationType>('Closing');
   const [showValDrop,  setShowValDrop]  = useState(false);
-  const [dateFrom,     setDateFrom]     = useState('');
-  const [dateTo,       setDateTo]       = useState('');
-  const [showDatePick, setShowDatePick] = useState(false);
   const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set());
   const [isSelMode,    setIsSelMode]    = useState(false);
 
@@ -104,8 +100,6 @@ export default function StockSnapshotScreen() {
     grandPct:   '100%',
   };
 
-  const dateLabel = dateFrom && dateTo ? `${dateFrom} — ${dateTo}` : 'Today';
-
   // ── Multi-select ───────────────────────────────────────────────────────
   const handleLongPress = (id: string) => {
     setShowValDrop(false);
@@ -130,12 +124,6 @@ export default function StockSnapshotScreen() {
   const cancelSelection = () => { setSelectedIds(new Set()); setIsSelMode(false); };
   const selectAll       = () => { setSelectedIds(new Set(data.rows.map(r => r.id))); setIsSelMode(true); };
 
-  // ── Date picker ────────────────────────────────────────────────────────
-  const handleDateApply = (f: string, t: string) => {
-    setDateFrom(f);
-    setDateTo(t);
-    setShowDatePick(false);
-  };
 
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
@@ -170,17 +158,6 @@ export default function StockSnapshotScreen() {
         {/* ── Controls Row */}
         {!isSelMode && (
           <View style={s.controlsRow}>
-            {/* Date Pill */}
-            <TouchableOpacity
-              style={s.controlPill}
-              onPress={() => { setShowValDrop(false); setShowDatePick(true); }}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
-              <Text style={s.controlPillTxt} numberOfLines={1}>{dateLabel}</Text>
-              <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-
             {/* Valuation Pill */}
             <TouchableOpacity
               style={s.controlPill}
@@ -316,16 +293,6 @@ export default function StockSnapshotScreen() {
         </View>
       )}
 
-      {/* ── Date Range Picker */}
-      <DateRangePickerModal
-        visible={showDatePick}
-        fromDate={dateFrom}
-        toDate={dateTo}
-        onApply={handleDateApply}
-        onClose={() => setShowDatePick(false)}
-        minDate={selectedFY?.startDate}
-        maxDate={selectedFY?.endDate}
-      />
     </SafeAreaView>
   );
 }
