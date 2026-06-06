@@ -1,5 +1,24 @@
 # CHANGELOG_AGENT.md
 
+## 2026-06-06 — Stock Settings CTO Audit + Repair
+
+### Fixed
+- **TextInput clearing bug**: all numeric fields used `parseInt(v) || 0` — snapped to 0 on clear. Fixed with `drafts` state (Record<string,string>). `dv(key,val)` shows draft or committed value. `numChange` commits only on valid int. `handleSave` flushes all drafts before POST.
+- **Unit for new items**: prepend selected unit to UoM list on load if missing — ensures checkmark shows
+- **Batch/Expiry/Negative toggles**: were hardcoded `value={false}` + empty onChange. Now wired to `batch_tracking_app_enabled` etc. Show Tally pending note when ON.
+- **Warehouse codes**: were saving correctly but UX was confusing; draft-aware archive months added
+- **Fast/slow settings**: backend now reads `fast_moving_top_pct` from company_inventory_settings (was hardcoded 50%)
+- **Expiry days before**: draft-aware (key `expiry_days`)
+- **Cancel button**: now resets drafts + reloads from API
+
+### Commits
+- `630a2650` (mobile) — CTO audit fixes
+- `a05e3327` — displayName total-stock (main screen was missing)
+- `afcfd5cf` — QA YF-1+YF-2 fixes (reorder-queue mapper + fast-slow tooltip)
+- `8ab0717e` — original Stock Settings redesign
+
+---
+
 ## 2026-06-06 — Stock Settings Full Redesign
 
 ### Redesigned
