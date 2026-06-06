@@ -142,7 +142,12 @@ export default function DateRangePickerModal({
     }
   };
 
-  // Quick presets
+  // Quick presets — clamp to FY bounds when minDate/maxDate are provided
+  const clampToFY = (d: Date): Date => {
+    if (minD && d < minD) return new Date(minD);
+    if (maxD && d > maxD) return new Date(maxD);
+    return d;
+  };
   const setPreset = (key: string) => {
     const m = today.getMonth(), y = today.getFullYear();
     let f: Date, t: Date = new Date(today);
@@ -150,14 +155,15 @@ export default function DateRangePickerModal({
       f = new Date(y, m, 1);
       t = new Date(y, m + 1, 0);
     } else if (key === 'last_1') {
-      // Last 30 days
       f = new Date(today); f.setDate(f.getDate() - 30);
       t = new Date(today);
     } else {
-      // last_3 — last 3 calendar months
       f = new Date(y, m - 2, 1);
       t = new Date(y, m + 1, 0);
     }
+    // Clamp to selected FY bounds
+    f = clampToFY(f);
+    t = clampToFY(t);
     setSelFrom(f); setSelTo(t); setStep('from');
     setViewYear(f.getFullYear()); setViewMonth(f.getMonth());
   };

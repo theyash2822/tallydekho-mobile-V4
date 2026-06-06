@@ -264,3 +264,35 @@ _Add new entries at top._
 ### QA
 - TypeScript: 0 errors
 - ESLint: 0 errors in changed files
+
+## 2026-06-04 — Stock Ledger 3-mode API wiring (continued)
+
+### Bug Fixes
+- `by_item` 0 movements: stCond.slice(1) reuse had wrong param indices — item names being compared to dates. Removed the broken reuse; transactions now load correctly.
+- `by_document` SQL crash: v.id in ORDER BY not in GROUP BY → fixed to MIN(v.id)
+- Duplicate React key error: all 5 key spots now use composite `${id}-${index}` keys
+- By Item "selected" bug: [].every() vacuous truth → added length > 0 guard
+- Selected state now cleared on tab switch
+
+### UI Improvements (Chronological tile)
+- Title: item name (was tx.sku — often null)
+- Subtitle: docRef · date · warehouse
+- Left: colored 2-letter type badge (SA/PU/TR) replacing letter avatar
+- Qty: uses − sign for outward (was blank)
+
+### By Item tile
+- Title: item name only (removed sku from title, moved to subtitle)
+- Subtitle: SKU (if available) · N movements
+
+## 2026-06-04
+
+### fix(reorder-queue): use current stock (closing_qty) instead of FY-derived qty
+- Removed `fy=` param from `getStocks` call — reorder decisions use Tally's authoritative `closing_qty`
+- Physical Stock vouchers inflate FY qty → removing FY param sidesteps the problem entirely
+- Removed unused `fyInfoToParam` import, removed `selectedFY` from useEffect deps
+- **File:** `app/stocks/reorder-queue.tsx`
+
+### fix(reorder-queue): Medium priority color → COLORS.positive (#2D7D46)
+### fix(stock-ledger): load voucher types on mount via useEffect
+### fix(stock-ledger): move loadVoucherTypes after apiVoucherTypes declaration (crash fix)
+

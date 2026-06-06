@@ -393,7 +393,7 @@ function LoanCalendarModal({
 // Main Screen
 // ─────────────────────────────────────────────────────────────────────────────
 export default function LoansODsScreen() {
-  const { company } = useAuth();
+  const { company, selectedFY} = useAuth();
   const companyGuid = company?.guid;
   const [apiData, setApiData] = React.useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -663,6 +663,8 @@ export default function LoansODsScreen() {
         toDate={dateTo}
         onApply={(f, t) => { setDateFrom(f); setDateTo(t); }}
         onClose={() => setShowDatePick(false)}
+        minDate={selectedFY?.startDate}
+        maxDate={selectedFY?.endDate}
       />
 
       <LoanCalendarModal

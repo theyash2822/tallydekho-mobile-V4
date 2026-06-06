@@ -715,6 +715,8 @@ export default function LedgerDetailScreen() {
         toDate={toDate}
         onApply={(f, t) => { setFromDate(f); setToDate(t); }}
         onClose={() => setShowDateRange(false)}
+        minDate={selectedFY?.startDate}
+        maxDate={selectedFY?.endDate}
       />
 
       {/* ── Transaction Multi-select Share Bar ── */}

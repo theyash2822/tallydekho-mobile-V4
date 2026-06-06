@@ -411,6 +411,8 @@ export default function CashRegisterScreen() {
         toDate={dateTo}
         onApply={(f, t) => { setDateFrom(f); setDateTo(t); }}
         onClose={() => setShowDatePick(false)}
+        minDate={selectedFY?.startDate}
+        maxDate={selectedFY?.endDate}
       />
     </SafeAreaView>
   );

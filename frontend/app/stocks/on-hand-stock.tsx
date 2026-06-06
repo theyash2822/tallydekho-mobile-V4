@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 // No mock data — real API data only (V2 rule)
@@ -55,7 +56,8 @@ const sc = StyleSheet.create({
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 
 export default function OnHandStockScreen() {
-  const router = useRouter();
+    const { selectedFY } = useAuth();
+const router = useRouter();
   const params = useLocalSearchParams<{ whId?: string }>();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -166,6 +168,8 @@ export default function OnHandStockScreen() {
         toDate={dateTo}
         onClose={() => setCalOpen(false)}
         onApply={(from, to) => { setDateFrom(from); setDateTo(to); }}
+        minDate={selectedFY?.startDate}
+        maxDate={selectedFY?.endDate}
       />
     </SafeAreaView>
   );

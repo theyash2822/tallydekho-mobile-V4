@@ -924,6 +924,8 @@ export default function StockLedgerScreen() {
             setTimeout(() => setShowFilter(true), 350);
           }
         }}
+        minDate={selectedFY?.startDate}
+        maxDate={selectedFY?.endDate}
       />
     </SafeAreaView>
   );

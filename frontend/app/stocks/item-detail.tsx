@@ -296,6 +296,8 @@ export default function ItemDetailScreen() {
         toDate={dateTo}
         onClose={() => setCalOpen(false)}
         onApply={(from, to) => { setDateFrom(from); setDateTo(to); }}
+        minDate={selectedFY?.startDate}
+        maxDate={selectedFY?.endDate}
       />
     </SafeAreaView>
   );

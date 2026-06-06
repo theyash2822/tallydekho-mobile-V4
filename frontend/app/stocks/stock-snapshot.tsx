@@ -323,6 +323,8 @@ export default function StockSnapshotScreen() {
         toDate={dateTo}
         onApply={handleDateApply}
         onClose={() => setShowDatePick(false)}
+        minDate={selectedFY?.startDate}
+        maxDate={selectedFY?.endDate}
       />
     </SafeAreaView>
   );

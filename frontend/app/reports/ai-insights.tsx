@@ -736,6 +736,8 @@ export default function AIInsightsScreen() {
         toDate={toDate}
         onApply={(f, t) => { if (f && t) { setFromDate(f); setToDate(t); } }}
         onClose={() => setShowDatePicker(false)}
+        minDate={selectedFY?.startDate}
+        maxDate={selectedFY?.endDate}
       />
     </SafeAreaView>
   );

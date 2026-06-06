@@ -43,7 +43,7 @@ const OVERDUE_PARTIES = [
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function ReceivablesScreen() {
-  const { company } = useAuth();
+  const { company, selectedFY} = useAuth();
   const companyGuid = company?.guid;
   const [apiData, setApiData] = React.useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -276,6 +276,8 @@ export default function ReceivablesScreen() {
         toDate={dateTo}
         onApply={(f, t) => { setDateFrom(f); setDateTo(t); }}
         onClose={() => setShowDatePick(false)}
+        minDate={selectedFY?.startDate}
+        maxDate={selectedFY?.endDate}
       />
     </SafeAreaView>
   );

@@ -51,7 +51,7 @@ export default function SalesScreen() {
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
-  const { company, lastSyncAt } = useAuth();
+  const { company, lastSyncAt, selectedFY} = useAuth();
   const companyGuid = company?.guid;
   const [liveRecent, setLiveRecent] = useState<any[]>([]);
   const [liveTopParties, setLiveTopParties] = useState<any[]>([]);
@@ -384,6 +384,8 @@ export default function SalesScreen() {
         toDate={toDate}
         onApply={handleDateApply}
         onClose={() => setShowDatePicker(false)}
+        minDate={selectedFY?.startDate}
+        maxDate={selectedFY?.endDate}
       />
 
     </SafeAreaView>
