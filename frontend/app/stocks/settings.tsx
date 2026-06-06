@@ -49,6 +49,10 @@ interface Settings {
   negative_stock_alerts:          AlertChannels;
   expiry_alerts:                  ExpiryAlerts;
   fast_slow_moving_alerts:        AlertChannels;
+  // App-level intent for Tally-controlled settings
+  batch_tracking_app_enabled:     boolean;
+  expiry_tracking_app_enabled:    boolean;
+  allow_negative_stock_app:       boolean;
 }
 
 interface Warehouse { id: string; name: string; parent: string; address: string; }
@@ -73,6 +77,9 @@ const DEFAULT_SETTINGS: Settings = {
   negative_stock_alerts:          { inApp: true,  email: true,  whatsapp: false },
   expiry_alerts:                  { inApp: true,  email: false, whatsapp: false, daysBefore: 30 },
   fast_slow_moving_alerts:        { inApp: false, email: false, whatsapp: false },
+  batch_tracking_app_enabled:     false,
+  expiry_tracking_app_enabled:    false,
+  allow_negative_stock_app:       false,
 };
 
 const CYCLE_OPTIONS = ['Daily', 'Weekly', 'Monthly', 'Quarterly'];
@@ -108,6 +115,10 @@ export default function StockSettingsScreen() {
   const [isDirty,   setIsDirty]   = useState(false);
   const [loadError, setLoadError] = useState(false);
 
+  // ── Numeric draft state: allows clearing and retyping without snapping to 0
+  // Keys: Settings field names + 'expiry_days' + 'wh_arch_<guid>'
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+
   // ── API data
   const [availableUoms, setAvailableUoms]   = useState<string[]>(['Nos','Kg','Ltr','Box','Pcs','Meter']);
   const [warehouses,    setWarehouses]       = useState<Warehouse[]>([]);
@@ -133,23 +144,31 @@ export default function StockSettingsScreen() {
   // ── Load settings on mount
   const loadSettings = useCallback(async () => {
     if (!companyGuid) { setLoading(false); return; }
+    setDrafts({}); // clear any stale drafts on reload
     try {
       const res = await getInventorySettings(companyGuid);
       if (res?.success && res.data) {
         const { settings: srv, available_uoms, warehouses: wh } = res.data;
-        if (available_uoms?.length) setAvailableUoms(available_uoms);
+        // Merge UoMs — if loaded unit isn't in the list, prepend it so checkmark shows
+        if (available_uoms?.length) {
+          const loadedUnit = srv?.default_unit_for_new_items;
+          const merged = loadedUnit && !available_uoms.includes(loadedUnit)
+            ? [loadedUnit, ...available_uoms]
+            : available_uoms;
+          setAvailableUoms(merged);
+        }
         if (wh?.length) setWarehouses(wh);
         if (srv) {
           setSettings(prev => ({
             ...prev,
             ...srv,
             // Ensure nested objects are proper (pg jsonb comes as plain obj)
-            inventory_aging_rules:  srv.inventory_aging_rules  || prev.inventory_aging_rules,
-            low_stock_alerts:       srv.low_stock_alerts       || prev.low_stock_alerts,
-            negative_stock_alerts:  srv.negative_stock_alerts  || prev.negative_stock_alerts,
-            expiry_alerts:          srv.expiry_alerts          || prev.expiry_alerts,
-            fast_slow_moving_alerts:srv.fast_slow_moving_alerts|| prev.fast_slow_moving_alerts,
-            warehouse_code_map:     srv.warehouse_code_map     || {},
+            inventory_aging_rules:   srv.inventory_aging_rules   || prev.inventory_aging_rules,
+            low_stock_alerts:        srv.low_stock_alerts        || prev.low_stock_alerts,
+            negative_stock_alerts:   srv.negative_stock_alerts   || prev.negative_stock_alerts,
+            expiry_alerts:           srv.expiry_alerts           || prev.expiry_alerts,
+            fast_slow_moving_alerts: srv.fast_slow_moving_alerts || prev.fast_slow_moving_alerts,
+            warehouse_code_map:      srv.warehouse_code_map      || {},
             cycle_count_frequency_map: srv.cycle_count_frequency_map || {},
             archive_stock_layers_map:  srv.archive_stock_layers_map  || {},
           }));
@@ -171,6 +190,20 @@ export default function StockSettingsScreen() {
     setIsDirty(true);
   };
 
+  // ── Numeric draft helpers — prevent integer snapping while user types ──
+  // Display value: show draft string if mid-edit, else show the committed number
+  const dv = (key: string, val: number): string =>
+    drafts[key] !== undefined ? drafts[key] : String(val);
+
+  // Update handler for numeric fields
+  const numChange = (key: keyof Settings, raw: string) => {
+    setDrafts(prev => ({ ...prev, [key]: raw }));
+    setIsDirty(true);
+    if (raw === '') return; // allow empty while typing
+    const n = parseInt(raw, 10);
+    if (!isNaN(n) && n >= 0) update(key, n as Settings[typeof key]);
+  };
+
   const updateAlertChannel = (
     key: 'low_stock_alerts' | 'negative_stock_alerts' | 'fast_slow_moving_alerts',
     channel: keyof AlertChannels,
@@ -182,12 +215,11 @@ export default function StockSettingsScreen() {
     setIsDirty(true);
   };
 
-  const updateExpiryAlert = (channel: keyof ExpiryAlerts) => {
-    setSettings(prev => {
-      const ea = prev.expiry_alerts;
-      if (channel === 'daysBefore') return prev; // handled separately
-      return { ...prev, expiry_alerts: { ...ea, [channel]: !ea[channel] } };
-    });
+  const updateExpiryAlert = (channel: keyof AlertChannels) => {
+    setSettings(prev => ({
+      ...prev,
+      expiry_alerts: { ...prev.expiry_alerts, [channel]: !prev.expiry_alerts[channel] },
+    }));
     setIsDirty(true);
   };
 
@@ -199,18 +231,63 @@ export default function StockSettingsScreen() {
     setSettings(prev => ({ ...prev, cycle_count_frequency_map: { ...prev.cycle_count_frequency_map, [whId]: freq } }));
     setIsDirty(true);
   };
-  const updateWhArchive = (whId: string, months: string) => {
-    const n = parseInt(months) || 24;
-    setSettings(prev => ({ ...prev, archive_stock_layers_map: { ...prev.archive_stock_layers_map, [whId]: n } }));
+  // Per-warehouse archive: draft-aware so user can clear and retype
+  const whArchiveDv = (whId: string): string => {
+    const k = `wh_arch_${whId}`;
+    return drafts[k] !== undefined ? drafts[k] : String(settings?.archive_stock_layers_map?.[whId] ?? 24);
+  };
+  const onWhArchiveChange = (whId: string, raw: string) => {
+    const k = `wh_arch_${whId}`;
+    setDrafts(prev => ({ ...prev, [k]: raw }));
     setIsDirty(true);
+    if (raw === '') return;
+    const n = parseInt(raw, 10);
+    if (!isNaN(n) && n >= 1) {
+      setSettings(prev => ({ ...prev, archive_stock_layers_map: { ...prev.archive_stock_layers_map, [whId]: n } }));
+    }
   };
 
-  // ── Save
+  // ── Save — flush any remaining drafts before sending
   const handleSave = async () => {
     if (!companyGuid) return;
     setSaving(true);
     try {
-      await saveInventorySettings(companyGuid, settings);
+      // Flush numeric drafts into settings snapshot
+      const numKeys: Array<keyof Settings> = [
+        'purchase_buffer_days', 'archive_old_stock_months', 'default_low_stock_level',
+        'fast_moving_top_pct', 'slow_moving_no_movement_days', 'dead_stock_no_movement_days',
+      ];
+      const flushed: Partial<Settings> = {};
+      for (const key of numKeys) {
+        const d = drafts[key as string];
+        if (d !== undefined) {
+          const n = parseInt(d, 10);
+          if (!isNaN(n) && n >= 0) (flushed as any)[key] = n;
+        }
+      }
+      // Flush per-warehouse archive drafts
+      const flushedArchive = { ...settings.archive_stock_layers_map };
+      for (const [k, v] of Object.entries(drafts)) {
+        if (k.startsWith('wh_arch_')) {
+          const whId = k.replace('wh_arch_', '');
+          const n = parseInt(v, 10);
+          if (!isNaN(n) && n >= 1) flushedArchive[whId] = n;
+        }
+      }
+      // Flush expiry days draft
+      let flushedExpiry = settings.expiry_alerts;
+      if (drafts['expiry_days'] !== undefined) {
+        const n = parseInt(drafts['expiry_days'], 10);
+        if (!isNaN(n) && n >= 1) flushedExpiry = { ...flushedExpiry, daysBefore: n };
+      }
+      const finalSettings: Settings = {
+        ...settings,
+        ...flushed,
+        archive_stock_layers_map: flushedArchive,
+        expiry_alerts: flushedExpiry,
+      };
+      await saveInventorySettings(companyGuid, finalSettings);
+      setDrafts({});
       setIsDirty(false);
       Toast.show({ type: 'success', text1: 'Settings saved successfully' });
     } catch {
@@ -418,8 +495,8 @@ export default function StockSettingsScreen() {
                 <View style={s.inputWithUnit}>
                   <TextInput
                     style={s.inlineInput}
-                    value={String(s_obj.purchase_buffer_days)}
-                    onChangeText={v => update('purchase_buffer_days', parseInt(v) || 0)}
+                    value={dv('purchase_buffer_days', s_obj.purchase_buffer_days)}
+                    onChangeText={v => numChange('purchase_buffer_days', v)}
                     keyboardType="numeric"
                     maxLength={4}
                   />
@@ -508,8 +585,8 @@ export default function StockSettingsScreen() {
                 <View style={s.inputWithUnit}>
                   <TextInput
                     style={s.inlineInput}
-                    value={String(s_obj.archive_old_stock_months)}
-                    onChangeText={v => update('archive_old_stock_months', parseInt(v) || 24)}
+                    value={dv('archive_old_stock_months', s_obj.archive_old_stock_months)}
+                    onChangeText={v => numChange('archive_old_stock_months', v)}
                     keyboardType="numeric"
                     maxLength={3}
                   />
@@ -606,8 +683,8 @@ export default function StockSettingsScreen() {
                         <View style={s.inputWithUnit}>
                           <TextInput
                             style={s.inlineInput}
-                            value={String(s_obj.archive_stock_layers_map[wh.id] ?? 24)}
-                            onChangeText={v => updateWhArchive(wh.id, v)}
+                            value={whArchiveDv(wh.id)}
+                            onChangeText={v => onWhArchiveChange(wh.id, v)}
                             keyboardType="numeric"
                             maxLength={3}
                             placeholderTextColor={COLORS.textTertiary}
@@ -642,13 +719,19 @@ export default function StockSettingsScreen() {
               <View style={s.toggleRow}>
                 <View style={s.toggleInfo}>
                   <Text style={s.fieldLabel}>Batch / Lot Tracking</Text>
-                  <Text style={s.fieldSub}>Tally Supported — applies to future items by default</Text>
+                  <Text style={s.fieldSub}>Applies to future items. Tally update requires desktop sync.</Text>
                 </View>
                 <BrandSwitch
-                  value={false}
-                  onValueChange={() => { /* Tally write-back: future scope */ }}
+                  value={s_obj.batch_tracking_app_enabled}
+                  onValueChange={v => update('batch_tracking_app_enabled', v)}
                 />
               </View>
+              {s_obj.batch_tracking_app_enabled && (
+                <View style={s.tallyPendingWrap}>
+                  <Ionicons name="time-outline" size={12} color={AMBER} />
+                  <Text style={s.tallyPendingText}>Preference saved. Enable batch tracking in Tally Prime to apply to existing items.</Text>
+                </View>
+              )}
               <View style={s.tallyBadgeWrap}>
                 <View style={s.tallyBadge}>
                   <Ionicons name="sync-outline" size={10} color={AMBER} />
@@ -662,13 +745,19 @@ export default function StockSettingsScreen() {
               <View style={s.toggleRow}>
                 <View style={s.toggleInfo}>
                   <Text style={s.fieldLabel}>Expiry-Date Tracking</Text>
-                  <Text style={s.fieldSub}>Requires batch tracking enabled</Text>
+                  <Text style={s.fieldSub}>Requires batch tracking enabled in Tally</Text>
                 </View>
                 <BrandSwitch
-                  value={false}
-                  onValueChange={() => { /* Tally write-back: future scope */ }}
+                  value={s_obj.expiry_tracking_app_enabled}
+                  onValueChange={v => update('expiry_tracking_app_enabled', v)}
                 />
               </View>
+              {s_obj.expiry_tracking_app_enabled && (
+                <View style={s.tallyPendingWrap}>
+                  <Ionicons name="time-outline" size={12} color={AMBER} />
+                  <Text style={s.tallyPendingText}>Preference saved. Enable expiry dates in Tally Prime per stock item.</Text>
+                </View>
+              )}
               <View style={s.tallyBadgeWrap}>
                 <View style={s.tallyBadge}>
                   <Ionicons name="sync-outline" size={10} color={AMBER} />
@@ -685,10 +774,16 @@ export default function StockSettingsScreen() {
                   <Text style={s.fieldSub}>Permit stock quantity to go below zero</Text>
                 </View>
                 <BrandSwitch
-                  value={false}
-                  onValueChange={() => { /* Tally write-back: future scope */ }}
+                  value={s_obj.allow_negative_stock_app}
+                  onValueChange={v => update('allow_negative_stock_app', v)}
                 />
               </View>
+              {s_obj.allow_negative_stock_app && (
+                <View style={s.tallyPendingWrap}>
+                  <Ionicons name="time-outline" size={12} color={AMBER} />
+                  <Text style={s.tallyPendingText}>Preference saved. Update F11 company features in Tally Prime to apply.</Text>
+                </View>
+              )}
               <View style={s.tallyBadgeWrap}>
                 <View style={s.tallyBadge}>
                   <Ionicons name="sync-outline" size={10} color={AMBER} />
@@ -707,8 +802,8 @@ export default function StockSettingsScreen() {
                 <View style={s.inputWithUnit}>
                   <TextInput
                     style={s.inlineInput}
-                    value={String(s_obj.default_low_stock_level)}
-                    onChangeText={v => update('default_low_stock_level', parseInt(v) || 0)}
+                    value={dv('default_low_stock_level', s_obj.default_low_stock_level)}
+                    onChangeText={v => numChange('default_low_stock_level', v)}
                     keyboardType="numeric"
                     maxLength={6}
                   />
@@ -794,8 +889,8 @@ export default function StockSettingsScreen() {
                   <View style={s.fastSlowRow}>
                     <TextInput
                       style={[s.inlineInput, { width: 70 }]}
-                      value={String(s_obj.fast_moving_top_pct)}
-                      onChangeText={v => update('fast_moving_top_pct', parseInt(v) || 0)}
+                      value={dv('fast_moving_top_pct', s_obj.fast_moving_top_pct)}
+                      onChangeText={v => numChange('fast_moving_top_pct', v)}
                       keyboardType="numeric"
                       maxLength={3}
                     />
@@ -807,8 +902,8 @@ export default function StockSettingsScreen() {
                   <View style={s.fastSlowRow}>
                     <TextInput
                       style={[s.inlineInput, { width: 70 }]}
-                      value={String(s_obj.slow_moving_no_movement_days)}
-                      onChangeText={v => update('slow_moving_no_movement_days', parseInt(v) || 0)}
+                      value={dv('slow_moving_no_movement_days', s_obj.slow_moving_no_movement_days)}
+                      onChangeText={v => numChange('slow_moving_no_movement_days', v)}
                       keyboardType="numeric"
                       maxLength={4}
                     />
@@ -820,8 +915,8 @@ export default function StockSettingsScreen() {
                   <View style={s.fastSlowRow}>
                     <TextInput
                       style={[s.inlineInput, { width: 70 }]}
-                      value={String(s_obj.dead_stock_no_movement_days)}
-                      onChangeText={v => update('dead_stock_no_movement_days', parseInt(v) || 0)}
+                      value={dv('dead_stock_no_movement_days', s_obj.dead_stock_no_movement_days)}
+                      onChangeText={v => numChange('dead_stock_no_movement_days', v)}
                       keyboardType="numeric"
                       maxLength={4}
                     />
@@ -908,10 +1003,14 @@ export default function StockSettingsScreen() {
                   <View style={s.inputWithUnit}>
                     <TextInput
                       style={s.inlineInput}
-                      value={String(s_obj.expiry_alerts.daysBefore)}
+                      value={drafts['expiry_days'] !== undefined ? drafts['expiry_days'] : String(s_obj.expiry_alerts.daysBefore)}
                       onChangeText={v => {
-                        const n = parseInt(v) || 30;
-                        update('expiry_alerts', { ...s_obj.expiry_alerts, daysBefore: n });
+                        setDrafts(prev => ({ ...prev, expiry_days: v }));
+                        setIsDirty(true);
+                        if (v !== '') {
+                          const n = parseInt(v, 10);
+                          if (!isNaN(n) && n >= 1) update('expiry_alerts', { ...s_obj.expiry_alerts, daysBefore: n });
+                        }
                       }}
                       keyboardType="numeric"
                       maxLength={3}
@@ -946,7 +1045,7 @@ export default function StockSettingsScreen() {
         <View style={[s.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <TouchableOpacity
             style={s.cancelBtn}
-            onPress={() => { setIsDirty(false); loadSettings(); }}
+            onPress={() => { setIsDirty(false); setDrafts({}); loadSettings(); }}
             activeOpacity={0.7}
             disabled={saving}
           >
@@ -1076,7 +1175,7 @@ const s = StyleSheet.create({
   uomText: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
   uomTextActive: { color: COLORS.textPrimary, fontWeight: '700' },
 
-  // Tally controlled badge
+  // Tally controlled badge + pending note
   tallyBadgeWrap: { paddingHorizontal: SPACING.md, paddingBottom: 10 },
   tallyBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start',
@@ -1084,6 +1183,13 @@ const s = StyleSheet.create({
     paddingHorizontal: 8, paddingVertical: 3, borderRadius: RADIUS.sm,
   },
   tallyBadgeText: { fontSize: 10, color: AMBER, fontWeight: '600' },
+  tallyPendingWrap: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 6,
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: SPACING.md, paddingVertical: 8,
+    borderTopWidth: 1, borderTopColor: '#FDE68A',
+  },
+  tallyPendingText: { flex: 1, fontSize: TYPOGRAPHY.xs, color: '#92400E', fontWeight: '500', lineHeight: 16 },
 
   // Warehouse rows
   whRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 12, gap: 10 },
