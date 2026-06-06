@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,9 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useSettings } from '../../src/context/SettingsContext';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
+import { getStockSnapshot } from '../../src/services/api';
 
 const AMBER    = '#A89060';
 const AMBER_BG = '#A8906018';
@@ -24,49 +27,33 @@ interface SnapshotData {
   grandPct: string;
 }
 
-const SNAPSHOT_DATA: Record<ValuationType, SnapshotData> = {
-  Average: {
-    rows: [
-      { id: 'r1', rank: 1, warehouse: 'Jaipur - Main Depot', value: '32.10 L', pct: '48%' },
-      { id: 'r2', rank: 2, warehouse: 'Delhi Depot',         value: '22.30 L', pct: '33%' },
-      { id: 'r3', rank: 3, warehouse: 'Mumbai Satellite',    value: '11.60 L', pct: '19%' },
-    ],
-    grandValue: '66.00 L', grandPct: '100%',
-  },
-  Opening: {
-    rows: [
-      { id: 'r1', rank: 1, warehouse: 'Mumbai Satellite',    value: '35.20 L', pct: '42%' },
-      { id: 'r2', rank: 2, warehouse: 'Delhi Depot',         value: '28.50 L', pct: '34%' },
-      { id: 'r3', rank: 3, warehouse: 'Jaipur - Main Depot', value: '20.10 L', pct: '24%' },
-    ],
-    grandValue: '83.80 L', grandPct: '100%',
-  },
-  Closing: {
-    rows: [
-      { id: 'r1', rank: 1, warehouse: 'Delhi Depot',         value: '29.80 L', pct: '45%' },
-      { id: 'r2', rank: 2, warehouse: 'Jaipur - Main Depot', value: '21.50 L', pct: '33%' },
-      { id: 'r3', rank: 3, warehouse: 'Mumbai Satellite',    value: '14.20 L', pct: '22%' },
-    ],
-    grandValue: '65.50 L', grandPct: '100%',
-  },
-  Peak: {
-    rows: [
-      { id: 'r1', rank: 1, warehouse: 'Jaipur - Main Depot', value: '42.60 L', pct: '46%' },
-      { id: 'r2', rank: 2, warehouse: 'Mumbai Satellite',    value: '28.90 L', pct: '31%' },
-      { id: 'r3', rank: 3, warehouse: 'Delhi Depot',         value: '21.30 L', pct: '23%' },
-    ],
-    grandValue: '92.80 L', grandPct: '100%',
-  },
-};
-
 const VALUATION_TYPES: ValuationType[] = ['Average', 'Opening', 'Closing', 'Peak'];
+
+// ── Types ────────────────────────────────────────────────────────────────────
+interface ApiWarehouse {
+  warehouse: string;
+  skus: number;
+  closing_value: number;
+  opening_value: number;
+  average_value: number;
+  peak_value: number;
+}
+interface ApiSummary {
+  total_closing: number;
+  total_opening: number;
+  total_average: number;
+  total_peak: number;
+}
 
 export default function StockSnapshotScreen() {
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
+  const { company, selectedFY } = useAuth();
+  const companyGuid = company?.guid;
+  const fyParam     = fyInfoToParam(selectedFY);
 
-  const [valuation,    setValuation]    = useState<ValuationType>('Average');
+  const [valuation,    setValuation]    = useState<ValuationType>('Closing');
   const [showValDrop,  setShowValDrop]  = useState(false);
   const [dateFrom,     setDateFrom]     = useState('');
   const [dateTo,       setDateTo]       = useState('');
@@ -74,7 +61,49 @@ export default function StockSnapshotScreen() {
   const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set());
   const [isSelMode,    setIsSelMode]    = useState(false);
 
-  const data      = SNAPSHOT_DATA[valuation];
+  // API state
+  const [apiWarehouses, setApiWarehouses] = useState<ApiWarehouse[]>([]);
+  const [apiSummary,    setApiSummary]    = useState<ApiSummary | null>(null);
+  const [isLoading,     setIsLoading]     = useState(false);
+  const [apiError,      setApiError]      = useState<string | null>(null);
+
+  const loadSnapshot = useCallback(() => {
+    if (!companyGuid) return;
+    setIsLoading(true);
+    setApiError(null);
+    const params: Record<string, string> = {};
+    if (fyParam) params.fy = fyParam;
+    getStockSnapshot(companyGuid, params)
+      .then((res: any) => {
+        setApiWarehouses(res?.data?.warehouses ?? []);
+        setApiSummary(res?.data?.summary ?? null);
+      })
+      .catch((e: any) => setApiError(e?.message || 'Failed to load snapshot'))
+      .finally(() => setIsLoading(false));
+  }, [companyGuid, fyParam]);
+
+  useEffect(() => { loadSnapshot(); }, [loadSnapshot]);
+
+  // Build display data from API response in the shape the existing UI expects
+  const valKey = valuation.toLowerCase() as 'average' | 'opening' | 'closing' | 'peak';
+  const totalValue = apiSummary ? (apiSummary as any)[`total_${valKey}`] as number : 0;
+
+  const data: SnapshotData = {
+    rows: apiWarehouses.map((w, i) => {
+      const val = (w as any)[`${valKey}_value`] as number;
+      const pct = totalValue > 0 ? `${Math.round((val / totalValue) * 100)}%` : '0%';
+      return {
+        id:        `r${i + 1}`,
+        rank:      i + 1,
+        warehouse: w.warehouse,
+        value:     formatAmountCompact(val),
+        pct,
+      };
+    }),
+    grandValue: totalValue > 0 ? formatAmountCompact(totalValue) : '—',
+    grandPct:   '100%',
+  };
+
   const dateLabel = dateFrom && dateTo ? `${dateFrom} — ${dateTo}` : 'Today';
 
   // ── Multi-select ───────────────────────────────────────────────────────
@@ -186,6 +215,11 @@ export default function StockSnapshotScreen() {
           </View>
         )}
 
+        {/* ── Error */}
+        {apiError && (
+          <ErrorBanner message={apiError} onRetry={loadSnapshot} />
+        )}
+
         {/* ── Hint */}
         {!isSelMode && (
           <View style={s.hintRow}>
@@ -204,8 +238,23 @@ export default function StockSnapshotScreen() {
             <Text style={[s.colPct, s.hdrTxt]}>% Portfolio</Text>
           </View>
 
+          {/* Loading state */}
+          {isLoading && (
+            <View style={{ paddingVertical: 32, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+              <Text style={{ marginTop: 8, fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary }}>Loading...</Text>
+            </View>
+          )}
+
+          {/* Empty state */}
+          {!isLoading && !apiError && data.rows.length === 0 && (
+            <View style={{ paddingVertical: 32, alignItems: 'center' }}>
+              <Text style={{ fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary }}>No stock valuation data for this FY</Text>
+            </View>
+          )}
+
           {/* Data rows */}
-          {data.rows.map((row, idx) => {
+          {!isLoading && data.rows.map((row, idx) => {
             const isSel = selectedIds.has(row.id);
             return (
               <TouchableOpacity
@@ -237,12 +286,14 @@ export default function StockSnapshotScreen() {
           })}
 
           {/* Grand Total */}
-          <View style={[s.tableRow, s.grandRow]}>
-            <Text style={[s.colIdx, s.grandTxt]}>-</Text>
-            <Text style={[s.colWarehouse, s.grandTxt]}>Grand Total</Text>
-            <Text style={[s.colValue, s.grandTxt]}>{data.grandValue}</Text>
-            <Text style={[s.colPct, s.grandTxt]}>{data.grandPct}</Text>
-          </View>
+          {!isLoading && data.rows.length > 0 && (
+            <View style={[s.tableRow, s.grandRow]}>
+              <Text style={[s.colIdx, s.grandTxt]}>-</Text>
+              <Text style={[s.colWarehouse, s.grandTxt]}>Grand Total</Text>
+              <Text style={[s.colValue, s.grandTxt]}>{data.grandValue}</Text>
+              <Text style={[s.colPct, s.grandTxt]}>{data.grandPct}</Text>
+            </View>
+          )}
         </View>
 
         <View style={{ height: 80 }} />
