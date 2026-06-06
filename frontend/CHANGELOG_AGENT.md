@@ -1,5 +1,55 @@
 # CHANGELOG_AGENT.md
 
+## 2026-06-06 — Stock Settings Full Redesign
+
+### Redesigned
+- `app/stocks/settings.tsx` — full rewrite, production-ready, Tally-aware, API-wired
+
+### Changes
+**General section:**
+- Product Display Name — radio (auto/name/alias/part_number/description)
+- Default Unit for New Items — live from Tally UoMs via API (was hardcoded)
+- Purchase Buffer Days — renamed from "Global Reorder Buffer"
+- Reorder Calculation Mode — new radio (hybrid/tally_reorder/sales_velocity/default_low_stock)
+- Low Stock Threshold Mode — new radio (reorder_level/safety_stock/days_of_cover/custom_percentage)
+- Archive Old Stock Activity — renamed from "Auto-archive ledger"
+
+**Warehouses section:**
+- Loads real Tally godowns from API (was hardcoded fake data)
+- Per-warehouse settings: Code, Cycle Count Frequency (pills), Archive Stock Layers (months)
+- Add Warehouse modal REMOVED — creation exists on dedicated screen
+- Empty state when no godowns synced
+
+**Items section:**
+- Batch Tracking, Expiry Tracking, Allow Negative Stock — Tally Controlled badges (no local toggle)
+- Default Low Stock Level — renamed from "Default Reorder Point"
+- Inventory Aging Rules — new pill picker (0-30/31-60/61-90/90+ Days)
+- Fast/Slow Moving Analysis — new section (analysis period + fast%/slow days/dead days)
+- Unit for New Items — from live Tally UoMs
+
+**Alerts section:**
+- All 4 alerts: Low Stock, Negative Stock, Expiry, Fast/Slow Moving
+- Channel chips: In-App / Email / WA (renamed from `wa` to `whatsapp` to match backend)
+
+**Data binding:**
+- Loads from `GET /api/inventory/settings` on mount with loading spinner
+- Saves to `POST /api/inventory/settings` with saving spinner
+- Cancel = reload from API (discard local changes)
+- isDirty guard — Save/Cancel bar only appears on unsaved change
+
+**Bug fixes:**
+- All bare Text strings wrapped in `<Text>` — fixes "Text strings must be rendered within a <Text>" RN error
+- No bare interpolated strings outside `<Text>` tags
+
+### api.ts additions
+- `getInventorySettings(companyGuid)` — GET /api/inventory/settings
+- `saveInventorySettings(companyGuid, payload)` — POST /api/inventory/settings
+
+### Commit
+- `8ab0717e` → tallydekho-mobile-V4
+
+---
+
 ## 2026-06-04 | Fix: fyInfoToParam not from useAuth() — 4 stock screens
 
 **Task:** Negative stock (and reorder/valuation/item-detail) always showed current FY data regardless of FY selected on dashboard.
@@ -296,3 +346,10 @@ _Add new entries at top._
 ### fix(stock-ledger): load voucher types on mount via useEffect
 ### fix(stock-ledger): move loadVoucherTypes after apiVoucherTypes declaration (crash fix)
 
+
+## 2026-06-06
+
+### fix(stocks): movement-analytics screen — two-line chart + sold-out items + icon colors
+- `movement-analytics.tsx`: ChartDay type extended (`inward_value`, `inward_qty`). LineChart now draws two lines: gold (sold) + green (purchased). Legend added. Active tap tooltip shows both Sold ₹X and Bought ₹X. Sold-out items show SOLD OUT badge, ∞ TR, 0d DSI. Empty state: "No stock movements found".
+- `stocks.tsx`: Low Stock, Aged Inventory, Movement Analytics icon colors unified to `ICON_COLOR`/`ICON_BG` (were hardcoded red/amber/blue).
+- Commits: `8a71fc14` (movement-analytics), `5dc9fc8b` (stocks icon fix)
