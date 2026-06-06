@@ -103,9 +103,10 @@ export default function StockSettingsScreen() {
   const companyGuid = company?.guid;
 
   // ── Loading / saving state
-  const [loading, setLoading]   = useState(true);
-  const [saving,  setSaving]    = useState(false);
-  const [isDirty, setIsDirty]   = useState(false);
+  const [loading,   setLoading]   = useState(true);
+  const [saving,    setSaving]    = useState(false);
+  const [isDirty,   setIsDirty]   = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   // ── API data
   const [availableUoms, setAvailableUoms]   = useState<string[]>(['Nos','Kg','Ltr','Box','Pcs','Meter']);
@@ -156,6 +157,7 @@ export default function StockSettingsScreen() {
       }
     } catch (e) {
       console.warn('[StockSettings] load failed:', e);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -211,7 +213,7 @@ export default function StockSettingsScreen() {
       await saveInventorySettings(companyGuid, settings);
       setIsDirty(false);
       Toast.show({ type: 'success', text1: 'Settings saved successfully' });
-    } catch (e) {
+    } catch {
       Toast.show({ type: 'error', text1: 'Failed to save settings' });
     } finally {
       setSaving(false);
@@ -299,6 +301,17 @@ export default function StockSettingsScreen() {
         <Text style={s.headerTitle}>Stock Settings</Text>
         <View style={{ width: 44 }} />
       </View>
+
+      {/* Load error banner */}
+      {loadError && (
+        <View style={s.errorBanner}>
+          <Ionicons name="alert-circle-outline" size={16} color="#B91C1C" />
+          <Text style={s.errorBannerText}>Failed to load settings. Showing defaults — save only if correct.</Text>
+          <TouchableOpacity onPress={() => { setLoadError(false); setLoading(true); loadSettings(); }} activeOpacity={0.7}>
+            <Text style={s.errorBannerRetry}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <ScrollView
         style={s.scroll}
@@ -974,6 +987,16 @@ const s = StyleSheet.create({
   // Loading
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
+
+  // Error banner
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: SPACING.md, paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: '#FECACA',
+  },
+  errorBannerText:  { flex: 1, fontSize: TYPOGRAPHY.xs, color: '#B91C1C', fontWeight: '500' },
+  errorBannerRetry: { fontSize: TYPOGRAPHY.xs, color: '#B91C1C', fontWeight: '700', textDecorationLine: 'underline' },
 
   // Cards
   card: {
