@@ -225,7 +225,7 @@ export default function TotalStockScreen() {
     getStocks(companyGuid, { limit: '1000', warehouse: preWarehouse }).then((res: any) => {
       const items = res?.data?.items ?? [];
       const mapped: StockItem[] = items.map((r: any) => ({
-        id: r.guid || String(r.id), name: r.name || '', sku: r.sku || r.alias || r.hsn || '',
+        id: r.guid || String(r.id), name: r.displayName || r.name || '', sku: r.sku || r.alias || r.hsn || '',
         category: r.category || '', group: r.group_name || '',
         qty: +(r.closing_qty || 0),
         value: r.closing_value ? formatAmount(Math.round(+r.closing_value)) : formatAmount(0),
@@ -254,7 +254,7 @@ export default function TotalStockScreen() {
       const items = res?.data?.items ?? [];
       const mapped: StockItem[] = items.map((r: any) => ({
         id: r.guid || String(r.id),
-        name: r.name || '',
+        name: r.displayName || r.name || '',
         sku: r.sku || r.alias || r.hsn || '',
         category: r.category || '',
         group: r.group_name || '',
@@ -579,7 +579,7 @@ export default function TotalStockScreen() {
               const items = res?.data?.items ?? [];
               const mapped: StockItem[] = items.map((r: any) => ({
                 id: r.guid || String(r.id),
-                name: r.name || '',
+                name: r.displayName || r.name || '',
                 sku: r.sku || r.alias || r.hsn || '',
                 category: r.category || '',
                 group: r.group_name || '',

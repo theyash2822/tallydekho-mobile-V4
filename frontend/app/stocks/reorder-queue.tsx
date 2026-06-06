@@ -13,6 +13,7 @@ type Priority = 'critical' | 'high' | 'medium' | 'low';
 type ReorderItem = {
   id: string;
   name: string;
+  displayName?: string;
   sku: string;
   current: number;
   reorderAt: number;
@@ -79,7 +80,7 @@ export default function ReorderQueueScreen() {
               : Math.max(reorder * 2 - qty, reorder);
             return {
               id:        r.guid || String(r.id),
-              name:      r.name || '—',
+              name:      r.displayName || r.name || '—',
               sku:       r.sku || r.alias || '',
               current:   qty,
               reorderAt: reorder,
@@ -158,7 +159,7 @@ export default function ReorderQueueScreen() {
             <View key={item.id} style={styles.itemCard}>
               <View style={styles.cardTop}>
                 <View style={styles.cardLeft}>
-                  <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+                  <Text style={styles.itemName} numberOfLines={1}>{item.displayName || item.name}</Text>
                   <Text style={styles.itemSku}>{[item.sku, item.warehouse].filter(Boolean).join(' · ')}</Text>
                 </View>
                 <View style={[styles.priorityBadge, { backgroundColor: p.bg }]}>

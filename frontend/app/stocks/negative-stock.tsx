@@ -22,6 +22,7 @@ interface WarehouseQty {
 interface NegStockItem {
   id: string;
   name: string;
+  displayName?: string;
   sku: string;
   group: string;
   unit: string;
@@ -52,7 +53,7 @@ export default function NegativeStockScreen() {
       .then((res: any) => {
         const rows: NegStockItem[] = (res?.data?.items ?? []).map((r: any) => ({
           id:         String(r.stockGuid ?? r.id),
-          name:       r.itemName ?? r.name ?? 'Unknown',
+          name:       r.displayName || r.itemName || r.name || 'Unknown',
           sku:        r.sku || r.alias || '',
           group:      r.groupName ?? r.group ?? '—',
           unit:       r.unit ?? '',
@@ -194,7 +195,7 @@ export default function NegativeStockScreen() {
 
                   <View style={s.cardContent}>
                     {/* Name + sku + group */}
-                    <Text style={s.itemName}>{item.name}</Text>
+                    <Text style={s.itemName}>{item.displayName || item.name}</Text>
                     {item.sku ? <Text style={s.itemGroup}>{item.sku}</Text> : null}
                     <Text style={s.itemGroup}>{item.group}</Text>
 
