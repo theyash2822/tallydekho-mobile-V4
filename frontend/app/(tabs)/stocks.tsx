@@ -51,6 +51,22 @@ const WIDGET_TILES = [
       { label: 'Out of Stock', value: String(d?.outOfStock   ?? 0) },
     ],
   },
+  {
+    id: 'aged_inventory', title: 'Aged Inventory',
+    icon: 'time-outline', iconColor: '#D97706', iconBg: '#FFFBEB',
+    route: '/stocks/aged-items',
+    getValue: (_d: any) => [
+      { label: 'View Aged Stock', value: '→' },
+    ],
+  },
+  {
+    id: 'movement_analytics', title: 'Movement Analytics',
+    icon: 'trending-up-outline', iconColor: '#2563EB', iconBg: '#EFF6FF',
+    route: '/stocks/movement-analytics',
+    getValue: (_d: any) => [
+      { label: 'View Movement', value: '→' },
+    ],
+  },
 ];
 
 export default function StocksDashboard() {

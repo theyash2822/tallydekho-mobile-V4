@@ -211,7 +211,10 @@ export const getStocks          = (companyGuid?: string, params?: any) => get<an
 export const getStockFastSlow      = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/fast-slow', companyGuid, params));
 export const getExpirySchedule     = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/expiry-schedule', companyGuid, params));
 export const getTransferHistory    = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/transfer-history', companyGuid, params));
-export const getStockSnapshot      = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/snapshot', companyGuid, params));
+export const getStockSnapshot        = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/snapshot',                 companyGuid, params));
+export const getAgedItems            = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/aged-items',                companyGuid, params));
+export const getMovementAnalytics    = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/movement-analytics',        companyGuid, params));
+export const getMovementChart        = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/movement-analytics/chart',  companyGuid, params));
 export const getNegativeStock    = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/negative-stock', companyGuid, params));
 export const getStockDashboard  = (companyGuid: string) => appPost<any>('/stock-dashboard', { companyGuid });
 export const getStockItem    = (companyGuid?: string, id?: string, params?: any) => get<any>(withCompany(`/stocks/items/${id}`, companyGuid, params));

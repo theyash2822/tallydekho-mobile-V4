@@ -1,396 +1,322 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
+import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
+import { getAgedItems } from '../../src/services/api';
 
-// ─── DATA ─────────────────────────────────────────────────────────────────────
+// ── Types ────────────────────────────────────────────────────────────────────
+interface AgedItem {
+  name: string; sku: string; category: string;
+  closing_qty: number; closing_rate: number; total_value: number;
+  last_sold_date: string | null; last_received_date: string | null;
+  days_since_sold: number; days_since_received: number;
+}
 
-const AGED_ITEMS = [
-  { id: 'AG01', name: 'Legacy VGA Monitor 19"', sku: 'VGA-MON19', age: 365, value: '₹1,800', unitPrice: 1800, qty: 4,  category: 'Displays',    warehouse: 'Mumbai'    },
-  { id: 'AG02', name: 'CD/DVD Writer 52x',       sku: 'DVD-52X',   age: 310, value: '₹1,200', unitPrice: 1200, qty: 7,  category: 'Storage',     warehouse: 'Delhi'     },
-  { id: 'AG03', name: 'PS/2 Keyboard',           sku: 'PS2-KB01',  age: 290, value: '₹900',   unitPrice: 900,  qty: 12, category: 'Peripherals', warehouse: 'Mumbai'    },
-  { id: 'AG04', name: 'D-Sub VGA Cable 1.8m',    sku: 'VGA-1.8',   age: 245, value: '₹1,500', unitPrice: 1500, qty: 18, category: 'Cables',      warehouse: 'Bangalore' },
-  { id: 'AG05', name: 'IDE HDD 80GB',            sku: 'IDE-80GB',  age: 210, value: '₹2,400', unitPrice: 2400, qty: 3,  category: 'Storage',     warehouse: 'Chennai'   },
-  { id: 'AG06', name: 'Fax Machine M60',         sku: 'FAX-M60',   age: 180, value: '₹3,500', unitPrice: 3500, qty: 2,  category: 'Office',      warehouse: 'Delhi'     },
-  { id: 'AG07', name: 'Inkjet Cartridge HP45',   sku: 'INK-HP45',  age: 165, value: '₹4,200', unitPrice: 4200, qty: 25, category: 'Consumables', warehouse: 'Mumbai'    },
-  { id: 'AG08', name: 'LAN Hub 8-Port',          sku: 'HUB-8P',    age: 150, value: '₹2,800', unitPrice: 2800, qty: 5,  category: 'Networking',  warehouse: 'Bangalore' },
-  { id: 'AG09', name: 'USB 2.0 Flash Drive 4GB', sku: 'USB2-4G',   age: 120, value: '₹3,600', unitPrice: 3600, qty: 30, category: 'Storage',     warehouse: 'Kolkata'   },
-  { id: 'AG10', name: 'Parallel Port LPT Cable', sku: 'LPT-1.5',   age: 95,  value: '₹600',   unitPrice: 600,  qty: 8,  category: 'Cables',      warehouse: 'Chennai'   },
-];
+// ── Config ───────────────────────────────────────────────────────────────────
+const BUCKET_TABS = [
+  { key: '30',  label: '30 Day'  },
+  { key: '60',  label: '60 Day'  },
+  { key: '90',  label: '90 Day'  },
+  { key: '120', label: '120+ Day'},
+] as const;
+type Bucket = '30' | '60' | '90' | '120';
 
-const MAX_TOTAL_VALUE = Math.max(...AGED_ITEMS.map(i => i.unitPrice * i.qty));
+const MODE_TABS = [
+  { key: 'sold',     label: 'By Value'  },  // items not sold — sorted by value
+  { key: 'received', label: 'By Age'    },  // items not received — sorted by days
+] as const;
+type Mode = 'sold' | 'received';
 
 const AGE_CONFIG = (days: number) => {
-  if (days >= 300) return { label: '10m+',  color: '#DC2626', bg: '#FEF2F2' };
-  if (days >= 180) return { label: '6-10m', color: '#D97706', bg: '#FFFBEB' };
-  if (days >= 90)  return { label: '3-6m',  color: '#2563EB', bg: '#EFF6FF' };
-  return                  { label: '<3m',   color: '#6B7280', bg: '#F3F4F6' };
+  if (days >= 120) return { label: '120d+', color: '#DC2626', bg: '#FEF2F2' };
+  if (days >= 90)  return { label: '90-120d', color: '#D97706', bg: '#FFFBEB' };
+  if (days >= 60)  return { label: '60-90d', color: '#2563EB', bg: '#EFF6FF' };
+  return               { label: '30-60d', color: '#6B7280', bg: '#F3F4F6' };
 };
 
-const FILTER_OPTIONS = ['All', '>10m', '6-10m', '3-6m', '<3m'] as const;
-type FilterOpt = typeof FILTER_OPTIONS[number];
+const fmtDate = (d: string | null) => {
+  if (!d) return 'Never';
+  return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' });
+};
 
-function passesFilter(days: number, f: FilterOpt): boolean {
-  if (f === 'All')   return true;
-  if (f === '>10m')  return days >= 300;
-  if (f === '6-10m') return days >= 180 && days < 300;
-  if (f === '3-6m')  return days >= 90  && days < 180;
-  return days < 90;
-}
+// ── Item Card ─────────────────────────────────────────────────────────────────
+function ItemCard({
+  item, mode, maxValue, formatAmount, formatAmountCompact,
+}: {
+  item: AgedItem; mode: Mode; maxValue: number;
+  formatAmount: (n: number) => string; formatAmountCompact: (n: number) => string;
+}) {
+  const isNew = mode === 'received' && item.days_since_received < 30;
+  const ageDays = mode === 'sold' ? item.days_since_sold : item.days_since_received;
+  const ac = AGE_CONFIG(ageDays);
+  const barPct = maxValue > 0 ? Math.min(item.total_value / maxValue, 1) : 0;
 
-const TABS = ['By Age', 'By Value', 'By Category'] as const;
-type TabOpt = typeof TABS[number];
-
-type AgedItem = typeof AGED_ITEMS[0];
-
-// ─── BY-AGE ITEM CARD ─────────────────────────────────────────────────────────
-
-function AgeCard({ item }: { item: AgedItem }) {
-  const ac = AGE_CONFIG(item.age);
   return (
-    <View style={styles.itemCard}>
-      <View style={styles.itemTop}>
-        <View style={styles.itemInfo}>
-          <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-          <Text style={styles.itemMeta}>{item.sku} · {item.warehouse}</Text>
+    <View style={s.card}>
+      <View style={s.cardTop}>
+        {/* Left: name + meta */}
+        <View style={s.cardLeft}>
+          <Text style={s.itemName} numberOfLines={2}>{item.name}</Text>
+          <Text style={s.itemMeta}>
+            {item.sku ? `${item.sku} · ` : ''}{item.category || '—'}
+          </Text>
+          <Text style={s.itemDate}>
+            {mode === 'sold'
+              ? `Last sold: ${fmtDate(item.last_sold_date)}`
+              : `Last received: ${fmtDate(item.last_received_date)}`}
+          </Text>
         </View>
-        <View style={[styles.ageBadge, { backgroundColor: ac.bg }]}>
-          <Ionicons name="time-outline" size={11} color={ac.color} />
-          <Text style={[styles.ageText, { color: ac.color }]}>{item.age}d</Text>
+        {/* Right: value + age tag */}
+        <View style={s.cardRight}>
+          <Text style={s.itemValue}>{formatAmountCompact(item.total_value)}</Text>
+          <Text style={s.itemRate}>₹{item.closing_rate.toLocaleString('en-IN')}/unit</Text>
+          {isNew
+            ? <View style={[s.ageTag, { backgroundColor: '#E7F9ED' }]}>
+                <Text style={[s.ageTagTxt, { color: '#2D7D46' }]}>New</Text>
+              </View>
+            : <View style={[s.ageTag, { backgroundColor: ac.bg }]}>
+                <Text style={[s.ageTagTxt, { color: ac.color }]}>{ac.label}</Text>
+              </View>
+          }
         </View>
       </View>
-      <View style={styles.itemStats}>
-        {[
-          { label: 'Qty',      value: `${item.qty} units` },
-          { label: 'Value',    value: item.value },
-          { label: 'Category', value: item.category },
-          { label: 'Age Band', value: ac.label },
-        ].map(s => (
-          <View key={s.label} style={styles.statCell}>
-            <Text style={styles.statLabel}>{s.label}</Text>
-            <Text style={styles.statVal}>{s.value}</Text>
+
+      {/* Progress bar */}
+      <View style={s.progressBg}>
+        <View style={[s.progressFill, { width: `${Math.round(barPct * 100)}%` as any }]} />
+      </View>
+
+      {/* Bottom: qty + days */}
+      <View style={s.cardBottom}>
+        <Text style={s.cardBottomTxt}>Qty: {item.closing_qty.toLocaleString('en-IN')}</Text>
+        <Text style={s.cardBottomTxt}>
+          {mode === 'sold'
+            ? `${ageDays} days since last sale`
+            : isNew
+              ? `Received ${ageDays} days ago`
+              : `${ageDays} days in inventory`}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
+export default function AgedItemsScreen() {
+  const router   = useRouter();
+  const insets   = useSafeAreaInsets();
+  const { company } = useAuth();
+  const { formatAmount, formatAmountCompact } = useSettings();
+  const companyGuid = company?.guid;
+
+  const [bucket,    setBucket]    = useState<Bucket>('30');
+  const [mode,      setMode]      = useState<Mode>('sold');
+  const [items,     setItems]     = useState<AgedItem[]>([]);
+  const [summary,   setSummary]   = useState<{ total_skus: number; total_value: number } | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError,  setApiError]  = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    if (!companyGuid) return;
+    setIsLoading(true);
+    setApiError(null);
+    getAgedItems(companyGuid, { mode, days: bucket })
+      .then((res: any) => {
+        setItems(res?.data ?? []);
+        setSummary(res?.summary ?? null);
+      })
+      .catch((e: any) => setApiError(e?.message || 'Failed to load aged items'))
+      .finally(() => setIsLoading(false));
+  }, [companyGuid, mode, bucket]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const maxValue = items.length > 0 ? Math.max(...items.map(i => i.total_value)) : 1;
+
+  return (
+    <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
+      {/* Header */}
+      <View style={s.header}>
+        <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
+          <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
+        </TouchableOpacity>
+        <Text style={s.headerTitle}>Aged Inventory</Text>
+        <View style={{ width: 44 }} />
+      </View>
+
+      {/* Summary strip */}
+      {summary && !isLoading && (
+        <View style={s.summaryRow}>
+          <View style={s.summaryCard}>
+            <Text style={s.summaryVal}>{summary.total_skus}</Text>
+            <Text style={s.summaryLbl}>SKUs Affected</Text>
           </View>
+          <View style={s.summaryDiv} />
+          <View style={s.summaryCard}>
+            <Text style={s.summaryVal}>{formatAmountCompact(summary.total_value)}</Text>
+            <Text style={s.summaryLbl}>Aged Stock Value</Text>
+          </View>
+        </View>
+      )}
+
+      {/* Top tabs: age buckets */}
+      <View style={s.tabRow}>
+        {BUCKET_TABS.map(t => (
+          <TouchableOpacity
+            key={t.key}
+            style={[s.tab, bucket === t.key && s.tabActive]}
+            onPress={() => setBucket(t.key as Bucket)}
+            activeOpacity={0.7}
+          >
+            <Text style={[s.tabTxt, bucket === t.key && s.tabTxtActive]}>{t.label}</Text>
+          </TouchableOpacity>
         ))}
       </View>
-    </View>
-  );
-}
 
-// ─── BY-VALUE ITEM CARD ───────────────────────────────────────────────────────
-
-function ValueCard({ item, rank }: { item: AgedItem; rank: number }) {
-  const total  = item.unitPrice * item.qty;
-  const pct    = Math.round((total / MAX_TOTAL_VALUE) * 100);
-  const ac     = AGE_CONFIG(item.age);
-  return (
-    <View style={styles.itemCard}>
-      <View style={styles.itemTop}>
-        <View style={styles.rankCircle}>
-          <Text style={styles.rankText}>{rank}</Text>
-        </View>
-        <View style={styles.itemInfo}>
-          <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-          <Text style={styles.itemMeta}>{item.sku} · {item.category}</Text>
-        </View>
-        <View style={styles.valueSide}>
-          <Text style={styles.totalValueTxt}>₹{total.toLocaleString('en-IN')}</Text>
-          <Text style={styles.perUnitTxt}>{item.value} / unit</Text>
-        </View>
+      {/* Secondary tabs: mode */}
+      <View style={s.modeRow}>
+        {MODE_TABS.map(t => (
+          <TouchableOpacity
+            key={t.key}
+            style={[s.modeTab, mode === t.key && s.modeTabActive]}
+            onPress={() => setMode(t.key as Mode)}
+            activeOpacity={0.7}
+          >
+            <Text style={[s.modeTabTxt, mode === t.key && s.modeTabTxtActive]}>{t.label}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
-      <View style={styles.valueBarRow}>
-        <View style={styles.valueBarTrack}>
-          <View style={[styles.valueBarFill, { width: `${pct}%` as any }]} />
-        </View>
-        <View style={[styles.ageBadge, { backgroundColor: ac.bg, marginLeft: 8 }]}>
-          <Text style={[styles.ageText, { color: ac.color }]}>{ac.label}</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
 
-// ─── BY-CATEGORY GROUP ────────────────────────────────────────────────────────
+      {/* Error */}
+      {apiError && <ErrorBanner message={apiError} onRetry={load} />}
 
-function CategoryGroup({ cat, items }: { cat: string; items: AgedItem[] }) {
-  const [open, setOpen] = useState(true);
-  const total  = items.reduce((s, i) => s + i.unitPrice * i.qty, 0);
-  const maxAge = Math.max(...items.map(i => i.age));
-
-  return (
-    <View style={styles.catGroup}>
-      <TouchableOpacity
-        style={styles.catHeader}
-        onPress={() => setOpen(o => !o)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.catHeaderL}>
-          <Ionicons name="folder-outline" size={15} color={COLORS.brandPrimary} />
-          <Text style={styles.catName}>{cat}</Text>
-          <View style={styles.catBadge}>
-            <Text style={styles.catBadgeTxt}>{items.length}</Text>
-          </View>
+      {/* Loading */}
+      {isLoading ? (
+        <View style={{ paddingHorizontal: SPACING.md, paddingTop: SPACING.sm }}>
+          {[...Array(5)].map((_, i) => <LedgerRowSkeleton key={i} />)}
         </View>
-        <View style={styles.catHeaderR}>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={styles.catTotal}>₹{total.toLocaleString('en-IN')}</Text>
-            <Text style={styles.catMaxAge}>Max age: {maxAge}d</Text>
-          </View>
-          <Ionicons
-            name={open ? 'chevron-up' : 'chevron-down'}
-            size={15} color={COLORS.textTertiary}
-          />
-        </View>
-      </TouchableOpacity>
-
-      {open && items.map(item => {
-        const ac = AGE_CONFIG(item.age);
-        return (
-          <View key={item.id} style={styles.catRow}>
-            <View style={styles.catRowL}>
-              <Text style={styles.catItemName} numberOfLines={1}>{item.name}</Text>
-              <Text style={styles.catItemMeta}>{item.qty} units · {item.warehouse}</Text>
-            </View>
-            <View style={styles.catRowR}>
-              <View style={[styles.ageBadge, { backgroundColor: ac.bg }]}>
-                <Text style={[styles.ageText, { color: ac.color }]}>{item.age}d</Text>
+      ) : (
+        <FlatList
+          data={items}
+          keyExtractor={item => item.name}
+          renderItem={({ item }) => (
+            <ItemCard
+              item={item} mode={mode} maxValue={maxValue}
+              formatAmount={formatAmount} formatAmountCompact={formatAmountCompact}
+            />
+          )}
+          contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 16 }]}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={s.empty}>
+              <View style={s.emptyIcon}>
+                <Ionicons name="time-outline" size={48} color={COLORS.textTertiary} />
               </View>
-              <Text style={styles.catItemVal}>
-                ₹{(item.unitPrice * item.qty).toLocaleString('en-IN')}
+              <Text style={s.emptyTitle}>No Aged Items</Text>
+              <Text style={s.emptyDesc}>
+                No items match the selected age bucket and mode.
               </Text>
             </View>
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-// ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
-
-export default function AgedItemsScreen() {
-  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
-  const router    = useRouter();
-  const [filter,    setFilter]    = useState<FilterOpt>('All');
-  const [activeTab, setActiveTab] = useState<TabOpt>('By Age');
-
-  const filtered = AGED_ITEMS.filter(i => passesFilter(i.age, filter));
-
-  const byAge      = [...filtered].sort((a, b) => b.age - a.age);
-  const byValue    = [...filtered].sort(
-    (a, b) => (b.unitPrice * b.qty) - (a.unitPrice * a.qty),
-  );
-  const cats       = [...new Set(filtered.map(i => i.category))].sort();
-  const grouped    = cats.reduce<Record<string, AgedItem[]>>((acc, cat) => {
-    acc[cat] = filtered.filter(i => i.category === cat);
-    return acc;
-  }, {});
-
-  const totalValue = filtered.reduce((s, i) => s + i.unitPrice * i.qty, 0);
-
-  return (
-    <SafeAreaView style={styles.safe}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Aged Inventory</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      {/* Summary banner */}
-      <View style={styles.banner}>
-        <View style={styles.bannerLeft}>
-          <Ionicons name="time-outline" size={28} color="#D97706" />
-          <View>
-            <Text style={styles.bannerVal}>₹{totalValue.toLocaleString('en-IN')}</Text>
-            <Text style={styles.bannerLabel}>Total aged stock value</Text>
-          </View>
-        </View>
-        <View style={styles.bannerRight}>
-          <Text style={styles.bannerCount}>{filtered.length}</Text>
-          <Text style={styles.bannerLabel}>SKUs affected</Text>
-        </View>
-      </View>
-
-      {/* Age-band filter chips */}
-      <View style={styles.filterRow}>
-        {FILTER_OPTIONS.map(f => (
-          <TouchableOpacity
-            key={f}
-            style={[styles.filterChip, filter === f && styles.filterChipActive]}
-            onPress={() => setFilter(f)}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>{f}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* Tab bar */}
-      <View style={styles.tabBar}>
-        {TABS.map(tab => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tabItem, activeTab === tab && styles.tabItemActive]}
-            onPress={() => setActiveTab(tab)}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <ScrollView
-        style={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
-      >
-        {activeTab === 'By Age' && byAge.map(item => (
-          <AgeCard key={item.id} item={item} />
-        ))}
-
-        {activeTab === 'By Value' && byValue.map((item, idx) => (
-          <ValueCard key={item.id} item={item} rank={idx + 1} />
-        ))}
-
-        {activeTab === 'By Category' && cats.map(cat => (
-          <CategoryGroup key={cat} cat={cat} items={grouped[cat]} />
-        ))}
-
-        <View style={{ height: 80 }} />
-      </ScrollView>
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }
 
-// ─── STYLES ───────────────────────────────────────────────────────────────────
-
-const styles = StyleSheet.create({
+// ── Styles ────────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: COLORS.pageBg },
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: SPACING.md, paddingVertical: 14,
+    paddingHorizontal: SPACING.sm, paddingVertical: 12,
+    backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  headerBtn:   { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary },
+
+  summaryRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+    paddingVertical: SPACING.md,
+  },
+  summaryCard: { flex: 1, alignItems: 'center' },
+  summaryDiv:  { width: 1, height: 32, backgroundColor: COLORS.borderDefault },
+  summaryVal:  { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
+  summaryLbl:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+
+  // Top bucket tabs
+  tabRow: {
+    flexDirection: 'row',
     backgroundColor: COLORS.cardBg,
     borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+    paddingHorizontal: SPACING.sm, paddingTop: SPACING.sm, paddingBottom: 0,
   },
-  backBtn:     { width: 40, alignItems: 'flex-start' },
-  headerTitle: {
-    flex: 1, fontSize: TYPOGRAPHY.lg, fontWeight: '700',
-    color: COLORS.textPrimary, textAlign: 'center',
-  },
-
-  banner: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#FFFBEB',
-    borderBottomWidth: 1, borderBottomColor: '#FDE68A',
-    paddingHorizontal: SPACING.md, paddingVertical: 12,
-  },
-  bannerLeft:  { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  bannerRight: { alignItems: 'flex-end' },
-  bannerVal:   { fontSize: TYPOGRAPHY.xl, fontWeight: '800', color: '#D97706' },
-  bannerCount: { fontSize: TYPOGRAPHY.xl, fontWeight: '800', color: COLORS.textPrimary },
-  bannerLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
-
-  filterRow: {
-    flexDirection: 'row', paddingHorizontal: SPACING.md, paddingVertical: 10,
-    gap: 6, backgroundColor: COLORS.cardBg,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-  },
-  filterChip:       {
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 20, borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  filterChipActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
-  filterText:       { fontSize: 11, fontWeight: '600', color: COLORS.textSecondary },
-  filterTextActive: { color: COLORS.white },
-
-  tabBar:      {
-    flexDirection: 'row', backgroundColor: COLORS.cardBg,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-  },
-  tabItem:     {
-    flex: 1, alignItems: 'center', paddingVertical: 12,
+  tab: {
+    flex: 1, alignItems: 'center', paddingBottom: 10,
     borderBottomWidth: 2, borderBottomColor: 'transparent',
   },
-  tabItemActive:{ borderBottomColor: COLORS.brandPrimary },
-  tabText:     { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textTertiary },
-  tabTextActive:{ color: COLORS.textPrimary },
+  tabActive: { borderBottomColor: COLORS.brandPrimary },
+  tabTxt:    { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
+  tabTxtActive: { color: COLORS.brandPrimary },
 
-  scroll:  { flex: 1 },
-  content: { padding: SPACING.md, gap: 10 },
+  // Secondary mode tabs
+  modeRow: {
+    flexDirection: 'row', gap: SPACING.sm,
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
+  },
+  modeTab: {
+    paddingHorizontal: SPACING.md, paddingVertical: 7,
+    borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault,
+    backgroundColor: COLORS.cardBg,
+  },
+  modeTabActive:  { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
+  modeTabTxt:     { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
+  modeTabTxtActive: { color: '#fff' },
 
-  // Shared card
-  itemCard: {
-    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
-    padding: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  itemTop:  {
-    flexDirection: 'row', alignItems: 'flex-start',
-    justifyContent: 'space-between', marginBottom: 10,
-  },
-  itemInfo: { flex: 1, marginRight: 8 },
-  itemName: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  itemMeta: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
-  ageBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12,
-  },
-  ageText:  { fontSize: 11, fontWeight: '700' },
+  list: { paddingHorizontal: SPACING.md, paddingTop: SPACING.xs },
 
-  // By-Age specifics
-  itemStats:  { flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 },
-  statCell:   { width: '50%' },
-  statLabel:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
-  statVal:    { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary, marginTop: 2 },
+  // Item card
+  card: {
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    padding: SPACING.md, marginBottom: SPACING.sm,
+  },
+  cardTop:    { flexDirection: 'row', justifyContent: 'space-between', marginBottom: SPACING.sm },
+  cardLeft:   { flex: 1, marginRight: SPACING.sm },
+  cardRight:  { alignItems: 'flex-end', gap: 4 },
+  itemName:   { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 3 },
+  itemMeta:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginBottom: 2 },
+  itemDate:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  itemValue:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  itemRate:   { fontSize: 10, color: COLORS.textTertiary },
+  ageTag: {
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: RADIUS.sm,
+    alignItems: 'center',
+  },
+  ageTagTxt:  { fontSize: 10, fontWeight: '700' },
+  progressBg: {
+    height: 4, backgroundColor: COLORS.pageBg, borderRadius: 2, marginBottom: SPACING.sm,
+  },
+  progressFill: { height: 4, backgroundColor: COLORS.brandPrimary, borderRadius: 2 },
+  cardBottom:   { flexDirection: 'row', justifyContent: 'space-between' },
+  cardBottomTxt: { fontSize: 10, color: COLORS.textTertiary },
 
-  // By-Value specifics
-  rankCircle:   {
-    width: 26, height: 26, borderRadius: 13,
-    backgroundColor: COLORS.activeBg,
-    alignItems: 'center', justifyContent: 'center', marginRight: 8,
+  // Empty
+  empty: { paddingTop: 80, alignItems: 'center', paddingHorizontal: SPACING.xl },
+  emptyIcon: {
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault,
+    alignItems: 'center', justifyContent: 'center', marginBottom: SPACING.md,
   },
-  rankText:     { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
-  valueSide:    { alignItems: 'flex-end' },
-  totalValueTxt:{ fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
-  perUnitTxt:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 1 },
-  valueBarRow:  { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
-  valueBarTrack:{ flex: 1, height: 6, backgroundColor: COLORS.borderDefault, borderRadius: 3, overflow: 'hidden' },
-  valueBarFill: { height: '100%', borderRadius: 3, backgroundColor: COLORS.brandPrimary },
-
-  // By-Category specifics
-  catGroup:  {
-    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
-    borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden',
-  },
-  catHeader: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', padding: SPACING.md,
-  },
-  catHeaderL:{ flexDirection: 'row', alignItems: 'center', gap: 8 },
-  catHeaderR:{ flexDirection: 'row', alignItems: 'center', gap: 10 },
-  catName:   { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  catBadge:  {
-    backgroundColor: COLORS.activeBg,
-    paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10,
-  },
-  catBadgeTxt:{ fontSize: 10, fontWeight: '700', color: COLORS.textSecondary },
-  catTotal:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  catMaxAge: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
-  catRow:    {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md, paddingVertical: 10,
-    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
-  },
-  catRowL:      { flex: 1, marginRight: 8 },
-  catRowR:      { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  catItemName:  { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  catItemMeta:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 1 },
-  catItemVal:   { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  emptyTitle: { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary, marginBottom: SPACING.sm },
+  emptyDesc:  { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 22 },
 });

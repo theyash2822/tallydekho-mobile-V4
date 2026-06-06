@@ -1,445 +1,426 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions,
+  View, Text, FlatList, TouchableOpacity, StyleSheet,
+  ScrollView, Dimensions, ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import Svg, { G, Path, Line, Circle, Text as SvgText, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
+import Svg, {
+  Path, Defs, LinearGradient, Stop, Rect,
+  Line, Circle, Text as SvgText,
+} from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
+import { useSettings } from '../../src/context/SettingsContext';
+import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
+import { getMovementAnalytics, getMovementChart } from '../../src/services/api';
 
-// ─── DATA ─────────────────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
+const SW          = Dimensions.get('window').width;
+const CHART_H     = 190;
+const PAD         = { top: 28, right: 16, bottom: 36, left: 56 };
+const DAY_W       = 44;               // px per day column
+const CHART_LINE  = '#C9A227';        // gold line colour
+const CHART_FILL  = '#C9A22720';      // translucent fill
 
-const FAST_MOVING = [
-  { id: 'FM01', name: 'USB-C Cable 3A',        sku: 'USB-3A-1M',  sales: 1240, velocity: 'Very Fast', change: +22, category: 'Accessories' },
-  { id: 'FM02', name: 'Wireless Mouse M220',   sku: 'LOG-M220',   sales: 980,  velocity: 'Fast',      change: +15, category: 'Peripherals' },
-  { id: 'FM03', name: 'HDMI Cable 1.5m',       sku: 'HDM-1.5',    sales: 870,  velocity: 'Fast',      change: +8,  category: 'Accessories' },
-  { id: 'FM04', name: 'Laptop Stand Adj.',     sku: 'LST-ADJ01',  sales: 760,  velocity: 'Moderate',  change: -3,  category: 'Furniture'  },
-  { id: 'FM05', name: 'Keyboard MK235',        sku: 'LOG-MK235',  sales: 690,  velocity: 'Moderate',  change: +5,  category: 'Peripherals' },
-  { id: 'FM06', name: 'Power Bank 20000mAh',   sku: 'AMZ-PB20K',  sales: 620,  velocity: 'Moderate',  change: +12, category: 'Mobiles'    },
-  { id: 'FM07', name: 'Screen Guard iPhone',   sku: 'SG-IP14',    sales: 580,  velocity: 'Moderate',  change: -8,  category: 'Accessories' },
-  { id: 'FM08', name: 'TWS Earbuds Pro',       sku: 'TWS-PRO-01', sales: 510,  velocity: 'Normal',    change: +3,  category: 'Audio'      },
-  { id: 'FM09', name: 'Type-C Hub 7-in-1',     sku: 'USB-C71',    sales: 460,  velocity: 'Normal',    change: -1,  category: 'Accessories' },
-  { id: 'FM10', name: 'Smart Watch Band 44mm', sku: 'SWB-44',     sales: 390,  velocity: 'Normal',    change: +9,  category: 'Wearables'  },
-];
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface MovItem {
+  name: string; sku: string; category: string;
+  closing_qty: number; closing_rate: number; total_value: number;
+  outward_qty: number; outward_value: number; tr: number; dsi: number | null;
+}
+interface ChartDay { date: string; value: number; qty: number; }
 
-const VELOCITY_CONFIG = {
-  'Very Fast': { color: '#2D7D46', bg: '#F0FBF4' },
-  'Fast':      { color: '#059669', bg: '#ECFDF5' },
-  'Moderate':  { color: '#2563EB', bg: '#EFF6FF' },
-  'Normal':    { color: '#6B7280', bg: '#F3F4F6' },
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const compactAmt = (n: number) => {
+  if (n >= 1_00_00_000) return `₹${(n / 1_00_00_000).toFixed(1)}Cr`;
+  if (n >= 1_00_000)    return `₹${(n / 1_00_000).toFixed(1)}L`;
+  if (n >= 1_000)       return `₹${(n / 1_000).toFixed(1)}k`;
+  return `₹${Math.round(n)}`;
+};
+const fmtShortDate = (iso: string) => {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
 };
 
-const CATEGORIES = ['All', 'Accessories', 'Peripherals', 'Audio', 'Mobiles', 'Wearables'];
-const maxSales = Math.max(...FAST_MOVING.map(f => f.sales));
+// ── Line Chart ─────────────────────────────────────────────────────────────────
+function LineChart({ data, onPointPress, activeIdx }: {
+  data: ChartDay[];
+  onPointPress: (idx: number) => void;
+  activeIdx: number | null;
+}) {
+  if (!data.length) return null;
 
-const TREND_DATA: Record<'7D' | '1M' | '3M', { labels: string[]; values: number[] }> = {
-  '7D': {
-    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    values: [420,  385,  510,  465,  590,  720,  680],
-  },
-  '1M': {
-    labels: ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7'],
-    values: [3200, 2850, 3750, 4100, 3650, 4480, 5100],
-  },
-  '3M': {
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
-    values: [11800, 10200, 14100, 12900, 16500, 15200, 18400],
-  },
-};
+  const innerW = DAY_W * data.length;
+  const innerH = CHART_H - PAD.top - PAD.bottom;
+  const maxV   = Math.max(...data.map(d => d.value), 1);
+  const minV   = 0;
 
-// ─── CHART COMPONENT (defined outside screen) ─────────────────────────────────
+  // Y axis labels (4 evenly spaced)
+  const yLabels = [0, 1, 2, 3].map(i => {
+    const v = minV + (maxV - minV) * (i / 3);
+    return { v, y: PAD.top + innerH - (innerH * (i / 3)) };
+  });
 
-const SCREEN_W = Dimensions.get('window').width;
-// Subtract scroll content padding (SPACING.md each side) + card padding (SPACING.md each side)
-const CHART_W  = SCREEN_W - SPACING.md * 4;
-const CHART_H  = 160;
-const PAD      = { top: 20, right: 12, bottom: 28, left: 44 };
-const INNER_W  = CHART_W - PAD.left - PAD.right;
-const INNER_H  = CHART_H - PAD.top - PAD.bottom;
-
-type ChartProps = { values: number[]; labels: string[] };
-
-function SalesLineChart({ values, labels }: ChartProps) {
-  const [cursorIdx, setCursorIdx] = useState<number | null>(null);
-
-  const n      = values.length;
-  const maxVal = Math.max(...values);
-  const minVal = Math.min(...values);
-  const range  = maxVal - minVal || 1;
-
-  const pts = values.map((v, i) => ({
-    x: PAD.left + (i / (n - 1)) * INNER_W,
-    y: PAD.top  + (1 - (v - minVal) / range) * INNER_H,
-    v,
-  }));
+  // Build SVG path
+  const pts = data.map((d, i) => {
+    const x = PAD.left + i * DAY_W + DAY_W / 2;
+    const y = PAD.top + innerH - (innerH * ((d.value - minV) / (maxV - minV || 1)));
+    return { x, y, d };
+  });
 
   const linePath = pts
-    .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+    .map((p, i) => (i === 0 ? `M${p.x},${p.y}` : `L${p.x},${p.y}`))
     .join(' ');
 
-  const areaPath =
-    linePath +
-    ` L${pts[n - 1].x.toFixed(1)},${(PAD.top + INNER_H).toFixed(1)}` +
-    ` L${pts[0].x.toFixed(1)},${(PAD.top + INNER_H).toFixed(1)} Z`;
+  const areaPath = [
+    `M${pts[0].x},${PAD.top + innerH}`,
+    ...pts.map(p => `L${p.x},${p.y}`),
+    `L${pts[pts.length - 1].x},${PAD.top + innerH}`,
+    'Z',
+  ].join(' ');
 
-  const gridRatios = [0, 0.25, 0.5, 0.75, 1];
-
-  const cursor   = cursorIdx !== null ? pts[cursorIdx] : null;
-  const tipCx    = cursor
-    ? Math.max(PAD.left + 30, Math.min(cursor.x, CHART_W - PAD.right - 30))
-    : 0;
-  const tipCy    = cursor ? Math.max(PAD.top + 14, cursor.y - 26) : 0;
-
-  const fmtVal = (v: number) =>
-    v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toString();
+  const totalW = PAD.left + innerW + PAD.right;
 
   return (
-    <View
-      onStartShouldSetResponder={() => true}
-      onMoveShouldSetResponder={() => true}
-      onResponderGrant={e => {
-        const x   = e.nativeEvent.locationX;
-        const idx = Math.round(((x - PAD.left) / INNER_W) * (n - 1));
-        setCursorIdx(Math.max(0, Math.min(n - 1, idx)));
-      }}
-      onResponderMove={e => {
-        const x   = e.nativeEvent.locationX;
-        const idx = Math.round(((x - PAD.left) / INNER_W) * (n - 1));
-        setCursorIdx(Math.max(0, Math.min(n - 1, idx)));
-      }}
-      onResponderRelease={() => {
-        setTimeout(() => setCursorIdx(null), 2500);
-      }}
-    >
-      <Svg width={CHART_W} height={CHART_H}>
+    <View style={{ width: totalW }}>
+      <Svg width={totalW} height={CHART_H}>
         <Defs>
-          <LinearGradient id="aGrad" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={COLORS.brandPrimary} stopOpacity="0.18" />
-            <Stop offset="1" stopColor={COLORS.brandPrimary} stopOpacity="0.01" />
+          <LinearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0"   stopColor={CHART_LINE} stopOpacity="0.3" />
+            <Stop offset="1"   stopColor={CHART_LINE} stopOpacity="0"   />
           </LinearGradient>
         </Defs>
 
-        {/* Horizontal grid lines + Y-axis labels */}
-        {gridRatios.map((r, i) => {
-          const gy  = PAD.top + r * INNER_H;
-          const gv  = Math.round(maxVal - r * range);
-          return (
-            <G key={i}>
-              <Line
-                x1={PAD.left} y1={gy}
-                x2={CHART_W - PAD.right} y2={gy}
-                stroke={COLORS.borderDefault}
-                strokeWidth={1}
-                strokeDasharray="4,4"
-              />
-              <SvgText
-                x={PAD.left - 5} y={gy + 4}
-                textAnchor="end" fontSize="9" fill={COLORS.textTertiary}
-              >
-                {fmtVal(gv)}
-              </SvgText>
-            </G>
-          );
-        })}
-
-        {/* Area fill */}
-        <Path d={areaPath} fill="url(#aGrad)" />
-
-        {/* Line stroke */}
-        <Path
-          d={linePath}
-          stroke={COLORS.brandPrimary}
-          strokeWidth={2.5}
-          fill="none"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        {/* Idle data-point circles */}
-        {pts.map((p, i) => (
-          <Circle
-            key={i} cx={p.x} cy={p.y} r={3.5}
-            fill={COLORS.cardBg}
-            stroke={COLORS.brandPrimary}
-            strokeWidth={2}
-          />
+        {/* Y grid lines + labels */}
+        {yLabels.map((yl, i) => (
+          <React.Fragment key={i}>
+            <Line
+              x1={PAD.left} y1={yl.y}
+              x2={totalW - PAD.right} y2={yl.y}
+              stroke={COLORS.borderDefault} strokeWidth="1"
+            />
+            <SvgText
+              x={PAD.left - 6} y={yl.y + 4}
+              fontSize={9} fill={COLORS.textTertiary}
+              textAnchor="end"
+            >
+              {compactAmt(yl.v)}
+            </SvgText>
+          </React.Fragment>
         ))}
 
-        {/* X-axis labels — first uses "start", last uses "end" so no overflow */}
-        {labels.map((l, i) => {
-          const anchor = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle';
+        {/* Area fill */}
+        <Path d={areaPath} fill="url(#fill)" />
+
+        {/* Line */}
+        <Path d={linePath} stroke={CHART_LINE} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+
+        {/* X-axis date labels (every 5 days) */}
+        {pts.map((p, i) => {
+          if (i % 5 !== 0 && i !== pts.length - 1) return null;
           return (
             <SvgText
-              key={i} x={pts[i].x} y={CHART_H - 4}
-              textAnchor={anchor} fontSize="9" fill={COLORS.textTertiary}
+              key={i}
+              x={p.x} y={CHART_H - 6}
+              fontSize={9} fill={COLORS.textTertiary}
+              textAnchor="middle"
             >
-              {l}
+              {fmtShortDate(p.d.date)}
             </SvgText>
           );
         })}
 
-        {/* Cursor overlay */}
-        {cursor && (
-          <G>
-            {/* Vertical dashed rule */}
+        {/* Active point */}
+        {activeIdx !== null && pts[activeIdx] && (
+          <>
             <Line
-              x1={cursor.x} y1={PAD.top}
-              x2={cursor.x} y2={PAD.top + INNER_H}
-              stroke={COLORS.brandPrimary}
-              strokeWidth={1.5}
-              strokeDasharray="4,3"
-              opacity="0.55"
+              x1={pts[activeIdx].x} y1={PAD.top}
+              x2={pts[activeIdx].x} y2={PAD.top + innerH}
+              stroke={CHART_LINE} strokeWidth="1" strokeDasharray="4,3"
             />
-            {/* Highlighted point */}
             <Circle
-              cx={cursor.x} cy={cursor.y} r={7}
-              fill={COLORS.brandPrimary}
-              stroke={COLORS.cardBg}
-              strokeWidth={2.5}
+              cx={pts[activeIdx].x} cy={pts[activeIdx].y}
+              r="5" fill={CHART_LINE} stroke="#fff" strokeWidth="2"
             />
-            {/* Tooltip pill */}
-            <Rect
-              x={tipCx - 30} y={tipCy - 12}
-              width={60} height={22}
-              rx={11} ry={11}
-              fill={COLORS.brandPrimary}
-            />
-            <SvgText
-              x={tipCx} y={tipCy + 3}
-              textAnchor="middle"
-              fontSize="11"
-              fontWeight="700"
-              fill={COLORS.white}
-            >
-              {fmtVal(cursor.v)}
-            </SvgText>
-          </G>
+          </>
         )}
       </Svg>
+
+      {/* Tap overlay — one pressable per day */}
+      <View style={[StyleSheet.absoluteFill, { left: PAD.left, right: PAD.right, top: PAD.top, bottom: PAD.bottom, flexDirection: 'row' }]}>
+        {data.map((_, i) => (
+          <TouchableOpacity
+            key={i}
+            style={{ width: DAY_W, height: '100%' }}
+            onPress={() => onPointPress(i)}
+            activeOpacity={1}
+          />
+        ))}
+      </View>
     </View>
   );
 }
 
-// ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
+// ── Item Row ──────────────────────────────────────────────────────────────────
+function ItemRow({
+  item, selected, onPress, formatAmountCompact,
+}: {
+  item: MovItem; selected: boolean; onPress: () => void; formatAmountCompact: (n: number) => string;
+}) {
+  return (
+    <TouchableOpacity
+      style={[s.itemRow, selected && s.itemRowSel]}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      <View style={s.itemLeft}>
+        <Text style={s.itemName} numberOfLines={2}>{item.name}</Text>
+        {item.sku ? <Text style={s.itemSku}>{item.sku}</Text> : null}
+      </View>
+      <View style={s.itemMetrics}>
+        <View style={s.metric}>
+          <Text style={s.metricVal}>{item.tr.toFixed(1)}x</Text>
+          <Text style={s.metricLbl}>TR</Text>
+        </View>
+        <View style={s.metric}>
+          <Text style={s.metricVal}>{item.dsi != null ? `${item.dsi}d` : '—'}</Text>
+          <Text style={s.metricLbl}>DSI</Text>
+        </View>
+        <View style={s.metric}>
+          <Text style={s.metricVal}>{formatAmountCompact(item.total_value)}</Text>
+          <Text style={s.metricLbl}>Value</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
 
+// ── Screen ────────────────────────────────────────────────────────────────────
 export default function MovementAnalyticsScreen() {
-  const router = useRouter();
-  const [activeCat, setActiveCat] = useState('All');
-  const [period, setPeriod]       = useState<'7D' | '1M' | '3M'>('1M');
+  const router   = useRouter();
+  const insets   = useSafeAreaInsets();
+  const { company, selectedFY } = useAuth();
+  const { formatAmountCompact } = useSettings();
+  const companyGuid = company?.guid;
+  const fyParam     = fyInfoToParam(selectedFY);
 
-  const filtered   = activeCat === 'All'
-    ? FAST_MOVING
-    : FAST_MOVING.filter(i => i.category === activeCat);
-  const trendData  = TREND_DATA[period];
+  // Items list
+  const [items,      setItems]      = useState<MovItem[]>([]);
+  const [isLoading,  setIsLoading]  = useState(false);
+  const [apiError,   setApiError]   = useState<string | null>(null);
+
+  // Chart
+  const [selectedItem, setSelectedItem]   = useState<string | null>(null);
+  const [chartData,    setChartData]      = useState<ChartDay[]>([]);
+  const [chartLoading, setChartLoading]   = useState(false);
+  const [activeIdx,    setActiveIdx]      = useState<number | null>(null);
+  const chartScrollRef = useRef<ScrollView>(null);
+
+  // Load items
+  const loadItems = useCallback(() => {
+    if (!companyGuid) return;
+    setIsLoading(true);
+    setApiError(null);
+    const params: Record<string, string> = {};
+    if (fyParam) params.fy = fyParam;
+    getMovementAnalytics(companyGuid, params)
+      .then((res: any) => {
+        const data: MovItem[] = res?.data ?? [];
+        setItems(data);
+        // Auto-select first item
+        if (data.length > 0 && !selectedItem) {
+          setSelectedItem(data[0].name);
+        }
+      })
+      .catch((e: any) => setApiError(e?.message || 'Failed to load movement analytics'))
+      .finally(() => setIsLoading(false));
+  }, [companyGuid, fyParam]);
+
+  useEffect(() => { loadItems(); }, [loadItems]);
+
+  // Load chart data when selected item changes
+  useEffect(() => {
+    if (!selectedItem || !companyGuid) return;
+    setChartLoading(true);
+    setActiveIdx(null);
+    getMovementChart(companyGuid, { item: selectedItem })
+      .then((res: any) => {
+        setChartData(res?.data ?? []);
+        // Scroll chart to end (most recent date)
+        setTimeout(() => chartScrollRef.current?.scrollToEnd({ animated: false }), 100);
+      })
+      .catch(() => setChartData([]))
+      .finally(() => setChartLoading(false));
+  }, [selectedItem, companyGuid]);
+
+  const activePoint = activeIdx !== null ? chartData[activeIdx] : null;
+  const selectedItemData = items.find(i => i.name === selectedItem);
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
+      <View style={s.header}>
+        <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
+          <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Fast Moving Items</Text>
-        <View style={{ width: 40 }} />
+        <Text style={s.headerTitle}>Movement Analytics</Text>
+        <View style={{ width: 44 }} />
       </View>
 
-      {/* Period toggle */}
-      <View style={styles.periodRow}>
-        {(['7D', '1M', '3M'] as const).map(p => (
-          <TouchableOpacity
-            key={p}
-            style={[styles.periodBtn, period === p && styles.periodBtnActive]}
-            onPress={() => setPeriod(p)}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.periodText, period === p && styles.periodTextActive]}>{p}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      {/* Error */}
+      {apiError && <ErrorBanner message={apiError} onRetry={loadItems} />}
 
-      {/* KPI strip */}
-      <View style={styles.kpiRow}>
-        {[
-          { label: 'Fast-Moving SKUs', value: '130',  icon: 'flash-outline',       color: '#7C3AED' },
-          { label: 'Total Units Sold', value: '7.1K', icon: 'trending-up-outline', color: '#2D7D46' },
-          { label: 'Avg Velocity',     value: '54/d', icon: 'speedometer-outline', color: '#2563EB' },
-        ].map(k => (
-          <View key={k.label} style={styles.kpiCard}>
-            <View style={[styles.kpiIcon, { backgroundColor: k.color + '18' }]}>
-              <Ionicons name={k.icon as any} size={18} color={k.color} />
-            </View>
-            <Text style={styles.kpiVal}>{k.value}</Text>
-            <Text style={styles.kpiLabel}>{k.label}</Text>
-          </View>
-        ))}
-      </View>
-
-      <ScrollView
-        style={styles.scroll}
+      <FlatList
+        data={isLoading ? [] : items}
+        keyExtractor={item => item.name}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
-      >
-        {/* Interactive trend chart */}
-        <View style={styles.chartCard}>
-          <View style={styles.chartHeader}>
-            <View style={styles.chartTitleRow}>
-              <Ionicons name="stats-chart-outline" size={15} color={COLORS.textPrimary} />
-              <Text style={styles.chartTitle}>Sales Trend</Text>
+        contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+        ListHeaderComponent={
+          <View>
+            {/* Chart card */}
+            <View style={s.chartCard}>
+              {/* Selected item + active point info */}
+              <View style={s.chartInfo}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.chartItemName} numberOfLines={1}>
+                    {selectedItemData?.name ?? 'Select an item'}
+                  </Text>
+                  {selectedItemData && (
+                    <Text style={s.chartSubtitle}>
+                      TR {selectedItemData.tr.toFixed(1)}x
+                      {selectedItemData.dsi != null ? `  ·  DSI ${selectedItemData.dsi}d` : ''}
+                    </Text>
+                  )}
+                </View>
+                {activePoint && activePoint.value > 0 ? (
+                  <View style={s.activePoint}>
+                    <Text style={s.activeVal}>{compactAmt(activePoint.value)}</Text>
+                    <Text style={s.activeDate}>{fmtShortDate(activePoint.date)}</Text>
+                  </View>
+                ) : (
+                  <Text style={s.chartHint}>Tap chart to inspect</Text>
+                )}
+              </View>
+
+              {/* Chart */}
+              {chartLoading ? (
+                <View style={s.chartLoading}>
+                  <ActivityIndicator size="small" color={CHART_LINE} />
+                </View>
+              ) : chartData.length > 0 && chartData.some(d => d.value > 0) ? (
+                <ScrollView
+                  ref={chartScrollRef}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={s.chartScroll}
+                >
+                  <LineChart
+                    data={chartData}
+                    onPointPress={setActiveIdx}
+                    activeIdx={activeIdx}
+                  />
+                </ScrollView>
+              ) : (
+                <View style={s.chartEmpty}>
+                  <Text style={s.chartEmptyTxt}>No sales in last 30 days</Text>
+                </View>
+              )}
             </View>
-            <View style={styles.chartHintRow}>
-              <Ionicons name="finger-print-outline" size={13} color={COLORS.textTertiary} />
-              <Text style={styles.chartHint}>Touch to inspect</Text>
+
+            {/* Section label */}
+            <View style={s.sectionHeader}>
+              <Text style={s.sectionTitle}>Items by Turnover Ratio</Text>
+              <Text style={s.sectionSub}>{items.length} items · {selectedFY?.label ?? 'Current FY'}</Text>
             </View>
           </View>
-          {/* key=period remounts chart when period changes, resetting cursor */}
-          <SalesLineChart key={period} values={trendData.values} labels={trendData.labels} />
-        </View>
-
-        {/* Category filter */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.catRow}
-        >
-          {CATEGORIES.map(cat => (
-            <TouchableOpacity
-              key={cat}
-              style={[styles.catChip, activeCat === cat && styles.catChipActive]}
-              onPress={() => setActiveCat(cat)}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.catText, activeCat === cat && styles.catTextActive]}>{cat}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Ranked item list */}
-        <Text style={styles.sectionTitle}>Top Fast-Moving Items</Text>
-        {filtered.map((item, idx) => {
-          const vc     = VELOCITY_CONFIG[item.velocity as keyof typeof VELOCITY_CONFIG];
-          const barPct = (item.sales / maxSales) * 100;
-          return (
-            <View key={item.id} style={styles.itemCard}>
-              <View style={styles.itemTop}>
-                <Text style={styles.rank}>{idx + 1}</Text>
-                <View style={styles.itemInfo}>
-                  <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-                  <Text style={styles.itemSku}>{item.sku} · {item.category}</Text>
-                </View>
-                <View style={[styles.velocityBadge, { backgroundColor: vc.bg }]}>
-                  <Text style={[styles.velocityText, { color: vc.color }]}>{item.velocity}</Text>
-                </View>
-              </View>
-              <View style={styles.barRow}>
-                <View style={styles.barTrack}>
-                  <View style={[styles.barFill, { width: `${barPct}%` as any, backgroundColor: vc.color }]} />
-                </View>
-                <Text style={styles.salesVal}>{item.sales.toLocaleString()}</Text>
-                <Text style={[styles.changeVal, { color: item.change >= 0 ? '#2D7D46' : '#DC2626' }]}>
-                  {item.change >= 0 ? '+' : ''}{item.change}%
-                </Text>
-              </View>
+        }
+        renderItem={({ item }) => (
+          <ItemRow
+            item={item}
+            selected={item.name === selectedItem}
+            onPress={() => setSelectedItem(item.name)}
+            formatAmountCompact={formatAmountCompact}
+          />
+        )}
+        ListEmptyComponent={
+          isLoading ? (
+            <View style={{ paddingHorizontal: SPACING.md }}>
+              {[...Array(5)].map((_, i) => <LedgerRowSkeleton key={i} />)}
             </View>
-          );
-        })}
-        <View style={{ height: 80 }} />
-      </ScrollView>
+          ) : !apiError ? (
+            <View style={s.empty}>
+              <Ionicons name="analytics-outline" size={48} color={COLORS.textTertiary} />
+              <Text style={s.emptyTxt}>No movement data for this FY</Text>
+            </View>
+          ) : null
+        }
+      />
     </SafeAreaView>
   );
 }
 
-// ─── STYLES ───────────────────────────────────────────────────────────────────
-
-const styles = StyleSheet.create({
+// ── Styles ────────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: COLORS.pageBg },
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: SPACING.md, paddingVertical: 14,
-    backgroundColor: COLORS.cardBg,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+    paddingHorizontal: SPACING.sm, paddingVertical: 12,
+    backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
-  backBtn:     { width: 40, alignItems: 'flex-start' },
-  headerTitle: {
-    flex: 1, fontSize: TYPOGRAPHY.lg, fontWeight: '700',
-    color: COLORS.textPrimary, textAlign: 'center',
-  },
+  headerBtn:   { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary },
 
-  periodRow:       {
-    flexDirection: 'row', gap: 8,
-    paddingHorizontal: SPACING.md, paddingVertical: 10,
-    backgroundColor: COLORS.cardBg,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-  },
-  periodBtn:       {
-    paddingHorizontal: 16, paddingVertical: 6,
-    borderRadius: 20, borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  periodBtnActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
-  periodText:      { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
-  periodTextActive:{ color: COLORS.white },
-
-  kpiRow:  {
-    flexDirection: 'row',
-    backgroundColor: COLORS.cardBg,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-    padding: SPACING.sm,
-  },
-  kpiCard: { flex: 1, alignItems: 'center', gap: 4 },
-  kpiIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  kpiVal:  { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
-  kpiLabel:{ fontSize: 10, color: COLORS.textTertiary, textAlign: 'center' },
-
-  scroll:  { flex: 1 },
-  content: { padding: SPACING.md, gap: 12 },
-
-  chartCard:    {
-    backgroundColor: COLORS.cardBg,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.md,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
+  // Chart card
+  chartCard: {
+    margin: SPACING.md, backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault,
     overflow: 'hidden',
   },
-  chartHeader:  {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', marginBottom: 12,
+  chartInfo: {
+    flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md, paddingTop: SPACING.md, paddingBottom: SPACING.sm,
   },
-  chartTitleRow:{ flexDirection: 'row', alignItems: 'center', gap: 6 },
-  chartTitle:   { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  chartHintRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  chartHint:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontStyle: 'italic' },
+  chartItemName: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  chartSubtitle: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+  chartHint:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  activePoint:   { alignItems: 'flex-end' },
+  activeVal:     { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: CHART_LINE },
+  activeDate:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+  chartScroll:   { },
+  chartLoading:  { height: CHART_H, alignItems: 'center', justifyContent: 'center' },
+  chartEmpty:    { height: CHART_H, alignItems: 'center', justifyContent: 'center' },
+  chartEmptyTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
 
-  catRow:       { paddingVertical: 4, gap: 8 },
-  catChip:      {
-    paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 20, borderWidth: 1,
-    borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg,
+  // Section header
+  sectionHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: SPACING.md, paddingBottom: SPACING.xs,
   },
-  catChipActive:{ backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
-  catText:      { fontSize: 11, fontWeight: '600', color: COLORS.textSecondary },
-  catTextActive:{ color: COLORS.white },
+  sectionTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  sectionSub:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
 
-  sectionTitle:{ fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-
-  itemCard: {
-    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md,
-    padding: SPACING.sm, borderWidth: 1, borderColor: COLORS.borderDefault,
+  // Item row
+  itemRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: COLORS.cardBg,
+    marginHorizontal: SPACING.md, marginBottom: SPACING.sm,
+    borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault,
+    padding: SPACING.md,
   },
-  itemTop:  { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
-  rank:     {
-    width: 22, height: 22, borderRadius: 11,
-    backgroundColor: COLORS.pageBg, textAlign: 'center',
-    lineHeight: 22, fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary,
-  },
-  itemInfo: { flex: 1 },
-  itemName: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  itemSku:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 1 },
-  velocityBadge: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10 },
-  velocityText:  { fontSize: 10, fontWeight: '700' },
+  itemRowSel: { borderColor: CHART_LINE, borderWidth: 1.5 },
+  itemLeft:   { flex: 1, marginRight: SPACING.sm },
+  itemName:   { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  itemSku:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
 
-  barRow:   { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  barTrack: { flex: 1, height: 6, backgroundColor: COLORS.borderDefault, borderRadius: 3, overflow: 'hidden' },
-  barFill:  { height: '100%', borderRadius: 3 },
-  salesVal: { width: 40, fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'right' },
-  changeVal:{ width: 40, fontSize: TYPOGRAPHY.xs, fontWeight: '700', textAlign: 'right' },
+  itemMetrics: { flexDirection: 'row', gap: SPACING.md },
+  metric:      { alignItems: 'center' },
+  metricVal:   { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  metricLbl:   { fontSize: 9, color: COLORS.textTertiary, marginTop: 1, textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  // Empty
+  empty:    { paddingTop: 60, alignItems: 'center', gap: 12 },
+  emptyTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
 });
