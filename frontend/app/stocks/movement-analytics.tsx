@@ -1,13 +1,13 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  ScrollView, Dimensions, ActivityIndicator,
+  ScrollView, Dimensions, TextInput,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Svg, {
-  Path, Defs, LinearGradient, Stop, Rect,
+  Path, Defs, LinearGradient, Stop,
   Line, Circle, Text as SvgText,
 } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
@@ -18,12 +18,11 @@ import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { getMovementAnalytics, getMovementChart } from '../../src/services/api';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const SW          = Dimensions.get('window').width;
-const CHART_H     = 190;
-const PAD         = { top: 28, right: 16, bottom: 36, left: 56 };
-const DAY_W       = 44;               // px per day column
-const CHART_LINE  = '#C9A227';        // gold line colour
-const CHART_FILL  = '#C9A22720';      // translucent fill
+const CHART_H    = 200;
+const Y_AXIS_W   = 54;                // fixed pinned Y-axis width
+const PAD        = { top: 24, right: 16, bottom: 36 };  // no PAD.left — handled by Y_AXIS_W
+const DAY_W      = 44;                // px per day column in scrollable area
+const CHART_LINE = '#C9A227';         // gold
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface MovItem {
@@ -45,121 +44,148 @@ const fmtShortDate = (iso: string) => {
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
 };
 
-// ── Line Chart ─────────────────────────────────────────────────────────────────
-function LineChart({ data, onPointPress, activeIdx }: {
+// ── Line Chart ────────────────────────────────────────────────────────────────
+// Y-axis is pinned to the left (rigid). Only the chart data + X-axis dates scroll.
+function LineChart({
+  data, onPointPress, activeIdx,
+}: {
   data: ChartDay[];
   onPointPress: (idx: number) => void;
   activeIdx: number | null;
 }) {
-  if (!data.length) return null;
-
-  const innerW = DAY_W * data.length;
   const innerH = CHART_H - PAD.top - PAD.bottom;
   const maxV   = Math.max(...data.map(d => d.value), 1);
-  const minV   = 0;
 
-  // Y axis labels (4 evenly spaced)
-  const yLabels = [0, 1, 2, 3].map(i => {
-    const v = minV + (maxV - minV) * (i / 3);
-    return { v, y: PAD.top + innerH - (innerH * (i / 3)) };
-  });
+  // 4 evenly spaced Y labels
+  const yLabels = [0, 1, 2, 3].map(i => ({
+    v: maxV * (i / 3),
+    y: PAD.top + innerH - innerH * (i / 3),
+  }));
 
-  // Build SVG path
-  const pts = data.map((d, i) => {
-    const x = PAD.left + i * DAY_W + DAY_W / 2;
-    const y = PAD.top + innerH - (innerH * ((d.value - minV) / (maxV - minV || 1)));
-    return { x, y, d };
-  });
+  // Points in scrollable coordinate space (x starts at 0)
+  const pts = data.map((d, i) => ({
+    x: i * DAY_W + DAY_W / 2,
+    y: PAD.top + innerH - innerH * (d.value / maxV),
+    d,
+  }));
 
-  const linePath = pts
-    .map((p, i) => (i === 0 ? `M${p.x},${p.y}` : `L${p.x},${p.y}`))
-    .join(' ');
-
+  const scrollW  = DAY_W * data.length + PAD.right;
+  const linePath = pts.map((p, i) => (i === 0 ? `M${p.x},${p.y}` : `L${p.x},${p.y}`)).join(' ');
   const areaPath = [
     `M${pts[0].x},${PAD.top + innerH}`,
     ...pts.map(p => `L${p.x},${p.y}`),
-    `L${pts[pts.length - 1].x},${PAD.top + innerH}`,
-    'Z',
+    `L${pts[pts.length - 1].x},${PAD.top + innerH}`, 'Z',
   ].join(' ');
 
-  const totalW = PAD.left + innerW + PAD.right;
-
   return (
-    <View style={{ width: totalW }}>
-      <Svg width={totalW} height={CHART_H}>
-        <Defs>
-          <LinearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0"   stopColor={CHART_LINE} stopOpacity="0.3" />
-            <Stop offset="1"   stopColor={CHART_LINE} stopOpacity="0"   />
-          </LinearGradient>
-        </Defs>
+    <View style={{ flexDirection: 'row', height: CHART_H }}>
 
-        {/* Y grid lines + labels */}
+      {/* ── Pinned Y-axis (rigid, never scrolls) ── */}
+      <Svg width={Y_AXIS_W} height={CHART_H}>
+        {/* Horizontal grid — ghost lines extending into scrollable area */}
         {yLabels.map((yl, i) => (
-          <React.Fragment key={i}>
-            <Line
-              x1={PAD.left} y1={yl.y}
-              x2={totalW - PAD.right} y2={yl.y}
-              stroke={COLORS.borderDefault} strokeWidth="1"
-            />
-            <SvgText
-              x={PAD.left - 6} y={yl.y + 4}
-              fontSize={9} fill={COLORS.textTertiary}
-              textAnchor="end"
-            >
-              {compactAmt(yl.v)}
-            </SvgText>
-          </React.Fragment>
-        ))}
-
-        {/* Area fill */}
-        <Path d={areaPath} fill="url(#fill)" />
-
-        {/* Line */}
-        <Path d={linePath} stroke={CHART_LINE} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-
-        {/* X-axis date labels (every 5 days) */}
-        {pts.map((p, i) => {
-          if (i % 5 !== 0 && i !== pts.length - 1) return null;
-          return (
-            <SvgText
-              key={i}
-              x={p.x} y={CHART_H - 6}
-              fontSize={9} fill={COLORS.textTertiary}
-              textAnchor="middle"
-            >
-              {fmtShortDate(p.d.date)}
-            </SvgText>
-          );
-        })}
-
-        {/* Active point */}
-        {activeIdx !== null && pts[activeIdx] && (
-          <>
-            <Line
-              x1={pts[activeIdx].x} y1={PAD.top}
-              x2={pts[activeIdx].x} y2={PAD.top + innerH}
-              stroke={CHART_LINE} strokeWidth="1" strokeDasharray="4,3"
-            />
-            <Circle
-              cx={pts[activeIdx].x} cy={pts[activeIdx].y}
-              r="5" fill={CHART_LINE} stroke="#fff" strokeWidth="2"
-            />
-          </>
-        )}
-      </Svg>
-
-      {/* Tap overlay — one pressable per day */}
-      <View style={[StyleSheet.absoluteFill, { left: PAD.left, right: PAD.right, top: PAD.top, bottom: PAD.bottom, flexDirection: 'row' }]}>
-        {data.map((_, i) => (
-          <TouchableOpacity
-            key={i}
-            style={{ width: DAY_W, height: '100%' }}
-            onPress={() => onPointPress(i)}
-            activeOpacity={1}
+          <Line key={i}
+            x1={Y_AXIS_W - 4} y1={yl.y}
+            x2={Y_AXIS_W} y2={yl.y}
+            stroke={COLORS.borderDefault} strokeWidth="1"
           />
         ))}
-      </View>
+        {/* Y labels */}
+        {yLabels.map((yl, i) => (
+          <SvgText key={i}
+            x={Y_AXIS_W - 6} y={yl.y + 4}
+            fontSize={9} fill={COLORS.textTertiary} textAnchor="end"
+          >
+            {compactAmt(yl.v)}
+          </SvgText>
+        ))}
+        {/* Vertical axis line */}
+        <Line
+          x1={Y_AXIS_W} y1={PAD.top}
+          x2={Y_AXIS_W} y2={PAD.top + innerH}
+          stroke={COLORS.borderDefault} strokeWidth="1"
+        />
+      </Svg>
+
+      {/* ── Scrollable chart area (data + X-axis dates) ── */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ flex: 1 }}
+      >
+        <View>
+          <Svg width={scrollW} height={CHART_H}>
+            <Defs>
+              <LinearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0"   stopColor={CHART_LINE} stopOpacity="0.35" />
+                <Stop offset="1"   stopColor={CHART_LINE} stopOpacity="0"    />
+              </LinearGradient>
+            </Defs>
+
+            {/* Horizontal grid lines aligned with Y labels */}
+            {yLabels.map((yl, i) => (
+              <Line key={i}
+                x1={0} y1={yl.y}
+                x2={scrollW} y2={yl.y}
+                stroke={COLORS.borderDefault} strokeWidth="1"
+              />
+            ))}
+
+            {/* Area fill */}
+            <Path d={areaPath} fill="url(#grad)" />
+
+            {/* Line */}
+            <Path
+              d={linePath}
+              stroke={CHART_LINE} strokeWidth="2.5"
+              fill="none" strokeLinecap="round" strokeLinejoin="round"
+            />
+
+            {/* X-axis date labels (every 5 days + last) */}
+            {pts.map((p, i) => {
+              if (i % 5 !== 0 && i !== pts.length - 1) return null;
+              return (
+                <SvgText key={i}
+                  x={p.x} y={CHART_H - 8}
+                  fontSize={9} fill={COLORS.textTertiary} textAnchor="middle"
+                >
+                  {fmtShortDate(p.d.date)}
+                </SvgText>
+              );
+            })}
+
+            {/* Active point vertical guideline + dot */}
+            {activeIdx !== null && pts[activeIdx] && (
+              <>
+                <Line
+                  x1={pts[activeIdx].x} y1={PAD.top}
+                  x2={pts[activeIdx].x} y2={PAD.top + innerH}
+                  stroke={CHART_LINE} strokeWidth="1.5" strokeDasharray="4,3"
+                />
+                <Circle
+                  cx={pts[activeIdx].x} cy={pts[activeIdx].y}
+                  r="5.5" fill={CHART_LINE} stroke="#fff" strokeWidth="2"
+                />
+              </>
+            )}
+          </Svg>
+
+          {/* Transparent tap overlay per day */}
+          <View style={[
+            StyleSheet.absoluteFill,
+            { flexDirection: 'row', top: PAD.top, bottom: PAD.bottom },
+          ]}>
+            {data.map((_, i) => (
+              <TouchableOpacity
+                key={i}
+                style={{ width: DAY_W, flex: 1 }}
+                onPress={() => onPointPress(i)}
+                activeOpacity={1}
+              />
+            ))}
+          </View>
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -168,7 +194,8 @@ function LineChart({ data, onPointPress, activeIdx }: {
 function ItemRow({
   item, selected, onPress, formatAmountCompact,
 }: {
-  item: MovItem; selected: boolean; onPress: () => void; formatAmountCompact: (n: number) => string;
+  item: MovItem; selected: boolean; onPress: () => void;
+  formatAmountCompact: (n: number) => string;
 }) {
   return (
     <TouchableOpacity
@@ -182,7 +209,9 @@ function ItemRow({
       </View>
       <View style={s.itemMetrics}>
         <View style={s.metric}>
-          <Text style={s.metricVal}>{item.tr.toFixed(1)}x</Text>
+          <Text style={[s.metricVal, item.tr > 0 && { color: CHART_LINE }]}>
+            {item.tr > 0 ? `${item.tr.toFixed(1)}x` : '—'}
+          </Text>
           <Text style={s.metricLbl}>TR</Text>
         </View>
         <View style={s.metric}>
@@ -207,19 +236,17 @@ export default function MovementAnalyticsScreen() {
   const companyGuid = company?.guid;
   const fyParam     = fyInfoToParam(selectedFY);
 
-  // Items list
-  const [items,      setItems]      = useState<MovItem[]>([]);
-  const [isLoading,  setIsLoading]  = useState(false);
-  const [apiError,   setApiError]   = useState<string | null>(null);
+  const [items,        setItems]        = useState<MovItem[]>([]);
+  const [isLoading,    setIsLoading]    = useState(false);
+  const [apiError,     setApiError]     = useState<string | null>(null);
+  const [search,       setSearch]       = useState('');
 
-  // Chart
-  const [selectedItem, setSelectedItem]   = useState<string | null>(null);
-  const [chartData,    setChartData]      = useState<ChartDay[]>([]);
-  const [chartLoading, setChartLoading]   = useState(false);
-  const [activeIdx,    setActiveIdx]      = useState<number | null>(null);
-  const chartScrollRef = useRef<ScrollView>(null);
+  const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  const [chartData,    setChartData]    = useState<ChartDay[]>([]);
+  const [chartLoading, setChartLoading] = useState(false);
+  const [activeIdx,    setActiveIdx]    = useState<number | null>(null);
 
-  // Load items
+  // Load all items
   const loadItems = useCallback(() => {
     if (!companyGuid) return;
     setIsLoading(true);
@@ -230,34 +257,35 @@ export default function MovementAnalyticsScreen() {
       .then((res: any) => {
         const data: MovItem[] = res?.data ?? [];
         setItems(data);
-        // Auto-select first item
-        if (data.length > 0 && !selectedItem) {
-          setSelectedItem(data[0].name);
-        }
+        if (data.length > 0 && !selectedItem) setSelectedItem(data[0].name);
       })
-      .catch((e: any) => setApiError(e?.message || 'Failed to load movement analytics'))
+      .catch((e: any) => setApiError(e?.message || 'Failed to load'))
       .finally(() => setIsLoading(false));
   }, [companyGuid, fyParam]);
 
   useEffect(() => { loadItems(); }, [loadItems]);
 
-  // Load chart data when selected item changes
+  // Load chart for selected item
   useEffect(() => {
     if (!selectedItem || !companyGuid) return;
     setChartLoading(true);
     setActiveIdx(null);
     getMovementChart(companyGuid, { item: selectedItem })
-      .then((res: any) => {
-        setChartData(res?.data ?? []);
-        // Scroll chart to end (most recent date)
-        setTimeout(() => chartScrollRef.current?.scrollToEnd({ animated: false }), 100);
-      })
+      .then((res: any) => setChartData(res?.data ?? []))
       .catch(() => setChartData([]))
       .finally(() => setChartLoading(false));
   }, [selectedItem, companyGuid]);
 
-  const activePoint = activeIdx !== null ? chartData[activeIdx] : null;
-  const selectedItemData = items.find(i => i.name === selectedItem);
+  const filtered = search.trim()
+    ? items.filter(i =>
+        i.name.toLowerCase().includes(search.toLowerCase()) ||
+        (i.sku && i.sku.toLowerCase().includes(search.toLowerCase()))
+      )
+    : items;
+
+  const activePoint       = activeIdx !== null ? chartData[activeIdx] : null;
+  const selectedItemData  = items.find(i => i.name === selectedItem);
+  const hasChartData      = chartData.some(d => d.value > 0);
 
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
@@ -270,33 +298,31 @@ export default function MovementAnalyticsScreen() {
         <View style={{ width: 44 }} />
       </View>
 
-      {/* Error */}
       {apiError && <ErrorBanner message={apiError} onRetry={loadItems} />}
 
       <FlatList
-        data={isLoading ? [] : items}
+        data={isLoading ? [] : filtered}
         keyExtractor={item => item.name}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
         ListHeaderComponent={
           <View>
-            {/* Chart card */}
+            {/* ── Chart card ── */}
             <View style={s.chartCard}>
-              {/* Selected item + active point info */}
+              {/* Item info + active point value */}
               <View style={s.chartInfo}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.chartItemName} numberOfLines={1}>
-                    {selectedItemData?.name ?? 'Select an item'}
+                    {selectedItemData?.name ?? '—'}
                   </Text>
-                  {selectedItemData && (
-                    <Text style={s.chartSubtitle}>
-                      TR {selectedItemData.tr.toFixed(1)}x
-                      {selectedItemData.dsi != null ? `  ·  DSI ${selectedItemData.dsi}d` : ''}
-                    </Text>
-                  )}
+                  <Text style={s.chartSub}>
+                    {selectedItemData && selectedItemData.tr > 0
+                      ? `TR ${selectedItemData.tr.toFixed(1)}x${selectedItemData.dsi != null ? `  ·  DSI ${selectedItemData.dsi}d` : ''}`
+                      : 'No sales in selected FY'}
+                  </Text>
                 </View>
                 {activePoint && activePoint.value > 0 ? (
-                  <View style={s.activePoint}>
+                  <View style={s.activeBox}>
                     <Text style={s.activeVal}>{compactAmt(activePoint.value)}</Text>
                     <Text style={s.activeDate}>{fmtShortDate(activePoint.date)}</Text>
                   </View>
@@ -308,21 +334,14 @@ export default function MovementAnalyticsScreen() {
               {/* Chart */}
               {chartLoading ? (
                 <View style={s.chartLoading}>
-                  <ActivityIndicator size="small" color={CHART_LINE} />
+                  <Text style={s.chartLoadingTxt}>Loading…</Text>
                 </View>
-              ) : chartData.length > 0 && chartData.some(d => d.value > 0) ? (
-                <ScrollView
-                  ref={chartScrollRef}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={s.chartScroll}
-                >
-                  <LineChart
-                    data={chartData}
-                    onPointPress={setActiveIdx}
-                    activeIdx={activeIdx}
-                  />
-                </ScrollView>
+              ) : hasChartData ? (
+                <LineChart
+                  data={chartData}
+                  onPointPress={setActiveIdx}
+                  activeIdx={activeIdx}
+                />
               ) : (
                 <View style={s.chartEmpty}>
                   <Text style={s.chartEmptyTxt}>No sales in last 30 days</Text>
@@ -330,10 +349,28 @@ export default function MovementAnalyticsScreen() {
               )}
             </View>
 
-            {/* Section label */}
-            <View style={s.sectionHeader}>
-              <Text style={s.sectionTitle}>Items by Turnover Ratio</Text>
-              <Text style={s.sectionSub}>{items.length} items · {selectedFY?.label ?? 'Current FY'}</Text>
+            {/* ── Search bar ── */}
+            <View style={s.searchWrap}>
+              <Ionicons name="search-outline" size={16} color={COLORS.textTertiary} />
+              <TextInput
+                style={s.searchInput}
+                placeholder="Search stock by name or SKU…"
+                placeholderTextColor={COLORS.textTertiary}
+                value={search}
+                onChangeText={setSearch}
+                returnKeyType="search"
+              />
+              {search.length > 0 && (
+                <TouchableOpacity onPress={() => setSearch('')} activeOpacity={0.7}>
+                  <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Section header */}
+            <View style={s.sectionHdr}>
+              <Text style={s.sectionTitle}>All Stocks by Turnover Ratio</Text>
+              <Text style={s.sectionSub}>{filtered.length} items · {selectedFY?.label ?? 'Current FY'}</Text>
             </View>
           </View>
         }
@@ -341,19 +378,21 @@ export default function MovementAnalyticsScreen() {
           <ItemRow
             item={item}
             selected={item.name === selectedItem}
-            onPress={() => setSelectedItem(item.name)}
+            onPress={() => { setSelectedItem(item.name); setActiveIdx(null); }}
             formatAmountCompact={formatAmountCompact}
           />
         )}
         ListEmptyComponent={
           isLoading ? (
             <View style={{ paddingHorizontal: SPACING.md }}>
-              {[...Array(5)].map((_, i) => <LedgerRowSkeleton key={i} />)}
+              {[...Array(6)].map((_, i) => <LedgerRowSkeleton key={i} />)}
             </View>
           ) : !apiError ? (
             <View style={s.empty}>
               <Ionicons name="analytics-outline" size={48} color={COLORS.textTertiary} />
-              <Text style={s.emptyTxt}>No movement data for this FY</Text>
+              <Text style={s.emptyTxt}>
+                {search.trim() ? 'No items match your search' : 'No stock data available'}
+              </Text>
             </View>
           ) : null
         }
@@ -368,7 +407,8 @@ const s = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: SPACING.sm, paddingVertical: 12,
-    backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+    backgroundColor: COLORS.cardBg,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
   headerBtn:   { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { flex: 1, textAlign: 'center', fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary },
@@ -384,18 +424,30 @@ const s = StyleSheet.create({
     paddingHorizontal: SPACING.md, paddingTop: SPACING.md, paddingBottom: SPACING.sm,
   },
   chartItemName: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  chartSubtitle: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+  chartSub:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
   chartHint:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
-  activePoint:   { alignItems: 'flex-end' },
-  activeVal:     { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: CHART_LINE },
+  activeBox:     { alignItems: 'flex-end' },
+  activeVal:     { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: CHART_LINE },
   activeDate:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
-  chartScroll:   { },
   chartLoading:  { height: CHART_H, alignItems: 'center', justifyContent: 'center' },
+  chartLoadingTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
   chartEmpty:    { height: CHART_H, alignItems: 'center', justifyContent: 'center' },
   chartEmptyTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
 
+  // Search
+  searchWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginHorizontal: SPACING.md, marginBottom: SPACING.sm,
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    paddingHorizontal: SPACING.sm, paddingVertical: 10,
+  },
+  searchInput: {
+    flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, paddingVertical: 0,
+  },
+
   // Section header
-  sectionHeader: {
+  sectionHdr: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: SPACING.md, paddingBottom: SPACING.xs,
   },
@@ -410,13 +462,12 @@ const s = StyleSheet.create({
     borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault,
     padding: SPACING.md,
   },
-  itemRowSel: { borderColor: CHART_LINE, borderWidth: 1.5 },
+  itemRowSel: { borderColor: CHART_LINE, borderWidth: 2 },
   itemLeft:   { flex: 1, marginRight: SPACING.sm },
   itemName:   { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
   itemSku:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
-
   itemMetrics: { flexDirection: 'row', gap: SPACING.md },
-  metric:      { alignItems: 'center' },
+  metric:      { alignItems: 'center', minWidth: 40 },
   metricVal:   { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   metricLbl:   { fontSize: 9, color: COLORS.textTertiary, marginTop: 1, textTransform: 'uppercase', letterSpacing: 0.5 },
 
