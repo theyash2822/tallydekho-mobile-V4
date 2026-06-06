@@ -51,22 +51,6 @@ const WIDGET_TILES = [
       { label: 'Out of Stock', value: String(d?.outOfStock   ?? 0) },
     ],
   },
-  {
-    id: 'fast_moving', title: 'Fast / Slow Moving',
-    icon: 'flash-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
-    route: '/stocks/fast-slow',
-    getValue: (_d: any) => [
-      { label: 'View Analysis', value: '→' },
-    ],
-  },
-  {
-    id: 'negative', title: 'Negative Stock',
-    icon: 'trending-down-outline', iconColor: '#DC2626', iconBg: '#FEF2F2',
-    route: '/stocks/negative-stock',
-    getValue: (_d: any) => [
-      { label: 'View Items', value: '→' },
-    ],
-  },
 ];
 
 export default function StocksDashboard() {
