@@ -234,8 +234,8 @@ export default function StockSnapshotScreen() {
           <View style={[s.tableRow, s.tableHeader]}>
             <Text style={[s.colIdx, s.hdrTxt]}>#</Text>
             <Text style={[s.colWarehouse, s.hdrTxt]}>Warehouse</Text>
-            <Text style={[s.colValue, s.hdrTxt]}>Value (₹)</Text>
-            <Text style={[s.colPct, s.hdrTxt]}>% Portfolio</Text>
+            <Text style={[s.colValue, s.hdrTxt]} numberOfLines={1}>Value (₹)</Text>
+            <Text style={[s.colPct, s.hdrTxt]} numberOfLines={1}>% Share</Text>
           </View>
 
           {/* Loading state */}
@@ -364,8 +364,8 @@ const s = StyleSheet.create({
 
   colIdx:      { width: 30 },
   colWarehouse:{ flex: 1, paddingRight: 4 },
-  colValue:    { width: 76, textAlign: 'right' },
-  colPct:      { width: 72, textAlign: 'right' },
+  colValue:    { width: 88, textAlign: 'right' },
+  colPct:      { width: 80, textAlign: 'right' },
 
   hdrTxt:     { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: 0.3 },
   rankTxt:    { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
