@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  ScrollView, Dimensions, TextInput,
+  ScrollView, TextInput,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -178,7 +178,7 @@ function LineChart({
             {data.map((_, i) => (
               <TouchableOpacity
                 key={i}
-                style={{ width: DAY_W, flex: 1 }}
+                style={{ width: DAY_W }}
                 onPress={() => onPointPress(i)}
                 activeOpacity={1}
               />
