@@ -18,19 +18,27 @@ import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { getMovementAnalytics, getMovementChart } from '../../src/services/api';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const CHART_H    = 200;
-const Y_AXIS_W   = 54;                // fixed pinned Y-axis width
-const PAD        = { top: 24, right: 16, bottom: 36 };  // no PAD.left — handled by Y_AXIS_W
-const DAY_W      = 44;                // px per day column in scrollable area
-const CHART_LINE = '#C9A227';         // gold
+const CHART_H   = 200;
+const Y_AXIS_W  = 54;
+const PAD       = { top: 24, right: 16, bottom: 36 };
+const DAY_W     = 44;
+const CHART_OUT = '#C9A227';   // gold  — sold / outward
+const CHART_IN  = '#27A96C';   // green — purchased / inward
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface MovItem {
   name: string; sku: string; category: string;
   closing_qty: number; closing_rate: number; total_value: number;
   outward_qty: number; outward_value: number; tr: number; dsi: number | null;
+  sold_out?: boolean;
 }
-interface ChartDay { date: string; value: number; qty: number; }
+interface ChartDay {
+  date: string;
+  value: number;         // outward value (sold)
+  qty: number;           // outward qty
+  inward_value: number;  // inward value (purchased/received)
+  inward_qty: number;    // inward qty
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const compactAmt = (n: number) => {
@@ -44,8 +52,7 @@ const fmtShortDate = (iso: string) => {
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
 };
 
-// ── Line Chart ────────────────────────────────────────────────────────────────
-// Y-axis is pinned to the left (rigid). Only the chart data + X-axis dates scroll.
+// ── Two-line Chart (gold = sold/outward, green = purchased/inward) ─────────────
 function LineChart({
   data, onPointPress, activeIdx,
 }: {
@@ -54,43 +61,45 @@ function LineChart({
   activeIdx: number | null;
 }) {
   const innerH = CHART_H - PAD.top - PAD.bottom;
-  const maxV   = Math.max(...data.map(d => d.value), 1);
+  const maxV   = Math.max(...data.map(d => Math.max(d.value, d.inward_value)), 1);
 
-  // 4 evenly spaced Y labels
   const yLabels = [0, 1, 2, 3].map(i => ({
     v: maxV * (i / 3),
     y: PAD.top + innerH - innerH * (i / 3),
   }));
 
-  // Points in scrollable coordinate space (x starts at 0)
-  const pts = data.map((d, i) => ({
+  const outPts = data.map((d, i) => ({
     x: i * DAY_W + DAY_W / 2,
     y: PAD.top + innerH - innerH * (d.value / maxV),
     d,
   }));
+  const inPts = data.map((d, i) => ({
+    x: i * DAY_W + DAY_W / 2,
+    y: PAD.top + innerH - innerH * (d.inward_value / maxV),
+    d,
+  }));
 
   const scrollW  = DAY_W * data.length + PAD.right;
-  const linePath = pts.map((p, i) => (i === 0 ? `M${p.x},${p.y}` : `L${p.x},${p.y}`)).join(' ');
+  const outPath  = outPts.map((p, i) => (i === 0 ? `M${p.x},${p.y}` : `L${p.x},${p.y}`)).join(' ');
+  const inPath   = inPts.map((p,  i) => (i === 0 ? `M${p.x},${p.y}` : `L${p.x},${p.y}`)).join(' ');
   const areaPath = [
-    `M${pts[0].x},${PAD.top + innerH}`,
-    ...pts.map(p => `L${p.x},${p.y}`),
-    `L${pts[pts.length - 1].x},${PAD.top + innerH}`, 'Z',
+    `M${outPts[0].x},${PAD.top + innerH}`,
+    ...outPts.map(p => `L${p.x},${p.y}`),
+    `L${outPts[outPts.length - 1].x},${PAD.top + innerH}`, 'Z',
   ].join(' ');
 
   return (
     <View style={{ flexDirection: 'row', height: CHART_H }}>
 
-      {/* ── Pinned Y-axis (rigid, never scrolls) ── */}
+      {/* ── Pinned Y-axis ── */}
       <Svg width={Y_AXIS_W} height={CHART_H}>
-        {/* Horizontal grid — ghost lines extending into scrollable area */}
         {yLabels.map((yl, i) => (
           <Line key={i}
             x1={Y_AXIS_W - 4} y1={yl.y}
-            x2={Y_AXIS_W} y2={yl.y}
+            x2={Y_AXIS_W}     y2={yl.y}
             stroke={COLORS.borderDefault} strokeWidth="1"
           />
         ))}
-        {/* Y labels */}
         {yLabels.map((yl, i) => (
           <SvgText key={i}
             x={Y_AXIS_W - 6} y={yl.y + 4}
@@ -99,7 +108,6 @@ function LineChart({
             {compactAmt(yl.v)}
           </SvgText>
         ))}
-        {/* Vertical axis line */}
         <Line
           x1={Y_AXIS_W} y1={PAD.top}
           x2={Y_AXIS_W} y2={PAD.top + innerH}
@@ -107,43 +115,39 @@ function LineChart({
         />
       </Svg>
 
-      {/* ── Scrollable chart area (data + X-axis dates) ── */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={{ flex: 1 }}
-      >
+      {/* ── Scrollable chart ── */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
         <View>
           <Svg width={scrollW} height={CHART_H}>
             <Defs>
-              <LinearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0"   stopColor={CHART_LINE} stopOpacity="0.35" />
-                <Stop offset="1"   stopColor={CHART_LINE} stopOpacity="0"    />
+              <LinearGradient id="gradOut" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor={CHART_OUT} stopOpacity="0.25" />
+                <Stop offset="1" stopColor={CHART_OUT} stopOpacity="0"    />
               </LinearGradient>
             </Defs>
 
-            {/* Horizontal grid lines aligned with Y labels */}
+            {/* Grid lines */}
             {yLabels.map((yl, i) => (
               <Line key={i}
-                x1={0} y1={yl.y}
-                x2={scrollW} y2={yl.y}
+                x1={0} y1={yl.y} x2={scrollW} y2={yl.y}
                 stroke={COLORS.borderDefault} strokeWidth="1"
               />
             ))}
 
-            {/* Area fill */}
-            <Path d={areaPath} fill="url(#grad)" />
+            {/* Outward area fill */}
+            <Path d={areaPath} fill="url(#gradOut)" />
 
-            {/* Line */}
-            <Path
-              d={linePath}
-              stroke={CHART_LINE} strokeWidth="2.5"
-              fill="none" strokeLinecap="round" strokeLinejoin="round"
-            />
+            {/* Outward line — gold (sold) */}
+            <Path d={outPath} stroke={CHART_OUT} strokeWidth="2.5"
+              fill="none" strokeLinecap="round" strokeLinejoin="round" />
 
-            {/* X-axis date labels (every 5 days + last) */}
-            {pts.map((p, i) => {
-              if (i % 5 !== 0 && i !== pts.length - 1) return null;
+            {/* Inward line — green (purchased/received) */}
+            <Path d={inPath} stroke={CHART_IN} strokeWidth="2.5"
+              fill="none" strokeLinecap="round" strokeLinejoin="round" />
+
+            {/* X-axis date labels (every 5 entries + last) */}
+            {outPts.map((p, i) => {
+              if (i % 5 !== 0 && i !== outPts.length - 1) return null;
               return (
                 <SvgText key={i}
                   x={p.x} y={CHART_H - 8}
@@ -154,31 +158,38 @@ function LineChart({
               );
             })}
 
-            {/* Active point vertical guideline + dot */}
-            {activeIdx !== null && pts[activeIdx] && (
-              <>
-                <Line
-                  x1={pts[activeIdx].x} y1={PAD.top}
-                  x2={pts[activeIdx].x} y2={PAD.top + innerH}
-                  stroke={CHART_LINE} strokeWidth="1.5" strokeDasharray="4,3"
-                />
-                <Circle
-                  cx={pts[activeIdx].x} cy={pts[activeIdx].y}
-                  r="5.5" fill={CHART_LINE} stroke="#fff" strokeWidth="2"
-                />
-              </>
+            {/* Active vertical guideline */}
+            {activeIdx !== null && outPts[activeIdx] && (
+              <Line
+                x1={outPts[activeIdx].x} y1={PAD.top}
+                x2={outPts[activeIdx].x} y2={PAD.top + innerH}
+                stroke={COLORS.textTertiary} strokeWidth="1.5" strokeDasharray="4,3"
+              />
+            )}
+            {/* Active dot — outward (gold) */}
+            {activeIdx !== null && outPts[activeIdx] && data[activeIdx].value > 0 && (
+              <Circle
+                cx={outPts[activeIdx].x} cy={outPts[activeIdx].y}
+                r="5.5" fill={CHART_OUT} stroke="#fff" strokeWidth="2"
+              />
+            )}
+            {/* Active dot — inward (green) */}
+            {activeIdx !== null && inPts[activeIdx] && data[activeIdx].inward_value > 0 && (
+              <Circle
+                cx={inPts[activeIdx].x} cy={inPts[activeIdx].y}
+                r="5.5" fill={CHART_IN} stroke="#fff" strokeWidth="2"
+              />
             )}
           </Svg>
 
-          {/* Transparent tap overlay per day */}
+          {/* Transparent tap overlay */}
           <View style={[
             StyleSheet.absoluteFill,
             { flexDirection: 'row', top: PAD.top, bottom: PAD.bottom },
           ]}>
             {data.map((_, i) => (
               <TouchableOpacity
-                key={i}
-                style={{ width: DAY_W }}
+                key={i} style={{ width: DAY_W }}
                 onPress={() => onPointPress(i)}
                 activeOpacity={1}
               />
@@ -197,6 +208,10 @@ function ItemRow({
   item: MovItem; selected: boolean; onPress: () => void;
   formatAmountCompact: (n: number) => string;
 }) {
+  const trDisplay  = item.sold_out ? '∞' : item.tr > 0 ? `${item.tr.toFixed(1)}x` : '—';
+  const dsiDisplay = item.sold_out ? '0d' : item.dsi != null ? `${item.dsi}d` : '—';
+  const trColor    = (item.sold_out || item.tr > 0) ? CHART_OUT : COLORS.textPrimary;
+
   return (
     <TouchableOpacity
       style={[s.itemRow, selected && s.itemRowSel]}
@@ -205,21 +220,28 @@ function ItemRow({
     >
       <View style={s.itemLeft}>
         <Text style={s.itemName} numberOfLines={2}>{item.name}</Text>
-        {item.sku ? <Text style={s.itemSku}>{item.sku}</Text> : null}
+        <View style={s.itemSubRow}>
+          {item.sku ? <Text style={s.itemSku}>{item.sku}</Text> : null}
+          {item.sold_out && (
+            <View style={s.soldBadge}>
+              <Text style={s.soldBadgeTxt}>SOLD OUT</Text>
+            </View>
+          )}
+        </View>
       </View>
       <View style={s.itemMetrics}>
         <View style={s.metric}>
-          <Text style={[s.metricVal, item.tr > 0 && { color: CHART_LINE }]}>
-            {item.tr > 0 ? `${item.tr.toFixed(1)}x` : '—'}
-          </Text>
+          <Text style={[s.metricVal, { color: trColor }]}>{trDisplay}</Text>
           <Text style={s.metricLbl}>TR</Text>
         </View>
         <View style={s.metric}>
-          <Text style={s.metricVal}>{item.dsi != null ? `${item.dsi}d` : '—'}</Text>
+          <Text style={s.metricVal}>{dsiDisplay}</Text>
           <Text style={s.metricLbl}>DSI</Text>
         </View>
         <View style={s.metric}>
-          <Text style={s.metricVal}>{formatAmountCompact(item.total_value)}</Text>
+          <Text style={s.metricVal}>
+            {item.sold_out ? '₹0' : formatAmountCompact(item.total_value)}
+          </Text>
           <Text style={s.metricLbl}>Value</Text>
         </View>
       </View>
@@ -271,7 +293,18 @@ export default function MovementAnalyticsScreen() {
     setChartLoading(true);
     setActiveIdx(null);
     getMovementChart(companyGuid, { item: selectedItem })
-      .then((res: any) => setChartData(res?.data ?? []))
+      .then((res: any) => {
+        const raw = res?.data ?? [];
+        // Normalise — ensure inward fields always exist (backward compat)
+        const normalised: ChartDay[] = raw.map((d: any) => ({
+          date:         d.date,
+          value:        parseFloat(d.value        ?? d.outward_value ?? 0),
+          qty:          parseFloat(d.qty          ?? d.outward_qty   ?? 0),
+          inward_value: parseFloat(d.inward_value ?? 0),
+          inward_qty:   parseFloat(d.inward_qty   ?? 0),
+        }));
+        setChartData(normalised);
+      })
       .catch(() => setChartData([]))
       .finally(() => setChartLoading(false));
   }, [selectedItem, companyGuid]);
@@ -283,9 +316,9 @@ export default function MovementAnalyticsScreen() {
       )
     : items;
 
-  const activePoint       = activeIdx !== null ? chartData[activeIdx] : null;
-  const selectedItemData  = items.find(i => i.name === selectedItem);
-  const hasChartData      = chartData.some(d => d.value > 0);
+  const activePoint      = activeIdx !== null ? chartData[activeIdx] : null;
+  const selectedItemData = items.find(i => i.name === selectedItem);
+  const hasChartData     = chartData.some(d => d.value > 0 || d.inward_value > 0);
 
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
@@ -309,26 +342,52 @@ export default function MovementAnalyticsScreen() {
           <View>
             {/* ── Chart card ── */}
             <View style={s.chartCard}>
-              {/* Item info + active point value */}
+
+              {/* Item info + active point tooltip */}
               <View style={s.chartInfo}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.chartItemName} numberOfLines={1}>
                     {selectedItemData?.name ?? '—'}
                   </Text>
                   <Text style={s.chartSub}>
-                    {selectedItemData && selectedItemData.tr > 0
-                      ? `TR ${selectedItemData.tr.toFixed(1)}x${selectedItemData.dsi != null ? `  ·  DSI ${selectedItemData.dsi}d` : ''}`
-                      : 'No sales in selected FY'}
+                    {selectedItemData
+                      ? selectedItemData.sold_out
+                        ? 'Sold out · Last 30 entries'
+                        : selectedItemData.tr > 0
+                          ? `TR ${selectedItemData.tr.toFixed(1)}x${selectedItemData.dsi != null ? `  ·  DSI ${selectedItemData.dsi}d` : ''}  ·  Last 30 entries`
+                          : 'No sales in selected FY · Last 30 entries'
+                      : '—'}
                   </Text>
                 </View>
-                {activePoint && activePoint.value > 0 ? (
+                {activePoint && (activePoint.value > 0 || activePoint.inward_value > 0) ? (
                   <View style={s.activeBox}>
-                    <Text style={s.activeVal}>{compactAmt(activePoint.value)}</Text>
+                    {activePoint.value > 0 && (
+                      <Text style={[s.activeVal, { color: CHART_OUT }]}>
+                        Sold {compactAmt(activePoint.value)}
+                      </Text>
+                    )}
+                    {activePoint.inward_value > 0 && (
+                      <Text style={[s.activeVal, { color: CHART_IN }]}>
+                        Bought {compactAmt(activePoint.inward_value)}
+                      </Text>
+                    )}
                     <Text style={s.activeDate}>{fmtShortDate(activePoint.date)}</Text>
                   </View>
                 ) : (
                   <Text style={s.chartHint}>Tap chart to inspect</Text>
                 )}
+              </View>
+
+              {/* Legend */}
+              <View style={s.chartLegend}>
+                <View style={s.legendItem}>
+                  <View style={[s.legendDot, { backgroundColor: CHART_OUT }]} />
+                  <Text style={s.legendTxt}>Sold</Text>
+                </View>
+                <View style={s.legendItem}>
+                  <View style={[s.legendDot, { backgroundColor: CHART_IN }]} />
+                  <Text style={s.legendTxt}>Purchased</Text>
+                </View>
               </View>
 
               {/* Chart */}
@@ -344,7 +403,7 @@ export default function MovementAnalyticsScreen() {
                 />
               ) : (
                 <View style={s.chartEmpty}>
-                  <Text style={s.chartEmptyTxt}>No sales in last 30 days</Text>
+                  <Text style={s.chartEmptyTxt}>No stock movements found</Text>
                 </View>
               )}
             </View>
@@ -421,18 +480,27 @@ const s = StyleSheet.create({
   },
   chartInfo: {
     flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md, paddingTop: SPACING.md, paddingBottom: SPACING.sm,
+    paddingHorizontal: SPACING.md, paddingTop: SPACING.md, paddingBottom: SPACING.xs,
   },
   chartItemName: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   chartSub:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
   chartHint:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
-  activeBox:     { alignItems: 'flex-end' },
-  activeVal:     { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: CHART_LINE },
+  activeBox:     { alignItems: 'flex-end', gap: 2 },
+  activeVal:     { fontSize: TYPOGRAPHY.sm, fontWeight: '700' },
   activeDate:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
   chartLoading:  { height: CHART_H, alignItems: 'center', justifyContent: 'center' },
   chartLoadingTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
   chartEmpty:    { height: CHART_H, alignItems: 'center', justifyContent: 'center' },
   chartEmptyTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
+
+  // Legend
+  chartLegend: {
+    flexDirection: 'row', gap: SPACING.md,
+    paddingHorizontal: SPACING.md, paddingBottom: SPACING.xs,
+  },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  legendDot:  { width: 8, height: 8, borderRadius: 4 },
+  legendTxt:  { fontSize: 9, color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5 },
 
   // Search
   searchWrap: {
@@ -462,10 +530,16 @@ const s = StyleSheet.create({
     borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault,
     padding: SPACING.md,
   },
-  itemRowSel: { borderColor: CHART_LINE, borderWidth: 2 },
-  itemLeft:   { flex: 1, marginRight: SPACING.sm },
-  itemName:   { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  itemSku:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
+  itemRowSel:  { borderColor: CHART_OUT, borderWidth: 2 },
+  itemLeft:    { flex: 1, marginRight: SPACING.sm },
+  itemName:    { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  itemSubRow:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  itemSku:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  soldBadge:   {
+    backgroundColor: '#E53935', borderRadius: 3,
+    paddingHorizontal: 4, paddingVertical: 1,
+  },
+  soldBadgeTxt: { fontSize: 8, color: '#fff', fontWeight: '700', letterSpacing: 0.5 },
   itemMetrics: { flexDirection: 'row', gap: SPACING.md },
   metric:      { alignItems: 'center', minWidth: 40 },
   metricVal:   { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
