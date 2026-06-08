@@ -10,7 +10,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
-import { getStockItem, getStockMovements, getStockGodowns } from '../../src/services/api';
+import { getStockItem, getStockMovements, getStockGodowns, getBarcodesByGuids, generateBarcode } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -53,7 +53,16 @@ function BarcodeStrip({ value }: { value: string }) {
     </View>
   );
 }
-const bc = StyleSheet.create({ wrap: { alignItems: 'center', paddingVertical: SPACING.md } });
+const bc  = StyleSheet.create({ wrap: { alignItems: 'center', paddingVertical: SPACING.md } });
+const bgs = StyleSheet.create({
+  genBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 10, paddingHorizontal: 20, marginVertical: SPACING.md,
+    borderRadius: 20, borderWidth: 1.5, borderColor: COLORS.brandPrimary,
+    backgroundColor: COLORS.pageBg, alignSelf: 'center',
+  },
+  genBtnText: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.brandPrimary },
+});
 
 // ─── MATRIX CELL ─────────────────────────────────────────────────────────────
 function MatrixCell({ label, value, valueColor, chevron, onPress }: {
@@ -107,6 +116,8 @@ export default function ItemDetailScreen() {
   const [calOpen,    setCalOpen]    = useState(false);
   const [dateFrom,   setDateFrom]   = useState('');
   const [dateTo,     setDateTo]     = useState('');
+  const [itemBarcode,       setItemBarcode]       = useState<string | null>(null);
+  const [barcodeGenerating, setBarcodeGenerating] = useState(false);
 
   useEffect(() => {
     if (!companyGuid || !id) return;
@@ -118,6 +129,13 @@ export default function ItemDetailScreen() {
     // Fetch warehouse breakdown
     getStockGodowns(companyGuid, id as string)
       .then((res: any) => { if (res?.data?.warehouses) setGodowns(res.data.warehouses); })
+      .catch(() => {});
+    // Fetch primary barcode from stock_barcodes
+    getBarcodesByGuids(companyGuid, [id as string])
+      .then((res: any) => {
+        const bc = (res?.data?.items || res?.items || [])[0]?.barcode || null;
+        setItemBarcode(bc);
+      })
       .catch(() => {});
   }, [companyGuid, id, selectedFY]);
 
@@ -180,7 +198,32 @@ export default function ItemDetailScreen() {
           <View style={styles.heroCard}>
             <Text style={styles.heroName}>{itemName}</Text>
             <Text style={styles.heroSku}>{itemSku}</Text>
-            <BarcodeStrip value={itemSku !== '—' ? itemSku : '000000000'} />
+            {itemBarcode ? (
+              <BarcodeStrip value={itemBarcode} />
+            ) : (
+              <TouchableOpacity
+                style={bgs.genBtn}
+                activeOpacity={0.8}
+                disabled={barcodeGenerating}
+                onPress={async () => {
+                  if (!companyGuid || !id) return;
+                  setBarcodeGenerating(true);
+                  try {
+                    const res = await generateBarcode(companyGuid, id as string);
+                    const bc = res?.data?.barcode || res?.barcode;
+                    if (bc) { setItemBarcode(bc); }
+                  } catch {}
+                  finally { setBarcodeGenerating(false); }
+                }}
+              >
+                {barcodeGenerating
+                  ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+                  : <Ionicons name="barcode-outline" size={18} color={COLORS.brandPrimary} />}
+                <Text style={bgs.genBtnText}>
+                  {barcodeGenerating ? 'Generating…' : 'Generate Barcode'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Key Matrix */}
