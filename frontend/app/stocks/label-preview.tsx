@@ -11,6 +11,7 @@ import * as Sharing from 'expo-sharing';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getBarcodesByGuids } from '../../src/services/api';
+import { encodeCode128B, barcodeDataURI } from '../../src/utils/barcode';
 
 const AMBER = '#A89060';
 
@@ -22,25 +23,24 @@ type PreviewItem = {
   closingRate: number;
 };
 
-// ─── SVG Barcode Generator ───────────────────────────────────────────────────
-// Visual representation only — not a real scannable barcode renderer
+// ─── Real CODE128B Barcode SVG ────────────────────────────────────────────────
+// Uses actual CODE128B encoding — scannable by physical barcode scanners.
 function BarcodeSVG({ code, width = 240, height = 60 }: { code: string; width?: number; height?: number }) {
-  const bars: { x: number; w: number; h: number }[] = [];
+  const { bars, totalModules } = encodeCode128B(code);
+  if (!bars.length || !totalModules) return null;
+  const moduleW = width / totalModules;
+  const rects: React.ReactElement[] = [];
   let x = 0;
-  const totalBars = 52;
-  const spacing = width / (totalBars * 1.8);
-  for (let i = 0; i < totalBars; i++) {
-    const charCode = code.charCodeAt(i % code.length);
-    const w = charCode % 3 === 0 ? 3 : charCode % 3 === 1 ? 2 : 1.5;
-    const h = height - (charCode % 2 === 0 ? 0 : 8);
-    bars.push({ x, w, h });
-    x += w + spacing;
-  }
+  bars.forEach((modules, i) => {
+    const w = modules * moduleW;
+    if (i % 2 === 0) {
+      rects.push(<Rect key={i} x={x} y={0} width={w} height={height} fill="#000" />);
+    }
+    x += w;
+  });
   return (
-    <Svg width={width} height={height}>
-      {bars.map((bar, i) => (
-        <Rect key={i} x={bar.x} y={height - bar.h} width={bar.w} height={bar.h} fill="#1A1A1A" rx={0.5} />
-      ))}
+    <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+      {rects}
     </Svg>
   );
 }

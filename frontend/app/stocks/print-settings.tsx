@@ -10,6 +10,7 @@ import * as Sharing from 'expo-sharing';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getBarcodesByGuids } from '../../src/services/api';
+import { barcodeDataURI } from '../../src/utils/barcode';
 
 const AMBER = '#A89060';
 const LABEL_SIZES = ['50×30 mm', '38×25 mm', '100×50 mm', 'A4'];
@@ -34,14 +35,16 @@ function buildLabelHTML(
   for (const item of items) {
     const barcode = item.barcode || '—';
     const price   = item.closingRate > 0 ? `₹${item.closingRate.toLocaleString('en-IN')}` : '';
+    // Real CODE128B barcode as inline SVG data URI — actually scannable
+    const barcodeImg = item.barcode
+      ? `<img src="${barcodeDataURI(item.barcode, 200, 40)}" style="max-width:100%;height:10mm;" alt="${item.barcode}"/>`
+      : `<span style="color:#aaa;font-size:6pt">no barcode</span>`;
     for (let c = 0; c < opts.copies; c++) {
       labels.push(`
         <div class="label">
           <div class="name">${item.displayName}</div>
-          <div class="barcode-bars">
-            ${item.barcode ? generateBarcodeBars(item.barcode) : '<span style="color:#aaa;font-size:6pt">no barcode</span>'}
-          </div>
-          <div class="barcode-num">${barcode}</div>
+          <div class="bc">${barcodeImg}</div>
+          <div class="bcnum">${barcode}</div>
           ${opts.showSku && item.sku ? `<div class="field">SKU: ${item.sku}</div>` : ''}
           ${opts.showPrice && price ? `<div class="field">Price: ${price}</div>` : ''}
         </div>
@@ -50,37 +53,22 @@ function buildLabelHTML(
   }
 
   const labelCss = isA4
-    ? `display:inline-block; width:${dim.w}; page-break-inside:avoid; margin:2mm; font-size:${dim.fs};`
-    : `display:block; width:${dim.w}; height:${dim.h}; page-break-after:always; font-size:${dim.fs};`;
+    ? `display:inline-block;width:${dim.w};page-break-inside:avoid;margin:2mm;font-size:${dim.fs};`
+    : `display:block;width:${dim.w};height:${dim.h};page-break-after:always;font-size:${dim.fs};`;
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
   <style>
-    @page { margin: 0; size: ${isA4 ? 'A4' : `${dim.w} ${dim.h}`}; }
-    body  { margin: 0; padding: ${isA4 ? '5mm' : '0'}; font-family: Arial, sans-serif; }
-    .label { ${labelCss} border: 0.3mm solid #ccc; box-sizing: border-box; padding: 1.5mm;
-              display: flex; flex-direction: column; align-items: center; justify-content: center; }
-    .name  { font-weight: 700; font-size: ${dim.fs}; text-align: center; margin-bottom: 1mm;
-              max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .barcode-bars { display: flex; align-items: flex-end; gap: 0.3mm; height: 10mm; margin-bottom: 0.5mm; }
-    .bar   { background: #000; }
-    .barcode-num { font-size: 5.5pt; letter-spacing: 1.5pt; color: #333; margin-bottom: 0.5mm; }
-    .field { font-size: 5.5pt; color: #555; }
+    @page{margin:0;size:${isA4 ? 'A4' : `${dim.w} ${dim.h}`}}
+    body{margin:0;padding:${isA4 ? '5mm' : '0'};font-family:Arial,sans-serif}
+    .label{${labelCss}border:0.3mm solid #ccc;box-sizing:border-box;padding:1.5mm;
+      display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .name{font-weight:700;font-size:${dim.fs};text-align:center;margin-bottom:1mm;
+      max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .bc{display:flex;align-items:center;justify-content:center;margin-bottom:0.5mm}
+    .bcnum{font-size:5.5pt;letter-spacing:1.5pt;color:#333;margin-bottom:0.5mm}
+    .field{font-size:5.5pt;color:#555}
   </style>
   </head><body>${labels.join('')}</body></html>`;
-}
-
-// Generate simple CSS bar representation of barcode (visual only, not scannable spec)
-function generateBarcodeBars(code: string): string {
-  const bars: string[] = [];
-  const totalBars = 40;
-  for (let i = 0; i < totalBars; i++) {
-    const ch = code.charCodeAt(i % code.length);
-    const w  = ch % 3 === 0 ? '0.8mm' : ch % 3 === 1 ? '0.5mm' : '0.3mm';
-    const h  = (ch % 2 === 0 ? '10mm' : '8mm');
-    if (i % 2 === 0) bars.push(`<div class="bar" style="width:${w};height:${h}"></div>`);
-    else bars.push(`<div style="width:${w}"></div>`);
-  }
-  return bars.join('');
 }
 
 export interface PrintItem {
