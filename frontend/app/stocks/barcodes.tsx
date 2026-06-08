@@ -14,7 +14,7 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { useAuth } from '../../src/context/AuthContext';
 import {
   getBarcodeList, getBarcodeSettings, saveBarcodeSettings,
-  generateBarcode, linkBarcode, lookupBarcode,
+  generateBarcode, generateBulkBarcodes, linkBarcode, lookupBarcode,
   bulkImportBarcodes, BarcodeItem, BarcodeSettings,
 } from '../../src/services/api';
 
@@ -63,6 +63,10 @@ export default function BarcodesScreen() {
   // ── Multi-select ────────────────────────────────────────────────────────────
   const [selectedIds,    setSelectedIds]    = useState<Set<string>>(new Set());
   const [isMultiSelect,  setIsMultiSelect]  = useState(false);
+
+  // ── Generation state ────────────────────────────────────────────────────────
+  const [generatingIds,  setGeneratingIds]  = useState<Set<string>>(new Set()); // per-row inline spinner
+  const [generatingAll,  setGeneratingAll]  = useState(false);                  // bulk in-progress
 
   // ── Modals ──────────────────────────────────────────────────────────────────
   const [scannerVisible,  setScannerVisible]  = useState(false);
@@ -194,24 +198,73 @@ export default function BarcodesScreen() {
     }
   };
 
-  // ── Add to Print Queue ─────────────────────────────────────────────────────
-  const handleAddToPrintQueue = () => {
-    const ids = Array.from(selectedIds).join(',');
-    router.push(`/stocks/print-settings?ids=${ids}` as any);
-  };
-
-  // ── Generate barcode for item ──────────────────────────────────────────────
-  const handleGenerateBarcode = async (item: BarcodeItem) => {
-    if (!companyGuid) return;
+  // ── Generate barcode inline (single item, updates row in-place) ──────────
+  const handleGenerateInline = async (item: BarcodeItem) => {
+    if (!companyGuid || generatingIds.has(item.stockGuid)) return;
+    setGeneratingIds(prev => new Set(prev).add(item.stockGuid));
     try {
       const res = await generateBarcode(companyGuid, item.stockGuid, settings.defaultBarcodeType, settings.barcodeStorageMode);
-      const d = res?.data || res;
-      Alert.alert('Barcode Generated', `${d.barcode}`, [
-        { text: 'OK', onPress: () => loadItems(1, true) },
-      ]);
+      const barcode = res?.data?.barcode || res?.barcode;
+      // Update that single row in-place — no full list reload
+      setItems(prev => prev.map(i =>
+        i.stockGuid === item.stockGuid
+          ? { ...i, barcode, barcodeStatus: 'active', source: 'app_generated' }
+          : i
+      ));
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to generate barcode');
+      Alert.alert('Could not generate', err?.message || 'Try again.');
+    } finally {
+      setGeneratingIds(prev => { const n = new Set(prev); n.delete(item.stockGuid); return n; });
     }
+  };
+
+  // ── Generate All unlinked items (bulk) ────────────────────────────────────
+  const handleGenerateAll = () => {
+    const unlinked = items.filter(i => !i.barcode);
+    if (!unlinked.length) {
+      Alert.alert('All linked', 'Every item already has a barcode.');
+      return;
+    }
+    Alert.alert(
+      'Generate All Barcodes',
+      `Generate barcodes for ${unlinked.length} unlinked item${unlinked.length !== 1 ? 's' : ''}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: `Generate ${unlinked.length}`, onPress: async () => {
+          setGeneratingAll(true);
+          try {
+            const res = await generateBulkBarcodes(companyGuid, {
+              all: true,
+              barcodeType: settings.defaultBarcodeType,
+              syncTarget:  settings.barcodeStorageMode,
+            });
+            const d = res?.data || res;
+            await loadItems(1, true);
+            Alert.alert('✅ Done', `Generated ${d.generated} barcodes${d.errors ? `, ${d.errors} failed` : '.'}`);
+          } catch (err: any) {
+            Alert.alert('Error', err?.message || 'Bulk generate failed');
+          } finally { setGeneratingAll(false); }
+        }},
+      ]
+    );
+  };
+
+  // ── Add to Print Queue — auto-generates unlinked selected items first ─────
+  const handleAddToPrintQueue = async () => {
+    if (!companyGuid || !selectedIds.size) return;
+    const needsBarcode = items.filter(i => selectedIds.has(i.stockGuid) && !i.barcode);
+    if (needsBarcode.length > 0) {
+      setGeneratingAll(true);
+      try {
+        await generateBulkBarcodes(companyGuid, {
+          stockGuids:  needsBarcode.map(i => i.stockGuid),
+          barcodeType: settings.defaultBarcodeType,
+          syncTarget:  settings.barcodeStorageMode,
+        });
+      } catch { /* non-fatal — print continues */ }
+      finally { setGeneratingAll(false); }
+    }
+    router.push(`/stocks/print-settings?ids=${Array.from(selectedIds).join(',')}` as any);
   };
 
   // ── Link scanned barcode to stock item ─────────────────────────────────────
@@ -243,19 +296,28 @@ export default function BarcodesScreen() {
     } finally { setLinking(false); }
   };
 
-  // ── Item tap ───────────────────────────────────────────────────────────────
+  // ── Item tap — unlinked: generate inline; linked: open details ────────────
   const handleItemTap = (item: BarcodeItem) => {
     if (isMultiSelect) { toggleSelect(item.stockGuid); return; }
+    if (generatingIds.has(item.stockGuid)) return; // already generating
     if (item.barcode) {
       router.push(`/stocks/item-detail?id=${item.stockGuid}` as any);
     } else {
-      Alert.alert(item.displayName, 'No barcode linked.', [
-        { text: 'Generate Barcode', onPress: () => handleGenerateBarcode(item) },
-        { text: 'Link Barcode', onPress: () => { setScannedCode(''); setManualBarcode(''); setLinkSearch(''); setLinkResults([item]); setLinkVisible(true); } },
-        { text: 'Open Details', onPress: () => router.push(`/stocks/item-detail?id=${item.stockGuid}` as any) },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
+      // Single tap on unlinked item → generate barcode immediately, no dialog
+      handleGenerateInline(item);
     }
+  };
+
+  // ── Item long-press — multi-select (unlinked) or options menu (linked) ────
+  const handleItemLongPress = (item: BarcodeItem) => {
+    if (isMultiSelect) { toggleSelect(item.stockGuid); return; }
+    if (!item.barcode) { enterMultiSelect(item.stockGuid); return; }
+    Alert.alert(item.displayName, item.barcode, [
+      { text: 'Select for Print', onPress: () => enterMultiSelect(item.stockGuid) },
+      { text: 'Link Different Barcode', onPress: () => { setScannedCode(''); setManualBarcode(item.barcode || ''); setLinkSearch(''); setLinkResults([item]); setLinkVisible(true); } },
+      { text: 'Open Details', onPress: () => router.push(`/stocks/item-detail?id=${item.stockGuid}` as any) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   // ── Import ─────────────────────────────────────────────────────────────────
@@ -308,14 +370,17 @@ export default function BarcodesScreen() {
 
   // ── Render item row ────────────────────────────────────────────────────────
   const renderItem = ({ item }: { item: BarcodeItem }) => {
-    const isSelected = selectedIds.has(item.stockGuid);
-    const subtitle   = item.barcode || item.sku || item.alias || 'No barcode linked';
-    const isLinked   = !!item.barcode;
+    const isSelected   = selectedIds.has(item.stockGuid);
+    const isGenerating = generatingIds.has(item.stockGuid);
+    const isLinked     = !!item.barcode;
+    const subtitle     = isGenerating
+      ? 'Generating barcode…'
+      : item.barcode || item.sku || item.alias || 'Tap to generate barcode';
     return (
       <TouchableOpacity
-        style={[s.itemRow, isSelected && s.itemRowSelected]}
+        style={[s.itemRow, isSelected && s.itemRowSelected, isGenerating && s.itemRowGenerating]}
         onPress={() => handleItemTap(item)}
-        onLongPress={() => !isMultiSelect ? enterMultiSelect(item.stockGuid) : toggleSelect(item.stockGuid)}
+        onLongPress={() => handleItemLongPress(item)}
         activeOpacity={0.7}
         delayLongPress={350}
       >
@@ -325,11 +390,13 @@ export default function BarcodesScreen() {
           </View>
         )}
         <View style={s.itemIconWrap}>
-          <Ionicons name={isLinked ? 'barcode-outline' : 'cube-outline'} size={20} color={isLinked ? AMBER : COLORS.textSecondary} />
+          {isGenerating
+            ? <ActivityIndicator size="small" color={AMBER} />
+            : <Ionicons name={isLinked ? 'barcode-outline' : 'cube-outline'} size={20} color={isLinked ? AMBER : COLORS.textSecondary} />}
         </View>
         <View style={s.itemInfo}>
           <Text style={s.itemName} numberOfLines={1}>{item.displayName}</Text>
-          <Text style={[s.itemSku, !isLinked && s.itemSkuNoBarcode]} numberOfLines={1}>{subtitle}</Text>
+          <Text style={[s.itemSku, !isLinked && !isGenerating && s.itemSkuNoBarcode, isGenerating && s.itemSkuGenerating]} numberOfLines={1}>{subtitle}</Text>
         </View>
         <Text style={s.itemQty}>{Math.round(item.currentQty).toLocaleString()}</Text>
       </TouchableOpacity>
@@ -361,6 +428,12 @@ export default function BarcodesScreen() {
             </TouchableOpacity>
             <TouchableOpacity style={s.headerIcon} onPress={() => setImportVisible(true)} activeOpacity={0.7}>
               <Ionicons name="cloud-upload-outline" size={22} color={COLORS.textPrimary} />
+            </TouchableOpacity>
+            {/* ⚡ Generate All unlinked items */}
+            <TouchableOpacity style={s.headerIcon} onPress={handleGenerateAll} activeOpacity={0.7} disabled={generatingAll}>
+              {generatingAll
+                ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+                : <Ionicons name="flash-outline" size={22} color={COLORS.brandPrimary} />}
             </TouchableOpacity>
             <TouchableOpacity style={s.headerIcon} onPress={() => { setDraftSettings({ ...settings }); setSettingsVisible(true); }} activeOpacity={0.7}>
               <Ionicons name="settings-outline" size={21} color={COLORS.textPrimary} />
@@ -476,9 +549,10 @@ export default function BarcodesScreen() {
       {/* ── Add to Print Queue sticky button */}
       {isMultiSelect && selectedIds.size > 0 && (
         <View style={[s.printQueueBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-          <TouchableOpacity style={s.printQueueBtn} onPress={handleAddToPrintQueue} activeOpacity={0.85}>
-            <Ionicons name="print-outline" size={18} color="#fff" />
-            <Text style={s.printQueueBtnText}>Add {selectedIds.size} item{selectedIds.size > 1 ? 's' : ''} to Print Queue</Text>
+          <TouchableOpacity style={s.printQueueBtn} onPress={handleAddToPrintQueue} activeOpacity={0.85} disabled={generatingAll}>
+            {generatingAll
+              ? <><ActivityIndicator size="small" color="#fff" /><Text style={s.printQueueBtnText}>Generating barcodes…</Text></>
+              : <><Ionicons name="print-outline" size={18} color="#fff" /><Text style={s.printQueueBtnText}>Generate & Print {selectedIds.size} item{selectedIds.size > 1 ? 's' : ''}</Text></>}
           </TouchableOpacity>
         </View>
       )}
@@ -757,7 +831,9 @@ const s = StyleSheet.create({
   itemInfo:      { flex: 1 },
   itemName:      { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
   itemSku:       { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
-  itemSkuNoBarcode: { color: COLORS.textTertiary, fontStyle: 'italic' },
+  itemSkuNoBarcode:  { color: COLORS.textTertiary, fontStyle: 'italic' },
+  itemSkuGenerating: { color: AMBER, fontStyle: 'italic' },
+  itemRowGenerating: { backgroundColor: '#FFFDF5' },
   itemQty:       { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, minWidth: 40, textAlign: 'right' },
   emptyWrap:     { alignItems: 'center', paddingTop: 60, gap: 12 },
   emptyText:     { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },

@@ -437,3 +437,8 @@ export const saveBarcodeSettings = (companyGuid: string, payload: BarcodeSetting
 
 export const getBarcodesByGuids = (companyGuid: string, stockGuids: string[]) =>
   post<any>('/inventory/barcodes/by-guids', { companyGuid, stockGuids });
+
+export const generateBulkBarcodes = (
+  companyGuid: string,
+  options: { stockGuids?: string[]; all?: boolean; barcodeType?: string; syncTarget?: string }
+) => post<any>('/inventory/barcodes/generate-bulk', { companyGuid, ...options });
