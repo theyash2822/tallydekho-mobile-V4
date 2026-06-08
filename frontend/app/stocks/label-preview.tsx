@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -53,6 +53,7 @@ export default function LabelPreviewScreen() {
     showSku?: string; showPrice?: string; showBatch?: string;
   }>();
   const { company } = useAuth();
+  const { width: screenW } = useWindowDimensions();
   const companyGuid = company?.guid ?? '';
 
   const stockGuids = params.ids ? params.ids.split(',').filter(Boolean) : [];
@@ -117,6 +118,28 @@ export default function LabelPreviewScreen() {
       </SafeAreaView>
     );
   }
+
+  // ── Label preview dimensions ────────────────────────────────────────────
+  const LABEL_MM: Record<string, { w: number; h: number }> = {
+    '50×30 mm':  { w: 50,  h: 30  },
+    '38×25 mm':  { w: 38,  h: 25  },
+    '100×50 mm': { w: 100, h: 50  },
+    'A4':        { w: 210, h: 297 },
+  };
+  const mmDim     = LABEL_MM[labelSize] || LABEL_MM['50×30 mm'];
+  const isPortrait = mmDim.h > mmDim.w;
+  const maxCardW   = screenW - 48;
+  const cardW      = Math.min(maxCardW, isPortrait ? 220 : 340);
+  const cardH      = Math.round((cardW * mmDim.h) / mmDim.w);
+  // Clamp A4 preview height so it doesn’t fill the whole screen
+  const previewH   = isPortrait ? Math.min(cardH, 320) : cardH;
+  // Scale fonts relative to 50×30 area as baseline
+  const areaRatio    = Math.sqrt((mmDim.w * mmDim.h) / 1500); // sqrt(50*30)
+  const nameFontSize = Math.max(7, Math.min(13, Math.round(10 * areaRatio)));
+  const codeFontSize = Math.max(5, Math.round(7  * areaRatio));
+  const fieldFontSz  = Math.max(5, Math.round(6  * areaRatio));
+  const barcodeH     = Math.max(14, Math.round(previewH * 0.30));
+  const barcodeW     = Math.round(cardW * 0.72);
 
   const fmtPrice = (rate: number) =>
     rate > 0 ? `₹${rate.toLocaleString('en-IN')}` : '—';
@@ -215,41 +238,61 @@ export default function LabelPreviewScreen() {
         )}
 
         {/* ════════════════════════════════════════
-            LABEL CARD
+            LABEL CARD — scaled to real proportions
         ════════════════════════════════════════ */}
         <View style={s.labelContainer}>
-          <View style={s.labelCard}>
-            <View style={s.labelSizeBadge}><Text style={s.labelSizeBadgeText}>{labelSize}</Text></View>
+          {/* "Actual size" hint */}
+          <Text style={s.previewHint}>Preview — {labelSize} · {copies} cop{copies === 1 ? 'y' : 'ies'}</Text>
 
-            <Text style={s.labelItemName} numberOfLines={2}>{currentItem.displayName}</Text>
+          {/* White paper shadow + label */}
+          <View style={[s.labelPaper, { width: cardW, height: previewH }]}>
 
-            {/* Barcode visual */}
-            <View style={s.barcodeWrap}>
-              <BarcodeSVG code={currentItem.barcode || currentItem.displayName} width={240} height={60} />
+            {/* Size badge */}
+            <View style={s.labelSizeBadge}>
+              <Text style={s.labelSizeBadgeText}>{labelSize}</Text>
             </View>
-            <Text style={s.barcodeNumber}>
+
+            {/* Item name */}
+            <Text
+              style={[s.labelItemName, { fontSize: nameFontSize, marginBottom: Math.max(2, previewH * 0.04) }]}
+              numberOfLines={isPortrait ? 3 : 2}
+            >
+              {currentItem.displayName}
+            </Text>
+
+            {/* Barcode SVG — sized to label */}
+            <BarcodeSVG
+              code={currentItem.barcode || currentItem.displayName}
+              width={barcodeW}
+              height={barcodeH}
+            />
+
+            {/* Barcode number */}
+            <Text style={[s.barcodeNumber, { fontSize: codeFontSize, marginBottom: Math.max(2, previewH * 0.03) }]}>
               {currentItem.barcode || 'No barcode linked'}
             </Text>
 
             {/* Optional fields */}
             {(showSku || showPrice) && (
-              <View style={s.labelFields}>
+              <View style={[s.labelFields, { borderTopWidth: 0.5 }]}>
                 {showSku && currentItem.sku && (
                   <View style={s.labelFieldRow}>
-                    <Text style={s.labelFieldKey}>SKU</Text>
-                    <Text style={s.labelFieldVal}>{currentItem.sku}</Text>
+                    <Text style={[s.labelFieldKey, { fontSize: fieldFontSz }]}>SKU</Text>
+                    <Text style={[s.labelFieldVal, { fontSize: fieldFontSz }]}>{currentItem.sku}</Text>
                   </View>
                 )}
                 {showPrice && (
                   <View style={s.labelFieldRow}>
-                    <Text style={s.labelFieldKey}>Price</Text>
-                    <Text style={s.labelFieldVal}>{fmtPrice(currentItem.closingRate)}</Text>
+                    <Text style={[s.labelFieldKey, { fontSize: fieldFontSz }]}>Price</Text>
+                    <Text style={[s.labelFieldVal, { fontSize: fieldFontSz }]}>{fmtPrice(currentItem.closingRate)}</Text>
                   </View>
                 )}
               </View>
             )}
           </View>
-          <View style={s.labelShadow} />
+
+          {/* Drop shadow */}
+          <View style={[s.labelShadow, { width: cardW - 12 }]} />
         </View>
 
         {/* ── All items list */}
@@ -285,20 +328,33 @@ export default function LabelPreviewScreen() {
 
       {/* ── Bottom bar */}
       <View style={[s.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        {/* Row 1: Print + Share PDF */}
+        <View style={s.btnRow}>
+          <TouchableOpacity
+            style={[s.printNowBtn, printing && s.btnDisabled]}
+            onPress={handlePrintNow}
+            activeOpacity={0.85}
+            disabled={printing}
+          >
+            {printing
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Ionicons name="print-outline" size={18} color="#fff" />}
+            <Text style={s.printNowBtnText}>{printing ? 'Opening…' : 'Print Now'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.sharePdfBtn, printing && s.btnDisabled]}
+            onPress={handleSharePDF}
+            activeOpacity={0.85}
+            disabled={printing}
+          >
+            <Ionicons name="share-outline" size={18} color={COLORS.brandPrimary} />
+            <Text style={s.sharePdfText}>Share PDF</Text>
+          </TouchableOpacity>
+        </View>
+        {/* Row 2: Edit settings */}
         <TouchableOpacity style={s.editBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Ionicons name="settings-outline" size={16} color={COLORS.textPrimary} />
+          <Ionicons name="settings-outline" size={16} color={COLORS.textSecondary} />
           <Text style={s.editBtnText}>Edit Settings</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.printNowBtn, printing && { opacity: 0.6 }]}
-          onPress={handlePrintNow}
-          activeOpacity={0.85}
-          disabled={printing}
-        >
-          {printing
-            ? <ActivityIndicator size="small" color="#fff" />
-            : <Ionicons name="print-outline" size={18} color="#fff" />}
-          <Text style={s.printNowBtnText}>{printing ? 'Opening…' : 'Print Now'}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -325,18 +381,33 @@ const s = StyleSheet.create({
   navBtnDisabled: { opacity: 0.35 },
   navText:        { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary, minWidth: 50, textAlign: 'center' },
 
-  labelContainer: { paddingHorizontal: SPACING.lg, marginBottom: SPACING.md },
-  labelCard:      { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.lg, alignItems: 'center', borderWidth: 1, borderColor: COLORS.borderDefault, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4, position: 'relative' },
-  labelShadow:    { height: 8, borderRadius: RADIUS.lg, backgroundColor: COLORS.borderDefault, marginHorizontal: SPACING.xl, marginTop: -4 },
-  labelSizeBadge: { position: 'absolute', top: 12, right: 12, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: COLORS.hoverBg, borderRadius: RADIUS.full },
-  labelSizeBadgeText: { fontSize: 10, color: COLORS.textTertiary, fontWeight: '600' },
-  labelItemName:  { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center', marginBottom: SPACING.md, paddingHorizontal: 30 },
-  barcodeWrap:    { marginBottom: 6 },
-  barcodeNumber:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, letterSpacing: 2, marginBottom: SPACING.md },
-  labelFields:    { width: '100%', borderTopWidth: 1, borderTopColor: COLORS.borderDefault, paddingTop: SPACING.sm, gap: 4 },
-  labelFieldRow:  { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
-  labelFieldKey:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '600' },
-  labelFieldVal:  { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary },
+  // Label container + preview card
+  labelContainer:  { alignItems: 'center', marginBottom: SPACING.md, paddingHorizontal: SPACING.md },
+  previewHint:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginBottom: 8, fontStyle: 'italic' },
+  labelPaper:      {
+    backgroundColor: '#fff',
+    borderRadius:    4,
+    borderWidth:     1,
+    borderColor:     '#ddd',
+    alignItems:      'center',
+    justifyContent:  'center',
+    padding:         8,
+    shadowColor:     '#000',
+    shadowOffset:    { width: 0, height: 4 },
+    shadowOpacity:   0.12,
+    shadowRadius:    10,
+    elevation:       6,
+    overflow:        'hidden',
+  },
+  labelShadow:     { height: 6, borderRadius: 4, backgroundColor: '#e0e0e0', marginTop: 0 },
+  labelSizeBadge:  { position: 'absolute', top: 4, right: 4, paddingHorizontal: 5, paddingVertical: 2, backgroundColor: 'rgba(0,0,0,0.06)', borderRadius: 3 },
+  labelSizeBadgeText: { fontSize: 8, color: '#999', fontWeight: '600' },
+  labelItemName:   { fontWeight: '700', color: '#111', textAlign: 'center', paddingHorizontal: 4 },
+  barcodeNumber:   { color: '#555', letterSpacing: 1.5, textAlign: 'center' },
+  labelFields:     { width: '100%', borderTopColor: '#eee', paddingTop: 3, marginTop: 2 },
+  labelFieldRow:   { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 1 },
+  labelFieldKey:   { color: '#999', fontWeight: '600' },
+  labelFieldVal:   { fontWeight: '700', color: '#333' },
 
   allItemsSection: { marginHorizontal: SPACING.md, marginTop: SPACING.sm },
   allItemsTitle:   { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
@@ -350,9 +421,13 @@ const s = StyleSheet.create({
   allItemBarcodePreview: { flexDirection: 'row', alignItems: 'flex-end', gap: 1.5 },
   miniBar:         { width: 2.5, backgroundColor: COLORS.borderStrong, borderRadius: 1 },
 
-  bottomBar:       { flexDirection: 'row', gap: SPACING.sm, paddingHorizontal: SPACING.md, paddingTop: SPACING.md, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
-  editBtn:         { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 48, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.borderStrong },
-  editBtnText:     { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  printNowBtn:     { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary },
-  printNowBtnText: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: '#fff' },
+  bottomBar:       { gap: SPACING.sm, paddingHorizontal: SPACING.md, paddingTop: SPACING.md, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
+  btnRow:          { flexDirection: 'row', gap: SPACING.sm },
+  btnDisabled:     { opacity: 0.45 },
+  printNowBtn:     { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary },
+  printNowBtnText: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: '#fff' },
+  sharePdfBtn:     { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.brandPrimary },
+  sharePdfText:    { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.brandPrimary },
+  editBtn:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 40, borderRadius: RADIUS.md },
+  editBtnText:     { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textTertiary },
 });
