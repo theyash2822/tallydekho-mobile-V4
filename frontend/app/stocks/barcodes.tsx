@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Modal, FlatList, Pressable, Animated,
-  KeyboardAvoidingView, Platform, Vibration, Alert, ActivityIndicator, Switch,
+  KeyboardAvoidingView, Platform, Vibration, Alert, ActivityIndicator, Switch, RefreshControl,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -446,6 +446,13 @@ export default function BarcodesScreen() {
         contentContainerStyle={s.listContent}
         showsVerticalScrollIndicator={false}
         ItemSeparatorComponent={() => <View style={s.separator} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading && items.length > 0}
+            onRefresh={() => loadItems(1, true)}
+            tintColor={COLORS.brandPrimary}
+          />
+        }
         onEndReached={() => { if (hasMore && !loading) loadItems(page + 1, false); }}
         onEndReachedThreshold={0.3}
         ListHeaderComponent={loading && items.length === 0 ? (
