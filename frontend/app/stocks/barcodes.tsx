@@ -113,7 +113,7 @@ export default function BarcodesScreen() {
     }
   }, [companyGuid, selPeriod, selGroup, selStatus, search]);
 
-  useEffect(() => { loadItems(1, true); }, [selPeriod, selGroup, selStatus]);
+  useEffect(() => { loadItems(1, true); }, [companyGuid, selPeriod, selGroup, selStatus]);
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
