@@ -74,6 +74,23 @@ export default function BarcodesScreen() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [linkVisible,     setLinkVisible]     = useState(false);
   const [scanned,         setScanned]         = useState(false);
+
+  // ── Scan result state (shown in-scanner overlay) ──────────────────────────
+  type ScanResult = {
+    found:    boolean;
+    barcode:  string;
+    item?: {
+      stockGuid:   string;
+      displayName: string;
+      sku:         string | null;
+      barcode:     string;
+      currentQty:  number;
+      groupName:   string | null;
+      unit:        string;
+    };
+  };
+  const [scanLookingUp, setScanLookingUp] = useState(false);
+  const [scanResult,    setScanResult]    = useState<ScanResult | null>(null);
   const [pasteText,       setPasteText]       = useState('');
   const [importing,       setImporting]       = useState(false);
 
@@ -175,27 +192,36 @@ export default function BarcodesScreen() {
   };
 
   const handleBarcodeScanned = async ({ data }: { data: string }) => {
-    if (scanned) return;
+    if (scanned || scanLookingUp) return;
     setScanned(true);
     Vibration.vibrate(100);
-    setScannerVisible(false);
-    if (!companyGuid) return;
+    setScanLookingUp(true);
+    setScanResult(null);
+    if (!companyGuid) { setScanLookingUp(false); return; }
     try {
       const res = await lookupBarcode(companyGuid, data);
       const d = res?.data || res;
       if (d.found && d.item?.stockGuid) {
-        router.push(`/stocks/item-detail?id=${d.item.stockGuid}` as any);
+        setScanResult({ found: true, barcode: data, item: d.item });
       } else {
-        // Barcode not found — offer to link
-        setScannedCode(data);
-        setManualBarcode(data);
-        setLinkSearch('');
-        setLinkResults([]);
-        setLinkVisible(true);
+        setScanResult({ found: false, barcode: data });
       }
     } catch {
-      Alert.alert('Scan Failed', 'Could not look up barcode. Try again.');
+      setScanResult({ found: false, barcode: data });
+    } finally {
+      setScanLookingUp(false);
     }
+  };
+
+  const resetScanner = () => {
+    setScanned(false);
+    setScanResult(null);
+    setScanLookingUp(false);
+  };
+
+  const closeScanner = () => {
+    setScannerVisible(false);
+    resetScanner();
   };
 
   // ── Generate barcode inline (single item, updates row in-place) ──────────
@@ -560,7 +586,7 @@ export default function BarcodesScreen() {
       {/* ════════════════════════════════════════════
           BARCODE SCANNER MODAL
       ════════════════════════════════════════════ */}
-      <Modal visible={scannerVisible} animationType="slide" onRequestClose={() => setScannerVisible(false)}>
+      <Modal visible={scannerVisible} animationType="slide" onRequestClose={closeScanner}>
         <View style={s.scannerModal}>
           {permission?.granted ? (
             <CameraView
@@ -578,6 +604,8 @@ export default function BarcodesScreen() {
               </TouchableOpacity>
             </View>
           )}
+
+          {/* ── Scan frame overlay ── */}
           <View style={s.scanOverlay}>
             <View style={s.scanDimTop} />
             <View style={s.scanMiddleRow}>
@@ -590,11 +618,113 @@ export default function BarcodesScreen() {
               </View>
               <View style={s.scanDimSide} />
             </View>
+
+            {/* ── Bottom: hint / looking-up spinner / scan result panel ── */}
             <View style={s.scanDimBottom}>
-              <Text style={s.scanHint}>Point camera at barcode or QR code</Text>
-              <TouchableOpacity style={s.scanCloseBtn} onPress={() => setScannerVisible(false)} activeOpacity={0.8}>
-                <Text style={s.scanCloseBtnText}>Cancel</Text>
-              </TouchableOpacity>
+              {/* No result yet — show hint */}
+              {!scanLookingUp && !scanResult && (
+                <>
+                  <Text style={s.scanHint}>Point camera at barcode or QR code</Text>
+                  <TouchableOpacity style={s.scanCloseBtn} onPress={closeScanner} activeOpacity={0.8}>
+                    <Text style={s.scanCloseBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {/* Looking up — spinner */}
+              {scanLookingUp && (
+                <View style={s.scanResultPanel}>
+                  <ActivityIndicator size="large" color="#fff" />
+                  <Text style={s.scanResultLooking}>Looking up barcode…</Text>
+                </View>
+              )}
+
+              {/* Result panel — found */}
+              {scanResult?.found && scanResult.item && (
+                <View style={s.scanResultPanel}>
+                  <View style={s.scanResultBadgeFound}>
+                    <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                    <Text style={s.scanResultBadgeText}>Product Found</Text>
+                  </View>
+
+                  {/* Product info */}
+                  <Text style={s.scanResultName} numberOfLines={2}>{scanResult.item.displayName}</Text>
+                  <Text style={s.scanResultBarcode}>{scanResult.barcode}</Text>
+
+                  <View style={s.scanResultMeta}>
+                    <View style={s.scanResultMetaItem}>
+                      <Text style={s.scanResultMetaLabel}>Qty</Text>
+                      <Text style={s.scanResultMetaValue}>{Math.round(scanResult.item.currentQty).toLocaleString()} {scanResult.item.unit}</Text>
+                    </View>
+                    {scanResult.item.sku && (
+                      <View style={s.scanResultMetaItem}>
+                        <Text style={s.scanResultMetaLabel}>SKU</Text>
+                        <Text style={s.scanResultMetaValue} numberOfLines={1}>{scanResult.item.sku}</Text>
+                      </View>
+                    )}
+                    {scanResult.item.groupName && (
+                      <View style={s.scanResultMetaItem}>
+                        <Text style={s.scanResultMetaLabel}>Group</Text>
+                        <Text style={s.scanResultMetaValue} numberOfLines={1}>{scanResult.item.groupName}</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Actions */}
+                  <View style={s.scanResultActions}>
+                    <TouchableOpacity
+                      style={s.scanResultBtnPrimary}
+                      activeOpacity={0.85}
+                      onPress={() => {
+                        closeScanner();
+                        router.push(`/stocks/item-detail?id=${scanResult.item!.stockGuid}` as any);
+                      }}
+                    >
+                      <Ionicons name="open-outline" size={16} color="#fff" />
+                      <Text style={s.scanResultBtnPrimaryText}>View Full Details</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={s.scanResultBtnSecondary} activeOpacity={0.8} onPress={resetScanner}>
+                      <Ionicons name="scan-outline" size={16} color="#fff" />
+                      <Text style={s.scanResultBtnSecondaryText}>Scan Again</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* Result panel — not found */}
+              {scanResult && !scanResult.found && (
+                <View style={s.scanResultPanel}>
+                  <View style={s.scanResultBadgeNotFound}>
+                    <Ionicons name="help-circle" size={16} color="#fff" />
+                    <Text style={s.scanResultBadgeText}>Not Linked</Text>
+                  </View>
+
+                  <Text style={s.scanResultName}>Barcode not linked to any product</Text>
+                  <Text style={s.scanResultBarcode}>{scanResult.barcode}</Text>
+
+                  <View style={s.scanResultActions}>
+                    <TouchableOpacity
+                      style={s.scanResultBtnPrimary}
+                      activeOpacity={0.85}
+                      onPress={() => {
+                        closeScanner();
+                        setScannedCode(scanResult.barcode);
+                        setManualBarcode(scanResult.barcode);
+                        setLinkSearch('');
+                        setLinkResults([]);
+                        setLinkVisible(true);
+                      }}
+                    >
+                      <Ionicons name="link-outline" size={16} color="#fff" />
+                      <Text style={s.scanResultBtnPrimaryText}>Link to Product</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={s.scanResultBtnSecondary} activeOpacity={0.8} onPress={resetScanner}>
+                      <Ionicons name="scan-outline" size={16} color="#fff" />
+                      <Text style={s.scanResultBtnSecondaryText}>Scan Again</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
             </View>
           </View>
         </View>
@@ -861,6 +991,24 @@ const s = StyleSheet.create({
   scanHint:            { color: 'rgba(255,255,255,0.7)', fontSize: TYPOGRAPHY.sm, textAlign: 'center' },
   scanCloseBtn:        { paddingHorizontal: 36, paddingVertical: 13, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: RADIUS.full, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
   scanCloseBtnText:    { color: '#fff', fontSize: TYPOGRAPHY.sm, fontWeight: '700' },
+
+  // ── Scan result panel (shown inside scanner overlay)
+  scanResultPanel:        { width: '100%', paddingHorizontal: 20, paddingVertical: 20, alignItems: 'center', gap: 10 },
+  scanResultLooking:      { color: 'rgba(255,255,255,0.8)', fontSize: TYPOGRAPHY.sm, marginTop: 8 },
+  scanResultBadgeFound:   { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 5, backgroundColor: '#22c55e', borderRadius: RADIUS.full },
+  scanResultBadgeNotFound:{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 5, backgroundColor: AMBER,    borderRadius: RADIUS.full },
+  scanResultBadgeText:    { color: '#fff', fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
+  scanResultName:         { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: '#fff', textAlign: 'center', paddingHorizontal: 10 },
+  scanResultBarcode:      { fontSize: TYPOGRAPHY.xs, color: 'rgba(255,255,255,0.6)', letterSpacing: 1.5, fontFamily: 'monospace' },
+  scanResultMeta:         { flexDirection: 'row', gap: 16, marginTop: 2 },
+  scanResultMetaItem:     { alignItems: 'center', gap: 2 },
+  scanResultMetaLabel:    { fontSize: 10, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 },
+  scanResultMetaValue:    { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: '#fff', maxWidth: 100 },
+  scanResultActions:      { flexDirection: 'row', gap: 10, marginTop: 4, width: '100%' },
+  scanResultBtnPrimary:   { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 13, borderRadius: RADIUS.full, backgroundColor: COLORS.brandPrimary },
+  scanResultBtnPrimaryText:   { color: '#fff', fontSize: TYPOGRAPHY.sm, fontWeight: '700' },
+  scanResultBtnSecondary: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 13, borderRadius: RADIUS.full, backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
+  scanResultBtnSecondaryText: { color: '#fff', fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
 
   modalOverlay:  { flex: 1, backgroundColor: COLORS.overlay, justifyContent: 'flex-end' },
   importSheet:   { backgroundColor: COLORS.cardBg, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, maxHeight: '85%', paddingHorizontal: SPACING.md },
