@@ -375,3 +375,62 @@ export const getInventorySettings  = (companyGuid: string) =>
   get<any>(`/inventory/settings?companyGuid=${companyGuid}`);
 export const saveInventorySettings = (companyGuid: string, payload: Record<string, any>) =>
   post<any>(`/inventory/settings?companyGuid=${companyGuid}`, payload);
+
+// ── Barcode Module ──────────────────────────────────────────────────────────────
+export interface BarcodeItem {
+  stockGuid:       string;
+  displayName:     string;
+  name:            string;
+  alias:           string | null;
+  partNumber:      string | null;
+  sku:             string | null;
+  barcode:         string | null;
+  barcodeId:       number | null;
+  barcodeType:     string | null;
+  barcodeStatus:   string | null;
+  source:          string | null;
+  syncTarget:      string;
+  tallySyncStatus: string | null;
+  groupName:       string | null;
+  currentQty:      number;
+  unit:            string;
+}
+export interface BarcodeSettings {
+  barcodeStorageMode: string;  // app_only | tally_alias | tally_part_number | tally_udf
+  defaultBarcodeType: string;  // CODE128 | EAN13 | EAN8 | UPC | QR | INTERNAL
+  autoSyncToTally:    boolean;
+}
+export interface BarcodeSummary {
+  totalItems: number; linked: number; unlinked: number;
+  duplicates: number; invalid: number; pendingTallySync: number;
+}
+
+export const getBarcodeList = (
+  companyGuid: string,
+  filters?: { period?: string; group?: string; status?: string; search?: string; page?: number; pageSize?: number }
+) => post<any>('/inventory/barcodes', { companyGuid, ...filters });
+
+export const generateBarcode = (
+  companyGuid: string, stockGuid: string, barcodeType = 'CODE128', syncTarget = 'app_only'
+) => post<any>('/inventory/barcodes/generate', { companyGuid, stockGuid, barcodeType, syncTarget });
+
+export const linkBarcode = (
+  companyGuid: string, stockGuid: string, barcode: string,
+  barcodeType = 'CODE128', source = 'manual', syncTarget = 'app_only', isPrimary = true
+) => post<any>('/inventory/barcodes/link', { companyGuid, stockGuid, barcode, barcodeType, source, syncTarget, isPrimary });
+
+export const lookupBarcode = (
+  companyGuid: string, barcode: string
+) => post<any>('/inventory/barcodes/lookup', { companyGuid, barcode });
+
+export const bulkImportBarcodes = (
+  companyGuid: string, payload: { text?: string; lines?: string[]; fileName?: string }
+) => post<any>('/inventory/barcodes/bulk-import', { companyGuid, ...payload });
+
+export const getBarcodeTemplate = () => get<any>('/inventory/barcodes/template');
+
+export const getBarcodeSettings = (companyGuid: string) =>
+  get<any>(`/inventory/barcodes/settings?companyGuid=${companyGuid}`);
+
+export const saveBarcodeSettings = (companyGuid: string, payload: BarcodeSettings) =>
+  post<any>('/inventory/barcodes/settings', { companyGuid, ...payload });

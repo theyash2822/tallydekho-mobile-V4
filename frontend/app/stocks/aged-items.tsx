@@ -14,7 +14,7 @@ import { getAgedItems } from '../../src/services/api';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface AgedItem {
-  name: string; sku: string; category: string;
+  name: string; displayName?: string; sku: string; category: string;
   closing_qty: number; closing_rate: number; total_value: number;
   last_sold_date: string | null; last_received_date: string | null;
   days_since_sold: number; days_since_received: number;
@@ -64,7 +64,7 @@ function ItemCard({
       <View style={s.cardTop}>
         {/* Left: name + meta */}
         <View style={s.cardLeft}>
-          <Text style={s.itemName} numberOfLines={2}>{item.name}</Text>
+          <Text style={s.itemName} numberOfLines={2}>{item.displayName || item.name}</Text>
           <Text style={s.itemMeta}>
             {item.sku ? `${item.sku} · ` : ''}{item.category || '—'}
           </Text>

@@ -26,7 +26,7 @@ function OnHandCard({
         <Ionicons name={item.icon as any} size={20} color={item.iconColor} />
       </View>
       <View style={sc.info}>
-        <Text style={sc.name} numberOfLines={1}>{item.name}</Text>
+        <Text style={sc.name} numberOfLines={1}>{item.displayName || item.name}</Text>
         <Text style={sc.sku}>{item.sku} · {item.category}</Text>
       </View>
       <View style={sc.right}>
