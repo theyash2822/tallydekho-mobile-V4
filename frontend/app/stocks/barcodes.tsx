@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Modal, FlatList, Pressable, Animated,
-  KeyboardAvoidingView, Platform, Vibration, Alert, ActivityIndicator, Switch, RefreshControl,
+  KeyboardAvoidingView, Platform, Vibration, Alert, ActivityIndicator, Switch, RefreshControl, Linking,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -186,8 +186,38 @@ export default function BarcodesScreen() {
 
   // ── Scanner ────────────────────────────────────────────────────────────────
   const openScanner = async () => {
-    if (!permission?.granted) await requestPermission();
-    setScanned(false);
+    // Use returned result — not stale permission state from hook
+    let granted = permission?.granted ?? false;
+
+    if (!granted) {
+      if (permission?.canAskAgain === false) {
+        // OS-level denied — send to Settings
+        Alert.alert(
+          'Camera Access Denied',
+          'TallyDekho needs camera access to scan barcodes.\n\nGo to Settings → Privacy → Camera → TallyDekho and enable it.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
+        return;
+      }
+      // Ask for permission and use the RETURNED result (not stale hook value)
+      const result = await requestPermission();
+      granted = result?.granted ?? false;
+    }
+
+    if (!granted) {
+      Alert.alert(
+        'Camera Permission Required',
+        'Please allow camera access to scan barcodes.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    // Only open modal after we know permission is granted
+    resetScanner();
     setScannerVisible(true);
   };
 
@@ -598,9 +628,23 @@ export default function BarcodesScreen() {
           ) : (
             <View style={s.scannerNoPermission}>
               <Ionicons name="camera-outline" size={60} color="rgba(255,255,255,0.4)" />
-              <Text style={s.scannerNoPermText}>Camera permission required</Text>
-              <TouchableOpacity style={s.permBtn} onPress={requestPermission} activeOpacity={0.8}>
-                <Text style={s.permBtnText}>Grant Permission</Text>
+              <Text style={s.scannerNoPermText}>Camera permission required to scan barcodes</Text>
+              {permission?.canAskAgain !== false ? (
+                <TouchableOpacity style={s.permBtn} onPress={async () => {
+                  const result = await requestPermission();
+                  if (!result?.granted) {
+                    Alert.alert('Permission Denied', 'Camera access is required to scan barcodes.');
+                  }
+                }} activeOpacity={0.8}>
+                  <Text style={s.permBtnText}>Grant Permission</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={s.permBtn} onPress={() => Linking.openSettings()} activeOpacity={0.8}>
+                  <Text style={s.permBtnText}>Open Settings</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={closeScanner} activeOpacity={0.7} style={{ marginTop: 8 }}>
+                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: TYPOGRAPHY.sm }}>Cancel</Text>
               </TouchableOpacity>
             </View>
           )}
