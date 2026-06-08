@@ -1,18 +1,87 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import Toast from 'react-native-toast-message';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { useSettings } from '../../src/context/SettingsContext';
 import { useAuth } from '../../src/context/AuthContext';
 import { getBarcodesByGuids } from '../../src/services/api';
 
 const AMBER = '#A89060';
 const LABEL_SIZES = ['50×30 mm', '38×25 mm', '100×50 mm', 'A4'];
+
+// ── Label dimensions map (→ CSS mm values)
+const LABEL_DIMS: Record<string, { w: string; h: string; fs: string }> = {
+  '50×30 mm':  { w: '50mm',  h: '30mm',  fs: '8pt'  },
+  '38×25 mm':  { w: '38mm',  h: '25mm',  fs: '7pt'  },
+  '100×50 mm': { w: '100mm', h: '50mm',  fs: '10pt' },
+  'A4':        { w: '210mm', h: '297mm', fs: '10pt' },
+};
+
+// ── Generate print-ready HTML for a set of labels
+function buildLabelHTML(
+  items: PrintItem[],
+  opts: { labelSize: string; copies: number; showSku: boolean; showPrice: boolean; showBatch: boolean }
+): string {
+  const dim = LABEL_DIMS[opts.labelSize] || LABEL_DIMS['50×30 mm'];
+  const isA4 = opts.labelSize === 'A4';
+  const labels: string[] = [];
+
+  for (const item of items) {
+    const barcode = item.barcode || '—';
+    const price   = item.closingRate > 0 ? `₹${item.closingRate.toLocaleString('en-IN')}` : '';
+    for (let c = 0; c < opts.copies; c++) {
+      labels.push(`
+        <div class="label">
+          <div class="name">${item.displayName}</div>
+          <div class="barcode-bars">
+            ${item.barcode ? generateBarcodeBars(item.barcode) : '<span style="color:#aaa;font-size:6pt">no barcode</span>'}
+          </div>
+          <div class="barcode-num">${barcode}</div>
+          ${opts.showSku && item.sku ? `<div class="field">SKU: ${item.sku}</div>` : ''}
+          ${opts.showPrice && price ? `<div class="field">Price: ${price}</div>` : ''}
+        </div>
+      `);
+    }
+  }
+
+  const labelCss = isA4
+    ? `display:inline-block; width:${dim.w}; page-break-inside:avoid; margin:2mm; font-size:${dim.fs};`
+    : `display:block; width:${dim.w}; height:${dim.h}; page-break-after:always; font-size:${dim.fs};`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
+  <style>
+    @page { margin: 0; size: ${isA4 ? 'A4' : `${dim.w} ${dim.h}`}; }
+    body  { margin: 0; padding: ${isA4 ? '5mm' : '0'}; font-family: Arial, sans-serif; }
+    .label { ${labelCss} border: 0.3mm solid #ccc; box-sizing: border-box; padding: 1.5mm;
+              display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .name  { font-weight: 700; font-size: ${dim.fs}; text-align: center; margin-bottom: 1mm;
+              max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .barcode-bars { display: flex; align-items: flex-end; gap: 0.3mm; height: 10mm; margin-bottom: 0.5mm; }
+    .bar   { background: #000; }
+    .barcode-num { font-size: 5.5pt; letter-spacing: 1.5pt; color: #333; margin-bottom: 0.5mm; }
+    .field { font-size: 5.5pt; color: #555; }
+  </style>
+  </head><body>${labels.join('')}</body></html>`;
+}
+
+// Generate simple CSS bar representation of barcode (visual only, not scannable spec)
+function generateBarcodeBars(code: string): string {
+  const bars: string[] = [];
+  const totalBars = 40;
+  for (let i = 0; i < totalBars; i++) {
+    const ch = code.charCodeAt(i % code.length);
+    const w  = ch % 3 === 0 ? '0.8mm' : ch % 3 === 1 ? '0.5mm' : '0.3mm';
+    const h  = (ch % 2 === 0 ? '10mm' : '8mm');
+    if (i % 2 === 0) bars.push(`<div class="bar" style="width:${w};height:${h}"></div>`);
+    else bars.push(`<div style="width:${w}"></div>`);
+  }
+  return bars.join('');
+}
 
 export interface PrintItem {
   stockGuid: string;
@@ -77,8 +146,38 @@ export default function PrintSettingsScreen() {
     } as any);
   };
 
-  const handlePrintExport = () => {
-    Toast.show({ type: 'success', text1: `Sending ${queuedItems.length * copies} labels to printer…` });
+  const [printing, setPrinting] = useState(false);
+
+  const handlePrintExport = async () => {
+    if (!queuedItems.length) return;
+    setPrinting(true);
+    try {
+      const html = buildLabelHTML(queuedItems, { labelSize, copies, showSku, showPrice, showBatch });
+      await Print.printAsync({ html });
+    } catch (err: any) {
+      if (!err?.message?.includes('cancel')) {
+        Alert.alert('Print failed', err?.message || 'Could not open print dialog');
+      }
+    } finally { setPrinting(false); }
+  };
+
+  const handleExportPDF = async () => {
+    if (!queuedItems.length) return;
+    setPrinting(true);
+    try {
+      const html = buildLabelHTML(queuedItems, { labelSize, copies, showSku, showPrice, showBatch });
+      const { uri } = await Print.printToFileAsync({ html });
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share barcode labels PDF' });
+      } else {
+        Alert.alert('PDF saved', `Saved to: ${uri}`);
+      }
+    } catch (err: any) {
+      if (!err?.message?.includes('cancel')) {
+        Alert.alert('Export failed', err?.message || 'Could not export PDF');
+      }
+    } finally { setPrinting(false); }
   };
 
   return (
@@ -199,22 +298,40 @@ export default function PrintSettingsScreen() {
 
       {/* ── Bottom action bar */}
       <View style={[s.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        {/* Row 1: Preview + Print */}
+        <View style={s.btnRow}>
+          <TouchableOpacity
+            style={[s.previewBtn, (queuedItems.length === 0 || loading) && s.btnDisabled]}
+            onPress={handlePreview}
+            activeOpacity={0.85}
+            disabled={queuedItems.length === 0 || loading}
+          >
+            <Ionicons name="eye-outline" size={18} color="#fff" />
+            <Text style={s.previewBtnText}>Preview</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.printBtn, (queuedItems.length === 0 || loading || printing) && s.btnDisabled]}
+            onPress={handlePrintExport}
+            activeOpacity={0.85}
+            disabled={queuedItems.length === 0 || loading || printing}
+          >
+            {printing
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Ionicons name="print-outline" size={18} color="#fff" />}
+            <Text style={s.previewBtnText}>
+              {printing ? 'Opening…' : `Print ${queuedItems.length * copies}`}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        {/* Row 2: Export PDF */}
         <TouchableOpacity
-          style={[s.previewBtn, (queuedItems.length === 0 || loading) && s.btnDisabled]}
-          onPress={handlePreview}
-          activeOpacity={0.85}
-          disabled={queuedItems.length === 0 || loading}
-        >
-          <Ionicons name="eye-outline" size={18} color="#fff" />
-          <Text style={s.previewBtnText}>Preview Label</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.exportBtn, (queuedItems.length === 0 || loading) && s.btnDisabled]}
-          onPress={handlePrintExport}
+          style={[s.exportBtn, (queuedItems.length === 0 || loading || printing) && s.btnDisabled]}
+          onPress={handleExportPDF}
           activeOpacity={0.8}
-          disabled={queuedItems.length === 0 || loading}
+          disabled={queuedItems.length === 0 || loading || printing}
         >
-          <Text style={s.exportBtnText}>Print / Export</Text>
+          <Ionicons name="share-outline" size={16} color={COLORS.textPrimary} />
+          <Text style={s.exportBtnText}>Export / Share as PDF</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -253,10 +370,12 @@ const s = StyleSheet.create({
   checkbox:       { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: COLORS.borderStrong, alignItems: 'center', justifyContent: 'center' },
   checkboxActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
 
-  bottomBar:    { paddingHorizontal: SPACING.md, paddingTop: SPACING.md, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, gap: SPACING.sm },
-  previewBtn:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, height: 50, borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary },
-  previewBtnText: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: '#fff' },
-  exportBtn:    { height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.borderStrong },
-  exportBtnText: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  btnDisabled:   { opacity: 0.4 },
+  bottomBar:      { paddingHorizontal: SPACING.md, paddingTop: SPACING.md, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, gap: SPACING.sm },
+  btnRow:         { flexDirection: 'row', gap: SPACING.sm },
+  previewBtn:     { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary },
+  printBtn:       { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: RADIUS.md, backgroundColor: '#2D7D46' },
+  previewBtnText: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: '#fff' },
+  exportBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 44, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.borderStrong },
+  exportBtnText:  { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  btnDisabled:    { opacity: 0.4 },
 });

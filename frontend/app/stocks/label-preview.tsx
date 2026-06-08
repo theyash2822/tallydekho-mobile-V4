@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Svg, { Rect } from 'react-native-svg';
-import Toast from 'react-native-toast-message';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getBarcodesByGuids } from '../../src/services/api';
@@ -63,6 +64,7 @@ export default function LabelPreviewScreen() {
 
   const [items,      setItems]      = useState<PreviewItem[]>([]);
   const [loading,    setLoading]    = useState(false);
+  const [printing,   setPrinting]   = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
 
   useEffect(() => {
@@ -85,8 +87,10 @@ export default function LabelPreviewScreen() {
         <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
       </TouchableOpacity>
       <Text style={s.headerTitle}>Label Preview</Text>
-      <TouchableOpacity style={s.headerBtn} onPress={() => Toast.show({ type: 'success', text1: 'Sent to printer' })} activeOpacity={0.7}>
-        <Ionicons name="print-outline" size={22} color={COLORS.textPrimary} />
+      <TouchableOpacity style={s.headerBtn} onPress={handlePrintNow} activeOpacity={0.7} disabled={printing}>
+        {printing
+          ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+          : <Ionicons name="print-outline" size={22} color={COLORS.textPrimary} />}
       </TouchableOpacity>
     </View>
   );
@@ -116,6 +120,69 @@ export default function LabelPreviewScreen() {
 
   const fmtPrice = (rate: number) =>
     rate > 0 ? `₹${rate.toLocaleString('en-IN')}` : '—';
+
+  // ── Build print HTML (same logic as print-settings) ───────────────────────
+  const buildHTML = () => {
+    const labelSize = params.labelSize ?? '50×30 mm';
+    const dimMap: Record<string, { w: string; h: string; fs: string }> = {
+      '50×30 mm':  { w: '50mm',  h: '30mm',  fs: '8pt'  },
+      '38×25 mm':  { w: '38mm',  h: '25mm',  fs: '7pt'  },
+      '100×50 mm': { w: '100mm', h: '50mm',  fs: '10pt' },
+      'A4':        { w: '210mm', h: '297mm', fs: '10pt' },
+    };
+    const dim = dimMap[labelSize] || dimMap['50×30 mm'];
+    const isA4 = labelSize === 'A4';
+    const labelCss = isA4
+      ? `display:inline-block;width:${dim.w};page-break-inside:avoid;margin:2mm;font-size:${dim.fs};`
+      : `display:block;width:${dim.w};height:${dim.h};page-break-after:always;font-size:${dim.fs};`;
+    const labelHtml = items.flatMap(item => {
+      const bars = (item.barcode || item.displayName).split('').slice(0, 40).map((ch, i) => {
+        const code = ch.charCodeAt(0);
+        const w = code % 3 === 0 ? '0.8mm' : code % 3 === 1 ? '0.5mm' : '0.3mm';
+        const h = code % 2 === 0 ? '10mm' : '8mm';
+        return i % 2 === 0
+          ? `<div style="background:#000;width:${w};height:${h}"></div>`
+          : `<div style="width:${w}"></div>`;
+      }).join('');
+      return Array.from({ length: copies }).map(() => `
+        <div style="${labelCss}border:0.3mm solid #ccc;box-sizing:border-box;padding:1.5mm;
+          display:flex;flex-direction:column;align-items:center;justify-content:center">
+          <div style="font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:1mm">${item.displayName}</div>
+          <div style="display:flex;align-items:flex-end;gap:0.3mm;height:10mm;margin-bottom:0.5mm">${bars}</div>
+          <div style="font-size:5.5pt;letter-spacing:1.5pt;color:#333;margin-bottom:0.5mm">${item.barcode || '—'}</div>
+          ${showSku && item.sku ? `<div style="font-size:5.5pt;color:#555">SKU: ${item.sku}</div>` : ''}
+          ${showPrice ? `<div style="font-size:5.5pt;color:#555">${fmtPrice(item.closingRate)}</div>` : ''}
+        </div>`);
+    }).join('');
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
+      <style>@page{margin:0;size:${isA4 ? 'A4' : `${dim.w} ${dim.h}`}}body{margin:0;padding:${isA4 ? '5mm' : '0'};font-family:Arial,sans-serif}</style>
+      </head><body>${labelHtml}</body></html>`;
+  };
+
+  const handlePrintNow = async () => {
+    if (!items.length) return;
+    setPrinting(true);
+    try {
+      await Print.printAsync({ html: buildHTML() });
+    } catch (err: any) {
+      if (!err?.message?.includes('cancel'))
+        Alert.alert('Print failed', err?.message || 'Could not open print dialog');
+    } finally { setPrinting(false); }
+  };
+
+  const handleSharePDF = async () => {
+    if (!items.length) return;
+    setPrinting(true);
+    try {
+      const { uri } = await Print.printToFileAsync({ html: buildHTML() });
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share barcode labels' });
+      else Alert.alert('PDF saved', uri);
+    } catch (err: any) {
+      if (!err?.message?.includes('cancel'))
+        Alert.alert('Export failed', err?.message || 'Could not export PDF');
+    } finally { setPrinting(false); }
+  };
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -223,12 +290,15 @@ export default function LabelPreviewScreen() {
           <Text style={s.editBtnText}>Edit Settings</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={s.printNowBtn}
-          onPress={() => Toast.show({ type: 'success', text1: `Printing ${items.length * copies} labels…` })}
+          style={[s.printNowBtn, printing && { opacity: 0.6 }]}
+          onPress={handlePrintNow}
           activeOpacity={0.85}
+          disabled={printing}
         >
-          <Ionicons name="print-outline" size={18} color="#fff" />
-          <Text style={s.printNowBtnText}>Print Now</Text>
+          {printing
+            ? <ActivityIndicator size="small" color="#fff" />
+            : <Ionicons name="print-outline" size={18} color="#fff" />}
+          <Text style={s.printNowBtnText}>{printing ? 'Opening…' : 'Print Now'}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
