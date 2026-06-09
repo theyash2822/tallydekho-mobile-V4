@@ -3,7 +3,10 @@ import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Modal, FlatList, Pressable, Animated,
   KeyboardAvoidingView, Platform, Vibration, Alert, ActivityIndicator, Switch, RefreshControl, Linking,
+  useWindowDimensions,
 } from 'react-native';
+import Svg, { Rect } from 'react-native-svg';
+import { encodeCode128B } from '../../src/utils/barcode';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -19,6 +22,27 @@ import {
 } from '../../src/services/api';
 
 const AMBER = '#A89060';
+
+// ─── Real CODE128B barcode SVG component (scannable) ─────────────────────────
+function BarcodeSVG({ code, width, height = 80 }: { code: string; width: number; height?: number }) {
+  const { bars, totalModules } = encodeCode128B(code);
+  if (!bars.length || !totalModules) return null;
+  const moduleW = width / totalModules;
+  const rects: React.ReactElement[] = [];
+  let x = 0;
+  bars.forEach((modules, i) => {
+    const w = modules * moduleW;
+    if (i % 2 === 0) {
+      rects.push(<Rect key={i} x={x} y={0} width={w} height={height} fill="#000" />);
+    }
+    x += w;
+  });
+  return (
+    <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+      {rects}
+    </Svg>
+  );
+}
 
 const PERIODS  = ['All', 'Today', '7 Days', '30 Days'];
 const STORAGE_MODE_LABELS: Record<string, string> = {
@@ -38,6 +62,7 @@ const BARCODE_TYPE_LABELS: Record<string, string> = {
 export default function BarcodesScreen() {
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   const { company } = useAuth();
   const companyGuid = company?.guid ?? '';
   const [permission, requestPermission] = useCameraPermissions();
@@ -74,6 +99,7 @@ export default function BarcodesScreen() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [linkVisible,     setLinkVisible]     = useState(false);
   const [scanned,         setScanned]         = useState(false);
+  const [viewBarcodeItem, setViewBarcodeItem] = useState<BarcodeItem | null>(null);
 
   // Ref-based guard: synchronous, no stale-closure issues.
   // Camera fires onBarcodeScanned many times per second — ref blocks all
@@ -373,7 +399,7 @@ export default function BarcodesScreen() {
     if (isMultiSelect) { toggleSelect(item.stockGuid); return; }
     if (generatingIds.has(item.stockGuid)) return; // already generating
     if (item.barcode) {
-      router.push(`/stocks/item-detail?id=${item.stockGuid}` as any);
+      setViewBarcodeItem(item);   // Show the scannable barcode image first
     } else {
       // Single tap on unlinked item → generate barcode immediately, no dialog
       handleGenerateInline(item);
@@ -385,6 +411,7 @@ export default function BarcodesScreen() {
     if (isMultiSelect) { toggleSelect(item.stockGuid); return; }
     if (!item.barcode) { enterMultiSelect(item.stockGuid); return; }
     Alert.alert(item.displayName, item.barcode, [
+      { text: '🔲 View Barcode Image', onPress: () => setViewBarcodeItem(item) },
       { text: 'Select for Print', onPress: () => enterMultiSelect(item.stockGuid) },
       { text: 'Link Different Barcode', onPress: () => { setScannedCode(''); setManualBarcode(item.barcode || ''); setLinkSearch(''); setLinkResults([item]); setLinkVisible(true); } },
       { text: 'Open Details', onPress: () => router.push(`/stocks/item-detail?id=${item.stockGuid}` as any) },
@@ -983,6 +1010,82 @@ export default function BarcodesScreen() {
           </KeyboardAvoidingView>
         </Pressable>
       </Modal>
+
+      {/* ════════════════════════════════════════════
+          VIEW BARCODE MODAL — shows real scannable CODE128 image
+      ════════════════════════════════════════════ */}
+      <Modal visible={!!viewBarcodeItem} animationType="fade" transparent onRequestClose={() => setViewBarcodeItem(null)}>
+        <Pressable style={s.bcModalOverlay} onPress={() => setViewBarcodeItem(null)}>
+          <Pressable style={s.bcModalCard} onPress={e => e.stopPropagation()}>
+            {/* Handle */}
+            <View style={s.bcModalHandle} />
+
+            {/* Product name */}
+            <Text style={s.bcModalTitle} numberOfLines={2}>
+              {viewBarcodeItem?.displayName}
+            </Text>
+
+            {/* ━━ Real CODE128 barcode image ━━ */}
+            {viewBarcodeItem?.barcode ? (
+              <View style={s.bcImageWrap}>
+                <BarcodeSVG
+                  code={viewBarcodeItem.barcode}
+                  width={screenWidth - 96}
+                  height={90}
+                />
+                {/* Barcode value text */}
+                <Text style={s.bcValue}>{viewBarcodeItem.barcode}</Text>
+              </View>
+            ) : (
+              <Text style={{ color: COLORS.textTertiary, fontSize: TYPOGRAPHY.sm, textAlign: 'center', paddingVertical: 24 }}>
+                No barcode linked
+              </Text>
+            )}
+
+            {/* Quick info row */}
+            <View style={s.bcInfoRow}>
+              {viewBarcodeItem?.sku ? (
+                <View style={s.bcInfoChip}>
+                  <Text style={s.bcInfoLabel}>SKU</Text>
+                  <Text style={s.bcInfoVal}>{viewBarcodeItem.sku}</Text>
+                </View>
+              ) : null}
+              <View style={s.bcInfoChip}>
+                <Text style={s.bcInfoLabel}>Qty</Text>
+                <Text style={s.bcInfoVal}>{Math.round(viewBarcodeItem?.currentQty ?? 0).toLocaleString()}</Text>
+              </View>
+              {viewBarcodeItem?.groupName ? (
+                <View style={s.bcInfoChip}>
+                  <Text style={s.bcInfoLabel}>Group</Text>
+                  <Text style={s.bcInfoVal} numberOfLines={1}>{viewBarcodeItem.groupName}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            {/* Actions */}
+            <View style={s.bcActions}>
+              <TouchableOpacity
+                style={s.bcActionBtnPrimary}
+                onPress={() => {
+                  setViewBarcodeItem(null);
+                  if (viewBarcodeItem) router.push(`/stocks/item-detail?id=${viewBarcodeItem.stockGuid}` as any);
+                }}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="open-outline" size={16} color="#fff" />
+                <Text style={s.bcActionBtnPrimaryText}>View Full Details</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={s.bcActionBtnSecondary}
+                onPress={() => setViewBarcodeItem(null)}
+                activeOpacity={0.8}
+              >
+                <Text style={s.bcActionBtnSecondaryText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1109,4 +1212,21 @@ const s = StyleSheet.create({
   linkResultInfo: { flex: 1 },
   linkResultName: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
   linkResultSku:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
+
+  // View Barcode modal
+  bcModalOverlay:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  bcModalCard:      { backgroundColor: COLORS.cardBg, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, paddingHorizontal: SPACING.lg, paddingBottom: 32, paddingTop: 4 },
+  bcModalHandle:    { width: 38, height: 4, borderRadius: 2, backgroundColor: COLORS.borderStrong, alignSelf: 'center', marginBottom: 16, marginTop: 10 },
+  bcModalTitle:     { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center', marginBottom: 20 },
+  bcImageWrap:      { alignItems: 'center', backgroundColor: '#fff', borderRadius: RADIUS.lg, paddingVertical: 20, paddingHorizontal: 16, borderWidth: 1, borderColor: COLORS.borderDefault, marginBottom: 16 },
+  bcValue:          { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 10, letterSpacing: 2, fontFamily: 'monospace' },
+  bcInfoRow:        { flexDirection: 'row', gap: 10, justifyContent: 'center', marginBottom: 20, flexWrap: 'wrap' },
+  bcInfoChip:       { alignItems: 'center', backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: COLORS.borderDefault },
+  bcInfoLabel:      { fontSize: 10, color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
+  bcInfoVal:        { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, maxWidth: 100 },
+  bcActions:        { flexDirection: 'row', gap: 10 },
+  bcActionBtnPrimary: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary },
+  bcActionBtnPrimaryText: { color: '#fff', fontSize: TYPOGRAPHY.sm, fontWeight: '700' },
+  bcActionBtnSecondary:   { flex: 1, alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.borderStrong },
+  bcActionBtnSecondaryText: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
 });
