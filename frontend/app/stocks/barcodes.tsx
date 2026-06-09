@@ -74,12 +74,10 @@ export default function BarcodesScreen() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [linkVisible,     setLinkVisible]     = useState(false);
   const [scanned,         setScanned]         = useState(false);
-  // cameraActive: true only AFTER modal slide animation completes (via onShow)
-  // Prevents camera from attempting to scan while the modal is still animating
-  const [cameraActive,    setCameraActive]    = useState(false);
 
-  // Ref-based guard: prevents stale-closure race where camera fires multiple
-  // onBarcodeScanned events before React can re-render with scanned=true
+  // Ref-based guard: synchronous, no stale-closure issues.
+  // Camera fires onBarcodeScanned many times per second — ref blocks all
+  // subsequent calls after the first one until the user resets.
   const isProcessingRef = useRef(false);
 
   // ── Scan result state (shown in-scanner overlay) ──────────────────────────
@@ -163,17 +161,6 @@ export default function BarcodesScreen() {
 
   useEffect(() => { loadSettings(); }, [loadSettings]);
 
-  // ── Camera activation: delay mount until after Modal slide animation (350ms)
-  // Do NOT rely on Modal.onShow — unreliable across RN versions / platforms
-  useEffect(() => {
-    if (!scannerVisible) {
-      setCameraActive(false);
-      return;
-    }
-    const t = setTimeout(() => setCameraActive(true), 350);
-    return () => clearTimeout(t);
-  }, [scannerVisible]);
-
   // ── Link search (search stock items in already-loaded items) ─────────────
   useEffect(() => {
     if (!linkSearch.trim()) { setLinkResults([]); return; }
@@ -237,7 +224,6 @@ export default function BarcodesScreen() {
 
     // Only open modal after we know permission is granted
     resetScanner();
-    setCameraActive(false);  // Camera activates via onShow after animation completes
     setScannerVisible(true);
   };
 
@@ -246,7 +232,7 @@ export default function BarcodesScreen() {
     // the camera fires multiple events before React re-renders.
     if (isProcessingRef.current) return;
     isProcessingRef.current = true;
-    setScanned(true);  // Still set state so onBarcodeScanned prop becomes undefined
+    setScanned(true);  // Used to show result UI — not used to gate the CameraView prop
     Vibration.vibrate(100);
     setScanLookingUp(true);
     setScanResult(null);
@@ -280,7 +266,6 @@ export default function BarcodesScreen() {
 
   const closeScanner = () => {
     isProcessingRef.current = false;
-    setCameraActive(false);
     setScannerVisible(false);
     resetScanner();
   };
@@ -653,20 +638,13 @@ export default function BarcodesScreen() {
         onRequestClose={closeScanner}
       >
         <View style={s.scannerModal}>
-          {/* Only mount CameraView once modal is fully visible (cameraActive=true)
-              Mounting during animation causes viewport sizing issues on iOS */}
-          {cameraActive && permission?.granted ? (
+          {permission?.granted ? (
             <CameraView
               style={StyleSheet.absoluteFillObject}
               facing="back"
-              onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
+              onBarcodeScanned={handleBarcodeScanned}
               barcodeScannerSettings={{ barcodeTypes: ['qr', 'code128', 'ean13', 'ean8', 'upc_a'] }}
             />
-          ) : (!cameraActive && permission?.granted) ? (
-            // Camera loading state while modal is still animating
-            <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
-              <ActivityIndicator size="large" color="rgba(255,255,255,0.5)" />
-            </View>
           ) : (
             <View style={s.scannerNoPermission}>
               <Ionicons name="camera-outline" size={60} color="rgba(255,255,255,0.4)" />
