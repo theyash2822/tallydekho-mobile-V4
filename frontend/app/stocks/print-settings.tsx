@@ -35,9 +35,12 @@ function buildLabelHTML(
   for (const item of items) {
     const barcode = item.barcode || '—';
     const price   = item.closingRate > 0 ? `₹${item.closingRate.toLocaleString('en-IN')}` : '';
-    // Real CODE128B barcode as inline SVG data URI — actually scannable
+    // Real CODE128B barcode as inline SVG data URI — scannable.
+    // 600px wide gives ~2.6px/module before CSS scaling; height 80px ensures
+    // bars are tall enough for camera auto-focus. CSS width:100% lets the
+    // print engine scale to physical label width (higher-DPI printers work).
     const barcodeImg = item.barcode
-      ? `<img src="${barcodeDataURI(item.barcode, 200, 40)}" style="max-width:100%;height:10mm;" alt="${item.barcode}"/>`
+      ? `<img src="${barcodeDataURI(item.barcode, 600, 80)}" style="width:100%;height:13mm;display:block;" alt="${item.barcode}"/>`
       : `<span style="color:#aaa;font-size:6pt">no barcode</span>`;
     for (let c = 0; c < opts.copies; c++) {
       labels.push(`
