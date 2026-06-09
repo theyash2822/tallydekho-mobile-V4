@@ -163,6 +163,17 @@ export default function BarcodesScreen() {
 
   useEffect(() => { loadSettings(); }, [loadSettings]);
 
+  // ── Camera activation: delay mount until after Modal slide animation (350ms)
+  // Do NOT rely on Modal.onShow — unreliable across RN versions / platforms
+  useEffect(() => {
+    if (!scannerVisible) {
+      setCameraActive(false);
+      return;
+    }
+    const t = setTimeout(() => setCameraActive(true), 350);
+    return () => clearTimeout(t);
+  }, [scannerVisible]);
+
   // ── Link search (search stock items in already-loaded items) ─────────────
   useEffect(() => {
     if (!linkSearch.trim()) { setLinkResults([]); return; }
@@ -640,7 +651,6 @@ export default function BarcodesScreen() {
         visible={scannerVisible}
         animationType="slide"
         onRequestClose={closeScanner}
-        onShow={() => setCameraActive(true)}  // Activate camera AFTER slide animation finishes
       >
         <View style={s.scannerModal}>
           {/* Only mount CameraView once modal is fully visible (cameraActive=true)
