@@ -6,7 +6,6 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';
-import QRCode from 'react-native-qrcode-svg';
 import { encodeCode128B } from '../../src/utils/barcode';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,16 +23,22 @@ import {
 
 const AMBER = '#A89060';
 
-// ─── Real CODE128B barcode SVG component (scannable) ─────────────────────────
-function BarcodeSVG({ code, width, height = 80 }: { code: string; width: number; height?: number }) {
+// ─── Real CODE128B barcode SVG (scannable) ──────────────────────────────
+// width must be large enough: min 3dp × (totalModules + 20 quiet) ≈ 627dp
+// Quiet zone (10 modules each side) is included in the width budget.
+function BarcodeSVG({ code, width, height = 90 }: { code: string; width: number; height?: number }) {
   const { bars, totalModules } = encodeCode128B(code);
   if (!bars.length || !totalModules) return null;
-  const moduleW = width / totalModules;
+
+  const QUIET = 10; // modules of blank space required on each side by CODE128 spec
+  const totalWithQuiet = totalModules + QUIET * 2;
+  const moduleW = width / totalWithQuiet;
+
   const rects: React.ReactElement[] = [];
-  let x = 0;
+  let x = QUIET * moduleW; // start after left quiet zone
   bars.forEach((modules, i) => {
     const w = modules * moduleW;
-    if (i % 2 === 0) {
+    if (i % 2 === 0) { // even index = black bar
       rects.push(<Rect key={i} x={x} y={0} width={w} height={height} fill="#000" />);
     }
     x += w;
@@ -1026,18 +1031,28 @@ export default function BarcodesScreen() {
               {viewBarcodeItem?.displayName}
             </Text>
 
-            {/* ━━ QR code (much more scannable from screens than linear CODE128 bars) ━━ */}
+            {/* ━━ CODE128 barcode — 600dp wide, horizontally scrollable ━━
+                600dp / 209 modules ≈ 2.9dp per module
+                At 3× DPI = ~8.5 physical pixels per module — scannable by phone camera */}
             {viewBarcodeItem?.barcode ? (
               <View style={s.bcImageWrap}>
-                {/* Small label above */}
-                <Text style={s.bcScanLabel}>Scan this code to look up product</Text>
-                <QRCode
-                  value={viewBarcodeItem.barcode}
-                  size={screenWidth - 128}
-                  backgroundColor="#ffffff"
-                  color="#000000"
-                />
-                {/* Barcode value text below */}
+                <Text style={s.bcScanLabel}>
+                  ← Scroll to see full barcode — scan with another device
+                </Text>
+                {/* Horizontal scroll: full 600dp barcode always rendered,
+                    never clipped — camera must see the whole barcode */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={s.bcScrollContent}
+                  scrollEnabled
+                >
+                  <BarcodeSVG
+                    code={viewBarcodeItem.barcode}
+                    width={600}
+                    height={100}
+                  />
+                </ScrollView>
                 <Text style={s.bcValue}>{viewBarcodeItem.barcode}</Text>
               </View>
             ) : (
@@ -1223,7 +1238,8 @@ const s = StyleSheet.create({
   bcModalHandle:    { width: 38, height: 4, borderRadius: 2, backgroundColor: COLORS.borderStrong, alignSelf: 'center', marginBottom: 16, marginTop: 10 },
   bcModalTitle:     { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center', marginBottom: 20 },
   bcImageWrap:      { alignItems: 'center', backgroundColor: '#fff', borderRadius: RADIUS.lg, paddingVertical: 20, paddingHorizontal: 16, borderWidth: 1, borderColor: COLORS.borderDefault, marginBottom: 16 },
-  bcScanLabel:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginBottom: 14, textAlign: 'center' },
+  bcScanLabel:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginBottom: 12, textAlign: 'center' },
+  bcScrollContent:  { paddingVertical: 4 },
   bcValue:          { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 12, letterSpacing: 2, fontFamily: 'monospace' },
   bcInfoRow:        { flexDirection: 'row', gap: 10, justifyContent: 'center', marginBottom: 20, flexWrap: 'wrap' },
   bcInfoChip:       { alignItems: 'center', backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: COLORS.borderDefault },
