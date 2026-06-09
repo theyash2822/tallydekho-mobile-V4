@@ -6,6 +6,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';
+import QRCode from 'react-native-qrcode-svg';
 import { encodeCode128B } from '../../src/utils/barcode';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -1025,15 +1026,18 @@ export default function BarcodesScreen() {
               {viewBarcodeItem?.displayName}
             </Text>
 
-            {/* ━━ Real CODE128 barcode image ━━ */}
+            {/* ━━ QR code (much more scannable from screens than linear CODE128 bars) ━━ */}
             {viewBarcodeItem?.barcode ? (
               <View style={s.bcImageWrap}>
-                <BarcodeSVG
-                  code={viewBarcodeItem.barcode}
-                  width={screenWidth - 96}
-                  height={90}
+                {/* Small label above */}
+                <Text style={s.bcScanLabel}>Scan this code to look up product</Text>
+                <QRCode
+                  value={viewBarcodeItem.barcode}
+                  size={screenWidth - 128}
+                  backgroundColor="#ffffff"
+                  color="#000000"
                 />
-                {/* Barcode value text */}
+                {/* Barcode value text below */}
                 <Text style={s.bcValue}>{viewBarcodeItem.barcode}</Text>
               </View>
             ) : (
@@ -1219,7 +1223,8 @@ const s = StyleSheet.create({
   bcModalHandle:    { width: 38, height: 4, borderRadius: 2, backgroundColor: COLORS.borderStrong, alignSelf: 'center', marginBottom: 16, marginTop: 10 },
   bcModalTitle:     { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center', marginBottom: 20 },
   bcImageWrap:      { alignItems: 'center', backgroundColor: '#fff', borderRadius: RADIUS.lg, paddingVertical: 20, paddingHorizontal: 16, borderWidth: 1, borderColor: COLORS.borderDefault, marginBottom: 16 },
-  bcValue:          { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 10, letterSpacing: 2, fontFamily: 'monospace' },
+  bcScanLabel:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginBottom: 14, textAlign: 'center' },
+  bcValue:          { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 12, letterSpacing: 2, fontFamily: 'monospace' },
   bcInfoRow:        { flexDirection: 'row', gap: 10, justifyContent: 'center', marginBottom: 20, flexWrap: 'wrap' },
   bcInfoChip:       { alignItems: 'center', backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: COLORS.borderDefault },
   bcInfoLabel:      { fontSize: 10, color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
