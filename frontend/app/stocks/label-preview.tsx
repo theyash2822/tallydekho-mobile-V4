@@ -144,7 +144,7 @@ export default function LabelPreviewScreen() {
     rate > 0 ? `₹${rate.toLocaleString('en-IN')}` : '—';
 
   // ── Build print HTML via shared labelPrint utility ─────────────────────────
-  const getHTML = () => buildLabelHTML(items, { labelSize, copies, showSku, showPrice });
+  const getHTML = () => buildLabelHTML(items, { labelSize, copies, showSku, showPrice, showBatch });
 
   const handlePrintNow = async () => {
     if (!items.length) return;
@@ -237,7 +237,7 @@ export default function LabelPreviewScreen() {
             </Text>
 
             {/* Optional fields */}
-            {(showSku || showPrice) && (
+            {(showSku || showPrice || showBatch) && (
               <View style={[s.labelFields, { borderTopWidth: 0.5 }]}>
                 {showSku && currentItem.sku && (
                   <View style={s.labelFieldRow}>
@@ -249,6 +249,12 @@ export default function LabelPreviewScreen() {
                   <View style={s.labelFieldRow}>
                     <Text style={[s.labelFieldKey, { fontSize: fieldFontSz }]}>Price</Text>
                     <Text style={[s.labelFieldVal, { fontSize: fieldFontSz }]}>{fmtPrice(currentItem.closingRate)}</Text>
+                  </View>
+                )}
+                {showBatch && (
+                  <View style={s.labelFieldRow}>
+                    <Text style={[s.labelFieldKey, { fontSize: fieldFontSz }]}>Batch/Exp</Text>
+                    <Text style={[s.labelFieldVal, { fontSize: fieldFontSz }]}>___________</Text>
                   </View>
                 )}
               </View>

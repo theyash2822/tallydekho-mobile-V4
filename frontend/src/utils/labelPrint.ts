@@ -27,10 +27,11 @@ export interface GridInfo {
 }
 
 export interface BuildOpts {
-  labelSize: string;
-  copies:    number;
-  showSku:   boolean;
-  showPrice: boolean;
+  labelSize:  string;
+  copies:     number;
+  showSku:    boolean;
+  showPrice:  boolean;
+  showBatch:  boolean;   // show 'BATCH: ___' placeholder line on label
 }
 
 // ─── Label size catalogue ─────────────────────────────────────────────────────
@@ -68,7 +69,7 @@ export function computeGrid(sizeKey: string, copies: number, itemCount: number):
 
 // ─── HTML generator ───────────────────────────────────────────────────────────
 export function buildLabelHTML(items: PrintItem[], opts: BuildOpts): string {
-  const { labelSize, copies, showSku, showPrice } = opts;
+  const { labelSize, copies, showSku, showPrice, showBatch } = opts;
   const isFullPage = labelSize === 'Full Page';
   const { w, h }   = getLabelDims(labelSize);
   const { cols, perPage } = computeGrid(labelSize, copies, items.length);
@@ -114,8 +115,9 @@ export function buildLabelHTML(items: PrintItem[], opts: BuildOpts): string {
         ${bcImg}
         <div style="font-size:${codeFS};letter-spacing:1.5pt;color:#333;
           margin:0.4mm 0">${item.barcode ?? '—'}</div>
-        ${showSku && item.sku   ? `<div style="font-size:${fieldFS};color:#555">SKU: ${item.sku}</div>`   : ''}
-        ${showPrice && price    ? `<div style="font-size:${fieldFS};color:#555">${price}</div>`            : ''}
+        ${showSku && item.sku   ? `<div style="font-size:${fieldFS};color:#555">SKU: ${item.sku}</div>`       : ''}
+        ${showPrice && price    ? `<div style="font-size:${fieldFS};color:#555">${price}</div>`                  : ''}
+        ${showBatch             ? `<div style="font-size:${fieldFS};color:#555">Batch/Exp: ___________</div>`    : ''}
       </div>`;
   };
 

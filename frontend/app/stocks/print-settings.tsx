@@ -80,7 +80,7 @@ export default function PrintSettingsScreen() {
     if (!queuedItems.length) return;
     setPrinting(true);
     try {
-      const html = buildLabelHTML(queuedItems, { labelSize, copies, showSku, showPrice });
+      const html = buildLabelHTML(queuedItems, { labelSize, copies, showSku, showPrice, showBatch });
       await Print.printAsync({ html });
     } catch (err: any) {
       if (!err?.message?.includes('cancel')) {
@@ -93,7 +93,7 @@ export default function PrintSettingsScreen() {
     if (!queuedItems.length) return;
     setPrinting(true);
     try {
-      const html = buildLabelHTML(queuedItems, { labelSize, copies, showSku, showPrice });
+      const html = buildLabelHTML(queuedItems, { labelSize, copies, showSku, showPrice, showBatch });
       const { uri } = await Print.printToFileAsync({ html });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
