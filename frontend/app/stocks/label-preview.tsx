@@ -164,19 +164,16 @@ export default function LabelPreviewScreen() {
       ? `display:inline-block;width:${dim.w};page-break-inside:avoid;margin:2mm;font-size:${dim.fs};`
       : `display:block;width:${dim.w};height:${dim.h};page-break-after:always;font-size:${dim.fs};`;
     const labelHtml = items.flatMap(item => {
-      const bars = (item.barcode || item.displayName).split('').slice(0, 40).map((ch, i) => {
-        const code = ch.charCodeAt(0);
-        const w = code % 3 === 0 ? '0.8mm' : code % 3 === 1 ? '0.5mm' : '0.3mm';
-        const h = code % 2 === 0 ? '10mm' : '8mm';
-        return i % 2 === 0
-          ? `<div style="background:#000;width:${w};height:${h}"></div>`
-          : `<div style="width:${w}"></div>`;
-      }).join('');
+      // Real CODE128B barcode as inline SVG data URI — scannable by real scanners
+      const barcodeValue = item.barcode || item.displayName;
+      const barcodeImg = barcodeValue
+        ? `<img src="${barcodeDataURI(barcodeValue, 200, 40)}" style="width:90%;max-height:10mm;margin-bottom:0.5mm" />`
+        : '';
       return Array.from({ length: copies }).map(() => `
         <div style="${labelCss}border:0.3mm solid #ccc;box-sizing:border-box;padding:1.5mm;
           display:flex;flex-direction:column;align-items:center;justify-content:center">
           <div style="font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:1mm">${item.displayName}</div>
-          <div style="display:flex;align-items:flex-end;gap:0.3mm;height:10mm;margin-bottom:0.5mm">${bars}</div>
+          ${barcodeImg}
           <div style="font-size:5.5pt;letter-spacing:1.5pt;color:#333;margin-bottom:0.5mm">${item.barcode || '—'}</div>
           ${showSku && item.sku ? `<div style="font-size:5.5pt;color:#555">SKU: ${item.sku}</div>` : ''}
           ${showPrice ? `<div style="font-size:5.5pt;color:#555">${fmtPrice(item.closingRate)}</div>` : ''}

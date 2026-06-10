@@ -5,7 +5,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import Svg, { Rect, Text as SvgText } from 'react-native-svg';
+import { useWindowDimensions } from 'react-native';
+import Svg, { Rect } from 'react-native-svg';
+import { encodeCode128B } from '../../src/utils/barcode';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
@@ -27,33 +29,41 @@ const MOV_CONFIG = {
   'Stock Journal': { color: COLORS.info  },
 };
 
-// ─── BARCODE STRIP ───────────────────────────────────────────────────────────
-const BAR_W   = [3,1,2,1,3,2,1,1,2,1,3,1,1,2,1,2,1,3,2,1,1,2,1,3,2,1,1,2,3,1,1,2,1,3,1,2,1,1,3,2];
-const SCALE   = 3;
-const B_H     = 50;
-const B_TOTAL = BAR_W.reduce((s, w) => s + w * SCALE, 0);
+// ─── REAL CODE128B BARCODE ──────────────────────────────────────────────────
+// Uses encodeCode128B from barcode.ts — same encoder as label-preview.tsx.
+// Integer virtual coords + viewBox scaling → bar ratios exact, no drift.
+function BarcodeSVG({ code, height = 56 }: { code: string; height?: number }) {
+  const { width: screenWidth } = useWindowDimensions();
+  const barcodeW = screenWidth - 80;
 
-function BarcodeStrip({ value }: { value: string }) {
-  let cx = 0;
-  const bars: { x: number; w: number; h: number }[] = [];
-  BAR_W.forEach((w, i) => {
-    if (i % 2 === 0) bars.push({ x: cx, w: w * SCALE, h: i % 6 === 0 ? B_H + 8 : B_H });
-    cx += w * SCALE;
+  const { bars, totalModules } = encodeCode128B(code);
+  if (!bars.length || !totalModules) return null;
+
+  const QUIET          = 10;                         // quiet modules each side
+  const totalWithQuiet = totalModules + QUIET * 2;
+  const VMOD           = 3;                          // integer virtual units per module
+  const vw             = totalWithQuiet * VMOD;      // virtual canvas width
+
+  const rects: React.ReactElement[] = [];
+  let mp = QUIET;
+  bars.forEach((modules, i) => {
+    if (i % 2 === 0) {
+      rects.push(<Rect key={i} x={mp * VMOD} y={0} width={modules * VMOD} height={height} fill="#000" />);
+    }
+    mp += modules;
   });
+
   return (
-    <View style={bc.wrap}>
-      <Svg width={B_TOTAL} height={B_H + 24}>
-        {bars.map((b, i) => (
-          <Rect key={i} x={b.x} y={0} width={b.w} height={b.h} fill={COLORS.brandPrimary} />
-        ))}
-        <SvgText x={B_TOTAL / 2} y={B_H + 18} textAnchor="middle" fontSize="10" fill={COLORS.textSecondary} letterSpacing="2">
-          {value}
-        </SvgText>
+    <View style={{ alignItems: 'center', paddingVertical: SPACING.md }}>
+      <Svg width={barcodeW} height={height} viewBox={`0 0 ${vw} ${height}`} preserveAspectRatio="none">
+        {rects}
       </Svg>
+      <Text style={{ fontSize: 10, color: COLORS.textSecondary, letterSpacing: 2, marginTop: 4, fontFamily: 'monospace' }}>
+        {code}
+      </Text>
     </View>
   );
 }
-const bc  = StyleSheet.create({ wrap: { alignItems: 'center', paddingVertical: SPACING.md } });
 const bgs = StyleSheet.create({
   genBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
@@ -199,7 +209,7 @@ export default function ItemDetailScreen() {
             <Text style={styles.heroName}>{itemName}</Text>
             <Text style={styles.heroSku}>{itemSku}</Text>
             {itemBarcode ? (
-              <BarcodeStrip value={itemBarcode} />
+              <BarcodeSVG code={itemBarcode} />
             ) : (
               <TouchableOpacity
                 style={bgs.genBtn}
