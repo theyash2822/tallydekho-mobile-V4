@@ -438,6 +438,16 @@ export const saveBarcodeSettings = (companyGuid: string, payload: BarcodeSetting
 export const pushPendingBarcodes = (companyGuid: string) =>
   post<any>('/inventory/barcodes/push-pending', { companyGuid });
 
+// Returns raw CSV text (not JSON) — pre-filled with all company stocks
+export const downloadBarcodeTemplate = async (companyGuid: string): Promise<string> => {
+  const token = await getToken();
+  const res = await fetch(`${BASE_URL}/api/inventory/barcodes/template?companyGuid=${companyGuid}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Template fetch failed: ${res.status}`);
+  return res.text();
+};
+
 export const getBarcodesByGuids = (companyGuid: string, stockGuids: string[]) =>
   post<any>('/inventory/barcodes/by-guids', { companyGuid, stockGuids });
 

@@ -19,7 +19,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useSettings } from '../../src/context/SettingsContext';
 import { useAuth } from '../../src/context/AuthContext';
 import {
-  getBarcodeList, getBarcodeSettings, saveBarcodeSettings, pushPendingBarcodes,
+  getBarcodeList, getBarcodeSettings, saveBarcodeSettings, pushPendingBarcodes, downloadBarcodeTemplate,
   generateBarcode, generateBulkBarcodes, linkBarcode, lookupBarcode,
   bulkImportBarcodes, BarcodeItem, BarcodeSettings,
 } from '../../src/services/api';
@@ -474,26 +474,21 @@ export default function BarcodesScreen() {
     if (!companyGuid || downloadingTemplate) return;
     setDownloadingTemplate(true);
     try {
-      // Fetch pre-filled CSV from backend (auth required — uses getToken)
-      const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
-      const token = await AsyncStorage.getItem('token');
-      const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.243:3001';
-      const res = await fetch(`${BASE_URL}/api/inventory/barcodes/template?companyGuid=${companyGuid}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error('Failed to fetch template');
-      const csvText = await res.text();
-      // Write to cache directory and share
-      const path = FileSystem.cacheDirectory + 'barcode_template.csv';
+      const csvText = await downloadBarcodeTemplate(companyGuid);
+      const path = (FileSystem.cacheDirectory ?? '') + 'barcode_template.csv';
       await FileSystem.writeAsStringAsync(path, csvText, { encoding: FileSystem.EncodingType.UTF8 });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
-        await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: 'Barcode Import Template', UTI: 'public.comma-separated-values-text' });
+        await Sharing.shareAsync(path, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Barcode Import Template',
+          UTI: 'public.comma-separated-values-text',
+        });
       } else {
-        Alert.alert('Saved', `Template saved to: ${path}`);
+        Alert.alert('Saved', 'Template saved. Open Files app to find barcode_template.csv');
       }
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not download template');
+      Alert.alert('Download Failed', err?.message || 'Could not download template. Check your connection.');
     } finally { setDownloadingTemplate(false); }
   };
 
