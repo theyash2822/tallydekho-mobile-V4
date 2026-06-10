@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Modal, FlatList, Pressable, Animated,
@@ -105,6 +105,15 @@ export default function BarcodesScreen() {
 
   // ── Modals ──────────────────────────────────────────────────────────────────
   const [scannerVisible,  setScannerVisible]  = useState(false);
+  const [cameraActive,    setCameraActive]    = useState(false); // iOS: delay camera render until modal is fully open
+
+  // ── Memoized barcode types — MUST NOT be recreated on every render.
+  // On iOS, a new object reference causes AVFoundation to re-init its barcode
+  // detection pipeline mid-scan, causing the scanner to miss barcodes entirely.
+  const barcodeScannerSettings = useMemo(
+    () => ({ barcodeTypes: ['qr', 'code128', 'ean13', 'ean8', 'upc_a'] as any }),
+    [] // stable for component lifetime
+  );
   const [importVisible,   setImportVisible]   = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [linkVisible,     setLinkVisible]     = useState(false);
@@ -260,6 +269,7 @@ export default function BarcodesScreen() {
 
     // Only open modal after we know permission is granted
     resetScanner();
+    setCameraActive(false); // reset — camera activates after modal is open
     setScannerVisible(true);
   };
 
@@ -303,6 +313,7 @@ export default function BarcodesScreen() {
   const closeScanner = () => {
     isProcessingRef.current = false;
     setScannerVisible(false);
+    setCameraActive(false);
     resetScanner();
   };
 
@@ -673,15 +684,31 @@ export default function BarcodesScreen() {
         visible={scannerVisible}
         animationType="slide"
         onRequestClose={closeScanner}
+        onShow={() => {
+          // iOS: AVFoundation needs ~400ms after the modal finishes sliding in
+          // before it can reliably fire onBarcodeScanned. Android is fine immediately.
+          const delay = Platform.OS === 'ios' ? 450 : 0;
+          setTimeout(() => setCameraActive(true), delay);
+        }}
       >
         <View style={s.scannerModal}>
           {permission?.granted ? (
-            <CameraView
-              style={StyleSheet.absoluteFillObject}
-              facing="back"
-              onBarcodeScanned={handleBarcodeScanned}
-              barcodeScannerSettings={{ barcodeTypes: ['qr', 'code128', 'ean13', 'ean8', 'upc_a'] }}
-            />
+            // Only render CameraView after cameraActive=true.
+            // This prevents iOS from mounting the camera before the modal slide
+            // animation completes, which causes AVFoundation to miss the first
+            // several barcode frames.
+            cameraActive ? (
+              <CameraView
+                style={StyleSheet.absoluteFillObject}
+                facing="back"
+                onBarcodeScanned={handleBarcodeScanned}
+                barcodeScannerSettings={barcodeScannerSettings}
+              />
+            ) : (
+              <View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
+                <ActivityIndicator color="#fff" />
+              </View>
+            )
           ) : (
             <View style={s.scannerNoPermission}>
               <Ionicons name="camera-outline" size={60} color="rgba(255,255,255,0.4)" />
