@@ -1031,28 +1031,20 @@ export default function BarcodesScreen() {
               {viewBarcodeItem?.displayName}
             </Text>
 
-            {/* ━━ CODE128 barcode — 600dp wide, horizontally scrollable ━━
-                600dp / 209 modules ≈ 2.9dp per module
-                At 3× DPI = ~8.5 physical pixels per module — scannable by phone camera */}
+            {/* ━━ CODE128 barcode — fits screen width, no scroll ━━
+                barcode must be fully visible in one frame for scanner to decode.
+                bcImageWrap padding (16×2) + bcModalCard padding (24×2) = 80dp total.
+                moduleW = (screenWidth-80) / (totalModules+20 quiet) ≥ 1.4dp → ~4px at 3× — scannable */}
             {viewBarcodeItem?.barcode ? (
               <View style={s.bcImageWrap}>
                 <Text style={s.bcScanLabel}>
-                  ← Scroll to see full barcode — scan with another device
+                  Point scanner at the full barcode below
                 </Text>
-                {/* Horizontal scroll: full 600dp barcode always rendered,
-                    never clipped — camera must see the whole barcode */}
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={s.bcScrollContent}
-                  scrollEnabled
-                >
-                  <BarcodeSVG
-                    code={viewBarcodeItem.barcode}
-                    width={600}
-                    height={100}
-                  />
-                </ScrollView>
+                <BarcodeSVG
+                  code={viewBarcodeItem.barcode}
+                  width={screenWidth - 80}
+                  height={100}
+                />
                 <Text style={s.bcValue}>{viewBarcodeItem.barcode}</Text>
               </View>
             ) : (
