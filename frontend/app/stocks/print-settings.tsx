@@ -10,77 +10,11 @@ import * as Sharing from 'expo-sharing';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getBarcodesByGuids } from '../../src/services/api';
-import { barcodeDataURI } from '../../src/utils/barcode';
+import { buildLabelHTML, computeGrid, LABEL_SIZE_KEYS, type PrintItem } from '../../src/utils/labelPrint';
 
 const AMBER = '#A89060';
-const LABEL_SIZES = ['50×30 mm', '38×25 mm', '100×50 mm', 'A4'];
-
-// ── Label dimensions map (→ CSS mm values)
-const LABEL_DIMS: Record<string, { w: string; h: string; fs: string }> = {
-  '50×30 mm':  { w: '50mm',  h: '30mm',  fs: '8pt'  },
-  '38×25 mm':  { w: '38mm',  h: '25mm',  fs: '7pt'  },
-  '100×50 mm': { w: '100mm', h: '50mm',  fs: '10pt' },
-  'A4':        { w: '210mm', h: '297mm', fs: '10pt' },
-};
-
-// ── Generate print-ready HTML for a set of labels
-function buildLabelHTML(
-  items: PrintItem[],
-  opts: { labelSize: string; copies: number; showSku: boolean; showPrice: boolean; showBatch: boolean }
-): string {
-  const dim = LABEL_DIMS[opts.labelSize] || LABEL_DIMS['50×30 mm'];
-  const isA4 = opts.labelSize === 'A4';
-  const labels: string[] = [];
-
-  for (const item of items) {
-    const barcode = item.barcode || '—';
-    const price   = item.closingRate > 0 ? `₹${item.closingRate.toLocaleString('en-IN')}` : '';
-    // Real CODE128B barcode as inline SVG data URI — scannable.
-    // 600px wide gives ~2.6px/module before CSS scaling; height 80px ensures
-    // bars are tall enough for camera auto-focus. CSS width:100% lets the
-    // print engine scale to physical label width (higher-DPI printers work).
-    const barcodeImg = item.barcode
-      ? `<img src="${barcodeDataURI(item.barcode, 600, 80)}" style="width:100%;height:13mm;display:block;" alt="${item.barcode}"/>`
-      : `<span style="color:#aaa;font-size:6pt">no barcode</span>`;
-    for (let c = 0; c < opts.copies; c++) {
-      labels.push(`
-        <div class="label">
-          <div class="name">${item.displayName}</div>
-          <div class="bc">${barcodeImg}</div>
-          <div class="bcnum">${barcode}</div>
-          ${opts.showSku && item.sku ? `<div class="field">SKU: ${item.sku}</div>` : ''}
-          ${opts.showPrice && price ? `<div class="field">Price: ${price}</div>` : ''}
-        </div>
-      `);
-    }
-  }
-
-  const labelCss = isA4
-    ? `display:inline-block;width:${dim.w};page-break-inside:avoid;margin:2mm;font-size:${dim.fs};`
-    : `display:block;width:${dim.w};height:${dim.h};page-break-after:always;font-size:${dim.fs};`;
-
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
-  <style>
-    @page{margin:0;size:${isA4 ? 'A4' : `${dim.w} ${dim.h}`}}
-    body{margin:0;padding:${isA4 ? '5mm' : '0'};font-family:Arial,sans-serif}
-    .label{${labelCss}border:0.3mm solid #ccc;box-sizing:border-box;padding:1.5mm;
-      display:flex;flex-direction:column;align-items:center;justify-content:center}
-    .name{font-weight:700;font-size:${dim.fs};text-align:center;margin-bottom:1mm;
-      max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .bc{display:flex;align-items:center;justify-content:center;margin-bottom:0.5mm}
-    .bcnum{font-size:5.5pt;letter-spacing:1.5pt;color:#333;margin-bottom:0.5mm}
-    .field{font-size:5.5pt;color:#555}
-  </style>
-  </head><body>${labels.join('')}</body></html>`;
-}
-
-export interface PrintItem {
-  stockGuid: string;
-  displayName: string;
-  sku: string | null;
-  barcode: string | null;
-  closingRate: number;
-}
+// PrintItem is re-exported from labelPrint.ts — do not redefine here
+export type { PrintItem } from '../../src/utils/labelPrint';
 
 export default function PrintSettingsScreen() {
   const router  = useRouter();
@@ -120,6 +54,9 @@ export default function PrintSettingsScreen() {
   const [showPrice, setShowPrice] = useState(true);
   const [showBatch, setShowBatch] = useState(false);
 
+  // Grid info — updates live as labelSize / copies / items change
+  const { perPage, total, sheets } = computeGrid(labelSize, copies, queuedItems.length);
+
   const removeItem = (id: string) => setQueueIds(prev => prev.filter(i => i !== id));
 
   const handlePreview = () => {
@@ -143,7 +80,7 @@ export default function PrintSettingsScreen() {
     if (!queuedItems.length) return;
     setPrinting(true);
     try {
-      const html = buildLabelHTML(queuedItems, { labelSize, copies, showSku, showPrice, showBatch });
+      const html = buildLabelHTML(queuedItems, { labelSize, copies, showSku, showPrice });
       await Print.printAsync({ html });
     } catch (err: any) {
       if (!err?.message?.includes('cancel')) {
@@ -156,7 +93,7 @@ export default function PrintSettingsScreen() {
     if (!queuedItems.length) return;
     setPrinting(true);
     try {
-      const html = buildLabelHTML(queuedItems, { labelSize, copies, showSku, showPrice, showBatch });
+      const html = buildLabelHTML(queuedItems, { labelSize, copies, showSku, showPrice });
       const { uri } = await Print.printToFileAsync({ html });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
@@ -218,7 +155,7 @@ export default function PrintSettingsScreen() {
           </TouchableOpacity>
           {sizeOpen && (
             <View style={s.dropdownList}>
-              {LABEL_SIZES.map(sz => (
+              {LABEL_SIZE_KEYS.map(sz => (
                 <TouchableOpacity key={sz} style={s.dropdownItem} onPress={() => { setLabelSize(sz); setSizeOpen(false); }} activeOpacity={0.7}>
                   <Text style={[s.dropdownItemText, labelSize === sz && s.dropdownItemActive]}>{sz}</Text>
                   {labelSize === sz && <Ionicons name="checkmark" size={16} color={AMBER} />}
@@ -227,6 +164,28 @@ export default function PrintSettingsScreen() {
             </View>
           )}
         </View>
+
+        <View style={s.divider} />
+
+        {/* ── Grid info banner — updates live */}
+        {queuedItems.length > 0 && (
+          <View style={s.gridInfoBanner}>
+            <View style={s.gridInfoItem}>
+              <Text style={s.gridInfoValue}>{perPage}</Text>
+              <Text style={s.gridInfoLabel}>per A4 sheet</Text>
+            </View>
+            <View style={s.gridInfoSep} />
+            <View style={s.gridInfoItem}>
+              <Text style={s.gridInfoValue}>{total}</Text>
+              <Text style={s.gridInfoLabel}>total labels</Text>
+            </View>
+            <View style={s.gridInfoSep} />
+            <View style={s.gridInfoItem}>
+              <Text style={s.gridInfoValue}>{sheets}</Text>
+              <Text style={s.gridInfoLabel}>sheet{sheets !== 1 ? 's' : ''} needed</Text>
+            </View>
+          </View>
+        )}
 
         <View style={s.divider} />
 
@@ -369,4 +328,11 @@ const s = StyleSheet.create({
   exportBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 44, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.borderStrong },
   exportBtnText:  { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
   btnDisabled:    { opacity: 0.4 },
+
+  // Grid info banner
+  gridInfoBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, paddingVertical: 14, marginTop: 4 },
+  gridInfoItem:   { flex: 1, alignItems: 'center' },
+  gridInfoValue:  { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary },
+  gridInfoLabel:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2, textAlign: 'center' },
+  gridInfoSep:    { width: 1, height: 32, backgroundColor: COLORS.borderDefault },
 });

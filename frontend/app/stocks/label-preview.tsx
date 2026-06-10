@@ -11,17 +11,13 @@ import * as Sharing from 'expo-sharing';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getBarcodesByGuids } from '../../src/services/api';
-import { encodeCode128B, barcodeDataURI } from '../../src/utils/barcode';
+import { encodeCode128B } from '../../src/utils/barcode';
+import { buildLabelHTML, computeGrid, getLabelDims, type PrintItem } from '../../src/utils/labelPrint';
 
 const AMBER = '#A89060';
 
-type PreviewItem = {
-  stockGuid:   string;
-  displayName: string;
-  sku:         string | null;
-  barcode:     string | null;
-  closingRate: number;
-};
+// PreviewItem = PrintItem (shared type from labelPrint.ts)
+type PreviewItem = PrintItem;
 
 // ─── Real CODE128B Barcode SVG ────────────────────────────────────────────────
 // Uses actual CODE128B encoding — scannable by physical barcode scanners.
@@ -86,6 +82,9 @@ export default function LabelPreviewScreen() {
 
   const currentItem = items[currentIdx] ?? null;
 
+  // Grid info for info strip
+  const { perPage, total, sheets } = computeGrid(labelSize, copies, items.length);
+
   // ── Header (always shown)
   const Header = () => (
     <View style={s.header}>
@@ -125,13 +124,8 @@ export default function LabelPreviewScreen() {
   }
 
   // ── Label preview dimensions ────────────────────────────────────────────
-  const LABEL_MM: Record<string, { w: number; h: number }> = {
-    '50×30 mm':  { w: 50,  h: 30  },
-    '38×25 mm':  { w: 38,  h: 25  },
-    '100×50 mm': { w: 100, h: 50  },
-    'A4':        { w: 210, h: 297 },
-  };
-  const mmDim     = LABEL_MM[labelSize] || LABEL_MM['50×30 mm'];
+  // getLabelDims from labelPrint.ts — covers all sizes including 'Full Page'
+  const mmDim     = getLabelDims(labelSize);
   const isPortrait = mmDim.h > mmDim.w;
   const maxCardW   = screenW - 48;
   const cardW      = Math.min(maxCardW, isPortrait ? 220 : 340);
@@ -149,46 +143,14 @@ export default function LabelPreviewScreen() {
   const fmtPrice = (rate: number) =>
     rate > 0 ? `₹${rate.toLocaleString('en-IN')}` : '—';
 
-  // ── Build print HTML (same logic as print-settings) ───────────────────────
-  const buildHTML = () => {
-    const labelSize = params.labelSize ?? '50×30 mm';
-    const dimMap: Record<string, { w: string; h: string; fs: string }> = {
-      '50×30 mm':  { w: '50mm',  h: '30mm',  fs: '8pt'  },
-      '38×25 mm':  { w: '38mm',  h: '25mm',  fs: '7pt'  },
-      '100×50 mm': { w: '100mm', h: '50mm',  fs: '10pt' },
-      'A4':        { w: '210mm', h: '297mm', fs: '10pt' },
-    };
-    const dim = dimMap[labelSize] || dimMap['50×30 mm'];
-    const isA4 = labelSize === 'A4';
-    const labelCss = isA4
-      ? `display:inline-block;width:${dim.w};page-break-inside:avoid;margin:2mm;font-size:${dim.fs};`
-      : `display:block;width:${dim.w};height:${dim.h};page-break-after:always;font-size:${dim.fs};`;
-    const labelHtml = items.flatMap(item => {
-      // Real CODE128B barcode as inline SVG data URI — scannable by real scanners
-      const barcodeValue = item.barcode || item.displayName;
-      const barcodeImg = barcodeValue
-        ? `<img src="${barcodeDataURI(barcodeValue, 200, 40)}" style="width:90%;max-height:10mm;margin-bottom:0.5mm" />`
-        : '';
-      return Array.from({ length: copies }).map(() => `
-        <div style="${labelCss}border:0.3mm solid #ccc;box-sizing:border-box;padding:1.5mm;
-          display:flex;flex-direction:column;align-items:center;justify-content:center">
-          <div style="font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:1mm">${item.displayName}</div>
-          ${barcodeImg}
-          <div style="font-size:5.5pt;letter-spacing:1.5pt;color:#333;margin-bottom:0.5mm">${item.barcode || '—'}</div>
-          ${showSku && item.sku ? `<div style="font-size:5.5pt;color:#555">SKU: ${item.sku}</div>` : ''}
-          ${showPrice ? `<div style="font-size:5.5pt;color:#555">${fmtPrice(item.closingRate)}</div>` : ''}
-        </div>`);
-    }).join('');
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
-      <style>@page{margin:0;size:${isA4 ? 'A4' : `${dim.w} ${dim.h}`}}body{margin:0;padding:${isA4 ? '5mm' : '0'};font-family:Arial,sans-serif}</style>
-      </head><body>${labelHtml}</body></html>`;
-  };
+  // ── Build print HTML via shared labelPrint utility ─────────────────────────
+  const getHTML = () => buildLabelHTML(items, { labelSize, copies, showSku, showPrice });
 
   const handlePrintNow = async () => {
     if (!items.length) return;
     setPrinting(true);
     try {
-      await Print.printAsync({ html: buildHTML() });
+      await Print.printAsync({ html: getHTML() });
     } catch (err: any) {
       if (!err?.message?.includes('cancel'))
         Alert.alert('Print failed', err?.message || 'Could not open print dialog');
@@ -199,7 +161,7 @@ export default function LabelPreviewScreen() {
     if (!items.length) return;
     setPrinting(true);
     try {
-      const { uri } = await Print.printToFileAsync({ html: buildHTML() });
+      const { uri } = await Print.printToFileAsync({ html: getHTML() });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share barcode labels' });
       else Alert.alert('PDF saved', uri);
@@ -217,13 +179,13 @@ export default function LabelPreviewScreen() {
 
         {/* ── Info strip */}
         <View style={s.infoStrip}>
-          <View style={s.infoItem}><Text style={s.infoLabel}>Size</Text><Text style={s.infoValue}>{labelSize}</Text></View>
+          <View style={s.infoItem}><Text style={s.infoLabel}>Per Sheet</Text><Text style={s.infoValue}>{perPage}</Text></View>
           <View style={s.infoSep} />
-          <View style={s.infoItem}><Text style={s.infoLabel}>Copies</Text><Text style={s.infoValue}>{copies}</Text></View>
+          <View style={s.infoItem}><Text style={s.infoLabel}>Total Labels</Text><Text style={s.infoValue}>{total}</Text></View>
           <View style={s.infoSep} />
-          <View style={s.infoItem}><Text style={s.infoLabel}>Items</Text><Text style={s.infoValue}>{items.length}</Text></View>
+          <View style={s.infoItem}><Text style={s.infoLabel}>Sheets</Text><Text style={s.infoValue}>{sheets}</Text></View>
           <View style={s.infoSep} />
-          <View style={s.infoItem}><Text style={s.infoLabel}>Total</Text><Text style={s.infoValue}>{items.length * copies}</Text></View>
+          <View style={s.infoItem}><Text style={s.infoLabel}>Size</Text><Text style={s.infoValue} numberOfLines={1}>{labelSize}</Text></View>
         </View>
 
         {/* ── Item navigator */}
