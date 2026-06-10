@@ -17,7 +17,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useSettings } from '../../src/context/SettingsContext';
 import { useAuth } from '../../src/context/AuthContext';
 import {
-  getBarcodeList, getBarcodeSettings, saveBarcodeSettings,
+  getBarcodeList, getBarcodeSettings, saveBarcodeSettings, pushPendingBarcodes,
   generateBarcode, generateBulkBarcodes, linkBarcode, lookupBarcode,
   bulkImportBarcodes, BarcodeItem, BarcodeSettings,
 } from '../../src/services/api';
@@ -460,9 +460,25 @@ export default function BarcodesScreen() {
       await saveBarcodeSettings(companyGuid, draftSettings);
       setSettings(draftSettings);
       setSettingsVisible(false);
+      // Backend auto-triggers push for existing pending barcodes when autoSyncToTally=true
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Could not save settings');
     } finally { setSettingsSaving(false); }
+  };
+
+  // ── Manual "Sync Now" ──────────────────────────────────────────────────────
+  const [syncingNow, setSyncingNow] = useState(false);
+  const handleSyncNow = async () => {
+    if (!companyGuid || syncingNow) return;
+    setSyncingNow(true);
+    try {
+      const res = await pushPendingBarcodes(companyGuid);
+      const d = res?.data || res;
+      Alert.alert('Tally Sync', d?.message || `Synced ${d?.synced ?? 0} barcode(s)`, [{ text: 'OK' }]);
+      loadItems(1, true);
+    } catch (err: any) {
+      Alert.alert('Sync failed', err?.message || 'Could not push to Tally');
+    } finally { setSyncingNow(false); }
   };
 
   // ── Render item row ────────────────────────────────────────────────────────
@@ -970,6 +986,23 @@ export default function BarcodesScreen() {
                     />
                   </View>
 
+                  {/* Sync Now button — visible when a Tally sync target is selected */}
+                  {settings.barcodeStorageMode !== 'app_only' && (
+                    <TouchableOpacity
+                      style={[s.syncNowBtn, syncingNow && { opacity: 0.5 }]}
+                      onPress={handleSyncNow}
+                      activeOpacity={0.8}
+                      disabled={syncingNow}
+                    >
+                      {syncingNow
+                        ? <ActivityIndicator size="small" color={AMBER} />
+                        : <Ionicons name="cloud-upload-outline" size={16} color={AMBER} />}
+                      <Text style={s.syncNowBtnText}>
+                        {syncingNow ? 'Syncing…' : 'Sync Pending to Tally Now'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
                   <View style={s.importActions}>
                     <TouchableOpacity style={s.importCancelBtn} onPress={() => setSettingsVisible(false)} activeOpacity={0.7}>
                       <Text style={s.importCancelText}>Cancel</Text>
@@ -1234,6 +1267,8 @@ const s = StyleSheet.create({
   orText:        { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '600' },
   importLabel:   { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
   pasteInput:    { borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, padding: SPACING.md, minHeight: 100, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, backgroundColor: COLORS.pageBg },
+  syncNowBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, marginTop: SPACING.md, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: AMBER, backgroundColor: 'rgba(168,144,96,0.08)' },
+  syncNowBtnText: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: AMBER },
   importActions: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.lg },
   importCancelBtn: { flex: 1, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.borderStrong },
   importCancelText: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },

@@ -435,6 +435,9 @@ export const getBarcodeSettings = (companyGuid: string) =>
 export const saveBarcodeSettings = (companyGuid: string, payload: BarcodeSettings) =>
   post<any>('/inventory/barcodes/settings', { companyGuid, ...payload });
 
+export const pushPendingBarcodes = (companyGuid: string) =>
+  post<any>('/inventory/barcodes/push-pending', { companyGuid });
+
 export const getBarcodesByGuids = (companyGuid: string, stockGuids: string[]) =>
   post<any>('/inventory/barcodes/by-guids', { companyGuid, stockGuids });
 
