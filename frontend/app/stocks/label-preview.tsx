@@ -28,18 +28,23 @@ type PreviewItem = {
 function BarcodeSVG({ code, width = 240, height = 60 }: { code: string; width?: number; height?: number }) {
   const { bars, totalModules } = encodeCode128B(code);
   if (!bars.length || !totalModules) return null;
-  const moduleW = width / totalModules;
+
+  const QUIET = 10;                        // 10 quiet modules each side (CODE128 spec)
+  const totalWithQuiet = totalModules + QUIET * 2;
+  const VMOD = 3;                          // integer virtual units per module
+  const vw   = totalWithQuiet * VMOD;      // virtual canvas width
+
   const rects: React.ReactElement[] = [];
-  let x = 0;
+  let mp = QUIET;                          // integer module position
   bars.forEach((modules, i) => {
-    const w = modules * moduleW;
     if (i % 2 === 0) {
-      rects.push(<Rect key={i} x={x} y={0} width={w} height={height} fill="#000" />);
+      rects.push(<Rect key={i} x={mp * VMOD} y={0} width={modules * VMOD} height={height} fill="#000" />);
     }
-    x += w;
+    mp += modules;
   });
+
   return (
-    <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+    <Svg width={width} height={height} viewBox={`0 0 ${vw} ${height}`} preserveAspectRatio="none">
       {rects}
     </Svg>
   );

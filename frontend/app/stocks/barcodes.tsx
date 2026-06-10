@@ -24,27 +24,31 @@ import {
 const AMBER = '#A89060';
 
 // ─── Real CODE128B barcode SVG (scannable) ──────────────────────────────
-// width must be large enough: min 3dp × (totalModules + 20 quiet) ≈ 627dp
-// Quiet zone (10 modules each side) is included in the width budget.
+// Uses integer virtual coordinates + viewBox scaling so bar ratios (1:2:3:4)
+// are preserved exactly — no floating-point drift, no sub-pixel misreads.
 function BarcodeSVG({ code, width, height = 90 }: { code: string; width: number; height?: number }) {
   const { bars, totalModules } = encodeCode128B(code);
   if (!bars.length || !totalModules) return null;
 
-  const QUIET = 10; // modules of blank space required on each side by CODE128 spec
+  const QUIET = 10;                        // 10 quiet modules each side (CODE128 spec)
   const totalWithQuiet = totalModules + QUIET * 2;
-  const moduleW = width / totalWithQuiet;
+  const VMOD = 3;                          // virtual units per module (integer → no float drift)
+  const vw   = totalWithQuiet * VMOD;      // virtual canvas width
 
   const rects: React.ReactElement[] = [];
-  let x = QUIET * moduleW; // start after left quiet zone
+  let mp = QUIET;                          // integer module position — no accumulation error
   bars.forEach((modules, i) => {
-    const w = modules * moduleW;
-    if (i % 2 === 0) { // even index = black bar
-      rects.push(<Rect key={i} x={x} y={0} width={w} height={height} fill="#000" />);
+    if (i % 2 === 0) {                     // even = black bar
+      rects.push(<Rect key={i} x={mp * VMOD} y={0} width={modules * VMOD} height={height} fill="#000" />);
     }
-    x += w;
+    mp += modules;
   });
+
+  // preserveAspectRatio="none" scales x and y independently:
+  // x-axis: vw → width (uniform bar scaling, exact ratios kept)
+  // y-axis: height → height (bars fill full height)
   return (
-    <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+    <Svg width={width} height={height} viewBox={`0 0 ${vw} ${height}`} preserveAspectRatio="none">
       {rects}
     </Svg>
   );

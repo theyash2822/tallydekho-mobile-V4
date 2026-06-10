@@ -96,29 +96,30 @@ export function barcodeSVG(
   const { bars, totalModules } = encodeCode128B(value);
   if (!bars.length) return '';
 
-  // Code 128 spec requires ≥10 quiet modules on each side.
-  const QUIET         = 10;
+  // Integer virtual coordinates + viewBox scaling: bar ratios (1:2:3:4) are
+  // preserved exactly regardless of output width. No floating-point drift.
+  const QUIET          = 10;               // quiet modules each side (CODE128 spec)
   const totalWithQuiet = totalModules + QUIET * 2;
-  const moduleW       = width / totalWithQuiet;
-  const textH         = showText ? 14 : 0;
-  const totalH        = height + textH;
+  const VMOD           = 3;               // integer virtual units per module
+  const vw             = totalWithQuiet * VMOD; // virtual canvas width
+  const textH          = showText ? 14 : 0;
+  const totalH         = height + textH;
 
-  let x = QUIET * moduleW; // start after left quiet zone
+  let mp = QUIET;      // integer module position — no accumulation error
   let rectsSVG = '';
   bars.forEach((modules, i) => {
-    const w = modules * moduleW;
     if (i % 2 === 0) {
-      // Black bar
-      rectsSVG += `<rect x="${x.toFixed(2)}" y="0" width="${w.toFixed(2)}" height="${height}" fill="#000"/>`;
+      rectsSVG += `<rect x="${mp * VMOD}" y="0" width="${modules * VMOD}" height="${height}" fill="#000"/>`;
     }
-    x += w;
+    mp += modules;
   });
 
   const textSVG = showText
-    ? `<text x="${(width / 2).toFixed(1)}" y="${(height + 11).toFixed(1)}" text-anchor="middle" font-size="9" font-family="monospace" fill="#333" letter-spacing="1">${value}</text>`
+    ? `<text x="${(vw / 2).toFixed(1)}" y="${(height + 11).toFixed(1)}" text-anchor="middle" font-size="9" font-family="monospace" fill="#333" letter-spacing="1">${value}</text>`
     : '';
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${totalH}" viewBox="0 0 ${width} ${totalH}">${rectsSVG}${textSVG}</svg>`;
+  // preserveAspectRatio="none": x-axis scales vw→width (uniform), y-axis height→totalH
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${totalH}" viewBox="0 0 ${vw} ${totalH}" preserveAspectRatio="none">${rectsSVG}${textSVG}</svg>`;
 }
 
 /**
