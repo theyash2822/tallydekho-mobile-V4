@@ -39,7 +39,7 @@ const CODE128B_PATTERNS: number[][] = [
   [1,1,3,1,1,4],[1,1,3,1,4,1],[3,1,1,1,1,4],               // 100-102
 ];
 
-const START_B  = [2,1,1,4,1,2]; // Start Code B
+const START_B  = [2,1,1,2,1,4]; // Start Code B (ISO 15417 value 104) — NOT [2,1,1,4,1,2] which is Start A (103)
 const STOP     = [2,3,3,1,1,1,2]; // Stop (7 bars)
 const CODE_B_START_VAL = 104;
 
