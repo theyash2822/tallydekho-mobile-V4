@@ -91,16 +91,20 @@ export function buildLabelHTML(items: PrintItem[], opts: BuildOpts): string {
   const padLabel    = isFullPage ? '8mm'  : '1.5mm';
 
   // Barcode image dimensions
+  // bcImgH = FIXED height (not max-height) so bars are always tall enough.
+  // iOS AVFoundation needs ≥10mm bar height to scan printed CODE128 reliably.
+  // Android ML Kit works even at 6-7mm — that's why Android printed fine but iOS didn't.
+  // We use h * 0.55 so bars scale with label size, minimum 11mm enforced.
   const bcRenderW = isFullPage ? 600 : 400;
-  const bcRenderH = isFullPage ? 120 : 60;
-  const bcImgH    = isFullPage ? '22mm' : `${Math.max(7, Math.round(h * 0.38))}mm`;
+  const bcRenderH = isFullPage ? 120 : 80;  // taller source = better quality at small print sizes
+  const bcImgH    = isFullPage ? '25mm' : `${Math.max(11, Math.round(h * 0.55))}mm`;
 
   const makeLabel = (item: PrintItem): string => {
     const price = item.closingRate > 0
       ? `₹${item.closingRate.toLocaleString('en-IN')}` : '';
     const bcImg = item.barcode
       ? `<img src="${barcodeDataURI(item.barcode, bcRenderW, bcRenderH)}"
-           style="width:92%;max-height:${bcImgH};display:block;margin:0.5mm auto" alt="${item.barcode}"/>`
+           style="width:92%;height:${bcImgH};display:block;margin:0.5mm auto" alt="${item.barcode}"/>`
       : `<span style="font-size:5pt;color:#aaa">no barcode</span>`;
     return `
       <div style="
