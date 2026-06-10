@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useBarcodeScanner } from '../../src/hooks/useBarcodeScanner';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Modal, FlatList, Pressable, Animated,
@@ -105,42 +106,61 @@ export default function BarcodesScreen() {
 
   // ── Modals ──────────────────────────────────────────────────────────────────
   const [scannerVisible,  setScannerVisible]  = useState(false);
-  const [cameraActive,    setCameraActive]    = useState(false); // iOS: delay camera render until modal is fully open
+  const [cameraActive,    setCameraActive]    = useState(false);
 
-  // ── Memoized barcode types — MUST NOT be recreated on every render.
-  // On iOS, a new object reference causes AVFoundation to re-init its barcode
-  // detection pipeline mid-scan, causing the scanner to miss barcodes entirely.
+  // ── Memoized barcode types — stable reference, prevents iOS AVFoundation re-init
   const barcodeScannerSettings = useMemo(
     () => ({ barcodeTypes: ['qr', 'code128', 'ean13', 'ean8', 'upc_a'] as any }),
-    [] // stable for component lifetime
+    []
   );
+
+  // ── Torch + auto-zoom + helper text ───────────────────────────────────────
+  const [torchOn,     setTorchOn]     = useState(false);
+  const [zoom,        setZoom]        = useState(0);
+  const [showHelper,  setShowHelper]  = useState(false);
+  const zoomTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const helperTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const zoomStepRef    = useRef(0);
+
+  // Auto-zoom: 0 → slight (0.08) → more (0.18) at 800ms intervals
+  // Resets when scanner closes or scan succeeds
+  const startZoomTimer = useCallback(() => {
+    zoomStepRef.current = 0;
+    const step = () => {
+      zoomStepRef.current += 1;
+      if (zoomStepRef.current === 1) {
+        setZoom(0.08);
+        zoomTimerRef.current = setTimeout(step, 800);
+      } else if (zoomStepRef.current === 2) {
+        setZoom(0.18);
+        zoomTimerRef.current = null;
+      }
+    };
+    zoomTimerRef.current = setTimeout(step, 800);
+  }, []);
+
+  const clearScannerTimers = useCallback(() => {
+    if (zoomTimerRef.current)   { clearTimeout(zoomTimerRef.current);   zoomTimerRef.current   = null; }
+    if (helperTimerRef.current) { clearTimeout(helperTimerRef.current); helperTimerRef.current = null; }
+  }, []);
+
+  const resetScannerUI = useCallback(() => {
+    clearScannerTimers();
+    setZoom(0);
+    setTorchOn(false);
+    setShowHelper(false);
+    zoomStepRef.current = 0;
+  }, [clearScannerTimers]);
   const [importVisible,   setImportVisible]   = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [linkVisible,     setLinkVisible]     = useState(false);
-  const [scanned,         setScanned]         = useState(false);
   const [viewBarcodeItem, setViewBarcodeItem] = useState<BarcodeItem | null>(null);
 
-  // Ref-based guard: synchronous, no stale-closure issues.
-  // Camera fires onBarcodeScanned many times per second — ref blocks all
-  // subsequent calls after the first one until the user resets.
-  const isProcessingRef = useRef(false);
-
-  // ── Scan result state (shown in-scanner overlay) ──────────────────────────
-  type ScanResult = {
-    found:    boolean;
-    barcode:  string;
-    item?: {
-      stockGuid:   string;
-      displayName: string;
-      sku:         string | null;
-      barcode:     string;
-      currentQty:  number;
-      groupName:   string | null;
-      unit:        string;
-    };
-  };
-  const [scanLookingUp, setScanLookingUp] = useState(false);
-  const [scanResult,    setScanResult]    = useState<ScanResult | null>(null);
+  // ── Barcode scanner hook — scan state + lookup, no inline API calls ────────
+  const {
+    scanned, scanLookingUp, scanResult,
+    handleBarcodeScanned, resetScanner, isProcessingRef,
+  } = useBarcodeScanner(companyGuid);
   const [pasteText,       setPasteText]       = useState('');
   const [importing,       setImporting]       = useState(false);
 
@@ -234,88 +254,45 @@ export default function BarcodesScreen() {
   };
   const exitMultiSelect = () => { setIsMultiSelect(false); setSelectedIds(new Set()); };
 
-  // ── Scanner ────────────────────────────────────────────────────────────────
+  // ── Scanner open / close ─────────────────────────────────────────────────
   const openScanner = async () => {
-    // Reset camera state — camera will activate only after onShow fires
-    // Use returned result — not stale permission state from hook
     let granted = permission?.granted ?? false;
-
     if (!granted) {
       if (permission?.canAskAgain === false) {
-        // OS-level denied — send to Settings
         Alert.alert(
           'Camera Access Denied',
           'TallyDekho needs camera access to scan barcodes.\n\nGo to Settings → Privacy → Camera → TallyDekho and enable it.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => Linking.openSettings() },
-          ]
+          [{ text: 'Cancel', style: 'cancel' }, { text: 'Open Settings', onPress: () => Linking.openSettings() }]
         );
         return;
       }
-      // Ask for permission and use the RETURNED result (not stale hook value)
       const result = await requestPermission();
       granted = result?.granted ?? false;
     }
-
     if (!granted) {
-      Alert.alert(
-        'Camera Permission Required',
-        'Please allow camera access to scan barcodes.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Camera Permission Required', 'Please allow camera access to scan barcodes.', [{ text: 'OK' }]);
       return;
     }
-
-    // Only open modal after we know permission is granted
     resetScanner();
-    setCameraActive(false); // reset — camera activates after modal is open
+    resetScannerUI();
+    setCameraActive(false);
     setScannerVisible(true);
   };
 
-  const handleBarcodeScanned = useCallback(async ({ data }: { data: string }) => {
-    // Use ref (not state) as the guard — state is stale in closures when
-    // the camera fires multiple events before React re-renders.
-    if (isProcessingRef.current) return;
-    isProcessingRef.current = true;
-    setScanned(true);  // Used to show result UI — not used to gate the CameraView prop
-    Vibration.vibrate(100);
-    setScanLookingUp(true);
-    setScanResult(null);
-    if (!companyGuid) {
-      setScanLookingUp(false);
-      isProcessingRef.current = false;  // Unlock if no company (edge case)
-      return;
-    }
-    try {
-      const res = await lookupBarcode(companyGuid, data);
-      const d = res?.data || res;
-      if (d.found && d.item?.stockGuid) {
-        setScanResult({ found: true, barcode: data, item: d.item });
-      } else {
-        setScanResult({ found: false, barcode: data });
-      }
-    } catch {
-      setScanResult({ found: false, barcode: data });
-    } finally {
-      setScanLookingUp(false);
-      // Note: isProcessingRef stays true until user taps "Scan Again" or closes scanner
-    }
-  }, [companyGuid]);  // Stable reference — only recreated when companyGuid changes
+  // handleBarcodeScanned comes from useBarcodeScanner hook
+  // Reset also resets zoom + torch + helper
+  const handleScanAgain = useCallback(() => {
+    resetScanner();
+    resetScannerUI();
+    startZoomTimer();
+  }, [resetScanner, resetScannerUI, startZoomTimer]);
 
-  const resetScanner = () => {
-    isProcessingRef.current = false;  // Allow new scan
-    setScanned(false);
-    setScanResult(null);
-    setScanLookingUp(false);
-  };
-
-  const closeScanner = () => {
-    isProcessingRef.current = false;
+  const closeScanner = useCallback(() => {
+    resetScanner();
+    resetScannerUI();
     setScannerVisible(false);
     setCameraActive(false);
-    resetScanner();
-  };
+  }, [resetScanner, resetScannerUI]);
 
   // ── Generate barcode inline (single item, updates row in-place) ──────────
   const handleGenerateInline = async (item: BarcodeItem) => {
@@ -685,10 +662,14 @@ export default function BarcodesScreen() {
         animationType="slide"
         onRequestClose={closeScanner}
         onShow={() => {
-          // iOS: AVFoundation needs ~400ms after the modal finishes sliding in
-          // before it can reliably fire onBarcodeScanned. Android is fine immediately.
+          // iOS: AVFoundation needs ~400ms after modal slide-in before firing onBarcodeScanned
           const delay = Platform.OS === 'ios' ? 450 : 0;
-          setTimeout(() => setCameraActive(true), delay);
+          setTimeout(() => {
+            setCameraActive(true);
+            startZoomTimer();
+            // Helper text after 2s: "Move closer or turn on flash"
+            helperTimerRef.current = setTimeout(() => setShowHelper(true), 2000);
+          }, delay);
         }}
       >
         <View style={s.scannerModal}>
@@ -701,6 +682,8 @@ export default function BarcodesScreen() {
               <CameraView
                 style={StyleSheet.absoluteFillObject}
                 facing="back"
+                zoom={zoom}
+                enableTorch={torchOn}
                 onBarcodeScanned={handleBarcodeScanned}
                 barcodeScannerSettings={barcodeScannerSettings}
               />
@@ -735,7 +718,15 @@ export default function BarcodesScreen() {
 
           {/* ── Scan frame overlay ── */}
           <View style={s.scanOverlay}>
-            <View style={s.scanDimTop} />
+
+            {/* Torch toggle — top right */}
+            <TouchableOpacity style={s.torchBtn} onPress={() => setTorchOn(v => !v)} activeOpacity={0.8}>
+              <Ionicons name={torchOn ? 'flash' : 'flash-outline'} size={22} color={torchOn ? '#FFD700' : '#fff'} />
+            </TouchableOpacity>
+
+            <View style={s.scanDimTop}>
+              <Text style={s.scanTopHint}>Aim at barcode · Scans full screen</Text>
+            </View>
             <View style={s.scanMiddleRow}>
               <View style={s.scanDimSide} />
               <View style={s.scanFrame}>
@@ -749,10 +740,14 @@ export default function BarcodesScreen() {
 
             {/* ── Bottom: hint / looking-up spinner / scan result panel ── */}
             <View style={s.scanDimBottom}>
-              {/* No result yet — show hint */}
+              {/* No result yet — show hint + optional helper */}
               {!scanLookingUp && !scanResult && (
                 <>
-                  <Text style={s.scanHint}>Point camera at barcode or QR code</Text>
+                  {showHelper ? (
+                    <Text style={s.scanHelperText}>Move closer or turn on flash 💡</Text>
+                  ) : (
+                    <Text style={s.scanHint}>Hold barcode steady in view</Text>
+                  )}
                   <TouchableOpacity style={s.scanCloseBtn} onPress={closeScanner} activeOpacity={0.8}>
                     <Text style={s.scanCloseBtnText}>Cancel</Text>
                   </TouchableOpacity>
@@ -811,7 +806,7 @@ export default function BarcodesScreen() {
                       <Ionicons name="open-outline" size={16} color="#fff" />
                       <Text style={s.scanResultBtnPrimaryText}>View Full Details</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={s.scanResultBtnSecondary} activeOpacity={0.8} onPress={resetScanner}>
+                    <TouchableOpacity style={s.scanResultBtnSecondary} activeOpacity={0.8} onPress={handleScanAgain}>
                       <Ionicons name="scan-outline" size={16} color="#fff" />
                       <Text style={s.scanResultBtnSecondaryText}>Scan Again</Text>
                     </TouchableOpacity>
@@ -846,7 +841,7 @@ export default function BarcodesScreen() {
                       <Ionicons name="link-outline" size={16} color="#fff" />
                       <Text style={s.scanResultBtnPrimaryText}>Link to Product</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={s.scanResultBtnSecondary} activeOpacity={0.8} onPress={resetScanner}>
+                    <TouchableOpacity style={s.scanResultBtnSecondary} activeOpacity={0.8} onPress={handleScanAgain}>
                       <Ionicons name="scan-outline" size={16} color="#fff" />
                       <Text style={s.scanResultBtnSecondaryText}>Scan Again</Text>
                     </TouchableOpacity>
@@ -1187,19 +1182,24 @@ const s = StyleSheet.create({
   permBtn:             { backgroundColor: COLORS.brandPrimary, paddingHorizontal: 28, paddingVertical: 12, borderRadius: RADIUS.full },
   permBtnText:         { color: '#fff', fontSize: TYPOGRAPHY.sm, fontWeight: '700' },
   scanOverlay:         { ...StyleSheet.absoluteFillObject },
-  scanDimTop:          { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  scanMiddleRow:       { flexDirection: 'row', height: 200 },
-  scanDimSide:         { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  scanFrame:           { width: 260, height: 200, position: 'relative' },
-  corner:              { position: 'absolute', width: 28, height: 28 },
+  // Frame is a visual guide only — camera scans full screen.
+  // Wide frame (flex:1 sides tiny) makes clear the whole screen is active.
+  scanDimTop:          { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 10 },
+  scanTopHint:         { color: 'rgba(255,255,255,0.6)', fontSize: 11, letterSpacing: 0.3 },
+  scanMiddleRow:       { flexDirection: 'row', height: 130 },
+  scanDimSide:         { width: 12, backgroundColor: 'rgba(0,0,0,0.45)' },
+  scanFrame:           { flex: 1, height: 130, position: 'relative' },
+  corner:              { position: 'absolute', width: 24, height: 24 },
   cornerTL:            { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderColor: '#fff', borderTopLeftRadius: 4 },
   cornerTR:            { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderColor: '#fff', borderTopRightRadius: 4 },
   cornerBL:            { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderColor: '#fff', borderBottomLeftRadius: 4 },
   cornerBR:            { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderColor: '#fff', borderBottomRightRadius: 4 },
-  scanDimBottom:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 60, gap: 20 },
+  scanDimBottom:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 60, gap: 20 },
   scanHint:            { color: 'rgba(255,255,255,0.7)', fontSize: TYPOGRAPHY.sm, textAlign: 'center' },
+  scanHelperText:      { color: '#FFD700', fontSize: 13, fontWeight: '600', textAlign: 'center', paddingHorizontal: 20 },
   scanCloseBtn:        { paddingHorizontal: 36, paddingVertical: 13, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: RADIUS.full, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
   scanCloseBtnText:    { color: '#fff', fontSize: TYPOGRAPHY.sm, fontWeight: '700' },
+  torchBtn:            { position: 'absolute', top: 54, right: 20, zIndex: 10, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
 
   // ── Scan result panel (shown inside scanner overlay)
   scanResultPanel:        { width: '100%', paddingHorizontal: 20, paddingVertical: 20, alignItems: 'center', gap: 10 },
