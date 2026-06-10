@@ -13,6 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useAuth } from '../../src/context/AuthContext';
@@ -466,6 +468,35 @@ export default function BarcodesScreen() {
     } finally { setSettingsSaving(false); }
   };
 
+  // ── Download pre-filled barcode template ─────────────────────────────────
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+  const handleDownloadTemplate = async () => {
+    if (!companyGuid || downloadingTemplate) return;
+    setDownloadingTemplate(true);
+    try {
+      // Fetch pre-filled CSV from backend (auth required — uses getToken)
+      const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+      const token = await AsyncStorage.getItem('token');
+      const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.243:3001';
+      const res = await fetch(`${BASE_URL}/api/inventory/barcodes/template?companyGuid=${companyGuid}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to fetch template');
+      const csvText = await res.text();
+      // Write to cache directory and share
+      const path = FileSystem.cacheDirectory + 'barcode_template.csv';
+      await FileSystem.writeAsStringAsync(path, csvText, { encoding: FileSystem.EncodingType.UTF8 });
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: 'Barcode Import Template', UTI: 'public.comma-separated-values-text' });
+      } else {
+        Alert.alert('Saved', `Template saved to: ${path}`);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not download template');
+    } finally { setDownloadingTemplate(false); }
+  };
+
   // ── Manual "Sync Now" ──────────────────────────────────────────────────────
   const [syncingNow, setSyncingNow] = useState(false);
   const handleSyncNow = async () => {
@@ -889,12 +920,23 @@ export default function BarcodesScreen() {
                   <Text style={s.dropZoneText}>Tap to choose CSV file</Text>
                   <Text style={s.dropZoneSub}>Supports .csv, .txt</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={s.templateLink} activeOpacity={0.7} onPress={() => {
-                  Alert.alert('Template Columns', 'stock_guid, item_name, sku, barcode, barcode_type, is_primary, sync_target\n\nMinimum: item_name, barcode');
-                }}>
-                  <Ionicons name="download-outline" size={14} color={AMBER} />
-                  <Text style={s.templateLinkText}>View Import Template</Text>
+                {/* Download pre-filled template with all stock names */}
+                <TouchableOpacity
+                  style={s.templateLink}
+                  activeOpacity={0.7}
+                  onPress={handleDownloadTemplate}
+                  disabled={downloadingTemplate}
+                >
+                  {downloadingTemplate
+                    ? <ActivityIndicator size="small" color={AMBER} />
+                    : <Ionicons name="download-outline" size={14} color={AMBER} />}
+                  <Text style={s.templateLinkText}>
+                    {downloadingTemplate ? 'Downloading…' : 'Download Template (pre-filled with your items)'}
+                  </Text>
                 </TouchableOpacity>
+                <Text style={s.templateHint}>
+                  Opens in Excel/Sheets · Fill barcode column · Save as CSV · Upload above
+                </Text>
                 <View style={s.orDivider}>
                   <View style={s.orLine} />
                   <Text style={s.orText}>OR</Text>
@@ -1260,8 +1302,9 @@ const s = StyleSheet.create({
   dropZone:      { borderWidth: 2, borderStyle: 'dashed', borderColor: COLORS.borderStrong, borderRadius: RADIUS.lg, paddingVertical: 36, alignItems: 'center', gap: 8, marginBottom: SPACING.sm },
   dropZoneText:  { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
   dropZoneSub:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
-  templateLink:  { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'center', paddingVertical: 10 },
-  templateLinkText: { fontSize: TYPOGRAPHY.sm, color: '#A89060', fontWeight: '600' },
+  templateLink:     { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'center', paddingVertical: 10 },
+  templateLinkText:  { fontSize: TYPOGRAPHY.sm, color: '#A89060', fontWeight: '600' },
+  templateHint:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, textAlign: 'center', paddingHorizontal: SPACING.md, marginBottom: SPACING.sm },
   orDivider:     { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: SPACING.md },
   orLine:        { flex: 1, height: 1, backgroundColor: COLORS.borderDefault },
   orText:        { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '600' },
