@@ -1,18 +1,21 @@
 // Push Notification Service — Expo
 // Registers device for push notifications and saves token to backend
 // Note: expo-notifications requires a dev build or production app — not supported in Expo Go SDK 53+
-import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { registerPushToken } from './api';
 
-// Check if running in Expo Go (push not supported there in SDK 53+)
-const isExpoGo = Constants.appOwnership === 'expo';
+// SDK 53+: executionEnvironment is 'storeClient' in Expo Go, 'standalone'/'bare' in dev/prod builds
+// appOwnership is deprecated since SDK 46 — do NOT use it
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
-// Configure how notifications appear when app is in foreground (only in dev build / production)
+// Lazily import expo-notifications ONLY in dev/prod builds
+// This avoids the "removed from Expo Go" error that fires at import time
+let Notifications: typeof import('expo-notifications') | null = null;
 if (!isExpoGo) {
-  Notifications.setNotificationHandler({
+  Notifications = require('expo-notifications');
+  Notifications!.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
       shouldPlaySound: true,
@@ -30,7 +33,7 @@ if (!isExpoGo) {
  */
 export async function registerForPushNotifications(): Promise<string | null> {
   // Not supported in Expo Go SDK 53+
-  if (isExpoGo) {
+  if (isExpoGo || !Notifications) {
     console.log('[Push] Expo Go detected — push notifications require a dev build. Skipping.');
     return null;
   }
@@ -66,9 +69,17 @@ export async function registerForPushNotifications(): Promise<string | null> {
   }
 
   try {
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: process.env.EXPO_PUBLIC_PROJECT_ID, // set in app.json / .env
-    });
+    const projectId =
+      process.env.EXPO_PUBLIC_PROJECT_ID ||
+      Constants.expoConfig?.extra?.eas?.projectId ||
+      Constants.easConfig?.projectId;
+
+    if (!projectId) {
+      console.warn('[Push] No projectId found — set EXPO_PUBLIC_PROJECT_ID in .env');
+      return null;
+    }
+
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData.data;
     console.log('[Push] Expo push token:', token);
 
@@ -86,7 +97,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
  */
 export function setupNotificationHandlers(router: any) {
   // Not supported in Expo Go
-  if (isExpoGo) return () => {};
+  if (isExpoGo || !Notifications) return () => {};
 
   // Foreground notification received
   const foregroundSub = Notifications.addNotificationReceivedListener(notification => {
