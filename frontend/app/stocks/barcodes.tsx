@@ -180,23 +180,32 @@ export default function BarcodesScreen() {
     });
   }, []);
 
-  // ── Bounds-aware scan handler — platform-split strategy ────────────────────
+  // ── Bounds-aware scan handler — cross-platform ──────────────────────────────
   //
-  // iOS: AVFoundation transforms bounds to view coordinates correctly.
-  //      Spatial filter: reject if barcode centre is outside the frame rect.
+  // Android coordinate pipeline (confirmed from ExpoCameraView.kt):
+  //   1. ML Kit corner points in analysis-image pixel space
+  //   2. transformBarcodeScannerResultToViewCoordinates() scales to preview
+  //      pixel space using previewView.width/height vs image width/height
+  //   3. /density → screen dp  (same unit as measureInWindow)
+  //   RESULT: bounds ARE in screen dp when previewView is sized (non-zero).
   //
-  // Android: ML Kit returns corner points in analysis-image pixel space.
-  //          expo-camera only divides by density — no camera→view matrix applied.
-  //          So bounds.origin.(x,y) are in analysis-image space, NOT screen dp.
-  //          Spatial filter is unreliable — use deduplication instead:
-  //          Roll a 400 ms window of detected codes. If 2+ different values
-  //          appear → multiple barcodes in view → reject + show guidance.
+  // Primary path (both platforms): spatial bounds check using screen dp.
+  // Fallback (bounds zero/invalid, e.g. first frames before preview sizes):
+  //   deduplication — reject when 2+ different barcodes fire in 400 ms.
   const handleBarcodeScanWithBoundsCheck = useCallback(
     (result: { data: string; bounds?: { origin: { x: number; y: number }; size: { width: number; height: number } } }) => {
       if (isProcessingRef.current) return;
 
-      if (Platform.OS === 'ios' && result.bounds && frameScreenBounds) {
-        // ── iOS path: spatial filter ───────────────────────────────────────
+      // Bounds are valid when the preview is sized and the transform was applied.
+      // Guard: size must be at least 1dp to rule out un-transformed zero frames.
+      const boundsValid =
+        !!result.bounds &&
+        !!frameScreenBounds &&
+        result.bounds.size.width  >= 1 &&
+        result.bounds.size.height >= 1;
+
+      if (boundsValid && result.bounds && frameScreenBounds) {
+        // ── Spatial filter (both iOS + Android when preview ready) ─────────
         const cx = result.bounds.origin.x + result.bounds.size.width  / 2;
         const cy = result.bounds.origin.y + result.bounds.size.height / 2;
         const inside =
@@ -211,15 +220,13 @@ export default function BarcodesScreen() {
           outOfFrameTimerRef.current = setTimeout(() => setOutOfFrame(false), 900);
           return;
         }
-      } else if (Platform.OS === 'android') {
-        // ── Android path: deduplication ───────────────────────────────────
+      } else {
+        // ── Dedup fallback (bounds not ready / zero) ─────────────────────
         const now = Date.now();
         recentDataRef.current = recentDataRef.current.filter(r => now - r.time < 400);
         recentDataRef.current.push({ data: result.data, time: now });
-
         const uniqueCodes = new Set(recentDataRef.current.map(r => r.data));
         if (uniqueCodes.size > 1) {
-          // Multiple different barcodes detected in last 400 ms — user needs to isolate one
           setOutOfFrame(true);
           if (outOfFrameTimerRef.current) clearTimeout(outOfFrameTimerRef.current);
           outOfFrameTimerRef.current = setTimeout(() => setOutOfFrame(false), 900);
@@ -227,10 +234,10 @@ export default function BarcodesScreen() {
         }
       }
 
-      // Single / spatially-filtered barcode — accept
+      // Accept — barcode is inside the frame (or dedup passed)
       setOutOfFrame(false);
       if (outOfFrameTimerRef.current) { clearTimeout(outOfFrameTimerRef.current); outOfFrameTimerRef.current = null; }
-      recentDataRef.current = []; // flush dedup buffer on accepted scan
+      recentDataRef.current = [];
       handleBarcodeScanned(result);
     },
     [frameScreenBounds, handleBarcodeScanned, isProcessingRef],
