@@ -127,6 +127,8 @@ export default function BarcodesScreen() {
   const zoomStepRef        = useRef(0);
   const frameMeasureRef    = useRef<View>(null);
   const outOfFrameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Android dedup: rolling window of recently detected codes (no reliable screen coords on Android)
+  const recentDataRef      = useRef<{ data: string; time: number }[]>([]);
 
   // Auto-zoom: 0 → slight (0.08) → more (0.18) at 800ms intervals
   // Resets when scanner closes or scan succeeds
@@ -157,6 +159,7 @@ export default function BarcodesScreen() {
     setTorchOn(false);
     setShowHelper(false);
     setOutOfFrame(false);
+    recentDataRef.current = [];
     zoomStepRef.current = 0;
   }, [clearScannerTimers]);
   const [importVisible,   setImportVisible]   = useState(false);
@@ -177,15 +180,23 @@ export default function BarcodesScreen() {
     });
   }, []);
 
-  // ── Bounds-aware scan handler — only accepts barcodes inside the frame ────
-  // expo-camera returns bounds: { origin: {x,y}, size: {width,height} } in
-  // view (screen) coordinates when CameraView is absoluteFillObject.
-  // We compute the barcode centre and reject it if outside the visible frame.
+  // ── Bounds-aware scan handler — platform-split strategy ────────────────────
+  //
+  // iOS: AVFoundation transforms bounds to view coordinates correctly.
+  //      Spatial filter: reject if barcode centre is outside the frame rect.
+  //
+  // Android: ML Kit returns corner points in analysis-image pixel space.
+  //          expo-camera only divides by density — no camera→view matrix applied.
+  //          So bounds.origin.(x,y) are in analysis-image space, NOT screen dp.
+  //          Spatial filter is unreliable — use deduplication instead:
+  //          Roll a 400 ms window of detected codes. If 2+ different values
+  //          appear → multiple barcodes in view → reject + show guidance.
   const handleBarcodeScanWithBoundsCheck = useCallback(
     (result: { data: string; bounds?: { origin: { x: number; y: number }; size: { width: number; height: number } } }) => {
-      if (isProcessingRef.current) return; // hook guard handles in-flight duplicates
+      if (isProcessingRef.current) return;
 
-      if (result.bounds && frameScreenBounds) {
+      if (Platform.OS === 'ios' && result.bounds && frameScreenBounds) {
+        // ── iOS path: spatial filter ───────────────────────────────────────
         const cx = result.bounds.origin.x + result.bounds.size.width  / 2;
         const cy = result.bounds.origin.y + result.bounds.size.height / 2;
         const inside =
@@ -195,7 +206,20 @@ export default function BarcodesScreen() {
           cy <= frameScreenBounds.y + frameScreenBounds.height;
 
         if (!inside) {
-          // Barcode detected but outside the frame — show guidance, don't process
+          setOutOfFrame(true);
+          if (outOfFrameTimerRef.current) clearTimeout(outOfFrameTimerRef.current);
+          outOfFrameTimerRef.current = setTimeout(() => setOutOfFrame(false), 900);
+          return;
+        }
+      } else if (Platform.OS === 'android') {
+        // ── Android path: deduplication ───────────────────────────────────
+        const now = Date.now();
+        recentDataRef.current = recentDataRef.current.filter(r => now - r.time < 400);
+        recentDataRef.current.push({ data: result.data, time: now });
+
+        const uniqueCodes = new Set(recentDataRef.current.map(r => r.data));
+        if (uniqueCodes.size > 1) {
+          // Multiple different barcodes detected in last 400 ms — user needs to isolate one
           setOutOfFrame(true);
           if (outOfFrameTimerRef.current) clearTimeout(outOfFrameTimerRef.current);
           outOfFrameTimerRef.current = setTimeout(() => setOutOfFrame(false), 900);
@@ -203,9 +227,10 @@ export default function BarcodesScreen() {
         }
       }
 
-      // Inside frame (or bounds unavailable) — clear hint and process
+      // Single / spatially-filtered barcode — accept
       setOutOfFrame(false);
       if (outOfFrameTimerRef.current) { clearTimeout(outOfFrameTimerRef.current); outOfFrameTimerRef.current = null; }
+      recentDataRef.current = []; // flush dedup buffer on accepted scan
       handleBarcodeScanned(result);
     },
     [frameScreenBounds, handleBarcodeScanned, isProcessingRef],
