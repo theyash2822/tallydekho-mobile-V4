@@ -116,13 +116,17 @@ export default function BarcodesScreen() {
     []
   );
 
-  // ── Torch + auto-zoom + helper text ───────────────────────────────────────
-  const [torchOn,     setTorchOn]     = useState(false);
-  const [zoom,        setZoom]        = useState(0);
-  const [showHelper,  setShowHelper]  = useState(false);
-  const zoomTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const helperTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const zoomStepRef    = useRef(0);
+  // ── Torch + auto-zoom + helper text + out-of-frame hint ────────────────────
+  const [torchOn,           setTorchOn]           = useState(false);
+  const [zoom,              setZoom]              = useState(0);
+  const [showHelper,        setShowHelper]        = useState(false);
+  const [outOfFrame,        setOutOfFrame]        = useState(false);
+  const [frameScreenBounds, setFrameScreenBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const zoomTimerRef       = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const helperTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const zoomStepRef        = useRef(0);
+  const frameMeasureRef    = useRef<View>(null);
+  const outOfFrameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-zoom: 0 → slight (0.08) → more (0.18) at 800ms intervals
   // Resets when scanner closes or scan succeeds
@@ -142,8 +146,9 @@ export default function BarcodesScreen() {
   }, []);
 
   const clearScannerTimers = useCallback(() => {
-    if (zoomTimerRef.current)   { clearTimeout(zoomTimerRef.current);   zoomTimerRef.current   = null; }
-    if (helperTimerRef.current) { clearTimeout(helperTimerRef.current); helperTimerRef.current = null; }
+    if (zoomTimerRef.current)       { clearTimeout(zoomTimerRef.current);       zoomTimerRef.current       = null; }
+    if (helperTimerRef.current)     { clearTimeout(helperTimerRef.current);     helperTimerRef.current     = null; }
+    if (outOfFrameTimerRef.current) { clearTimeout(outOfFrameTimerRef.current); outOfFrameTimerRef.current = null; }
   }, []);
 
   const resetScannerUI = useCallback(() => {
@@ -151,6 +156,7 @@ export default function BarcodesScreen() {
     setZoom(0);
     setTorchOn(false);
     setShowHelper(false);
+    setOutOfFrame(false);
     zoomStepRef.current = 0;
   }, [clearScannerTimers]);
   const [importVisible,   setImportVisible]   = useState(false);
@@ -163,6 +169,48 @@ export default function BarcodesScreen() {
     scanned, scanLookingUp, scanResult,
     handleBarcodeScanned, resetScanner, isProcessingRef,
   } = useBarcodeScanner(companyGuid);
+
+  // ── Measure scan frame absolute position on screen ───────────────────────
+  const handleFrameLayout = useCallback(() => {
+    frameMeasureRef.current?.measureInWindow((x, y, width, height) => {
+      if (width > 0 && height > 0) setFrameScreenBounds({ x, y, width, height });
+    });
+  }, []);
+
+  // ── Bounds-aware scan handler — only accepts barcodes inside the frame ────
+  // expo-camera returns bounds: { origin: {x,y}, size: {width,height} } in
+  // view (screen) coordinates when CameraView is absoluteFillObject.
+  // We compute the barcode centre and reject it if outside the visible frame.
+  const handleBarcodeScanWithBoundsCheck = useCallback(
+    (result: { data: string; bounds?: { origin: { x: number; y: number }; size: { width: number; height: number } } }) => {
+      if (isProcessingRef.current) return; // hook guard handles in-flight duplicates
+
+      if (result.bounds && frameScreenBounds) {
+        const cx = result.bounds.origin.x + result.bounds.size.width  / 2;
+        const cy = result.bounds.origin.y + result.bounds.size.height / 2;
+        const inside =
+          cx >= frameScreenBounds.x &&
+          cx <= frameScreenBounds.x + frameScreenBounds.width &&
+          cy >= frameScreenBounds.y &&
+          cy <= frameScreenBounds.y + frameScreenBounds.height;
+
+        if (!inside) {
+          // Barcode detected but outside the frame — show guidance, don't process
+          setOutOfFrame(true);
+          if (outOfFrameTimerRef.current) clearTimeout(outOfFrameTimerRef.current);
+          outOfFrameTimerRef.current = setTimeout(() => setOutOfFrame(false), 900);
+          return;
+        }
+      }
+
+      // Inside frame (or bounds unavailable) — clear hint and process
+      setOutOfFrame(false);
+      if (outOfFrameTimerRef.current) { clearTimeout(outOfFrameTimerRef.current); outOfFrameTimerRef.current = null; }
+      handleBarcodeScanned(result);
+    },
+    [frameScreenBounds, handleBarcodeScanned, isProcessingRef],
+  );
+
   const [pasteText,       setPasteText]       = useState('');
   const [importing,       setImporting]       = useState(false);
 
@@ -726,7 +774,7 @@ export default function BarcodesScreen() {
                 facing="back"
                 zoom={zoom}
                 enableTorch={torchOn}
-                onBarcodeScanned={handleBarcodeScanned}
+                onBarcodeScanned={handleBarcodeScanWithBoundsCheck}
                 barcodeScannerSettings={barcodeScannerSettings}
               />
             ) : (
@@ -767,11 +815,11 @@ export default function BarcodesScreen() {
             </TouchableOpacity>
 
             <View style={s.scanDimTop}>
-              <Text style={s.scanTopHint}>Aim at barcode · Scans full screen</Text>
+              <Text style={s.scanTopHint}>Aim barcode at the frame to scan</Text>
             </View>
             <View style={s.scanMiddleRow}>
               <View style={s.scanDimSide} />
-              <View style={s.scanFrame}>
+              <View ref={frameMeasureRef} style={s.scanFrame} onLayout={handleFrameLayout}>
                 <View style={[s.corner, s.cornerTL]} />
                 <View style={[s.corner, s.cornerTR]} />
                 <View style={[s.corner, s.cornerBL]} />
@@ -785,7 +833,9 @@ export default function BarcodesScreen() {
               {/* No result yet — show hint + optional helper */}
               {!scanLookingUp && !scanResult && (
                 <>
-                  {showHelper ? (
+                  {outOfFrame ? (
+                    <Text style={[s.scanHint, s.scanHintOutOfFrame]}>📦 Move barcode into frame</Text>
+                  ) : showHelper ? (
                     <Text style={s.scanHelperText}>Move closer or turn on flash 💡</Text>
                   ) : (
                     <Text style={s.scanHint}>Hold barcode steady in view</Text>
@@ -1252,8 +1302,8 @@ const s = StyleSheet.create({
   permBtn:             { backgroundColor: COLORS.brandPrimary, paddingHorizontal: 28, paddingVertical: 12, borderRadius: RADIUS.full },
   permBtnText:         { color: '#fff', fontSize: TYPOGRAPHY.sm, fontWeight: '700' },
   scanOverlay:         { ...StyleSheet.absoluteFillObject },
-  // Frame is a visual guide only — camera scans full screen.
-  // Wide frame (flex:1 sides tiny) makes clear the whole screen is active.
+  // Frame is a real scan constraint — barcodes outside it are rejected.
+  // measureInWindow maps this View to absolute screen coordinates for bounds check.
   scanDimTop:          { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 10 },
   scanTopHint:         { color: 'rgba(255,255,255,0.6)', fontSize: 11, letterSpacing: 0.3 },
   scanMiddleRow:       { flexDirection: 'row', height: 130 },
@@ -1266,6 +1316,7 @@ const s = StyleSheet.create({
   cornerBR:            { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderColor: '#fff', borderBottomRightRadius: 4 },
   scanDimBottom:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 60, gap: 20 },
   scanHint:            { color: 'rgba(255,255,255,0.7)', fontSize: TYPOGRAPHY.sm, textAlign: 'center' },
+  scanHintOutOfFrame:  { color: '#FF6B35', fontWeight: '700', fontSize: TYPOGRAPHY.sm },
   scanHelperText:      { color: '#FFD700', fontSize: 13, fontWeight: '600', textAlign: 'center', paddingHorizontal: 20 },
   scanCloseBtn:        { paddingHorizontal: 36, paddingVertical: 13, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: RADIUS.full, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
   scanCloseBtnText:    { color: '#fff', fontSize: TYPOGRAPHY.sm, fontWeight: '700' },
