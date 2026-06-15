@@ -265,6 +265,8 @@ export const getAlerts           = (companyGuid?: string, params?: any) => get<a
 export const getEWBStatus        = (companyGuid?: string, params?: any) => get<any>(withCompany('/ewaybills/status', companyGuid, params));
 export const getEWBPending       = (companyGuid?: string, params?: any) => get<any>(withCompany('/ewaybills/pending', companyGuid, params));
 export const getEWBList          = (companyGuid?: string, params?: any) => get<any>(withCompany('/ewaybills', companyGuid, params));
+export const generateEWayBill    = (payload: any) => post<any>('/ewaybills/generate', payload);
+export const cancelEWayBill      = (payload: any) => post<any>('/ewaybills/cancel', payload);
 export const askHelpAI = (message: string, history?: any[]) => post<any>('/ai/help', { message, history });
 export const sendPaymentReminder = (companyGuid: string, data: any) => post<any>('/reminders/send', { companyGuid, ...data });
 

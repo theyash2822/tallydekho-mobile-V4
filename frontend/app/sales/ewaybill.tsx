@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput,
+  Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import Toast from 'react-native-toast-message';
 
 import { useAuth } from '../../src/context/AuthContext';
-import { getEWBList, getCompanyCapabilities } from '../../src/services/api';
+import { getEWBList, getEWBPending, generateEWayBill, getCompanyCapabilities } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 
 const EWB_COLORS: Record<string, string> = {
@@ -28,26 +30,74 @@ export default function EWayBillScreen() {
   const [countryApplicable, setCountryApplicable] = useState(true);
   const [notApplicableMsg, setNotApplicableMsg] = useState('');
   const [apiError, setApiError] = useState<string | null>(null);
+  const [generatingIds, setGeneratingIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!companyGuid) return;
-    getEWBList(companyGuid).then((res: any) => {
-      if (res?.meta?.country_applicable === false) {
+    Promise.all([
+      getEWBList(companyGuid).catch(() => null),
+      getEWBPending(companyGuid).catch(() => null),
+    ]).then(([generatedRes, pendingRes]: any[]) => {
+      if (generatedRes?.meta?.country_applicable === false) {
         setCountryApplicable(false);
-        setNotApplicableMsg(res.meta.message || 'E-Way Bill not applicable for your country');
+        setNotApplicableMsg(generatedRes.meta.message || 'E-Way Bill not applicable for your country');
         return;
       }
-      const rows = res?.data ?? [];
-      setLiveBills(rows.map((r: any) => ({
-        id: r.voucher_number || String(r.id),
-        company: r.party_name || '',
-        date: r.date || '',
-        amount: formatAmount(Math.abs(+r.amount||0)),
-        status: r.ewb_number ? 'generated' : 'pending',
-        ewb_no: r.ewb_number || null,
-      })));
-    }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
+      const generatedRows: any[] = generatedRes?.data ?? [];
+      const pendingRows: any[]   = pendingRes?.data   ?? [];
+      const mapRow = (r: any, forcedStatus?: string) => ({
+        id:      r.voucher_number || String(r.id),
+        guid:    r.guid           || '',
+        company: r.party_name    || '',
+        date:    r.date          || '',
+        amount:  formatAmount(Math.abs(+(r.amount) || 0)),
+        status:  forcedStatus || (r.ewb_number ? 'generated' : 'pending'),
+        ewb_no:  r.ewb_number    || null,
+      });
+      const generatedBills = generatedRows.map(r => mapRow(r, 'generated'));
+      const pendingBills   = pendingRows.map(r => mapRow(r, 'pending'));
+      // Merge: generated first, then pending (avoid duplicates by voucher_number)
+      const seenIds = new Set(generatedBills.map((b: any) => b.id));
+      const uniquePending = pendingBills.filter((b: any) => !seenIds.has(b.id));
+      setLiveBills([...generatedBills, ...uniquePending]);
+    }).catch((err: any) => { console.error('[EWB load error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
   }, [companyGuid]);
+
+  const handleGenerateEWB = async (item: any) => {
+    if (!companyGuid || !item.guid) return;
+    setGeneratingIds(prev => [...prev, item.id]);
+    try {
+      const result: any = await generateEWayBill({ companyGuid, voucherGuid: item.guid });
+      if (result?.success) {
+        Toast.show({ type: 'success', text1: 'E-Way Bill Generated ✓', text2: `EWB No: ${result.data?.ewbNo}` });
+        setLiveBills(prev => prev.map((b: any) => b.id === item.id ? { ...b, status: 'generated', ewb_no: result.data?.ewbNo } : b));
+      } else if (result?.locked) {
+        Alert.alert('EWB Locked', result?.error?.message || 'Prerequisites not met');
+      } else {
+        const msg = result?.error?.message || 'Failed';
+        if (msg.includes('not provisioned') || msg.includes('credentials') || msg.includes('not configured')) {
+          Alert.alert('Not Configured', msg, [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Go to Settings', onPress: () => router.push('/settings/voucher-config' as any) },
+          ]);
+        } else {
+          Toast.show({ type: 'error', text1: 'EWB Failed', text2: msg });
+        }
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Network error';
+      if (msg.includes('not provisioned') || msg.includes('credentials')) {
+        Alert.alert('Not Configured', 'Configure NIC EWB credentials in Settings', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Configure', onPress: () => router.push('/settings/voucher-config' as any) },
+        ]);
+      } else {
+        Toast.show({ type: 'error', text1: 'EWB Failed', text2: msg });
+      }
+    } finally {
+      setGeneratingIds(prev => prev.filter(id => id !== item.id));
+    }
+  };
 
   const allBills = liveBills;
 
@@ -210,6 +260,27 @@ export default function EWayBillScreen() {
                   </View>
                 </TouchableOpacity>
 
+                {/* Generate EWB button for pending bills */}
+                {bill.status === 'pending' && (
+                  <View style={{ paddingHorizontal: SPACING.md, paddingBottom: 12 }}>
+                    <TouchableOpacity
+                      style={ew.generateBtn}
+                      onPress={() => handleGenerateEWB(bill)}
+                      activeOpacity={0.85}
+                      disabled={generatingIds.includes(bill.id)}
+                    >
+                      {generatingIds.includes(bill.id) ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <>
+                          <Ionicons name="car-outline" size={14} color="#fff" />
+                          <Text style={ew.generateBtnTxt}>Generate EWB</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                )}
+
                 {/* Actions (Cancel + Extend Validity) */}
                 {bill.status === 'generated' && (
                   <View style={styles.billActions}>
@@ -242,6 +313,11 @@ export default function EWayBillScreen() {
     </SafeAreaView>
   );
 }
+
+const ew = StyleSheet.create({
+  generateBtn:    { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 8, paddingHorizontal: 14, alignSelf: 'flex-start' },
+  generateBtnTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: '#fff' },
+});
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.pageBg },
