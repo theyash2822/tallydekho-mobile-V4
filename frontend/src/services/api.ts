@@ -466,3 +466,7 @@ export const generateBulkBarcodes = (
   companyGuid: string,
   options: { stockGuids?: string[]; all?: boolean; barcodeType?: string; syncTarget?: string }
 ) => post<any>('/inventory/barcodes/generate-bulk', { companyGuid, ...options });
+
+// ── Compliance Config ──────────────────────────────────────────────────────────
+export const getComplianceConfig  = (guid: string) => get<any>(`/company/${guid}/compliance-config`);
+export const saveComplianceConfig = (guid: string, payload: any) => post<any>(`/company/${guid}/compliance-config`, payload);

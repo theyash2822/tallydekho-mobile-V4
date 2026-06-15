@@ -683,6 +683,17 @@ export default function CreateSalesInvoiceScreen() {
   const [termsText, setTermsText] = useState('Goods once sold will not be taken back.');
   const [activeModal, setActiveModal] = useState<ModalState>(null);
 
+  // Dispatch / E-Way Bill Details
+  const [showDispatch, setShowDispatch]         = useState(false);
+  const [dispatchFrom, setDispatchFrom]         = useState('');
+  const [shipTo, setShipTo]                     = useState('');
+  const [transporterName, setTransporterName]   = useState('');
+  const [transporterId, setTransporterId]       = useState('');
+  const [transportMode, setTransportMode]       = useState('Road');
+  const [vehicleNumber, setVehicleNumber]       = useState('');
+  const [vehicleType, setVehicleType]           = useState('Regular');
+  const [transportDocNo, setTransportDocNo]     = useState('');
+
   // Collect Payment Now
   const [collectPayNow, setCollectPayNow] = useState(false);
   const [payNowMode, setPayNowMode] = useState('');
@@ -865,6 +876,16 @@ export default function CreateSalesInvoiceScreen() {
           amount: parseFloat(payNowAmount) || 0,
           reference: payNowRef || undefined,
         } : undefined,
+        dispatch_details: showDispatch ? {
+          dispatch_from:    dispatchFrom,
+          ship_to:          shipTo,
+          transport_mode:   transportMode,
+          transporter_name: transporterName || undefined,
+          transporter_id:   transporterId || undefined,
+          vehicle_number:   vehicleNumber || undefined,
+          vehicle_type:     vehicleType,
+          transport_doc_no: transportDocNo || undefined,
+        } : undefined,
         is_draft: isDraft,
       });
 
@@ -877,7 +898,7 @@ export default function CreateSalesInvoiceScreen() {
     } finally {
       setSubmitting(false);
     }
-  }, [party, items, hasMultipleWarehouses, company, date, ledger, entryType, totals.grand, refNo, narration, warehouses, collectPayNow, payNowMode, payNowAmount, payNowRef]);
+  }, [party, items, hasMultipleWarehouses, company, date, ledger, entryType, totals.grand, refNo, narration, warehouses, collectPayNow, payNowMode, payNowAmount, payNowRef, showDispatch, dispatchFrom, shipTo, transportMode, transporterName, transporterId, vehicleNumber, vehicleType, transportDocNo]);
 
   // ── Render ──────────────────────────────────────────────────
   return (
@@ -1158,6 +1179,87 @@ export default function CreateSalesInvoiceScreen() {
                       {' '}(₹{(totals.grand - (parseFloat(payNowAmount) || 0)).toLocaleString('en-IN', { maximumFractionDigits: 2 })} due)
                     </Text>
                   )}
+                </View>
+              </View>
+            )}
+          </View>
+
+          {/* Dispatch / E-Way Bill Details */}
+          <View style={s.card}>
+            <TouchableOpacity style={s.payNowToggleRow} onPress={() => setShowDispatch(v => !v)} activeOpacity={0.8}>
+              <View style={s.payNowLeft}>
+                <View style={[s.payNowIcon, { backgroundColor: showDispatch ? '#EFF6FF' : COLORS.pageBg }]}>
+                  <Ionicons name="car-outline" size={18} color={showDispatch ? COLORS.info : COLORS.textSecondary} />
+                </View>
+                <View>
+                  <Text style={s.payNowTitle}>Dispatch / E-Way Bill Details</Text>
+                  <Text style={s.payNowSub}>Required for goods movement & E-Way Bill</Text>
+                </View>
+              </View>
+              <BrandSwitch value={showDispatch} onValueChange={setShowDispatch} />
+            </TouchableOpacity>
+
+            {showDispatch && (
+              <View style={s.payNowBody}>
+                <View style={s.divider} />
+
+                <View style={s.row2}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.fLabel}>Dispatch From</Text>
+                    <ThemedFInput value={dispatchFrom} onChangeText={setDispatchFrom} placeholder="City / Address" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.fLabel}>Ship To</Text>
+                    <ThemedFInput value={shipTo} onChangeText={setShipTo} placeholder="City / Address" />
+                  </View>
+                </View>
+
+                <Text style={s.fLabel}>Transport Mode</Text>
+                <View style={s.termsRow}>
+                  {['Road','Rail','Air','Ship','Not Applicable'].map(mode => (
+                    <TouchableOpacity key={mode}
+                      style={[s.termChip, transportMode === mode && s.termChipActive]}
+                      onPress={() => setTransportMode(mode)} activeOpacity={0.7}>
+                      <Text style={[s.termChipTxt, transportMode === mode && s.termChipTxtActive]}>{mode}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <View style={s.row2}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.fLabel}>Transporter Name</Text>
+                    <ThemedFInput value={transporterName} onChangeText={setTransporterName} placeholder="Optional" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.fLabel}>Transporter ID</Text>
+                    <ThemedFInput value={transporterId} onChangeText={setTransporterId} placeholder="GSTIN / ID" />
+                  </View>
+                </View>
+
+                <View style={s.row2}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.fLabel}>Vehicle Number</Text>
+                    <ThemedFInput value={vehicleNumber} onChangeText={v => setVehicleNumber(v.toUpperCase())} placeholder="e.g. MH12AB1234" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.fLabel}>Vehicle Type</Text>
+                    <View style={s.termsRow}>
+                      {['Regular','Over Dimensional','Not Applicable'].map(vt => (
+                        <TouchableOpacity key={vt}
+                          style={[s.termChip, vehicleType === vt && s.termChipActive]}
+                          onPress={() => setVehicleType(vt)} activeOpacity={0.7}>
+                          <Text style={[s.termChipTxt, vehicleType === vt && s.termChipTxtActive]}>{vt.split(' ')[0]}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+
+                <View style={s.row2}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.fLabel}>Doc / LR / RR No.</Text>
+                    <ThemedFInput value={transportDocNo} onChangeText={setTransportDocNo} placeholder="Optional" />
+                  </View>
                 </View>
               </View>
             )}

@@ -13,7 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { getUserSettings, updateUserSettings, getBankLedgers, getCompanyLogo } from '../../src/services/api';
+import { getUserSettings, updateUserSettings, getBankLedgers, getCompanyLogo, getComplianceConfig, saveComplianceConfig } from '../../src/services/api';
 import { generateDocumentHTML, PDFBankInfo } from '../../src/utils/documentHelpers';
 
 // ── Data ──────────────────────────────────────────────────────────────────────
@@ -204,6 +204,14 @@ export default function VoucherConfigScreen() {
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
   const [saving,        setSaving]        = useState<string | null>(null);
+
+  // ── Compliance Config State ────────────────────────────────────────────────────────
+  const [numberingPolicy, setNumberingPolicy]       = useState<'tally_prime_series'|'tallydekho_series'>('tally_prime_series');
+  const [eInvoiceApplicable, setEInvoiceApplicable] = useState<'not_applicable'|'applicable_not_configured'|'applicable_configured'>('not_applicable');
+  const [eInvoiceMode, setEInvoiceMode]             = useState<'manual'|'auto'>('manual');
+  const [eWayBillApplicable, setEWayBillApplicable] = useState<'not_applicable'|'applicable_not_configured'|'applicable_configured'>('not_applicable');
+  const [eWayBillMode, setEWayBillMode]             = useState<'manual'|'auto'|'ask_after_irn'>('manual');
+  const [complianceDirty, setComplianceDirty]       = useState(false);
   const [previewLoading, setPreviewLoading] = useState<string | null>(null);
   const companyLogoRef = useRef<string | null>(null);
 
@@ -269,6 +277,38 @@ export default function VoucherConfigScreen() {
       }).catch(() => {});
     });
   }, []);
+
+  // Load compliance config on mount
+  useEffect(() => {
+    if (!company?.guid) return;
+    getComplianceConfig(company.guid).then((res: any) => {
+      const d = res?.data;
+      if (d) {
+        setNumberingPolicy(d.numbering_policy || 'tally_prime_series');
+        setEInvoiceApplicable(d.e_invoice_applicable || 'not_applicable');
+        setEInvoiceMode(d.e_invoice_mode || 'manual');
+        setEWayBillApplicable(d.e_way_bill_applicable || 'not_applicable');
+        setEWayBillMode(d.e_way_bill_mode || 'manual');
+      }
+    }).catch(() => {});
+  }, [company?.guid]);
+
+  const saveComplianceSettings = async () => {
+    if (!company?.guid) return;
+    try {
+      await saveComplianceConfig(company.guid, {
+        numbering_policy: numberingPolicy,
+        e_invoice_applicable: eInvoiceApplicable,
+        e_invoice_mode: eInvoiceMode,
+        e_way_bill_applicable: eWayBillApplicable,
+        e_way_bill_mode: eWayBillMode,
+      });
+      setComplianceDirty(false);
+      Toast.show({ type: 'success', text1: 'Settings Saved' });
+    } catch {
+      Toast.show({ type: 'error', text1: 'Save Failed' });
+    }
+  };
 
   const update = (id: string, key: keyof VConfig, val: any) =>
     setConfigs(prev => ({ ...prev, [id]: { ...prev[id], [key]: val } }));
@@ -402,6 +442,150 @@ export default function VoucherConfigScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         <Text style={s.subtitle}>Configure PDF format and settings for each voucher type</Text>
+
+        {/* ── Section 1: Voucher Numbering Policy ── */}
+        <View style={cs.sectionCard}>
+          <Text style={cs.sectionTitle}>Voucher Numbering Policy</Text>
+          <Text style={cs.sectionSub}>Controls how invoice/voucher numbers are assigned</Text>
+
+          {[
+            { value: 'tally_prime_series', label: 'Follow TallyPrime Series', sub: 'TallyPrime assigns the final number (recommended)' },
+            { value: 'tallydekho_series',  label: 'TallyDekho Series',        sub: 'TallyDekho generates number, pushes to Tally' },
+          ].map(opt => (
+            <TouchableOpacity
+              key={opt.value}
+              style={[cs.optRow, numberingPolicy === opt.value && cs.optRowActive]}
+              onPress={() => { setNumberingPolicy(opt.value as any); setComplianceDirty(true); }}
+              activeOpacity={0.7}
+            >
+              <View style={cs.optRadio}>
+                {numberingPolicy === opt.value && <View style={cs.optRadioDot} />}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={cs.optLabel}>{opt.label}</Text>
+                <Text style={cs.optSub}>{opt.sub}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+
+          {numberingPolicy === 'tallydekho_series' && (
+            <View style={cs.warningBox}>
+              <Ionicons name="warning-outline" size={14} color="#D97706" />
+              <Text style={cs.warningTxt}>Only use if TallyDekho series is reserved exclusively for this app. E-Invoice & E-Way Bill always use TallyPrime series.</Text>
+            </View>
+          )}
+        </View>
+
+        {/* ── Section 2: E-Invoice Configuration ── */}
+        <View style={cs.sectionCard}>
+          <View style={cs.sectionHdr}>
+            <Ionicons name="document-attach-outline" size={18} color={COLORS.brandPrimary} />
+            <Text style={cs.sectionTitle}>E-Invoice (IRN)</Text>
+          </View>
+          <Text style={cs.sectionSub}>For businesses with annual turnover ≥ ₹5 Cr</Text>
+
+          {[
+            { value: 'not_applicable',            label: 'Not Applicable',            sub: 'E-Invoice not required for this business' },
+            { value: 'applicable_not_configured', label: 'Applicable — Not Configured', sub: 'Required but IRP credentials not set up yet' },
+            { value: 'applicable_configured',     label: 'Applicable — Configured',    sub: 'IRP integrated, IRN generation enabled' },
+          ].map(opt => (
+            <TouchableOpacity
+              key={opt.value}
+              style={[cs.optRow, eInvoiceApplicable === opt.value && cs.optRowActive]}
+              onPress={() => { setEInvoiceApplicable(opt.value as any); setComplianceDirty(true); }}
+              activeOpacity={0.7}
+            >
+              <View style={cs.optRadio}>
+                {eInvoiceApplicable === opt.value && <View style={cs.optRadioDot} />}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={cs.optLabel}>{opt.label}</Text>
+                <Text style={cs.optSub}>{opt.sub}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+
+          {eInvoiceApplicable === 'applicable_configured' && (
+            <View style={cs.modeRow}>
+              <Text style={cs.modeLabel}>IRN Generation Mode</Text>
+              <View style={cs.modeChips}>
+                {[{v:'manual',l:'Manual'},{v:'auto',l:'Auto after Tally sync'}].map(m => (
+                  <TouchableOpacity key={m.v}
+                    style={[cs.modeChip, eInvoiceMode === m.v && cs.modeChipActive]}
+                    onPress={() => { setEInvoiceMode(m.v as any); setComplianceDirty(true); }}
+                    activeOpacity={0.7}>
+                    <Text style={[cs.modeChipTxt, eInvoiceMode === m.v && cs.modeChipTxtActive]}>{m.l}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity
+                style={cs.configLink}
+                onPress={() => router.push('/settings/einvoice' as any)}
+                activeOpacity={0.7}>
+                <Ionicons name="settings-outline" size={14} color={COLORS.brandPrimary} />
+                <Text style={cs.configLinkTxt}>Configure IRP Credentials →</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* ── Section 3: E-Way Bill Configuration ── */}
+        <View style={cs.sectionCard}>
+          <View style={cs.sectionHdr}>
+            <Ionicons name="car-outline" size={18} color={COLORS.brandPrimary} />
+            <Text style={cs.sectionTitle}>E-Way Bill</Text>
+          </View>
+          <Text style={cs.sectionSub}>For goods movement where consignment value exceeds ₹50,000</Text>
+
+          {[
+            { value: 'not_applicable',            label: 'Not Applicable',            sub: 'No goods movement or below threshold' },
+            { value: 'applicable_not_configured', label: 'Applicable — Not Configured', sub: 'Required but NIC EWB credentials not set up yet' },
+            { value: 'applicable_configured',     label: 'Applicable — Configured',    sub: 'EWB portal integrated, generation enabled' },
+          ].map(opt => (
+            <TouchableOpacity
+              key={opt.value}
+              style={[cs.optRow, eWayBillApplicable === opt.value && cs.optRowActive]}
+              onPress={() => { setEWayBillApplicable(opt.value as any); setComplianceDirty(true); }}
+              activeOpacity={0.7}
+            >
+              <View style={cs.optRadio}>
+                {eWayBillApplicable === opt.value && <View style={cs.optRadioDot} />}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={cs.optLabel}>{opt.label}</Text>
+                <Text style={cs.optSub}>{opt.sub}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+
+          {eWayBillApplicable === 'applicable_configured' && (
+            <View style={cs.modeRow}>
+              <Text style={cs.modeLabel}>E-Way Bill Mode</Text>
+              <View style={cs.modeChips}>
+                {[
+                  {v:'manual',l:'Manual'},
+                  {v:'auto',l:'Auto when details ready'},
+                  {v:'ask_after_irn',l:'Ask after IRN'},
+                ].map(m => (
+                  <TouchableOpacity key={m.v}
+                    style={[cs.modeChip, eWayBillMode === m.v && cs.modeChipActive]}
+                    onPress={() => { setEWayBillMode(m.v as any); setComplianceDirty(true); }}
+                    activeOpacity={0.7}>
+                    <Text style={[cs.modeChipTxt, eWayBillMode === m.v && cs.modeChipTxtActive]}>{m.l}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Save compliance config button — show only if dirty */}
+        {complianceDirty && (
+          <TouchableOpacity style={cs.saveBtn} onPress={saveComplianceSettings} activeOpacity={0.85}>
+            <Ionicons name="checkmark-circle-outline" size={18} color={COLORS.white} />
+            <Text style={cs.saveBtnTxt}>Save Compliance Settings</Text>
+          </TouchableOpacity>
+        )}
 
         {VOUCHER_TYPES.map(vt => {
           const cfg    = configs[vt.id];
@@ -713,4 +897,31 @@ const s = StyleSheet.create({
   useBtnTxt:     { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
   saveAllBtn:    { backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.lg, paddingVertical: 16, alignItems: 'center', marginTop: 4 },
   saveAllTxt:    { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+});
+
+// ── Compliance Sections Styles ─────────────────────────────────────────────────
+const cs = StyleSheet.create({
+  sectionCard:    { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, padding: SPACING.md, marginBottom: SPACING.md },
+  sectionHdr:     { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  sectionTitle:   { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 4 },
+  sectionSub:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginBottom: 12 },
+  optRow:         { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 10, paddingHorizontal: 4, borderRadius: RADIUS.md, marginBottom: 4 },
+  optRowActive:   { backgroundColor: COLORS.activeBg },
+  optRadio:       { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: COLORS.borderStrong, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  optRadioDot:    { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.brandPrimary },
+  optLabel:       { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary, marginBottom: 2 },
+  optSub:         { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  warningBox:     { flexDirection: 'row', gap: 8, backgroundColor: '#FEF3C7', borderRadius: RADIUS.md, padding: 12, marginTop: 8, borderWidth: 1, borderColor: '#FCD34D' },
+  warningTxt:     { flex: 1, fontSize: TYPOGRAPHY.xs, color: '#92400E' },
+  modeRow:        { marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
+  modeLabel:      { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary, marginBottom: 8 },
+  modeChips:      { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  modeChip:       { paddingHorizontal: 12, paddingVertical: 7, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
+  modeChipActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
+  modeChipTxt:    { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
+  modeChipTxtActive: { color: COLORS.white },
+  configLink:     { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  configLinkTxt:  { fontSize: TYPOGRAPHY.sm, color: COLORS.brandPrimary, fontWeight: '600' },
+  saveBtn:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 14, marginBottom: SPACING.md },
+  saveBtnTxt:     { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
 });
