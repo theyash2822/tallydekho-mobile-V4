@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Share, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Share, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { fyInfoToParam } from '../../src/context/AuthContext';
-import { getEInvoiceGenerated, getEInvoicePending } from '../../src/services/api';
+import { getEInvoiceGenerated, getEInvoicePending, generateEInvoice } from '../../src/services/api';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useSettings } from '../../src/context/SettingsContext';
 
@@ -31,6 +32,7 @@ export default function EInvoiceListScreen() {
   const [fromDate,       setFromDate]       = useState(selectedFY?.startDate || '');
   const [toDate,         setToDate]         = useState(selectedFY?.endDate   || '');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [generatingIds,  setGeneratingIds]  = useState<string[]>([]);
 
   // Always sync dates when selectedFY changes (user may switch FY from home screen)
   useEffect(() => {
@@ -52,7 +54,7 @@ export default function EInvoiceListScreen() {
       getEInvoicePending(company.guid, dateParams).catch(() => ({ data: [] })),
     ]).then(([genRes, pendRes]: any[]) => {
         const mapRow = (i: any, idx: number, status: string) => ({
-          id: i.id?.toString() || `${status[0]}${idx}`,
+          id: i.guid?.toString() || i.id?.toString() || `${status[0]}${idx}`,
           irn: i.irn || '',
           invoiceNo: i.voucher_number || i.voucher_no || `INV-${idx}`,
           party: i.party_name || 'Unknown',
@@ -75,12 +77,60 @@ export default function EInvoiceListScreen() {
 
   const cancelSelect = () => setSelected([]);
 
+  // ── Generate IRN handler ───────────────────────────────────────────────────
+  const handleGenerateIRN = async (item: any) => {
+    if (!company?.guid || !item.id) return;
+    setGeneratingIds(prev => [...prev, item.id]);
+    try {
+      const result = await generateEInvoice({
+        companyGuid: company.guid,
+        voucherGuid: item.id,
+        voucherNumber: item.invoiceNo,
+      });
+      if (result?.success) {
+        Toast.show({
+          type: 'success',
+          text1: 'IRN Generated',
+          text2: result.data?.irn ? result.data.irn.slice(0, 30) + '...' : 'IRN created successfully',
+        });
+        // Refresh row in list
+        setInvoiceData(prev =>
+          prev.map(i =>
+            i.id === item.id
+              ? { ...i, status: 'Generated', irn: result.data?.irn || '' }
+              : i
+          )
+        );
+      } else if (result?.locked) {
+        Alert.alert('IRN Locked', result?.error?.message || 'Prerequisites not met');
+      } else {
+        Toast.show({ type: 'error', text1: 'Generation Failed', text2: result?.error?.message || 'Unknown error' });
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to generate IRN';
+      if (msg.includes('not yet provisioned') || msg.includes('not configured') || msg.includes('IRP credentials')) {
+        Alert.alert(
+          'Not Configured',
+          'IRP credentials not set up. Go to Settings > E-Invoice to configure.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Go to Settings', onPress: () => router.push('/settings/einvoice' as any) },
+          ]
+        );
+      } else {
+        Toast.show({ type: 'error', text1: 'IRN Failed', text2: msg });
+      }
+    } finally {
+      setGeneratingIds(prev => prev.filter(id => id !== item.id));
+    }
+  };
+
   const handleShare = async () => {
     const lines = invoiceData
       .filter(i => selected.includes(i.id))
-      .map(i => `${i.invoiceNo}  ${i.irn}  ${i.party}  ₹${i.amount}  ${i.status}`);
+      .map(i => `${i.invoiceNo}  ${i.irn}  ${i.party}  \u20b9${i.amount}  ${i.status}`);
     try {
-      await Share.share({ message: `TallyDekho — E-Invoices\n${lines.join('\n')}`, title: 'Share E-Invoices' });
+      await Share.share({ message: `TallyDekho \u2014 E-Invoices\n${lines.join('\n')}`, title: 'Share E-Invoices' });
     } catch {
       Alert.alert('Share', `${selected.length} E-Invoice(s) ready to share as PDF.`);
     }
@@ -126,6 +176,7 @@ export default function EInvoiceListScreen() {
         {invoiceData.map((item) => {
           const cfg = STATUS_CFG[item.status] ?? STATUS_CFG.Generated;
           const isSelected = selected.includes(item.id);
+          const isGenerating = generatingIds.includes(item.id);
           return (
             <TouchableOpacity
               key={item.id}
@@ -160,6 +211,25 @@ export default function EInvoiceListScreen() {
                 </View>
                 <Text style={s.amount}>{'\u20b9'}{item.amount}</Text>
               </View>
+
+              {/* Generate IRN button — only for Pending rows */}
+              {item.status === 'Pending' && (
+                <TouchableOpacity
+                  style={el.generateBtn}
+                  onPress={() => handleGenerateIRN(item)}
+                  activeOpacity={0.85}
+                  disabled={isGenerating}
+                >
+                  {isGenerating ? (
+                    <ActivityIndicator size="small" color={COLORS.white} />
+                  ) : (
+                    <>
+                      <Ionicons name="document-attach-outline" size={14} color={COLORS.white} />
+                      <Text style={el.generateBtnTxt}>Generate IRN</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
             </TouchableOpacity>
           );
         })}
@@ -193,6 +263,28 @@ export default function EInvoiceListScreen() {
     </SafeAreaView>
   );
 }
+
+// ── Generate IRN button styles ────────────────────────────────────────────────
+const el = StyleSheet.create({
+  generateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.brandPrimary,
+    borderRadius: RADIUS.md,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    minWidth: 44,
+    justifyContent: 'center',
+  },
+  generateBtnTxt: {
+    fontSize: TYPOGRAPHY.xs,
+    fontWeight: '700',
+    color: COLORS.white,
+  },
+});
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({

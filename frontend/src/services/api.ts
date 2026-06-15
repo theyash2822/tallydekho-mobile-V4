@@ -272,6 +272,8 @@ export const getUnmatchedInvoices = (companyGuid?: string, params?: any) => get<
 export const getEInvoiceStatus    = (companyGuid?: string, params?: any) => get<any>(withCompany('/einvoice/status', companyGuid, params));
 export const getEInvoicePending   = (companyGuid?: string, params?: any) => get<any>(withCompany('/einvoice/pending', companyGuid, params));
 export const getEInvoiceGenerated = (companyGuid?: string, params?: any) => get<any>(withCompany('/einvoice/generated', companyGuid, params));
+export const generateEInvoice     = (payload: any) => post<any>('/einvoice/generate', payload);
+export const cancelEInvoice       = (payload: any) => post<any>('/einvoice/cancel',   payload);
 export const getGSTDetail        = (companyGuid?: string, params?: any) => get<any>(withCompany('/reports/gst-detail', companyGuid, params));
 export const getGSTSummary       = (companyGuid?: string, params?: any) => get<any>(withCompany('/reports/gst-summary', companyGuid, params));
 
