@@ -10,36 +10,46 @@ import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { getParties, getLedgers, createSalesInvoice } from '../../src/services/api';
+import {
+  getParties, createSalesInvoice, getStocks, getWarehouses,
+  getSalesLedgerAccounts, getTaxLedgers, createTallyParty, lookupBarcode,
+} from '../../src/services/api';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
 import SearchableDropdown, { SDOption } from '../../src/components/forms/SearchableDropdown';
-import { useSettings } from '../../src/context/SettingsContext';
+import DatePickerModal, { formatDMY, parseDMY } from '../../src/components/forms/DatePickerModal';
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-const LEDGER_ACCOUNTS: DropdownOption[] = [
-  { label: 'Credit Sales', value: 'credit_sales' },
-  { label: 'Cash Sales', value: 'cash_sales' },
-  { label: 'Off-Books Sales', value: 'off_books' },
-  { label: 'Export Sales', value: 'export_sales' },
-  { label: 'Domestic Sales', value: 'domestic_sales' },
-  { label: 'Online Sales', value: 'online_sales' },
-  { label: 'Retail Sales', value: 'retail_sales' },
-  { label: 'Wholesale Sales', value: 'wholesale_sales' },
-];
-const PARTIES: DropdownOption[] = [
-  { label: 'ABC Traders', value: 'abc' },
-  { label: 'PQR Exports', value: 'pqr' },
-  { label: 'Kumar & Sons', value: 'kumar' },
-  { label: 'XYZ Retail', value: 'xyz' },
-  { label: 'Sharma Electronics', value: 'sharma' },
-  { label: 'Delhi Suppliers', value: 'delhi' },
-  { label: 'Raj Enterprises', value: 'raj' },
-  { label: 'Indian Export House', value: 'ieh' },
-];
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const todayStr = () => {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`;
+};
+
+/** Convert DD/MM/YY → YYYY-MM-DD for backend */
+const dmyToISO = (dmy: string): string => {
+  if (!dmy) return '';
+  const parts = dmy.split('/');
+  if (parts.length < 3) return dmy;
+  const [dd, mm, yy] = parts;
+  const year = parseInt(yy) < 100 ? 2000 + parseInt(yy) : parseInt(yy);
+  return `${year}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
+};
+
+const calcItem = (item: InvoiceItem) => {
+  const qty = parseFloat(item.qty) || 0;
+  const rate = parseFloat(item.rate) || 0;
+  const gross = qty * rate;
+  const disc = parseFloat(item.discount) || 0;
+  const discAmt = item.discountType === '%' ? gross * disc / 100 : Math.min(disc, gross);
+  const taxable = gross - discAmt;
+  const taxAmt = taxable * (parseFloat(item.taxRate) || 0) / 100;
+  return { gross, discAmt, taxable, taxAmt, subtotal: taxable + taxAmt };
+};
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 const TERMS: DropdownOption[] = [
   { label: 'Due on Receipt', value: 'due_on_receipt' },
   { label: '15 Days', value: '15d' },
@@ -47,53 +57,61 @@ const TERMS: DropdownOption[] = [
   { label: 'Custom', value: 'custom' },
 ];
 
-// Warehouse → Products mapping
-const WAREHOUSE_PRODUCTS: Record<string, string[]> = {
-  main_wh:     ['jbl_speaker', 'samsung_j1', 'lycan_hp', 'sony_xm5', 'jbl_wired', 'shipping', 'consulting'],
-  store_a:     ['jbl_speaker', 'lycan_hp', 'consulting'],
-  store_b:     ['samsung_j1', 'sony_xm5', 'shipping'],
-  delhi_depot: ['jbl_wired', 'consulting', 'shipping'],
-};
-const ALL_PRODUCTS: DropdownOption[] = [
-  { label: 'JBL Portable Speaker', value: 'jbl_speaker' },
-  { label: 'Samsung Galaxy J1 Bluetooth', value: 'samsung_j1' },
-  { label: 'Lycan Wireless Headphone', value: 'lycan_hp' },
-  { label: 'Sony WH-1000XM5', value: 'sony_xm5' },
-  { label: 'JBL Wired Speaker', value: 'jbl_wired' },
-  { label: 'Shipping & Handling', value: 'shipping' },
-  { label: 'Consulting Services', value: 'consulting' },
-];
-// Barcode → product value mapping (mock)
-const BARCODE_MAP: Record<string, string> = {
-  '123456789012': 'jbl_speaker',
-  '234567890123': 'samsung_j1',
-  '345678901234': 'lycan_hp',
-  '456789012345': 'sony_xm5',
-  '567890123456': 'jbl_wired',
-};
-const WAREHOUSES: DropdownOption[] = [
-  { label: 'Main Warehouse', value: 'main_wh' },
-  { label: 'Store A', value: 'store_a' },
-  { label: 'Store B', value: 'store_b' },
-  { label: 'Delhi Depot', value: 'delhi_depot' },
-];
-const UNITS: DropdownOption[] = [
-  { label: 'Pcs', value: 'pcs' },
-  { label: 'Kg', value: 'kg' },
-  { label: 'Ltr', value: 'ltr' },
-  { label: 'Mtr', value: 'mtr' },
-  { label: 'Box', value: 'box' },
-  { label: 'Nos', value: 'nos' },
-];
-const TAX_RATES: DropdownOption[] = [
-  { label: '0% (Exempt)', value: '0' },
-  { label: '5% GST', value: '5' },
-  { label: '12% GST', value: '12' },
-  { label: '18% GST', value: '18' },
-  { label: '28% GST', value: '28' },
+const PAY_MODES: DropdownOption[] = [
+  { label: 'Cash', value: 'cash' },
+  { label: 'NEFT', value: 'neft' },
+  { label: 'RTGS', value: 'rtgs' },
+  { label: 'Cheque', value: 'cheque' },
+  { label: 'UPI', value: 'upi' },
+  { label: 'IMPS', value: 'imps' },
 ];
 
-// ─── Themed inline input (theme-colored focus border, no blue) ────────────────
+const GST_TYPES = ['Regular', 'Unregistered', 'Composition'];
+const INVOICE_STATES = [
+  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
+  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
+  'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram',
+  'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana',
+  'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+  'Delhi', 'Jammu & Kashmir', 'Ladakh', 'Chandigarh', 'Puducherry',
+];
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface StockItem {
+  id: number;
+  name: string;
+  displayName?: string;
+  closing_qty?: number;
+  unit?: string;
+  rate?: number;
+  hsn?: string;
+}
+
+interface Warehouse { id: number; name: string; guid?: string; }
+
+interface InvoiceItem {
+  id: string;
+  warehouse: string;
+  product: string;
+  qty: string;
+  unit: string;
+  rate: string;
+  discountType: '%' | 'flat';
+  discount: string;
+  taxLedger: string;     // actual ledger name from tax ledger picker
+  taxRate: string;       // user-entered % for calculation
+  gstType: 'cgst_sgst' | 'igst';
+}
+
+const newItem = (warehouseName = ''): InvoiceItem => ({
+  id: Date.now().toString() + Math.random().toString(36).slice(2),
+  warehouse: warehouseName, product: '', qty: '1', unit: 'pcs', rate: '',
+  discountType: '%', discount: '0', taxLedger: '', taxRate: '', gstType: 'cgst_sgst',
+});
+
+type ModalState = { type: 'product'|'unit'|'warehouse'|'barcode'|'taxLedger'; itemId: string } | null;
+
+// ─── Themed inline input ──────────────────────────────────────────────────────
 function ThemedFInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
   const [focused, setFocused] = useState(false);
   return (
@@ -113,21 +131,35 @@ function ThemedFInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
 }
 
 // ─── Barcode Scanner Modal ─────────────────────────────────────────────────────
-function BarcodeScannerModal({ visible, onScan, onClose }: {
+function BarcodeScannerModal({ visible, onScan, onClose, companyGuid }: {
   visible: boolean;
-  onScan: (productValue: string) => void;
+  onScan: (productName: string) => void;
   onClose: () => void;
+  companyGuid?: string;
 }) {
   const [permission, requestPermission] = useCameraPermissions();
   const scanned = useRef(false);
 
-  const handleBarcodeScanned = ({ data }: { data: string }) => {
+  const handleBarcodeScanned = async ({ data }: { data: string }) => {
     if (scanned.current) return;
     scanned.current = true;
-    const product = BARCODE_MAP[data];
-    if (product) {
-      onScan(product);
-    } else {
+    try {
+      if (companyGuid) {
+        const result: any = await lookupBarcode(companyGuid, data);
+        const productName = result?.data?.name || result?.name;
+        if (productName) {
+          onScan(productName);
+        } else {
+          Alert.alert('Not Found', `No product mapped to barcode: ${data}`, [
+            { text: 'OK', onPress: () => { scanned.current = false; } },
+          ]);
+        }
+      } else {
+        Alert.alert('No Company', 'Please select a company first.', [
+          { text: 'OK', onPress: () => { scanned.current = false; } },
+        ]);
+      }
+    } catch {
       Alert.alert('Not Found', `No product mapped to barcode: ${data}`, [
         { text: 'OK', onPress: () => { scanned.current = false; } },
       ]);
@@ -185,18 +217,7 @@ function BarcodeScannerModal({ visible, onScan, onClose }: {
   );
 }
 
-// ─── Add Customer Bottom Drawer ───────────────────────────────────────────────
-const GST_TYPES = ['Regular', 'Unregistered', 'Composition'];
-const INVOICE_STATES = [
-  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
-  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
-  'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram',
-  'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana',
-  'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
-  'Delhi', 'Jammu & Kashmir', 'Ladakh', 'Chandigarh', 'Puducherry',
-];
-
-// Simple inline state picker for the drawer
+// ─── State Dropdown (for AddCustomerDrawer) ───────────────────────────────────
 function StateDropdown({ value, onSelect }: { value: string; onSelect: (v: string) => void }) {
   const [open, setOpen] = useState(false);
   return (
@@ -230,10 +251,12 @@ function StateDropdown({ value, onSelect }: { value: string; onSelect: (v: strin
   );
 }
 
-function AddCustomerDrawer({ visible, onClose, onSaved }: {
+// ─── Add Customer Bottom Drawer ───────────────────────────────────────────────
+function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
   visible: boolean;
   onClose: () => void;
-  onSaved: (name: string) => void;
+  onSaved: (name: string, success?: boolean) => void;
+  company?: { guid?: string; name?: string } | null;
 }) {
   const insets = useSafeAreaInsets();
   const [name, setName] = useState('');
@@ -242,23 +265,21 @@ function AddCustomerDrawer({ visible, onClose, onSaved }: {
   const [creditDays, setCreditDays] = useState('');
   const [mailing, setMailing] = useState(false);
   const [bank, setBank] = useState(false);
-  // Mailing fields
   const [mailingName, setMailingName] = useState('');
   const [address, setAddress] = useState('');
   const [stateVal, setStateVal] = useState('');
   const [pincode, setPincode] = useState('');
   const [country, setCountry] = useState('India');
-  // Bank fields
   const [beneficiaryName, setBeneficiaryName] = useState('');
   const [bankName, setBankName] = useState('');
   const [accountNo, setAccountNo] = useState('');
   const [ifscCode, setIfscCode] = useState('');
   const [bankBranch, setBankBranch] = useState('');
-  // GST
   const [gstType, setGstType] = useState('Regular');
   const [gstOpen, setGstOpen] = useState(false);
   const [gstin, setGstin] = useState('');
   const [pan, setPan] = useState('');
+  const [saving, setSaving] = useState(false);
   const [nameFocused, setNameFocused] = useState(false);
   const [creditFocused, setCreditFocused] = useState(false);
   const [gstinFocused, setGstinFocused] = useState(false);
@@ -267,13 +288,48 @@ function AddCustomerDrawer({ visible, onClose, onSaved }: {
 
   const webFix = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
 
-  const handleSave = () => {
-    if (!name.trim()) { Alert.alert('Required', 'Customer name is required.'); return; }
-    onSaved(name.trim());
-    // Reset
+  const resetForm = () => {
     setName(''); setOpenBal(''); setIsCr(false); setCreditDays('');
     setMailing(false); setBank(false); setGstType('Regular');
-    setGstin(''); setPan('');
+    setGstin(''); setPan(''); setSaving(false);
+    setMailingName(''); setAddress(''); setStateVal(''); setPincode('');
+    setBeneficiaryName(''); setBankName(''); setAccountNo(''); setIfscCode(''); setBankBranch('');
+  };
+
+  const handleSave = async () => {
+    if (!name.trim()) { Alert.alert('Required', 'Customer name is required.'); return; }
+    setSaving(true);
+    try {
+      await createTallyParty({
+        companyGuid: company?.guid,
+        companyName: company?.name,
+        partyName: name.trim(),
+        openingBalance: parseFloat(openBal) || 0,
+        isCr,
+        gstin: gstin.trim(),
+        gstType,
+        creditDays: parseInt(creditDays) || 0,
+        mailingName: mailingName || name.trim(),
+        address,
+        state: stateVal,
+        pincode,
+        country: country || 'India',
+        bankDetails: bank ? { beneficiaryName, bankName, accountNo, ifsc: ifscCode, branch: bankBranch } : undefined,
+      });
+      const savedName = name.trim();
+      resetForm();
+      onSaved(savedName, true);
+    } catch (err: any) {
+      const isOffline = err?.message?.includes('offline') || err?.message?.includes('not connected') || err?.message?.includes('Desktop');
+      const savedName = name.trim();
+      resetForm();
+      onSaved(savedName, !isOffline);
+      if (isOffline) {
+        Alert.alert('Queued', `"${savedName}" will be created in Tally when desktop connects.`);
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -284,7 +340,6 @@ function AddCustomerDrawer({ visible, onClose, onSaved }: {
         style={acd.kvWrap}
       >
         <View style={[acd.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-          {/* Handle + Header */}
           <View style={acd.handle} />
           <View style={acd.header}>
             <Text style={acd.title}>New Customer</Text>
@@ -299,7 +354,6 @@ function AddCustomerDrawer({ visible, onClose, onSaved }: {
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={acd.body}
           >
-            {/* Name */}
             <Text style={acd.label}>Name <Text style={acd.star}>*</Text></Text>
             <TextInput
               style={[acd.input, nameFocused && acd.inputFocused, webFix]}
@@ -310,7 +364,6 @@ function AddCustomerDrawer({ visible, onClose, onSaved }: {
               onBlur={() => setNameFocused(false)}
             />
 
-            {/* Opening Balance */}
             <Text style={acd.label}>Opening Balance</Text>
             <View style={[acd.balBox, balFocused && acd.inputFocused]}>
               <TextInput
@@ -324,14 +377,11 @@ function AddCustomerDrawer({ visible, onClose, onSaved }: {
               />
               <View style={acd.drCrRow}>
                 <Text style={[acd.drCrLbl, !isCr && acd.drCrLblActive]}>Dr</Text>
-                <BrandSwitch
-                  value={isCr} onValueChange={setIsCr}
-                />
+                <BrandSwitch value={isCr} onValueChange={setIsCr} />
                 <Text style={[acd.drCrLbl, isCr && acd.drCrLblActive]}>Cr</Text>
               </View>
             </View>
 
-            {/* Credit Period */}
             <Text style={acd.label}>Credit Period (Days)</Text>
             <TextInput
               style={[acd.input, creditFocused && acd.inputFocused, webFix]}
@@ -343,10 +393,8 @@ function AddCustomerDrawer({ visible, onClose, onSaved }: {
               onBlur={() => setCreditFocused(false)}
             />
 
-            {/* Toggles + Expandable Sections */}
             <View style={acd.divider} />
 
-            {/* Enable Mailing Details */}
             <View style={acd.toggleRow}>
               <Text style={acd.toggleLbl}>Enable Mailing Details</Text>
               <BrandSwitch value={mailing} onValueChange={setMailing} />
@@ -354,46 +402,24 @@ function AddCustomerDrawer({ visible, onClose, onSaved }: {
             {mailing && (
               <View style={acd.expandSection}>
                 <Text style={acd.label}>Mailing Name</Text>
-                <TextInput
-                  style={[acd.input, webFix]}
-                  placeholder="Enter mailing name"
-                  placeholderTextColor={COLORS.textTertiary}
-                  value={mailingName} onChangeText={setMailingName}
-                />
+                <TextInput style={[acd.input, webFix]} placeholder="Enter mailing name" placeholderTextColor={COLORS.textTertiary} value={mailingName} onChangeText={setMailingName} />
                 <Text style={acd.label}>Address</Text>
-                <TextInput
-                  style={[acd.input, acd.textarea, webFix]}
-                  placeholder="Enter address"
-                  placeholderTextColor={COLORS.textTertiary}
-                  value={address} onChangeText={setAddress}
-                  multiline numberOfLines={3}
-                />
+                <TextInput style={[acd.input, acd.textarea, webFix]} placeholder="Enter address" placeholderTextColor={COLORS.textTertiary} value={address} onChangeText={setAddress} multiline numberOfLines={3} />
                 <Text style={acd.label}>State</Text>
                 <StateDropdown value={stateVal} onSelect={setStateVal} />
                 <View style={acd.row2}>
                   <View style={{ flex: 1 }}>
                     <Text style={acd.label}>Pincode</Text>
-                    <TextInput
-                      style={[acd.input, webFix]}
-                      placeholder="Pincode"
-                      placeholderTextColor={COLORS.textTertiary}
-                      value={pincode} onChangeText={setPincode}
-                      keyboardType="numeric"
-                    />
+                    <TextInput style={[acd.input, webFix]} placeholder="Pincode" placeholderTextColor={COLORS.textTertiary} value={pincode} onChangeText={setPincode} keyboardType="numeric" />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={acd.label}>Country</Text>
-                    <TextInput
-                      style={[acd.input, webFix]}
-                      value={country} onChangeText={setCountry}
-                      placeholderTextColor={COLORS.textTertiary}
-                    />
+                    <TextInput style={[acd.input, webFix]} value={country} onChangeText={setCountry} placeholderTextColor={COLORS.textTertiary} />
                   </View>
                 </View>
               </View>
             )}
 
-            {/* Provide Bank Details */}
             <View style={acd.toggleRow}>
               <Text style={acd.toggleLbl}>Provide Bank Details</Text>
               <BrandSwitch value={bank} onValueChange={setBank} />
@@ -401,65 +427,28 @@ function AddCustomerDrawer({ visible, onClose, onSaved }: {
             {bank && (
               <View style={acd.expandSection}>
                 <Text style={acd.label}>Beneficiary Name</Text>
-                <TextInput
-                  style={[acd.input, webFix]}
-                  placeholder="Enter beneficiary name"
-                  placeholderTextColor={COLORS.textTertiary}
-                  value={beneficiaryName} onChangeText={setBeneficiaryName}
-                />
+                <TextInput style={[acd.input, webFix]} placeholder="Enter beneficiary name" placeholderTextColor={COLORS.textTertiary} value={beneficiaryName} onChangeText={setBeneficiaryName} />
                 <Text style={acd.label}>Bank Name</Text>
-                <TextInput
-                  style={[acd.input, webFix]}
-                  placeholder="Enter bank name"
-                  placeholderTextColor={COLORS.textTertiary}
-                  value={bankName} onChangeText={setBankName}
-                />
+                <TextInput style={[acd.input, webFix]} placeholder="Enter bank name" placeholderTextColor={COLORS.textTertiary} value={bankName} onChangeText={setBankName} />
                 <Text style={acd.label}>Account Number</Text>
-                <TextInput
-                  style={[acd.input, webFix]}
-                  placeholder="Enter account number"
-                  placeholderTextColor={COLORS.textTertiary}
-                  value={accountNo} onChangeText={setAccountNo}
-                  keyboardType="numeric"
-                />
+                <TextInput style={[acd.input, webFix]} placeholder="Enter account number" placeholderTextColor={COLORS.textTertiary} value={accountNo} onChangeText={setAccountNo} keyboardType="numeric" />
                 <Text style={acd.label}>IFSC Code</Text>
-                <TextInput
-                  style={[acd.input, webFix]}
-                  placeholder="Enter IFSC code"
-                  placeholderTextColor={COLORS.textTertiary}
-                  value={ifscCode} onChangeText={v => setIfscCode(v.toUpperCase())}
-                  autoCapitalize="characters"
-                />
+                <TextInput style={[acd.input, webFix]} placeholder="Enter IFSC code" placeholderTextColor={COLORS.textTertiary} value={ifscCode} onChangeText={v => setIfscCode(v.toUpperCase())} autoCapitalize="characters" />
                 <Text style={acd.label}>Bank Branch</Text>
-                <TextInput
-                  style={[acd.input, webFix]}
-                  placeholder="Enter branch name"
-                  placeholderTextColor={COLORS.textTertiary}
-                  value={bankBranch} onChangeText={setBankBranch}
-                />
+                <TextInput style={[acd.input, webFix]} placeholder="Enter branch name" placeholderTextColor={COLORS.textTertiary} value={bankBranch} onChangeText={setBankBranch} />
               </View>
             )}
             <View style={acd.divider} />
 
-            {/* GST Registration Type */}
             <Text style={acd.label}>GST Registration Type <Text style={acd.star}>*</Text></Text>
-            <TouchableOpacity
-              style={[acd.selectBox, gstOpen && acd.selectBoxOpen]}
-              onPress={() => setGstOpen(!gstOpen)}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity style={[acd.selectBox, gstOpen && acd.selectBoxOpen]} onPress={() => setGstOpen(!gstOpen)} activeOpacity={0.7}>
               <Text style={acd.selectTxt}>{gstType}</Text>
               <Ionicons name={gstOpen ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
             </TouchableOpacity>
             {gstOpen && (
               <View style={acd.dropList}>
                 {GST_TYPES.map((t, idx) => (
-                  <TouchableOpacity
-                    key={t}
-                    style={[acd.dropItem, idx === GST_TYPES.length - 1 && { borderBottomWidth: 0 }]}
-                    onPress={() => { setGstType(t); setGstOpen(false); }}
-                    activeOpacity={0.7}
-                  >
+                  <TouchableOpacity key={t} style={[acd.dropItem, idx === GST_TYPES.length - 1 && { borderBottomWidth: 0 }]} onPress={() => { setGstType(t); setGstOpen(false); }} activeOpacity={0.7}>
                     <Text style={[acd.dropTxt, gstType === t && acd.dropTxtActive]}>{t}</Text>
                     {gstType === t && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
                   </TouchableOpacity>
@@ -467,36 +456,23 @@ function AddCustomerDrawer({ visible, onClose, onSaved }: {
               </View>
             )}
 
-            {/* GSTIN */}
             <Text style={acd.label}>GSTIN <Text style={acd.star}>*</Text></Text>
-            <TextInput
-              style={[acd.input, gstinFocused && acd.inputFocused, webFix]}
-              placeholder="Enter GSTIN"
-              placeholderTextColor={COLORS.textTertiary}
-              value={gstin} onChangeText={v => setGstin(v.toUpperCase())}
-              autoCapitalize="characters"
-              onFocus={() => setGstinFocused(true)}
-              onBlur={() => setGstinFocused(false)}
-            />
+            <TextInput style={[acd.input, gstinFocused && acd.inputFocused, webFix]} placeholder="Enter GSTIN" placeholderTextColor={COLORS.textTertiary} value={gstin} onChangeText={v => setGstin(v.toUpperCase())} autoCapitalize="characters" onFocus={() => setGstinFocused(true)} onBlur={() => setGstinFocused(false)} />
 
-            {/* PAN */}
             <Text style={acd.label}>PAN/IT No.</Text>
-            <TextInput
-              style={[acd.input, panFocused && acd.inputFocused, webFix]}
-              placeholder="Enter PAN/IT number"
-              placeholderTextColor={COLORS.textTertiary}
-              value={pan} onChangeText={v => setPan(v.toUpperCase())}
-              autoCapitalize="characters"
-              onFocus={() => setPanFocused(true)}
-              onBlur={() => setPanFocused(false)}
-            />
+            <TextInput style={[acd.input, panFocused && acd.inputFocused, webFix]} placeholder="Enter PAN/IT number" placeholderTextColor={COLORS.textTertiary} value={pan} onChangeText={v => setPan(v.toUpperCase())} autoCapitalize="characters" onFocus={() => setPanFocused(true)} onBlur={() => setPanFocused(false)} />
 
             <View style={{ height: 8 }} />
           </ScrollView>
 
-          {/* Save */}
-          <TouchableOpacity style={acd.saveBtn} onPress={handleSave} activeOpacity={0.85}>
-            <Text style={acd.saveBtnTxt}>Save Customer</Text>
+          <TouchableOpacity
+            style={[acd.saveBtn, saving && { opacity: 0.6 }]}
+            onPress={handleSave}
+            activeOpacity={0.85}
+            disabled={saving}
+          >
+            {saving && <ActivityIndicator size="small" color={COLORS.white} style={{ marginRight: 8 }} />}
+            <Text style={acd.saveBtnTxt}>{saving ? 'Saving...' : 'Save Customer'}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -504,150 +480,41 @@ function AddCustomerDrawer({ visible, onClose, onSaved }: {
   );
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface InvoiceItem {
-  id: string;
-  warehouse: string;
-  product: string;
-  qty: string;
-  unit: string;
-  rate: string;
-  discountType: '%' | 'flat';
-  discount: string;
-  taxRate: string;
-}
-
-const newItem = (): InvoiceItem => ({
-  id: Date.now().toString(),
-  warehouse: '', product: '', qty: '1', unit: 'pcs', rate: '',
-  discountType: '%', discount: '0', taxRate: '18',
-});
-
-const todayStr = () => {
-  const d = new Date();
-  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`;
-};
-
-const calcItem = (item: InvoiceItem) => {
-  const qty = parseFloat(item.qty) || 0;
-  const rate = parseFloat(item.rate) || 0;
-  const gross = qty * rate;
-  const disc = parseFloat(item.discount) || 0;
-  const discAmt = item.discountType === '%' ? gross * disc / 100 : Math.min(disc, gross);
-  const taxable = gross - discAmt;
-  const taxAmt = taxable * (parseFloat(item.taxRate) || 0) / 100;
-  return { gross, discAmt, taxable, taxAmt, subtotal: taxable + taxAmt };
-};
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-function ProductDropdownModal({ visible, value, onSelect, onClose }: {
-  visible: boolean; value: string;
-  onSelect: (v: DropdownOption) => void; onClose: () => void;
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={m.overlay} activeOpacity={1} onPress={onClose} />
-      <View style={m.sheet}>
-        <View style={m.handle} />
-        <Text style={m.title}>Select Product / Service</Text>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {ALL_PRODUCTS.map(p => (
-            <TouchableOpacity key={p.value} style={[m.opt, p.value === value && m.optActive]}
-              onPress={() => { onSelect(p); onClose(); }} activeOpacity={0.7}>
-              <View style={m.optLeft}>
-                <Ionicons name="cube-outline" size={16} color={COLORS.textSecondary} />
-                <Text style={[m.optTxt, p.value === value && m.optActiveTxt]}>{p.label}</Text>
-              </View>
-              {p.value === value && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
-            </TouchableOpacity>
-          ))}
-          <TouchableOpacity style={m.addNew} onPress={onClose} activeOpacity={0.7}>
-            <Ionicons name="add-circle-outline" size={16} color={COLORS.positive} />
-            <Text style={m.addNewTxt}>Add New Product</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
-    </Modal>
-  );
-}
-
-function UnitModal({ visible, value, onSelect, onClose }: {
-  visible: boolean; value: string;
-  onSelect: (v: string) => void; onClose: () => void;
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={m.overlay} activeOpacity={1} onPress={onClose}>
-        <View style={m.unitMenu}>
-          {UNITS.map(u => (
-            <TouchableOpacity key={u.value}
-              style={[m.unitOpt, u.value === value && m.unitOptActive]}
-              onPress={() => { onSelect(u.value); onClose(); }} activeOpacity={0.7}>
-              <Text style={[m.unitOptTxt, u.value === value && m.unitOptActiveTxt]}>{u.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </TouchableOpacity>
-    </Modal>
-  );
-}
-
-function TaxModal({ visible, value, onSelect, onClose }: {
-  visible: boolean; value: string;
-  onSelect: (v: string) => void; onClose: () => void;
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={m.overlay} activeOpacity={1} onPress={onClose}>
-        <View style={m.taxMenu}>
-          {TAX_RATES.map(t => (
-            <TouchableOpacity key={t.value}
-              style={[m.unitOpt, t.value === value && m.unitOptActive]}
-              onPress={() => { onSelect(t.value); onClose(); }} activeOpacity={0.7}>
-              <Text style={[m.unitOptTxt, t.value === value && m.unitOptActiveTxt]}>{t.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </TouchableOpacity>
-    </Modal>
-  );
-}
-
-type ModalState = { type: 'product'|'unit'|'tax'|'warehouse'|'barcode'; itemId: string } | null;
-
-function ItemRow({ item, onUpdate, onRemove, onOpenModal }: {
+// ─── ItemRow ──────────────────────────────────────────────────────────────────
+function ItemRow({ item, onUpdate, onRemove, onOpenModal, hasMultipleWarehouses, stockItems, taxLedgers, warehouses }: {
   item: InvoiceItem;
   onUpdate: (id: string, field: keyof InvoiceItem, val: string) => void;
   onRemove: (id: string) => void;
   onOpenModal: (s: ModalState) => void;
+  hasMultipleWarehouses: boolean;
+  stockItems: StockItem[];
+  taxLedgers: { name: string }[];
+  warehouses: Warehouse[];
 }) {
   const calc = calcItem(item);
-  const warehouseLabel = WAREHOUSES.find(w => w.value === item.warehouse)?.label;
-
-  // Products filtered by selected warehouse
-  const availableProducts = item.warehouse
-    ? ALL_PRODUCTS.filter(p => (WAREHOUSE_PRODUCTS[item.warehouse] || []).includes(p.value))
-    : ALL_PRODUCTS;
-  const productName = availableProducts.find(p => p.value === item.product)?.label
-    || ALL_PRODUCTS.find(p => p.value === item.product)?.label;
-  const unitLabel = UNITS.find(u => u.value === item.unit)?.label || item.unit;
+  const stockItem = stockItems.find(si => si.name === item.product);
+  const productLabel = stockItem
+    ? (stockItem.displayName || stockItem.name)
+    : (item.product || '');
 
   return (
     <View style={ir.card}>
-      {/* Row 1: Warehouse (FIRST) */}
-      <TouchableOpacity
-        style={[ir.warehouseBtn, item.warehouse && ir.warehouseBtnActive]}
-        onPress={() => onOpenModal({ type: 'warehouse', itemId: item.id })}
-        activeOpacity={0.7}
-      >
-        <Ionicons name="business-outline" size={13} color={item.warehouse ? COLORS.info : COLORS.textTertiary} />
-        <Text style={[ir.warehouseTxt, !warehouseLabel && ir.placeholderTxt]}>
-          {warehouseLabel || 'Select Warehouse first...'}
-        </Text>
-        <Ionicons name="chevron-down" size={11} color={COLORS.textSecondary} />
-      </TouchableOpacity>
+      {/* Warehouse selector — only if multiple warehouses */}
+      {hasMultipleWarehouses && (
+        <TouchableOpacity
+          style={[ir.warehouseBtn, item.warehouse && ir.warehouseBtnActive]}
+          onPress={() => onOpenModal({ type: 'warehouse', itemId: item.id })}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="business-outline" size={13} color={item.warehouse ? COLORS.info : COLORS.textTertiary} />
+          <Text style={[ir.warehouseTxt, !item.warehouse && ir.placeholderTxt]}>
+            {item.warehouse || 'Select Warehouse first...'}
+          </Text>
+          <Ionicons name="chevron-down" size={11} color={COLORS.textSecondary} />
+        </TouchableOpacity>
+      )}
 
-      {/* Row 2: Product + Barcode + Delete */}
+      {/* Product + Barcode + Delete */}
       <View style={ir.topRow}>
         <TouchableOpacity
           style={ir.productBtn}
@@ -656,7 +523,7 @@ function ItemRow({ item, onUpdate, onRemove, onOpenModal }: {
         >
           <Ionicons name="cube-outline" size={14} color={COLORS.textSecondary} />
           <Text style={[ir.productTxt, !item.product && ir.placeholderTxt]} numberOfLines={1}>
-            {productName || (item.warehouse ? 'Select product...' : 'Select warehouse first')}
+            {productLabel || 'Select product...'}
           </Text>
           <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
         </TouchableOpacity>
@@ -686,7 +553,7 @@ function ItemRow({ item, onUpdate, onRemove, onOpenModal }: {
           />
         </View>
         <TouchableOpacity style={ir.unitBtn} onPress={() => onOpenModal({ type: 'unit', itemId: item.id })} activeOpacity={0.7}>
-          <Text style={ir.unitTxt}>{unitLabel}</Text>
+          <Text style={ir.unitTxt}>{item.unit || 'pcs'}</Text>
           <Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
         </TouchableOpacity>
         <View style={ir.rateBox}>
@@ -702,7 +569,7 @@ function ItemRow({ item, onUpdate, onRemove, onOpenModal }: {
         </View>
       </View>
 
-      {/* Discount + Tax */}
+      {/* Discount + Tax Ledger Picker */}
       <View style={ir.fieldRow}>
         <View style={ir.discRow}>
           <TouchableOpacity
@@ -722,14 +589,51 @@ function ItemRow({ item, onUpdate, onRemove, onOpenModal }: {
           />
           <Text style={ir.discLabel}>Disc</Text>
         </View>
-        <TouchableOpacity style={ir.taxBtn} onPress={() => onOpenModal({ type: 'tax', itemId: item.id })} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={[ir.taxBtn, item.taxLedger ? { backgroundColor: COLORS.infoBg } : {}]}
+          onPress={() => onOpenModal({ type: 'taxLedger', itemId: item.id })}
+          activeOpacity={0.7}
+        >
           <Ionicons name="receipt-outline" size={12} color={COLORS.info} />
-          <Text style={ir.taxTxt}>GST {item.taxRate}%</Text>
+          <Text style={ir.taxTxt} numberOfLines={1}>
+            {item.taxLedger ? item.taxLedger.slice(0, 14) : 'Tax Ledger'}
+          </Text>
           <Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
 
-      {/* Subtotal */}
+      {/* Tax Rate % + GST Type chips — shown only if taxLedger selected */}
+      {!!item.taxLedger && (
+        <View style={ir.fieldRow}>
+          <View style={ir.qtyBox}>
+            <Text style={ir.miniLabel}>Tax %</Text>
+            <TextInput
+              style={ir.miniInput}
+              value={item.taxRate}
+              onChangeText={v => onUpdate(item.id, 'taxRate', v)}
+              keyboardType="numeric"
+              placeholder="18"
+              placeholderTextColor={COLORS.textTertiary}
+            />
+          </View>
+          <TouchableOpacity
+            style={[ir.discTypeBtn, { flex: 1, marginLeft: 8 }, item.gstType === 'cgst_sgst' && { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary }]}
+            onPress={() => onUpdate(item.id, 'gstType', 'cgst_sgst')}
+            activeOpacity={0.7}
+          >
+            <Text style={[ir.discTypeTxt, item.gstType === 'cgst_sgst' && { color: COLORS.white }]}>CGST+SGST</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[ir.discTypeBtn, { flex: 1, marginLeft: 4 }, item.gstType === 'igst' && { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary }]}
+            onPress={() => onUpdate(item.id, 'gstType', 'igst')}
+            activeOpacity={0.7}
+          >
+            <Text style={[ir.discTypeTxt, item.gstType === 'igst' && { color: COLORS.white }]}>IGST</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Item Total */}
       <View style={ir.subtotalRow}>
         <Text style={ir.subtotalLabel}>Item Total</Text>
         <Text style={ir.subtotalVal}>
@@ -740,41 +644,33 @@ function ItemRow({ item, onUpdate, onRemove, onOpenModal }: {
   );
 }
 
-// ─── Payment Mode options ─────────────────────────────────────────────────────
-const PAY_MODES: DropdownOption[] = [
-  { label: 'Cash', value: 'cash' },
-  { label: 'NEFT', value: 'neft' },
-  { label: 'RTGS', value: 'rtgs' },
-  { label: 'Cheque', value: 'cheque' },
-  { label: 'UPI', value: 'upi' },
-  { label: 'IMPS', value: 'imps' },
-];
-
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CreateSalesInvoiceScreen() {
-  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { company, isPaired } = useAuth();
+  const { company, selectedFY } = useAuth();
 
+  // FY date bounds
+  const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
+
+  // ── State ──────────────────────────────────────────────────
   const [entryType, setEntryType] = useState<EntryType>('regular');
-  const [ledger, setLedger] = useState('credit_sales');
-  const [invoiceNo] = useState('INV-30979');
+  const [ledger, setLedger] = useState('');
+  const [invoiceNo] = useState('');
   const [date, setDate] = useState(todayStr());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [party, setParty] = useState('');
-  const [parties, setParties] = useState<DropdownOption[]>(PARTIES);
+  const [parties, setParties] = useState<DropdownOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
-  // Load real parties from API
-  useEffect(() => {
-    if (!company?.guid) return;
-    getParties(company.guid).then((res: any) => {
-      const list = res?.data || [];
-      if (list.length > 0) {
-        setParties(list.map((p: any) => ({ label: p.name, value: p.guid || p.id?.toString() || p.name })));
-      }
-    }).catch(() => {});
-  }, [company?.guid]);
+  // Real API data
+  const [stockItems, setStockItems] = useState<StockItem[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [salesLedgers, setSalesLedgers] = useState<{ name: string; guid?: string }[]>([]);
+  const [taxLedgers, setTaxLedgers] = useState<{ name: string }[]>([]);
+
+  const hasMultipleWarehouses = warehouses.length > 1;
+
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [payTerms, setPayTerms] = useState('due_on_receipt');
   const [customDays, setCustomDays] = useState('');
@@ -793,26 +689,107 @@ export default function CreateSalesInvoiceScreen() {
   const [payNowAmount, setPayNowAmount] = useState('');
   const [payNowRef, setPayNowRef] = useState('');
 
+  // Success overlay
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [submitResult, setSubmitResult] = useState<{ tdkRef: string; isQueued: boolean; message: string } | null>(null);
+
+  // ── Data Loading Effects ────────────────────────────────────
+  useEffect(() => {
+    if (!company?.guid) return;
+    getParties(company.guid).then((res: any) => {
+      const list = res?.data || [];
+      if (list.length > 0) {
+        setParties(list.map((p: any) => ({ label: p.name, value: p.name })));
+      }
+    }).catch(() => {});
+  }, [company?.guid]);
+
+  useEffect(() => {
+    if (!company?.guid) return;
+    getStocks(company.guid).then((res: any) => {
+      const list = res?.data || res?.items || [];
+      setStockItems(list);
+    }).catch(() => {});
+  }, [company?.guid]);
+
+  useEffect(() => {
+    if (!company?.guid) return;
+    getWarehouses(company.guid).then((res: any) => {
+      const list: Warehouse[] = res?.data || res?.warehouses || [];
+      setWarehouses(list);
+      if (list.length === 1) {
+        setItems(prev => prev.map(i => ({ ...i, warehouse: list[0].name })));
+      }
+    }).catch(() => {});
+  }, [company?.guid]);
+
+  useEffect(() => {
+    if (!company?.guid) return;
+    getSalesLedgerAccounts(company.guid).then((res: any) => {
+      const list = res?.data || [];
+      setSalesLedgers(list);
+      if (list.length > 0 && !ledger) setLedger(list[0].name);
+    }).catch(() => {});
+  }, [company?.guid]);
+
+  useEffect(() => {
+    if (!company?.guid) return;
+    getTaxLedgers(company.guid).then((res: any) => {
+      setTaxLedgers(res?.data || []);
+    }).catch(() => {});
+  }, [company?.guid]);
+
+  // Due date auto-fill
+  useEffect(() => {
+    const days = payTerms === '15d' ? 15 : payTerms === '30d' ? 30 :
+                 payTerms === 'due_on_receipt' ? 0 :
+                 payTerms === 'custom' ? (parseInt(customDays) || 0) : 0;
+    if (days > 0 && date) {
+      const parsed = parseDMY(date);
+      if (parsed) {
+        const due = new Date(parsed);
+        due.setDate(due.getDate() + days);
+        setDueDate(formatDMY(due));
+      }
+    } else if (payTerms === 'due_on_receipt') {
+      setDueDate(date);
+    }
+  }, [payTerms, date, customDays]);
+
+  // ── Item Actions ────────────────────────────────────────────
   const updateItem = useCallback((id: string, field: keyof InvoiceItem, val: string) => {
-    setItems(prev => prev.map(i => i.id === id ? { ...i, [field]: val } : i));
+    setItems(prev => prev.map(i => i.id === id ? { ...i, [field]: val as any } : i));
   }, []);
+
   const removeItem = useCallback((id: string) => {
     setItems(prev => prev.length > 1 ? prev.filter(i => i.id !== id) : prev);
   }, []);
-  const addItem = useCallback(() => setItems(prev => [...prev, newItem()]), []);
 
+  const addItem = useCallback(() => {
+    const autoWarehouse = warehouses.length === 1 ? warehouses[0].name : '';
+    setItems(prev => [...prev, newItem(autoWarehouse)]);
+  }, [warehouses]);
+
+  const closeModal = useCallback(() => setActiveModal(null), []);
+
+  // ── Computed ────────────────────────────────────────────────
   const logisticsTotal = useMemo(() => calcLogisticsTotal(logEntries, logTaxRate), [logEntries, logTaxRate]);
 
   const totals = useMemo(() => {
-    let gross = 0, discTotal = 0, taxTotal = 0;
+    let gross = 0, discTotal = 0, cgst = 0, sgst = 0, igst = 0;
     items.forEach(item => {
       const c = calcItem(item);
       gross += c.gross;
       discTotal += c.discAmt;
-      taxTotal += c.taxAmt;
+      if (item.gstType === 'igst') {
+        igst += c.taxAmt;
+      } else {
+        cgst += c.taxAmt / 2;
+        sgst += c.taxAmt / 2;
+      }
     });
-    const grand = gross - discTotal + taxTotal + logisticsTotal;
-    return { gross, discTotal, taxTotal, cgst: taxTotal/2, sgst: taxTotal/2, logisticsTotal, grand };
+    const grand = gross - discTotal + cgst + sgst + igst + logisticsTotal;
+    return { gross, discTotal, cgst, sgst, igst, taxTotal: cgst + sgst + igst, logisticsTotal, grand };
   }, [items, logisticsTotal]);
 
   const paymentStatus = useMemo(() => {
@@ -823,32 +800,66 @@ export default function CreateSalesInvoiceScreen() {
     return 'partial';
   }, [collectPayNow, payNowAmount, totals.grand]);
 
+  // Derive unit options from real stock items
+  const unitOptions = useMemo(() => {
+    const units = [...new Set(stockItems.map(i => i.unit).filter(Boolean))] as string[];
+    return units.length > 0 ? units : ['Pcs', 'Kg', 'Ltr', 'Mtr', 'Box', 'Nos'];
+  }, [stockItems]);
+
+  // ── Submit ──────────────────────────────────────────────────
   const handleSubmit = useCallback(async (isDraft = false) => {
-    if (!isPaired) {
-      Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' });
+    if (!party) {
+      Toast.show({ type: 'error', text1: 'Customer required' });
       return;
     }
+    if (items.some(i => !i.product)) {
+      Toast.show({ type: 'error', text1: 'All items need a product selected' });
+      return;
+    }
+    if (hasMultipleWarehouses && items.some(i => !i.warehouse)) {
+      Toast.show({ type: 'error', text1: 'Warehouse required for all items' });
+      return;
+    }
+
+    setSubmitting(true);
     try {
-      setSubmitting(true);
-      await createSalesInvoice({
-        company_guid: company?.guid,
-        party,
-        date,
-        ledger_account: ledger,
-        payment_terms: payTerms,
-        due_date: dueDate || undefined,
-        ref_no: refNo || undefined,
-        items: items.map(item => ({
-          stock_item: item.product,
-          warehouse: item.warehouse,
-          qty: parseFloat(item.qty) || 0,
-          unit: item.unit,
-          rate: parseFloat(item.rate) || 0,
-          discount: parseFloat(item.discount) || 0,
-          tax_rate: parseFloat(item.taxRate) || 0,
-        })),
+      const result: any = await createSalesInvoice({
+        companyGuid: company?.guid,
+        companyName: company?.name,
+        partyLedger: party,
+        date: dmyToISO(date),
+        salesLedger: ledger,
+        isOptional: entryType === 'optional',
+        original_entry_type: entryType,
+        voucherType: 'Sales',
+        totalAmount: totals.grand,
+        reference: refNo || undefined,
         narration: narration || undefined,
-        terms: termsText || undefined,
+        items: items.map(item => ({
+          itemName: item.product,
+          billedQty: parseFloat(item.qty) || 0,
+          actualQty: parseFloat(item.qty) || 0,
+          rate: parseFloat(item.rate) || 0,
+          amount: calcItem(item).taxable,
+          salesLedger: ledger,
+          godown: item.warehouse || warehouses[0]?.name || 'Main Location',
+        })),
+        taxes: items
+          .filter(i => i.taxLedger && parseFloat(i.taxRate) > 0)
+          .map(item => {
+            const c = calcItem(item);
+            if (item.gstType === 'igst') {
+              return [{ ledgerName: item.taxLedger, taxRate: parseFloat(item.taxRate), taxAmount: c.taxAmt, taxableValue: c.taxable }];
+            } else {
+              const halfTax = c.taxAmt / 2;
+              const halfRate = parseFloat(item.taxRate) / 2;
+              return [
+                { ledgerName: `CGST @${halfRate}%`, taxRate: halfRate, taxAmount: halfTax, taxableValue: c.taxable },
+                { ledgerName: `SGST @${halfRate}%`, taxRate: halfRate, taxAmount: halfTax, taxableValue: c.taxable },
+              ];
+            }
+          })
+          .flat(),
         collect_payment: collectPayNow ? {
           mode: payNowMode,
           amount: parseFloat(payNowAmount) || 0,
@@ -856,19 +867,68 @@ export default function CreateSalesInvoiceScreen() {
         } : undefined,
         is_draft: isDraft,
       });
-      Toast.show({ type: 'success', text1: isDraft ? 'Draft Saved' : 'Invoice Submitted', text2: `Invoice ${invoiceNo} ${isDraft ? 'saved as draft' : 'submitted to Tally'}.` });
-      setTimeout(() => router.back(), 1000);
+
+      const tdkRef = result?.data?.tdkReferenceNo || result?.tdkReferenceNo || '';
+      const isQueued = result?.queued === true;
+      setSubmitResult({ tdkRef, isQueued, message: result?.message || '' });
+      setShowSuccess(true);
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message || 'Could not submit. Check Tally connection.' });
+      Toast.show({ type: 'error', text1: 'Submit Failed', text2: err?.message || 'Check Tally connection.' });
     } finally {
       setSubmitting(false);
     }
-  }, [isPaired, company?.guid, party, date, ledger, payTerms, dueDate, refNo, items, narration, termsText, collectPayNow, payNowMode, payNowAmount, payNowRef, invoiceNo, router]);
+  }, [party, items, hasMultipleWarehouses, company, date, ledger, entryType, totals.grand, refNo, narration, warehouses, collectPayNow, payNowMode, payNowAmount, payNowRef]);
 
-  const closeModal = useCallback(() => setActiveModal(null), []);
-
+  // ── Render ──────────────────────────────────────────────────
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
+      {/* Success Overlay */}
+      {showSuccess && submitResult && (
+        <View style={ss.overlay}>
+          <View style={ss.card}>
+            <View style={ss.iconWrap}>
+              <Ionicons
+                name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
+                size={56}
+                color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
+              />
+            </View>
+            <Text style={ss.title}>
+              {submitResult.isQueued ? 'Saved. Pending Sync' : 'Invoice Submitted!'}
+            </Text>
+            <Text style={ss.sub}>
+              {submitResult.isQueued
+                ? 'Your entry is queued. Will push to Tally when desktop reconnects.'
+                : 'Invoice pushed to Tally successfully.'}
+            </Text>
+            {!!submitResult.tdkRef && (
+              <View style={ss.refBadge}>
+                <Text style={ss.refLabel}>Reference No.</Text>
+                <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
+              </View>
+            )}
+            <TouchableOpacity style={ss.pdfBtn} activeOpacity={0.85} onPress={() => {
+              Toast.show({ type: 'info', text1: 'PDF sharing coming soon' });
+            }}>
+              <Ionicons name="document-outline" size={18} color={COLORS.white} />
+              <Text style={ss.pdfBtnTxt}>Share PDF</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={ss.waBtn} activeOpacity={0.85} onPress={() => {
+              Toast.show({ type: 'info', text1: 'WhatsApp sharing coming soon' });
+            }}>
+              <Ionicons name="logo-whatsapp" size={18} color={COLORS.white} />
+              <Text style={ss.waBtnTxt}>Share on WhatsApp</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={ss.doneBtn} activeOpacity={0.85} onPress={() => {
+              setShowSuccess(false);
+              router.back();
+            }}>
+              <Text style={ss.doneTxt}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       <View style={s.header}>
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}
           hitSlop={{ top:8, bottom:8, left:8, right:8 }}>
@@ -877,7 +937,7 @@ export default function CreateSalesInvoiceScreen() {
         <Text style={s.headerTitle}>Create Sales Invoice</Text>
         <RegularOptionalToggle value={entryType} onChange={setEntryType} />
         <View style={s.invNoBadge}>
-          <Text style={s.invNoTxt}>{invoiceNo}</Text>
+          <Text style={s.invNoTxt}>{invoiceNo || 'Auto'}</Text>
         </View>
       </View>
 
@@ -887,14 +947,14 @@ export default function CreateSalesInvoiceScreen() {
           contentContainerStyle={s.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Ledger Searchable Selector */}
+          {/* Sales Ledger */}
           <SearchableDropdown
             label="Sales Ledger"
             required
             placeholder="Search ledger account..."
-            options={LEDGER_ACCOUNTS}
+            options={salesLedgers.map(l => ({ label: l.name, value: l.name }))}
             value={ledger}
-            onSelect={o => setLedger(o.value)}
+            onSelect={(o: any) => setLedger(o.value)}
             icon="book-outline"
             containerStyle={{ marginBottom: SPACING.md }}
           />
@@ -910,32 +970,40 @@ export default function CreateSalesInvoiceScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={s.fLabel}>Invoice No.</Text>
                 <View style={s.autoBox}>
-                  <Text style={s.autoTxt}>{invoiceNo}</Text>
+                  <Text style={s.autoTxt}>{invoiceNo || 'Auto'}</Text>
                   <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
                 </View>
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.fLabel}>Date <Text style={s.star}>*</Text></Text>
-                <ThemedFInput
-                  value={date} onChangeText={setDate}
-                  placeholder="DD/MM/YY"
-                />
+                {entryType === 'regular' ? (
+                  <View style={[s.autoBox, { opacity: 0.55 }]}>
+                    <Text style={s.autoTxt}>{date}</Text>
+                    <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
+                  </View>
+                ) : (
+                  <TouchableOpacity style={s.fInput} onPress={() => setShowDatePicker(true)}>
+                    <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary }}>
+                      {date || 'Select date'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
 
-            {/* Customer / Party — searchable + Add New */}
+            {/* Customer / Party */}
             <SearchableDropdown
               label="Customer / Party"
               required
               placeholder="Search customer..."
               options={parties}
               value={party}
-              onSelect={o => setParty(o.value)}
+              onSelect={(o: any) => setParty(o.value)}
               onAddNew={() => setShowAddCustomer(true)}
               addNewLabel="Add New Customer"
             />
 
-            {/* Payment Terms — inline accordion */}
+            {/* Payment Terms */}
             <View style={{ marginBottom: SPACING.md }}>
               <Text style={s.fLabel}>Payment Terms</Text>
               <View style={s.termsRow}>
@@ -971,17 +1039,11 @@ export default function CreateSalesInvoiceScreen() {
             <View style={s.row2}>
               <View style={{ flex: 1 }}>
                 <Text style={s.fLabel}>Due Date</Text>
-                <ThemedFInput
-                  value={dueDate} onChangeText={setDueDate}
-                  placeholder="DD/MM/YY"
-                />
+                <ThemedFInput value={dueDate} onChangeText={setDueDate} placeholder="DD/MM/YY" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.fLabel}>Reference No.</Text>
-                <ThemedFInput
-                  value={refNo} onChangeText={setRefNo}
-                  placeholder="Optional"
-                />
+                <ThemedFInput value={refNo} onChangeText={setRefNo} placeholder="Optional" />
               </View>
             </View>
           </View>
@@ -1002,6 +1064,10 @@ export default function CreateSalesInvoiceScreen() {
               onUpdate={updateItem}
               onRemove={removeItem}
               onOpenModal={setActiveModal}
+              hasMultipleWarehouses={hasMultipleWarehouses}
+              stockItems={stockItems}
+              taxLedgers={taxLedgers}
+              warehouses={warehouses}
             />
           ))}
 
@@ -1034,10 +1100,7 @@ export default function CreateSalesInvoiceScreen() {
                   <Text style={s.payNowSub}>Record payment received at the time of billing</Text>
                 </View>
               </View>
-              <BrandSwitch
-                value={collectPayNow}
-                onValueChange={setCollectPayNow}
-              />
+              <BrandSwitch value={collectPayNow} onValueChange={setCollectPayNow} />
             </TouchableOpacity>
 
             {collectPayNow && (
@@ -1047,7 +1110,7 @@ export default function CreateSalesInvoiceScreen() {
                   label="Mode of Payment"
                   value={payNowMode}
                   options={PAY_MODES}
-                  onSelect={o => setPayNowMode(o.value)}
+                  onSelect={(o: any) => setPayNowMode(o.value)}
                   placeholder="Select payment mode..."
                   required
                 />
@@ -1074,7 +1137,6 @@ export default function CreateSalesInvoiceScreen() {
                     />
                   </View>
                 </View>
-                {/* Payment Status Chip */}
                 <View style={[
                   s.payStatusChip,
                   paymentStatus === 'paid' ? s.payStatusPaid :
@@ -1101,7 +1163,7 @@ export default function CreateSalesInvoiceScreen() {
             )}
           </View>
 
-          {/* Summary */}
+          {/* Invoice Summary */}
           <View style={s.summaryCard}>
             <Text style={s.summaryTitle}>Invoice Summary</Text>
             <View style={s.summaryRow}>
@@ -1114,17 +1176,23 @@ export default function CreateSalesInvoiceScreen() {
                 <Text style={[s.sumVal, { color: COLORS.positive }]}>-₹{totals.discTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
               </View>
             )}
-            {totals.taxTotal > 0 && (
-              <>
-                <View style={s.summaryRow}>
-                  <Text style={s.sumLabel}>CGST</Text>
-                  <Text style={s.sumVal}>₹{totals.cgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
-                </View>
-                <View style={s.summaryRow}>
-                  <Text style={s.sumLabel}>SGST</Text>
-                  <Text style={s.sumVal}>₹{totals.sgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
-                </View>
-              </>
+            {totals.cgst > 0 && (
+              <View style={s.summaryRow}>
+                <Text style={s.sumLabel}>CGST</Text>
+                <Text style={s.sumVal}>₹{totals.cgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+              </View>
+            )}
+            {totals.sgst > 0 && (
+              <View style={s.summaryRow}>
+                <Text style={s.sumLabel}>SGST</Text>
+                <Text style={s.sumVal}>₹{totals.sgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+              </View>
+            )}
+            {totals.igst > 0 && (
+              <View style={s.summaryRow}>
+                <Text style={s.sumLabel}>IGST</Text>
+                <Text style={s.sumVal}>₹{totals.igst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+              </View>
             )}
             {totals.logisticsTotal > 0 && (
               <View style={s.summaryRow}>
@@ -1139,7 +1207,7 @@ export default function CreateSalesInvoiceScreen() {
             </View>
           </View>
 
-          {/* Notes */}
+          {/* Notes & Terms */}
           <View style={s.card}>
             <View style={s.cardHdr}>
               <Ionicons name="document-outline" size={18} color={COLORS.textSecondary} />
@@ -1174,54 +1242,52 @@ export default function CreateSalesInvoiceScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* Product Modal — shows warehouse-filtered products */}
-      <Modal
-        visible={activeModal?.type === 'product'}
-        transparent
-        animationType="slide"
-        onRequestClose={closeModal}
-      >
+      {/* ── Modals ── */}
+
+      {/* Product Modal */}
+      <Modal visible={activeModal?.type === 'product'} transparent animationType="slide" onRequestClose={closeModal}>
         <TouchableOpacity style={m.overlay} activeOpacity={1} onPress={closeModal} />
         <View style={m.sheet}>
           <View style={m.handle} />
           <Text style={m.title}>Select Product / Service</Text>
           {(() => {
-            const itemId = activeModal?.itemId;
-            const item = items.find(i => i.id === itemId);
-            const filteredProducts = item?.warehouse
-              ? ALL_PRODUCTS.filter(p => (WAREHOUSE_PRODUCTS[item.warehouse] || []).includes(p.value))
-              : ALL_PRODUCTS;
-            const currentProduct = item?.product || '';
+            const currentItem = items.find(i => i.id === activeModal?.itemId);
+            const currentProduct = currentItem?.product || '';
             return (
               <ScrollView showsVerticalScrollIndicator={false}>
-                {item?.warehouse ? (
+                {stockItems.length === 0 && (
                   <View style={mAdd.warehouseHint}>
-                    <Ionicons name="business-outline" size={13} color={COLORS.info} />
-                    <Text style={mAdd.warehouseHintTxt}>
-                      Showing products from: {WAREHOUSES.find(w => w.value === item.warehouse)?.label}
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={mAdd.warehouseHint}>
-                    <Ionicons name="alert-circle-outline" size={13} color={COLORS.warning} />
-                    <Text style={[mAdd.warehouseHintTxt, { color: COLORS.warning }]}>Select warehouse to filter products</Text>
+                    <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+                    <Text style={mAdd.warehouseHintTxt}>Loading products...</Text>
                   </View>
                 )}
-                {filteredProducts.map(p => (
+                {stockItems.map(p => (
                   <TouchableOpacity
-                    key={p.value}
-                    style={[m.opt, p.value === currentProduct && m.optActive]}
+                    key={p.id}
+                    style={[m.opt, p.name === currentProduct && m.optActive]}
                     onPress={() => {
-                      if (activeModal) updateItem(activeModal.itemId, 'product', p.value);
+                      if (activeModal) {
+                        setItems(prev => prev.map(i => {
+                          if (i.id !== activeModal.itemId) return i;
+                          return {
+                            ...i,
+                            product: p.name,
+                            unit: p.unit || i.unit,
+                            rate: p.rate != null ? String(p.rate) : i.rate,
+                          };
+                        }));
+                      }
                       closeModal();
                     }}
                     activeOpacity={0.7}
                   >
                     <View style={m.optLeft}>
                       <Ionicons name="cube-outline" size={16} color={COLORS.textSecondary} />
-                      <Text style={[m.optTxt, p.value === currentProduct && m.optActiveTxt]}>{p.label}</Text>
+                      <Text style={[m.optTxt, p.name === currentProduct && m.optActiveTxt]}>
+                        {`${p.displayName || p.name} (${p.closing_qty ?? 0} ${p.unit || 'pcs'})`}
+                      </Text>
                     </View>
-                    {p.value === currentProduct && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
+                    {p.name === currentProduct && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -1229,20 +1295,62 @@ export default function CreateSalesInvoiceScreen() {
           })()}
         </View>
       </Modal>
+
       {/* Unit Modal */}
-      <UnitModal
-        visible={activeModal?.type === 'unit'}
-        value={activeModal ? items.find(i => i.id === activeModal.itemId)?.unit || 'pcs' : 'pcs'}
-        onSelect={v => { if (activeModal) updateItem(activeModal.itemId, 'unit', v); }}
-        onClose={closeModal}
-      />
-      {/* Tax Modal */}
-      <TaxModal
-        visible={activeModal?.type === 'tax'}
-        value={activeModal ? items.find(i => i.id === activeModal.itemId)?.taxRate || '18' : '18'}
-        onSelect={v => { if (activeModal) updateItem(activeModal.itemId, 'taxRate', v); }}
-        onClose={closeModal}
-      />
+      <Modal visible={activeModal?.type === 'unit'} transparent animationType="fade" onRequestClose={closeModal}>
+        <TouchableOpacity style={m.overlay} activeOpacity={1} onPress={closeModal}>
+          <View style={m.unitMenu}>
+            {unitOptions.map(u => {
+              const current = activeModal ? items.find(i => i.id === activeModal.itemId)?.unit || '' : '';
+              return (
+                <TouchableOpacity
+                  key={u}
+                  style={[m.unitOpt, u === current && m.unitOptActive]}
+                  onPress={() => { if (activeModal) updateItem(activeModal.itemId, 'unit', u); closeModal(); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[m.unitOptTxt, u === current && m.unitOptActiveTxt]}>{u}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Tax Ledger Modal */}
+      <Modal visible={activeModal?.type === 'taxLedger'} transparent animationType="slide" onRequestClose={closeModal}>
+        <TouchableOpacity style={m.overlay} activeOpacity={1} onPress={closeModal} />
+        <View style={m.sheet}>
+          <View style={m.handle} />
+          <Text style={m.title}>Select Tax Ledger</Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {taxLedgers.length === 0 && (
+              <View style={mAdd.warehouseHint}>
+                <Ionicons name="alert-circle-outline" size={13} color={COLORS.warning} />
+                <Text style={[mAdd.warehouseHintTxt, { color: COLORS.warning }]}>No tax ledgers found</Text>
+              </View>
+            )}
+            {taxLedgers.map((t, idx) => {
+              const currentTaxLedger = activeModal ? items.find(i => i.id === activeModal.itemId)?.taxLedger || '' : '';
+              return (
+                <TouchableOpacity
+                  key={idx}
+                  style={[m.opt, t.name === currentTaxLedger && m.optActive]}
+                  onPress={() => { if (activeModal) updateItem(activeModal.itemId, 'taxLedger', t.name); closeModal(); }}
+                  activeOpacity={0.7}
+                >
+                  <View style={m.optLeft}>
+                    <Ionicons name="receipt-outline" size={16} color={COLORS.info} />
+                    <Text style={[m.optTxt, t.name === currentTaxLedger && m.optActiveTxt]}>{t.name}</Text>
+                  </View>
+                  {t.name === currentTaxLedger && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </Modal>
+
       {/* Warehouse Modal */}
       <Modal visible={activeModal?.type === 'warehouse'} transparent animationType="slide" onRequestClose={closeModal}>
         <TouchableOpacity style={m.overlay} activeOpacity={1} onPress={closeModal} />
@@ -1250,9 +1358,17 @@ export default function CreateSalesInvoiceScreen() {
           <View style={m.handle} />
           <Text style={m.title}>Select Warehouse</Text>
           <ScrollView showsVerticalScrollIndicator={false}>
-            {WAREHOUSES.map(w => (
-              <TouchableOpacity key={w.value} style={m.opt} onPress={() => { if (activeModal) updateItem(activeModal.itemId, 'warehouse', w.value); closeModal(); }} activeOpacity={0.7}>
-                <View style={m.optLeft}><Ionicons name="business-outline" size={16} color={COLORS.info} /><Text style={m.optTxt}>{w.label}</Text></View>
+            {warehouses.map(w => (
+              <TouchableOpacity
+                key={w.id}
+                style={m.opt}
+                onPress={() => { if (activeModal) updateItem(activeModal.itemId, 'warehouse', w.name); closeModal(); }}
+                activeOpacity={0.7}
+              >
+                <View style={m.optLeft}>
+                  <Ionicons name="business-outline" size={16} color={COLORS.info} />
+                  <Text style={m.optTxt}>{w.name}</Text>
+                </View>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -1262,28 +1378,49 @@ export default function CreateSalesInvoiceScreen() {
       {/* Barcode Scanner Modal */}
       <BarcodeScannerModal
         visible={activeModal?.type === 'barcode'}
-        onScan={(productValue) => {
+        companyGuid={company?.guid}
+        onScan={(productName) => {
           if (activeModal) {
-            updateItem(activeModal.itemId, 'product', productValue);
-            const product = ALL_PRODUCTS.find(p => p.value === productValue);
-            Alert.alert('✓ Product Found', `Added: ${product?.label || productValue}`);
+            const si = stockItems.find(s => s.name === productName);
+            setItems(prev => prev.map(i => {
+              if (i.id !== activeModal.itemId) return i;
+              return {
+                ...i,
+                product: productName,
+                unit: si?.unit || i.unit,
+                rate: si?.rate != null ? String(si.rate) : i.rate,
+              };
+            }));
+            Alert.alert('✓ Product Found', `Added: ${si?.displayName || productName}`);
           }
           closeModal();
         }}
         onClose={closeModal}
       />
 
+      {/* Date Picker Modal (OPT mode only) */}
+      <DatePickerModal
+        visible={showDatePicker}
+        value={date}
+        minDate={fyStart}
+        maxDate={new Date().toISOString().slice(0, 10)}
+        onSelect={(d) => { setDate(d); setShowDatePicker(false); }}
+        onClose={() => setShowDatePicker(false)}
+      />
+
       {/* Add New Customer Drawer */}
       <AddCustomerDrawer
         visible={showAddCustomer}
+        company={company}
         onClose={() => setShowAddCustomer(false)}
-        onSaved={(name) => {
-          const newVal = name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
-          const newOpt: DropdownOption = { label: name, value: newVal };
+        onSaved={(name, success) => {
+          const newOpt: DropdownOption = { label: name, value: name };
           setParties(prev => [...prev, newOpt]);
-          setParty(newVal);
+          setParty(name);
           setShowAddCustomer(false);
-          Alert.alert('✓ Customer Added', `"${name}" has been added and selected.`);
+          if (success !== false) {
+            Alert.alert('✓ Customer Added', `"${name}" has been added and selected.`);
+          }
         }}
       />
     </SafeAreaView>
@@ -1299,28 +1436,21 @@ const s = StyleSheet.create({
   invNoBadge: { backgroundColor: COLORS.infoBg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.full },
   invNoTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.info },
   scroll: { padding: SPACING.md, paddingBottom: 8 },
-  ledgerRow: { flexDirection: 'row', gap: 8, marginBottom: SPACING.md },
-  ledgerChip: { flex: 1, paddingVertical: 10, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg, alignItems: 'center' },
-  ledgerChipActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
-  ledgerChipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
-  ledgerChipTxtActive: { color: '#fff' },
   card: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.md, marginBottom: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
   cardHdr: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SPACING.md },
   cardTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
   row2: { flexDirection: 'row', gap: 12, marginBottom: SPACING.md },
   fLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
-  fInput: { backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, minHeight: 48, ...Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any }) },
+  fInput: { backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, minHeight: 48, justifyContent: 'center', ...Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any }) },
   fInputFocused: { borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
   autoBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48 },
   autoTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
   star: { color: COLORS.negative },
-  // Payment terms chips
   termsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 2 },
   termChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
   termChipActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
   termChipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
   termChipTxtActive: { color: COLORS.white },
-  // Custom days input
   customDaysRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
   daysBadge: { backgroundColor: COLORS.pageBg, borderWidth: 1, borderLeftWidth: 0, borderColor: COLORS.borderDefault, borderTopRightRadius: RADIUS.md, borderBottomRightRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
   daysBadgeTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textSecondary },
@@ -1365,13 +1495,10 @@ const m = StyleSheet.create({
   title: { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary, paddingHorizontal: SPACING.md, paddingBottom: 8, marginBottom: 4, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   opt: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 14 },
   optActive: { backgroundColor: COLORS.pageBg },
-  optLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  optTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
+  optLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  optTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, flex: 1 },
   optActiveTxt: { fontWeight: '700', color: COLORS.brandPrimary },
-  addNew: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: SPACING.md, paddingVertical: 14, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, marginTop: 4 },
-  addNewTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.positive },
   unitMenu: { position: 'absolute', right: 0, top: 0, bottom: 0, left: 0, justifyContent: 'center', alignItems: 'center' },
-  taxMenu: { position: 'absolute', right: 0, top: 0, bottom: 0, left: 0, justifyContent: 'center', alignItems: 'center' },
   unitOpt: { backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.xl, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, width: 200, alignItems: 'center' },
   unitOptActive: { backgroundColor: COLORS.pageBg },
   unitOptTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
@@ -1379,200 +1506,106 @@ const m = StyleSheet.create({
 });
 
 const ir = StyleSheet.create({
-  card: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.md, marginBottom: SPACING.sm, borderWidth: 1, borderColor: COLORS.borderDefault },
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  productBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, paddingHorizontal: 10, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.borderDefault },
-  productTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
-  placeholderTxt: { color: COLORS.textTertiary },
-  delBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  barcodeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.borderDefault },
-  warehouseBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: COLORS.borderDefault, marginBottom: 8 },
-  warehouseBtnActive: { backgroundColor: COLORS.infoBg, borderColor: COLORS.info + '40' },
+  card: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.sm, marginBottom: SPACING.sm, borderWidth: 1, borderColor: COLORS.borderDefault, gap: 8 },
+  warehouseBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: COLORS.borderDefault },
+  warehouseBtnActive: { borderColor: COLORS.info, backgroundColor: COLORS.infoBg },
   warehouseTxt: { flex: 1, fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.info },
-  fieldRow: { flexDirection: 'row', gap: 8, marginBottom: 8, alignItems: 'flex-end' },
-  qtyBox: { width: 72 },
+  placeholderTxt: { color: COLORS.textTertiary, fontWeight: '400' },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  productBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: COLORS.borderDefault },
+  productTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
+  barcodeBtn: { width: 36, height: 36, borderRadius: RADIUS.sm, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.borderDefault },
+  delBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  qtyBox: { width: 64 },
   rateBox: { flex: 1 },
-  miniLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 4 },
-  miniInput: { backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 9, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, textAlign: 'center', minHeight: 38 },
-  unitBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 9, borderWidth: 1, borderColor: COLORS.borderDefault, alignSelf: 'flex-end', minHeight: 38 },
-  unitTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary },
-  discRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.borderDefault, paddingHorizontal: 6, paddingVertical: 4, minHeight: 38 },
-  discTypeBtn: { backgroundColor: COLORS.brandPrimary, paddingHorizontal: 6, paddingVertical: 4, borderRadius: 4 },
-  discTypeTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '800', color: '#fff', width: 16, textAlign: 'center' },
-  discInput: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, textAlign: 'center', paddingVertical: 2 },
-  discLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500' },
-  taxBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.infoBg, borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 9, borderWidth: 1, borderColor: COLORS.info + '30', minHeight: 38 },
-  taxTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.info },
-  subtotalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: COLORS.borderDefault, paddingTop: 8 },
-  subtotalLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
-  subtotalVal: { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
+  miniLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '600', marginBottom: 3 },
+  miniInput: { backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 6, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, textAlign: 'right' },
+  unitBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 7, borderWidth: 1, borderColor: COLORS.borderDefault, alignSelf: 'flex-end', marginBottom: 0 },
+  unitTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
+  discRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  discTypeBtn: { backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 7 },
+  discTypeTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
+  discInput: { width: 44, backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.sm, paddingHorizontal: 6, paddingVertical: 6, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, textAlign: 'center' },
+  discLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  taxBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 7, borderWidth: 1, borderColor: COLORS.borderDefault, flex: 1 },
+  taxTxt: { flex: 1, fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.info },
+  subtotalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
+  subtotalLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '600' },
+  subtotalVal: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
 });
 
-
-// ─── SearchableDD Styles ──────────────────────────────────────────────────────
-const sdd = StyleSheet.create({
-  wrap: { marginBottom: SPACING.md },
-  label: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
-  star: { color: COLORS.negative },
-  inputBox: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault,
-    borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 4, minHeight: 48,
-  },
-  inputBoxFocused: { borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
-  input: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, paddingVertical: 8 },
-  dropList: {
-    borderWidth: 1, borderTopWidth: 0, borderColor: COLORS.borderDefault,
-    backgroundColor: COLORS.cardBg,
-    borderBottomLeftRadius: RADIUS.md, borderBottomRightRadius: RADIUS.md,
-    overflow: 'hidden',
-  },
-  dropItem: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 14, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-  },
-  dropText: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, flex: 1 },
-  dropTextActive: { fontWeight: '700', color: COLORS.brandPrimary },
-  addNewRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: 14, paddingVertical: 14,
-    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
-  },
-  addNewText: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.brandPrimary },
-});
-
-// ─── Barcode Scanner Styles ───────────────────────────────────────────────────
 const bs = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#000' },
-  header: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md,
-    paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md, paddingVertical: 14, gap: 12 },
   closeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   title: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
-  rescanBtn: { paddingHorizontal: 14, paddingVertical: 8, backgroundColor: COLORS.infoBg, borderRadius: RADIUS.md },
-  rescanText: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.info },
+  rescanBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary },
+  rescanText: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
   camera: { flex: 1 },
-  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' },
-  scanFrame: {
-    width: 260, height: 180, borderWidth: 3, borderColor: COLORS.white,
-    borderRadius: RADIUS.lg, backgroundColor: 'transparent',
-  },
-  hint: { color: COLORS.white, fontSize: TYPOGRAPHY.sm, marginTop: 20, fontWeight: '600', textShadowColor: '#000', textShadowRadius: 4 },
-  permWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, padding: SPACING.xl, backgroundColor: COLORS.pageBg },
+  overlay: { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center', paddingBottom: 40 },
+  scanFrame: { width: 220, height: 220, borderWidth: 2, borderColor: COLORS.brandPrimary, borderRadius: 12, marginBottom: 20 },
+  hint: { fontSize: TYPOGRAPHY.sm, color: COLORS.white, fontWeight: '600' },
+  permWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, padding: SPACING.xl },
   permText: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary, textAlign: 'center' },
-  permBtn: { backgroundColor: COLORS.brandPrimary, paddingHorizontal: 24, paddingVertical: 14, borderRadius: RADIUS.md },
+  permBtn: { backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingHorizontal: SPACING.xl, paddingVertical: 14 },
   permBtnText: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
 });
 
-// ─── m additions ─────────────────────────────────────────────────────────────
-const mAdd = StyleSheet.create({
-  warehouseHint: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: SPACING.md, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-    backgroundColor: COLORS.pageBg,
-  },
-  warehouseHintTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.info, flex: 1 },
-});
-
-// ─── Add Customer Drawer Styles ───────────────────────────────────────────────
 const acd = StyleSheet.create({
-  backdrop: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  kvWrap: { flex: 1, justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: COLORS.cardBg,
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    maxHeight: '92%',
-    shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15, shadowRadius: 16, elevation: 24,
-  },
-  handle: {
-    width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.borderStrong,
-    alignSelf: 'center', marginTop: 12, marginBottom: 4,
-  },
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: SPACING.md, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-    gap: 8,
-  },
-  title: { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
-  subtitle: {
-    fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textTertiary,
-    backgroundColor: COLORS.pageBg, paddingHorizontal: 8, paddingVertical: 3,
-    borderRadius: RADIUS.sm, overflow: 'hidden',
-  },
-  closeBtn: {
-    marginLeft: 'auto', width: 32, height: 32,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: COLORS.pageBg, borderRadius: 16,
-  },
-  body: { paddingHorizontal: SPACING.md, paddingTop: 4, paddingBottom: 8 },
-  label: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, marginBottom: 8, marginTop: 16 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
+  kvWrap: { justifyContent: 'flex-end' },
+  sheet: { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%' },
+  handle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  title: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
+  subtitle: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, marginRight: 8 },
+  closeBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  body: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm },
+  label: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6, marginTop: 12 },
   star: { color: COLORS.negative },
-  input: {
-    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
-    paddingHorizontal: 14, paddingVertical: 13,
-    fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary,
-    backgroundColor: COLORS.cardBg,
-  },
+  input: { backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, minHeight: 48 },
   inputFocused: { borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
-  balBox: {
-    flexDirection: 'row', alignItems: 'center',
-    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
-    backgroundColor: COLORS.cardBg, paddingLeft: 14, paddingRight: 10, paddingVertical: 4,
-  },
-  balInput: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, paddingVertical: 9 },
-  drCrRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 8 },
-  drCrLbl: { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textTertiary },
-  drCrLblActive: { color: COLORS.textPrimary, fontWeight: '700' },
-  divider: { height: 1, backgroundColor: COLORS.borderDefault, marginVertical: 8 },
-  toggleRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 10,
-  },
-  toggleLbl: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
-  selectBox: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
-    paddingHorizontal: 14, paddingVertical: 14, backgroundColor: COLORS.cardBg,
-  },
-  selectBoxOpen: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
-  selectTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, fontWeight: '600' },
-  dropList: {
-    borderWidth: 1, borderTopWidth: 0, borderColor: COLORS.borderDefault,
-    backgroundColor: COLORS.cardBg,
-    borderBottomLeftRadius: RADIUS.md, borderBottomRightRadius: RADIUS.md,
-    overflow: 'hidden',
-  },
-  dropItem: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 14, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-  },
+  textarea: { minHeight: 80, textAlignVertical: 'top' },
+  balBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingLeft: 14, paddingRight: 8, minHeight: 48 },
+  balInput: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, paddingVertical: 12 },
+  drCrRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  drCrLbl: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary, fontWeight: '600' },
+  drCrLblActive: { color: COLORS.brandPrimary },
+  divider: { height: 1, backgroundColor: COLORS.borderDefault, marginVertical: 12 },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 },
+  toggleLbl: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  expandSection: { paddingLeft: 4, paddingBottom: 8 },
+  row2: { flexDirection: 'row', gap: 12 },
+  selectBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48 },
+  selectBoxOpen: { borderColor: COLORS.brandPrimary },
+  selectTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
+  dropList: { backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, marginTop: 4, overflow: 'hidden' },
+  dropItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   dropTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
-  dropTxtActive: { fontWeight: '700' },
-  saveBtn: {
-    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md,
-    paddingVertical: 15, alignItems: 'center',
-    marginHorizontal: SPACING.md, marginTop: 8,
-  },
+  dropTxtActive: { fontWeight: '700', color: COLORS.brandPrimary },
+  saveBtn: { flexDirection: 'row', margin: SPACING.md, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
   saveBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
-  expandSection: {
-    backgroundColor: COLORS.pageBg,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: COLORS.borderDefault,
-  },
-  row2: { flexDirection: 'row', gap: 10 },
-  textarea: { minHeight: 72, textAlignVertical: 'top', paddingTop: 12 },
 });
 
+const mAdd = StyleSheet.create({
+  warehouseHint: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.infoBg, marginBottom: 4 },
+  warehouseHintTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.info, fontWeight: '600' },
+});
+
+const ss = StyleSheet.create({
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 999 },
+  card: { backgroundColor: COLORS.cardBg, borderRadius: 24, padding: 28, width: '85%', alignItems: 'center', gap: 12 },
+  iconWrap: { marginBottom: 4 },
+  title: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary, textAlign: 'center' },
+  sub: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 20 },
+  refBadge: { backgroundColor: COLORS.pageBg, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center', width: '100%', borderWidth: 1, borderColor: COLORS.borderDefault },
+  refLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '600', marginBottom: 2 },
+  refVal: { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.brandPrimary },
+  pdfBtn: { flexDirection: 'row', gap: 8, backgroundColor: COLORS.brandPrimary, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, width: '100%', justifyContent: 'center', alignItems: 'center' },
+  pdfBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+  waBtn: { flexDirection: 'row', gap: 8, backgroundColor: '#25D366', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, width: '100%', justifyContent: 'center', alignItems: 'center' },
+  waBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+  doneBtn: { paddingVertical: 12, width: '100%', alignItems: 'center' },
+  doneTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textSecondary },
+});

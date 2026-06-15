@@ -1,5 +1,38 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-06-09 — Barcode Scan Failure Fix (Mobile)
+
+### Root Causes Found & Fixed
+
+**Bug 1 — CRITICAL: Code 128B check-character crash (`barcode.ts`)**
+- `CODE128B_PATTERNS` had 96 entries (indices 0–95) but `checksum % 103` produces 0–102
+- For checkVal 96–102 (7 cases), `CODE128B_PATTERNS[checkVal]` was `undefined`
+- `bars.push(...undefined)` → `Cannot convert undefined value to object` → crash
+- Affected TDK2272 barcodes: seq=3 (cv=100), seq=12 (cv=99), seq=21 (cv=98), seq=30 (cv=97)...
+- Fix: Added 7 missing symbol patterns (96–102) per ISO 15417 / Code 128 standard
+- All 103 barcode sequences now render successfully (0 crashes)
+
+**Bug 2 — CRITICAL: No quiet zone in print barcode (`barcode.ts` `barcodeSVG`)**
+- `barcodeSVG()` (used by `barcodeDataURI` → print HTML) computed `moduleW = width / totalModules`
+- No quiet zone margin — bars ran edge-to-edge to SVG boundary
+- Code 128 spec requires ≥10 quiet modules each side; without them, scanners can't find start/stop
+- Fix: Added `QUIET = 10`; `totalWithQuiet = totalModules + 20`; bars now start at `QUIET * moduleW`
+
+**Bug 3 — CRITICAL: Print barcode too small (`print-settings.tsx`)**
+- `barcodeDataURI(item.barcode, 200, 40)` — only 200px wide for ~209 modules = <1px/module
+- Completely unscannable on printed labels
+- Fix: Changed to `barcodeDataURI(item.barcode, 600, 80)` + CSS `width:100%;height:13mm;display:block`
+
+### Scanner Config — Verified OK
+- `CameraView` barcode types include `code128` ✅
+- Lookup API does `barcode.trim()` exact match ✅
+- DB stores and queries `status='active'` barcodes ✅
+- No normalization or case-sensitivity issues found
+
+### Commit: `7ea623dd` → tallydekho-mobile-V4
+
+---
+
 ## 2026-06-08 — Barcode Module (Mobile)
 
 ### api.ts — New barcode types + functions

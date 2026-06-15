@@ -10,7 +10,7 @@ const MONTHS = [
 const DAY_LABELS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
 /** Parse DD/MM/YY string → Date, returns null if invalid */
-function parseDMY(str: string): Date | null {
+export function parseDMY(str: string): Date | null {
   if (!str) return null;
   const parts = str.split('/');
   if (parts.length < 3) return null;
@@ -31,9 +31,11 @@ interface Props {
   onSelect: (dateStr: string) => void;
   onClose: () => void;
   title?: string;
+  minDate?: string;    // ISO YYYY-MM-DD
+  maxDate?: string;    // ISO YYYY-MM-DD
 }
 
-export default function DatePickerModal({ visible, value, onSelect, onClose, title = 'Select Date' }: Props) {
+export default function DatePickerModal({ visible, value, onSelect, onClose, title = 'Select Date', minDate, maxDate }: Props) {
   const today = new Date();
   const initDate = parseDMY(value) || today;
 
@@ -50,6 +52,26 @@ export default function DatePickerModal({ visible, value, onSelect, onClose, tit
       setSelected(parseDMY(value));
     }
   }, [visible]);
+
+  /** Parse ISO YYYY-MM-DD → Date (local, avoids UTC offset issues) */
+  const parseISO = (iso: string): Date => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+
+  /** Returns true if a given day in the current view should be disabled */
+  const isDisabled = (day: number): boolean => {
+    const d = new Date(viewYear, viewMonth, day);
+    if (minDate) {
+      const min = parseISO(minDate);
+      if (d < min) return true;
+    }
+    if (maxDate) {
+      const max = parseISO(maxDate);
+      if (d > max) return true;
+    }
+    return false;
+  };
 
   const calDays = useMemo(() => {
     const firstDay    = new Date(viewYear, viewMonth, 1).getDay();
@@ -106,29 +128,34 @@ export default function DatePickerModal({ visible, value, onSelect, onClose, tit
 
         {/* Calendar Grid */}
         <View style={s.grid}>
-          {calDays.map((day, idx) => (
-            <View key={idx} style={s.cell}>
-              {day !== null ? (
-                <TouchableOpacity
-                  style={[
-                    s.dayBtn,
-                    isSelected(day) && s.dayBtnSel,
-                    isToday(day) && !isSelected(day) && s.dayBtnToday,
-                  ]}
-                  onPress={() => setSelected(new Date(viewYear, viewMonth, day))}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[
-                    s.dayTxt,
-                    isSelected(day) && s.dayTxtSel,
-                    isToday(day) && !isSelected(day) && s.dayTxtToday,
-                  ]}>{day}</Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={s.dayBtn} />
-              )}
-            </View>
-          ))}
+          {calDays.map((day, idx) => {
+            const disabled = day !== null ? isDisabled(day) : false;
+            return (
+              <View key={idx} style={s.cell}>
+                {day !== null ? (
+                  <TouchableOpacity
+                    style={[
+                      s.dayBtn,
+                      isSelected(day) && s.dayBtnSel,
+                      isToday(day) && !isSelected(day) && s.dayBtnToday,
+                      disabled && { opacity: 0.25 },
+                    ]}
+                    onPress={() => !disabled && setSelected(new Date(viewYear, viewMonth, day))}
+                    activeOpacity={disabled ? 1 : 0.7}
+                    disabled={disabled}
+                  >
+                    <Text style={[
+                      s.dayTxt,
+                      isSelected(day) && s.dayTxtSel,
+                      isToday(day) && !isSelected(day) && s.dayTxtToday,
+                    ]}>{day}</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={s.dayBtn} />
+                )}
+              </View>
+            );
+          })}
         </View>
 
         {/* Action Buttons */}

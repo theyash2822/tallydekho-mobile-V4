@@ -164,6 +164,17 @@ export const getCreditNotes    = (companyGuid?: string, params?: any) => get<any
 export const getDeliveryNotes  = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/delivery-notes', companyGuid, params));
 export const getEWayBills      = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/ewaybills', companyGuid, params));
 export const createSalesInvoice  = (payload: any) => tallyPost<any>('/voucher/sales', payload);
+
+// Sales ledger accounts (Sales Accounts group only)
+export const getSalesLedgerAccounts = (companyGuid?: string) =>
+  get<any>(withCompany('/sales/ledger-accounts', companyGuid));
+
+// Tax ledgers (GST/CGST/SGST/IGST)
+export const getTaxLedgers = (companyGuid?: string) =>
+  get<any>(withCompany('/tax/ledgers', companyGuid));
+
+// Create customer/party in Tally
+export const createTallyParty = (payload: any) => tallyPost<any>('/master/party', payload);
 export const createSalesOrder    = (payload: any) => tallyPost<any>('/voucher/sales-order', payload);
 export const createQuotation     = (payload: any) => tallyPost<any>('/voucher/sales-order', payload);
 export const createCreditNote    = (payload: any) => tallyPost<any>('/voucher/credit-note', payload);
