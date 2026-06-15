@@ -24,6 +24,21 @@ type VoucherType =
   | 'Journal' | 'Contra' | 'Debit Note' | 'Credit Note' | 'Delivery Note'
   | 'Stock Transfer' | 'Adjustment' | 'Stock Edit' | 'New Item' | 'New Ledger' | 'New Warehouse';
 
+type LifecycleFilter =
+  | 'all' | 'pending_sync' | 'regular' | 'optional'
+  | 'originally_optional' | 'failed' | 'irn_pending' | 'ewb_pending';
+
+const LIFECYCLE_FILTERS: { key: LifecycleFilter; label: string }[] = [
+  { key: 'all',               label: 'All' },
+  { key: 'pending_sync',      label: 'Pending Sync' },
+  { key: 'regular',           label: 'Regular' },
+  { key: 'optional',          label: 'Optional' },
+  { key: 'originally_optional', label: 'Orig. Optional' },
+  { key: 'failed',            label: 'Failed' },
+  { key: 'irn_pending',       label: 'IRN Pending' },
+  { key: 'ewb_pending',       label: 'EWB Pending' },
+];
+
 interface VoucherEntry {
   id: string;
   ref: string;
@@ -37,6 +52,15 @@ interface VoucherEntry {
   syncStatus?: SyncStatus;
   action?: 'Created' | 'Edited' | 'Deleted';
   isMine: boolean;
+  // Lifecycle fields
+  tdkRef?: string;
+  tallyVoucherNo?: string;
+  originalEntryType?: 'regular' | 'optional';
+  currentEntryType?: 'regular' | 'optional';
+  booksImpactStatus?: 'posted' | 'not_posted';
+  conversionStatus?: 'pending' | 'converted' | 'cancelled';
+  eInvoiceStatus?: string;
+  eWayBillStatus?: string;
 }
 
 // ─── Voucher Types ────────────────────────────────────────────────────────────
@@ -93,6 +117,14 @@ const mapApiRow = (r: any, fmt: (n: number) => string = (n) => String(n)): Vouch
   isCredit: isCreditVoucher(r.voucher_type),
   syncStatus: 'synced' as const,
   isMine: true,
+  tdkRef: r.tdk_reference_no || '',
+  tallyVoucherNo: r.av_tally_voucher_no || r.voucher_number || '',
+  originalEntryType: r.original_entry_type,
+  currentEntryType: r.current_entry_type,
+  booksImpactStatus: r.books_impact_status,
+  conversionStatus: r.conversion_status,
+  eInvoiceStatus: r.e_invoice_status,
+  eWayBillStatus: r.e_way_bill_status,
 });
 
 // ─── Color Maps ───────────────────────────────────────────────────────────────
@@ -235,6 +267,7 @@ export default function AuditTrailScreen() {
   const [multiSelect,    setMultiSelect]    = useState(false);
   const [selected,       setSelected]       = useState<string[]>([]);
   const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
+  const [lifecycleFilter, setLifecycleFilter] = useState<LifecycleFilter>('all');
 
   // ── API State ─────────────────────────────────────────────
   const [apiEntries, setApiEntries] = useState<VoucherEntry[]>([]);
@@ -293,6 +326,14 @@ export default function AuditTrailScreen() {
       : p._queue_status === 'processing' ? 'processing' : 'pending',
     action: 'Created',
     isMine: true,
+    tdkRef: p.tdk_reference_no || '',
+    tallyVoucherNo: p.voucher_number || '',
+    originalEntryType: p.original_entry_type,
+    currentEntryType: p.current_entry_type,
+    booksImpactStatus: p.books_impact_status || 'not_posted',
+    conversionStatus: p.conversion_status,
+    eInvoiceStatus: p.e_invoice_status,
+    eWayBillStatus: p.e_way_bill_status,
   });
 
   // ── Fetch data ────────────────────────────────────────────
@@ -305,7 +346,7 @@ export default function AuditTrailScreen() {
 
     if (activeTab === 'myentries') {
       // My Entries: merge posted vouchers (res.data) + ALL write_queue entries (res.pending)
-      getMyEntries(companyGuid, { from: fromDate, to: toDate, limit: String(PAGE_SIZE), page: 1 })
+      getMyEntries(companyGuid, { from: fromDate, to: toDate, limit: String(PAGE_SIZE), page: 1, lifecycleFilter })
         .then((res: any) => {
           const postedRows = (res?.data ?? []).map((r: any) => ({ ...mapApiRow(r, formatAmount), isMine: true }));
           const queueRows  = (res?.pending ?? []).map(mapQueueRow);
@@ -379,8 +420,26 @@ export default function AuditTrailScreen() {
       if (showDr && !showCr) arr = arr.filter(e => !e.isCredit);
       if (!showDr && showCr) arr = arr.filter(e => e.isCredit);
     }
+    // Lifecycle filter (My Entries tab only)
+    if (activeTab === 'myentries' && lifecycleFilter !== 'all') {
+      arr = arr.filter(e => {
+        const ct = e.currentEntryType;
+        const ot = e.originalEntryType;
+        const ss = e.syncStatus;
+        const ei = e.eInvoiceStatus;
+        const ew = e.eWayBillStatus;
+        if (lifecycleFilter === 'pending_sync')       return ss === 'pending' || ss === 'processing';
+        if (lifecycleFilter === 'regular')            return ct === 'regular' || (!ct && ss === 'synced');
+        if (lifecycleFilter === 'optional')           return ct === 'optional';
+        if (lifecycleFilter === 'originally_optional') return ot === 'optional' && ct === 'regular';
+        if (lifecycleFilter === 'failed')             return ss === 'failed';
+        if (lifecycleFilter === 'irn_pending')        return ['locked','pending','details_required'].includes(ei || '');
+        if (lifecycleFilter === 'ewb_pending')        return ['locked','pending','details_required'].includes(ew || '');
+        return true;
+      });
+    }
     return arr;
-  }, [allSource, voucherType, showDr, showCr]);
+  }, [allSource, voucherType, showDr, showCr, activeTab, lifecycleFilter]);
 
   const grouped = useMemo(() => {
     const map: Record<string, VoucherEntry[]> = {};
@@ -398,7 +457,7 @@ export default function AuditTrailScreen() {
   const clearSelection = () => { setSelected([]); setMultiSelect(false); };
   const selectAll      = () => setSelected(filtered.map(e => e.id));
 
-  const switchTab = (tab: TabType) => { setActiveTab(tab); clearSelection(); setVoucherType('ALL'); };
+  const switchTab = (tab: TabType) => { setActiveTab(tab); clearSelection(); setVoucherType('ALL'); setLifecycleFilter('all'); };
 
   const toggleMonth = (month: string) =>
     setCollapsedMonths(prev => {
@@ -553,6 +612,29 @@ export default function AuditTrailScreen() {
           </View>
         ) : (
           <>
+            {/* Lifecycle Filter Chips — My Entries only */}
+            {activeTab === 'myentries' && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={lf.row}
+                style={{ marginBottom: SPACING.sm }}
+              >
+                {LIFECYCLE_FILTERS.map(f => (
+                  <TouchableOpacity
+                    key={f.key}
+                    style={[lf.chip, lifecycleFilter === f.key && lf.chipActive]}
+                    onPress={() => setLifecycleFilter(f.key)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[lf.chipTxt, lifecycleFilter === f.key && lf.chipTxtActive]}>
+                      {f.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+
             {/* KPI Cards — 2×2 Grid */}
             <View style={s.kpiCard}>
               <View style={s.kpiRow}>
@@ -717,10 +799,78 @@ export default function AuditTrailScreen() {
                                 <View style={[s.vtypePill, { backgroundColor: color + '18' }]}>
                                   <Text style={[s.vtypePillTxt, { color }]}>{entry.type}</Text>
                                 </View>
-                                <Text style={s.refTxt}>{entry.ref}</Text>
+                                <Text style={s.refTxt}>
+                                  {(() => {
+                                    if (activeTab !== 'myentries') return entry.ref;
+                                    if (entry.booksImpactStatus === 'posted' && (entry.tallyVoucherNo || entry.ref)) {
+                                      return entry.tallyVoucherNo || entry.ref;
+                                    }
+                                    if (entry.currentEntryType === 'optional' && entry.conversionStatus !== 'converted') {
+                                      return entry.tdkRef || entry.ref || 'Opt. Ref';
+                                    }
+                                    if (entry.tdkRef) return entry.tdkRef;
+                                    return entry.ref || '—';
+                                  })()}
+                                </Text>
                               </View>
+                              {/* Lifecycle Badges — My Entries only */}
+                              {activeTab === 'myentries' && (
+                                <View style={lb.row}>
+                                  {entry.currentEntryType === 'optional' && (
+                                    <View style={[lb.badge, lb.optional]}>
+                                      <Text style={[lb.badgeTxt, { color: AMBER }]}>Optional</Text>
+                                    </View>
+                                  )}
+                                  {(entry.currentEntryType === 'regular' || (!entry.currentEntryType && entry.syncStatus === 'synced')) && (
+                                    <View style={[lb.badge, lb.regular]}>
+                                      <Text style={[lb.badgeTxt, { color: COLORS.positive }]}>Regular</Text>
+                                    </View>
+                                  )}
+                                  {entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
+                                    <View style={[lb.badge, lb.origOptional]}>
+                                      <Text style={[lb.badgeTxt, { color: COLORS.info }]}>Orig. Optional</Text>
+                                    </View>
+                                  )}
+                                  {entry.syncStatus === 'pending' && (
+                                    <View style={[lb.badge, lb.pendingSync]}>
+                                      <Text style={[lb.badgeTxt, { color: AMBER }]}>Pending Sync</Text>
+                                    </View>
+                                  )}
+                                  {entry.syncStatus === 'failed' && (
+                                    <View style={[lb.badge, lb.failed]}>
+                                      <Text style={[lb.badgeTxt, { color: COLORS.negative }]}>Failed</Text>
+                                    </View>
+                                  )}
+                                  {entry.booksImpactStatus === 'not_posted' && entry.syncStatus !== 'failed' && (
+                                    <View style={[lb.badge, lb.notPosted]}>
+                                      <Text style={[lb.badgeTxt, { color: COLORS.textSecondary }]}>Not Posted</Text>
+                                    </View>
+                                  )}
+                                  {entry.booksImpactStatus === 'posted' && (
+                                    <View style={[lb.badge, lb.posted]}>
+                                      <Text style={[lb.badgeTxt, { color: COLORS.positive }]}>Posted</Text>
+                                    </View>
+                                  )}
+                                  {entry.eInvoiceStatus === 'generated' && (
+                                    <View style={[lb.badge, lb.irnDone]}>
+                                      <Text style={[lb.badgeTxt, { color: COLORS.info }]}>IRN ✓</Text>
+                                    </View>
+                                  )}
+                                  {['locked','pending','details_required'].includes(entry.eInvoiceStatus || '') && (
+                                    <View style={[lb.badge, lb.irnPending]}>
+                                      <Text style={[lb.badgeTxt, { color: COLORS.info }]}>IRN Pending</Text>
+                                    </View>
+                                  )}
+                                </View>
+                              )}
                               <Text style={s.partyTxt}>{entry.party}</Text>
                               <Text style={s.descTxt}>{entry.description}</Text>
+                              {activeTab === 'myentries' && entry.currentEntryType === 'optional' && entry.conversionStatus !== 'converted' && (
+                                <Text style={{ fontSize: 9, color: AMBER, fontWeight: '700' }}>OPTIONAL VOUCHER NO.</Text>
+                              )}
+                              {activeTab === 'myentries' && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
+                                <Text style={{ fontSize: 9, color: COLORS.info, fontWeight: '700' }}>ORIG. ENTRY TYPE: OPTIONAL</Text>
+                              )}
                               <Text style={s.entryDateTxt}>{entry.date}</Text>
                             </View>
 
@@ -979,4 +1129,33 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderColor: COLORS.borderDefault,
   },
   bottomBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+});
+
+// ─── Lifecycle Filter Chip Styles ─────────────────────────────────────────────
+const lf = StyleSheet.create({
+  row:     { gap: 8, paddingVertical: 2 },
+  chip: {
+    paddingHorizontal: 14, paddingVertical: 8,
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.full,
+    borderWidth: 1.5, borderColor: COLORS.borderDefault,
+  },
+  chipActive:    { backgroundColor: COLORS.textPrimary, borderColor: COLORS.textPrimary },
+  chipTxt:       { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
+  chipTxtActive: { color: COLORS.white },
+});
+
+// ─── Lifecycle Badge Styles ───────────────────────────────────────────────────
+const lb = StyleSheet.create({
+  row:         { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 3 },
+  badge:       { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 4 },
+  badgeTxt:    { fontSize: 9, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
+  regular:     { backgroundColor: COLORS.positiveBg },
+  optional:    { backgroundColor: '#FDF3E0' },
+  origOptional:{ backgroundColor: COLORS.infoBg },
+  pendingSync: { backgroundColor: '#FDF3E0' },
+  failed:      { backgroundColor: '#FEE2E2' },
+  notPosted:   { backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault },
+  posted:      { backgroundColor: COLORS.positiveBg },
+  irnDone:     { backgroundColor: COLORS.infoBg },
+  irnPending:  { backgroundColor: COLORS.infoBg },
 });
