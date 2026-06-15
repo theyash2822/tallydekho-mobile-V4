@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Dimensions, Modal, Alert, ActivityIndicator,
@@ -6,7 +6,7 @@ import {
 import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
@@ -278,6 +278,14 @@ export default function AuditTrailScreen() {
   const [page,          setPage]          = useState(1);
   const [hasMore,       setHasMore]       = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [refreshKey,    setRefreshKey]    = useState(0);
+
+  // ── Refresh on screen focus (catches Optional→Regular conversions + Tally syncs) ──
+  useFocusEffect(
+    useCallback(() => {
+      setRefreshKey(k => k + 1);
+    }, [])
+  );
 
   // ── write_queue entry_type → display label ─────────────────
   const WQ_ENTRY_LABEL: Record<string, string> = {
@@ -371,7 +379,7 @@ export default function AuditTrailScreen() {
         .catch((err: any) => setApiError(err?.message || 'Failed to load vouchers'))
         .finally(() => setIsLoading(false));
     }
-  }, [companyGuid, fromDate, toDate, activeTab]);
+  }, [companyGuid, fromDate, toDate, activeTab, refreshKey]);
 
   const loadMore = () => {
     if (!companyGuid || isLoadingMore || !hasMore || activeTab === 'myentries') return;
