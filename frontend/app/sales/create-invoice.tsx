@@ -7,7 +7,7 @@ import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { barcodePicker } from '../../src/utils/barcodePicker';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import {
@@ -110,7 +110,7 @@ const newItem = (warehouseName = ''): InvoiceItem => ({
   discountType: '%', discount: '0', taxLedger: '', taxRate: '', gstType: 'cgst_sgst',
 });
 
-type ModalState = { type: 'product'|'unit'|'warehouse'|'barcode'|'taxLedger'; itemId: string } | null;
+type ModalState = { type: 'unit'|'taxLedger'; itemId: string } | null;
 
 // ─── Themed inline input ──────────────────────────────────────────────────────
 function ThemedFInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
@@ -131,90 +131,34 @@ function ThemedFInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
   );
 }
 
-// ─── Barcode Scanner Modal ─────────────────────────────────────────────────────
-function BarcodeScannerModal({ visible, onScan, onClose, companyGuid }: {
-  visible: boolean;
-  onScan: (productName: string) => void;
-  onClose: () => void;
-  companyGuid?: string;
-}) {
-  const [permission, requestPermission] = useCameraPermissions();
-  const scanned = useRef(false);
-
-  const handleBarcodeScanned = async ({ data }: { data: string }) => {
-    if (scanned.current) return;
-    scanned.current = true;
-    try {
-      if (companyGuid) {
-        const result: any = await lookupBarcode(companyGuid, data);
-        const productName = result?.data?.name || result?.name;
-        if (productName) {
-          onScan(productName);
-        } else {
-          Alert.alert('Not Found', `No product mapped to barcode: ${data}`, [
-            { text: 'OK', onPress: () => { scanned.current = false; } },
-          ]);
-        }
-      } else {
-        Alert.alert('No Company', 'Please select a company first.', [
-          { text: 'OK', onPress: () => { scanned.current = false; } },
-        ]);
-      }
-    } catch {
-      Alert.alert('Not Found', `No product mapped to barcode: ${data}`, [
-        { text: 'OK', onPress: () => { scanned.current = false; } },
-      ]);
-    }
-  };
-
-  if (!visible) return null;
-
-  if (!permission?.granted) {
-    return (
-      <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-        <SafeAreaView style={bs.safe}>
-          <View style={bs.header}>
-            <TouchableOpacity onPress={onClose} style={bs.closeBtn}>
-              <Ionicons name="close" size={24} color={COLORS.textPrimary} />
-            </TouchableOpacity>
-            <Text style={bs.title}>Scan Barcode</Text>
-          </View>
-          <View style={bs.permWrap}>
-            <Ionicons name="camera-outline" size={64} color={COLORS.textTertiary} />
-            <Text style={bs.permText}>Camera permission required to scan barcodes.</Text>
-            <TouchableOpacity style={bs.permBtn} onPress={requestPermission} activeOpacity={0.85}>
-              <Text style={bs.permBtnText}>Grant Camera Access</Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </Modal>
-    );
-  }
-
+// ─── Step Indicator ──────────────────────────────────────────────────────────
+function StepIndicator({ step }: { step: 1|2|3 }) {
+  const STEPS = [
+    { num: 1 as const, label: 'Setup' },
+    { num: 2 as const, label: 'Items' },
+    { num: 3 as const, label: 'Review' },
+  ];
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={bs.safe} edges={['top']}>
-        <View style={bs.header}>
-          <TouchableOpacity onPress={onClose} style={bs.closeBtn}>
-            <Ionicons name="close" size={24} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-          <Text style={bs.title}>Scan Barcode</Text>
-          <TouchableOpacity onPress={() => { scanned.current = false; }} style={bs.rescanBtn}>
-            <Text style={bs.rescanText}>Rescan</Text>
-          </TouchableOpacity>
-        </View>
-        <CameraView
-          style={bs.camera}
-          facing="back"
-          barcodeScannerSettings={{ barcodeTypes: ['qr', 'ean13', 'ean8', 'code128', 'code39'] }}
-          onBarcodeScanned={handleBarcodeScanned}
-        />
-        <View style={bs.overlay}>
-          <View style={bs.scanFrame} />
-          <Text style={bs.hint}>Point camera at product barcode</Text>
-        </View>
-      </SafeAreaView>
-    </Modal>
+    <View style={si.wrap}>
+      {STEPS.map((st, idx) => (
+        <React.Fragment key={st.num}>
+          <View style={si.stepItem}>
+            <View style={[si.circle, step === st.num && si.circleActive, step > st.num && si.circleDone]}>
+              {step > st.num
+                ? <Ionicons name="checkmark" size={13} color={COLORS.white} />
+                : <Text style={[si.circleNum, step === st.num && si.circleNumActive]}>{st.num}</Text>
+              }
+            </View>
+            <Text style={[si.label, step === st.num && si.labelActive, step > st.num && { color: COLORS.brandPrimary }]}>
+              {st.label}
+            </Text>
+          </View>
+          {idx < STEPS.length - 1 && (
+            <View style={[si.line, step > st.num && si.lineDone]} />
+          )}
+        </React.Fragment>
+      ))}
+    </View>
   );
 }
 
@@ -482,11 +426,12 @@ function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
 }
 
 // ─── ItemRow ──────────────────────────────────────────────────────────────────
-function ItemRow({ item, onUpdate, onRemove, onOpenModal, hasMultipleWarehouses, stockItems, taxLedgers, warehouses }: {
+function ItemRow({ item, onUpdate, onRemove, onOpenModal, onBarcodePress, hasMultipleWarehouses, stockItems, taxLedgers, warehouses }: {
   item: InvoiceItem;
   onUpdate: (id: string, field: keyof InvoiceItem, val: string) => void;
   onRemove: (id: string) => void;
   onOpenModal: (s: ModalState) => void;
+  onBarcodePress: (itemId: string) => void;
   hasMultipleWarehouses: boolean;
   stockItems: StockItem[];
   taxLedgers: { name: string }[];
@@ -639,7 +584,7 @@ function ItemRow({ item, onUpdate, onRemove, onOpenModal, hasMultipleWarehouses,
         </View>
         <TouchableOpacity
           style={ir.barcodeBtn}
-          onPress={() => onOpenModal({ type: 'barcode', itemId: item.id })}
+          onPress={() => onBarcodePress(item.id)}
           activeOpacity={0.7}
         >
           <Ionicons name="barcode-outline" size={18} color={COLORS.textSecondary} />
@@ -792,6 +737,7 @@ export default function CreateSalesInvoiceScreen() {
   const [narration, setNarration] = useState('');
   const [termsText, setTermsText] = useState('Goods once sold will not be taken back.');
   const [activeModal, setActiveModal] = useState<ModalState>(null);
+  const [step, setStep] = useState<1|2|3>(1);
 
   // Dispatch / E-Way Bill Details
   const [showDispatch, setShowDispatch]         = useState(false);
@@ -911,6 +857,23 @@ export default function CreateSalesInvoiceScreen() {
     const autoWarehouse = warehouses.length === 1 ? warehouses[0].name : '';
     setItems(prev => [...prev, newItem(autoWarehouse)]);
   }, [warehouses]);
+
+  const goNext = useCallback(() => {
+    if (step === 1) {
+      if (!ledger) { Toast.show({ type: 'error', text1: 'Sales Ledger required' }); return; }
+      if (!party)  { Toast.show({ type: 'error', text1: 'Customer required' });      return; }
+      setStep(2);
+    } else if (step === 2) {
+      if (items.every(i => !i.product)) { Toast.show({ type: 'error', text1: 'Add at least one product' }); return; }
+      if (items.some(i => !i.product))  { Toast.show({ type: 'error', text1: 'Fill product for all item rows' }); return; }
+      if (hasMultipleWarehouses && items.some(i => !i.warehouse)) { Toast.show({ type: 'error', text1: 'Select warehouse for all items' }); return; }
+      setStep(3);
+    }
+  }, [step, ledger, party, items, hasMultipleWarehouses]);
+
+  const goBack = useCallback(() => {
+    setStep(prev => Math.max(1, prev - 1) as 1|2|3);
+  }, []);
 
   const closeModal = useCallback(() => setActiveModal(null), []);
 
@@ -1032,7 +995,7 @@ export default function CreateSalesInvoiceScreen() {
     }
   }, [party, items, hasMultipleWarehouses, company, date, ledger, entryType, totals.grand, refNo, narration, warehouses, collectPayNow, payNowMode, payNowAmount, payNowRef, showDispatch, dispatchFrom, shipTo, transportMode, transporterName, transporterId, vehicleNumber, vehicleType, transportDocNo, transportDocDate]);
 
-  // ── Render ──────────────────────────────────────────────────
+  // ── Render (3-step wizard) ──────────────────────────────────────────────────
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       {/* Success Overlay */}
@@ -1082,9 +1045,13 @@ export default function CreateSalesInvoiceScreen() {
         </View>
       )}
 
+      {/* ── Header (back is step-aware) ── */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}
-          hitSlop={{ top:8, bottom:8, left:8, right:8 }}>
+        <TouchableOpacity
+          onPress={step === 1 ? () => router.back() : goBack}
+          style={s.backBtn}
+          hitSlop={{ top:8, bottom:8, left:8, right:8 }}
+        >
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Create Sales Invoice</Text>
@@ -1094,396 +1061,446 @@ export default function CreateSalesInvoiceScreen() {
         </View>
       </View>
 
+      {/* ── Step Indicator ── */}
+      <StepIndicator step={step} />
+
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={s.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Sales Ledger */}
-          <SearchableDropdown
-            label="Sales Ledger"
-            required
-            placeholder="Search ledger account..."
-            options={salesLedgers.map(l => ({ label: l.name, value: l.name }))}
-            value={ledger}
-            onSelect={(o: any) => setLedger(o.value)}
-            icon="book-outline"
-            containerStyle={{ marginBottom: SPACING.md }}
-          />
+          {/* ════════════════════════════ STEP 1 — Invoice Setup ════════════════════════════ */}
+          {step === 1 && (
+            <>
+              <SearchableDropdown
+                label="Sales Ledger"
+                required
+                placeholder="Search ledger account..."
+                options={salesLedgers.map(l => ({ label: l.name, value: l.name }))}
+                value={ledger}
+                onSelect={(o: any) => setLedger(o.value)}
+                icon="book-outline"
+                containerStyle={{ marginBottom: SPACING.md }}
+              />
 
-          {/* Invoice Details Card */}
-          <View style={s.card}>
-            <View style={s.cardHdr}>
-              <Ionicons name="document-text-outline" size={18} color={COLORS.brandPrimary} />
-              <Text style={s.cardTitle}>Invoice Details</Text>
-            </View>
-
-            <View style={s.row2}>
-              <View style={{ flex: 1 }}>
-                <Text style={s.fLabel}>Invoice No.</Text>
-                <View style={s.autoBox}>
-                  <Text style={s.autoTxt}>{invoiceNo || 'Auto'}</Text>
-                  <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
+              <View style={s.card}>
+                <View style={s.cardHdr}>
+                  <Ionicons name="document-text-outline" size={18} color={COLORS.brandPrimary} />
+                  <Text style={s.cardTitle}>Invoice Details</Text>
                 </View>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.fLabel}>Date <Text style={s.star}>*</Text></Text>
-                {entryType === 'regular' ? (
-                  <View style={[s.autoBox, { opacity: 0.55 }]}>
-                    <Text style={s.autoTxt}>{date}</Text>
-                    <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
-                  </View>
-                ) : (
-                  <TouchableOpacity style={s.fInput} onPress={() => setShowDatePicker(true)}>
-                    <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary }}>
-                      {date || 'Select date'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
 
-            {/* Customer / Party */}
-            <SearchableDropdown
-              label="Customer / Party"
-              required
-              placeholder="Search customer..."
-              options={parties}
-              value={party}
-              onSelect={(o: any) => setParty(o.value)}
-              onAddNew={() => setShowAddCustomer(true)}
-              addNewLabel="Add New Customer"
-            />
-
-            {/* Payment Terms */}
-            <View style={{ marginBottom: SPACING.md }}>
-              <Text style={s.fLabel}>Payment Terms</Text>
-              <View style={s.termsRow}>
-                {TERMS.map(t => (
-                  <TouchableOpacity
-                    key={t.value}
-                    style={[s.termChip, payTerms === t.value && s.termChipActive]}
-                    onPress={() => setPayTerms(t.value)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[s.termChipTxt, payTerms === t.value && s.termChipTxtActive]}>
-                      {t.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {payTerms === 'custom' && (
-                <View style={s.customDaysRow}>
-                  <ThemedFInput
-                    style={{ flex: 1 }}
-                    value={customDays}
-                    onChangeText={setCustomDays}
-                    keyboardType="numeric"
-                    placeholder="Enter number of days"
-                  />
-                  <View style={s.daysBadge}>
-                    <Text style={s.daysBadgeTxt}>Days</Text>
-                  </View>
-                </View>
-              )}
-            </View>
-
-            <View style={s.row2}>
-              <View style={{ flex: 1 }}>
-                <Text style={s.fLabel}>Due Date</Text>
-                <ThemedFInput value={dueDate} onChangeText={setDueDate} placeholder="DD/MM/YY" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.fLabel}>Reference No.</Text>
-                <ThemedFInput value={refNo} onChangeText={setRefNo} placeholder="Optional" />
-              </View>
-            </View>
-          </View>
-
-          {/* Items Section */}
-          <View style={s.sectionHdr}>
-            <Ionicons name="cube-outline" size={16} color={COLORS.textPrimary} />
-            <Text style={s.sectionTitle}>Items & Services</Text>
-            <View style={s.itemCount}>
-              <Text style={s.itemCountTxt}>{items.length}</Text>
-            </View>
-          </View>
-
-          {items.map(item => (
-            <ItemRow
-              key={item.id}
-              item={item}
-              onUpdate={updateItem}
-              onRemove={removeItem}
-              onOpenModal={setActiveModal}
-              hasMultipleWarehouses={hasMultipleWarehouses}
-              stockItems={stockItems}
-              taxLedgers={taxLedgers}
-              warehouses={warehouses}
-            />
-          ))}
-
-          <TouchableOpacity style={s.addItemBtn} onPress={addItem} activeOpacity={0.7}>
-            <Ionicons name="add-circle-outline" size={18} color={COLORS.positive} />
-            <Text style={s.addItemTxt}>Add Item / Service</Text>
-          </TouchableOpacity>
-
-          {/* Logistics Section */}
-          <LogisticsSection
-            entries={logEntries}
-            taxRate={logTaxRate}
-            onEntriesChange={setLogEntries}
-            onTaxRateChange={setLogTaxRate}
-          />
-
-          {/* Collect Payment Now */}
-          <View style={s.card}>
-            <TouchableOpacity
-              style={s.payNowToggleRow}
-              onPress={() => setCollectPayNow(v => !v)}
-              activeOpacity={0.8}
-            >
-              <View style={s.payNowLeft}>
-                <View style={[s.payNowIcon, { backgroundColor: collectPayNow ? COLORS.positiveBg : COLORS.pageBg }]}>
-                  <Ionicons name="cash-outline" size={18} color={collectPayNow ? COLORS.positive : COLORS.textSecondary} />
-                </View>
-                <View>
-                  <Text style={s.payNowTitle}>Collect Payment Now</Text>
-                  <Text style={s.payNowSub}>Record payment received at the time of billing</Text>
-                </View>
-              </View>
-              <BrandSwitch value={collectPayNow} onValueChange={setCollectPayNow} />
-            </TouchableOpacity>
-
-            {collectPayNow && (
-              <View style={s.payNowBody}>
-                <View style={s.divider} />
-                <FormDropdown
-                  label="Mode of Payment"
-                  value={payNowMode}
-                  options={PAY_MODES}
-                  onSelect={(o: any) => setPayNowMode(o.value)}
-                  placeholder="Select payment mode..."
-                  required
-                />
                 <View style={s.row2}>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Amount Received (₹)</Text>
-                    <TextInput
-                      style={s.fInput}
-                      value={payNowAmount}
-                      onChangeText={setPayNowAmount}
-                      keyboardType="numeric"
-                      placeholder="0.00"
-                      placeholderTextColor={COLORS.textTertiary}
-                    />
+                    <Text style={s.fLabel}>Invoice No.</Text>
+                    <View style={s.autoBox}>
+                      <Text style={s.autoTxt}>{invoiceNo || 'Auto'}</Text>
+                      <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
+                    </View>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.fLabel}>Date <Text style={s.star}>*</Text></Text>
+                    {entryType === 'regular' ? (
+                      <View style={[s.autoBox, { opacity: 0.55 }]}>
+                        <Text style={s.autoTxt}>{date}</Text>
+                        <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
+                      </View>
+                    ) : (
+                      <TouchableOpacity style={s.fInput} onPress={() => setShowDatePicker(true)}>
+                        <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary }}>
+                          {date || 'Select date'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+
+                <SearchableDropdown
+                  label="Customer / Party"
+                  required
+                  placeholder="Search customer..."
+                  options={parties}
+                  value={party}
+                  onSelect={(o: any) => setParty(o.value)}
+                  onAddNew={() => setShowAddCustomer(true)}
+                  addNewLabel="Add New Customer"
+                />
+
+                <View style={{ marginBottom: SPACING.md }}>
+                  <Text style={s.fLabel}>Payment Terms</Text>
+                  <View style={s.termsRow}>
+                    {TERMS.map(t => (
+                      <TouchableOpacity
+                        key={t.value}
+                        style={[s.termChip, payTerms === t.value && s.termChipActive]}
+                        onPress={() => setPayTerms(t.value)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[s.termChipTxt, payTerms === t.value && s.termChipTxtActive]}>
+                          {t.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {payTerms === 'custom' && (
+                    <View style={s.customDaysRow}>
+                      <ThemedFInput
+                        style={{ flex: 1 }}
+                        value={customDays}
+                        onChangeText={setCustomDays}
+                        keyboardType="numeric"
+                        placeholder="Enter number of days"
+                      />
+                      <View style={s.daysBadge}>
+                        <Text style={s.daysBadgeTxt}>Days</Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+
+                <View style={s.row2}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.fLabel}>Due Date</Text>
+                    <ThemedFInput value={dueDate} onChangeText={setDueDate} placeholder="DD/MM/YY" />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={s.fLabel}>Reference No.</Text>
-                    <TextInput
-                      style={s.fInput}
-                      value={payNowRef}
-                      onChangeText={setPayNowRef}
-                      placeholder="Txn / Cheque No."
-                      placeholderTextColor={COLORS.textTertiary}
+                    <ThemedFInput value={refNo} onChangeText={setRefNo} placeholder="Optional" />
+                  </View>
+                </View>
+              </View>
+            </>
+          )}
+
+          {/* ════════════════════════════ STEP 2 — Items & Charges ════════════════════════════ */}
+          {step === 2 && (
+            <>
+              <View style={s.sectionHdr}>
+                <Ionicons name="cube-outline" size={16} color={COLORS.textPrimary} />
+                <Text style={s.sectionTitle}>Items & Services</Text>
+                <View style={s.itemCount}>
+                  <Text style={s.itemCountTxt}>{items.length}</Text>
+                </View>
+              </View>
+
+              {items.map(item => (
+                <ItemRow
+                  key={item.id}
+                  item={item}
+                  onUpdate={updateItem}
+                  onRemove={removeItem}
+                  onOpenModal={setActiveModal}
+                  onBarcodePress={(itemId) => {
+                    barcodePicker.set((result) => {
+                      const si = stockItems.find(s2 => s2.name === result.productName);
+                      setItems(prev => prev.map(i => {
+                        if (i.id !== itemId) return i;
+                        return {
+                          ...i,
+                          product: result.productName,
+                          unit: result.unit || si?.unit || i.unit,
+                          rate: si?.rate != null ? String(si.rate) : i.rate,
+                        };
+                      }));
+                    });
+                    router.push('/sales/product-scanner' as any);
+                  }}
+                  hasMultipleWarehouses={hasMultipleWarehouses}
+                  stockItems={stockItems}
+                  taxLedgers={taxLedgers}
+                  warehouses={warehouses}
+                />
+              ))}
+
+              <TouchableOpacity style={s.addItemBtn} onPress={addItem} activeOpacity={0.7}>
+                <Ionicons name="add-circle-outline" size={18} color={COLORS.positive} />
+                <Text style={s.addItemTxt}>Add Item / Service</Text>
+              </TouchableOpacity>
+
+              <LogisticsSection
+                entries={logEntries}
+                taxRate={logTaxRate}
+                onEntriesChange={setLogEntries}
+                onTaxRateChange={setLogTaxRate}
+              />
+            </>
+          )}
+
+          {/* ════════════════════════════ STEP 3 — Review & Submit ════════════════════════════ */}
+          {step === 3 && (
+            <>
+              {/* Invoice Summary */}
+              <View style={s.summaryCard}>
+                <Text style={s.summaryTitle}>Invoice Summary</Text>
+                <View style={s.summaryRow}>
+                  <Text style={s.sumLabel}>Subtotal</Text>
+                  <Text style={s.sumVal}>₹{totals.gross.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+                </View>
+                {totals.discTotal > 0 && (
+                  <View style={s.summaryRow}>
+                    <Text style={s.sumLabel}>Discount</Text>
+                    <Text style={[s.sumVal, { color: COLORS.positive }]}>-₹{totals.discTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+                  </View>
+                )}
+                {totals.cgst > 0 && (
+                  <View style={s.summaryRow}>
+                    <Text style={s.sumLabel}>CGST</Text>
+                    <Text style={s.sumVal}>₹{totals.cgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+                  </View>
+                )}
+                {totals.sgst > 0 && (
+                  <View style={s.summaryRow}>
+                    <Text style={s.sumLabel}>SGST</Text>
+                    <Text style={s.sumVal}>₹{totals.sgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+                  </View>
+                )}
+                {totals.igst > 0 && (
+                  <View style={s.summaryRow}>
+                    <Text style={s.sumLabel}>IGST</Text>
+                    <Text style={s.sumVal}>₹{totals.igst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+                  </View>
+                )}
+                {totals.logisticsTotal > 0 && (
+                  <View style={s.summaryRow}>
+                    <Text style={s.sumLabel}>Logistics</Text>
+                    <Text style={s.sumVal}>₹{totals.logisticsTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+                  </View>
+                )}
+                <View style={s.sumDivider} />
+                <View style={s.summaryRow}>
+                  <Text style={s.grandLabel}>Grand Total</Text>
+                  <Text style={s.grandVal}>₹{totals.grand.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+                </View>
+              </View>
+
+              {/* Collect Payment Now — toggle, fields only when ON */}
+              <View style={s.card}>
+                <TouchableOpacity
+                  style={s.payNowToggleRow}
+                  onPress={() => setCollectPayNow(v => !v)}
+                  activeOpacity={0.8}
+                >
+                  <View style={s.payNowLeft}>
+                    <View style={[s.payNowIcon, { backgroundColor: collectPayNow ? COLORS.positiveBg : COLORS.pageBg }]}>
+                      <Ionicons name="cash-outline" size={18} color={collectPayNow ? COLORS.positive : COLORS.textSecondary} />
+                    </View>
+                    <View>
+                      <Text style={s.payNowTitle}>Collect Payment Now</Text>
+                      <Text style={s.payNowSub}>Record payment received at the time of billing</Text>
+                    </View>
+                  </View>
+                  <BrandSwitch value={collectPayNow} onValueChange={setCollectPayNow} />
+                </TouchableOpacity>
+
+                {collectPayNow && (
+                  <View style={s.payNowBody}>
+                    <View style={s.divider} />
+                    <FormDropdown
+                      label="Mode of Payment"
+                      value={payNowMode}
+                      options={PAY_MODES}
+                      onSelect={(o: any) => setPayNowMode(o.value)}
+                      placeholder="Select payment mode..."
+                      required
                     />
+                    <View style={s.row2}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.fLabel}>Amount Received (₹)</Text>
+                        <TextInput
+                          style={s.fInput}
+                          value={payNowAmount}
+                          onChangeText={setPayNowAmount}
+                          keyboardType="numeric"
+                          placeholder="0.00"
+                          placeholderTextColor={COLORS.textTertiary}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.fLabel}>Reference No.</Text>
+                        <TextInput
+                          style={s.fInput}
+                          value={payNowRef}
+                          onChangeText={setPayNowRef}
+                          placeholder="Txn / Cheque No."
+                          placeholderTextColor={COLORS.textTertiary}
+                        />
+                      </View>
+                    </View>
+                    <View style={[
+                      s.payStatusChip,
+                      paymentStatus === 'paid' ? s.payStatusPaid :
+                      paymentStatus === 'partial' ? s.payStatusPartial : s.payStatusPending
+                    ]}>
+                      <Ionicons
+                        name={paymentStatus === 'paid' ? 'checkmark-circle' : paymentStatus === 'partial' ? 'time-outline' : 'alert-circle-outline'}
+                        size={16}
+                        color={paymentStatus === 'paid' ? COLORS.positive : paymentStatus === 'partial' ? COLORS.warning : COLORS.negative}
+                      />
+                      <Text style={[s.payStatusTxt, { color: paymentStatus === 'paid' ? COLORS.positive : paymentStatus === 'partial' ? COLORS.warning : COLORS.negative }]}>
+                        {paymentStatus === 'paid' ? 'Fully Paid' : paymentStatus === 'partial' ? 'Partially Paid' : 'Payment Pending'}
+                      </Text>
+                      {paymentStatus === 'partial' && totals.grand > 0 && (
+                        <Text style={[s.payStatusSub, { color: COLORS.warning }]}>
+                          {' '}(₹{(totals.grand - (parseFloat(payNowAmount) || 0)).toLocaleString('en-IN', { maximumFractionDigits: 2 })} due)
+                        </Text>
+                      )}
+                    </View>
                   </View>
-                </View>
-                <View style={[
-                  s.payStatusChip,
-                  paymentStatus === 'paid' ? s.payStatusPaid :
-                  paymentStatus === 'partial' ? s.payStatusPartial : s.payStatusPending
-                ]}>
-                  <Ionicons
-                    name={paymentStatus === 'paid' ? 'checkmark-circle' : paymentStatus === 'partial' ? 'time-outline' : 'alert-circle-outline'}
-                    size={16}
-                    color={paymentStatus === 'paid' ? COLORS.positive : paymentStatus === 'partial' ? COLORS.warning : COLORS.negative}
-                  />
-                  <Text style={[
-                    s.payStatusTxt,
-                    { color: paymentStatus === 'paid' ? COLORS.positive : paymentStatus === 'partial' ? COLORS.warning : COLORS.negative }
-                  ]}>
-                    {paymentStatus === 'paid' ? 'Fully Paid' : paymentStatus === 'partial' ? 'Partially Paid' : 'Payment Pending'}
-                  </Text>
-                  {paymentStatus === 'partial' && totals.grand > 0 && (
-                    <Text style={[s.payStatusSub, { color: COLORS.warning }]}>
-                      {' '}(₹{(totals.grand - (parseFloat(payNowAmount) || 0)).toLocaleString('en-IN', { maximumFractionDigits: 2 })} due)
-                    </Text>
-                  )}
-                </View>
+                )}
               </View>
-            )}
-          </View>
 
-          {/* Dispatch / E-Way Bill Details */}
-          <View style={s.card}>
-            <TouchableOpacity style={s.payNowToggleRow} onPress={() => setShowDispatch(v => !v)} activeOpacity={0.8}>
-              <View style={s.payNowLeft}>
-                <View style={[s.payNowIcon, { backgroundColor: showDispatch ? '#EFF6FF' : COLORS.pageBg }]}>
-                  <Ionicons name="car-outline" size={18} color={showDispatch ? COLORS.info : COLORS.textSecondary} />
-                </View>
-                <View>
-                  <Text style={s.payNowTitle}>Dispatch / E-Way Bill Details</Text>
-                  <Text style={s.payNowSub}>Required for goods movement & E-Way Bill</Text>
-                </View>
-              </View>
-              <BrandSwitch value={showDispatch} onValueChange={setShowDispatch} />
-            </TouchableOpacity>
-
-            {showDispatch && (
-              <View style={s.payNowBody}>
-                <View style={s.divider} />
-
-                <View style={s.row2}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Dispatch From</Text>
-                    <ThemedFInput value={dispatchFrom} onChangeText={setDispatchFrom} placeholder="City / Address" />
+              {/* Dispatch / E-Way Bill — toggle, fields only when ON */}
+              <View style={s.card}>
+                <TouchableOpacity style={s.payNowToggleRow} onPress={() => setShowDispatch(v => !v)} activeOpacity={0.8}>
+                  <View style={s.payNowLeft}>
+                    <View style={[s.payNowIcon, { backgroundColor: showDispatch ? '#EFF6FF' : COLORS.pageBg }]}>
+                      <Ionicons name="car-outline" size={18} color={showDispatch ? COLORS.info : COLORS.textSecondary} />
+                    </View>
+                    <View>
+                      <Text style={s.payNowTitle}>Dispatch / E-Way Bill Details</Text>
+                      <Text style={s.payNowSub}>Required for goods movement & E-Way Bill</Text>
+                    </View>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Ship To</Text>
-                    <ThemedFInput value={shipTo} onChangeText={setShipTo} placeholder="City / Address" />
-                  </View>
-                </View>
+                  <BrandSwitch value={showDispatch} onValueChange={setShowDispatch} />
+                </TouchableOpacity>
 
-                <Text style={s.fLabel}>Transport Mode</Text>
-                <View style={s.termsRow}>
-                  {['Road','Rail','Air','Ship','Not Applicable'].map(mode => (
-                    <TouchableOpacity key={mode}
-                      style={[s.termChip, transportMode === mode && s.termChipActive]}
-                      onPress={() => setTransportMode(mode)} activeOpacity={0.7}>
-                      <Text style={[s.termChipTxt, transportMode === mode && s.termChipTxtActive]}>{mode}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <View style={s.row2}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Transporter Name</Text>
-                    <ThemedFInput value={transporterName} onChangeText={setTransporterName} placeholder="Optional" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Transporter ID</Text>
-                    <ThemedFInput value={transporterId} onChangeText={setTransporterId} placeholder="GSTIN / ID" />
-                  </View>
-                </View>
-
-                <View style={s.row2}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Vehicle Number</Text>
-                    <ThemedFInput value={vehicleNumber} onChangeText={v => setVehicleNumber(v.toUpperCase())} placeholder="e.g. MH12AB1234" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Vehicle Type</Text>
+                {showDispatch && (
+                  <View style={s.payNowBody}>
+                    <View style={s.divider} />
+                    <View style={s.row2}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.fLabel}>Dispatch From</Text>
+                        <ThemedFInput value={dispatchFrom} onChangeText={setDispatchFrom} placeholder="City / Address" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.fLabel}>Ship To</Text>
+                        <ThemedFInput value={shipTo} onChangeText={setShipTo} placeholder="City / Address" />
+                      </View>
+                    </View>
+                    <Text style={s.fLabel}>Transport Mode</Text>
                     <View style={s.termsRow}>
-                      {['Regular','Over Dimensional','Not Applicable'].map(vt => (
-                        <TouchableOpacity key={vt}
-                          style={[s.termChip, vehicleType === vt && s.termChipActive]}
-                          onPress={() => setVehicleType(vt)} activeOpacity={0.7}>
-                          <Text style={[s.termChipTxt, vehicleType === vt && s.termChipTxtActive]}>{vt.split(' ')[0]}</Text>
+                      {['Road','Rail','Air','Ship','Not Applicable'].map(mode => (
+                        <TouchableOpacity key={mode}
+                          style={[s.termChip, transportMode === mode && s.termChipActive]}
+                          onPress={() => setTransportMode(mode)} activeOpacity={0.7}>
+                          <Text style={[s.termChipTxt, transportMode === mode && s.termChipTxtActive]}>{mode}</Text>
                         </TouchableOpacity>
                       ))}
                     </View>
+                    <View style={s.row2}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.fLabel}>Transporter Name</Text>
+                        <ThemedFInput value={transporterName} onChangeText={setTransporterName} placeholder="Optional" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.fLabel}>Transporter ID</Text>
+                        <ThemedFInput value={transporterId} onChangeText={setTransporterId} placeholder="GSTIN / ID" />
+                      </View>
+                    </View>
+                    <View style={s.row2}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.fLabel}>Vehicle Number</Text>
+                        <ThemedFInput value={vehicleNumber} onChangeText={v => setVehicleNumber(v.toUpperCase())} placeholder="e.g. MH12AB1234" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.fLabel}>Vehicle Type</Text>
+                        <View style={s.termsRow}>
+                          {['Regular','Over Dimensional','Not Applicable'].map(vt => (
+                            <TouchableOpacity key={vt}
+                              style={[s.termChip, vehicleType === vt && s.termChipActive]}
+                              onPress={() => setVehicleType(vt)} activeOpacity={0.7}>
+                              <Text style={[s.termChipTxt, vehicleType === vt && s.termChipTxtActive]}>{vt.split(' ')[0]}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    </View>
+                    <View style={s.row2}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.fLabel}>Doc / LR / RR No.</Text>
+                        <ThemedFInput value={transportDocNo} onChangeText={setTransportDocNo} placeholder="Optional" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.fLabel}>Doc Date</Text>
+                        <TouchableOpacity
+                          style={[s.fInput, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                          onPress={() => setShowTransportDocDatePicker(true)}
+                        >
+                          <Text style={{ color: transportDocDate ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.base }}>
+                            {transportDocDate ? (() => { const [y,m,d] = transportDocDate.split('-'); return `${d}/${m}/${y.slice(2)}`; })() : 'Optional'}
+                          </Text>
+                          <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   </View>
+                )}
+              </View>
+
+              {/* Notes & Terms */}
+              <View style={s.card}>
+                <View style={s.cardHdr}>
+                  <Ionicons name="document-outline" size={18} color={COLORS.textSecondary} />
+                  <Text style={s.cardTitle}>Notes & Terms</Text>
                 </View>
-
-                <View style={s.row2}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Doc / LR / RR No.</Text>
-                    <ThemedFInput value={transportDocNo} onChangeText={setTransportDocNo} placeholder="Optional" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Doc Date</Text>
-                    <TouchableOpacity
-                      style={[s.fInput, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
-                      onPress={() => setShowTransportDocDatePicker(true)}>
-                      <Text style={{ color: transportDocDate ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.base }}>
-                        {transportDocDate ? (() => { const [y,m,d] = transportDocDate.split('-'); return `${d}/${m}/${y.slice(2)}`; })() : 'Optional'}
-                      </Text>
-                      <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                <FormField
+                  label="Narration"
+                  value={narration} onChangeText={setNarration}
+                  placeholder="Internal notes..."
+                  multiline numberOfLines={2}
+                  style={{ minHeight: 60, textAlignVertical: 'top' } as any}
+                />
+                <FormField
+                  label="Terms & Conditions"
+                  value={termsText} onChangeText={setTermsText}
+                  multiline numberOfLines={3}
+                  style={{ minHeight: 72, textAlignVertical: 'top' } as any}
+                  containerStyle={{ marginBottom: 0 }}
+                />
               </View>
-            )}
-          </View>
-
-          {/* Invoice Summary */}
-          <View style={s.summaryCard}>
-            <Text style={s.summaryTitle}>Invoice Summary</Text>
-            <View style={s.summaryRow}>
-              <Text style={s.sumLabel}>Subtotal</Text>
-              <Text style={s.sumVal}>₹{totals.gross.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
-            </View>
-            {totals.discTotal > 0 && (
-              <View style={s.summaryRow}>
-                <Text style={s.sumLabel}>Discount</Text>
-                <Text style={[s.sumVal, { color: COLORS.positive }]}>-₹{totals.discTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
-              </View>
-            )}
-            {totals.cgst > 0 && (
-              <View style={s.summaryRow}>
-                <Text style={s.sumLabel}>CGST</Text>
-                <Text style={s.sumVal}>₹{totals.cgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
-              </View>
-            )}
-            {totals.sgst > 0 && (
-              <View style={s.summaryRow}>
-                <Text style={s.sumLabel}>SGST</Text>
-                <Text style={s.sumVal}>₹{totals.sgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
-              </View>
-            )}
-            {totals.igst > 0 && (
-              <View style={s.summaryRow}>
-                <Text style={s.sumLabel}>IGST</Text>
-                <Text style={s.sumVal}>₹{totals.igst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
-              </View>
-            )}
-            {totals.logisticsTotal > 0 && (
-              <View style={s.summaryRow}>
-                <Text style={s.sumLabel}>Logistics</Text>
-                <Text style={s.sumVal}>₹{totals.logisticsTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
-              </View>
-            )}
-            <View style={s.sumDivider} />
-            <View style={s.summaryRow}>
-              <Text style={s.grandLabel}>Grand Total</Text>
-              <Text style={s.grandVal}>₹{totals.grand.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
-            </View>
-          </View>
-
-          {/* Notes & Terms */}
-          <View style={s.card}>
-            <View style={s.cardHdr}>
-              <Ionicons name="document-outline" size={18} color={COLORS.textSecondary} />
-              <Text style={s.cardTitle}>Notes & Terms</Text>
-            </View>
-            <FormField
-              label="Narration"
-              value={narration} onChangeText={setNarration}
-              placeholder="Internal notes..."
-              multiline numberOfLines={2}
-              style={{ minHeight: 60, textAlignVertical: 'top' } as any}
-            />
-            <FormField
-              label="Terms & Conditions"
-              value={termsText} onChangeText={setTermsText}
-              multiline numberOfLines={3}
-              style={{ minHeight: 72, textAlignVertical: 'top' } as any}
-              containerStyle={{ marginBottom: 0 }}
-            />
-          </View>
+            </>
+          )}
         </ScrollView>
 
-        {/* Footer Buttons */}
+        {/* ── Step-aware Footer ── */}
         <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-          <TouchableOpacity style={[s.draftBtn, submitting && { opacity: 0.5 }]} onPress={() => handleSubmit(true)} activeOpacity={0.7} disabled={submitting}>
-            <Text style={s.draftTxt}>Save Draft</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[s.submitBtn, submitting && { opacity: 0.6 }]} onPress={() => handleSubmit(false)} activeOpacity={0.7} disabled={submitting}>
-            {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />}
-            <Text style={s.submitTxt}>{submitting ? 'Submitting...' : 'Submit Invoice'}</Text>
-          </TouchableOpacity>
+          {step === 1 && (
+            <>
+              <TouchableOpacity style={[s.draftBtn, submitting && { opacity: 0.5 }]} onPress={() => handleSubmit(true)} activeOpacity={0.7} disabled={submitting}>
+                <Text style={s.draftTxt}>Save Draft</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.nextBtn} onPress={goNext} activeOpacity={0.7}>
+                <Text style={s.nextTxt}>Items</Text>
+                <Ionicons name="arrow-forward" size={16} color={COLORS.white} />
+              </TouchableOpacity>
+            </>
+          )}
+          {step === 2 && (
+            <>
+              <TouchableOpacity style={[s.draftBtn, submitting && { opacity: 0.5 }]} onPress={() => handleSubmit(true)} activeOpacity={0.7} disabled={submitting}>
+                <Text style={s.draftTxt}>Save Draft</Text>
+              </TouchableOpacity>
+              <View style={s.runningTotal}>
+                <Text style={s.runTotalAmt}>₹{totals.grand.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</Text>
+                <Text style={s.runTotalItems}>{items.filter(i => i.product).length} items</Text>
+              </View>
+              <TouchableOpacity style={s.nextBtn} onPress={goNext} activeOpacity={0.7}>
+                <Text style={s.nextTxt}>Review</Text>
+                <Ionicons name="arrow-forward" size={16} color={COLORS.white} />
+              </TouchableOpacity>
+            </>
+          )}
+          {step === 3 && (
+            <>
+              <TouchableOpacity style={[s.draftBtn, submitting && { opacity: 0.5 }]} onPress={() => handleSubmit(true)} activeOpacity={0.7} disabled={submitting}>
+                <Text style={s.draftTxt}>Save Draft</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.submitBtn, { flex: 2 }, submitting && { opacity: 0.6 }]} onPress={() => handleSubmit(false)} activeOpacity={0.7} disabled={submitting}>
+                {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />}
+                <Text style={s.submitTxt}>{submitting ? 'Submitting...' : 'Submit Invoice'}</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </KeyboardAvoidingView>
 
@@ -1546,29 +1563,6 @@ export default function CreateSalesInvoiceScreen() {
         </View>
       </Modal>
 
-      {/* Barcode Scanner Modal */}
-      <BarcodeScannerModal
-        visible={activeModal?.type === 'barcode'}
-        companyGuid={company?.guid}
-        onScan={(productName) => {
-          if (activeModal) {
-            const si = stockItems.find(s => s.name === productName);
-            setItems(prev => prev.map(i => {
-              if (i.id !== activeModal.itemId) return i;
-              return {
-                ...i,
-                product: productName,
-                unit: si?.unit || i.unit,
-                rate: si?.rate != null ? String(si.rate) : i.rate,
-              };
-            }));
-            Alert.alert('✓ Product Found', `Added: ${si?.displayName || productName}`);
-          }
-          closeModal();
-        }}
-        onClose={closeModal}
-      />
-
       {/* Date Picker Modal (OPT mode only) */}
       <DatePickerModal
         visible={showDatePicker}
@@ -1606,7 +1600,6 @@ export default function CreateSalesInvoiceScreen() {
     </SafeAreaView>
   );
 }
-
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.pageBg },
@@ -1666,6 +1659,11 @@ const s = StyleSheet.create({
   payStatusPending: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.full, backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault },
   payStatusTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600' as const, color: COLORS.textSecondary },
   payStatusSub: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  nextBtn: { flex: 2, flexDirection: 'row' as const, gap: 6, paddingVertical: 14, borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary, alignItems: 'center' as const, justifyContent: 'center' as const },
+  nextTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700' as const, color: COLORS.white },
+  runningTotal: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, paddingHorizontal: 4 },
+  runTotalAmt: { fontSize: TYPOGRAPHY.sm, fontWeight: '800' as const, color: COLORS.textPrimary },
+  runTotalItems: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
 });
 
 const m = StyleSheet.create({
@@ -1783,6 +1781,20 @@ const acd = StyleSheet.create({
 const mAdd = StyleSheet.create({
   warehouseHint: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.infoBg, marginBottom: 4 },
   warehouseHintTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.info, fontWeight: '600' },
+});
+
+const si = StyleSheet.create({
+  wrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, paddingHorizontal: SPACING.lg, paddingVertical: 12 },
+  stepItem: { alignItems: 'center', gap: 4 },
+  circle: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg, alignItems: 'center', justifyContent: 'center' },
+  circleActive: { borderColor: COLORS.brandPrimary },
+  circleDone: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary },
+  circleNum: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' as const, color: COLORS.textTertiary },
+  circleNumActive: { color: COLORS.brandPrimary },
+  label: { fontSize: TYPOGRAPHY.xs, fontWeight: '600' as const, color: COLORS.textTertiary },
+  labelActive: { color: COLORS.brandPrimary },
+  line: { flex: 1, height: 2, backgroundColor: COLORS.borderDefault, marginBottom: 18, marginHorizontal: 6 },
+  lineDone: { backgroundColor: COLORS.brandPrimary },
 });
 
 const ss = StyleSheet.create({
