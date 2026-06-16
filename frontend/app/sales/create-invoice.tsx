@@ -493,41 +493,150 @@ function ItemRow({ item, onUpdate, onRemove, onOpenModal, hasMultipleWarehouses,
   warehouses: Warehouse[];
 }) {
   const calc = calcItem(item);
+  const [productQuery, setProductQuery] = useState('');
+  const [productOpen, setProductOpen] = useState(false);
+  const [warehouseQuery, setWarehouseQuery] = useState('');
+  const [warehouseOpen, setWarehouseOpen] = useState(false);
+  const productSelecting = useRef(false);
+  const warehouseSelecting = useRef(false);
+  const wFix = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
+
   const stockItem = stockItems.find(si => si.name === item.product);
-  const productLabel = stockItem
-    ? (stockItem.displayName || stockItem.name)
-    : (item.product || '');
+  const productLabel = stockItem ? (stockItem.displayName || stockItem.name) : (item.product || '');
+
+  const filteredProducts = productQuery.trim()
+    ? stockItems.filter(p => (p.displayName || p.name).toLowerCase().includes(productQuery.toLowerCase()))
+    : stockItems;
+
+  const filteredWarehouses = warehouseQuery.trim()
+    ? warehouses.filter(w => w.name.toLowerCase().includes(warehouseQuery.toLowerCase()))
+    : warehouses;
 
   return (
     <View style={ir.card}>
-      {/* Warehouse selector — only if multiple warehouses */}
+      {/* Warehouse inline search — only if multiple warehouses */}
       {hasMultipleWarehouses && (
-        <TouchableOpacity
-          style={[ir.warehouseBtn, item.warehouse && ir.warehouseBtnActive]}
-          onPress={() => onOpenModal({ type: 'warehouse', itemId: item.id })}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="business-outline" size={13} color={item.warehouse ? COLORS.info : COLORS.textTertiary} />
-          <Text style={[ir.warehouseTxt, !item.warehouse && ir.placeholderTxt]}>
-            {item.warehouse || 'Select Warehouse first...'}
-          </Text>
-          <Ionicons name="chevron-down" size={11} color={COLORS.textSecondary} />
-        </TouchableOpacity>
+        <View>
+          <View style={[ir.inlineSearchBox, warehouseOpen && ir.inlineSearchBoxOpen, item.warehouse && !warehouseOpen && ir.warehouseActive]}>
+            <Ionicons name="business-outline" size={13} color={item.warehouse && !warehouseOpen ? COLORS.info : COLORS.textTertiary} style={{ marginRight: 6 }} />
+            <TextInput
+              style={[ir.inlineSearchInput, wFix]}
+              value={warehouseOpen ? warehouseQuery : item.warehouse}
+              onChangeText={setWarehouseQuery}
+              onFocus={() => { setWarehouseQuery(''); setWarehouseOpen(true); }}
+              onBlur={() => {
+                setTimeout(() => {
+                  if (!warehouseSelecting.current) setWarehouseOpen(false);
+                  warehouseSelecting.current = false;
+                }, 150);
+              }}
+              placeholder="Search warehouse..."
+              placeholderTextColor={COLORS.textTertiary}
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+            {item.warehouse && !warehouseOpen ? (
+              <TouchableOpacity onPress={() => { onUpdate(item.id, 'warehouse', ''); }} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                <Ionicons name="close-circle" size={14} color={COLORS.textTertiary} />
+              </TouchableOpacity>
+            ) : (
+              <Ionicons name={warehouseOpen ? 'chevron-up' : 'chevron-down'} size={13} color={COLORS.textSecondary} />
+            )}
+          </View>
+          {warehouseOpen && (
+            <View style={ir.inlineSuggestions}>
+              <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} nestedScrollEnabled>
+                {filteredWarehouses.length === 0 ? (
+                  <View style={ir.inlineEmpty}><Text style={ir.inlineEmptyTxt}>No warehouses found</Text></View>
+                ) : (
+                  filteredWarehouses.map((w, idx) => (
+                    <TouchableOpacity
+                      key={w.id}
+                      style={[ir.inlineOpt, idx === filteredWarehouses.length - 1 && { borderBottomWidth: 0 }, item.warehouse === w.name && ir.inlineOptActive]}
+                      onPressIn={() => { warehouseSelecting.current = true; }}
+                      onPress={() => { warehouseSelecting.current = false; onUpdate(item.id, 'warehouse', w.name); setWarehouseOpen(false); }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="business-outline" size={12} color={COLORS.info} style={{ marginRight: 6 }} />
+                      <Text style={[ir.inlineOptTxt, item.warehouse === w.name && ir.inlineOptTxtActive]} numberOfLines={1}>{w.name}</Text>
+                      {item.warehouse === w.name && <Ionicons name="checkmark" size={14} color={COLORS.brandPrimary} />}
+                    </TouchableOpacity>
+                  ))
+                )}
+              </ScrollView>
+            </View>
+          )}
+        </View>
       )}
 
-      {/* Product + Barcode + Delete */}
+      {/* Product inline search + Barcode + Delete */}
       <View style={ir.topRow}>
-        <TouchableOpacity
-          style={ir.productBtn}
-          onPress={() => onOpenModal({ type: 'product', itemId: item.id })}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="cube-outline" size={14} color={COLORS.textSecondary} />
-          <Text style={[ir.productTxt, !item.product && ir.placeholderTxt]} numberOfLines={1}>
-            {productLabel || 'Select product...'}
-          </Text>
-          <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
-        </TouchableOpacity>
+        <View style={{ flex: 1 }}>
+          <View style={[ir.inlineSearchBox, productOpen && ir.inlineSearchBoxOpen]}>
+            <Ionicons name="cube-outline" size={13} color={COLORS.textSecondary} style={{ marginRight: 6 }} />
+            <TextInput
+              style={[ir.inlineSearchInput, wFix]}
+              value={productOpen ? productQuery : productLabel}
+              onChangeText={setProductQuery}
+              onFocus={() => { setProductQuery(''); setProductOpen(true); }}
+              onBlur={() => {
+                setTimeout(() => {
+                  if (!productSelecting.current) setProductOpen(false);
+                  productSelecting.current = false;
+                }, 150);
+              }}
+              placeholder="Search product..."
+              placeholderTextColor={COLORS.textTertiary}
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+            {item.product && !productOpen ? (
+              <TouchableOpacity
+                onPress={() => { onUpdate(item.id, 'product', ''); onUpdate(item.id, 'unit', 'pcs'); onUpdate(item.id, 'rate', ''); }}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              >
+                <Ionicons name="close-circle" size={14} color={COLORS.textTertiary} />
+              </TouchableOpacity>
+            ) : (
+              <Ionicons name={productOpen ? 'chevron-up' : 'chevron-down'} size={13} color={COLORS.textSecondary} />
+            )}
+          </View>
+          {productOpen && (
+            <View style={ir.inlineSuggestions}>
+              <ScrollView style={{ maxHeight: 180 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} nestedScrollEnabled>
+                {filteredProducts.length === 0 ? (
+                  <View style={ir.inlineEmpty}>
+                    <Ionicons name="search-outline" size={14} color={COLORS.textTertiary} style={{ marginRight: 4 }} />
+                    <Text style={ir.inlineEmptyTxt}>{productQuery ? `No results for "${productQuery}"` : 'No products available'}</Text>
+                  </View>
+                ) : (
+                  filteredProducts.map((p, idx) => (
+                    <TouchableOpacity
+                      key={p.id}
+                      style={[ir.inlineOpt, idx === filteredProducts.length - 1 && { borderBottomWidth: 0 }, item.product === p.name && ir.inlineOptActive]}
+                      onPressIn={() => { productSelecting.current = true; }}
+                      onPress={() => {
+                        productSelecting.current = false;
+                        onUpdate(item.id, 'product', p.name);
+                        if (p.unit) onUpdate(item.id, 'unit', p.unit);
+                        if (p.rate != null) onUpdate(item.id, 'rate', String(p.rate));
+                        setProductQuery('');
+                        setProductOpen(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="cube-outline" size={12} color={COLORS.textSecondary} style={{ marginRight: 6 }} />
+                      <Text style={[ir.inlineOptTxt, item.product === p.name && ir.inlineOptTxtActive]} numberOfLines={1}>
+                        {`${p.displayName || p.name} (${p.closing_qty ?? 0} ${p.unit || 'pcs'})`}
+                      </Text>
+                      {item.product === p.name && <Ionicons name="checkmark" size={14} color={COLORS.brandPrimary} />}
+                    </TouchableOpacity>
+                  ))
+                )}
+              </ScrollView>
+            </View>
+          )}
+        </View>
         <TouchableOpacity
           style={ir.barcodeBtn}
           onPress={() => onOpenModal({ type: 'barcode', itemId: item.id })}
@@ -1380,60 +1489,6 @@ export default function CreateSalesInvoiceScreen() {
 
       {/* ── Modals ── */}
 
-      {/* Product Modal */}
-      <Modal visible={activeModal?.type === 'product'} transparent animationType="slide" onRequestClose={closeModal}>
-        <View style={m.overlay}>
-          <TouchableOpacity style={{flex:1}} activeOpacity={1} onPress={closeModal} />
-          <View style={m.sheet}>
-          <View style={m.handle} />
-          <Text style={m.title}>Select Product / Service</Text>
-          {(() => {
-            const currentItem = items.find(i => i.id === activeModal?.itemId);
-            const currentProduct = currentItem?.product || '';
-            return (
-              <ScrollView showsVerticalScrollIndicator={false}>
-                {stockItems.length === 0 && (
-                  <View style={mAdd.warehouseHint}>
-                    <ActivityIndicator size="small" color={COLORS.brandPrimary} />
-                    <Text style={mAdd.warehouseHintTxt}>Loading products...</Text>
-                  </View>
-                )}
-                {stockItems.map(p => (
-                  <TouchableOpacity
-                    key={p.id}
-                    style={[m.opt, p.name === currentProduct && m.optActive]}
-                    onPress={() => {
-                      if (activeModal) {
-                        setItems(prev => prev.map(i => {
-                          if (i.id !== activeModal.itemId) return i;
-                          return {
-                            ...i,
-                            product: p.name,
-                            unit: p.unit || i.unit,
-                            rate: p.rate != null ? String(p.rate) : i.rate,
-                          };
-                        }));
-                      }
-                      closeModal();
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={m.optLeft}>
-                      <Ionicons name="cube-outline" size={16} color={COLORS.textSecondary} />
-                      <Text style={[m.optTxt, p.name === currentProduct && m.optActiveTxt]}>
-                        {`${p.displayName || p.name} (${p.closing_qty ?? 0} ${p.unit || 'pcs'})`}
-                      </Text>
-                    </View>
-                    {p.name === currentProduct && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            );
-          })()}
-          </View>
-        </View>
-      </Modal>
-
       {/* Unit Modal */}
       <Modal visible={activeModal?.type === 'unit'} transparent animationType="fade" onRequestClose={closeModal}>
         <TouchableOpacity style={m.overlay} activeOpacity={1} onPress={closeModal}>
@@ -1486,32 +1541,6 @@ export default function CreateSalesInvoiceScreen() {
                 </TouchableOpacity>
               );
             })}
-          </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Warehouse Modal */}
-      <Modal visible={activeModal?.type === 'warehouse'} transparent animationType="slide" onRequestClose={closeModal}>
-        <View style={m.overlay}>
-          <TouchableOpacity style={{flex:1}} activeOpacity={1} onPress={closeModal} />
-          <View style={m.sheet}>
-          <View style={m.handle} />
-          <Text style={m.title}>Select Warehouse</Text>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {warehouses.map(w => (
-              <TouchableOpacity
-                key={w.id}
-                style={m.opt}
-                onPress={() => { if (activeModal) updateItem(activeModal.itemId, 'warehouse', w.name); closeModal(); }}
-                activeOpacity={0.7}
-              >
-                <View style={m.optLeft}>
-                  <Ionicons name="business-outline" size={16} color={COLORS.info} />
-                  <Text style={m.optTxt}>{w.name}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
           </ScrollView>
           </View>
         </View>
@@ -1684,6 +1713,18 @@ const ir = StyleSheet.create({
   subtotalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
   subtotalLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '600' },
   subtotalVal: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  // ─── Inline search (product + warehouse) ───
+  inlineSearchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.sm, paddingHorizontal: 8, minHeight: 36 },
+  inlineSearchBoxOpen: { borderColor: COLORS.brandPrimary, borderWidth: 1.5, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, borderBottomWidth: 0 },
+  warehouseActive: { borderColor: COLORS.info, backgroundColor: COLORS.infoBg },
+  inlineSearchInput: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, paddingVertical: 6 },
+  inlineSuggestions: { backgroundColor: COLORS.cardBg, borderWidth: 1.5, borderTopWidth: 0, borderColor: COLORS.brandPrimary, borderBottomLeftRadius: RADIUS.sm, borderBottomRightRadius: RADIUS.sm, overflow: 'hidden', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4 },
+  inlineOpt: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  inlineOptActive: { backgroundColor: COLORS.pageBg },
+  inlineOptTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
+  inlineOptTxtActive: { fontWeight: '700', color: COLORS.brandPrimary },
+  inlineEmpty: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 12 },
+  inlineEmptyTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
 });
 
 const bs = StyleSheet.create({
