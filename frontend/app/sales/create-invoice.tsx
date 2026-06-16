@@ -718,8 +718,8 @@ export default function CreateSalesInvoiceScreen() {
   useEffect(() => {
     if (!company?.guid) return;
     getStocks(company.guid).then((res: any) => {
-      const list = res?.data || res?.items || [];
-      setStockItems(list);
+      const list = res?.data?.items || res?.items || res?.data || [];
+      setStockItems(Array.isArray(list) ? list : []);
     }).catch(() => {});
   }, [company?.guid]);
 
