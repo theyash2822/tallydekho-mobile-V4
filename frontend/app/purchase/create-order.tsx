@@ -354,8 +354,9 @@ export default function CreatePurchaseOrderScreen() {
 
       {/* Product Modal */}
       <Modal visible={activeModal?.type==='product'} transparent animationType="slide" onRequestClose={closeModal}>
-        <TouchableOpacity style={m.overlay} activeOpacity={1} onPress={closeModal} />
-        <View style={m.sheet}>
+        <View style={m.overlay}>
+          <TouchableOpacity style={{flex:1}} activeOpacity={1} onPress={closeModal} />
+          <View style={m.sheet}>
           <View style={m.handle}/><Text style={m.title}>Select Product</Text>
           {(()=>{
             const item=items.find(i=>i.id===activeModal?.itemId);
@@ -370,6 +371,7 @@ export default function CreatePurchaseOrderScreen() {
               </TouchableOpacity>))}
             </ScrollView>);
           })()}
+          </View>
         </View>
       </Modal>
       <Modal visible={activeModal?.type==='unit'} transparent animationType="fade" onRequestClose={closeModal}>
@@ -389,8 +391,9 @@ export default function CreatePurchaseOrderScreen() {
         </TouchableOpacity>
       </Modal>
       <Modal visible={activeModal?.type==='warehouse'} transparent animationType="slide" onRequestClose={closeModal}>
-        <TouchableOpacity style={m.overlay} activeOpacity={1} onPress={closeModal} />
-        <View style={m.sheet}>
+        <View style={m.overlay}>
+          <TouchableOpacity style={{flex:1}} activeOpacity={1} onPress={closeModal} />
+          <View style={m.sheet}>
           <View style={m.handle}/><Text style={m.title}>Select Warehouse</Text>
           <ScrollView showsVerticalScrollIndicator={false}>
             {WAREHOUSES.map(w=>(<TouchableOpacity key={w.value} style={m.opt}
@@ -398,6 +401,7 @@ export default function CreatePurchaseOrderScreen() {
               <View style={m.optRow}><Ionicons name="business-outline" size={16} color={COLORS.info} /><Text style={m.optTxt}>{w.label}</Text></View>
             </TouchableOpacity>))}
           </ScrollView>
+          </View>
         </View>
       </Modal>
       <BarcodeScannerModal visible={activeModal?.type==='barcode'}
@@ -448,7 +452,7 @@ const s = StyleSheet.create({
   submitTxt:{fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.white},
 });
 const m = StyleSheet.create({
-  overlay:{flex:1,backgroundColor:'rgba(0,0,0,0.4)'},
+  overlay:{flex:1,backgroundColor:'rgba(0,0,0,0.4)',justifyContent:'flex-end'},
   sheet:{backgroundColor:COLORS.cardBg,borderTopLeftRadius:20,borderTopRightRadius:20,maxHeight:'65%',paddingTop:12},
   handle:{width:40,height:4,backgroundColor:COLORS.borderStrong,borderRadius:2,alignSelf:'center',marginBottom:16},
   title:{fontSize:TYPOGRAPHY.md,fontWeight:'700',color:COLORS.textPrimary,paddingHorizontal:SPACING.md,paddingBottom:8,marginBottom:4,borderBottomWidth:1,borderBottomColor:COLORS.borderDefault},

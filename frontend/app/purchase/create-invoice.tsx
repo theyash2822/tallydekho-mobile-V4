@@ -543,8 +543,9 @@ export default function CreatePurchaseInvoiceScreen() {
 
       {/* Item Modals */}
       <Modal visible={activeModal?.type==='product'} transparent animationType="slide" onRequestClose={()=>setActiveModal(null)}>
-        <TouchableOpacity style={mm.overlay} activeOpacity={1} onPress={()=>setActiveModal(null)} />
-        <View style={mm.sheet}>
+        <View style={mm.overlay}>
+          <TouchableOpacity style={{flex:1}} activeOpacity={1} onPress={()=>setActiveModal(null)} />
+          <View style={mm.sheet}>
           <View style={mm.handle}/><Text style={mm.title}>Select Product</Text>
           <ScrollView showsVerticalScrollIndicator={false}>
             {(()=>{
@@ -562,6 +563,7 @@ export default function CreatePurchaseInvoiceScreen() {
               </>);
             })()}
           </ScrollView>
+          </View>
         </View>
       </Modal>
       <Modal visible={activeModal?.type==='unit'} transparent animationType="fade" onRequestClose={()=>setActiveModal(null)}>
@@ -587,8 +589,9 @@ export default function CreatePurchaseInvoiceScreen() {
         </TouchableOpacity>
       </Modal>
       <Modal visible={activeModal?.type==='warehouse'} transparent animationType="slide" onRequestClose={()=>setActiveModal(null)}>
-        <TouchableOpacity style={mm.overlay} activeOpacity={1} onPress={()=>setActiveModal(null)} />
-        <View style={mm.sheet}>
+        <View style={mm.overlay}>
+          <TouchableOpacity style={{flex:1}} activeOpacity={1} onPress={()=>setActiveModal(null)} />
+          <View style={mm.sheet}>
           <View style={mm.handle}/><Text style={mm.title}>Select Warehouse</Text>
           <ScrollView showsVerticalScrollIndicator={false}>
             {WAREHOUSES.map(w=>(
@@ -601,6 +604,7 @@ export default function CreatePurchaseInvoiceScreen() {
               </TouchableOpacity>
             ))}
           </ScrollView>
+          </View>
         </View>
       </Modal>
       <ItemBarcodeScannerModal
@@ -675,7 +679,7 @@ const s = StyleSheet.create({
   submitTxt:{fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.white},
 });
 const mm = StyleSheet.create({
-  overlay:{flex:1,backgroundColor:'rgba(0,0,0,0.4)'},
+  overlay:{flex:1,backgroundColor:'rgba(0,0,0,0.4)',justifyContent:'flex-end'},
   sheet:{backgroundColor:COLORS.cardBg,borderTopLeftRadius:20,borderTopRightRadius:20,maxHeight:'60%',paddingTop:12},
   handle:{width:40,height:4,backgroundColor:COLORS.borderStrong,borderRadius:2,alignSelf:'center',marginBottom:16},
   title:{fontSize:TYPOGRAPHY.md,fontWeight:'700',color:COLORS.textPrimary,paddingHorizontal:SPACING.md,paddingBottom:8,marginBottom:4,borderBottomWidth:1,borderBottomColor:COLORS.borderDefault},
