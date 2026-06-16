@@ -46,8 +46,9 @@ export default function FormDropdown({
       </TouchableOpacity>
 
       <Modal visible={visible} transparent animationType="slide" onRequestClose={() => setVisible(false)}>
-        <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setVisible(false)} />
-        <View style={[s.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <View style={s.overlay}>
+          <TouchableOpacity style={{flex:1}} activeOpacity={1} onPress={() => setVisible(false)} />
+          <View style={[s.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <View style={s.handle} />
           <Text style={s.sheetTitle}>{label}</Text>
           <FlatList
@@ -70,6 +71,7 @@ export default function FormDropdown({
             )}
             ItemSeparatorComponent={() => <View style={s.sep} />}
           />
+          </View>
         </View>
       </Modal>
     </View>
@@ -88,7 +90,7 @@ const s = StyleSheet.create({
   btnDisabled: { backgroundColor: COLORS.pageBg },
   btnTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, flex: 1, marginRight: 8 },
   placeholder: { color: COLORS.textTertiary },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: COLORS.cardBg,
     borderTopLeftRadius: 20, borderTopRightRadius: 20,

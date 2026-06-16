@@ -40,7 +40,7 @@ const s = StyleSheet.create({
   triggerSelected: { borderColor: COLORS.borderDefault },
   triggerTxt: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, fontWeight: '500' },
   triggerPlh: { color: COLORS.textTertiary, fontWeight: '400' },
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: COLORS.cardBg,
     borderTopLeftRadius: 20, borderTopRightRadius: 20,
@@ -135,12 +135,13 @@ export default function SearchableDropdown({
         transparent
         onRequestClose={() => setModalOpen(false)}
       >
-        <TouchableOpacity
-          style={s.backdrop}
-          activeOpacity={1}
-          onPress={() => { setQuery(''); setModalOpen(false); }}
-        />
-        <View style={s.sheet}>
+        <View style={s.backdrop}>
+          <TouchableOpacity
+            style={{flex:1}}
+            activeOpacity={1}
+            onPress={() => { setQuery(''); setModalOpen(false); }}
+          />
+          <View style={s.sheet}>
           {/* Handle */}
           <View style={s.handle} />
 
@@ -217,6 +218,7 @@ export default function SearchableDropdown({
               <Text style={s.addNewTxt}>{addNewLabel || 'Add New'}</Text>
             </TouchableOpacity>
           )}
+          </View>
         </View>
       </Modal>
     </View>
