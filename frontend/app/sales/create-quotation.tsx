@@ -288,7 +288,7 @@ export default function CreateQuotationScreen() {
   const [refNo, setRefNo] = useState('');
   const [items, setItems] = useState<QItem[]>([newItem()]);
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
-  const [logTaxRate, setLogTaxRate] = useState('0');
+
   const [narration, setNarration] = useState('');
   const [terms, setTerms] = useState('This quotation is valid for 30 days from the date of issue.');
   const [activeModal, setActiveModal] = useState<ModalState>(null);
@@ -298,7 +298,7 @@ export default function CreateQuotationScreen() {
   const removeItem = useCallback((id:string) =>
     setItems(prev => prev.length > 1 ? prev.filter(i => i.id !== id) : prev), []);
 
-  const logisticsTotal = useMemo(() => calcLogisticsTotal(logEntries, logTaxRate), [logEntries, logTaxRate]);
+  const logisticsTotal = useMemo(() => calcLogisticsTotal(logEntries), [logEntries]);
 
   const totals = useMemo(() => {
     let gross = 0, discTotal = 0, taxTotal = 0;
@@ -402,9 +402,7 @@ export default function CreateQuotationScreen() {
           {/* Logistics */}
           <LogisticsSection
             entries={logEntries}
-            taxRate={logTaxRate}
             onEntriesChange={setLogEntries}
-            onTaxRateChange={setLogTaxRate}
           />
 
           {/* Summary */}

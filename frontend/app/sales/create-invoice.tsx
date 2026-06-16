@@ -46,7 +46,8 @@ const calcItem = (item: InvoiceItem) => {
   const disc = parseFloat(item.discount) || 0;
   const discAmt = item.discountType === '%' ? gross * disc / 100 : Math.min(disc, gross);
   const taxable = gross - discAmt;
-  const taxAmt = taxable * (parseFloat(item.taxRate) || 0) / 100;
+  const totalTaxRate = (item.taxEntries || []).reduce((sum, t) => sum + (parseFloat(t.taxRate) || 0), 0);
+  const taxAmt = taxable * totalTaxRate / 100;
   return { gross, discAmt, taxable, taxAmt, subtotal: taxable + taxAmt };
 };
 
@@ -90,6 +91,12 @@ interface StockItem {
 
 interface Warehouse { id: number; name: string; guid?: string; }
 
+interface TaxLedgerEntry {
+  id: string;
+  ledgerName: string;
+  taxRate: string;
+}
+
 interface InvoiceItem {
   id: string;
   warehouse: string;
@@ -99,18 +106,16 @@ interface InvoiceItem {
   rate: string;
   discountType: '%' | 'flat';
   discount: string;
-  taxLedger: string;     // actual ledger name from tax ledger picker
-  taxRate: string;       // user-entered % for calculation
-  gstType: 'cgst_sgst' | 'igst';
+  taxEntries: TaxLedgerEntry[];
 }
 
 const newItem = (warehouseName = ''): InvoiceItem => ({
   id: Date.now().toString() + Math.random().toString(36).slice(2),
   warehouse: warehouseName, product: '', qty: '1', unit: 'pcs', rate: '',
-  discountType: '%', discount: '0', taxLedger: '', taxRate: '', gstType: 'cgst_sgst',
+  discountType: '%', discount: '0', taxEntries: [],
 });
 
-type ModalState = { type: 'unit'|'taxLedger'; itemId: string } | null;
+type ModalState = { type: 'unit'; itemId: string } | null;
 
 // ─── Themed inline input ──────────────────────────────────────────────────────
 function ThemedFInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
@@ -425,13 +430,104 @@ function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
   );
 }
 
+// ─── TaxEntryRow ─────────────────────────────────────────────────────────────
+function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove }: {
+  entry: TaxLedgerEntry;
+  taxLedgers: { name: string }[];
+  onUpdate: (field: keyof TaxLedgerEntry, val: string) => void;
+  onRemove: () => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const selectingRef = useRef(false);
+  const wFix = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
+
+  const filtered = query.trim()
+    ? taxLedgers.filter(l => l.name.toLowerCase().includes(query.toLowerCase()))
+    : taxLedgers;
+
+  return (
+    <View>
+      <View style={ir.taxEntryRow}>
+        <View style={{ flex: 1 }}>
+          <View style={[ir.taxLedgerBox, open && ir.taxLedgerBoxOpen]}>
+            <Ionicons name="receipt-outline" size={11} color={COLORS.info} style={{ marginRight: 3 }} />
+            <TextInput
+              style={[ir.taxLedgerInput, wFix]}
+              value={open ? query : entry.ledgerName}
+              onChangeText={setQuery}
+              onFocus={() => { setQuery(''); setOpen(true); }}
+              onBlur={() => {
+                setTimeout(() => {
+                  if (!selectingRef.current) setOpen(false);
+                  selectingRef.current = false;
+                }, 150);
+              }}
+              placeholder="Select ledger..."
+              placeholderTextColor={COLORS.textTertiary}
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+            {entry.ledgerName && !open ? (
+              <TouchableOpacity onPress={() => onUpdate('ledgerName', '')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                <Ionicons name="close-circle" size={12} color={COLORS.textTertiary} />
+              </TouchableOpacity>
+            ) : (
+              <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={11} color={COLORS.textSecondary} />
+            )}
+          </View>
+          {open && (
+            <View style={ir.taxSuggestions}>
+              <ScrollView style={{ maxHeight: 130 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} nestedScrollEnabled>
+                {filtered.length === 0 ? (
+                  <View style={ir.inlineEmpty}><Text style={ir.inlineEmptyTxt}>No matching ledgers</Text></View>
+                ) : (
+                  filtered.map((l, idx) => (
+                    <TouchableOpacity
+                      key={l.name}
+                      style={[ir.inlineOpt, idx === filtered.length - 1 && { borderBottomWidth: 0 }, entry.ledgerName === l.name && ir.inlineOptActive]}
+                      onPressIn={() => { selectingRef.current = true; }}
+                      onPress={() => { selectingRef.current = false; onUpdate('ledgerName', l.name); setQuery(''); setOpen(false); }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[ir.inlineOptTxt, entry.ledgerName === l.name && ir.inlineOptTxtActive]} numberOfLines={1}>{l.name}</Text>
+                      {entry.ledgerName === l.name && <Ionicons name="checkmark" size={13} color={COLORS.brandPrimary} />}
+                    </TouchableOpacity>
+                  ))
+                )}
+              </ScrollView>
+            </View>
+          )}
+        </View>
+        <View style={ir.taxRateBox}>
+          <TextInput
+            style={[ir.taxRateInput, wFix]}
+            value={entry.taxRate}
+            onChangeText={v => onUpdate('taxRate', v)}
+            keyboardType="numeric"
+            placeholder="0"
+            placeholderTextColor={COLORS.textTertiary}
+          />
+          <Text style={ir.taxRateSign}>%</Text>
+        </View>
+        <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="close-circle" size={16} color={COLORS.negative} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 // ─── ItemRow ──────────────────────────────────────────────────────────────────
-function ItemRow({ item, onUpdate, onRemove, onOpenModal, onBarcodePress, hasMultipleWarehouses, stockItems, taxLedgers, warehouses }: {
+function ItemRow({ item, onUpdate, onRemove, onOpenModal, onBarcodePress, onAddTaxEntry, onUpdateTaxEntry, onRemoveTaxEntry, hasMultipleWarehouses, stockItems, taxLedgers, warehouses }: {
   item: InvoiceItem;
   onUpdate: (id: string, field: keyof InvoiceItem, val: string) => void;
   onRemove: (id: string) => void;
   onOpenModal: (s: ModalState) => void;
   onBarcodePress: (itemId: string) => void;
+  onAddTaxEntry: (itemId: string) => void;
+  onUpdateTaxEntry: (itemId: string, entryId: string, field: keyof TaxLedgerEntry, val: string) => void;
+  onRemoveTaxEntry: (itemId: string, entryId: string) => void;
   hasMultipleWarehouses: boolean;
   stockItems: StockItem[];
   taxLedgers: { name: string }[];
@@ -624,7 +720,7 @@ function ItemRow({ item, onUpdate, onRemove, onOpenModal, onBarcodePress, hasMul
         </View>
       </View>
 
-      {/* Discount + Tax Ledger Picker */}
+      {/* Discount Row */}
       <View style={ir.fieldRow}>
         <View style={ir.discRow}>
           <TouchableOpacity
@@ -644,49 +740,33 @@ function ItemRow({ item, onUpdate, onRemove, onOpenModal, onBarcodePress, hasMul
           />
           <Text style={ir.discLabel}>Disc</Text>
         </View>
-        <TouchableOpacity
-          style={[ir.taxBtn, item.taxLedger ? { backgroundColor: COLORS.infoBg } : {}]}
-          onPress={() => onOpenModal({ type: 'taxLedger', itemId: item.id })}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="receipt-outline" size={12} color={COLORS.info} />
-          <Text style={ir.taxTxt} numberOfLines={1}>
-            {item.taxLedger ? item.taxLedger.slice(0, 14) : 'Tax Ledger'}
-          </Text>
-          <Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
-        </TouchableOpacity>
       </View>
 
-      {/* Tax Rate % + GST Type chips — shown only if taxLedger selected */}
-      {!!item.taxLedger && (
-        <View style={ir.fieldRow}>
-          <View style={ir.qtyBox}>
-            <Text style={ir.miniLabel}>Tax %</Text>
-            <TextInput
-              style={ir.miniInput}
-              value={item.taxRate}
-              onChangeText={v => onUpdate(item.id, 'taxRate', v)}
-              keyboardType="numeric"
-              placeholder="18"
-              placeholderTextColor={COLORS.textTertiary}
-            />
-          </View>
-          <TouchableOpacity
-            style={[ir.discTypeBtn, { flex: 1, marginLeft: 8 }, item.gstType === 'cgst_sgst' && { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary }]}
-            onPress={() => onUpdate(item.id, 'gstType', 'cgst_sgst')}
-            activeOpacity={0.7}
-          >
-            <Text style={[ir.discTypeTxt, item.gstType === 'cgst_sgst' && { color: COLORS.white }]}>CGST+SGST</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[ir.discTypeBtn, { flex: 1, marginLeft: 4 }, item.gstType === 'igst' && { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary }]}
-            onPress={() => onUpdate(item.id, 'gstType', 'igst')}
-            activeOpacity={0.7}
-          >
-            <Text style={[ir.discTypeTxt, item.gstType === 'igst' && { color: COLORS.white }]}>IGST</Text>
+      {/* Tax Ledgers Section */}
+      <View style={ir.taxSection}>
+        <View style={ir.taxSectionHdr}>
+          <Ionicons name="receipt-outline" size={13} color={COLORS.textSecondary} />
+          <Text style={ir.taxSectionTitle}>Tax Ledgers</Text>
+          <TouchableOpacity style={ir.addTaxBtn} onPress={() => onAddTaxEntry(item.id)} activeOpacity={0.7}>
+            <Ionicons name="add-circle-outline" size={13} color={COLORS.brandPrimary} />
+            <Text style={ir.addTaxTxt}>Add</Text>
           </TouchableOpacity>
         </View>
-      )}
+        {item.taxEntries.length === 0 && (
+          <TouchableOpacity style={ir.noTaxBtn} onPress={() => onAddTaxEntry(item.id)} activeOpacity={0.7}>
+            <Text style={ir.noTaxTxt}>No tax • Tap Add to attach ledger</Text>
+          </TouchableOpacity>
+        )}
+        {item.taxEntries.map(te => (
+          <TaxEntryRow
+            key={te.id}
+            entry={te}
+            taxLedgers={taxLedgers}
+            onUpdate={(field, val) => onUpdateTaxEntry(item.id, te.id, field, val)}
+            onRemove={() => onRemoveTaxEntry(item.id, te.id)}
+          />
+        ))}
+      </View>
 
       {/* Item Total */}
       <View style={ir.subtotalRow}>
@@ -733,7 +813,6 @@ export default function CreateSalesInvoiceScreen() {
   const [refNo, setRefNo] = useState('');
   const [items, setItems] = useState<InvoiceItem[]>([newItem()]);
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
-  const [logTaxRate, setLogTaxRate] = useState('0');
   const [narration, setNarration] = useState('');
   const [termsText, setTermsText] = useState('Goods once sold will not be taken back.');
   const [activeModal, setActiveModal] = useState<ModalState>(null);
@@ -858,6 +937,27 @@ export default function CreateSalesInvoiceScreen() {
     setItems(prev => [...prev, newItem(autoWarehouse)]);
   }, [warehouses]);
 
+  const addTaxEntry = useCallback((itemId: string) => {
+    setItems(prev => prev.map(i => i.id === itemId ? {
+      ...i,
+      taxEntries: [...i.taxEntries, { id: Date.now().toString() + Math.random().toString(36).slice(2), ledgerName: '', taxRate: '' }],
+    } : i));
+  }, []);
+
+  const updateTaxEntry = useCallback((itemId: string, entryId: string, field: keyof TaxLedgerEntry, val: string) => {
+    setItems(prev => prev.map(i => i.id === itemId ? {
+      ...i,
+      taxEntries: i.taxEntries.map(t => t.id === entryId ? { ...t, [field]: val } : t),
+    } : i));
+  }, []);
+
+  const removeTaxEntry = useCallback((itemId: string, entryId: string) => {
+    setItems(prev => prev.map(i => i.id === itemId ? {
+      ...i,
+      taxEntries: i.taxEntries.filter(t => t.id !== entryId),
+    } : i));
+  }, []);
+
   const goNext = useCallback(() => {
     if (step === 1) {
       if (!ledger) { Toast.show({ type: 'error', text1: 'Sales Ledger required' }); return; }
@@ -878,23 +978,18 @@ export default function CreateSalesInvoiceScreen() {
   const closeModal = useCallback(() => setActiveModal(null), []);
 
   // ── Computed ────────────────────────────────────────────────
-  const logisticsTotal = useMemo(() => calcLogisticsTotal(logEntries, logTaxRate), [logEntries, logTaxRate]);
+  const logisticsTotal = useMemo(() => calcLogisticsTotal(logEntries), [logEntries]);
 
   const totals = useMemo(() => {
-    let gross = 0, discTotal = 0, cgst = 0, sgst = 0, igst = 0;
+    let gross = 0, discTotal = 0, taxTotal = 0;
     items.forEach(item => {
       const c = calcItem(item);
       gross += c.gross;
       discTotal += c.discAmt;
-      if (item.gstType === 'igst') {
-        igst += c.taxAmt;
-      } else {
-        cgst += c.taxAmt / 2;
-        sgst += c.taxAmt / 2;
-      }
+      taxTotal += c.taxAmt;
     });
-    const grand = gross - discTotal + cgst + sgst + igst + logisticsTotal;
-    return { gross, discTotal, cgst, sgst, igst, taxTotal: cgst + sgst + igst, logisticsTotal, grand };
+    const grand = gross - discTotal + taxTotal + logisticsTotal;
+    return { gross, discTotal, taxTotal, logisticsTotal, grand };
   }, [items, logisticsTotal]);
 
   const paymentStatus = useMemo(() => {
@@ -949,22 +1044,17 @@ export default function CreateSalesInvoiceScreen() {
           salesLedger: ledger,
           godown: item.warehouse || warehouses[0]?.name || 'Main Location',
         })),
-        taxes: items
-          .filter(i => i.taxLedger && parseFloat(i.taxRate) > 0)
-          .map(item => {
-            const c = calcItem(item);
-            if (item.gstType === 'igst') {
-              return [{ ledgerName: item.taxLedger, taxRate: parseFloat(item.taxRate), taxAmount: c.taxAmt, taxableValue: c.taxable }];
-            } else {
-              const halfTax = c.taxAmt / 2;
-              const halfRate = parseFloat(item.taxRate) / 2;
-              return [
-                { ledgerName: `CGST @${halfRate}%`, taxRate: halfRate, taxAmount: halfTax, taxableValue: c.taxable },
-                { ledgerName: `SGST @${halfRate}%`, taxRate: halfRate, taxAmount: halfTax, taxableValue: c.taxable },
-              ];
-            }
-          })
-          .flat(),
+        taxes: items.flatMap(item => {
+          const taxable = calcItem(item).taxable;
+          return (item.taxEntries || [])
+            .filter(t => t.ledgerName && parseFloat(t.taxRate) > 0)
+            .map(t => ({
+              ledgerName: t.ledgerName,
+              taxRate: parseFloat(t.taxRate),
+              taxAmount: taxable * (parseFloat(t.taxRate) || 0) / 100,
+              taxableValue: taxable,
+            }));
+        }),
         collect_payment: collectPayNow ? {
           mode: payNowMode,
           amount: parseFloat(payNowAmount) || 0,
@@ -1203,8 +1293,11 @@ export default function CreateSalesInvoiceScreen() {
                         };
                       }));
                     });
-                    router.push('/sales/product-scanner' as any);
+                    router.push(`/sales/product-scanner?companyGuid=${company?.guid}` as any);
                   }}
+                  onAddTaxEntry={addTaxEntry}
+                  onUpdateTaxEntry={updateTaxEntry}
+                  onRemoveTaxEntry={removeTaxEntry}
                   hasMultipleWarehouses={hasMultipleWarehouses}
                   stockItems={stockItems}
                   taxLedgers={taxLedgers}
@@ -1219,9 +1312,7 @@ export default function CreateSalesInvoiceScreen() {
 
               <LogisticsSection
                 entries={logEntries}
-                taxRate={logTaxRate}
                 onEntriesChange={setLogEntries}
-                onTaxRateChange={setLogTaxRate}
               />
             </>
           )}
@@ -1242,22 +1333,10 @@ export default function CreateSalesInvoiceScreen() {
                     <Text style={[s.sumVal, { color: COLORS.positive }]}>-₹{totals.discTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
                   </View>
                 )}
-                {totals.cgst > 0 && (
+                {totals.taxTotal > 0 && (
                   <View style={s.summaryRow}>
-                    <Text style={s.sumLabel}>CGST</Text>
-                    <Text style={s.sumVal}>₹{totals.cgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
-                  </View>
-                )}
-                {totals.sgst > 0 && (
-                  <View style={s.summaryRow}>
-                    <Text style={s.sumLabel}>SGST</Text>
-                    <Text style={s.sumVal}>₹{totals.sgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
-                  </View>
-                )}
-                {totals.igst > 0 && (
-                  <View style={s.summaryRow}>
-                    <Text style={s.sumLabel}>IGST</Text>
-                    <Text style={s.sumVal}>₹{totals.igst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+                    <Text style={s.sumLabel}>Tax</Text>
+                    <Text style={s.sumVal}>₹{totals.taxTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
                   </View>
                 )}
                 {totals.logisticsTotal > 0 && (
@@ -1527,42 +1606,6 @@ export default function CreateSalesInvoiceScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Tax Ledger Modal */}
-      <Modal visible={activeModal?.type === 'taxLedger'} transparent animationType="slide" onRequestClose={closeModal}>
-        <View style={m.overlay}>
-          <TouchableOpacity style={{flex:1}} activeOpacity={1} onPress={closeModal} />
-          <View style={m.sheet}>
-          <View style={m.handle} />
-          <Text style={m.title}>Select Tax Ledger</Text>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {taxLedgers.length === 0 && (
-              <View style={mAdd.warehouseHint}>
-                <Ionicons name="alert-circle-outline" size={13} color={COLORS.warning} />
-                <Text style={[mAdd.warehouseHintTxt, { color: COLORS.warning }]}>No tax ledgers found</Text>
-              </View>
-            )}
-            {taxLedgers.map((t, idx) => {
-              const currentTaxLedger = activeModal ? items.find(i => i.id === activeModal.itemId)?.taxLedger || '' : '';
-              return (
-                <TouchableOpacity
-                  key={idx}
-                  style={[m.opt, t.name === currentTaxLedger && m.optActive]}
-                  onPress={() => { if (activeModal) updateItem(activeModal.itemId, 'taxLedger', t.name); closeModal(); }}
-                  activeOpacity={0.7}
-                >
-                  <View style={m.optLeft}>
-                    <Ionicons name="receipt-outline" size={16} color={COLORS.info} />
-                    <Text style={[m.optTxt, t.name === currentTaxLedger && m.optActiveTxt]}>{t.name}</Text>
-                  </View>
-                  {t.name === currentTaxLedger && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
       {/* Date Picker Modal (OPT mode only) */}
       <DatePickerModal
         visible={showDatePicker}
@@ -1723,6 +1766,22 @@ const ir = StyleSheet.create({
   inlineOptTxtActive: { fontWeight: '700', color: COLORS.brandPrimary },
   inlineEmpty: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 12 },
   inlineEmptyTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  // ─── Tax Entries Section ───
+  taxSection: { borderTopWidth: 1, borderTopColor: COLORS.borderDefault, paddingTop: 8, gap: 6 },
+  taxSectionHdr: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  taxSectionTitle: { flex: 1, fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
+  addTaxBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: RADIUS.full, backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.brandPrimary },
+  addTaxTxt: { fontSize: 10, fontWeight: '700', color: COLORS.brandPrimary },
+  noTaxBtn: { paddingVertical: 8, alignItems: 'center', borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg },
+  noTaxTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  taxEntryRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, paddingVertical: 4, paddingHorizontal: 4, borderWidth: 1, borderColor: COLORS.borderDefault },
+  taxLedgerBox: { flexDirection: 'row', alignItems: 'center', flex: 1, backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.sm, paddingHorizontal: 5, minHeight: 30 },
+  taxLedgerBoxOpen: { borderColor: COLORS.brandPrimary, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, borderBottomWidth: 0 },
+  taxLedgerInput: { flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary, paddingVertical: 4 },
+  taxSuggestions: { backgroundColor: COLORS.cardBg, borderWidth: 1.5, borderTopWidth: 0, borderColor: COLORS.brandPrimary, borderBottomLeftRadius: RADIUS.sm, borderBottomRightRadius: RADIUS.sm, overflow: 'hidden' },
+  taxRateBox: { flexDirection: 'row', alignItems: 'center', width: 52, backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.sm, paddingHorizontal: 4 },
+  taxRateInput: { flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary, paddingVertical: 5, textAlign: 'right' },
+  taxRateSign: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '600' },
 });
 
 const bs = StyleSheet.create({
