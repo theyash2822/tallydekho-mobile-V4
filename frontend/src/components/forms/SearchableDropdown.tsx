@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput, StyleSheet,
-  ScrollView, Platform, Modal,
+  ScrollView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 
 export interface SDOption {
@@ -25,202 +24,274 @@ interface Props {
   icon?: string;
 }
 
-// ─── Styles (declared before component so they're available) ─────────────────
-const s = StyleSheet.create({
-  wrap: { marginBottom: SPACING.md },
-  label: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
-  star: { color: COLORS.negative },
-  trigger: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: COLORS.cardBg,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: 12, minHeight: 48, paddingVertical: 10,
-  },
-  triggerSelected: { borderColor: COLORS.borderDefault },
-  triggerTxt: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, fontWeight: '500' },
-  triggerPlh: { color: COLORS.textTertiary, fontWeight: '400' },
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: COLORS.cardBg,
-    borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    maxHeight: '70%',
-  },
-  handle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 8 },
-  sheetHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  sheetTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
-  closeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  searchRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: SPACING.md, marginVertical: 12, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, paddingHorizontal: 12, minHeight: 44, borderWidth: 1, borderColor: COLORS.borderDefault },
-  searchInput: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, paddingVertical: 8 },
-  optRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  optTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
-  optTxtActive: { fontWeight: '700', color: COLORS.brandPrimary },
-  emptyRow: { alignItems: 'center', paddingVertical: 40, gap: 8 },
-  emptyTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
-  addNewRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: SPACING.md, paddingVertical: 16, borderTopWidth: 1.5, borderTopColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg },
-  addNewTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.brandPrimary },
-  inputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 12, minHeight: 48 },
-  inputBoxFocused: { borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
-  inputBoxOpen: { borderColor: COLORS.brandPrimary },
-  input: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, paddingVertical: 10 },
-  dropList: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, overflow: 'hidden' },
-  dropItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  dropText: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
-  dropTextActive: { fontWeight: '700', color: COLORS.brandPrimary },
-  addNewText: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.brandPrimary },
-});
-
-export const sd = s;
-
 export default function SearchableDropdown({
   label, required, placeholder, options, value,
-  onSelect, onAddNew, addNewLabel, containerStyle, icon = 'search',
+  onSelect, onAddNew, addNewLabel, containerStyle,
 }: Props) {
-  const [modalOpen, setModalOpen] = useState(false);
-  const [query, setQuery]         = useState('');
+  const [query, setQuery]     = useState('');
+  const [open, setOpen]       = useState(false);
+  const selectionPending      = useRef(false);
+  const webFix = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
 
-  const selectedLabel = options.find(o => o.value === value)?.label;
-  const filtered = query
+  const selectedLabel = options.find(o => o.value === value)?.label || '';
+
+  // While open → show whatever the user typed; when closed → show selected label
+  const inputDisplay = open ? query : selectedLabel;
+
+  // Filter: if query has text, match anywhere (case-insensitive); else show all
+  const filtered = query.trim()
     ? options.filter(o => o.label.toLowerCase().includes(query.toLowerCase()))
     : options;
 
-  const webFix = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
+  /* ── Handlers ── */
+  const handleFocus = () => {
+    setQuery('');   // fresh search on every open
+    setOpen(true);
+  };
+
+  const handleBlur = () => {
+    // Slight delay so onPressIn on a suggestion fires before we close
+    setTimeout(() => {
+      if (!selectionPending.current) setOpen(false);
+      selectionPending.current = false;
+    }, 150);
+  };
 
   const handleSelect = (opt: SDOption) => {
+    selectionPending.current = false;
     onSelect(opt);
     setQuery('');
-    setModalOpen(false);
+    setOpen(false);
+  };
+
+  const handleClear = () => {
+    onSelect({ label: '', value: '' });
+    setQuery('');
+    setOpen(false);
+  };
+
+  const handleAddNew = () => {
+    selectionPending.current = false;
+    setOpen(false);
+    onAddNew?.();
   };
 
   return (
     <View style={[s.wrap, containerStyle]}>
+      {/* Label */}
       <Text style={s.label}>
-        {label}{required ? <Text style={s.star}> *</Text> : null}
+        {label}
+        {required ? <Text style={s.star}> *</Text> : null}
       </Text>
 
-      {/* Trigger Button */}
-      <TouchableOpacity
-        style={[s.trigger, value ? s.triggerSelected : null]}
-        onPress={() => setModalOpen(true)}
-        activeOpacity={0.7}
-      >
+      {/* Search Input */}
+      <View style={[s.inputBox, open && s.inputBoxOpen]}>
         <Ionicons
-          name={icon as any}
+          name="search"
           size={15}
-          color={value ? COLORS.textSecondary : COLORS.textTertiary}
-          style={{ marginRight: 6 }}
+          color={open ? COLORS.brandPrimary : COLORS.textTertiary}
+          style={{ marginRight: 8 }}
         />
-        <Text
-          style={[s.triggerTxt, !value && s.triggerPlh]}
-          numberOfLines={1}
-        >
-          {selectedLabel || placeholder || 'Select...'}
-        </Text>
+        <TextInput
+          style={[s.input, webFix]}
+          value={inputDisplay}
+          onChangeText={setQuery}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          placeholder={placeholder || `Search ${label.toLowerCase()}...`}
+          placeholderTextColor={COLORS.textTertiary}
+          returnKeyType="done"
+          autoCorrect={false}
+          autoCapitalize="none"
+        />
         {value ? (
           <TouchableOpacity
-            onPress={() => onSelect({ label: '', value: '' })}
+            onPress={handleClear}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={{ marginRight: 4 }}
+            activeOpacity={0.7}
           >
-            <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
+            <Ionicons name="close-circle" size={17} color={COLORS.textTertiary} />
           </TouchableOpacity>
-        ) : null}
-        <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
-      </TouchableOpacity>
-
-      {/* Modal Picker */}
-      <Modal
-        visible={modalOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setModalOpen(false)}
-      >
-        <View style={s.backdrop}>
-          <TouchableOpacity
-            style={{flex:1}}
-            activeOpacity={1}
-            onPress={() => { setQuery(''); setModalOpen(false); }}
+        ) : (
+          <Ionicons
+            name={open ? 'chevron-up' : 'chevron-down'}
+            size={15}
+            color={COLORS.textSecondary}
           />
-          <View style={s.sheet}>
-          {/* Handle */}
-          <View style={s.handle} />
+        )}
+      </View>
 
-          {/* Header */}
-          <View style={s.sheetHeader}>
-            <Text style={s.sheetTitle}>{label}</Text>
-            <TouchableOpacity
-              onPress={() => { setQuery(''); setModalOpen(false); }}
-              style={s.closeBtn}
-            >
-              <Ionicons name="close" size={22} color={COLORS.textPrimary} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Search */}
-          <View style={s.searchRow}>
-            <Ionicons name="search" size={16} color={COLORS.textTertiary} style={{ marginRight: 8 }} />
-            <TextInput
-              style={[s.searchInput, webFix]}
-              value={query}
-              onChangeText={setQuery}
-              placeholder={`Search ${label.toLowerCase()}...`}
-              placeholderTextColor={COLORS.textTertiary}
-              autoFocus
-              clearButtonMode="while-editing"
-            />
-            {query.length > 0 && (
-              <TouchableOpacity onPress={() => setQuery('')}>
-                <Ionicons name="close-circle" size={18} color={COLORS.textTertiary} />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* List */}
+      {/* Inline Predictive Suggestions */}
+      {open && (
+        <View style={s.suggestions}>
           <ScrollView
+            style={{ maxHeight: 210 }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
-            style={{ flex: 1 }}
+            nestedScrollEnabled
           >
-            {filtered.map((opt, idx) => (
-              <TouchableOpacity
-                key={opt.value}
-                style={[
-                  s.optRow,
-                  idx === filtered.length - 1 && !onAddNew && { borderBottomWidth: 0 },
-                ]}
-                onPress={() => handleSelect(opt)}
-                activeOpacity={0.7}
-              >
-                <Text style={[s.optTxt, value === opt.value && s.optTxtActive]}>
-                  {opt.label}
-                </Text>
-                {value === opt.value && (
-                  <Ionicons name="checkmark" size={18} color={COLORS.brandPrimary} />
-                )}
-              </TouchableOpacity>
-            ))}
-            {filtered.length === 0 && (
+            {filtered.length === 0 ? (
               <View style={s.emptyRow}>
-                <Ionicons name="search-outline" size={24} color={COLORS.textTertiary} />
-                <Text style={s.emptyTxt}>No results for "{query}"</Text>
+                <Ionicons name="search-outline" size={20} color={COLORS.textTertiary} />
+                <Text style={s.emptyTxt}>
+                  {query ? `No results for "${query}"` : 'No options available'}
+                </Text>
               </View>
+            ) : (
+              filtered.map((opt, idx) => (
+                <TouchableOpacity
+                  key={opt.value || String(idx)}
+                  style={[
+                    s.optRow,
+                    idx === filtered.length - 1 && !onAddNew && { borderBottomWidth: 0 },
+                    value === opt.value && s.optRowActive,
+                  ]}
+                  onPressIn={() => { selectionPending.current = true; }}
+                  onPress={() => handleSelect(opt)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[s.optTxt, value === opt.value && s.optTxtActive]}
+                    numberOfLines={1}
+                  >
+                    {opt.label}
+                  </Text>
+                  {value === opt.value && (
+                    <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />
+                  )}
+                </TouchableOpacity>
+              ))
             )}
           </ScrollView>
 
-          {/* Add New */}
+          {/* Add New button at the bottom of suggestions */}
           {onAddNew && (
             <TouchableOpacity
               style={s.addNewRow}
-              onPress={() => { onAddNew(); setModalOpen(false); }}
+              onPressIn={() => { selectionPending.current = true; }}
+              onPress={handleAddNew}
               activeOpacity={0.7}
             >
-              <Ionicons name="add-circle-outline" size={18} color={COLORS.brandPrimary} />
+              <Ionicons name="add-circle-outline" size={16} color={COLORS.brandPrimary} />
               <Text style={s.addNewTxt}>{addNewLabel || 'Add New'}</Text>
             </TouchableOpacity>
           )}
-          </View>
         </View>
-      </Modal>
+      )}
     </View>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  wrap: { marginBottom: SPACING.md },
+
+  label: {
+    fontSize: TYPOGRAPHY.sm,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginBottom: 6,
+  },
+  star: { color: COLORS.negative },
+
+  /* Input field */
+  inputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.cardBg,
+    borderWidth: 1,
+    borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 12,
+    minHeight: 48,
+  },
+  inputBoxOpen: {
+    borderColor: COLORS.brandPrimary,
+    borderWidth: 1.5,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    borderBottomWidth: 0,
+  },
+  input: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.base,
+    color: COLORS.textPrimary,
+    paddingVertical: 10,
+  },
+
+  /* Suggestions panel */
+  suggestions: {
+    backgroundColor: COLORS.cardBg,
+    borderWidth: 1.5,
+    borderColor: COLORS.brandPrimary,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: RADIUS.md,
+    borderBottomRightRadius: RADIUS.md,
+    overflow: 'hidden',
+    // Android elevation so it appears above sibling views
+    elevation: 8,
+    // iOS shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    zIndex: 999,
+  },
+
+  /* Option rows */
+  optRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderDefault,
+  },
+  optRowActive: {
+    backgroundColor: COLORS.pageBg,
+  },
+  optTxt: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.base,
+    color: COLORS.textPrimary,
+    marginRight: 8,
+  },
+  optTxtActive: {
+    fontWeight: '700',
+    color: COLORS.brandPrimary,
+  },
+
+  /* Empty state */
+  emptyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 20,
+  },
+  emptyTxt: {
+    fontSize: TYPOGRAPHY.sm,
+    color: COLORS.textTertiary,
+  },
+
+  /* Add New */
+  addNewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 14,
+    borderTopWidth: 1.5,
+    borderTopColor: COLORS.borderDefault,
+    backgroundColor: COLORS.pageBg,
+  },
+  addNewTxt: {
+    fontSize: TYPOGRAPHY.base,
+    fontWeight: '700',
+    color: COLORS.brandPrimary,
+  },
+});
+
+// Keep named export for backward compat
+export const sd = s;
