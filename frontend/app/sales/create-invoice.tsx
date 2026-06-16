@@ -6,13 +6,14 @@ import {
 import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import {
   getParties, createSalesInvoice, getStocks, getWarehouses,
   getSalesLedgerAccounts, getTaxLedgers, createTallyParty, lookupBarcode,
+  getComplianceConfig,
 } from '../../src/services/api';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import FormField from '../../src/components/forms/FormField';
@@ -692,7 +693,9 @@ export default function CreateSalesInvoiceScreen() {
   const [transportMode, setTransportMode]       = useState('Road');
   const [vehicleNumber, setVehicleNumber]       = useState('');
   const [vehicleType, setVehicleType]           = useState('Regular');
-  const [transportDocNo, setTransportDocNo]     = useState('');
+  const [transportDocNo, setTransportDocNo]         = useState('');
+  const [transportDocDate, setTransportDocDate]       = useState('');
+  const [showTransportDocDatePicker, setShowTransportDocDatePicker] = useState(false);
 
   // Collect Payment Now
   const [collectPayNow, setCollectPayNow] = useState(false);
@@ -747,6 +750,25 @@ export default function CreateSalesInvoiceScreen() {
     if (!company?.guid) return;
     getTaxLedgers(company.guid).then((res: any) => {
       setTaxLedgers(res?.data || []);
+    }).catch(() => {});
+  }, [company?.guid]);
+
+  // ── Quotation pre-fill from params ──────────────────────────────────────────
+  const routeParams = useLocalSearchParams<{ party?: string; fromQuotation?: string }>();
+  useEffect(() => {
+    if (routeParams?.party) setParty(routeParams.party as string);
+    if (routeParams?.fromQuotation) setRefNo(routeParams.fromQuotation as string);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Auto-enable dispatch toggle when EWB is configured ───────────────────
+  useEffect(() => {
+    if (!company?.guid) return;
+    getComplianceConfig(company.guid).then((res: any) => {
+      const cfg = res?.data || res;
+      if (cfg?.e_way_bill_applicable === 'applicable_configured') {
+        setShowDispatch(true);
+      }
     }).catch(() => {});
   }, [company?.guid]);
 
@@ -884,7 +906,8 @@ export default function CreateSalesInvoiceScreen() {
           transporter_id:   transporterId || undefined,
           vehicle_number:   vehicleNumber || undefined,
           vehicle_type:     vehicleType,
-          transport_doc_no: transportDocNo || undefined,
+          transport_doc_no:   transportDocNo || undefined,
+          transport_doc_date: transportDocDate || undefined,
         } : undefined,
         is_draft: isDraft,
       });
@@ -898,7 +921,7 @@ export default function CreateSalesInvoiceScreen() {
     } finally {
       setSubmitting(false);
     }
-  }, [party, items, hasMultipleWarehouses, company, date, ledger, entryType, totals.grand, refNo, narration, warehouses, collectPayNow, payNowMode, payNowAmount, payNowRef, showDispatch, dispatchFrom, shipTo, transportMode, transporterName, transporterId, vehicleNumber, vehicleType, transportDocNo]);
+  }, [party, items, hasMultipleWarehouses, company, date, ledger, entryType, totals.grand, refNo, narration, warehouses, collectPayNow, payNowMode, payNowAmount, payNowRef, showDispatch, dispatchFrom, shipTo, transportMode, transporterName, transporterId, vehicleNumber, vehicleType, transportDocNo, transportDocDate]);
 
   // ── Render ──────────────────────────────────────────────────
   return (
@@ -1260,6 +1283,17 @@ export default function CreateSalesInvoiceScreen() {
                     <Text style={s.fLabel}>Doc / LR / RR No.</Text>
                     <ThemedFInput value={transportDocNo} onChangeText={setTransportDocNo} placeholder="Optional" />
                   </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.fLabel}>Doc Date</Text>
+                    <TouchableOpacity
+                      style={[s.fInput, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                      onPress={() => setShowTransportDocDatePicker(true)}>
+                      <Text style={{ color: transportDocDate ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.base }}>
+                        {transportDocDate ? (() => { const [y,m,d] = transportDocDate.split('-'); return `${d}/${m}/${y.slice(2)}`; })() : 'Optional'}
+                      </Text>
+                      <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             )}
@@ -1508,6 +1542,15 @@ export default function CreateSalesInvoiceScreen() {
         maxDate={new Date().toISOString().slice(0, 10)}
         onSelect={(d) => { setDate(d); setShowDatePicker(false); }}
         onClose={() => setShowDatePicker(false)}
+      />
+
+      {/* Transport Doc Date Picker */}
+      <DatePickerModal
+        visible={showTransportDocDatePicker}
+        value={transportDocDate || new Date().toISOString().slice(0, 10)}
+        maxDate={new Date().toISOString().slice(0, 10)}
+        onSelect={(d) => { setTransportDocDate(d); setShowTransportDocDatePicker(false); }}
+        onClose={() => setShowTransportDocDatePicker(false)}
       />
 
       {/* Add New Customer Drawer */}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Alert } from 'react-native';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,11 +26,32 @@ export default function QuotationsScreen() {
     if (!companyGuid) return;
     getSalesQuotations(companyGuid).then((res: any) => {
       const rows = res?.data ?? [];
-      if (rows.length) setLiveData(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), party: r.party_name||'', date: r.date||'', amount: formatAmount(Math.abs(+r.amount||0)), status: 'confirmed' })));
+      if (rows.length) setLiveData(rows.map((r: any) => ({
+        id:               r.voucher_number || String(r.id),
+        guid:             r.guid || '',
+        party:            r.party_name || '',
+        date:             r.date || '',
+        amount:           formatAmount(Math.abs(+r.amount || 0)),
+        status:           'confirmed',
+        currentEntryType: r.current_entry_type || 'regular',
+        tdkRef:           r.tdk_reference_no || '',
+      })));
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
   }, [companyGuid]);
 
-      const filtered = (liveData).filter((o: any) => !search || o.party.toLowerCase().includes(search.toLowerCase()) || o.id.toLowerCase().includes(search.toLowerCase()));
+  const handleConvert = (o: any) => {
+    if (o.currentEntryType === 'optional') {
+      Alert.alert(
+        'Cannot Convert Optional Entry',
+        'This quotation is an Optional entry. It must first be regularized in TallyPrime before it can be converted to a Sales Invoice.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    router.push({ pathname: '/sales/create-invoice', params: { party: o.party, fromQuotation: o.id } } as any);
+  };
+
+  const filtered = (liveData).filter((o: any) => !search || o.party.toLowerCase().includes(search.toLowerCase()) || o.id.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <SafeAreaView style={s.safe}>
@@ -59,17 +80,28 @@ export default function QuotationsScreen() {
         <View style={s.card}>
           {filtered.map((o, idx) => (
             <View key={o.id}>
-              <TouchableOpacity style={s.row} activeOpacity={0.7}>
+              <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={() => handleConvert(o)}>
                 <View style={s.rowL}>
                   <View style={[s.dot, { backgroundColor: SC[o.status] || '#9CA3AF' }]} />
                   <View style={s.rInfo}>
                     <View style={s.topR}><Text style={[s.stLbl, { color: SC[o.status] }]}>{SL[o.status]}</Text><Text style={s.docId}>{o.id}</Text></View>
                     <Text style={s.party}>{o.party}</Text>
-                    <Text style={s.meta}>{o.date} · {o.time}</Text>
+                    <Text style={s.meta}>{o.date}</Text>
+                    {o.currentEntryType === 'optional' && (
+                      <Text style={{ fontSize: TYPOGRAPHY.xs - 1, color: '#D97706', fontWeight: '700', marginTop: 2 }}>OPTIONAL</Text>
+                    )}
                   </View>
                 </View>
                 <View style={s.rowR}><Text style={s.amt}>{o.amount}</Text>
-                  <TouchableOpacity style={s.shareB}><Ionicons name="share-outline" size={14} color={COLORS.positive} /><Text style={s.shareT}>Share</Text></TouchableOpacity>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    <TouchableOpacity style={s.shareB} onPress={e => { e.stopPropagation?.(); }}><Ionicons name="share-outline" size={14} color={COLORS.positive} /><Text style={s.shareT}>Share</Text></TouchableOpacity>
+                    <TouchableOpacity
+                      style={[s.shareB, { backgroundColor: o.currentEntryType === 'optional' ? COLORS.pageBg : '#EFF6FF', borderWidth: 1, borderColor: o.currentEntryType === 'optional' ? COLORS.borderDefault : '#BFDBFE' }]}
+                      onPress={() => handleConvert(o)}>
+                      <Ionicons name="arrow-forward-circle-outline" size={14} color={o.currentEntryType === 'optional' ? COLORS.textTertiary : '#2563EB'} />
+                      <Text style={[s.shareT, { color: o.currentEntryType === 'optional' ? COLORS.textTertiary : '#2563EB' }]}>Convert</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </TouchableOpacity>
               {idx < filtered.length - 1 && <View style={s.div} />}
