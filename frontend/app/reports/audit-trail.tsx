@@ -441,8 +441,8 @@ export default function AuditTrailScreen() {
         if (lifecycleFilter === 'optional')           return ct === 'optional';
         if (lifecycleFilter === 'originally_optional') return ot === 'optional' && ct === 'regular';
         if (lifecycleFilter === 'failed')             return ss === 'failed';
-        if (lifecycleFilter === 'irn_pending')        return ['locked','pending','details_required'].includes(ei || '');
-        if (lifecycleFilter === 'ewb_pending')        return ['locked','pending','details_required'].includes(ew || '');
+        if (lifecycleFilter === 'irn_pending')        return !['not_applicable','not_required','generated','cancelled'].includes(ei || 'not_applicable');
+        if (lifecycleFilter === 'ewb_pending')        return !['not_applicable','not_required','generated','cancelled'].includes(ew || 'not_applicable');
         return true;
       });
     }
@@ -864,9 +864,9 @@ export default function AuditTrailScreen() {
                                       <Text style={[lb.badgeTxt, { color: COLORS.info }]}>IRN ✓</Text>
                                     </View>
                                   )}
-                                  {['locked','pending','details_required'].includes(entry.eInvoiceStatus || '') && (
+                                  {['generating','failed'].includes(entry.eInvoiceStatus || '') && (
                                     <View style={[lb.badge, lb.irnPending]}>
-                                      <Text style={[lb.badgeTxt, { color: COLORS.info }]}>IRN Pending</Text>
+                                      <Text style={[lb.badgeTxt, { color: COLORS.info }]}>{entry.eInvoiceStatus === 'failed' ? 'IRN Failed' : 'IRN Pending'}</Text>
                                     </View>
                                   )}
                                 </View>

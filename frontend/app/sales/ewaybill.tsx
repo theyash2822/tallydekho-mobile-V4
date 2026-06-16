@@ -11,7 +11,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import Toast from 'react-native-toast-message';
 
 import { useAuth } from '../../src/context/AuthContext';
-import { getEWBList, getEWBPending, generateEWayBill, getCompanyCapabilities } from '../../src/services/api';
+import { getEWBList, getEWBPending, generateEWayBill } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 
 const EWB_COLORS: Record<string, string> = {
