@@ -248,7 +248,7 @@ export default function PrintSettingsScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ── Bottom action bar */
+      {/* ── Bottom action bar */}
       <View style={[s.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         {/* Row 1: Preview + Print */}
         <View style={s.btnRow}>

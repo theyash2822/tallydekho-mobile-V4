@@ -807,7 +807,7 @@ export default function VoucherConfigScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Bank Picker — single instance at root level */
+      {/* Bank Picker — single instance at root level */}
       <PickerSheet
         visible={bankPickerFor !== null}
         title="Select Bank Account"

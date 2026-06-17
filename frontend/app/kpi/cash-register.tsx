@@ -395,7 +395,7 @@ export default function CashRegisterScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Share Button (multi-select mode) */
+      {/* Share Button (multi-select mode) */}
       {selected.size > 0 && (
         <View style={s.shareBtnWrap}>
           <TouchableOpacity

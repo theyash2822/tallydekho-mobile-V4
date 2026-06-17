@@ -1042,7 +1042,7 @@ export default function StockSettingsScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ── Fixed Bottom Action Bar */
+      {/* ── Fixed Bottom Action Bar */}
       {isDirty && (
         <View style={[s.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <TouchableOpacity
