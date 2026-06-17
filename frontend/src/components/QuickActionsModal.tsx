@@ -110,7 +110,7 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose,
       onRequestClose={onClose}
     >
       <View style={s.overlay}>
-        <TouchableOpacity style={s.backdrop} onPress={onClose} activeOpacity={1} />
+        <TouchableOpacity style={{ flex: 1 }} onPress={onClose} activeOpacity={1} />
 
         <View style={[s.sheet, { paddingBottom: sheetBottomPad }]}>
           {/* Header */}
@@ -196,11 +196,8 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose,
 const s = StyleSheet.create({
   overlay: {
     flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
   },
   sheet: {
     backgroundColor: '#F4F4F4',

@@ -149,6 +149,7 @@ const styles = StyleSheet.create({
     elevation: 10,
     boxShadow: '0 -3px 10px rgba(0, 0, 0, 0.3)',
     alignItems: 'flex-end',
+    overflow: 'visible',    // allow FAB (marginTop: -20) to protrude & receive touches
   },
   tabSide: {
     flex: 1,
@@ -174,6 +175,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     paddingBottom: 6,
+    overflow: 'visible',    // allow FAB to extend above tabBar and receive touch
   },
   fab: {
     width: 58,
