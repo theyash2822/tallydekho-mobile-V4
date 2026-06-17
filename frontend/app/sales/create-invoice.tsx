@@ -167,7 +167,7 @@ function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
                 ? <Ionicons name="checkmark" size={13} color={COLORS.white} />
                 : <Text style={[si.circleNum, step === st.num && si.circleNumActive]}>{st.num}</Text>}
             </View>
-            <Text style={[si.label, step === st.num && si.labelActive, step > st.num && { color: COLORS.brandPrimary }]}>
+            <Text style={[si.label, step === st.num && si.labelActive]}>
               {st.label}
             </Text>
           </View>
@@ -1719,10 +1719,10 @@ const si = StyleSheet.create({
   wrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, paddingHorizontal: SPACING.lg, paddingVertical: 12 },
   stepItem: { alignItems: 'center', gap: 4 },
   circle: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg, alignItems: 'center', justifyContent: 'center' },
-  circleActive: { borderColor: COLORS.brandPrimary },
-  circleDone: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary },
+  circleActive: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary },
+  circleDone: { borderColor: '#1C1C1C', backgroundColor: '#1C1C1C' },
   circleNum: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' as const, color: COLORS.textTertiary },
-  circleNumActive: { color: COLORS.brandPrimary },
+  circleNumActive: { color: COLORS.white },
   label: { fontSize: TYPOGRAPHY.xs, fontWeight: '600' as const, color: COLORS.textTertiary },
   labelActive: { color: COLORS.brandPrimary },
   line: { flex: 1, height: 2, backgroundColor: COLORS.borderDefault, marginBottom: 18, marginHorizontal: 6 },
