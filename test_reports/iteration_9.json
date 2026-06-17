@@ -1,0 +1,63 @@
+{
+  "summary": "Tested the 3-step Sales Invoice Wizard in TallyDekho. All 8 feature requirements PASS. Wizard renders correctly across all 3 steps with proper field ordering, no default taxes, Payment Terms in Step 3 only, correct payment modes (Cash/Cheque/NEFT/Bank Transfer/UPI), and E-Way Bill transport chips.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "MINOR: _onboardingShownThisSession is a module-level variable in _layout.tsx that resets on every page reload. Navigation from tabs to a stack screen (sales/create-invoice) can sometimes re-trigger the onboarding redirect. During testing, this was reproducible on certain navigation paths. Recommend adding a more robust onboarding completion state (e.g., AsyncStorage flag) instead of module-level variable.",
+    "MINOR: tally-sync Skip button calls signIn() but _layout.tsx has no explicit redirect from /(auth) to /(tabs) when isAuthenticated becomes true. The tally-sync screen stays stuck if the layout doesn't trigger navigation. This was worked around in testing but may affect real users."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A",
+    "frontend": "100%"
+  },
+  "seed_data_creation": "No seed data created. All data is mocked.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Auth flow: set localStorage auth_token=mock_token_123, reload page, click Skip (top-right at coords 345,40), then use FAB bottom-center to navigate to Sales > Create Invoice. OTP is mocked (any 4 digits work). All invoice APIs are mocked.",
+  "test_results": {
+    "step1": {
+      "Sales Ledger dropdown": "PASS",
+      "Invoice No locked (INV-30979)": "PASS",
+      "Date locked today (Regular mode)": "PASS",
+      "Customer/Party search field": "PASS",
+      "NO Payment Terms in Step 1": "PASS",
+      "REG/OPT toggle in header": "PASS",
+      "3-step indicator visible": "PASS"
+    },
+    "step2": {
+      "Navigation from Step 1 after customer selection": "PASS",
+      "Product shown FIRST (before Warehouse)": "PASS",
+      "Barcode scan button next to product": "PASS",
+      "Warehouse shown SECOND": "PASS",
+      "No pre-filled taxes (empty + Add Tax button)": "PASS",
+      "Logistics & Shipping collapsible toggle": "PASS",
+      "Logistics expanded shows Add Logistics/Shipping Charge": "PASS"
+    },
+    "step3": {
+      "Payment Terms collapsible in Step 3 (NOT Step 1)": "PASS",
+      "Collect Payment toggle": "PASS",
+      "Payment Mode: Cash": "PASS",
+      "Payment Mode: Cheque": "PASS",
+      "Payment Mode: NEFT": "PASS",
+      "Payment Mode: Bank Transfer": "PASS",
+      "Payment Mode: UPI": "PASS",
+      "NO RTGS in payment modes": "PASS",
+      "NO IMPS in payment modes": "PASS",
+      "E-Way Bill toggle visible": "PASS",
+      "Transport chips: Road/Rail/Air/Ship/Not Applicable": "PASS",
+      "Invoice Summary visible": "PASS",
+      "Submit Invoice button visible": "PASS"
+    }
+  }
+}

@@ -259,7 +259,7 @@ export default function CreateSalesOrderScreen() {
   const removeItem = useCallback((id:string) =>
     setItems(prev => prev.length>1 ? prev.filter(i => i.id!==id) : prev), []);
 
-  const logisticsTotal = useMemo(() => calcLogisticsTotal(logEntries, logTaxRate), [logEntries, logTaxRate]);
+  const logisticsTotal = useMemo(() => calcLogisticsTotal(logEntries), [logEntries]);
 
   const totals = useMemo(() => {
     let gross=0, discTotal=0, taxTotal=0;
@@ -344,7 +344,7 @@ export default function CreateSalesOrderScreen() {
             <Text style={s.addTxt}>Add Item / Service</Text>
           </TouchableOpacity>
 
-          <LogisticsSection entries={logEntries} taxRate={logTaxRate} onEntriesChange={setLogEntries} onTaxRateChange={setLogTaxRate} />
+          <LogisticsSection entries={logEntries} onEntriesChange={setLogEntries} />
 
           {/* Summary */}
           <View style={s.sumCard}>
