@@ -127,32 +127,54 @@ export default function LogisticsSection({
         : e
     ));
 
-  const hasAnyContent = entries.length > 0 || !!roundOffLedger || !!roundOffAmount;
-
   return (
     <View style={ls.container}>
       {/* Header */}
-      <TouchableOpacity style={ls.header} onPress={() => setExpanded(!expanded)} activeOpacity={0.7}>
-        <View style={ls.headerLeft}>
-          <View style={[ls.headerIcon, expanded ? ls.headerIconActive : undefined]}>
-            <Ionicons name="car-outline" size={16} color={expanded ? COLORS.warning : COLORS.textSecondary} />
-          </View>
-          <View>
-            <Text style={ls.headerTitle}>Logistics & Charges</Text>
-            {hasAnyContent && (
+      {entries.length > 0 ? (
+        <TouchableOpacity style={ls.header} onPress={() => setExpanded(!expanded)} activeOpacity={0.7}>
+          <View style={ls.headerLeft}>
+            <View style={[ls.headerIcon, expanded ? ls.headerIconActive : undefined]}>
+              <Ionicons name="truck-outline" size={16} color={expanded ? COLORS.warning : COLORS.textSecondary} />
+            </View>
+            <View>
+              <Text style={ls.headerTitle}>Logistics & Shipping</Text>
               <Text style={ls.headerSub}>
-                {entries.length > 0 ? `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'}` : ''}
-                {roundOffLedger ? (entries.length > 0 ? ' + Round Off' : 'Round Off') : ''}
-                {total > 0 ? ` · ₹${total.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : ''}
+                {`${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} · ₹${chargesTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
               </Text>
-            )}
+            </View>
+          </View>
+          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
+        </TouchableOpacity>
+      ) : (
+        <View style={ls.header}>
+          <View style={ls.headerLeft}>
+            <View style={ls.headerIcon}>
+              <Ionicons name="truck-outline" size={16} color={COLORS.textSecondary} />
+            </View>
+            <View>
+              <Text style={ls.headerTitle}>Logistics & Shipping</Text>
+              <Text style={ls.headerSub}>Freight, packing, other charges</Text>
+            </View>
           </View>
         </View>
-        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
-      </TouchableOpacity>
+      )}
+
+      {/* Empty state: green dashed add button */}
+      {entries.length === 0 && (
+        <View style={{ paddingHorizontal: SPACING.md, paddingBottom: SPACING.md }}>
+          <TouchableOpacity
+            style={{ borderWidth: 1.5, borderColor: '#22C55E', borderStyle: 'dashed', borderRadius: 8, padding: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 8 }}
+            onPress={addEntry}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="add-circle-outline" size={16} color="#22C55E" />
+            <Text style={{ color: '#22C55E', fontWeight: '600', fontSize: 14 }}>Add Logistics / Shipping Charge</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Body */}
-      {expanded && (
+      {entries.length > 0 && expanded && (
         <View style={ls.body}>
           {/* ── Logistics / Charge entries ── */}
           {entries.map((entry) => {
@@ -251,7 +273,7 @@ export default function LogisticsSection({
           {/* Add Logistics Row button */}
           <TouchableOpacity style={ls.addEntryBtn} onPress={addEntry} activeOpacity={0.7}>
             <Ionicons name="add-circle-outline" size={16} color={COLORS.warning} />
-            <Text style={ls.addEntryTxt}>+ Add Logistics / Charge Row</Text>
+            <Text style={ls.addEntryTxt}>+ Add Logistics Row</Text>
           </TouchableOpacity>
 
           {/* ── Round Off (separate line item) ── */}

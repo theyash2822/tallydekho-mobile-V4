@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput, Modal, TextInputProps, ActivityIndicator,
+  KeyboardAvoidingView, Platform, Alert, TextInput, Modal, TextInputProps, ActivityIndicator, Keyboard,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -484,7 +484,7 @@ function ItemRow({
                 />
               </View>
               <TouchableOpacity style={ir.barcodeBtn} onPress={() => onBarcodePress(item.id)} activeOpacity={0.7}>
-                <Ionicons name="barcode-outline" size={18} color={COLORS.textSecondary} />
+                <Ionicons name="scan-outline" size={20} color={COLORS.textPrimary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -548,30 +548,29 @@ function ItemRow({
           {/* Tax Section */}
           <View style={ir.taxSection}>
             <View style={ir.taxSectionHdr}>
-              <Ionicons name="receipt-outline" size={13} color={COLORS.textSecondary} />
               <Text style={ir.taxSectionTitle}>Taxes</Text>
-              <Text style={ir.taxColHint}>Type · Rate% · Amt ₹</Text>
-              <TouchableOpacity style={ir.addTaxBtn} onPress={() => onAddTaxEntry(item.id)} activeOpacity={0.7}>
-                <Ionicons name="add-circle-outline" size={13} color={COLORS.brandPrimary} />
-                <Text style={ir.addTaxTxt}>Add Tax</Text>
-              </TouchableOpacity>
+              <Text style={ir.taxColHint}>Type · Rate % · Amount ₹</Text>
             </View>
-            {item.taxEntries.length === 0 ? (
-              <View style={ir.noTaxPlaceholder}>
-                <Text style={ir.noTaxTxt}>No tax — tap Add to attach ledger</Text>
-              </View>
-            ) : (
-              item.taxEntries.map(te => (
-                <TaxEntryRow
-                  key={te.id}
-                  entry={te}
-                  taxLedgers={taxLedgers}
-                  taxable={calc.taxable}
-                  onUpdate={(field, val) => onUpdateTaxEntry(item.id, te.id, field, val)}
-                  onRemove={() => onRemoveTaxEntry(item.id, te.id)}
-                />
-              ))
-            )}
+            {/* Tax entry rows */}
+            {item.taxEntries.map(te => (
+              <TaxEntryRow
+                key={te.id}
+                entry={te}
+                taxLedgers={taxLedgers}
+                taxable={calc.taxable}
+                onUpdate={(field, val) => onUpdateTaxEntry(item.id, te.id, field, val)}
+                onRemove={() => onRemoveTaxEntry(item.id, te.id)}
+              />
+            ))}
+            {/* Add Tax button - outside header, after rows */}
+            <TouchableOpacity
+              style={ir.addTaxDashedBtn}
+              onPress={() => onAddTaxEntry(item.id)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="add-circle-outline" size={15} color={COLORS.brandPrimary} />
+              <Text style={ir.addTaxDashedTxt}>Add Tax</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Item Total */}
@@ -1059,7 +1058,7 @@ export default function CreateSalesInvoiceScreen() {
       <StepIndicator step={step} />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" onScrollBeginDrag={Keyboard.dismiss}>
 
           {/* ═══════════ STEP 1 ═══════════ */}
           {step === 1 && (
@@ -1224,7 +1223,7 @@ export default function CreateSalesInvoiceScreen() {
                     <View style={[s.payNowIcon, { backgroundColor: collectPayNow ? COLORS.positiveBg : COLORS.pageBg }]}>
                       <Ionicons name="cash-outline" size={18} color={collectPayNow ? COLORS.positive : COLORS.textSecondary} />
                     </View>
-                    <View>
+                    <View style={{ flex: 1, flexShrink: 1 }}>
                       <Text style={s.payNowTitle}>Collect Payment Now</Text>
                       <Text style={s.payNowSub}>Record payment received at the time of billing</Text>
                     </View>
@@ -1262,7 +1261,7 @@ export default function CreateSalesInvoiceScreen() {
                     <View style={[s.payNowIcon, { backgroundColor: showDispatch ? '#EFF6FF' : COLORS.pageBg }]}>
                       <Ionicons name="car-outline" size={18} color={showDispatch ? COLORS.info : COLORS.textSecondary} />
                     </View>
-                    <View>
+                    <View style={{ flex: 1, flexShrink: 1 }}>
                       <Text style={s.payNowTitle}>Dispatch / E-Way Bill Details</Text>
                       <Text style={s.payNowSub}>Required for goods movement & E-Way Bill</Text>
                     </View>
@@ -1324,9 +1323,8 @@ export default function CreateSalesInvoiceScreen() {
                     <View style={[s.payNowIcon, { backgroundColor: COLORS.pageBg }]}>
                       <Ionicons name="calendar-outline" size={18} color={payTermsExpanded ? COLORS.brandPrimary : COLORS.textSecondary} />
                     </View>
-                    <View>
+                    <View style={{ flex: 1, flexShrink: 1 }}>
                       <Text style={s.payNowTitle}>Payment Terms</Text>
-                      {dueDate ? <Text style={s.dueDateDisplay}>{formatDueDisplay(dueDate)}</Text> : null}
                     </View>
                   </View>
                   <Ionicons name={payTermsExpanded ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
@@ -1334,29 +1332,27 @@ export default function CreateSalesInvoiceScreen() {
                 {payTermsExpanded && (
                   <View style={s.payNowBody}>
                     <View style={s.divider} />
-                    <View style={s.termsRow}>
-                      {TERMS.map(t => (
-                        <TouchableOpacity key={t.value} style={[s.termChip, payTerms === t.value && s.termChipActive]} onPress={() => setPayTerms(t.value)} activeOpacity={0.7}>
-                          <Text style={[s.termChipTxt, payTerms === t.value && s.termChipTxtActive]}>{t.label}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
+                    <FormDropdown
+                      label="Terms"
+                      value={payTerms}
+                      options={TERMS}
+                      onSelect={(o: any) => setPayTerms(o.value)}
+                      placeholder="Select payment terms..."
+                    />
                     {payTerms === 'custom' && (
                       <View style={s.customDaysRow}>
                         <ThemedFInput style={{ flex: 1 }} value={customDays} onChangeText={setCustomDays} keyboardType="numeric" placeholder="Enter number of days" />
                         <View style={s.daysBadge}><Text style={s.daysBadgeTxt}>Days</Text></View>
                       </View>
                     )}
-                    {dueDate ? (
-                      <View style={s.dueDateChip}>
-                        <Ionicons name="calendar-outline" size={13} color={COLORS.info} />
-                        <Text style={s.dueDateChipTxt}>{formatDueDisplay(dueDate)}</Text>
-                      </View>
-                    ) : null}
                     <View style={[s.row2, { marginTop: SPACING.sm }]}>
                       <View style={{ flex: 1 }}>
                         <Text style={s.fLabel}>Due Date</Text>
-                        <ThemedFInput value={dueDate} onChangeText={setDueDate} placeholder="DD/MM/YY" />
+                        <View style={[s.fInput, { justifyContent: 'center' }]}>
+                          <Text style={{ color: dueDate ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.base }}>
+                            {dueDate ? formatDueDisplay(dueDate) : 'DD/MM/YYYY'}
+                          </Text>
+                        </View>
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={s.fLabel}>Reference No.</Text>
@@ -1579,7 +1575,7 @@ const ir = StyleSheet.create({
   fieldLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 4 },
   star: { color: COLORS.negative },
   productRow: { flexDirection: 'row', gap: 6, alignItems: 'flex-start' },
-  barcodeBtn: { width: 44, height: 48, borderRadius: RADIUS.md, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.borderDefault },
+  barcodeBtn: { width: 44, height: 48, borderRadius: RADIUS.md, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: COLORS.borderDefault },
   warehouseChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.infoBg, borderRadius: RADIUS.full, paddingHorizontal: 10, paddingVertical: 5, alignSelf: 'flex-start', borderWidth: 1, borderColor: COLORS.info + '40' },
   warehouseChipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.info },
   fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -1614,6 +1610,8 @@ const ir = StyleSheet.create({
   subtotalVal: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   removeItemBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.negative + '50', backgroundColor: COLORS.negativeBg },
   removeItemTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.negative },
+  addTaxDashedBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderStyle: 'dashed' as const, borderColor: COLORS.brandPrimary + '70', borderRadius: RADIUS.sm, paddingVertical: 10, marginTop: 4, marginBottom: 4 },
+  addTaxDashedTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.brandPrimary, fontWeight: '600' },
 });
 
 const acd = StyleSheet.create({
