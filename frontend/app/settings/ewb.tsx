@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Alert } from 'react-native';
+import { View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, StyleSheet, TextInput, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -83,7 +83,8 @@ export default function EWBIntegrationScreen() {
         <Text style={s.title}>E-Way Bill Integration</Text>
         <View style={{width:40}} />
       </View>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
         <View style={[s.statusBanner, {backgroundColor: status==='connected'?COLORS.positiveBg:COLORS.negativeBg}]}>
           <View style={[s.statusDot, {backgroundColor: status==='connected'?COLORS.positive:COLORS.negative}]} />
           <Text style={[s.statusTxt, {color: status==='connected'?COLORS.positive:COLORS.negative}]}>
@@ -112,7 +113,8 @@ export default function EWBIntegrationScreen() {
           <Ionicons name="open-outline" size={16} color={COLORS.textSecondary} />
           <Text style={s.portalTxt}>Open Portal</Text>
         </TouchableOpacity>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

@@ -1058,7 +1058,7 @@ export default function CreateSalesInvoiceScreen() {
       <StepIndicator step={step} />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" onScrollBeginDrag={Keyboard.dismiss}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" onScrollBeginDrag={Keyboard.dismiss}>
 
           {/* ═══════════ STEP 1 ═══════════ */}
           {step === 1 && (

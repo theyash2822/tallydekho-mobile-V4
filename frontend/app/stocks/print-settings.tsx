@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, ActivityIndicator, Alert,
+  View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, StyleSheet, TextInput, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -119,7 +119,8 @@ export default function PrintSettingsScreen() {
         <View style={{ width: 44 }} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
 
         {/* ── Queued items chips */}
         <View style={s.section}>
@@ -244,9 +245,10 @@ export default function PrintSettingsScreen() {
         </View>
 
         <View style={{ height: 120 }} />
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-      {/* ── Bottom action bar */}
+      {/* ── Bottom action bar */
       <View style={[s.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         {/* Row 1: Preview + Print */}
         <View style={s.btnRow}>

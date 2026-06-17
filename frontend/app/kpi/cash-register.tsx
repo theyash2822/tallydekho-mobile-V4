@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, ActivityIndicator,
+  View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, StyleSheet, TextInput, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -273,11 +273,14 @@ export default function CashRegisterScreen() {
       </View>
 
       {/* List */}
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        style={s.list}
-        onStartShouldSetResponder={() => { if (showTypeMenu) setShowTypeMenu(false); return false; }}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          style={s.list}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          onStartShouldSetResponder={() => { if (showTypeMenu) setShowTypeMenu(false); return false; }}
+        >
         <View style={s.listHeader}>
           <Text style={s.listTitle}>List Transactions</Text>
           <TouchableOpacity
@@ -389,9 +392,10 @@ export default function CashRegisterScreen() {
           <Text style={s.endTxt}>All {liveItems.length} entries loaded</Text>
         )}
         <View style={{ height: 120 }} />
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-      {/* Share Button (multi-select mode) */}
+      {/* Share Button (multi-select mode) */
       {selected.size > 0 && (
         <View style={s.shareBtnWrap}>
           <TouchableOpacity

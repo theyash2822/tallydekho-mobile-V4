@@ -219,6 +219,7 @@ export default function CreateLedgerScreen() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           contentContainerStyle={s.form}
         >
 

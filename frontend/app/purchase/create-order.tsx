@@ -275,7 +275,7 @@ export default function CreatePurchaseOrderScreen() {
       </View>
 
       <KeyboardAvoidingView style={{flex:1}} behavior={Platform.OS==='ios'?'padding':undefined}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
 
           {/* Purchase Ledger */}
           <SearchableDropdown label="Purchase Ledger" required placeholder="Search ledger account..." options={PURCHASE_LEDGERS} value={ledger} onSelect={o=>setLedger(o.value)} icon="book-outline" />

@@ -76,7 +76,7 @@ export default function CreateReceiptVoucher() {
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardDismissMode="on-drag">
 
           <View style={s.infoRow}>
             <View style={s.infoItem}>

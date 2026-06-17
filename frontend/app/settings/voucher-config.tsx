@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, StyleSheet,
   Modal, TextInput, Image, Animated,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -440,7 +440,8 @@ export default function VoucherConfigScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
         <Text style={s.subtitle}>Configure PDF format and settings for each voucher type</Text>
 
         {/* ── Section 1: Voucher Numbering Policy ── */}
@@ -803,9 +804,10 @@ export default function VoucherConfigScreen() {
         </TouchableOpacity>
         )}
         <View style={{ height: 40 }} />
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-      {/* Bank Picker — single instance at root level */}
+      {/* Bank Picker — single instance at root level */
       <PickerSheet
         visible={bankPickerFor !== null}
         title="Select Bank Account"

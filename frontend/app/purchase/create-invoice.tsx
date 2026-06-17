@@ -330,7 +330,7 @@ export default function CreatePurchaseInvoiceScreen() {
       </View>
 
       <KeyboardAvoidingView style={{flex:1}} behavior={Platform.OS==='ios'?'padding':undefined}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
 
           {/* OCR SCAN BANNER */}
           {ocrStatus === 'idle' && (

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, KeyboardAvoidingView, TouchableOpacity, StyleSheet,
   TextInput, ActivityIndicator,
   LayoutAnimation, UIManager, Platform,
 } from 'react-native';
@@ -390,13 +390,14 @@ export default function StockSettingsScreen() {
         </View>
       )}
 
-      <ScrollView
-        style={s.scroll}
-        contentContainerStyle={s.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="interactive"
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView
+          style={s.scroll}
+          contentContainerStyle={s.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
 
         {/* ══════════════════════════════════════════════
             CARD 1 — GENERAL
@@ -1038,9 +1039,10 @@ export default function StockSettingsScreen() {
 
         {/* Bottom spacer */}
         <View style={{ height: isDirty ? 100 : 32 }} />
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-      {/* ── Fixed Bottom Action Bar */}
+      {/* ── Fixed Bottom Action Bar */
       {isDirty && (
         <View style={[s.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <TouchableOpacity

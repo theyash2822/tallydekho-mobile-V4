@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Alert, Linking } from 'react-native';
+import { View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, StyleSheet, TextInput, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -61,7 +61,8 @@ export default function EInvoiceScreen() {
         <Text style={s.title}>E-Invoice (IRN)</Text>
         <View style={{width:40}} />
       </View>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
         {pendingIRN > 0 && (
           <View style={s.pendingBanner}>
             <Ionicons name="warning-outline" size={18} color={COLORS.warning} />
@@ -108,7 +109,8 @@ export default function EInvoiceScreen() {
           <Ionicons name="open-outline" size={16} color={COLORS.textSecondary} />
           <Text style={s.portalTxt}>Open IRP Portal</Text>
         </TouchableOpacity>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
