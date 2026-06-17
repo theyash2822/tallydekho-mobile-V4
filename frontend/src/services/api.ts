@@ -173,6 +173,10 @@ export const getSalesLedgerAccounts = (companyGuid?: string) =>
 export const getTaxLedgers = (companyGuid?: string) =>
   get<any>(withCompany('/tax/ledgers', companyGuid));
 
+// Charge ledgers (logistics & additional charges for invoice form)
+export const getChargeLedgers = (companyGuid?: string) =>
+  get<any>(withCompany('/charge-ledgers', companyGuid));
+
 // Create customer/party in Tally
 export const createTallyParty = (payload: any) => tallyPost<any>('/master/party', payload);
 export const createSalesOrder    = (payload: any) => tallyPost<any>('/voucher/sales-order', payload);

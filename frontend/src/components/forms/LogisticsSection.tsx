@@ -2,191 +2,231 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
+import BottomSheetSearch, { BSSOption } from './BottomSheetSearch';
+
+export interface LogTaxEntry {
+  id: string;
+  ledgerName: string;
+  taxRate: string;
+  taxAmount: string; // auto-calc, editable
+}
 
 export interface LogEntry {
   id: string;
-  type: string;
+  ledgerName: string;
   amount: string;
-  taxRate: string;   // per-entry tax rate
-  tracking: string;
-  remarks: string;
+  addTaxes: boolean;
+  taxEntries: LogTaxEntry[];
 }
 
-const LOG_TYPES = [
-  { label: 'Courier',   value: 'courier',   icon: 'bicycle-outline' },
-  { label: 'Transport', value: 'transport', icon: 'car-outline' },
-  { label: 'Freight',   value: 'freight',   icon: 'boat-outline' },
-  { label: 'Custom',    value: 'custom',    icon: 'build-outline' },
-] as const;
-
-const TAX_OPTS = [
-  { label: '0%',  value: '0' },
-  { label: '5%',  value: '5' },
-  { label: '12%', value: '12' },
-  { label: '18%', value: '18' },
-  { label: '28%', value: '28' },
-];
-
-const entryTotal = (e: LogEntry): number => {
-  const base = parseFloat(e.amount) || 0;
-  return base + base * (parseFloat(e.taxRate) || 0) / 100;
-};
-
 export function calcLogisticsTotal(entries: LogEntry[]): number {
-  return entries.reduce((sum, e) => sum + entryTotal(e), 0);
+  return entries.reduce((sum, e) => {
+    const base = parseFloat(e.amount) || 0;
+    const taxAmt = e.addTaxes
+      ? e.taxEntries.reduce((ts, t) => {
+          const ta = parseFloat(t.taxAmount);
+          if (!isNaN(ta)) return ts + ta;
+          return ts + base * (parseFloat(t.taxRate) || 0) / 100;
+        }, 0)
+      : 0;
+    return sum + base + taxAmt;
+  }, 0);
 }
 
 interface Props {
   entries: LogEntry[];
   onEntriesChange: (e: LogEntry[]) => void;
+  taxLedgers: { name: string }[];
+  chargeLedgers: { ledgerName: string; guid?: string }[];
 }
 
-export default function LogisticsSection({ entries, onEntriesChange }: Props) {
+const newEntry = (): LogEntry => ({
+  id: Date.now().toString() + Math.random().toString(36).slice(2),
+  ledgerName: '',
+  amount: '',
+  addTaxes: false,
+  taxEntries: [],
+});
+
+const newTaxEntry = (): LogTaxEntry => ({
+  id: Date.now().toString() + Math.random().toString(36).slice(2),
+  ledgerName: '',
+  taxRate: '',
+  taxAmount: '',
+});
+
+export default function LogisticsSection({ entries, onEntriesChange, taxLedgers, chargeLedgers }: Props) {
   const [expanded, setExpanded] = useState(false);
   const total = calcLogisticsTotal(entries);
 
+  const chargeLedgerOpts: BSSOption[] = chargeLedgers.map(l => ({
+    label: l.ledgerName,
+    value: l.ledgerName,
+  }));
+
+  const taxLedgerOpts: BSSOption[] = taxLedgers.map(l => ({
+    label: l.name,
+    value: l.name,
+  }));
+
   const addEntry = () => {
-    onEntriesChange([
-      ...entries,
-      { id: Date.now().toString(), type: 'courier', amount: '', taxRate: '0', tracking: '', remarks: '' },
-    ]);
+    onEntriesChange([...entries, newEntry()]);
     setExpanded(true);
   };
 
-  const update = (id: string, field: keyof LogEntry, value: string) =>
+  const updateEntry = (id: string, field: keyof Omit<LogEntry, 'taxEntries'>, value: any) =>
     onEntriesChange(entries.map(e => e.id === id ? { ...e, [field]: value } : e));
 
-  const remove = (id: string) =>
+  const removeEntry = (id: string) =>
     onEntriesChange(entries.filter(e => e.id !== id));
 
+  const addTaxEntry = (entryId: string) =>
+    onEntriesChange(entries.map(e =>
+      e.id === entryId ? { ...e, taxEntries: [...e.taxEntries, newTaxEntry()] } : e
+    ));
+
+  const updateTaxEntry = (entryId: string, taxId: string, field: keyof LogTaxEntry, value: string) =>
+    onEntriesChange(entries.map(e =>
+      e.id === entryId
+        ? { ...e, taxEntries: e.taxEntries.map(t => t.id === taxId ? { ...t, [field]: value } : t) }
+        : e
+    ));
+
+  const removeTaxEntry = (entryId: string, taxId: string) =>
+    onEntriesChange(entries.map(e =>
+      e.id === entryId
+        ? { ...e, taxEntries: e.taxEntries.filter(t => t.id !== taxId) }
+        : e
+    ));
+
   return (
-    <View style={s.container}>
+    <View style={ls.container}>
       {/* Header */}
-      <TouchableOpacity style={s.header} onPress={() => setExpanded(!expanded)} activeOpacity={0.7}>
-        <View style={s.hl}>
-          <View style={[s.headerIcon, { backgroundColor: expanded ? COLORS.infoBg : COLORS.pageBg }]}>
-            <Ionicons name="car-outline" size={16} color={expanded ? COLORS.info : COLORS.textSecondary} />
+      <TouchableOpacity style={ls.header} onPress={() => setExpanded(!expanded)} activeOpacity={0.7}>
+        <View style={ls.headerLeft}>
+          <View style={[ls.headerIcon, expanded ? ls.headerIconActive : undefined]}>
+            <Ionicons name="car-outline" size={16} color={expanded ? COLORS.warning : COLORS.textSecondary} />
           </View>
           <View>
-            <Text style={s.hTxt}>Logistics / Shipping</Text>
+            <Text style={ls.headerTitle}>Logistics & Charges</Text>
             {entries.length > 0 && (
-              <Text style={s.hSub}>{entries.length} entr{entries.length === 1 ? 'y' : 'ies'}{total > 0 ? ` · ₹${total.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : ''}</Text>
+              <Text style={ls.headerSub}>
+                {entries.length} entr{entries.length === 1 ? 'y' : 'ies'}
+                {total > 0 ? ` · ₹${total.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : ''}
+              </Text>
             )}
           </View>
         </View>
-        <View style={s.hr}>
-          <TouchableOpacity style={s.addBtn} onPress={addEntry} activeOpacity={0.7}>
-            <Ionicons name="add-circle-outline" size={18} color={COLORS.positive} />
-            <Text style={s.addTxt}>Add</Text>
-          </TouchableOpacity>
-          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
-        </View>
+        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
       </TouchableOpacity>
 
       {/* Body */}
       {expanded && (
-        <View style={s.body}>
-          {entries.length === 0 && (
-            <TouchableOpacity style={s.emptyBtn} onPress={addEntry} activeOpacity={0.7}>
-              <Ionicons name="add-circle-outline" size={17} color={COLORS.positive} />
-              <Text style={s.emptyTxt}>Add First Logistics Entry</Text>
-            </TouchableOpacity>
-          )}
-
-          {entries.map((entry, idx) => {
-            const eTotal = entryTotal(entry);
+        <View style={ls.body}>
+          {entries.map((entry) => {
+            const base = parseFloat(entry.amount) || 0;
             return (
-              <View key={entry.id} style={s.entryCard}>
-                {/* Entry header */}
-                <View style={s.entryHdr}>
-                  <Text style={s.entryNum}>Entry {idx + 1}</Text>
-                  {eTotal > 0 && (
-                    <Text style={s.entryTotalChip}>
-                      ₹{eTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </Text>
-                  )}
-                  <TouchableOpacity onPress={() => remove(entry.id)} activeOpacity={0.7}>
+              <View key={entry.id} style={ls.entryCard}>
+                {/* Row: Ledger + Amount + Remove */}
+                <View style={ls.entryTopRow}>
+                  <View style={{ flex: 1 }}>
+                    <BottomSheetSearch
+                      compact
+                      options={chargeLedgerOpts}
+                      value={entry.ledgerName}
+                      onSelect={opt => updateEntry(entry.id, 'ledgerName', opt.value)}
+                      onClear={() => updateEntry(entry.id, 'ledgerName', '')}
+                      placeholder="Select charge ledger..."
+                      sheetTitle="Charge Ledger"
+                    />
+                  </View>
+                  <TextInput
+                    style={ls.amountInput}
+                    value={entry.amount}
+                    onChangeText={v => updateEntry(entry.id, 'amount', v)}
+                    keyboardType="numeric"
+                    placeholder="₹ Amount"
+                    placeholderTextColor={COLORS.textTertiary}
+                  />
+                  <TouchableOpacity onPress={() => removeEntry(entry.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                     <Ionicons name="close-circle" size={18} color={COLORS.negative} />
                   </TouchableOpacity>
                 </View>
 
-                {/* Type chips */}
-                <View style={s.typeRow}>
-                  {LOG_TYPES.map(t => (
-                    <TouchableOpacity
-                      key={t.value}
-                      style={[s.typeChip, entry.type === t.value && s.typeChipActive]}
-                      onPress={() => update(entry.id, 'type', t.value)}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name={t.icon as any} size={11} color={entry.type === t.value ? '#fff' : COLORS.textSecondary} />
-                      <Text style={[s.typeTxt, entry.type === t.value && s.typeTxtActive]}>{t.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {/* Amount + Tax row */}
-                <View style={s.row2}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.fl}>Amount (₹)</Text>
-                    <TextInput
-                      style={s.fi}
-                      value={entry.amount}
-                      onChangeText={v => update(entry.id, 'amount', v)}
-                      keyboardType="numeric"
-                      placeholder="0.00"
-                      placeholderTextColor={COLORS.textTertiary}
-                    />
+                {/* Add Taxes checkbox */}
+                <TouchableOpacity
+                  style={ls.checkboxRow}
+                  onPress={() => updateEntry(entry.id, 'addTaxes', !entry.addTaxes)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[ls.checkbox, entry.addTaxes && ls.checkboxActive]}>
+                    {entry.addTaxes && <Ionicons name="checkmark" size={10} color={COLORS.white} />}
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.fl}>Tax Rate</Text>
-                    <View style={s.taxChipRow}>
-                      {TAX_OPTS.map(t => (
-                        <TouchableOpacity
-                          key={t.value}
-                          style={[s.taxChip, entry.taxRate === t.value && s.taxChipActive]}
-                          onPress={() => update(entry.id, 'taxRate', t.value)}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[s.taxChipTxt, entry.taxRate === t.value && s.taxChipTxtActive]}>{t.label}</Text>
+                  <Text style={ls.checkboxLabel}>Add Taxes</Text>
+                </TouchableOpacity>
+
+                {/* Tax entries when addTaxes is true */}
+                {entry.addTaxes && (
+                  <View style={ls.taxSection}>
+                    {entry.taxEntries.map(taxEntry => (
+                      <View key={taxEntry.id} style={ls.taxEntryRow}>
+                        <View style={{ flex: 1 }}>
+                          <BottomSheetSearch
+                            compact
+                            options={taxLedgerOpts}
+                            value={taxEntry.ledgerName}
+                            onSelect={opt => updateTaxEntry(entry.id, taxEntry.id, 'ledgerName', opt.value)}
+                            onClear={() => updateTaxEntry(entry.id, taxEntry.id, 'ledgerName', '')}
+                            placeholder="Tax ledger..."
+                            sheetTitle="Tax Ledger"
+                          />
+                        </View>
+                        <TextInput
+                          style={ls.taxRateInput}
+                          value={taxEntry.taxRate}
+                          onChangeText={v => {
+                            updateTaxEntry(entry.id, taxEntry.id, 'taxRate', v);
+                            const auto = (base * (parseFloat(v) || 0) / 100).toFixed(2);
+                            updateTaxEntry(entry.id, taxEntry.id, 'taxAmount', auto);
+                          }}
+                          keyboardType="numeric"
+                          placeholder="0%"
+                          placeholderTextColor={COLORS.textTertiary}
+                        />
+                        <TextInput
+                          style={ls.taxAmtInput}
+                          value={taxEntry.taxAmount}
+                          onChangeText={v => updateTaxEntry(entry.id, taxEntry.id, 'taxAmount', v)}
+                          keyboardType="numeric"
+                          placeholder="₹0"
+                          placeholderTextColor={COLORS.textTertiary}
+                        />
+                        <TouchableOpacity onPress={() => removeTaxEntry(entry.id, taxEntry.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                          <Ionicons name="close-circle" size={14} color={COLORS.negative} />
                         </TouchableOpacity>
-                      ))}
-                    </View>
+                      </View>
+                    ))}
+                    <TouchableOpacity style={ls.addTaxBtn} onPress={() => addTaxEntry(entry.id)} activeOpacity={0.7}>
+                      <Ionicons name="add-circle-outline" size={14} color={COLORS.info} />
+                      <Text style={ls.addTaxTxt}>+ Add Tax Row</Text>
+                    </TouchableOpacity>
                   </View>
-                </View>
-
-                {/* Tracking + Remarks */}
-                <View style={s.row2}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.fl}>Tracking No.</Text>
-                    <TextInput
-                      style={s.fi}
-                      value={entry.tracking}
-                      onChangeText={v => update(entry.id, 'tracking', v)}
-                      placeholder="Optional"
-                      placeholderTextColor={COLORS.textTertiary}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.fl}>Remarks</Text>
-                    <TextInput
-                      style={s.fi}
-                      value={entry.remarks}
-                      onChangeText={v => update(entry.id, 'remarks', v)}
-                      placeholder="Optional"
-                      placeholderTextColor={COLORS.textTertiary}
-                    />
-                  </View>
-                </View>
+                )}
               </View>
             );
           })}
 
-          {/* Total row */}
-          {entries.length > 0 && total > 0 && (
-            <View style={s.totalRow}>
-              <Text style={s.totalL}>Total Logistics</Text>
-              <Text style={s.totalV}>₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+          {/* Add Logistics Row button */}
+          <TouchableOpacity style={ls.addEntryBtn} onPress={addEntry} activeOpacity={0.7}>
+            <Ionicons name="add-circle-outline" size={16} color={COLORS.warning} />
+            <Text style={ls.addEntryTxt}>+ Add Logistics Row</Text>
+          </TouchableOpacity>
+
+          {/* Total */}
+          {total > 0 && (
+            <View style={ls.totalRow}>
+              <Text style={ls.totalLabel}>Total Logistics & Charges</Text>
+              <Text style={ls.totalVal}>₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
             </View>
           )}
         </View>
@@ -195,69 +235,95 @@ export default function LogisticsSection({ entries, onEntriesChange }: Props) {
   );
 }
 
-const s = StyleSheet.create({
+const ls = StyleSheet.create({
   container: {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
     borderWidth: 1, borderColor: COLORS.borderDefault,
     marginBottom: SPACING.md, overflow: 'hidden',
   },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: SPACING.md },
-  headerIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-  hl: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  hTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
-  hSub: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 1 },
-  hr: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  addTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.positive },
-  body: { paddingHorizontal: SPACING.md, paddingBottom: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
-  emptyBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    paddingVertical: 16, marginTop: SPACING.md,
-    borderWidth: 1, borderColor: COLORS.positive + '40', borderRadius: RADIUS.md,
-    borderStyle: 'dashed', backgroundColor: COLORS.positiveBg,
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    padding: SPACING.md,
   },
-  emptyTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.positive },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  headerIcon: {
+    width: 32, height: 32, borderRadius: 8,
+    backgroundColor: COLORS.pageBg,
+    alignItems: 'center', justifyContent: 'center', marginRight: 10,
+  },
+  headerIconActive: { backgroundColor: COLORS.warningBg },
+  headerTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
+  headerSub: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 1 },
+  body: {
+    paddingHorizontal: SPACING.md, paddingBottom: SPACING.md,
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
+    gap: SPACING.sm,
+  },
   entryCard: {
     backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md,
     padding: SPACING.sm, marginTop: SPACING.sm,
     borderWidth: 1, borderColor: COLORS.borderDefault, gap: 8,
   },
-  entryHdr: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  entryNum: { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textSecondary },
-  entryTotalChip: {
-    fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.positive,
-    backgroundColor: COLORS.positiveBg, paddingHorizontal: 6, paddingVertical: 2,
-    borderRadius: RADIUS.full,
+  entryTopRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
   },
-  typeRow: { flexDirection: 'row', gap: 5, flexWrap: 'wrap' },
-  typeChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    paddingHorizontal: 8, paddingVertical: 5, borderRadius: RADIUS.full,
-    borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg,
+  amountInput: {
+    width: 90, backgroundColor: COLORS.cardBg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 6,
+    fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, textAlign: 'right',
   },
-  typeChipActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
-  typeTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
-  typeTxtActive: { color: '#fff' },
-  row2: { flexDirection: 'row', gap: 8 },
-  fl: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 4 },
-  fi: {
-    backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault,
-    borderRadius: RADIUS.sm, paddingHorizontal: 10, paddingVertical: 8,
-    fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, minHeight: 38,
+  checkboxRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
   },
-  taxChipRow: { flexDirection: 'row', gap: 3, flexWrap: 'wrap' },
-  taxChip: {
-    paddingHorizontal: 6, paddingVertical: 5, borderRadius: RADIUS.sm,
-    borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg,
+  checkbox: {
+    width: 18, height: 18, borderRadius: 4,
+    borderWidth: 1.5, borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.cardBg,
+    alignItems: 'center', justifyContent: 'center',
   },
-  taxChipActive: { backgroundColor: COLORS.info, borderColor: COLORS.info },
-  taxChipTxt: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary },
-  taxChipTxtActive: { color: '#fff' },
+  checkboxActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
+  checkboxLabel: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
+  taxSection: {
+    gap: 6, paddingTop: 6,
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
+  },
+  taxEntryRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+  },
+  taxRateInput: {
+    width: 52, backgroundColor: COLORS.cardBg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.sm, paddingHorizontal: 6, paddingVertical: 6,
+    fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary, textAlign: 'center',
+  },
+  taxAmtInput: {
+    width: 68, backgroundColor: COLORS.cardBg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.sm, paddingHorizontal: 6, paddingVertical: 6,
+    fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary, textAlign: 'right',
+  },
+  addTaxBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingVertical: 8, paddingHorizontal: 10,
+    backgroundColor: COLORS.infoBg, borderRadius: RADIUS.sm,
+    borderWidth: 1, borderColor: COLORS.info + '40',
+    alignSelf: 'flex-start',
+  },
+  addTaxTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.info },
+  addEntryBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 12, marginTop: 4,
+    borderWidth: 1, borderColor: COLORS.warning + '60',
+    borderRadius: RADIUS.md, borderStyle: 'dashed',
+    backgroundColor: COLORS.warningBg,
+  },
+  addEntryTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.warning },
   totalRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingTop: SPACING.sm, marginTop: 4,
     borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
   },
-  totalL: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
-  totalV: { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.positive },
+  totalLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+  totalVal: { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.warning },
 });

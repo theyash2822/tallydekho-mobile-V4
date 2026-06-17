@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, Alert, TextInput, Modal, TextInputProps, ActivityIndicator,
@@ -13,20 +13,20 @@ import { useAuth } from '../../src/context/AuthContext';
 import {
   getParties, createSalesInvoice, getStocks, getWarehouses,
   getSalesLedgerAccounts, getTaxLedgers, createTallyParty, lookupBarcode,
-  getComplianceConfig,
+  getComplianceConfig, getChargeLedgers,
 } from '../../src/services/api';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
-import SearchableDropdown, { SDOption } from '../../src/components/forms/SearchableDropdown';
 import DatePickerModal, { formatDMY, parseDMY } from '../../src/components/forms/DatePickerModal';
+import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const todayStr = () => {
   const d = new Date();
-  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`;
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(-2)}`;
 };
 
 /** Convert DD/MM/YY → YYYY-MM-DD for backend */
@@ -36,7 +36,7 @@ const dmyToISO = (dmy: string): string => {
   if (parts.length < 3) return dmy;
   const [dd, mm, yy] = parts;
   const year = parseInt(yy) < 100 ? 2000 + parseInt(yy) : parseInt(yy);
-  return `${year}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
+  return `${year}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
 };
 
 const calcItem = (item: InvoiceItem) => {
@@ -46,8 +46,11 @@ const calcItem = (item: InvoiceItem) => {
   const disc = parseFloat(item.discount) || 0;
   const discAmt = item.discountType === '%' ? gross * disc / 100 : Math.min(disc, gross);
   const taxable = gross - discAmt;
-  const totalTaxRate = (item.taxEntries || []).reduce((sum, t) => sum + (parseFloat(t.taxRate) || 0), 0);
-  const taxAmt = taxable * totalTaxRate / 100;
+  const taxAmt = (item.taxEntries || []).reduce((sum, t) => {
+    const override = parseFloat(t.taxAmount);
+    if (!isNaN(override) && t.taxAmount.trim() !== '') return sum + override;
+    return sum + taxable * (parseFloat(t.taxRate) || 0) / 100;
+  }, 0);
   return { gross, discAmt, taxable, taxAmt, subtotal: taxable + taxAmt };
 };
 
@@ -95,6 +98,7 @@ interface TaxLedgerEntry {
   id: string;
   ledgerName: string;
   taxRate: string;
+  taxAmount: string; // auto-calc from rate × taxable, manually editable
 }
 
 interface InvoiceItem {
@@ -130,18 +134,18 @@ function ThemedFInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
       ]}
       placeholderTextColor={COLORS.textTertiary}
       onFocus={(e) => { setFocused(true); onFocus?.(e); }}
-      onBlur={(e)  => { setFocused(false); onBlur?.(e); }}
+      onBlur={(e) => { setFocused(false); onBlur?.(e); }}
       {...props}
     />
   );
 }
 
 // ─── Step Indicator ──────────────────────────────────────────────────────────
-function StepIndicator({ step }: { step: 1|2|3 }) {
+function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
   const STEPS = [
-    { num: 1 as const, label: 'Setup' },
-    { num: 2 as const, label: 'Items' },
-    { num: 3 as const, label: 'Review' },
+    { num: 1 as const, label: 'Invoice Details' },
+    { num: 2 as const, label: 'Items & Services' },
+    { num: 3 as const, label: 'Review & Submit' },
   ];
   return (
     <View style={si.wrap}>
@@ -430,97 +434,69 @@ function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
   );
 }
 
-// ─── TaxEntryRow ─────────────────────────────────────────────────────────────
-function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove }: {
+// ─── TaxEntryRow (redesigned — uses BottomSheetSearch) ───────────────────────
+function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
   entry: TaxLedgerEntry;
   taxLedgers: { name: string }[];
   onUpdate: (field: keyof TaxLedgerEntry, val: string) => void;
   onRemove: () => void;
+  taxable: number;
 }) {
-  const [query, setQuery] = useState('');
-  const [open, setOpen] = useState(false);
-  const selectingRef = useRef(false);
-  const wFix = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
-
-  const filtered = query.trim()
-    ? taxLedgers.filter(l => l.name.toLowerCase().includes(query.toLowerCase()))
-    : taxLedgers;
+  const taxOpts: BSSOption[] = taxLedgers.map(l => ({ label: l.name, value: l.name }));
 
   return (
-    <View>
-      <View style={ir.taxEntryRow}>
-        <View style={{ flex: 1 }}>
-          <View style={[ir.taxLedgerBox, open && ir.taxLedgerBoxOpen]}>
-            <Ionicons name="receipt-outline" size={11} color={COLORS.info} style={{ marginRight: 3 }} />
-            <TextInput
-              style={[ir.taxLedgerInput, wFix]}
-              value={open ? query : entry.ledgerName}
-              onChangeText={setQuery}
-              onFocus={() => { setQuery(''); setOpen(true); }}
-              onBlur={() => {
-                setTimeout(() => {
-                  if (!selectingRef.current) setOpen(false);
-                  selectingRef.current = false;
-                }, 150);
-              }}
-              placeholder="Select ledger..."
-              placeholderTextColor={COLORS.textTertiary}
-              autoCorrect={false}
-              autoCapitalize="none"
-            />
-            {entry.ledgerName && !open ? (
-              <TouchableOpacity onPress={() => onUpdate('ledgerName', '')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                <Ionicons name="close-circle" size={12} color={COLORS.textTertiary} />
-              </TouchableOpacity>
-            ) : (
-              <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={11} color={COLORS.textSecondary} />
-            )}
-          </View>
-          {open && (
-            <View style={ir.taxSuggestions}>
-              <ScrollView style={{ maxHeight: 130 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} nestedScrollEnabled>
-                {filtered.length === 0 ? (
-                  <View style={ir.inlineEmpty}><Text style={ir.inlineEmptyTxt}>No matching ledgers</Text></View>
-                ) : (
-                  filtered.map((l, idx) => (
-                    <TouchableOpacity
-                      key={l.name}
-                      style={[ir.inlineOpt, idx === filtered.length - 1 && { borderBottomWidth: 0 }, entry.ledgerName === l.name && ir.inlineOptActive]}
-                      onPressIn={() => { selectingRef.current = true; }}
-                      onPress={() => { selectingRef.current = false; onUpdate('ledgerName', l.name); setQuery(''); setOpen(false); }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[ir.inlineOptTxt, entry.ledgerName === l.name && ir.inlineOptTxtActive]} numberOfLines={1}>{l.name}</Text>
-                      {entry.ledgerName === l.name && <Ionicons name="checkmark" size={13} color={COLORS.brandPrimary} />}
-                    </TouchableOpacity>
-                  ))
-                )}
-              </ScrollView>
-            </View>
-          )}
-        </View>
-        <View style={ir.taxRateBox}>
-          <TextInput
-            style={[ir.taxRateInput, wFix]}
-            value={entry.taxRate}
-            onChangeText={v => onUpdate('taxRate', v)}
-            keyboardType="numeric"
-            placeholder="0"
-            placeholderTextColor={COLORS.textTertiary}
-          />
-          <Text style={ir.taxRateSign}>%</Text>
-        </View>
-        <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="close-circle" size={16} color={COLORS.negative} />
-        </TouchableOpacity>
+    <View style={ir.taxEntryRow}>
+      <View style={{ flex: 1 }}>
+        <BottomSheetSearch
+          compact
+          options={taxOpts}
+          value={entry.ledgerName}
+          onSelect={opt => onUpdate('ledgerName', opt.value)}
+          onClear={() => onUpdate('ledgerName', '')}
+          placeholder="Select ledger..."
+          sheetTitle="Tax Ledger"
+        />
       </View>
+      <TextInput
+        style={ir.taxRateInput}
+        value={entry.taxRate}
+        onChangeText={v => {
+          onUpdate('taxRate', v);
+          const auto = (taxable * (parseFloat(v) || 0) / 100).toFixed(2);
+          onUpdate('taxAmount', auto);
+        }}
+        keyboardType="numeric"
+        placeholder="0"
+        placeholderTextColor={COLORS.textTertiary}
+      />
+      <Text style={ir.taxRateSign}>%</Text>
+      <TextInput
+        style={ir.taxAmtInput}
+        value={entry.taxAmount}
+        onChangeText={v => onUpdate('taxAmount', v)}
+        keyboardType="numeric"
+        placeholder="0.00"
+        placeholderTextColor={COLORS.textTertiary}
+      />
+      <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <Ionicons name="close-circle" size={16} color={COLORS.negative} />
+      </TouchableOpacity>
     </View>
   );
 }
 
-// ─── ItemRow ──────────────────────────────────────────────────────────────────
-function ItemRow({ item, onUpdate, onRemove, onOpenModal, onBarcodePress, onAddTaxEntry, onUpdateTaxEntry, onRemoveTaxEntry, hasMultipleWarehouses, stockItems, taxLedgers, warehouses }: {
+// ─── ItemRow (redesigned — collapsible, BottomSheetSearch) ───────────────────
+function ItemRow({
+  item, stockItems, warehouses, taxLedgers, hasMultipleWarehouses,
+  onUpdate, onRemove, onOpenModal, onBarcodePress,
+  onAddTaxEntry, onUpdateTaxEntry, onRemoveTaxEntry,
+  itemIndex, canRemove,
+}: {
   item: InvoiceItem;
+  stockItems: StockItem[];
+  warehouses: Warehouse[];
+  taxLedgers: { name: string }[];
+  hasMultipleWarehouses: boolean;
   onUpdate: (id: string, field: keyof InvoiceItem, val: string) => void;
   onRemove: (id: string) => void;
   onOpenModal: (s: ModalState) => void;
@@ -528,253 +504,199 @@ function ItemRow({ item, onUpdate, onRemove, onOpenModal, onBarcodePress, onAddT
   onAddTaxEntry: (itemId: string) => void;
   onUpdateTaxEntry: (itemId: string, entryId: string, field: keyof TaxLedgerEntry, val: string) => void;
   onRemoveTaxEntry: (itemId: string, entryId: string) => void;
-  hasMultipleWarehouses: boolean;
-  stockItems: StockItem[];
-  taxLedgers: { name: string }[];
-  warehouses: Warehouse[];
+  itemIndex: number;
+  canRemove: boolean;
 }) {
+  const [expanded, setExpanded] = useState(true);
   const calc = calcItem(item);
-  const [productQuery, setProductQuery] = useState('');
-  const [productOpen, setProductOpen] = useState(false);
-  const [warehouseQuery, setWarehouseQuery] = useState('');
-  const [warehouseOpen, setWarehouseOpen] = useState(false);
-  const productSelecting = useRef(false);
-  const warehouseSelecting = useRef(false);
-  const wFix = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
+
+  const stockOpts: BSSOption[] = stockItems.map(si => ({
+    label: si.displayName || si.name,
+    value: si.name,
+    subtitle: `${si.closing_qty ?? 0} ${si.unit || 'pcs'}`,
+  }));
+
+  const warehouseOpts: BSSOption[] = warehouses.map(w => ({
+    label: w.name,
+    value: w.name,
+  }));
 
   const stockItem = stockItems.find(si => si.name === item.product);
-  const productLabel = stockItem ? (stockItem.displayName || stockItem.name) : (item.product || '');
-
-  const filteredProducts = productQuery.trim()
-    ? stockItems.filter(p => (p.displayName || p.name).toLowerCase().includes(productQuery.toLowerCase()))
-    : stockItems;
-
-  const filteredWarehouses = warehouseQuery.trim()
-    ? warehouses.filter(w => w.name.toLowerCase().includes(warehouseQuery.toLowerCase()))
-    : warehouses;
+  const productLabel = stockItem ? (stockItem.displayName || stockItem.name) : '';
+  const headerLabel = productLabel || `Item ${itemIndex + 1}`;
 
   return (
     <View style={ir.card}>
-      {/* Warehouse inline search — only if multiple warehouses */}
-      {hasMultipleWarehouses && (
-        <View>
-          <View style={[ir.inlineSearchBox, warehouseOpen && ir.inlineSearchBoxOpen, item.warehouse && !warehouseOpen && ir.warehouseActive]}>
-            <Ionicons name="business-outline" size={13} color={item.warehouse && !warehouseOpen ? COLORS.info : COLORS.textTertiary} style={{ marginRight: 6 }} />
-            <TextInput
-              style={[ir.inlineSearchInput, wFix]}
-              value={warehouseOpen ? warehouseQuery : item.warehouse}
-              onChangeText={setWarehouseQuery}
-              onFocus={() => { setWarehouseQuery(''); setWarehouseOpen(true); }}
-              onBlur={() => {
-                setTimeout(() => {
-                  if (!warehouseSelecting.current) setWarehouseOpen(false);
-                  warehouseSelecting.current = false;
-                }, 150);
-              }}
-              placeholder="Search warehouse..."
-              placeholderTextColor={COLORS.textTertiary}
-              autoCorrect={false}
-              autoCapitalize="none"
-            />
-            {item.warehouse && !warehouseOpen ? (
-              <TouchableOpacity onPress={() => { onUpdate(item.id, 'warehouse', ''); }} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                <Ionicons name="close-circle" size={14} color={COLORS.textTertiary} />
+      {/* Always-visible header row */}
+      <TouchableOpacity style={ir.rowHeader} onPress={() => setExpanded(!expanded)} activeOpacity={0.7}>
+        <Ionicons name="cube-outline" size={14} color={item.product ? COLORS.brandPrimary : COLORS.textSecondary} />
+        <Text style={[ir.rowHeaderTxt, item.product ? ir.rowHeaderTxtActive : undefined]} numberOfLines={1}>
+          {headerLabel}
+        </Text>
+        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={14} color={COLORS.textSecondary} />
+      </TouchableOpacity>
+
+      {expanded && (
+        <View style={ir.expandedContent}>
+          {/* Product / Service */}
+          <View>
+            <Text style={ir.fieldLabel}>Product / Service <Text style={ir.star}>*</Text></Text>
+            <View style={ir.productRow}>
+              <View style={{ flex: 1 }}>
+                <BottomSheetSearch
+                  placeholder="Select product..."
+                  options={stockOpts}
+                  value={item.product}
+                  onSelect={opt => {
+                    const si = stockItems.find(s => s.name === opt.value);
+                    onUpdate(item.id, 'product', opt.value);
+                    if (si?.unit) onUpdate(item.id, 'unit', si.unit);
+                    if (si?.rate != null) onUpdate(item.id, 'rate', String(si.rate));
+                  }}
+                  onClear={() => {
+                    onUpdate(item.id, 'product', '');
+                    onUpdate(item.id, 'unit', 'pcs');
+                    onUpdate(item.id, 'rate', '');
+                  }}
+                  sheetTitle="Product / Service"
+                  containerStyle={{ marginBottom: 0 }}
+                />
+              </View>
+              <TouchableOpacity
+                style={ir.barcodeBtn}
+                onPress={() => onBarcodePress(item.id)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="barcode-outline" size={18} color={COLORS.textSecondary} />
               </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Warehouse */}
+          {hasMultipleWarehouses ? (
+            <View>
+              <Text style={ir.fieldLabel}>Warehouse <Text style={ir.star}>*</Text></Text>
+              <BottomSheetSearch
+                placeholder="Select warehouse..."
+                options={warehouseOpts}
+                value={item.warehouse}
+                onSelect={opt => onUpdate(item.id, 'warehouse', opt.value)}
+                onClear={() => onUpdate(item.id, 'warehouse', '')}
+                sheetTitle="Warehouse"
+                containerStyle={{ marginBottom: 0 }}
+              />
+            </View>
+          ) : warehouses.length === 1 ? (
+            <View style={ir.warehouseChip}>
+              <Ionicons name="business-outline" size={11} color={COLORS.info} />
+              <Text style={ir.warehouseChipTxt}>{warehouses[0].name}</Text>
+            </View>
+          ) : null}
+
+          {/* Qty + Unit + Rate */}
+          <View style={ir.fieldRow}>
+            <View style={ir.qtyBox}>
+              <Text style={ir.miniLabel}>Qty</Text>
+              <TextInput
+                style={ir.miniInput}
+                value={item.qty}
+                onChangeText={v => onUpdate(item.id, 'qty', v)}
+                keyboardType="numeric"
+                placeholder="1"
+                placeholderTextColor={COLORS.textTertiary}
+              />
+            </View>
+            <TouchableOpacity style={ir.unitBtn} onPress={() => onOpenModal({ type: 'unit', itemId: item.id })} activeOpacity={0.7}>
+              <Text style={ir.unitTxt}>{item.unit || 'pcs'}</Text>
+              <Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+            <View style={ir.rateBox}>
+              <Text style={ir.miniLabel}>Rate (₹)</Text>
+              <TextInput
+                style={ir.miniInput}
+                value={item.rate}
+                onChangeText={v => onUpdate(item.id, 'rate', v)}
+                keyboardType="numeric"
+                placeholder="0.00"
+                placeholderTextColor={COLORS.textTertiary}
+              />
+            </View>
+          </View>
+
+          {/* Discount Row */}
+          <View style={ir.fieldRow}>
+            <View style={ir.discRow}>
+              <TouchableOpacity
+                style={ir.discTypeBtn}
+                onPress={() => onUpdate(item.id, 'discountType', item.discountType === '%' ? 'flat' : '%')}
+                activeOpacity={0.7}
+              >
+                <Text style={ir.discTypeTxt}>{item.discountType}</Text>
+              </TouchableOpacity>
+              <TextInput
+                style={ir.discInput}
+                value={item.discount}
+                onChangeText={v => onUpdate(item.id, 'discount', v)}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor={COLORS.textTertiary}
+              />
+              <Text style={ir.discLabel}>Disc</Text>
+            </View>
+          </View>
+
+          {/* Taxable Amount display */}
+          <View style={ir.taxableRow}>
+            <Text style={ir.taxableLabel}>Taxable Amount</Text>
+            <Text style={ir.taxableVal}>₹{calc.taxable.toFixed(2)}</Text>
+          </View>
+
+          {/* Tax Section */}
+          <View style={ir.taxSection}>
+            <View style={ir.taxSectionHdr}>
+              <Ionicons name="receipt-outline" size={13} color={COLORS.textSecondary} />
+              <Text style={ir.taxSectionTitle}>Taxes</Text>
+              <Text style={ir.taxColHint}>Type · Rate% · Amt ₹</Text>
+              <TouchableOpacity style={ir.addTaxBtn} onPress={() => onAddTaxEntry(item.id)} activeOpacity={0.7}>
+                <Ionicons name="add-circle-outline" size={13} color={COLORS.brandPrimary} />
+                <Text style={ir.addTaxTxt}>Add Tax</Text>
+              </TouchableOpacity>
+            </View>
+            {item.taxEntries.length === 0 ? (
+              <View style={ir.noTaxPlaceholder}>
+                <Text style={ir.noTaxTxt}>No tax — tap Add to attach ledger</Text>
+              </View>
             ) : (
-              <Ionicons name={warehouseOpen ? 'chevron-up' : 'chevron-down'} size={13} color={COLORS.textSecondary} />
+              item.taxEntries.map(te => (
+                <TaxEntryRow
+                  key={te.id}
+                  entry={te}
+                  taxLedgers={taxLedgers}
+                  taxable={calc.taxable}
+                  onUpdate={(field, val) => onUpdateTaxEntry(item.id, te.id, field, val)}
+                  onRemove={() => onRemoveTaxEntry(item.id, te.id)}
+                />
+              ))
             )}
           </View>
-          {warehouseOpen && (
-            <View style={ir.inlineSuggestions}>
-              <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} nestedScrollEnabled>
-                {filteredWarehouses.length === 0 ? (
-                  <View style={ir.inlineEmpty}><Text style={ir.inlineEmptyTxt}>No warehouses found</Text></View>
-                ) : (
-                  filteredWarehouses.map((w, idx) => (
-                    <TouchableOpacity
-                      key={w.id}
-                      style={[ir.inlineOpt, idx === filteredWarehouses.length - 1 && { borderBottomWidth: 0 }, item.warehouse === w.name && ir.inlineOptActive]}
-                      onPressIn={() => { warehouseSelecting.current = true; }}
-                      onPress={() => { warehouseSelecting.current = false; onUpdate(item.id, 'warehouse', w.name); setWarehouseOpen(false); }}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="business-outline" size={12} color={COLORS.info} style={{ marginRight: 6 }} />
-                      <Text style={[ir.inlineOptTxt, item.warehouse === w.name && ir.inlineOptTxtActive]} numberOfLines={1}>{w.name}</Text>
-                      {item.warehouse === w.name && <Ionicons name="checkmark" size={14} color={COLORS.brandPrimary} />}
-                    </TouchableOpacity>
-                  ))
-                )}
-              </ScrollView>
-            </View>
+
+          {/* Item Total */}
+          <View style={ir.subtotalRow}>
+            <Text style={ir.subtotalLabel}>Item Total</Text>
+            <Text style={ir.subtotalVal}>
+              ₹{calc.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </Text>
+          </View>
+
+          {/* Remove Item — only if canRemove */}
+          {canRemove && (
+            <TouchableOpacity style={ir.removeItemBtn} onPress={() => onRemove(item.id)} activeOpacity={0.7}>
+              <Ionicons name="trash-outline" size={14} color={COLORS.negative} />
+              <Text style={ir.removeItemTxt}>Remove Item</Text>
+            </TouchableOpacity>
           )}
         </View>
       )}
-
-      {/* Product inline search + Barcode + Delete */}
-      <View style={ir.topRow}>
-        <View style={{ flex: 1 }}>
-          <View style={[ir.inlineSearchBox, productOpen && ir.inlineSearchBoxOpen]}>
-            <Ionicons name="cube-outline" size={13} color={COLORS.textSecondary} style={{ marginRight: 6 }} />
-            <TextInput
-              style={[ir.inlineSearchInput, wFix]}
-              value={productOpen ? productQuery : productLabel}
-              onChangeText={setProductQuery}
-              onFocus={() => { setProductQuery(''); setProductOpen(true); }}
-              onBlur={() => {
-                setTimeout(() => {
-                  if (!productSelecting.current) setProductOpen(false);
-                  productSelecting.current = false;
-                }, 150);
-              }}
-              placeholder="Search product..."
-              placeholderTextColor={COLORS.textTertiary}
-              autoCorrect={false}
-              autoCapitalize="none"
-            />
-            {item.product && !productOpen ? (
-              <TouchableOpacity
-                onPress={() => { onUpdate(item.id, 'product', ''); onUpdate(item.id, 'unit', 'pcs'); onUpdate(item.id, 'rate', ''); }}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              >
-                <Ionicons name="close-circle" size={14} color={COLORS.textTertiary} />
-              </TouchableOpacity>
-            ) : (
-              <Ionicons name={productOpen ? 'chevron-up' : 'chevron-down'} size={13} color={COLORS.textSecondary} />
-            )}
-          </View>
-          {productOpen && (
-            <View style={ir.inlineSuggestions}>
-              <ScrollView style={{ maxHeight: 180 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} nestedScrollEnabled>
-                {filteredProducts.length === 0 ? (
-                  <View style={ir.inlineEmpty}>
-                    <Ionicons name="search-outline" size={14} color={COLORS.textTertiary} style={{ marginRight: 4 }} />
-                    <Text style={ir.inlineEmptyTxt}>{productQuery ? `No results for "${productQuery}"` : 'No products available'}</Text>
-                  </View>
-                ) : (
-                  filteredProducts.map((p, idx) => (
-                    <TouchableOpacity
-                      key={p.id}
-                      style={[ir.inlineOpt, idx === filteredProducts.length - 1 && { borderBottomWidth: 0 }, item.product === p.name && ir.inlineOptActive]}
-                      onPressIn={() => { productSelecting.current = true; }}
-                      onPress={() => {
-                        productSelecting.current = false;
-                        onUpdate(item.id, 'product', p.name);
-                        if (p.unit) onUpdate(item.id, 'unit', p.unit);
-                        if (p.rate != null) onUpdate(item.id, 'rate', String(p.rate));
-                        setProductQuery('');
-                        setProductOpen(false);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="cube-outline" size={12} color={COLORS.textSecondary} style={{ marginRight: 6 }} />
-                      <Text style={[ir.inlineOptTxt, item.product === p.name && ir.inlineOptTxtActive]} numberOfLines={1}>
-                        {`${p.displayName || p.name} (${p.closing_qty ?? 0} ${p.unit || 'pcs'})`}
-                      </Text>
-                      {item.product === p.name && <Ionicons name="checkmark" size={14} color={COLORS.brandPrimary} />}
-                    </TouchableOpacity>
-                  ))
-                )}
-              </ScrollView>
-            </View>
-          )}
-        </View>
-        <TouchableOpacity
-          style={ir.barcodeBtn}
-          onPress={() => onBarcodePress(item.id)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="barcode-outline" size={18} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-        <TouchableOpacity style={ir.delBtn} onPress={() => onRemove(item.id)} activeOpacity={0.7}>
-          <Ionicons name="close-circle" size={20} color={COLORS.negative} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Qty + Unit + Rate */}
-      <View style={ir.fieldRow}>
-        <View style={ir.qtyBox}>
-          <Text style={ir.miniLabel}>Qty</Text>
-          <TextInput
-            style={ir.miniInput}
-            value={item.qty}
-            onChangeText={v => onUpdate(item.id, 'qty', v)}
-            keyboardType="numeric"
-            placeholder="1"
-            placeholderTextColor={COLORS.textTertiary}
-          />
-        </View>
-        <TouchableOpacity style={ir.unitBtn} onPress={() => onOpenModal({ type: 'unit', itemId: item.id })} activeOpacity={0.7}>
-          <Text style={ir.unitTxt}>{item.unit || 'pcs'}</Text>
-          <Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-        <View style={ir.rateBox}>
-          <Text style={ir.miniLabel}>Rate (₹)</Text>
-          <TextInput
-            style={ir.miniInput}
-            value={item.rate}
-            onChangeText={v => onUpdate(item.id, 'rate', v)}
-            keyboardType="numeric"
-            placeholder="0.00"
-            placeholderTextColor={COLORS.textTertiary}
-          />
-        </View>
-      </View>
-
-      {/* Discount Row */}
-      <View style={ir.fieldRow}>
-        <View style={ir.discRow}>
-          <TouchableOpacity
-            style={ir.discTypeBtn}
-            onPress={() => onUpdate(item.id, 'discountType', item.discountType === '%' ? 'flat' : '%')}
-            activeOpacity={0.7}
-          >
-            <Text style={ir.discTypeTxt}>{item.discountType}</Text>
-          </TouchableOpacity>
-          <TextInput
-            style={ir.discInput}
-            value={item.discount}
-            onChangeText={v => onUpdate(item.id, 'discount', v)}
-            keyboardType="numeric"
-            placeholder="0"
-            placeholderTextColor={COLORS.textTertiary}
-          />
-          <Text style={ir.discLabel}>Disc</Text>
-        </View>
-      </View>
-
-      {/* Tax Ledgers Section */}
-      <View style={ir.taxSection}>
-        <View style={ir.taxSectionHdr}>
-          <Ionicons name="receipt-outline" size={13} color={COLORS.textSecondary} />
-          <Text style={ir.taxSectionTitle}>Tax Ledgers</Text>
-          <TouchableOpacity style={ir.addTaxBtn} onPress={() => onAddTaxEntry(item.id)} activeOpacity={0.7}>
-            <Ionicons name="add-circle-outline" size={13} color={COLORS.brandPrimary} />
-            <Text style={ir.addTaxTxt}>Add</Text>
-          </TouchableOpacity>
-        </View>
-        {item.taxEntries.length === 0 && (
-          <TouchableOpacity style={ir.noTaxBtn} onPress={() => onAddTaxEntry(item.id)} activeOpacity={0.7}>
-            <Text style={ir.noTaxTxt}>No tax • Tap Add to attach ledger</Text>
-          </TouchableOpacity>
-        )}
-        {item.taxEntries.map(te => (
-          <TaxEntryRow
-            key={te.id}
-            entry={te}
-            taxLedgers={taxLedgers}
-            onUpdate={(field, val) => onUpdateTaxEntry(item.id, te.id, field, val)}
-            onRemove={() => onRemoveTaxEntry(item.id, te.id)}
-          />
-        ))}
-      </View>
-
-      {/* Item Total */}
-      <View style={ir.subtotalRow}>
-        <Text style={ir.subtotalLabel}>Item Total</Text>
-        <Text style={ir.subtotalVal}>
-          ₹{calc.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-        </Text>
-      </View>
     </View>
   );
 }
@@ -795,7 +717,7 @@ export default function CreateSalesInvoiceScreen() {
   const [date, setDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [party, setParty] = useState('');
-  const [parties, setParties] = useState<DropdownOption[]>([]);
+  const [parties, setParties] = useState<BSSOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   // Real API data
@@ -803,6 +725,7 @@ export default function CreateSalesInvoiceScreen() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [salesLedgers, setSalesLedgers] = useState<{ name: string; guid?: string }[]>([]);
   const [taxLedgers, setTaxLedgers] = useState<{ name: string }[]>([]);
+  const [chargeLedgers, setChargeLedgers] = useState<{ ledgerName: string; guid?: string }[]>([]);
 
   const hasMultipleWarehouses = warehouses.length > 1;
 
@@ -816,19 +739,21 @@ export default function CreateSalesInvoiceScreen() {
   const [narration, setNarration] = useState('');
   const [termsText, setTermsText] = useState('Goods once sold will not be taken back.');
   const [activeModal, setActiveModal] = useState<ModalState>(null);
-  const [step, setStep] = useState<1|2|3>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [payTermsExpanded, setPayTermsExpanded] = useState(false);
+  const [ewbRequired, setEwbRequired] = useState(false);
 
   // Dispatch / E-Way Bill Details
-  const [showDispatch, setShowDispatch]         = useState(false);
-  const [dispatchFrom, setDispatchFrom]         = useState('');
-  const [shipTo, setShipTo]                     = useState('');
-  const [transporterName, setTransporterName]   = useState('');
-  const [transporterId, setTransporterId]       = useState('');
-  const [transportMode, setTransportMode]       = useState('Road');
-  const [vehicleNumber, setVehicleNumber]       = useState('');
-  const [vehicleType, setVehicleType]           = useState('Regular');
-  const [transportDocNo, setTransportDocNo]         = useState('');
-  const [transportDocDate, setTransportDocDate]       = useState('');
+  const [showDispatch, setShowDispatch] = useState(false);
+  const [dispatchFrom, setDispatchFrom] = useState('');
+  const [shipTo, setShipTo] = useState('');
+  const [transporterName, setTransporterName] = useState('');
+  const [transporterId, setTransporterId] = useState('');
+  const [transportMode, setTransportMode] = useState('Road');
+  const [vehicleNumber, setVehicleNumber] = useState('');
+  const [vehicleType, setVehicleType] = useState('Regular');
+  const [transportDocNo, setTransportDocNo] = useState('');
+  const [transportDocDate, setTransportDocDate] = useState('');
   const [showTransportDocDatePicker, setShowTransportDocDatePicker] = useState(false);
 
   // Collect Payment Now
@@ -887,21 +812,30 @@ export default function CreateSalesInvoiceScreen() {
     }).catch(() => {});
   }, [company?.guid]);
 
-  // ── Quotation pre-fill from params ──────────────────────────────────────────
+  useEffect(() => {
+    if (!company?.guid) return;
+    getChargeLedgers(company.guid).then((res: any) => {
+      const d = res?.data;
+      if (d) setChargeLedgers(d.allCharges || []);
+    }).catch(() => {});
+  }, [company?.guid]);
+
+  // ── Quotation pre-fill from params ──────────────────────────
   const routeParams = useLocalSearchParams<{ party?: string; fromQuotation?: string }>();
   useEffect(() => {
     if (routeParams?.party) setParty(routeParams.party as string);
     if (routeParams?.fromQuotation) setRefNo(routeParams.fromQuotation as string);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Auto-enable dispatch toggle when EWB is configured ───────────────────
+  // ── Auto-enable dispatch toggle when EWB is configured ─────
   useEffect(() => {
     if (!company?.guid) return;
     getComplianceConfig(company.guid).then((res: any) => {
       const cfg = res?.data || res;
       if (cfg?.e_way_bill_applicable === 'applicable_configured') {
         setShowDispatch(true);
+        setEwbRequired(true);
       }
     }).catch(() => {});
   }, [company?.guid]);
@@ -909,8 +843,8 @@ export default function CreateSalesInvoiceScreen() {
   // Due date auto-fill
   useEffect(() => {
     const days = payTerms === '15d' ? 15 : payTerms === '30d' ? 30 :
-                 payTerms === 'due_on_receipt' ? 0 :
-                 payTerms === 'custom' ? (parseInt(customDays) || 0) : 0;
+      payTerms === 'due_on_receipt' ? 0 :
+        payTerms === 'custom' ? (parseInt(customDays) || 0) : 0;
     if (days > 0 && date) {
       const parsed = parseDMY(date);
       if (parsed) {
@@ -940,7 +874,10 @@ export default function CreateSalesInvoiceScreen() {
   const addTaxEntry = useCallback((itemId: string) => {
     setItems(prev => prev.map(i => i.id === itemId ? {
       ...i,
-      taxEntries: [...i.taxEntries, { id: Date.now().toString() + Math.random().toString(36).slice(2), ledgerName: '', taxRate: '' }],
+      taxEntries: [...i.taxEntries, {
+        id: Date.now().toString() + Math.random().toString(36).slice(2),
+        ledgerName: '', taxRate: '', taxAmount: '',
+      }],
     } : i));
   }, []);
 
@@ -961,18 +898,25 @@ export default function CreateSalesInvoiceScreen() {
   const goNext = useCallback(() => {
     if (step === 1) {
       if (!ledger) { Toast.show({ type: 'error', text1: 'Sales Ledger required' }); return; }
-      if (!party)  { Toast.show({ type: 'error', text1: 'Customer required' });      return; }
+      if (!party) { Toast.show({ type: 'error', text1: 'Customer / Party required' }); return; }
       setStep(2);
     } else if (step === 2) {
-      if (items.every(i => !i.product)) { Toast.show({ type: 'error', text1: 'Add at least one product' }); return; }
-      if (items.some(i => !i.product))  { Toast.show({ type: 'error', text1: 'Fill product for all item rows' }); return; }
-      if (hasMultipleWarehouses && items.some(i => !i.warehouse)) { Toast.show({ type: 'error', text1: 'Select warehouse for all items' }); return; }
+      const filledItems = items.filter(i => i.product && (parseFloat(i.qty) || 0) > 0 && (parseFloat(i.rate) || 0) > 0);
+      if (filledItems.length === 0) {
+        Toast.show({ type: 'error', text1: 'Add at least 1 item with qty and rate' }); return;
+      }
+      if (items.some(i => i.product && (!(parseFloat(i.qty) > 0) || !(parseFloat(i.rate) > 0)))) {
+        Toast.show({ type: 'error', text1: 'All items need qty and rate' }); return;
+      }
+      if (hasMultipleWarehouses && items.some(i => i.product && !i.warehouse)) {
+        Toast.show({ type: 'error', text1: 'Select warehouse for all items' }); return;
+      }
       setStep(3);
     }
   }, [step, ledger, party, items, hasMultipleWarehouses]);
 
   const goBack = useCallback(() => {
-    setStep(prev => Math.max(1, prev - 1) as 1|2|3);
+    setStep(prev => Math.max(1, prev - 1) as 1 | 2 | 3);
   }, []);
 
   const closeModal = useCallback(() => setActiveModal(null), []);
@@ -1007,7 +951,7 @@ export default function CreateSalesInvoiceScreen() {
   }, [stockItems]);
 
   // ── Submit ──────────────────────────────────────────────────
-  const handleSubmit = useCallback(async (isDraft = false) => {
+  const handleSubmit = useCallback(async () => {
     if (!party) {
       Toast.show({ type: 'error', text1: 'Customer required' });
       return;
@@ -1019,6 +963,17 @@ export default function CreateSalesInvoiceScreen() {
     if (hasMultipleWarehouses && items.some(i => !i.warehouse)) {
       Toast.show({ type: 'error', text1: 'Warehouse required for all items' });
       return;
+    }
+    // EWB validation
+    if (ewbRequired && showDispatch) {
+      if (!dispatchFrom || !shipTo) {
+        Toast.show({
+          type: 'error',
+          text1: 'Dispatch details required',
+          text2: 'Dispatch From and Ship To are mandatory for E-Way Bill',
+        });
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -1047,31 +1002,45 @@ export default function CreateSalesInvoiceScreen() {
         taxes: items.flatMap(item => {
           const taxable = calcItem(item).taxable;
           return (item.taxEntries || [])
-            .filter(t => t.ledgerName && parseFloat(t.taxRate) > 0)
-            .map(t => ({
-              ledgerName: t.ledgerName,
-              taxRate: parseFloat(t.taxRate),
-              taxAmount: taxable * (parseFloat(t.taxRate) || 0) / 100,
-              taxableValue: taxable,
-            }));
+            .filter(t => t.ledgerName && (parseFloat(t.taxRate) > 0 || parseFloat(t.taxAmount) > 0))
+            .map(t => {
+              const override = parseFloat(t.taxAmount);
+              const taxAmt = !isNaN(override) && t.taxAmount.trim() !== ''
+                ? override
+                : taxable * (parseFloat(t.taxRate) || 0) / 100;
+              return {
+                ledgerName: t.ledgerName,
+                taxRate: parseFloat(t.taxRate),
+                taxAmount: taxAmt,
+                taxableValue: taxable,
+              };
+            });
         }),
+        logistics: logEntries.map(e => ({
+          ledgerName: e.ledgerName,
+          amount: parseFloat(e.amount) || 0,
+          taxes: e.addTaxes ? e.taxEntries.map(t => ({
+            ledgerName: t.ledgerName,
+            taxRate: parseFloat(t.taxRate),
+            taxAmount: parseFloat(t.taxAmount) || 0,
+          })) : [],
+        })),
         collect_payment: collectPayNow ? {
           mode: payNowMode,
           amount: parseFloat(payNowAmount) || 0,
           reference: payNowRef || undefined,
         } : undefined,
         dispatch_details: showDispatch ? {
-          dispatch_from:    dispatchFrom,
-          ship_to:          shipTo,
-          transport_mode:   transportMode,
+          dispatch_from: dispatchFrom,
+          ship_to: shipTo,
+          transport_mode: transportMode,
           transporter_name: transporterName || undefined,
-          transporter_id:   transporterId || undefined,
-          vehicle_number:   vehicleNumber || undefined,
-          vehicle_type:     vehicleType,
-          transport_doc_no:   transportDocNo || undefined,
+          transporter_id: transporterId || undefined,
+          vehicle_number: vehicleNumber || undefined,
+          vehicle_type: vehicleType,
+          transport_doc_no: transportDocNo || undefined,
           transport_doc_date: transportDocDate || undefined,
         } : undefined,
-        is_draft: isDraft,
       });
 
       const tdkRef = result?.data?.tdkReferenceNo || result?.tdkReferenceNo || '';
@@ -1083,9 +1052,15 @@ export default function CreateSalesInvoiceScreen() {
     } finally {
       setSubmitting(false);
     }
-  }, [party, items, hasMultipleWarehouses, company, date, ledger, entryType, totals.grand, refNo, narration, warehouses, collectPayNow, payNowMode, payNowAmount, payNowRef, showDispatch, dispatchFrom, shipTo, transportMode, transporterName, transporterId, vehicleNumber, vehicleType, transportDocNo, transportDocDate]);
+  }, [
+    party, items, hasMultipleWarehouses, ewbRequired, showDispatch, dispatchFrom, shipTo,
+    company, date, ledger, entryType, totals.grand, refNo, narration, warehouses,
+    collectPayNow, payNowMode, payNowAmount, payNowRef, logEntries,
+    transportMode, transporterName, transporterId, vehicleNumber, vehicleType,
+    transportDocNo, transportDocDate,
+  ]);
 
-  // ── Render (3-step wizard) ──────────────────────────────────────────────────
+  // ── Render ──────────────────────────────────────────────────
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       {/* Success Overlay */}
@@ -1135,20 +1110,20 @@ export default function CreateSalesInvoiceScreen() {
         </View>
       )}
 
-      {/* ── Header (back is step-aware) ── */}
+      {/* ── Header ── */}
       <View style={s.header}>
         <TouchableOpacity
           onPress={step === 1 ? () => router.back() : goBack}
           style={s.backBtn}
-          hitSlop={{ top:8, bottom:8, left:8, right:8 }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Create Sales Invoice</Text>
-        <RegularOptionalToggle value={entryType} onChange={setEntryType} />
-        <View style={s.invNoBadge}>
-          <Text style={s.invNoTxt}>{invoiceNo || 'Auto'}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={s.headerTitle}>Create Sales Invoice</Text>
+          <Text style={s.headerSub}>{invoiceNo || 'INV-Auto'}</Text>
         </View>
+        <RegularOptionalToggle value={entryType} onChange={setEntryType} />
       </View>
 
       {/* ── Step Indicator ── */}
@@ -1160,20 +1135,23 @@ export default function CreateSalesInvoiceScreen() {
           contentContainerStyle={s.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ════════════════════════════ STEP 1 — Invoice Setup ════════════════════════════ */}
+          {/* ══════════ STEP 1 — Invoice Details ══════════ */}
           {step === 1 && (
             <>
-              <SearchableDropdown
+              {/* Sales Ledger */}
+              <BottomSheetSearch
                 label="Sales Ledger"
                 required
                 placeholder="Search ledger account..."
                 options={salesLedgers.map(l => ({ label: l.name, value: l.name }))}
                 value={ledger}
-                onSelect={(o: any) => setLedger(o.value)}
+                onSelect={opt => setLedger(opt.value)}
+                onClear={() => setLedger('')}
+                sheetTitle="Sales Ledger"
                 icon="book-outline"
-                containerStyle={{ marginBottom: SPACING.md }}
               />
 
+              {/* Invoice Details Card */}
               <View style={s.card}>
                 <View style={s.cardHdr}>
                   <Ionicons name="document-text-outline" size={18} color={COLORS.brandPrimary} />
@@ -1204,65 +1182,26 @@ export default function CreateSalesInvoiceScreen() {
                     )}
                   </View>
                 </View>
-
-                <SearchableDropdown
-                  label="Customer / Party"
-                  required
-                  placeholder="Search customer..."
-                  options={parties}
-                  value={party}
-                  onSelect={(o: any) => setParty(o.value)}
-                  onAddNew={() => setShowAddCustomer(true)}
-                  addNewLabel="Add New Customer"
-                />
-
-                <View style={{ marginBottom: SPACING.md }}>
-                  <Text style={s.fLabel}>Payment Terms</Text>
-                  <View style={s.termsRow}>
-                    {TERMS.map(t => (
-                      <TouchableOpacity
-                        key={t.value}
-                        style={[s.termChip, payTerms === t.value && s.termChipActive]}
-                        onPress={() => setPayTerms(t.value)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[s.termChipTxt, payTerms === t.value && s.termChipTxtActive]}>
-                          {t.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  {payTerms === 'custom' && (
-                    <View style={s.customDaysRow}>
-                      <ThemedFInput
-                        style={{ flex: 1 }}
-                        value={customDays}
-                        onChangeText={setCustomDays}
-                        keyboardType="numeric"
-                        placeholder="Enter number of days"
-                      />
-                      <View style={s.daysBadge}>
-                        <Text style={s.daysBadgeTxt}>Days</Text>
-                      </View>
-                    </View>
-                  )}
-                </View>
-
-                <View style={s.row2}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Due Date</Text>
-                    <ThemedFInput value={dueDate} onChangeText={setDueDate} placeholder="DD/MM/YY" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Reference No.</Text>
-                    <ThemedFInput value={refNo} onChangeText={setRefNo} placeholder="Optional" />
-                  </View>
-                </View>
               </View>
+
+              {/* Customer / Party */}
+              <BottomSheetSearch
+                label="Customer / Party"
+                required
+                placeholder="Search customer..."
+                options={parties}
+                value={party}
+                onSelect={opt => setParty(opt.value)}
+                onClear={() => setParty('')}
+                onAddNew={() => setShowAddCustomer(true)}
+                addNewLabel="Add New Customer"
+                sheetTitle="Customer / Party"
+                icon="person-outline"
+              />
             </>
           )}
 
-          {/* ════════════════════════════ STEP 2 — Items & Charges ════════════════════════════ */}
+          {/* ══════════ STEP 2 — Items & Services ══════════ */}
           {step === 2 && (
             <>
               <View style={s.sectionHdr}>
@@ -1273,10 +1212,12 @@ export default function CreateSalesInvoiceScreen() {
                 </View>
               </View>
 
-              {items.map(item => (
+              {items.map((item, idx) => (
                 <ItemRow
                   key={item.id}
                   item={item}
+                  itemIndex={idx}
+                  canRemove={items.length > 1}
                   onUpdate={updateItem}
                   onRemove={removeItem}
                   onOpenModal={setActiveModal}
@@ -1305,54 +1246,26 @@ export default function CreateSalesInvoiceScreen() {
                 />
               ))}
 
+              {/* Add Item button */}
               <TouchableOpacity style={s.addItemBtn} onPress={addItem} activeOpacity={0.7}>
                 <Ionicons name="add-circle-outline" size={18} color={COLORS.positive} />
-                <Text style={s.addItemTxt}>Add Item / Service</Text>
+                <Text style={s.addItemTxt}>+ Add Item / Service</Text>
               </TouchableOpacity>
 
+              {/* Logistics Section */}
               <LogisticsSection
                 entries={logEntries}
                 onEntriesChange={setLogEntries}
+                taxLedgers={taxLedgers}
+                chargeLedgers={chargeLedgers}
               />
             </>
           )}
 
-          {/* ════════════════════════════ STEP 3 — Review & Submit ════════════════════════════ */}
+          {/* ══════════ STEP 3 — Review & Submit ══════════ */}
           {step === 3 && (
             <>
-              {/* Invoice Summary */}
-              <View style={s.summaryCard}>
-                <Text style={s.summaryTitle}>Invoice Summary</Text>
-                <View style={s.summaryRow}>
-                  <Text style={s.sumLabel}>Subtotal</Text>
-                  <Text style={s.sumVal}>₹{totals.gross.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
-                </View>
-                {totals.discTotal > 0 && (
-                  <View style={s.summaryRow}>
-                    <Text style={s.sumLabel}>Discount</Text>
-                    <Text style={[s.sumVal, { color: COLORS.positive }]}>-₹{totals.discTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
-                  </View>
-                )}
-                {totals.taxTotal > 0 && (
-                  <View style={s.summaryRow}>
-                    <Text style={s.sumLabel}>Tax</Text>
-                    <Text style={s.sumVal}>₹{totals.taxTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
-                  </View>
-                )}
-                {totals.logisticsTotal > 0 && (
-                  <View style={s.summaryRow}>
-                    <Text style={s.sumLabel}>Logistics</Text>
-                    <Text style={s.sumVal}>₹{totals.logisticsTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
-                  </View>
-                )}
-                <View style={s.sumDivider} />
-                <View style={s.summaryRow}>
-                  <Text style={s.grandLabel}>Grand Total</Text>
-                  <Text style={s.grandVal}>₹{totals.grand.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
-                </View>
-              </View>
-
-              {/* Collect Payment Now — toggle, fields only when ON */}
+              {/* 1. Collect Payment Now */}
               <View style={s.card}>
                 <TouchableOpacity
                   style={s.payNowToggleRow}
@@ -1408,7 +1321,7 @@ export default function CreateSalesInvoiceScreen() {
                     <View style={[
                       s.payStatusChip,
                       paymentStatus === 'paid' ? s.payStatusPaid :
-                      paymentStatus === 'partial' ? s.payStatusPartial : s.payStatusPending
+                        paymentStatus === 'partial' ? s.payStatusPartial : s.payStatusPending,
                     ]}>
                       <Ionicons
                         name={paymentStatus === 'paid' ? 'checkmark-circle' : paymentStatus === 'partial' ? 'time-outline' : 'alert-circle-outline'}
@@ -1428,7 +1341,7 @@ export default function CreateSalesInvoiceScreen() {
                 )}
               </View>
 
-              {/* Dispatch / E-Way Bill — toggle, fields only when ON */}
+              {/* 2. Dispatch / E-Way Bill */}
               <View style={s.card}>
                 <TouchableOpacity style={s.payNowToggleRow} onPress={() => setShowDispatch(v => !v)} activeOpacity={0.8}>
                   <View style={s.payNowLeft}>
@@ -1458,7 +1371,7 @@ export default function CreateSalesInvoiceScreen() {
                     </View>
                     <Text style={s.fLabel}>Transport Mode</Text>
                     <View style={s.termsRow}>
-                      {['Road','Rail','Air','Ship','Not Applicable'].map(mode => (
+                      {['Road', 'Rail', 'Air', 'Ship', 'Not Applicable'].map(mode => (
                         <TouchableOpacity key={mode}
                           style={[s.termChip, transportMode === mode && s.termChipActive]}
                           onPress={() => setTransportMode(mode)} activeOpacity={0.7}>
@@ -1484,7 +1397,7 @@ export default function CreateSalesInvoiceScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={s.fLabel}>Vehicle Type</Text>
                         <View style={s.termsRow}>
-                          {['Regular','Over Dimensional','Not Applicable'].map(vt => (
+                          {['Regular', 'Over Dimensional', 'Not Applicable'].map(vt => (
                             <TouchableOpacity key={vt}
                               style={[s.termChip, vehicleType === vt && s.termChipActive]}
                               onPress={() => setVehicleType(vt)} activeOpacity={0.7}>
@@ -1506,7 +1419,7 @@ export default function CreateSalesInvoiceScreen() {
                           onPress={() => setShowTransportDocDatePicker(true)}
                         >
                           <Text style={{ color: transportDocDate ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.base }}>
-                            {transportDocDate ? (() => { const [y,m,d] = transportDocDate.split('-'); return `${d}/${m}/${y.slice(2)}`; })() : 'Optional'}
+                            {transportDocDate ? (() => { const [y, m, d] = transportDocDate.split('-'); return `${d}/${m}/${y.slice(2)}`; })() : 'Optional'}
                           </Text>
                           <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
                         </TouchableOpacity>
@@ -1516,7 +1429,96 @@ export default function CreateSalesInvoiceScreen() {
                 )}
               </View>
 
-              {/* Notes & Terms */}
+              {/* 3. Payment Terms collapsible */}
+              <View style={s.card}>
+                <TouchableOpacity style={s.payNowToggleRow} onPress={() => setPayTermsExpanded(v => !v)} activeOpacity={0.8}>
+                  <View style={s.payNowLeft}>
+                    <View style={[s.payNowIcon, { backgroundColor: payTermsExpanded ? COLORS.pageBg : COLORS.pageBg }]}>
+                      <Ionicons name="calendar-outline" size={18} color={payTermsExpanded ? COLORS.brandPrimary : COLORS.textSecondary} />
+                    </View>
+                    <Text style={s.payNowTitle}>Payment Terms</Text>
+                  </View>
+                  <Ionicons name={payTermsExpanded ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
+                </TouchableOpacity>
+
+                {payTermsExpanded && (
+                  <View style={s.payNowBody}>
+                    <View style={s.divider} />
+                    <View style={s.termsRow}>
+                      {TERMS.map(t => (
+                        <TouchableOpacity
+                          key={t.value}
+                          style={[s.termChip, payTerms === t.value && s.termChipActive]}
+                          onPress={() => setPayTerms(t.value)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[s.termChipTxt, payTerms === t.value && s.termChipTxtActive]}>
+                            {t.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    {payTerms === 'custom' && (
+                      <View style={s.customDaysRow}>
+                        <ThemedFInput
+                          style={{ flex: 1 }}
+                          value={customDays}
+                          onChangeText={setCustomDays}
+                          keyboardType="numeric"
+                          placeholder="Enter number of days"
+                        />
+                        <View style={s.daysBadge}>
+                          <Text style={s.daysBadgeTxt}>Days</Text>
+                        </View>
+                      </View>
+                    )}
+                    <View style={[s.row2, { marginTop: SPACING.sm }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.fLabel}>Due Date</Text>
+                        <ThemedFInput value={dueDate} onChangeText={setDueDate} placeholder="DD/MM/YY" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.fLabel}>Reference No.</Text>
+                        <ThemedFInput value={refNo} onChangeText={setRefNo} placeholder="Optional" />
+                      </View>
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              {/* 4. Invoice Summary */}
+              <View style={s.summaryCard}>
+                <Text style={s.summaryTitle}>Invoice Summary</Text>
+                <View style={s.summaryRow}>
+                  <Text style={s.sumLabel}>Subtotal (Gross)</Text>
+                  <Text style={s.sumVal}>₹{totals.gross.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+                </View>
+                {totals.discTotal > 0 && (
+                  <View style={s.summaryRow}>
+                    <Text style={s.sumLabel}>Discount</Text>
+                    <Text style={[s.sumVal, { color: COLORS.positive }]}>-₹{totals.discTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+                  </View>
+                )}
+                {totals.taxTotal > 0 && (
+                  <View style={s.summaryRow}>
+                    <Text style={s.sumLabel}>Tax</Text>
+                    <Text style={s.sumVal}>₹{totals.taxTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+                  </View>
+                )}
+                {totals.logisticsTotal > 0 && (
+                  <View style={s.summaryRow}>
+                    <Text style={s.sumLabel}>Logistics & Charges</Text>
+                    <Text style={s.sumVal}>₹{totals.logisticsTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+                  </View>
+                )}
+                <View style={s.sumDivider} />
+                <View style={s.summaryRow}>
+                  <Text style={s.grandLabel}>Grand Total</Text>
+                  <Text style={s.grandVal}>₹{totals.grand.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+                </View>
+              </View>
+
+              {/* 5. Notes & Terms */}
               <View style={s.card}>
                 <View style={s.cardHdr}>
                   <Ionicons name="document-outline" size={18} color={COLORS.textSecondary} />
@@ -1541,42 +1543,38 @@ export default function CreateSalesInvoiceScreen() {
           )}
         </ScrollView>
 
-        {/* ── Step-aware Footer ── */}
+        {/* ── Step-aware Footer (NO Save Draft) ── */}
         <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           {step === 1 && (
-            <>
-              <TouchableOpacity style={[s.draftBtn, submitting && { opacity: 0.5 }]} onPress={() => handleSubmit(true)} activeOpacity={0.7} disabled={submitting}>
-                <Text style={s.draftTxt}>Save Draft</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.nextBtn} onPress={goNext} activeOpacity={0.7}>
-                <Text style={s.nextTxt}>Items</Text>
-                <Ionicons name="arrow-forward" size={16} color={COLORS.white} />
-              </TouchableOpacity>
-            </>
+            <TouchableOpacity style={s.fullNextBtn} onPress={goNext} activeOpacity={0.7}>
+              <Text style={s.nextBtnTxt}>Next: Add Items →</Text>
+            </TouchableOpacity>
           )}
           {step === 2 && (
             <>
-              <TouchableOpacity style={[s.draftBtn, submitting && { opacity: 0.5 }]} onPress={() => handleSubmit(true)} activeOpacity={0.7} disabled={submitting}>
-                <Text style={s.draftTxt}>Save Draft</Text>
+              <TouchableOpacity style={s.backOutlineBtn} onPress={goBack} activeOpacity={0.7}>
+                <Text style={s.backOutlineTxt}>← Details</Text>
               </TouchableOpacity>
-              <View style={s.runningTotal}>
-                <Text style={s.runTotalAmt}>₹{totals.grand.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</Text>
-                <Text style={s.runTotalItems}>{items.filter(i => i.product).length} items</Text>
-              </View>
               <TouchableOpacity style={s.nextBtn} onPress={goNext} activeOpacity={0.7}>
-                <Text style={s.nextTxt}>Review</Text>
-                <Ionicons name="arrow-forward" size={16} color={COLORS.white} />
+                <Text style={s.nextBtnTxt}>Next: Review →</Text>
               </TouchableOpacity>
             </>
           )}
           {step === 3 && (
             <>
-              <TouchableOpacity style={[s.draftBtn, submitting && { opacity: 0.5 }]} onPress={() => handleSubmit(true)} activeOpacity={0.7} disabled={submitting}>
-                <Text style={s.draftTxt}>Save Draft</Text>
+              <TouchableOpacity style={s.backOutlineBtn} onPress={goBack} activeOpacity={0.7}>
+                <Text style={s.backOutlineTxt}>← Items</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[s.submitBtn, { flex: 2 }, submitting && { opacity: 0.6 }]} onPress={() => handleSubmit(false)} activeOpacity={0.7} disabled={submitting}>
-                {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />}
-                <Text style={s.submitTxt}>{submitting ? 'Submitting...' : 'Submit Invoice'}</Text>
+              <TouchableOpacity
+                style={[s.submitBtn, submitting && { opacity: 0.6 }]}
+                onPress={handleSubmit}
+                activeOpacity={0.7}
+                disabled={submitting}
+              >
+                {submitting
+                  ? <ActivityIndicator size="small" color={COLORS.white} />
+                  : <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />}
+                <Text style={s.submitTxt}>{submitting ? 'Submitting...' : '✓ Submit Invoice'}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -1631,7 +1629,7 @@ export default function CreateSalesInvoiceScreen() {
         company={company}
         onClose={() => setShowAddCustomer(false)}
         onSaved={(name, success) => {
-          const newOpt: DropdownOption = { label: name, value: name };
+          const newOpt: BSSOption = { label: name, value: name };
           setParties(prev => [...prev, newOpt]);
           setParty(name);
           setShowAddCustomer(false);
@@ -1643,40 +1641,80 @@ export default function CreateSalesInvoiceScreen() {
     </SafeAreaView>
   );
 }
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.pageBg },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
-  invNoBadge: { backgroundColor: COLORS.infoBg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.full },
-  invNoTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.info },
+  header: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: COLORS.cardBg,
+    paddingHorizontal: SPACING.md, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  backBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center',
+  },
+  headerTitle: { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
+  headerSub: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 1 },
   scroll: { padding: SPACING.md, paddingBottom: 8 },
-  card: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.md, marginBottom: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
+  card: {
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
+    padding: SPACING.md, marginBottom: SPACING.md,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
   cardHdr: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SPACING.md },
   cardTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
   row2: { flexDirection: 'row', gap: 12, marginBottom: SPACING.md },
   fLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
-  fInput: { backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, minHeight: 48, justifyContent: 'center', ...Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any }) },
+  fInput: {
+    backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, minHeight: 48, justifyContent: 'center',
+    ...Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any }),
+  },
   fInputFocused: { borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
-  autoBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48 },
+  autoBox: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48,
+  },
   autoTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
   star: { color: COLORS.negative },
-  termsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 2 },
-  termChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
+  termsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 2, marginBottom: SPACING.sm },
+  termChip: {
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: RADIUS.md,
+    borderWidth: 1.5, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg,
+  },
   termChipActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
   termChipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
   termChipTxtActive: { color: COLORS.white },
-  customDaysRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
-  daysBadge: { backgroundColor: COLORS.pageBg, borderWidth: 1, borderLeftWidth: 0, borderColor: COLORS.borderDefault, borderTopRightRadius: RADIUS.md, borderBottomRightRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
+  customDaysRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10, marginBottom: SPACING.sm },
+  daysBadge: {
+    backgroundColor: COLORS.pageBg, borderWidth: 1, borderLeftWidth: 0,
+    borderColor: COLORS.borderDefault, borderTopRightRadius: RADIUS.md,
+    borderBottomRightRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
   daysBadgeTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textSecondary },
   sectionHdr: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SPACING.sm },
   sectionTitle: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-  itemCount: { backgroundColor: COLORS.brandPrimary, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  itemCount: {
+    backgroundColor: COLORS.brandPrimary, width: 22, height: 22, borderRadius: 11,
+    alignItems: 'center', justifyContent: 'center',
+  },
   itemCountTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: '#fff' },
-  addItemBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: COLORS.positiveBg, borderRadius: RADIUS.md, paddingVertical: 14, marginBottom: SPACING.md, borderWidth: 1, borderColor: COLORS.positive + '40', borderStyle: 'dashed' },
+  addItemBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: COLORS.positiveBg, borderRadius: RADIUS.md, paddingVertical: 14,
+    marginBottom: SPACING.md, borderWidth: 1, borderColor: COLORS.positive + '40', borderStyle: 'dashed',
+  },
   addItemTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.positive },
-  summaryCard: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.md, marginBottom: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
+  summaryCard: {
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
+    padding: SPACING.md, marginBottom: SPACING.md,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
   summaryTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginBottom: SPACING.md },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   sumLabel: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
@@ -1684,121 +1722,194 @@ const s = StyleSheet.create({
   sumDivider: { height: 1, backgroundColor: COLORS.borderDefault, marginBottom: 12 },
   grandLabel: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
   grandVal: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.brandPrimary },
-  footer: { flexDirection: 'row', gap: 12, paddingHorizontal: SPACING.md, paddingTop: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
-  draftBtn: { flex: 1, paddingVertical: 14, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.borderDefault, alignItems: 'center', justifyContent: 'center' },
-  draftTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textSecondary },
-  submitBtn: { flex: 2, flexDirection: 'row', gap: 8, paddingVertical: 14, borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center' },
+  footer: {
+    flexDirection: 'row', gap: 12, paddingHorizontal: SPACING.md, paddingTop: SPACING.md,
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg,
+  },
+  fullNextBtn: {
+    flex: 1, paddingVertical: 16, borderRadius: RADIUS.md,
+    backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center',
+  },
+  nextBtn: {
+    flex: 2, paddingVertical: 14, borderRadius: RADIUS.md,
+    backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center',
+  },
+  nextBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+  backOutlineBtn: {
+    flex: 1, paddingVertical: 14, borderRadius: RADIUS.md,
+    borderWidth: 1.5, borderColor: COLORS.borderDefault,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  backOutlineTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textSecondary },
+  submitBtn: {
+    flex: 2, flexDirection: 'row', gap: 8, paddingVertical: 14, borderRadius: RADIUS.md,
+    backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center',
+  },
   submitTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
   divider: { height: 1, backgroundColor: COLORS.borderDefault, marginVertical: 8 },
-  payNowToggleRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingVertical: 12, paddingHorizontal: SPACING.md },
-  payNowLeft: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
-  payNowIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center' as const, justifyContent: 'center' as const },
+  payNowToggleRow: {
+    flexDirection: 'row' as const, alignItems: 'center' as const,
+    justifyContent: 'space-between' as const, paddingVertical: 12, paddingHorizontal: SPACING.md,
+  },
+  payNowLeft: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, flex: 1 },
+  payNowIcon: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: COLORS.pageBg, alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
   payNowTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '600' as const, color: COLORS.textPrimary },
   payNowSub: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
   payNowBody: { paddingHorizontal: SPACING.md, paddingBottom: 12, gap: 10 },
   payStatusChip: { flexDirection: 'row' as const, gap: 8, paddingVertical: 8 },
-  payStatusPaid: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.full, backgroundColor: COLORS.positiveBg, borderWidth: 1, borderColor: COLORS.positive },
-  payStatusPartial: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.full, backgroundColor: COLORS.warningBg, borderWidth: 1, borderColor: COLORS.warning },
-  payStatusPending: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.full, backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault },
+  payStatusPaid: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.full,
+    backgroundColor: COLORS.positiveBg, borderWidth: 1, borderColor: COLORS.positive,
+  },
+  payStatusPartial: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.full,
+    backgroundColor: COLORS.warningBg, borderWidth: 1, borderColor: COLORS.warning,
+  },
+  payStatusPending: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.full,
+    backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
   payStatusTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600' as const, color: COLORS.textSecondary },
   payStatusSub: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
-  nextBtn: { flex: 2, flexDirection: 'row' as const, gap: 6, paddingVertical: 14, borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary, alignItems: 'center' as const, justifyContent: 'center' as const },
-  nextTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700' as const, color: COLORS.white },
-  runningTotal: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, paddingHorizontal: 4 },
-  runTotalAmt: { fontSize: TYPOGRAPHY.sm, fontWeight: '800' as const, color: COLORS.textPrimary },
-  runTotalItems: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
 });
 
 const m = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '65%', paddingTop: 12 },
-  handle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-  title: { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary, paddingHorizontal: SPACING.md, paddingBottom: 8, marginBottom: 4, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  opt: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 14 },
-  optActive: { backgroundColor: COLORS.pageBg },
-  optLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  optTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, flex: 1 },
-  optActiveTxt: { fontWeight: '700', color: COLORS.brandPrimary },
-  unitMenu: { position: 'absolute', right: 0, top: 0, bottom: 0, left: 0, justifyContent: 'center', alignItems: 'center' },
-  unitOpt: { backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.xl, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, width: 200, alignItems: 'center' },
+  unitMenu: {
+    position: 'absolute', right: 0, top: 0, bottom: 0, left: 0,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  unitOpt: {
+    backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.xl, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+    width: 200, alignItems: 'center',
+  },
   unitOptActive: { backgroundColor: COLORS.pageBg },
   unitOptTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
   unitOptActiveTxt: { fontWeight: '700', color: COLORS.brandPrimary },
 });
 
 const ir = StyleSheet.create({
-  card: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.sm, marginBottom: SPACING.sm, borderWidth: 1, borderColor: COLORS.borderDefault, gap: 8 },
-  warehouseBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: COLORS.borderDefault },
-  warehouseBtnActive: { borderColor: COLORS.info, backgroundColor: COLORS.infoBg },
-  warehouseTxt: { flex: 1, fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.info },
-  placeholderTxt: { color: COLORS.textTertiary, fontWeight: '400' },
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  productBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: COLORS.borderDefault },
-  productTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
-  barcodeBtn: { width: 36, height: 36, borderRadius: RADIUS.sm, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.borderDefault },
-  delBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  card: {
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
+    marginBottom: SPACING.sm, borderWidth: 1, borderColor: COLORS.borderDefault,
+    overflow: 'hidden',
+  },
+  rowHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: SPACING.md, paddingVertical: 12,
+  },
+  rowHeaderTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
+  rowHeaderTxtActive: { color: COLORS.textPrimary, fontWeight: '700' },
+  expandedContent: {
+    paddingHorizontal: SPACING.sm, paddingBottom: SPACING.sm,
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault, gap: 8,
+    paddingTop: SPACING.sm,
+  },
+  fieldLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 4 },
+  star: { color: COLORS.negative },
+  productRow: { flexDirection: 'row', gap: 6, alignItems: 'flex-start' },
+  barcodeBtn: {
+    width: 44, height: 48, borderRadius: RADIUS.md,
+    backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    marginTop: 0,
+  },
+  warehouseChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: COLORS.infoBg, borderRadius: RADIUS.full,
+    paddingHorizontal: 10, paddingVertical: 5,
+    alignSelf: 'flex-start', borderWidth: 1, borderColor: COLORS.info + '40',
+  },
+  warehouseChipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.info },
   fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   qtyBox: { width: 64 },
   rateBox: { flex: 1 },
   miniLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '600', marginBottom: 3 },
-  miniInput: { backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 6, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, textAlign: 'right' },
-  unitBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 7, borderWidth: 1, borderColor: COLORS.borderDefault, alignSelf: 'flex-end', marginBottom: 0 },
+  miniInput: {
+    backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 6,
+    fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, textAlign: 'right',
+  },
+  unitBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 2,
+    backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm,
+    paddingHorizontal: 8, paddingVertical: 7,
+    borderWidth: 1, borderColor: COLORS.borderDefault, alignSelf: 'flex-end',
+  },
   unitTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
   discRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  discTypeBtn: { backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 7 },
+  discTypeBtn: {
+    backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 7,
+  },
   discTypeTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
-  discInput: { width: 44, backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.sm, paddingHorizontal: 6, paddingVertical: 6, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, textAlign: 'center' },
+  discInput: {
+    width: 44, backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.sm, paddingHorizontal: 6, paddingVertical: 6,
+    fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, textAlign: 'center',
+  },
   discLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
-  taxBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 7, borderWidth: 1, borderColor: COLORS.borderDefault, flex: 1 },
-  taxTxt: { flex: 1, fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.info },
-  subtotalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
-  subtotalLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '600' },
-  subtotalVal: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  // ─── Inline search (product + warehouse) ───
-  inlineSearchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.sm, paddingHorizontal: 8, minHeight: 36 },
-  inlineSearchBoxOpen: { borderColor: COLORS.brandPrimary, borderWidth: 1.5, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, borderBottomWidth: 0 },
-  warehouseActive: { borderColor: COLORS.info, backgroundColor: COLORS.infoBg },
-  inlineSearchInput: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, paddingVertical: 6 },
-  inlineSuggestions: { backgroundColor: COLORS.cardBg, borderWidth: 1.5, borderTopWidth: 0, borderColor: COLORS.brandPrimary, borderBottomLeftRadius: RADIUS.sm, borderBottomRightRadius: RADIUS.sm, overflow: 'hidden', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4 },
-  inlineOpt: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  inlineOptActive: { backgroundColor: COLORS.pageBg },
-  inlineOptTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
-  inlineOptTxtActive: { fontWeight: '700', color: COLORS.brandPrimary },
-  inlineEmpty: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 12 },
-  inlineEmptyTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
-  // ─── Tax Entries Section ───
-  taxSection: { borderTopWidth: 1, borderTopColor: COLORS.borderDefault, paddingTop: 8, gap: 6 },
+  taxableRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm,
+    paddingHorizontal: 10, paddingVertical: 7,
+  },
+  taxableLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
+  taxableVal: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  taxSection: {
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault, paddingTop: 8, gap: 6,
+  },
   taxSectionHdr: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   taxSectionTitle: { flex: 1, fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
-  addTaxBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: RADIUS.full, backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.brandPrimary },
+  taxColHint: { fontSize: 10, color: COLORS.textTertiary, fontStyle: 'italic' },
+  addTaxBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingHorizontal: 7, paddingVertical: 3, borderRadius: RADIUS.full,
+    backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.brandPrimary,
+  },
   addTaxTxt: { fontSize: 10, fontWeight: '700', color: COLORS.brandPrimary },
-  noTaxBtn: { paddingVertical: 8, alignItems: 'center', borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg },
+  noTaxPlaceholder: {
+    paddingVertical: 8, alignItems: 'center', borderRadius: RADIUS.sm,
+    borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg,
+  },
   noTaxTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
-  taxEntryRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, paddingVertical: 4, paddingHorizontal: 4, borderWidth: 1, borderColor: COLORS.borderDefault },
-  taxLedgerBox: { flexDirection: 'row', alignItems: 'center', flex: 1, backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.sm, paddingHorizontal: 5, minHeight: 30 },
-  taxLedgerBoxOpen: { borderColor: COLORS.brandPrimary, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, borderBottomWidth: 0 },
-  taxLedgerInput: { flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary, paddingVertical: 4 },
-  taxSuggestions: { backgroundColor: COLORS.cardBg, borderWidth: 1.5, borderTopWidth: 0, borderColor: COLORS.brandPrimary, borderBottomLeftRadius: RADIUS.sm, borderBottomRightRadius: RADIUS.sm, overflow: 'hidden' },
-  taxRateBox: { flexDirection: 'row', alignItems: 'center', width: 52, backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.sm, paddingHorizontal: 4 },
-  taxRateInput: { flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary, paddingVertical: 5, textAlign: 'right' },
+  // TaxEntryRow fields
+  taxEntryRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm,
+    paddingVertical: 4, paddingHorizontal: 4,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  taxRateInput: {
+    width: 44, backgroundColor: COLORS.cardBg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.sm, paddingHorizontal: 4,
+    fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary, paddingVertical: 5, textAlign: 'right',
+  },
   taxRateSign: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '600' },
-});
-
-const bs = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#000' },
-  header: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md, paddingVertical: 14, gap: 12 },
-  closeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  title: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
-  rescanBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary },
-  rescanText: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
-  camera: { flex: 1 },
-  overlay: { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center', paddingBottom: 40 },
-  scanFrame: { width: 220, height: 220, borderWidth: 2, borderColor: COLORS.brandPrimary, borderRadius: 12, marginBottom: 20 },
-  hint: { fontSize: TYPOGRAPHY.sm, color: COLORS.white, fontWeight: '600' },
-  permWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, padding: SPACING.xl },
-  permText: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary, textAlign: 'center' },
-  permBtn: { backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingHorizontal: SPACING.xl, paddingVertical: 14 },
-  permBtnText: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+  taxAmtInput: {
+    width: 60, backgroundColor: COLORS.cardBg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.sm, paddingHorizontal: 4,
+    fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary, paddingVertical: 5, textAlign: 'right',
+  },
+  subtotalRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingTop: 8, borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
+  },
+  subtotalLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '600' },
+  subtotalVal: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  removeItemBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 9, borderRadius: RADIUS.sm,
+    borderWidth: 1, borderColor: COLORS.negative + '50',
+    backgroundColor: COLORS.negativeBg,
+  },
+  removeItemTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.negative },
 });
 
 const acd = StyleSheet.create({
@@ -1837,15 +1948,18 @@ const acd = StyleSheet.create({
   saveBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
 });
 
-const mAdd = StyleSheet.create({
-  warehouseHint: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.infoBg, marginBottom: 4 },
-  warehouseHintTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.info, fontWeight: '600' },
-});
-
 const si = StyleSheet.create({
-  wrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, paddingHorizontal: SPACING.lg, paddingVertical: 12 },
+  wrap: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+    paddingHorizontal: SPACING.lg, paddingVertical: 12,
+  },
   stepItem: { alignItems: 'center', gap: 4 },
-  circle: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg, alignItems: 'center', justifyContent: 'center' },
+  circle: {
+    width: 28, height: 28, borderRadius: 14,
+    borderWidth: 2, borderColor: COLORS.borderDefault,
+    backgroundColor: COLORS.cardBg, alignItems: 'center', justifyContent: 'center',
+  },
   circleActive: { borderColor: COLORS.brandPrimary },
   circleDone: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary },
   circleNum: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' as const, color: COLORS.textTertiary },
