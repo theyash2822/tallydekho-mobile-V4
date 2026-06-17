@@ -223,41 +223,60 @@ export default function LogisticsSection({
                 {entry.addTaxes && (
                   <View style={ls.taxSection}>
                     {entry.taxEntries.map(taxEntry => (
-                      <View key={taxEntry.id} style={ls.taxEntryRow}>
-                        <View style={{ flex: 1 }}>
-                          <BottomSheetSearch
-                            compact
-                            options={taxLedgerOpts}
-                            value={taxEntry.ledgerName}
-                            onSelect={opt => updateTaxEntry(entry.id, taxEntry.id, 'ledgerName', opt.value)}
-                            onClear={() => updateTaxEntry(entry.id, taxEntry.id, 'ledgerName', '')}
-                            placeholder="Tax ledger..."
-                            sheetTitle="Tax Ledger"
-                          />
+                      <View key={taxEntry.id} style={ls.taxEntryCard}>
+                        {/* Row 1: Ledger + Remove */}
+                        <View style={ls.taxEntryTopRow}>
+                          <View style={{ flex: 1 }}>
+                            <BottomSheetSearch
+                              compact
+                              options={taxLedgerOpts}
+                              value={taxEntry.ledgerName}
+                              onSelect={opt => updateTaxEntry(entry.id, taxEntry.id, 'ledgerName', opt.value)}
+                              onClear={() => updateTaxEntry(entry.id, taxEntry.id, 'ledgerName', '')}
+                              placeholder="Select tax ledger..."
+                              sheetTitle="Tax Ledger"
+                            />
+                          </View>
+                          <TouchableOpacity onPress={() => removeTaxEntry(entry.id, taxEntry.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 4 }}>
+                            <Ionicons name="close-circle" size={14} color={COLORS.negative} />
+                          </TouchableOpacity>
                         </View>
-                        <TextInput
-                          style={ls.taxRateInput}
-                          value={taxEntry.taxRate}
-                          onChangeText={v => {
-                            updateTaxEntry(entry.id, taxEntry.id, 'taxRate', v);
-                            const auto = (base * (parseFloat(v) || 0) / 100).toFixed(2);
-                            updateTaxEntry(entry.id, taxEntry.id, 'taxAmount', auto);
-                          }}
-                          keyboardType="numeric"
-                          placeholder="0%"
-                          placeholderTextColor={COLORS.textTertiary}
-                        />
-                        <TextInput
-                          style={ls.taxAmtInput}
-                          value={taxEntry.taxAmount}
-                          onChangeText={v => updateTaxEntry(entry.id, taxEntry.id, 'taxAmount', v)}
-                          keyboardType="numeric"
-                          placeholder="₹0"
-                          placeholderTextColor={COLORS.textTertiary}
-                        />
-                        <TouchableOpacity onPress={() => removeTaxEntry(entry.id, taxEntry.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                          <Ionicons name="close-circle" size={14} color={COLORS.negative} />
-                        </TouchableOpacity>
+                        {/* Row 2: Rate % → ₹ Amount */}
+                        <View style={ls.taxEntryBottomRow}>
+                          <View style={ls.taxFieldGroup}>
+                            <Text style={ls.taxMiniLbl}>Rate</Text>
+                            <View style={ls.taxFieldInputRow}>
+                              <TextInput
+                                style={ls.taxRateInput}
+                                value={taxEntry.taxRate}
+                                onChangeText={v => {
+                                  updateTaxEntry(entry.id, taxEntry.id, 'taxRate', v);
+                                  const auto = (base * (parseFloat(v) || 0) / 100).toFixed(2);
+                                  updateTaxEntry(entry.id, taxEntry.id, 'taxAmount', auto);
+                                }}
+                                keyboardType="numeric"
+                                placeholder="0"
+                                placeholderTextColor={COLORS.textTertiary}
+                              />
+                              <Text style={ls.taxRateSign}>%</Text>
+                            </View>
+                          </View>
+                          <Ionicons name="arrow-forward-outline" size={12} color={COLORS.textTertiary} style={{ marginTop: 14 }} />
+                          <View style={[ls.taxFieldGroup, { flex: 1 }]}>
+                            <Text style={ls.taxMiniLbl}>Amount</Text>
+                            <View style={ls.taxFieldInputRow}>
+                              <Text style={ls.taxRateSign}>₹</Text>
+                              <TextInput
+                                style={[ls.taxAmtInput, { flex: 1, width: undefined }]}
+                                value={taxEntry.taxAmount}
+                                onChangeText={v => updateTaxEntry(entry.id, taxEntry.id, 'taxAmount', v)}
+                                keyboardType="numeric"
+                                placeholder="0.00"
+                                placeholderTextColor={COLORS.textTertiary}
+                              />
+                            </View>
+                          </View>
+                        </View>
                       </View>
                     ))}
                     <TouchableOpacity style={ls.addTaxBtn} onPress={() => addTaxEntry(entry.id)} activeOpacity={0.7}>
@@ -273,7 +292,7 @@ export default function LogisticsSection({
           {/* Add Logistics Row button */}
           <TouchableOpacity style={ls.addEntryBtn} onPress={addEntry} activeOpacity={0.7}>
             <Ionicons name="add-circle-outline" size={16} color={COLORS.warning} />
-            <Text style={ls.addEntryTxt}>+ Add Logistics Row</Text>
+            <Text style={ls.addEntryTxt}>+ Add Logistics Charge</Text>
           </TouchableOpacity>
 
           {/* ── Round Off (separate line item) ── */}
@@ -365,7 +384,14 @@ const ls = StyleSheet.create({
   checkboxActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
   checkboxLabel: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
   taxSection: { gap: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
-  taxEntryRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  // Tax Entry Card (2-row layout)
+  taxEntryCard: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.borderDefault, marginBottom: 4, overflow: 'hidden' },
+  taxEntryTopRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 6, paddingVertical: 2, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  taxEntryBottomRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 8, paddingTop: 6 },
+  taxFieldGroup: { gap: 2 },
+  taxMiniLbl: { fontSize: 10, fontWeight: '600' as const, color: COLORS.textTertiary },
+  taxFieldInputRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  taxRateSign: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '600' as const },
   taxRateInput: {
     width: 52, backgroundColor: COLORS.cardBg,
     borderWidth: 1, borderColor: COLORS.borderDefault,

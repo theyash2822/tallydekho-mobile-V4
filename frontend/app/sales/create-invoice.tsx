@@ -368,42 +368,60 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
 }) {
   const taxOpts: BSSOption[] = taxLedgers.map(l => ({ label: l.name, value: l.name }));
   return (
-    <View style={ir.taxEntryRow}>
-      <View style={{ flex: 1 }}>
-        <BottomSheetSearch
-          compact
-          options={taxOpts}
-          value={entry.ledgerName}
-          onSelect={opt => onUpdate('ledgerName', opt.value)}
-          onClear={() => onUpdate('ledgerName', '')}
-          placeholder="Select ledger..."
-          sheetTitle="Tax Ledger"
-        />
+    <View style={ir.taxEntryCard}>
+      {/* Row 1: Ledger + Remove */}
+      <View style={ir.taxEntryTopRow}>
+        <View style={{ flex: 1 }}>
+          <BottomSheetSearch
+            compact
+            options={taxOpts}
+            value={entry.ledgerName}
+            onSelect={opt => onUpdate('ledgerName', opt.value)}
+            onClear={() => onUpdate('ledgerName', '')}
+            placeholder="Select tax ledger..."
+            sheetTitle="Tax Ledger"
+          />
+        </View>
+        <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ padding: 4 }}>
+          <Ionicons name="close-circle" size={16} color={COLORS.negative} />
+        </TouchableOpacity>
       </View>
-      <TextInput
-        style={ir.taxRateInput}
-        value={entry.taxRate}
-        onChangeText={v => {
-          onUpdate('taxRate', v);
-          const auto = (taxable * (parseFloat(v) || 0) / 100).toFixed(2);
-          onUpdate('taxAmount', auto);
-        }}
-        keyboardType="numeric"
-        placeholder="0"
-        placeholderTextColor={COLORS.textTertiary}
-      />
-      <Text style={ir.taxRateSign}>%</Text>
-      <TextInput
-        style={ir.taxAmtInput}
-        value={entry.taxAmount}
-        onChangeText={v => onUpdate('taxAmount', v)}
-        keyboardType="numeric"
-        placeholder="0.00"
-        placeholderTextColor={COLORS.textTertiary}
-      />
-      <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-        <Ionicons name="close-circle" size={16} color={COLORS.negative} />
-      </TouchableOpacity>
+      {/* Row 2: Rate % → Amount ₹ */}
+      <View style={ir.taxEntryBottomRow}>
+        <View style={ir.taxFieldGroup}>
+          <Text style={ir.taxMiniLbl}>Rate</Text>
+          <View style={ir.taxFieldInputRow}>
+            <TextInput
+              style={ir.taxRateInput}
+              value={entry.taxRate}
+              onChangeText={v => {
+                onUpdate('taxRate', v);
+                const auto = (taxable * (parseFloat(v) || 0) / 100).toFixed(2);
+                onUpdate('taxAmount', auto);
+              }}
+              keyboardType="numeric"
+              placeholder="0"
+              placeholderTextColor={COLORS.textTertiary}
+            />
+            <Text style={ir.taxRateSign}>%</Text>
+          </View>
+        </View>
+        <Ionicons name="arrow-forward-outline" size={13} color={COLORS.textTertiary} style={{ marginTop: 16 }} />
+        <View style={[ir.taxFieldGroup, { flex: 1 }]}>
+          <Text style={ir.taxMiniLbl}>Amount</Text>
+          <View style={ir.taxFieldInputRow}>
+            <Text style={ir.taxRateSign}>₹</Text>
+            <TextInput
+              style={[ir.taxAmtInput, { flex: 1, width: undefined }]}
+              value={entry.taxAmount}
+              onChangeText={v => onUpdate('taxAmount', v)}
+              keyboardType="numeric"
+              placeholder="0.00"
+              placeholderTextColor={COLORS.textTertiary}
+            />
+          </View>
+        </View>
+      </View>
     </View>
   );
 }
@@ -455,16 +473,23 @@ function ItemRow({
   return (
     <View style={ir.card}>
       {/* Always-visible header row */}
-      <TouchableOpacity style={ir.rowHeader} onPress={() => setExpanded(!expanded)} activeOpacity={0.7}>
-        <Ionicons name="cube-outline" size={14} color={item.product ? COLORS.brandPrimary : COLORS.textSecondary} />
-        <Text style={[ir.rowHeaderTxt, item.product ? ir.rowHeaderTxtActive : undefined]} numberOfLines={1}>
-          {headerLabel}
-        </Text>
-        {item.product && calc.subtotal > 0 && (
-          <Text style={ir.rowHeaderAmt}>₹{calc.subtotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</Text>
+      <View style={ir.rowHeader}>
+        <TouchableOpacity style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }} onPress={() => setExpanded(!expanded)} activeOpacity={0.7}>
+          <Ionicons name="cube-outline" size={14} color={item.product ? COLORS.brandPrimary : COLORS.textSecondary} />
+          <Text style={[ir.rowHeaderTxt, item.product ? ir.rowHeaderTxtActive : undefined]} numberOfLines={1}>
+            {headerLabel}
+          </Text>
+          {item.product && calc.subtotal > 0 && (
+            <Text style={ir.rowHeaderAmt}>₹{calc.subtotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</Text>
+          )}
+          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={14} color={COLORS.textSecondary} />
+        </TouchableOpacity>
+        {canRemove && (
+          <TouchableOpacity onPress={() => onRemove(item.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={ir.headerTrashBtn} activeOpacity={0.7}>
+            <Ionicons name="trash-outline" size={15} color={COLORS.negative} />
+          </TouchableOpacity>
         )}
-        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={14} color={COLORS.textSecondary} />
-      </TouchableOpacity>
+      </View>
 
       {expanded && (
         <View style={ir.expandedContent}>
@@ -532,7 +557,7 @@ function ItemRow({
           <View style={ir.fieldRow}>
             <View style={ir.discRow}>
               <TouchableOpacity style={ir.discTypeBtn} onPress={() => onUpdate(item.id, 'discountType', item.discountType === '%' ? 'flat' : '%')} activeOpacity={0.7}>
-                <Text style={ir.discTypeTxt}>{item.discountType}</Text>
+                <Text style={ir.discTypeTxt}>{item.discountType === '%' ? '%' : '₹'}</Text>
               </TouchableOpacity>
               <TextInput style={ir.discInput} value={item.discount} onChangeText={v => onUpdate(item.id, 'discount', v)} keyboardType="numeric" placeholder="0" placeholderTextColor={COLORS.textTertiary} />
               <Text style={ir.discLabel}>Disc</Text>
@@ -579,12 +604,7 @@ function ItemRow({
             <Text style={ir.subtotalVal}>₹{calc.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
           </View>
 
-          {canRemove && (
-            <TouchableOpacity style={ir.removeItemBtn} onPress={() => onRemove(item.id)} activeOpacity={0.7}>
-              <Ionicons name="trash-outline" size={14} color={COLORS.negative} />
-              <Text style={ir.removeItemTxt}>Remove Item</Text>
-            </TouchableOpacity>
-          )}
+
         </View>
       )}
     </View>
@@ -1049,7 +1069,7 @@ export default function CreateSalesInvoiceScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={s.headerTitle}>Create Sales Invoice</Text>
+          <Text style={s.headerTitle}>Sales Invoice</Text>
           <Text style={s.headerSub}>{invoiceNo || 'INV-Auto'}</Text>
         </View>
         <RegularOptionalToggle value={entryType} onChange={setEntryType} />
@@ -1247,7 +1267,7 @@ export default function CreateSalesInvoiceScreen() {
                     <View style={[s.payStatusChip, paymentStatus === 'paid' ? s.payStatusPaid : paymentStatus === 'partial' ? s.payStatusPartial : s.payStatusPending]}>
                       <Ionicons name={paymentStatus === 'paid' ? 'checkmark-circle' : paymentStatus === 'partial' ? 'time-outline' : 'alert-circle-outline'} size={16} color={paymentStatus === 'paid' ? COLORS.positive : paymentStatus === 'partial' ? COLORS.warning : COLORS.negative} />
                       <Text style={[s.payStatusTxt, { color: paymentStatus === 'paid' ? COLORS.positive : paymentStatus === 'partial' ? COLORS.warning : COLORS.negative }]}>
-                        {paymentStatus === 'paid' ? 'Fully Paid' : paymentStatus === 'partial' ? 'Partially Paid' : 'Payment Pending'}
+                        {paymentStatus === 'paid' ? 'Fully Paid' : paymentStatus === 'partial' ? `Partial — ₹${(totals.grand - (parseFloat(payNowAmount) || 0)).toLocaleString('en-IN', { maximumFractionDigits: 0 })} remaining` : 'Enter payment amount'}
                       </Text>
                     </View>
                   </View>
@@ -1277,12 +1297,20 @@ export default function CreateSalesInvoiceScreen() {
                     </View>
                     <Text style={s.fLabel}>Transport Mode</Text>
                     <View style={s.termsRow}>
-                      {['Road', 'Rail', 'Air', 'Ship', 'Not Applicable'].map(mode => (
+                      {['Road', 'Rail', 'Air', 'Ship'].map(mode => (
                         <TouchableOpacity key={mode} style={[s.termChip, transportMode === mode && s.termChipActive]} onPress={() => setTransportMode(mode)} activeOpacity={0.7}>
                           <Text style={[s.termChipTxt, transportMode === mode && s.termChipTxtActive]}>{mode}</Text>
                         </TouchableOpacity>
                       ))}
                     </View>
+                    <TouchableOpacity
+                      style={[s.naChip, transportMode === 'Not Applicable' && s.naChipActive]}
+                      onPress={() => setTransportMode('Not Applicable')}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="close-circle-outline" size={13} color={transportMode === 'Not Applicable' ? COLORS.white : COLORS.textTertiary} />
+                      <Text style={[s.naChipTxt, transportMode === 'Not Applicable' && s.naChipTxtActive]}>Not Applicable</Text>
+                    </TouchableOpacity>
                     <View style={s.row2}>
                       <View style={{ flex: 1 }}><Text style={s.fLabel}>Transporter Name</Text><ThemedFInput value={transporterName} onChangeText={setTransporterName} placeholder="Optional" /></View>
                       <View style={{ flex: 1 }}><Text style={s.fLabel}>Transporter ID</Text><ThemedFInput value={transporterId} onChangeText={setTransporterId} placeholder="GSTIN / ID" /></View>
@@ -1348,11 +1376,18 @@ export default function CreateSalesInvoiceScreen() {
                     <View style={[s.row2, { marginTop: SPACING.sm }]}>
                       <View style={{ flex: 1 }}>
                         <Text style={s.fLabel}>Due Date</Text>
-                        <View style={[s.fInput, { justifyContent: 'center' }]}>
-                          <Text style={{ color: dueDate ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.base }}>
-                            {dueDate ? formatDueDisplay(dueDate) : 'DD/MM/YYYY'}
-                          </Text>
-                        </View>
+                        {payTerms === 'due_on_receipt' ? (
+                          <View style={[s.autoBox, { opacity: 0.8 }]}>
+                            <Text style={[s.autoTxt, { color: COLORS.textSecondary }]}>Same as invoice date</Text>
+                            <Ionicons name="checkmark-circle" size={14} color={COLORS.positive} />
+                          </View>
+                        ) : (
+                          <View style={[s.fInput, { justifyContent: 'center' }]}>
+                            <Text style={{ color: dueDate ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.base }}>
+                              {dueDate ? formatDueDisplay(dueDate) : 'DD/MM/YYYY'}
+                            </Text>
+                          </View>
+                        )}
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={s.fLabel}>Reference No.</Text>
@@ -1416,32 +1451,45 @@ export default function CreateSalesInvoiceScreen() {
 
         {/* Footer */}
         <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-          {step === 1 && (
-            <TouchableOpacity style={s.fullNextBtn} onPress={goNext} activeOpacity={0.7}>
-              <Text style={s.nextBtnTxt}>Next: Add Items →</Text>
-            </TouchableOpacity>
-          )}
-          {step === 2 && (
-            <>
-              <TouchableOpacity style={s.backOutlineBtn} onPress={goBack} activeOpacity={0.7}>
-                <Text style={s.backOutlineTxt}>← Details</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.nextBtn} onPress={goNext} activeOpacity={0.7}>
-                <Text style={s.nextBtnTxt}>Next: Review →</Text>
-              </TouchableOpacity>
-            </>
-          )}
           {step === 3 && (
-            <>
-              <TouchableOpacity style={s.backOutlineBtn} onPress={goBack} activeOpacity={0.7}>
-                <Text style={s.backOutlineTxt}>← Items</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[s.submitBtn, submitting && { opacity: 0.6 }]} onPress={handleSubmit} activeOpacity={0.7} disabled={submitting}>
-                {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />}
-                <Text style={s.submitTxt}>{submitting ? 'Submitting...' : '✓ Submit Invoice'}</Text>
-              </TouchableOpacity>
-            </>
+            <View style={s.grandTotalBar}>
+              <View>
+                <Text style={s.grandTotalMeta}>
+                  {items.filter(i => i.product).length} item{items.filter(i => i.product).length !== 1 ? 's' : ''} · {party || 'No customer'}
+                </Text>
+                <Text style={s.grandTotalLabel}>Grand Total</Text>
+              </View>
+              <Text style={s.grandTotalAmt}>₹{totals.grand.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+            </View>
           )}
+          <View style={s.footerBtnRow}>
+            {step === 1 && (
+              <TouchableOpacity style={s.fullNextBtn} onPress={goNext} activeOpacity={0.7}>
+                <Text style={s.nextBtnTxt}>Next: Add Items →</Text>
+              </TouchableOpacity>
+            )}
+            {step === 2 && (
+              <>
+                <TouchableOpacity style={s.backOutlineBtn} onPress={goBack} activeOpacity={0.7}>
+                  <Text style={s.backOutlineTxt}>← Details</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.nextBtn} onPress={goNext} activeOpacity={0.7}>
+                  <Text style={s.nextBtnTxt}>Next: Review →</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            {step === 3 && (
+              <>
+                <TouchableOpacity style={s.backOutlineBtn} onPress={goBack} activeOpacity={0.7}>
+                  <Text style={s.backOutlineTxt}>← Items</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[s.submitBtn, submitting && { opacity: 0.6 }]} onPress={handleSubmit} activeOpacity={0.7} disabled={submitting}>
+                  {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />}
+                  <Text style={s.submitTxt}>{submitting ? 'Submitting...' : '✓ Submit Invoice'}</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
         </View>
       </KeyboardAvoidingView>
 
@@ -1489,7 +1537,7 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
   headerSub: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 1 },
   scroll: { padding: SPACING.md, paddingBottom: 8 },
-  card: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.md, marginBottom: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
+  card: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.md, marginBottom: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
   cardHdr: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SPACING.md },
   cardTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
   row2: { flexDirection: 'row', gap: 12, marginBottom: SPACING.md },
@@ -1534,7 +1582,16 @@ const s = StyleSheet.create({
   sumDivider: { height: 1, backgroundColor: COLORS.borderDefault, marginBottom: 12 },
   grandLabel: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
   grandVal: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.brandPrimary },
-  footer: { flexDirection: 'row', gap: 12, paddingHorizontal: SPACING.md, paddingTop: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
+  footer: { flexDirection: 'column' as const, gap: 8, paddingHorizontal: SPACING.md, paddingTop: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
+  footerBtnRow: { flexDirection: 'row' as const, gap: 12 },
+  grandTotalBar: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, paddingHorizontal: 2, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  grandTotalMeta: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '600' as const, marginBottom: 1 },
+  grandTotalLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '700' as const, color: COLORS.textSecondary },
+  grandTotalAmt: { fontSize: TYPOGRAPHY.xl, fontWeight: '800' as const, color: COLORS.brandPrimary },
+  naChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg, alignSelf: 'flex-start' as const, marginTop: 4 },
+  naChipActive: { backgroundColor: COLORS.textSecondary, borderColor: COLORS.textSecondary },
+  naChipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' as const, color: COLORS.textTertiary },
+  naChipTxtActive: { color: COLORS.white },
   fullNextBtn: { flex: 1, paddingVertical: 16, borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center' },
   nextBtn: { flex: 2, paddingVertical: 14, borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center' },
   nextBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
@@ -1612,6 +1669,14 @@ const ir = StyleSheet.create({
   removeItemTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.negative },
   addTaxDashedBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderStyle: 'dashed' as const, borderColor: COLORS.brandPrimary + '70', borderRadius: RADIUS.sm, paddingVertical: 10, marginTop: 4, marginBottom: 4 },
   addTaxDashedTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.brandPrimary, fontWeight: '600' },
+  // Tax Entry Card (2-row layout)
+  taxEntryCard: { backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' as const, marginBottom: 4 },
+  taxEntryTopRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, paddingHorizontal: 6, paddingVertical: 2, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  taxEntryBottomRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, padding: 8, paddingTop: 6 },
+  taxFieldGroup: { gap: 2 },
+  taxMiniLbl: { fontSize: 10, fontWeight: '600' as const, color: COLORS.textTertiary },
+  taxFieldInputRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3 },
+  headerTrashBtn: { marginLeft: 8, padding: 4, borderRadius: RADIUS.sm },
 });
 
 const acd = StyleSheet.create({
