@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import * as SplashScreen from 'expo-splash-screen';
 import Toast from 'react-native-toast-message';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { toastConfig } from '../src/utils/toastConfig';
 import { registerForPushNotifications, setupNotificationHandlers } from '../src/services/pushNotifications';
 // Initialize i18n before anything renders
@@ -83,12 +84,14 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <SettingsProvider>
-          <AuthProvider>
-            <StatusBar style="dark" />
-            <RootNavigation />
-          </AuthProvider>
-        </SettingsProvider>
+        <BottomSheetModalProvider>
+          <SettingsProvider>
+            <AuthProvider>
+              <StatusBar style="dark" />
+              <RootNavigation />
+            </AuthProvider>
+          </SettingsProvider>
+        </BottomSheetModalProvider>
       </SafeAreaProvider>
       {/* Toast must be LAST so it renders above everything */}
       <Toast config={toastConfig} topOffset={56} />
