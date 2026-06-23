@@ -344,7 +344,9 @@ export default function AuditTrailScreen() {
     action: 'Created',
     isMine: true,
     tdkRef: p.tdk_reference_no || '',
-    tallyVoucherNo: p.voucher_number || '',
+    // av_tally_voucher_no = app_vouchers.tally_voucher_no (populated by ingestProcessor reconciliation).
+    // p.voucher_number = wq.tally_voucher_number which is often empty (Tally ImportData doesn't return it).
+    tallyVoucherNo: p.av_tally_voucher_no || p.voucher_number || '',
     originalEntryType: p.original_entry_type,
     currentEntryType: p.current_entry_type,
     booksImpactStatus: p.books_impact_status || 'not_posted',
@@ -772,7 +774,19 @@ export default function AuditTrailScreen() {
                               if (multiSelect) {
                                 toggleSelect(entry.id);
                               } else {
-                                router.push(`/document/${entry.ref}` as any);
+                                // Use Tally voucher number when available (My Entries queue rows have
+                                // empty ref since wq.tally_voucher_number is never returned by Tally's
+                                // ImportData API — tallyVoucherNo is the reconciled value from app_vouchers)
+                                const docId = entry.tallyVoucherNo || entry.ref;
+                                if (!docId) {
+                                  Alert.alert(
+                                    'Not yet synced',
+                                    'This entry is still pending. Preview will be available once Tally assigns a voucher number.',
+                                    [{ text: 'OK' }]
+                                  );
+                                  return;
+                                }
+                                router.push(`/document/${docId}` as any);
                               }
                             }}
                             onLongPress={() => { setMultiSelect(true); toggleSelect(entry.id); }}
@@ -819,12 +833,15 @@ export default function AuditTrailScreen() {
                                 <Text style={s.refTxt}>
                                   {(() => {
                                     if (activeTab !== 'myentries') return entry.ref;
-                                    if (entry.booksImpactStatus === 'posted' && (entry.tallyVoucherNo || entry.ref)) {
-                                      return entry.tallyVoucherNo || entry.ref;
-                                    }
+                                    // Once Tally assigns a real number → always show it
+                                    if (entry.tallyVoucherNo) return entry.tallyVoucherNo;
+                                    // Posted but tallyVoucherNo somehow missing → fall back to ref
+                                    if (entry.booksImpactStatus === 'posted' && entry.ref) return entry.ref;
+                                    // Optional not yet converted → show TDK ref
                                     if (entry.currentEntryType === 'optional' && entry.conversionStatus !== 'converted') {
                                       return entry.tdkRef || entry.ref || 'Opt. Ref';
                                     }
+                                    // Pending/queued → show TDK ref so user knows it's ours
                                     if (entry.tdkRef) return entry.tdkRef;
                                     return entry.ref || '—';
                                   })()}
