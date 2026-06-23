@@ -1,12 +1,12 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, ScrollView, FlatList, TouchableOpacity, StyleSheet, TextInput,
-  Modal, Animated,
+  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
@@ -55,10 +55,9 @@ function SwipeableStockCard({ item, isMultiSelectMode, isSelected, onPress, onLo
   onPress: () => void; onLongPress: () => void; onEditStock: () => void; onTransfer: () => void; onAdjust: () => void;
 }) {
   const swipeRef = useRef<any>(null);
-  const renderLeftActions = (_: Animated.AnimatedInterpolation<number>, dragX: Animated.AnimatedInterpolation<number>) => {
-    const scale = dragX.interpolate({ inputRange: [0, 176], outputRange: [0.85, 1], extrapolate: 'clamp' });
+  const renderLeftActions = () => {
     return (
-      <Animated.View style={[{ flexDirection: 'row', gap: 6 }, { transform: [{ scale }] }]}>
+      <View style={{ flexDirection: 'row', gap: 6 }}>
         {/* Transfer */}
         <View style={[sw.actionWrap, sw.transferBg]}>
           <TouchableOpacity style={sw.actionInner} onPress={() => { swipeRef.current?.close(); onTransfer(); }} activeOpacity={0.85}>
@@ -73,18 +72,17 @@ function SwipeableStockCard({ item, isMultiSelectMode, isSelected, onPress, onLo
             <Text style={sw.actionTxt}>Adjust</Text>
           </TouchableOpacity>
         </View>
-      </Animated.View>
+      </View>
     );
   };
-  const renderRightActions = (_: Animated.AnimatedInterpolation<number>, dragX: Animated.AnimatedInterpolation<number>) => {
-    const scale = dragX.interpolate({ inputRange: [-80, 0], outputRange: [1, 0.85], extrapolate: 'clamp' });
+  const renderRightActions = () => {
     return (
-      <Animated.View style={[sw.actionWrap, sw.editBg, { transform: [{ scale }] }]}>
+      <View style={[sw.actionWrap, sw.editBg]}>
         <TouchableOpacity style={sw.actionInner} onPress={() => { swipeRef.current?.close(); onEditStock(); }} activeOpacity={0.85}>
           <Ionicons name="create-outline" size={22} color={COLORS.white} />
           <Text style={sw.actionTxt}>Edit Stock</Text>
         </TouchableOpacity>
-      </Animated.View>
+      </View>
     );
   };
   const cardInner = (
@@ -108,9 +106,9 @@ function SwipeableStockCard({ item, isMultiSelectMode, isSelected, onPress, onLo
   );
   if (isMultiSelectMode) return cardInner;
   return (
-    <Swipeable ref={swipeRef} renderLeftActions={renderLeftActions} renderRightActions={renderRightActions} friction={2} leftThreshold={88} rightThreshold={40} overshootLeft={false} overshootRight={false}>
+    <ReanimatedSwipeable ref={swipeRef} renderLeftActions={renderLeftActions} renderRightActions={renderRightActions} friction={2} leftThreshold={88} rightThreshold={40} overshootLeft={false} overshootRight={false}>
       {cardInner}
-    </Swipeable>
+    </ReanimatedSwipeable>
   );
 }
 

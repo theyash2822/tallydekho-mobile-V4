@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
@@ -409,7 +409,7 @@ function SwipeableCard({ account, isSelecting, isSelected, onPress, onLongPress,
   isSelecting: boolean; isSelected: boolean;
   onPress: () => void; onLongPress: () => void; onEditPress: () => void;
 }) {
-  const swipeRef     = useRef<Swipeable>(null);
+  const swipeRef     = useRef<any>(null);
   const timerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
 
@@ -444,7 +444,7 @@ function SwipeableCard({ account, isSelecting, isSelected, onPress, onLongPress,
   ), [onEditPress]);
 
   return (
-    <Swipeable
+    <ReanimatedSwipeable
       ref={swipeRef}
       renderRightActions={isSelecting ? undefined : renderRightActions}
       friction={2}
@@ -462,7 +462,7 @@ function SwipeableCard({ account, isSelecting, isSelected, onPress, onLongPress,
       >
         <BankCard account={account} isSelecting={isSelecting} isSelected={isSelected} />
       </TouchableOpacity>
-    </Swipeable>
+    </ReanimatedSwipeable>
   );
 }
 const sw = StyleSheet.create({
@@ -551,7 +551,7 @@ export default function BankFeedsScreen() {
     : undefined;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <>
       <SafeAreaView style={s.safe} edges={['top']}>
 
         {/* ─── Normal Header ──────────────────────────────────────────────── */}
@@ -656,7 +656,7 @@ export default function BankFeedsScreen() {
         />
 
       </SafeAreaView>
-    </GestureHandlerRootView>
+    </>
   );
 }
 

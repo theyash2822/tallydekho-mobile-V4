@@ -3,10 +3,10 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import {
   View, Text, ScrollView, FlatList, TouchableOpacity, StyleSheet,
   TextInput, RefreshControl, Modal, KeyboardAvoidingView,
-  Platform, Linking, Animated, Alert, Share, ActivityIndicator,
+  Platform, Linking, Alert, Share, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Ionicons } from '@expo/vector-icons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useRouter } from 'expo-router';
@@ -854,17 +854,9 @@ export default function LedgerScreen() {
           const hasPhone = !!(item.phone);
           const isSelected = selected.includes(item.id);
 
-          const renderRightActions = (
-            _progress: Animated.AnimatedInterpolation<number>,
-            dragX: Animated.AnimatedInterpolation<number>
-          ) => {
-            const scale = dragX.interpolate({
-              inputRange: [-160, 0],
-              outputRange: [1, 0.5],
-              extrapolate: 'clamp',
-            });
+          const renderRightActions = () => {
             return (
-              <Animated.View style={[styles.swipeActions, { transform: [{ scale }] }]}>
+              <View style={styles.swipeActions}>
                 {/* Call button */}
                 <TouchableOpacity
                   style={styles.callAction}
@@ -892,7 +884,7 @@ export default function LedgerScreen() {
                   <FontAwesome5 name="whatsapp" size={22} color="#fff" />
                   <Text style={styles.actionLabel}>WhatsApp</Text>
                 </TouchableOpacity>
-              </Animated.View>
+              </View>
             );
           };
 
@@ -939,7 +931,7 @@ export default function LedgerScreen() {
           );
 
           return hasPhone && !selectMode ? (
-            <Swipeable
+            <ReanimatedSwipeable
               renderRightActions={renderRightActions}
               rightThreshold={40}
               overshootRight={false}
@@ -947,7 +939,7 @@ export default function LedgerScreen() {
               containerStyle={{ borderRadius: RADIUS.md, overflow: 'hidden' }}
             >
               {cardContent}
-            </Swipeable>
+            </ReanimatedSwipeable>
           ) : (
             <View>{cardContent}</View>
           );
