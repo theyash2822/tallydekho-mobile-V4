@@ -196,6 +196,20 @@ export default function HomeScreen() {
     wasPaired.current = isPaired;
   }, [isPaired]);
 
+  // ── Update last sync timestamp whenever a sync fires ───────────
+  useEffect(() => {
+    if (!isPaired || !lastSyncAt) return;
+    getTallySyncStatus().then((res: any) => {
+      const d = res?.data ?? res;
+      if (d?.device?.last_seen) {
+        const ts = Number(d.device.last_seen) * 1000;
+        setLastSyncTime(new Date(ts).toLocaleString('en-IN', {
+          day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+        }));
+      }
+    }).catch(() => {});
+  }, [isPaired, lastSyncAt]);
+
   // ── Fetch real notification count ─────────────────────────────
   useEffect(() => {
     if (!isPaired || !companyGuid) return;
