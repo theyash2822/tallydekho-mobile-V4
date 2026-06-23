@@ -218,12 +218,9 @@ export default function VoucherConfigScreen() {
   // Load bank ledgers from Tally on mount
   useEffect(() => {
     if (!company?.guid) return;
-    getBankLedgers(company.guid).then((res: any) => {
+    getBankLedgers(company.guid, 'bank').then((res: any) => {
       if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
-        const opts = [
-          ...res.data.map((b: any) => ({ value: b.name, label: b.name })),
-          { value: 'Cash', label: 'Cash' },
-        ];
+        const opts = res.data.map((b: any) => ({ value: b.name, label: b.name }));
         setBankOpts(opts);
       }
     }).catch(() => {});

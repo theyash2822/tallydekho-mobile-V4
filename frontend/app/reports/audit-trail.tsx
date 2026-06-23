@@ -12,6 +12,7 @@ import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { getVouchers, getMyEntries, retryMyEntry } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
+import { socketService } from '../../src/services/socketService';
 
 const SCREEN_W = Dimensions.get('window').width;
 const AMBER = '#A89060';
@@ -286,6 +287,14 @@ export default function AuditTrailScreen() {
       setRefreshKey(k => k + 1);
     }, [])
   );
+
+  // ── Auto-refresh when backend reconciles a TDK voucher number after Tally sync ──
+  useEffect(() => {
+    socketService.setOnVoucherSynced(() => {
+      setRefreshKey(k => k + 1);
+    });
+    return () => { socketService.setOnVoucherSynced(null); };
+  }, []);
 
   // ── write_queue entry_type → display label ─────────────────
   const WQ_ENTRY_LABEL: Record<string, string> = {

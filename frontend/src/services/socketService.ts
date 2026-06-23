@@ -7,9 +7,11 @@
 import { io, Socket } from 'socket.io-client';
 
 type SyncedCallback = (companyGuid: string) => void;
+type VoucherSyncedCallback = (data: { tdkRef: string; tallyVoucherNo: string }) => void;
 
 let socket: Socket | null = null;
 let onSyncedCallback: SyncedCallback | null = null;
+let onVoucherSyncedCallback: VoucherSyncedCallback | null = null;
 let currentBaseUrl: string = '';
 
 export const socketService = {
@@ -48,6 +50,13 @@ export const socketService = {
       onSyncedCallback?.(companyGuid);
     });
 
+    // 🧾 Voucher number reconciled: backend fires after ingestProcessor matches TDK ref
+    socket.on('voucher:tallySynced', (payload: any) => {
+      const tdkRef: string = payload.tdkRef ?? payload.tdkReferenceNo ?? '';
+      const tallyVoucherNo: string = payload.tallyVoucherNo ?? '';
+      onVoucherSyncedCallback?.({ tdkRef, tallyVoucherNo });
+    });
+
     socket.on('disconnect', (reason) => {
       console.log('[Socket] disconnected:', reason);
     });
@@ -69,6 +78,10 @@ export const socketService = {
 
   setOnSynced(cb: SyncedCallback | null) {
     onSyncedCallback = cb;
+  },
+
+  setOnVoucherSynced(cb: VoucherSyncedCallback | null) {
+    onVoucherSyncedCallback = cb;
   },
 
   isConnected(): boolean {

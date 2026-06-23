@@ -13,7 +13,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import {
   getParties, createSalesInvoice, getStocks, getWarehouses,
   getSalesLedgerAccounts, getTaxLedgers, createTallyParty, lookupBarcode,
-  getComplianceConfig, getChargeLedgers, getStockGodowns,
+  getComplianceConfig, getChargeLedgers, getStockGodowns, getBankLedgers,
 } from '../../src/services/api';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import FormField from '../../src/components/forms/FormField';
@@ -677,6 +677,8 @@ export default function CreateSalesInvoiceScreen() {
   const [payNowMode, setPayNowMode] = useState('');
   const [payNowAmount, setPayNowAmount] = useState('');
   const [payNowRef, setPayNowRef] = useState('');
+  const [payNowLedger, setPayNowLedger] = useState(''); // actual Tally ledger name for payment
+  const [bankLedgers, setBankLedgers] = useState<BSSOption[]>([]);
 
   // Success
   const [showSuccess, setShowSuccess] = useState(false);
@@ -733,6 +735,14 @@ export default function CreateSalesInvoiceScreen() {
         setChargeLedgers([...(d.logisticsCharges || []), ...(d.additionalCharges || [])]);
         setRoundOffLedgers(d.roundOffLedgers || []);
       }
+    }).catch(() => {});
+  }, [company?.guid]);
+
+  useEffect(() => {
+    if (!company?.guid) return;
+    getBankLedgers(company.guid).then((res: any) => {
+      const list: any[] = res?.data || [];
+      setBankLedgers(list.map(l => ({ label: l.name, value: l.name, sub: l.type === 'cash' ? 'Cash' : 'Bank' })));
     }).catch(() => {});
   }, [company?.guid]);
 
@@ -926,6 +936,10 @@ export default function CreateSalesInvoiceScreen() {
         return;
       }
     }
+    if (collectPayNow && !payNowLedger) {
+      Toast.show({ type: 'error', text1: 'Payment Ledger required', text2: 'Select a Cash or Bank ledger for payment.' });
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -973,8 +987,9 @@ export default function CreateSalesInvoiceScreen() {
             });
         }),
         logistics: allLogistics,
-        collect_payment: collectPayNow ? {
-          mode: payNowMode, amount: parseFloat(payNowAmount) || 0, reference: payNowRef || undefined,
+        collect_payment: collectPayNow && payNowLedger ? {
+          mode: payNowMode, ledgerName: payNowLedger,
+          amount: parseFloat(payNowAmount) || 0, reference: payNowRef || undefined,
         } : undefined,
         dispatch_details: showDispatch ? {
           dispatch_from: dispatchFrom, ship_to: shipTo,
@@ -997,7 +1012,7 @@ export default function CreateSalesInvoiceScreen() {
   }, [
     party, items, itemGodowns, ewbRequired, showDispatch, dispatchFrom, shipTo,
     company, date, ledger, entryType, totals.grand, refNo, narration, warehouses,
-    collectPayNow, payNowMode, payNowAmount, payNowRef, logEntries, roundOffLedger, roundOffAmount,
+    collectPayNow, payNowMode, payNowAmount, payNowRef, payNowLedger, logEntries, roundOffLedger, roundOffAmount,
     transportMode, transporterName, transporterId, vehicleNumber, vehicleType, transportDocNo, transportDocDate,
   ]);
 
@@ -1253,7 +1268,23 @@ export default function CreateSalesInvoiceScreen() {
                 {collectPayNow && (
                   <View style={s.payNowBody}>
                     <View style={s.divider} />
-                    <FormDropdown label="Mode of Payment" value={payNowMode} options={PAY_MODES} onSelect={(o: any) => setPayNowMode(o.value)} placeholder="Select payment mode..." required />
+                    <FormDropdown label="Mode of Payment" value={payNowMode} options={PAY_MODES} onSelect={(o: any) => {
+                      setPayNowMode(o.value);
+                      // Auto-set Cash ledger for cash mode; clear for others so user picks
+                      if (o.value === 'cash') setPayNowLedger('Cash');
+                      else setPayNowLedger('');
+                    }} placeholder="Select payment mode..." required />
+                    {/* Payment Ledger picker */}
+                    <BottomSheetSearch
+                      label="Payment Ledger"
+                      required
+                      options={bankLedgers}
+                      value={payNowLedger}
+                      onSelect={(opt) => setPayNowLedger(opt.value)}
+                      onClear={() => setPayNowLedger('')}
+                      placeholder="Select Cash / Bank ledger..."
+                      sheetTitle="Payment Ledger"
+                    />
                     <View style={s.row2}>
                       <View style={{ flex: 1 }}>
                         <Text style={s.fLabel}>Amount Received (₹)</Text>
