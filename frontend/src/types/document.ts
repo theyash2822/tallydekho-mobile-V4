@@ -118,6 +118,26 @@ export interface FooterInfo {
 }
 
 // ── Master Document Model ─────────────────────────────────────────────────────
+export interface DispatchDetails {
+  dispatch_from_address?: string;
+  dispatch_from_place?: string;
+  dispatch_from_state?: string;
+  dispatch_from_pincode?: string;
+  ship_to_address?: string;
+  ship_to_place?: string;
+  ship_to_state?: string;
+  transport_mode?: string;
+  transport_mode_simple?: string;
+  transporter_name?: string;
+  transporter_id?: string;
+  vehicle_number?: string;
+  vehicle_type?: string;
+  transport_doc_no?: string;
+  transport_doc_date?: string;
+  ship_to_destination?: string;
+  document_type?: string;
+}
+
 export interface VoucherDocument {
   id: string;
   documentType: DocumentType;
@@ -138,4 +158,5 @@ export interface VoucherDocument {
   reference?: string;
   terms?: string;
   footerInfo?: FooterInfo;
+  dispatchDetails?: DispatchDetails;
 }

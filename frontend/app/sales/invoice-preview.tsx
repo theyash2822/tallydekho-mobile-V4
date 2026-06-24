@@ -69,6 +69,7 @@ function mapToVoucherDocument(data: any): VoucherDocument {
       roundOff: parseFloat(data.totals?.roundOff) || 0,
     },
     narration: data.narration || '',
+    dispatchDetails: data.dispatchDetails || data.dispatch_details || undefined,
   };
 }
 

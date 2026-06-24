@@ -11,7 +11,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
-import { VoucherDocument } from '../../types/document';
+import { VoucherDocument, DispatchDetails } from '../../types/document';
 import { formatCurrency, amountInWords, DOC_TYPE_CONFIG, generateDocumentHTML, PDFBankInfo } from '../../utils/documentHelpers';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
@@ -587,6 +587,38 @@ function PaymentBlock({ doc }: { doc: VoucherDocument }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// DispatchBlock — dispatch, ship-to, and transport details
+function DispatchBlock({ doc }: { doc: VoucherDocument }) {
+  const d = doc.dispatchDetails;
+  if (!d) return null;
+
+  const rows: { label: string; value: string }[] = [
+    (d.dispatch_from_address || d.dispatch_from_place) ? { label: 'Dispatch From', value: [d.dispatch_from_address || d.dispatch_from_place, d.dispatch_from_state, d.dispatch_from_pincode].filter(Boolean).join(', ') } : null,
+    d.ship_to_address || d.ship_to_place || d.ship_to_destination ? { label: 'Ship To', value: [d.ship_to_address || d.ship_to_place || d.ship_to_destination, d.ship_to_state].filter(Boolean).join(', ') } : null,
+    d.transport_mode_simple || d.transport_mode ? { label: 'Transport Mode', value: d.transport_mode_simple || d.transport_mode || '' } : null,
+    d.vehicle_number ? { label: 'Vehicle No.', value: d.vehicle_number } : null,
+    d.vehicle_type   ? { label: 'Vehicle Type', value: d.vehicle_type } : null,
+    d.transporter_name ? { label: 'Transporter', value: d.transporter_name } : null,
+    d.transporter_id   ? { label: 'Transporter ID', value: d.transporter_id } : null,
+    d.transport_doc_no ? { label: 'Doc / LR / RR No.', value: d.transport_doc_no } : null,
+    d.transport_doc_date ? { label: 'Doc Date', value: String(d.transport_doc_date).replace(/^(\d{4})(\d{2})(\d{2})$/, '$3/$2/$1') } : null,
+  ].filter(Boolean) as { label: string; value: string }[];
+
+  if (rows.length === 0) return null;
+
+  return (
+    <View style={ds.card}>
+      <SectionLabel title="DISPATCH & TRANSPORT" />
+      {rows.map((row, i) => (
+        <View key={i} style={[ds.dispatchRow, i < rows.length - 1 && { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault }]}>
+          <Text style={ds.dispatchLabel}>{row.label}</Text>
+          <Text style={ds.dispatchValue}>{row.value}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 // NarrationBlock — narration text + terms & conditions
 // ─────────────────────────────────────────────────────────────────────────────
 function NarrationBlock({ doc }: { doc: VoucherDocument }) {
@@ -806,6 +838,7 @@ export default function DocumentPreviewPage({
 
         <TotalsSummary doc={doc} />
         <PaymentBlock doc={doc} />
+        <DispatchBlock doc={doc} />
         <NarrationBlock doc={doc} />
         <FooterBlock doc={doc} />
 
@@ -1004,6 +1037,16 @@ const ds = StyleSheet.create({
   },
 
   // ── Narration / Terms ────────────────────────────────────────────────────────
+  dispatchRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
+    paddingVertical: 8,
+  },
+  dispatchLabel: {
+    fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, flex: 1,
+  },
+  dispatchValue: {
+    fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, flex: 2, textAlign: 'right',
+  },
   narrationBox: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 8,
     backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, padding: 12,

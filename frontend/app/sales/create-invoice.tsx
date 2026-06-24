@@ -666,7 +666,9 @@ export default function CreateSalesInvoiceScreen() {
   // Dispatch
   const [showDispatch, setShowDispatch] = useState(false);
   const [dispatchFrom, setDispatchFrom] = useState('');
+  const [dispatchFromState, setDispatchFromState] = useState('');
   const [shipTo, setShipTo] = useState('');
+  const [shipToState, setShipToState] = useState('');
   const [transporterName, setTransporterName] = useState('');
   const [transporterId, setTransporterId] = useState('');
   const [transportMode, setTransportMode] = useState('Road');
@@ -1005,7 +1007,8 @@ export default function CreateSalesInvoiceScreen() {
           amount: parseFloat(payNowAmount) || 0, reference: payNowRef || undefined,
         } : undefined,
         dispatch_details: showDispatch ? {
-          dispatch_from: dispatchFrom, ship_to: shipTo,
+          dispatch_from: dispatchFrom, dispatch_from_state: dispatchFromState || undefined,
+          ship_to: shipTo, ship_to_state: shipToState || undefined,
           transport_mode: transportMode,
           transporter_name: transporterName || undefined, transporter_id: transporterId || undefined,
           vehicle_number: vehicleNumber || undefined, vehicle_type: vehicleType,
@@ -1030,6 +1033,7 @@ export default function CreateSalesInvoiceScreen() {
     company, date, ledger, entryType, totals.grand, refNo, narration, warehouses,
     collectPayNow, payNowMode, payNowAmount, payNowRef, payNowLedger, logEntries, roundOffLedger, roundOffAmount,
     transportMode, transporterName, transporterId, vehicleNumber, vehicleType, transportDocNo, transportDocDate,
+    dispatchFromState, shipToState,
     numberingPolicy,
   ]);
 
@@ -1114,7 +1118,7 @@ export default function CreateSalesInvoiceScreen() {
                     narration: docData.narration || '',
                     additionalCharges: docData.additionalCharges || [],
                     paymentInfo: docData.paymentInfo || null,
-                    dispatchInfo: docData.dispatchInfo || null,
+                    dispatchDetails: docData.dispatchDetails || null,
                     isProvisional: docData.isProvisional ?? false,
                   };
 
@@ -1408,7 +1412,11 @@ export default function CreateSalesInvoiceScreen() {
                     <View style={s.divider} />
                     <View style={s.row2}>
                       <View style={{ flex: 1 }}><Text style={s.fLabel}>Dispatch From</Text><ThemedFInput value={dispatchFrom} onChangeText={setDispatchFrom} placeholder="City / Address" /></View>
+                      <View style={{ flex: 1 }}><Text style={s.fLabel}>Dispatch State</Text><ThemedFInput value={dispatchFromState} onChangeText={setDispatchFromState} placeholder="e.g. Rajasthan" /></View>
+                    </View>
+                    <View style={s.row2}>
                       <View style={{ flex: 1 }}><Text style={s.fLabel}>Ship To</Text><ThemedFInput value={shipTo} onChangeText={setShipTo} placeholder="City / Address" /></View>
+                      <View style={{ flex: 1 }}><Text style={s.fLabel}>Ship To State</Text><ThemedFInput value={shipToState} onChangeText={setShipToState} placeholder="e.g. Madhya Pradesh" /></View>
                     </View>
                     <Text style={s.fLabel}>Transport Mode</Text>
                     <View style={s.termsRow}>
