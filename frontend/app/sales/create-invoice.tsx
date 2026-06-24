@@ -96,7 +96,8 @@ const INVOICE_STATES = [
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface StockItem {
-  id: number;
+  id?: number;
+  guid?: string;        // Tally GUID — used for godowns API lookup
   name: string;
   displayName?: string;
   closing_qty?: number;
@@ -473,13 +474,17 @@ function ItemRow({
   // Warehouse options: use per-item godowns if available.
   // If godowns is empty (item only in Main Location / no warehouse transactions), show Main Location with closing_qty.
   // NEVER fall back to all global warehouses — that is misleading.
+  // Always show warehouse options as a picker when a product is selected.
+  // godowns is populated after product selection via the /godowns API.
+  // Fallback to Main Location only if product is selected but godowns haven't loaded yet.
   const warehouseOpts: BSSOption[] = godowns.length > 0
     ? godowns.map(g => ({ label: g.name, value: g.name, subtitle: `${Math.round(g.qty)} ${stockItem?.unit || 'units'} available` }))
     : item.product
       ? [{ label: 'Main Location', value: 'Main Location', subtitle: stockItem?.closing_qty != null ? `${Math.round(stockItem.closing_qty)} ${stockItem?.unit || 'units'} available` : 'Default warehouse' }]
       : [];
-  const needsWarehouseDropdown = warehouseOpts.length > 1;
-  const singleWarehouseName = warehouseOpts.length === 1 ? warehouseOpts[0].label : null;
+  // Always render the dropdown picker when a product is selected so user can see/change warehouse
+  const needsWarehouseDropdown = item.product ? warehouseOpts.length >= 1 : false;
+  const singleWarehouseName = null; // No longer use chip — always use picker
 
   return (
     <View style={ir.card}>
@@ -539,11 +544,6 @@ function ItemRow({
                   sheetTitle="Warehouse"
                   containerStyle={{ marginBottom: 0 }}
                 />
-              </View>
-            ) : singleWarehouseName ? (
-              <View style={ir.warehouseChip}>
-                <Ionicons name="business-outline" size={11} color={COLORS.info} />
-                <Text style={ir.warehouseChipTxt}>{singleWarehouseName}</Text>
               </View>
             ) : null
           ) : null}
@@ -743,7 +743,7 @@ export default function CreateSalesInvoiceScreen() {
 
   useEffect(() => {
     if (!company?.guid) return;
-    getStocks(company.guid).then((res: any) => {
+    getStocks(company.guid, { limit: 2000 }).then((res: any) => {
       const list = res?.data?.items || res?.items || res?.data || [];
       setStockItems(Array.isArray(list) ? list : []);
     }).catch(() => {});
@@ -866,15 +866,18 @@ export default function CreateSalesInvoiceScreen() {
       return;
     }
     try {
-      const res: any = await getStockGodowns(company.guid, String(si.id));
+      // Use guid (Tally GUID) for the godowns lookup — NOT numeric id which may be undefined
+      const stockIdentifier = si.guid || '';
+      const res: any = await getStockGodowns(company.guid, stockIdentifier);
       const godownList: Godown[] = res?.data?.warehouses || [];
-      setItemGodowns(prev => ({ ...prev, [itemId]: godownList }));
-      if (godownList.length === 1) {
-        // Single warehouse with stock — auto-select it
-        setItems(prev => prev.map(i => i.id === itemId ? { ...i, warehouse: godownList[0].name } : i));
-      } else if (godownList.length === 0) {
-        // No explicit warehouse data — default to Main Location
-        setItems(prev => prev.map(i => i.id === itemId ? { ...i, warehouse: 'Main Location' } : i));
+      // Always store godowns (even single entry) so the warehouse dropdown renders
+      const finalGodowns: Godown[] = godownList.length > 0
+        ? godownList
+        : [{ name: 'Main Location', qty: si.closing_qty ?? 0 }];
+      setItemGodowns(prev => ({ ...prev, [itemId]: finalGodowns }));
+      // Auto-select only when there is exactly one warehouse — user can still see & change it
+      if (finalGodowns.length === 1) {
+        setItems(prev => prev.map(i => i.id === itemId ? { ...i, warehouse: finalGodowns[0].name } : i));
       }
     } catch {
       // API failed — default to Main Location
