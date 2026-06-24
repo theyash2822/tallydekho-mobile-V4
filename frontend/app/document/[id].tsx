@@ -24,6 +24,8 @@ function apiVoucherToDoc(data: any, companyName: string): VoucherDocument {
   const gst = data.gst || null;
   const partyLedger = data.party || null;
   const co = data.company || null;
+  const dispatchDetails = data.dispatch_details || null;
+  const collectPayment = data.collect_payment || null;
 
   // Map voucher type to document type
   const rawType = v.voucher_type || 'Sales GST';
@@ -95,8 +97,15 @@ function apiVoucherToDoc(data: any, companyName: string): VoucherDocument {
       address: partyLedger?.address || undefined,
       phone: partyLedger?.phone || undefined,
     } : undefined,
-    narration: v.narration || undefined,
+    narration: v.narration || data.app_narration || undefined,
     reference: v.reference || undefined,
+    dispatchDetails: dispatchDetails || undefined,
+    paymentDetails: collectPayment ? {
+      mode: collectPayment.mode || '',
+      ledgerName: collectPayment.ledgerName || '',
+      amount: parseFloat(collectPayment.amount || 0),
+      reference: collectPayment.reference || '',
+    } : undefined,
     items,
     taxes,
     totals: {

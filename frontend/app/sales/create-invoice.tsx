@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, Alert, TextInput, Modal, TextInputProps, ActivityIndicator, Keyboard,
@@ -394,8 +395,8 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
           <Ionicons name="close-circle" size={16} color={COLORS.negative} />
         </TouchableOpacity>
       </View>
-      {/* Row 2: Rate % → Amount ₹ */}
-      <View style={ir.taxEntryBottomRow}>
+      {/* Row 2: Rate % → Amount ₹ — disabled until ledger selected */}
+      <View style={[ir.taxEntryBottomRow, !entry.ledgerName && { opacity: 0.38 }]} pointerEvents={entry.ledgerName ? 'auto' : 'none'}>
         <View style={ir.taxFieldGroup}>
           <Text style={ir.taxMiniLbl}>Rate</Text>
           <View style={ir.taxFieldInputRow}>
@@ -408,8 +409,9 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
                 onUpdate('taxAmount', auto);
               }}
               keyboardType="numeric"
-              placeholder="0"
+              placeholder={entry.ledgerName ? '0' : 'Select ledger first'}
               placeholderTextColor={COLORS.textTertiary}
+              editable={!!entry.ledgerName}
             />
             <Text style={ir.taxRateSign}>%</Text>
           </View>
@@ -426,6 +428,7 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
               keyboardType="numeric"
               placeholder="0.00"
               placeholderTextColor={COLORS.textTertiary}
+              editable={!!entry.ledgerName}
             />
           </View>
         </View>
@@ -724,6 +727,10 @@ export default function CreateSalesInvoiceScreen() {
   const [payNowLedger, setPayNowLedger] = useState(''); // actual Tally ledger name for payment
   const [bankLedgers, setBankLedgers] = useState<BSSOption[]>([]);
 
+  // Draft restore banner
+  const [showDraftBanner, setShowDraftBanner] = useState(false);
+  const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Success
   const [showSuccess, setShowSuccess] = useState(false);
   const [submitResult, setSubmitResult] = useState<{ tdkRef: string; isQueued: boolean; message: string; invoiceUuid?: string; numberingPolicy?: string; invoiceNumber?: string } | null>(null);
@@ -819,6 +826,98 @@ export default function CreateSalesInvoiceScreen() {
     if (routeParams?.fromQuotation) setRefNo(routeParams.fromQuotation as string);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Draft: check for saved draft on mount ────────────────────────────────
+  useEffect(() => {
+    if (!company?.guid) return;
+    const key = `tdinvoice_draft_${company.guid}`;
+    AsyncStorage.getItem(key).then(raw => {
+      if (!raw) return;
+      try {
+        const d = JSON.parse(raw);
+        if (d?.party || d?.items?.some((i: any) => i.product)) setShowDraftBanner(true);
+      } catch { /* ignore bad draft */ }
+    }).catch(() => {});
+  }, [company?.guid]);
+
+  // ── Draft: auto-save on any significant field change (debounced 800ms) ───
+  useEffect(() => {
+    if (!company?.guid) return;
+    if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+    draftSaveTimer.current = setTimeout(() => {
+      const draft = {
+        date, ledger, party, refNo, entryType, narration, termsText,
+        items, logEntries, roundOffLedger, roundOffAmount,
+        payTerms, customDays, dueDate,
+        showDispatch, dispatchFrom, dispatchFromState, shipTo, shipToState,
+        transporterName, transporterId, transportMode, vehicleNumber, vehicleType,
+        transportDocNo, transportDocDate,
+        collectPayNow, payNowMode, payNowAmount, payNowLedger, payNowRef,
+        numberingPolicy,
+      };
+      AsyncStorage.setItem(`tdinvoice_draft_${company.guid}`, JSON.stringify(draft)).catch(() => {});
+    }, 800);
+    return () => { if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date, ledger, party, refNo, entryType, narration, termsText, items, logEntries,
+      roundOffLedger, roundOffAmount, payTerms, customDays, dueDate, showDispatch,
+      dispatchFrom, dispatchFromState, shipTo, shipToState, transporterName, transporterId,
+      transportMode, vehicleNumber, vehicleType, transportDocNo, transportDocDate,
+      collectPayNow, payNowMode, payNowAmount, payNowLedger, payNowRef, numberingPolicy]);
+
+  const restoreDraft = useCallback(() => {
+    if (!company?.guid) return;
+    AsyncStorage.getItem(`tdinvoice_draft_${company.guid}`).then(raw => {
+      if (!raw) return;
+      try {
+        const d = JSON.parse(raw);
+        if (d.date)           setDate(d.date);
+        if (d.ledger)         setLedger(d.ledger);
+        if (d.party)          setParty(d.party);
+        if (d.refNo)          setRefNo(d.refNo);
+        if (d.entryType)      setEntryType(d.entryType);
+        if (d.narration)      setNarration(d.narration);
+        if (d.termsText)      setTermsText(d.termsText);
+        if (d.items?.length)  setItems(d.items);
+        if (d.logEntries?.length) setLogEntries(d.logEntries);
+        if (d.roundOffLedger) setRoundOffLedger(d.roundOffLedger);
+        if (d.roundOffAmount) setRoundOffAmount(d.roundOffAmount);
+        if (d.payTerms)       setPayTerms(d.payTerms);
+        if (d.customDays)     setCustomDays(d.customDays);
+        if (d.dueDate)        setDueDate(d.dueDate);
+        if (d.showDispatch)   setShowDispatch(d.showDispatch);
+        if (d.dispatchFrom)   setDispatchFrom(d.dispatchFrom);
+        if (d.dispatchFromState) setDispatchFromState(d.dispatchFromState);
+        if (d.shipTo)         setShipTo(d.shipTo);
+        if (d.shipToState)    setShipToState(d.shipToState);
+        if (d.transporterName) setTransporterName(d.transporterName);
+        if (d.transporterId)  setTransporterId(d.transporterId);
+        if (d.transportMode)  setTransportMode(d.transportMode);
+        if (d.vehicleNumber)  setVehicleNumber(d.vehicleNumber);
+        if (d.vehicleType)    setVehicleType(d.vehicleType);
+        if (d.transportDocNo) setTransportDocNo(d.transportDocNo);
+        if (d.transportDocDate) setTransportDocDate(d.transportDocDate);
+        if (d.collectPayNow)  setCollectPayNow(d.collectPayNow);
+        if (d.payNowMode)     setPayNowMode(d.payNowMode);
+        if (d.payNowAmount)   setPayNowAmount(d.payNowAmount);
+        if (d.payNowLedger)   setPayNowLedger(d.payNowLedger);
+        if (d.payNowRef)      setPayNowRef(d.payNowRef);
+        if (d.numberingPolicy) setNumberingPolicy(d.numberingPolicy);
+      } catch { /* ignore */ }
+    }).catch(() => {});
+    setShowDraftBanner(false);
+  }, [company?.guid]);
+
+  const discardDraft = useCallback(() => {
+    if (!company?.guid) return;
+    AsyncStorage.removeItem(`tdinvoice_draft_${company.guid}`).catch(() => {});
+    setShowDraftBanner(false);
+  }, [company?.guid]);
+
+  const clearDraftOnSubmit = useCallback(() => {
+    if (!company?.guid) return;
+    AsyncStorage.removeItem(`tdinvoice_draft_${company.guid}`).catch(() => {});
+  }, [company?.guid]);
 
   // Due date auto-calc
   useEffect(() => {
@@ -1078,6 +1177,7 @@ export default function CreateSalesInvoiceScreen() {
       const invoiceNumber = result?.invoiceNumber || result?.data?.invoiceNumber || undefined;
       setSubmitResult({ tdkRef, isQueued, message: result?.message || '', invoiceUuid, numberingPolicy: respNumberingPolicy, invoiceNumber });
       setShowSuccess(true);
+      clearDraftOnSubmit();
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Submit Failed', text2: err?.message || 'Check Tally connection.' });
     } finally {
@@ -1221,6 +1321,19 @@ export default function CreateSalesInvoiceScreen() {
         </View>
       )}
 
+      {/* Draft Restore Banner */}
+      {showDraftBanner && (
+        <View style={s.draftBanner}>
+          <Ionicons name="save-outline" size={15} color="#92400E" />
+          <Text style={s.draftBannerTxt}>You have an unsaved draft. Resume where you left off?</Text>
+          <TouchableOpacity onPress={restoreDraft} style={s.draftBannerBtn}>
+            <Text style={s.draftBannerBtnTxt}>Resume</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={discardDraft} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close" size={16} color="#92400E" />
+          </TouchableOpacity>
+        </View>
+      )}
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity onPress={step === 1 ? () => router.back() : goBack} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -1235,7 +1348,7 @@ export default function CreateSalesInvoiceScreen() {
 
       <StepIndicator step={step} />
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'android' ? 80 : 0}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'android' ? 120 : 0}>
         <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" onScrollBeginDrag={Keyboard.dismiss}>
 
           {/* ═══════════ STEP 1 ═══════════ */}
@@ -1413,19 +1526,27 @@ export default function CreateSalesInvoiceScreen() {
                     <View style={s.divider} />
                     <FormDropdown label="Mode of Payment" value={payNowMode} options={PAY_MODES} onSelect={(o: any) => {
                       setPayNowMode(o.value);
-                      // Auto-set Cash ledger for cash mode; clear for others so user picks
-                      if (o.value === 'cash') setPayNowLedger('Cash');
-                      else setPayNowLedger('');
+                      setPayNowLedger(''); // always clear — user must pick correct ledger
                     }} placeholder="Select payment mode..." required />
-                    {/* Payment Ledger picker */}
+                    {/* Payment Ledger picker — filtered by mode type */}
                     <BottomSheetSearch
                       label="Payment Ledger"
                       required
-                      options={bankLedgers}
+                      options={
+                        payNowMode === 'cash'
+                          ? bankLedgers.filter(l => l.sub === 'Cash')
+                          : payNowMode
+                            ? bankLedgers.filter(l => l.sub === 'Bank')
+                            : bankLedgers
+                      }
                       value={payNowLedger}
                       onSelect={(opt) => setPayNowLedger(opt.value)}
                       onClear={() => setPayNowLedger('')}
-                      placeholder="Select Cash / Bank ledger..."
+                      placeholder={
+                        !payNowMode ? 'Select mode first...' :
+                        payNowMode === 'cash' ? 'Select cash ledger...' :
+                        'Select bank ledger...'
+                      }
                       sheetTitle="Payment Ledger"
                     />
                     <View style={s.row2}>
@@ -1641,7 +1762,7 @@ export default function CreateSalesInvoiceScreen() {
                   style={{ minHeight: 60, textAlignVertical: 'top' } as any}
                   onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd?.({ animated: true }), 200)}
                 />
-                <FormField label="Terms & Conditions" value={termsText} onChangeText={setTermsText} multiline numberOfLines={3} style={{ minHeight: 72, textAlignVertical: 'top' } as any} containerStyle={{ marginBottom: 0 }} />
+                <FormField label="Terms & Conditions" value={termsText} onChangeText={setTermsText} multiline numberOfLines={3} style={{ minHeight: 72, textAlignVertical: 'top' } as any} containerStyle={{ marginBottom: 0 }} onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd?.({ animated: true }), 200)} />
               </View>
             </>
           )}
@@ -1657,7 +1778,7 @@ export default function CreateSalesInvoiceScreen() {
                 </Text>
                 <Text style={s.grandTotalLabel}>Grand Total</Text>
               </View>
-              <Text style={s.grandTotalAmt}>₹{totals.grand.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+              <Text style={s.grandTotalAmt} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>₹{totals.grand.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
             </View>
           )}
           <View style={s.footerBtnRow}>
@@ -1730,6 +1851,10 @@ export default function CreateSalesInvoiceScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.pageBg },
+  draftBanner: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, backgroundColor: '#FFF8E1', paddingHorizontal: SPACING.md, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F59E0B33' },
+  draftBannerTxt: { flex: 1, fontSize: TYPOGRAPHY.xs, color: '#92400E' },
+  draftBannerBtn: { backgroundColor: '#F59E0B', borderRadius: RADIUS.sm, paddingHorizontal: 10, paddingVertical: 4 },
+  draftBannerBtnTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' as const, color: '#fff' },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
@@ -1785,7 +1910,7 @@ const s = StyleSheet.create({
   grandTotalBar: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, paddingHorizontal: 2, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   grandTotalMeta: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '600' as const, marginBottom: 1 },
   grandTotalLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '700' as const, color: COLORS.textSecondary },
-  grandTotalAmt: { fontSize: TYPOGRAPHY.xl, fontWeight: '800' as const, color: COLORS.brandPrimary },
+  grandTotalAmt: { fontSize: TYPOGRAPHY.xl, fontWeight: '800' as const, color: COLORS.brandPrimary, flexShrink: 1, marginLeft: 8, textAlign: 'right' as const },
   naChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg, alignSelf: 'flex-start' as const, marginTop: 4 },
   naChipActive: { backgroundColor: COLORS.textSecondary, borderColor: COLORS.textSecondary },
   naChipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' as const, color: COLORS.textTertiary },
