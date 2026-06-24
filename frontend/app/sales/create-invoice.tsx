@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, Alert, TextInput, Modal, TextInputProps, ActivityIndicator, Keyboard,
@@ -136,8 +136,9 @@ const newItem = (warehouseName = ''): InvoiceItem => ({
 type ModalState = { type: 'unit'; itemId: string } | null;
 
 // ─── ThemedFInput ──────────────────────────────────────────────────────────────
-function ThemedFInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
+function ThemedFInput({ style, onFocus, onBlur, keyboardType, ...props }: TextInputProps) {
   const [focused, setFocused] = useState(false);
+  const isNumeric = keyboardType === 'numeric' || keyboardType === 'decimal-pad' || keyboardType === 'number-pad';
   return (
     <TextInput
       style={[
@@ -147,6 +148,8 @@ function ThemedFInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
         style,
       ]}
       placeholderTextColor={COLORS.textTertiary}
+      keyboardType={keyboardType}
+      selectTextOnFocus={isNumeric}
       onFocus={(e) => { setFocused(true); onFocus?.(e); }}
       onBlur={(e) => { setFocused(false); onBlur?.(e); }}
       {...props}
@@ -467,10 +470,14 @@ function ItemRow({
   const productLabel = stockItem ? (stockItem.displayName || stockItem.name) : '';
   const headerLabel = productLabel || `Item ${itemIndex + 1}`;
 
-  // Warehouse options: use per-item godowns if available, else global warehouses
+  // Warehouse options: use per-item godowns if available.
+  // If godowns is empty (item only in Main Location / no warehouse transactions), show Main Location with closing_qty.
+  // NEVER fall back to all global warehouses — that is misleading.
   const warehouseOpts: BSSOption[] = godowns.length > 0
-    ? godowns.map(g => ({ label: g.name, value: g.name, subtitle: `Stock: ${Math.round(g.qty)} units` }))
-    : warehouses.map(w => ({ label: w.name, value: w.name }));
+    ? godowns.map(g => ({ label: g.name, value: g.name, subtitle: `${Math.round(g.qty)} ${stockItem?.unit || 'units'} available` }))
+    : item.product
+      ? [{ label: 'Main Location', value: 'Main Location', subtitle: stockItem?.closing_qty != null ? `${Math.round(stockItem.closing_qty)} ${stockItem?.unit || 'units'} available` : 'Default warehouse' }]
+      : [];
   const needsWarehouseDropdown = warehouseOpts.length > 1;
   const singleWarehouseName = warehouseOpts.length === 1 ? warehouseOpts[0].label : null;
 
@@ -541,30 +548,60 @@ function ItemRow({
             ) : null
           ) : null}
 
-          {/* Qty + Unit + Rate */}
-          <View style={ir.fieldRow}>
+          {/* Row: Qty | Unit | Rate */}
+          <View style={ir.qurRow}>
+            {/* Qty */}
             <View style={ir.qtyBox}>
-              <Text style={ir.miniLabel}>Qty</Text>
-              <TextInput style={ir.miniInput} value={item.qty} onChangeText={v => onUpdate(item.id, 'qty', v)} keyboardType="numeric" placeholder="1" placeholderTextColor={COLORS.textTertiary} />
+              <Text style={ir.miniLabel}>Qty <Text style={ir.star}>*</Text></Text>
+              <TextInput
+                style={[ir.miniInput, { textAlign: 'center' }]}
+                value={item.qty}
+                onChangeText={v => onUpdate(item.id, 'qty', v)}
+                keyboardType="numeric"
+                selectTextOnFocus
+                placeholder="1"
+                placeholderTextColor={COLORS.textTertiary}
+              />
             </View>
-            <TouchableOpacity style={ir.unitBtn} onPress={() => onOpenModal({ type: 'unit', itemId: item.id })} activeOpacity={0.7}>
-              <Text style={ir.unitTxt}>{item.unit || 'pcs'}</Text>
-              <Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
-            </TouchableOpacity>
+            {/* Unit */}
+            <View style={ir.unitBox}>
+              <Text style={ir.miniLabel}>Unit</Text>
+              <TouchableOpacity style={ir.unitBtn} onPress={() => onOpenModal({ type: 'unit', itemId: item.id })} activeOpacity={0.7}>
+                <Text style={ir.unitTxt}>{item.unit || 'pcs'}</Text>
+                <Ionicons name="chevron-down" size={10} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            {/* Rate */}
             <View style={ir.rateBox}>
-              <Text style={ir.miniLabel}>Rate (₹)</Text>
-              <TextInput style={ir.miniInput} value={item.rate} onChangeText={v => onUpdate(item.id, 'rate', v)} keyboardType="numeric" placeholder="0.00" placeholderTextColor={COLORS.textTertiary} />
+              <Text style={ir.miniLabel}>Rate (₹) <Text style={ir.star}>*</Text></Text>
+              <TextInput
+                style={[ir.miniInput, { textAlign: 'right' }]}
+                value={item.rate}
+                onChangeText={v => onUpdate(item.id, 'rate', v)}
+                keyboardType="numeric"
+                selectTextOnFocus
+                placeholder="0.00"
+                placeholderTextColor={COLORS.textTertiary}
+              />
             </View>
           </View>
 
-          {/* Discount */}
-          <View style={ir.fieldRow}>
-            <View style={ir.discRow}>
+          {/* Row: Discount (compact inline) */}
+          <View style={ir.discFullRow}>
+            <Text style={ir.miniLabel}>Discount</Text>
+            <View style={ir.discInner}>
               <TouchableOpacity style={ir.discTypeBtn} onPress={() => onUpdate(item.id, 'discountType', item.discountType === '%' ? 'flat' : '%')} activeOpacity={0.7}>
                 <Text style={ir.discTypeTxt}>{item.discountType === '%' ? '%' : '₹'}</Text>
               </TouchableOpacity>
-              <TextInput style={ir.discInput} value={item.discount} onChangeText={v => onUpdate(item.id, 'discount', v)} keyboardType="numeric" placeholder="0" placeholderTextColor={COLORS.textTertiary} />
-              <Text style={ir.discLabel}>Disc</Text>
+              <TextInput
+                style={ir.discInput}
+                value={item.discount}
+                onChangeText={v => onUpdate(item.id, 'discount', v)}
+                keyboardType="numeric"
+                selectTextOnFocus
+                placeholder="0"
+                placeholderTextColor={COLORS.textTertiary}
+              />
             </View>
           </View>
 
@@ -618,6 +655,7 @@ function ItemRow({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CreateSalesInvoiceScreen() {
   const router = useRouter();
+  const scrollRef = useRef<any>(null);
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
@@ -832,12 +870,15 @@ export default function CreateSalesInvoiceScreen() {
       const godownList: Godown[] = res?.data?.warehouses || [];
       setItemGodowns(prev => ({ ...prev, [itemId]: godownList }));
       if (godownList.length === 1) {
+        // Single warehouse with stock — auto-select it
         setItems(prev => prev.map(i => i.id === itemId ? { ...i, warehouse: godownList[0].name } : i));
-      } else if (godownList.length === 0 && warehouses.length === 1) {
-        setItems(prev => prev.map(i => i.id === itemId ? { ...i, warehouse: warehouses[0].name } : i));
+      } else if (godownList.length === 0) {
+        // No explicit warehouse data — default to Main Location
+        setItems(prev => prev.map(i => i.id === itemId ? { ...i, warehouse: 'Main Location' } : i));
       }
     } catch {
-      if (warehouses.length === 1) updateItem(itemId, 'warehouse', warehouses[0].name);
+      // API failed — default to Main Location
+      setItems(prev => prev.map(i => i.id === itemId ? { ...i, warehouse: 'Main Location' } : i));
     }
   }, [stockItems, company?.guid, warehouses, updateItem]);
 
@@ -1180,8 +1221,8 @@ export default function CreateSalesInvoiceScreen() {
 
       <StepIndicator step={step} />
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" onScrollBeginDrag={Keyboard.dismiss}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'android' ? 80 : 0}>
+        <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" onScrollBeginDrag={Keyboard.dismiss}>
 
           {/* ═══════════ STEP 1 ═══════════ */}
           {step === 1 && (
@@ -1565,7 +1606,16 @@ export default function CreateSalesInvoiceScreen() {
                   <Ionicons name="document-outline" size={18} color={COLORS.textSecondary} />
                   <Text style={s.cardTitle}>Notes & Terms</Text>
                 </View>
-                <FormField label="Narration" value={narration} onChangeText={setNarration} placeholder="Internal notes..." multiline numberOfLines={2} style={{ minHeight: 60, textAlignVertical: 'top' } as any} />
+                <FormField
+                  label="Narration"
+                  value={narration}
+                  onChangeText={setNarration}
+                  placeholder="Internal notes..."
+                  multiline
+                  numberOfLines={2}
+                  style={{ minHeight: 60, textAlignVertical: 'top' } as any}
+                  onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd?.({ animated: true }), 200)}
+                />
                 <FormField label="Terms & Conditions" value={termsText} onChangeText={setTermsText} multiline numberOfLines={3} style={{ minHeight: 72, textAlignVertical: 'top' } as any} containerStyle={{ marginBottom: 0 }} />
               </View>
             </>
@@ -1758,17 +1808,21 @@ const ir = StyleSheet.create({
   barcodeBtn: { width: 44, height: 48, borderRadius: RADIUS.md, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: COLORS.borderDefault },
   warehouseChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.infoBg, borderRadius: RADIUS.full, paddingHorizontal: 10, paddingVertical: 5, alignSelf: 'flex-start', borderWidth: 1, borderColor: COLORS.info + '40' },
   warehouseChipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.info },
-  fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  qtyBox: { width: 64 },
+  // Qty | Unit | Rate row
+  qurRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginTop: 10 },
+  qtyBox: { width: 72 },
+  unitBox: { width: 64 },
   rateBox: { flex: 1 },
-  miniLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '600', marginBottom: 3 },
-  miniInput: { backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 6, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, textAlign: 'right' },
-  unitBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 7, borderWidth: 1, borderColor: COLORS.borderDefault, alignSelf: 'flex-end' },
-  unitTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
-  discRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  discTypeBtn: { backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 7 },
-  discTypeTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
-  discInput: { width: 44, backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.sm, paddingHorizontal: 6, paddingVertical: 6, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, textAlign: 'center' },
+  miniLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '600', marginBottom: 4 },
+  miniInput: { backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 8, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
+  unitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 8, borderWidth: 1, borderColor: COLORS.borderDefault, minHeight: 36 },
+  unitTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  // Discount row
+  discFullRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, gap: 8 },
+  discInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  discTypeBtn: { backgroundColor: COLORS.brandPrimary + '18', borderWidth: 1, borderColor: COLORS.brandPrimary + '40', borderRadius: RADIUS.sm, paddingHorizontal: 10, paddingVertical: 7, minWidth: 36, alignItems: 'center' },
+  discTypeTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.brandPrimary },
+  discInput: { width: 64, backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 7, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, textAlign: 'center' },
   discLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
   taxableRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, paddingHorizontal: 10, paddingVertical: 7 },
   taxableLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
