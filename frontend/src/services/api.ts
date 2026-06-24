@@ -478,3 +478,16 @@ export const generateBulkBarcodes = (
 // ── Compliance Config ──────────────────────────────────────────────────────────
 export const getComplianceConfig  = (guid: string) => get<any>(`/company/${guid}/compliance-config`);
 export const saveComplianceConfig = (guid: string, payload: any) => post<any>(`/company/${guid}/compliance-config`, payload);
+
+// ── Invoice Preview & Share PDF (Provisional/Final flow) ─────────────────────
+// GET /tally/invoice/:tdkRef/preview — returns VoucherDocument from app_vouchers snapshot
+export const getInvoicePreview = (tdkRef: string, companyGuid: string) =>
+  request<any>('GET', `/invoice/${encodeURIComponent(tdkRef)}/preview?companyGuid=${companyGuid}`, undefined, true, 'tally');
+
+// POST /tally/invoice/:tdkRef/share-pdf — waits up to maxWaitMs for Tally number, returns snapshot
+export const invoiceSharePdf = (
+  tdkRef: string,
+  companyGuid: string,
+  waitForTallyNumber = true,
+  maxWaitMs = 10000
+) => request<any>('POST', `/invoice/${encodeURIComponent(tdkRef)}/share-pdf`, { companyGuid, waitForTallyNumber, maxWaitMs }, true, 'tally');

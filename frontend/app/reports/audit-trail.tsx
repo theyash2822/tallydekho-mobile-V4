@@ -779,11 +779,16 @@ export default function AuditTrailScreen() {
                                 // ImportData API — tallyVoucherNo is the reconciled value from app_vouchers)
                                 const docId = entry.tallyVoucherNo || entry.ref;
                                 if (!docId) {
-                                  Alert.alert(
-                                    'Not yet synced',
-                                    'This entry is still pending. Preview will be available once Tally assigns a voucher number.',
-                                    [{ text: 'OK' }]
-                                  );
+                                  // If we have a TDK reference, show provisional preview
+                                  if (entry.tdkRef) {
+                                    router.push(`/sales/invoice-preview?tdkRef=${encodeURIComponent(entry.tdkRef)}` as any);
+                                  } else {
+                                    Alert.alert(
+                                      'Not yet synced',
+                                      'Preview is not available yet. Check again after Tally syncs.',
+                                      [{ text: 'OK' }]
+                                    );
+                                  }
                                   return;
                                 }
                                 router.push(`/document/${docId}` as any);

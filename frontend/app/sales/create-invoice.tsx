@@ -14,7 +14,11 @@ import {
   getParties, createSalesInvoice, getStocks, getWarehouses,
   getSalesLedgerAccounts, getTaxLedgers, createTallyParty, lookupBarcode,
   getComplianceConfig, getChargeLedgers, getStockGodowns, getBankLedgers,
+  invoiceSharePdf,
 } from '../../src/services/api';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import { generateDocumentHTML } from '../../src/utils/documentHelpers';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
@@ -682,7 +686,8 @@ export default function CreateSalesInvoiceScreen() {
 
   // Success
   const [showSuccess, setShowSuccess] = useState(false);
-  const [submitResult, setSubmitResult] = useState<{ tdkRef: string; isQueued: boolean; message: string } | null>(null);
+  const [submitResult, setSubmitResult] = useState<{ tdkRef: string; isQueued: boolean; message: string; invoiceUuid?: string } | null>(null);
+  const [sharePdfLoading, setSharePdfLoading] = useState(false);
 
   // ── Data loading ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1002,7 +1007,8 @@ export default function CreateSalesInvoiceScreen() {
 
       const tdkRef = result?.data?.tdkReferenceNo || result?.tdkReferenceNo || '';
       const isQueued = result?.queued === true;
-      setSubmitResult({ tdkRef, isQueued, message: result?.message || '' });
+      const invoiceUuid = result?.invoiceUuid || result?.data?.invoiceUuid || undefined;
+      setSubmitResult({ tdkRef, isQueued, message: result?.message || '', invoiceUuid });
       setShowSuccess(true);
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Submit Failed', text2: err?.message || 'Check Tally connection.' });
@@ -1033,7 +1039,7 @@ export default function CreateSalesInvoiceScreen() {
             <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : 'Invoice Submitted!'}</Text>
             <Text style={ss.sub}>
               {submitResult.isQueued
-                ? 'Your entry is queued. Will push to Tally when desktop reconnects.'
+                ? 'Entry queued. Will push to Tally when desktop reconnects.'
                 : 'Invoice pushed to Tally successfully.'}
             </Text>
             {!!submitResult.tdkRef && (
@@ -1042,36 +1048,94 @@ export default function CreateSalesInvoiceScreen() {
                 <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
               </View>
             )}
-            {/* Preview */}
-            <TouchableOpacity style={ss.previewBtn} activeOpacity={0.85} onPress={() => Toast.show({ type: 'info', text1: 'Invoice preview coming soon' })}>
+
+            {/* Preview — opens instantly with provisional/final data */}
+            <TouchableOpacity
+              style={ss.previewBtn}
+              activeOpacity={0.85}
+              onPress={() => {
+                if (!submitResult.tdkRef) return;
+                router.push(`/sales/invoice-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}` as any);
+              }}
+            >
               <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
-              <Text style={ss.previewBtnTxt}>Preview Invoice</Text>
+              <Text style={ss.previewBtnTxt}>Preview</Text>
             </TouchableOpacity>
-            {/* Share PDF */}
-            <TouchableOpacity style={ss.pdfBtn} activeOpacity={0.85} onPress={() => Toast.show({ type: 'info', text1: 'PDF sharing coming soon' })}>
-              <Ionicons name="document-outline" size={18} color={COLORS.white} />
-              <Text style={ss.pdfBtnTxt}>Share PDF</Text>
+
+            {/* Share PDF — waits up to 10s for Tally number (TALLY_PRIME_SERIES) */}
+            <TouchableOpacity
+              style={[ss.pdfBtn, sharePdfLoading && { opacity: 0.7 }]}
+              activeOpacity={0.85}
+              disabled={sharePdfLoading}
+              onPress={async () => {
+                if (!submitResult.tdkRef || !company?.guid) return;
+                setSharePdfLoading(true);
+                try {
+                  // Ask backend to wait up to 10s for Tally number
+                  const res = await invoiceSharePdf(submitResult.tdkRef, company.guid, true, 10000);
+                  const docData = res?.data;
+                  if (!docData) throw new Error('No invoice data returned');
+
+                  // Build minimal VoucherDocument for PDF generation
+                  // NOTE: backend returns grandTotal; generateDocumentHTML expects `total` — normalise here
+                  const pdfDoc = {
+                    documentTitle: `Invoice - ${docData.documentNumber}`,
+                    documentType: docData.documentType || 'sales_invoice',
+                    documentNumber: docData.documentNumber || docData.invoiceNumberLabel || 'Pending from TallyPrime',
+                    documentDate: docData.documentDate || '',
+                    company: docData.company || {},
+                    party: docData.party || {},
+                    items: docData.items || [],
+                    taxes: docData.taxLines || [],
+                    totals: {
+                      ...(docData.totals || {}),
+                      total: docData.totals?.total ?? docData.totals?.grandTotal ?? 0,
+                    },
+                    narration: docData.narration || '',
+                    additionalCharges: docData.additionalCharges || [],
+                    paymentInfo: docData.paymentInfo || null,
+                    dispatchInfo: docData.dispatchInfo || null,
+                    isProvisional: docData.isProvisional ?? false,
+                  };
+
+                  // Generate PDF on-device from snapshot HTML
+                  const html = generateDocumentHTML(
+                    pdfDoc as any,
+                    null, // no logo URI in share flow
+                    1,    // default format
+                    [],   // no terms
+                    null, // no QR
+                    null  // no bank info
+                  );
+                  const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
+
+                  // Open native share sheet
+                  const canShare = await Sharing.isAvailableAsync();
+                  const fileName = docData.fileName || `Invoice-${submitResult.tdkRef}.pdf`;
+                  if (canShare) {
+                    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: fileName, UTI: 'com.adobe.pdf' });
+                  } else {
+                    Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
+                  }
+                } catch (err: any) {
+                  Toast.show({ type: 'error', text1: 'PDF Error', text2: err?.message || 'Could not generate PDF' });
+                } finally {
+                  setSharePdfLoading(false);
+                }
+              }}
+            >
+              {sharePdfLoading
+                ? <ActivityIndicator size="small" color={COLORS.white} />
+                : <Ionicons name="document-outline" size={18} color={COLORS.white} />}
+              <Text style={ss.pdfBtnTxt}>{sharePdfLoading ? 'PDF is creating...' : 'Share PDF'}</Text>
             </TouchableOpacity>
-            {/* Share WhatsApp */}
-            <TouchableOpacity style={ss.waBtn} activeOpacity={0.85} onPress={() => Toast.show({ type: 'info', text1: 'WhatsApp sharing coming soon' })}>
-              <Ionicons name="logo-whatsapp" size={18} color={COLORS.white} />
-              <Text style={ss.waBtnTxt}>Share on WhatsApp</Text>
-            </TouchableOpacity>
-            {/* Generate IRN */}
-            {eInvoiceApplicable && (
-              <TouchableOpacity style={ss.irnBtn} activeOpacity={0.85} onPress={() => Toast.show({ type: 'info', text1: 'IRN generation coming soon' })}>
-                <Ionicons name="qr-code-outline" size={18} color={COLORS.white} />
-                <Text style={ss.irnBtnTxt}>Generate IRN (E-Invoice)</Text>
-              </TouchableOpacity>
-            )}
-            {/* Generate EWB */}
-            {ewbApplicable && (
-              <TouchableOpacity style={ss.ewbBtn} activeOpacity={0.85} onPress={() => Toast.show({ type: 'info', text1: 'E-Way Bill generation coming soon' })}>
-                <Ionicons name="document-text-outline" size={18} color={COLORS.white} />
-                <Text style={ss.ewbBtnTxt}>Generate E-Way Bill</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={ss.doneBtn} activeOpacity={0.85} onPress={() => { setShowSuccess(false); router.back(); }}>
+
+            {/* Done — navigates away without waiting for Tally */}
+            <TouchableOpacity style={ss.doneBtn} activeOpacity={0.85} onPress={() => {
+              setShowSuccess(false);
+              setSharePdfLoading(false);
+              router.back();
+            }}>
               <Text style={ss.doneTxt}>Done</Text>
             </TouchableOpacity>
           </View>

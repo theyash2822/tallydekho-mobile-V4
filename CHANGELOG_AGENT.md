@@ -36,3 +36,25 @@
 - `b59e2886` — simplified scanner, removed cameraActive
 - `1d6ac5ad` — View Barcode modal (CODE128 SVG)
 - `34c54c41` — QR code (NEEDS REVERT/FIX)
+
+## 2026-06-24 — Invoice PDF Before Tally Sync Flow (Phase A)
+
+### Mobile Changes
+- `src/services/api.ts`: Added `getInvoicePreview(tdkRef, companyGuid)` and `invoiceSharePdf(tdkRef, companyGuid, waitForTallyNumber, maxWaitMs)`
+- `src/services/socketService.ts`: Exported `getSocket()` for direct socket event listening
+- `app/sales/invoice-preview.tsx` (NEW SCREEN):
+  - Fetches provisional/final invoice snapshot from `/tally/invoice/:tdkRef/preview`
+  - Shows DocumentPreviewPage with provisional banner + watermark
+  - Auto-refreshes via `invoice_posting_updated` WebSocket when Tally syncs
+- `src/components/document/DocumentPreviewPage.tsx`:
+  - New optional props: `isProvisional?: boolean`, `watermarkText?: string`
+  - Provisional watermark overlay (pointer-events: none)
+  - Null-safe `documentTitle` fallback
+- `app/sales/create-invoice.tsx`:
+  - Success screen: 3 buttons only (Preview, Share PDF, Done)
+  - Removed: WhatsApp, IRN, EWB buttons from success screen
+  - Preview tap: navigates to `/sales/invoice-preview?tdkRef=...`
+  - Share PDF tap: 10s wait → local PDF generation → native share sheet (expo-sharing)
+  - `invoiceUuid` captured in submitResult
+- `app/reports/audit-trail.tsx`:
+  - Unsynced entry tap with `tdkRef` → navigates to provisional preview (not Alert)

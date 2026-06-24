@@ -88,3 +88,6 @@ export const socketService = {
     return socket?.connected ?? false;
   },
 };
+
+// Expose raw socket for direct event listening (e.g. invoice_posting_updated)
+export const getSocket = () => socket;
