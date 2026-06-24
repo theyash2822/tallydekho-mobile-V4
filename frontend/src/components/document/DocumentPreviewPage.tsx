@@ -774,11 +774,9 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
 export default function DocumentPreviewPage({
   document: doc,
   isProvisional = false,
-  watermarkText,
 }: {
   document: VoucherDocument;
   isProvisional?: boolean;
-  watermarkText?: string;
 }) {
   const router = useRouter();
 
@@ -814,15 +812,6 @@ export default function DocumentPreviewPage({
         <View style={{ height: 20 }} />
       </ScrollView>
 
-      {/* Provisional watermark overlay */}
-      {isProvisional && (
-        <View style={ds.watermarkOverlay} pointerEvents="none">
-          <Text style={ds.watermarkText}>
-            {watermarkText || 'PROVISIONAL'}
-          </Text>
-        </View>
-      )}
-
       <ActionBar doc={doc} />
     </SafeAreaView>
   );
@@ -835,17 +824,6 @@ const ds = StyleSheet.create({
   safe:          { flex: 1, backgroundColor: COLORS.pageBg },
   scroll:        { flex: 1 },
   scrollContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, paddingBottom: SPACING.md },
-  watermarkOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    justifyContent: 'center', alignItems: 'center',
-    pointerEvents: 'none',
-  },
-  watermarkText: {
-    fontSize: 28, fontWeight: '900', color: '#EF444420',
-    textTransform: 'uppercase', letterSpacing: 4,
-    transform: [{ rotate: '-35deg' }],
-  },
-
   // ── Navigation bar ──────────────────────────────────────────────────────────
   navBar: {
     flexDirection: 'row', alignItems: 'center',

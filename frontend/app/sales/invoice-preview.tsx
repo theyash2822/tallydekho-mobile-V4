@@ -178,7 +178,6 @@ export default function InvoicePreviewScreen() {
       <DocumentPreviewPage
         document={doc}
         isProvisional={isProvisional}
-        watermarkText={isProvisional ? 'Provisional / Pending Tally Posting' : undefined}
       />
     </View>
   );
