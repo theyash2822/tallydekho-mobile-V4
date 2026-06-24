@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 import BottomSheetSearch, { BSSOption } from './BottomSheetSearch';
 
@@ -134,7 +134,7 @@ export default function LogisticsSection({
         <TouchableOpacity style={ls.header} onPress={() => setExpanded(!expanded)} activeOpacity={0.7}>
           <View style={ls.headerLeft}>
             <View style={[ls.headerIcon, expanded ? ls.headerIconActive : undefined]}>
-              <Ionicons name="truck-outline" size={16} color={expanded ? COLORS.warning : COLORS.textSecondary} />
+              <MaterialCommunityIcons name="truck-outline" size={16} color={expanded ? COLORS.warning : COLORS.textSecondary} />
             </View>
             <View>
               <Text style={ls.headerTitle}>Logistics & Shipping</Text>
@@ -149,7 +149,7 @@ export default function LogisticsSection({
         <View style={ls.header}>
           <View style={ls.headerLeft}>
             <View style={ls.headerIcon}>
-              <Ionicons name="truck-outline" size={16} color={COLORS.textSecondary} />
+              <MaterialCommunityIcons name="truck-outline" size={16} color={COLORS.textSecondary} />
             </View>
             <View>
               <Text style={ls.headerTitle}>Logistics & Shipping</Text>
