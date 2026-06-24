@@ -686,8 +686,11 @@ export default function CreateSalesInvoiceScreen() {
 
   // Success
   const [showSuccess, setShowSuccess] = useState(false);
-  const [submitResult, setSubmitResult] = useState<{ tdkRef: string; isQueued: boolean; message: string; invoiceUuid?: string } | null>(null);
+  const [submitResult, setSubmitResult] = useState<{ tdkRef: string; isQueued: boolean; message: string; invoiceUuid?: string; numberingPolicy?: string; invoiceNumber?: string } | null>(null);
   const [sharePdfLoading, setSharePdfLoading] = useState(false);
+
+  // Numbering policy from compliance config (tally_prime_series | tallydekho_series)
+  const [numberingPolicy, setNumberingPolicy] = useState<'tally_prime_series' | 'tallydekho_series'>('tally_prime_series');
 
   // ── Data loading ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -762,6 +765,10 @@ export default function CreateSalesInvoiceScreen() {
       }
       if (cfg?.e_invoice_applicable === 'applicable_configured') {
         setEInvoiceApplicable(true);
+      }
+      // Wire numbering policy from Settings → Voucher Config
+      if (cfg?.numbering_policy === 'tallydekho_series') {
+        setNumberingPolicy('tallydekho_series');
       }
     }).catch(() => {});
   }, [company?.guid]);
@@ -968,6 +975,7 @@ export default function CreateSalesInvoiceScreen() {
         partyLedger: party, date: dmyToISO(date),
         salesLedger: ledger, isOptional: entryType === 'optional',
         original_entry_type: entryType, voucherType: 'Sales',
+        numbering_policy: numberingPolicy,
         totalAmount: totals.grand, reference: refNo || undefined,
         narration: narration || undefined,
         items: items.map(item => ({
@@ -1008,7 +1016,9 @@ export default function CreateSalesInvoiceScreen() {
       const tdkRef = result?.data?.tdkReferenceNo || result?.tdkReferenceNo || '';
       const isQueued = result?.queued === true;
       const invoiceUuid = result?.invoiceUuid || result?.data?.invoiceUuid || undefined;
-      setSubmitResult({ tdkRef, isQueued, message: result?.message || '', invoiceUuid });
+      const respNumberingPolicy = result?.numberingPolicy || numberingPolicy;
+      const invoiceNumber = result?.invoiceNumber || result?.data?.invoiceNumber || undefined;
+      setSubmitResult({ tdkRef, isQueued, message: result?.message || '', invoiceUuid, numberingPolicy: respNumberingPolicy, invoiceNumber });
       setShowSuccess(true);
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Submit Failed', text2: err?.message || 'Check Tally connection.' });
@@ -1020,6 +1030,7 @@ export default function CreateSalesInvoiceScreen() {
     company, date, ledger, entryType, totals.grand, refNo, narration, warehouses,
     collectPayNow, payNowMode, payNowAmount, payNowRef, payNowLedger, logEntries, roundOffLedger, roundOffAmount,
     transportMode, transporterName, transporterId, vehicleNumber, vehicleType, transportDocNo, transportDocDate,
+    numberingPolicy,
   ]);
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -1042,6 +1053,13 @@ export default function CreateSalesInvoiceScreen() {
                 ? 'Entry queued. Will push to Tally when desktop reconnects.'
                 : 'Invoice pushed to Tally successfully.'}
             </Text>
+            {/* TallyDekho Series: show invoice number immediately */}
+            {submitResult.numberingPolicy === 'tallydekho_series' && submitResult.invoiceNumber && (
+              <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
+                <Text style={ss.refLabel}>Invoice No.</Text>
+                <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.invoiceNumber}</Text>
+              </View>
+            )}
             {!!submitResult.tdkRef && (
               <View style={ss.refBadge}>
                 <Text style={ss.refLabel}>Reference No.</Text>
@@ -1071,8 +1089,10 @@ export default function CreateSalesInvoiceScreen() {
                 if (!submitResult.tdkRef || !company?.guid) return;
                 setSharePdfLoading(true);
                 try {
-                  // Ask backend to wait up to 10s for Tally number
-                  const res = await invoiceSharePdf(submitResult.tdkRef, company.guid, true, 10000);
+                  // TallyDekho Series: number is immediate — no wait needed
+                  // TallyPrime Series: wait up to 10s for Tally to assign the number
+                  const isTDSeries = submitResult.numberingPolicy === 'tallydekho_series';
+                  const res = await invoiceSharePdf(submitResult.tdkRef, company.guid, !isTDSeries, isTDSeries ? 0 : 10000);
                   const docData = res?.data;
                   if (!docData) throw new Error('No invoice data returned');
 
