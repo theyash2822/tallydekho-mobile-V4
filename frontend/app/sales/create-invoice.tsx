@@ -998,6 +998,17 @@ export default function CreateSalesInvoiceScreen() {
       Toast.show({ type: 'error', text1: 'Payment Ledger required', text2: 'Select a Cash or Bank ledger for payment.' });
       return;
     }
+    if (collectPayNow && payNowLedger) {
+      const pAmt = parseFloat(payNowAmount) || 0;
+      if (pAmt <= 0) {
+        Toast.show({ type: 'error', text1: 'Invalid payment amount', text2: 'Payment amount must be greater than 0.' });
+        return;
+      }
+      if (pAmt > totals.grand) {
+        Toast.show({ type: 'error', text1: 'Payment exceeds invoice total', text2: `Payment ₹${pAmt.toLocaleString('en-IN')} cannot exceed invoice total ₹${totals.grand.toLocaleString('en-IN')}` });
+        return;
+      }
+    }
 
     setSubmitting(true);
     try {
@@ -1420,7 +1431,18 @@ export default function CreateSalesInvoiceScreen() {
                     <View style={s.row2}>
                       <View style={{ flex: 1 }}>
                         <Text style={s.fLabel}>Amount Received (₹)</Text>
-                        <TextInput style={s.fInput} value={payNowAmount} onChangeText={setPayNowAmount} keyboardType="numeric" placeholder="0.00" placeholderTextColor={COLORS.textTertiary} />
+                        <TextInput
+                          style={s.fInput}
+                          value={payNowAmount}
+                          onChangeText={setPayNowAmount}
+                          onBlur={() => {
+                            const v = parseFloat(payNowAmount) || 0;
+                            if (v > totals.grand) setPayNowAmount(String(totals.grand));
+                          }}
+                          keyboardType="numeric"
+                          placeholder="0.00"
+                          placeholderTextColor={COLORS.textTertiary}
+                        />
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={s.fLabel}>Reference No.</Text>
