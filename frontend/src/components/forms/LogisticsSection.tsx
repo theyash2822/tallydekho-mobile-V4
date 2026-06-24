@@ -120,6 +120,23 @@ export default function LogisticsSection({
         : e
     ));
 
+  // Atomic update for taxRate + taxAmount together — avoids React 18 batching
+  // overwrite (two separate onEntriesChange calls would both use stale entries,
+  // causing the second to silently reset the first field back to its old value).
+  const updateTaxEntryRateAndAmount = (
+    entryId: string, taxId: string, rate: string, amount: string,
+  ) =>
+    onEntriesChange(entries.map(e =>
+      e.id === entryId
+        ? {
+            ...e,
+            taxEntries: e.taxEntries.map(t =>
+              t.id === taxId ? { ...t, taxRate: rate, taxAmount: amount } : t
+            ),
+          }
+        : e
+    ));
+
   const removeTaxEntry = (entryId: string, taxId: string) =>
     onEntriesChange(entries.map(e =>
       e.id === entryId
@@ -250,9 +267,10 @@ export default function LogisticsSection({
                                 style={ls.taxRateInput}
                                 value={taxEntry.taxRate}
                                 onChangeText={v => {
-                                  updateTaxEntry(entry.id, taxEntry.id, 'taxRate', v);
-                                  const auto = (base * (parseFloat(v) || 0) / 100).toFixed(2);
-                                  updateTaxEntry(entry.id, taxEntry.id, 'taxAmount', auto);
+                                  const auto = base > 0
+                                    ? (base * (parseFloat(v) || 0) / 100).toFixed(2)
+                                    : '';
+                                  updateTaxEntryRateAndAmount(entry.id, taxEntry.id, v, auto);
                                 }}
                                 keyboardType="numeric"
                                 placeholder="0"
