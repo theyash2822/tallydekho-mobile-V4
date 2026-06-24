@@ -36,7 +36,9 @@ export function calcLogisticsTotal(entries: LogEntry[], roundOffAmount = 0): num
 
 interface Props {
   entries: LogEntry[];
-  onEntriesChange: (e: LogEntry[]) => void;
+  // Must accept functional updater form (prev => ...) so batched calls always
+  // operate on the latest state rather than a stale prop snapshot.
+  onEntriesChange: React.Dispatch<React.SetStateAction<LogEntry[]>>;
   taxLedgers: { name: string }[];
   chargeLedgers: { ledgerName: string; guid?: string }[];
   // Round-off (separate line item — never mixed with logistics rows)
@@ -97,36 +99,42 @@ export default function LogisticsSection({
     value: l.ledgerName,
   }));
 
+  // ── All updaters use functional form (prev =>) so React always receives the
+  //    latest state even when multiple updates are batched in the same cycle.
+  //    Using the stale `entries` prop in closures caused later calls to silently
+  //    overwrite fields set by earlier calls (e.g. typing charge amount then
+  //    selecting a tax ledger blanked the amount).
+
   const addEntry = () => {
-    onEntriesChange([...entries, newEntry()]);
+    onEntriesChange(prev => [...prev, newEntry()]);
     setExpanded(true);
   };
 
   const updateEntry = (id: string, field: keyof Omit<LogEntry, 'taxEntries'>, value: any) =>
-    onEntriesChange(entries.map(e => e.id === id ? { ...e, [field]: value } : e));
+    onEntriesChange(prev => prev.map(e => e.id === id ? { ...e, [field]: value } : e));
 
   const removeEntry = (id: string) =>
-    onEntriesChange(entries.filter(e => e.id !== id));
+    onEntriesChange(prev => prev.filter(e => e.id !== id));
 
   const addTaxEntry = (entryId: string) =>
-    onEntriesChange(entries.map(e =>
+    onEntriesChange(prev => prev.map(e =>
       e.id === entryId ? { ...e, taxEntries: [...e.taxEntries, newTaxEntry()] } : e
     ));
 
   const updateTaxEntry = (entryId: string, taxId: string, field: keyof LogTaxEntry, value: string) =>
-    onEntriesChange(entries.map(e =>
+    onEntriesChange(prev => prev.map(e =>
       e.id === entryId
         ? { ...e, taxEntries: e.taxEntries.map(t => t.id === taxId ? { ...t, [field]: value } : t) }
         : e
     ));
 
-  // Atomic update for taxRate + taxAmount together — avoids React 18 batching
-  // overwrite (two separate onEntriesChange calls would both use stale entries,
-  // causing the second to silently reset the first field back to its old value).
+  // Atomic update for taxRate + taxAmount in one call — avoids the case where
+  // two separate onEntriesChange calls each compute from the same prev and the
+  // second one resets the field written by the first.
   const updateTaxEntryRateAndAmount = (
     entryId: string, taxId: string, rate: string, amount: string,
   ) =>
-    onEntriesChange(entries.map(e =>
+    onEntriesChange(prev => prev.map(e =>
       e.id === entryId
         ? {
             ...e,
@@ -138,7 +146,7 @@ export default function LogisticsSection({
     ));
 
   const removeTaxEntry = (entryId: string, taxId: string) =>
-    onEntriesChange(entries.map(e =>
+    onEntriesChange(prev => prev.map(e =>
       e.id === entryId
         ? { ...e, taxEntries: e.taxEntries.filter(t => t.id !== taxId) }
         : e
