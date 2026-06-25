@@ -280,7 +280,7 @@ function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={acd.backdrop}>
         <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={[acd.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <View style={acd.handle} />
           <View style={acd.header}>
