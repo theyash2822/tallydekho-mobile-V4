@@ -280,7 +280,10 @@ function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={acd.backdrop}>
         <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}
+        >
         <View style={[acd.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <View style={acd.handle} />
           <View style={acd.header}>
@@ -363,8 +366,6 @@ function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
             <Text style={acd.saveBtnTxt}>{saving ? 'Saving...' : 'Save Customer'}</Text>
           </TouchableOpacity>
         </View>
-        {/* Fill gap between sheet bottom and screen edge — prevents underlying screen from bleeding through */}
-        <View style={{ backgroundColor: '#FFFFFF', height: 150 }} />
       </KeyboardAvoidingView>
       </View>
     </Modal>
@@ -2033,7 +2034,7 @@ const ir = StyleSheet.create({
 });
 
 const acd = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
   sheet: { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%' },
   handle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
