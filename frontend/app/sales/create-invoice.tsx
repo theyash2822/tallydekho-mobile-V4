@@ -363,6 +363,8 @@ function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
             <Text style={acd.saveBtnTxt}>{saving ? 'Saving...' : 'Save Customer'}</Text>
           </TouchableOpacity>
         </View>
+        {/* Fill gap between sheet bottom and screen edge — prevents underlying screen from bleeding through */}
+        <View style={{ backgroundColor: '#FFFFFF', height: 150 }} />
       </KeyboardAvoidingView>
       </View>
     </Modal>
