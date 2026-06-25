@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput, Modal, TextInputProps, ActivityIndicator, Keyboard,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Pressable,
+  Platform, Alert, TextInput, Modal, TextInputProps, ActivityIndicator, Keyboard,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -277,14 +277,10 @@ function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={acd.backdrop}>
-        <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}
-        >
-        <View style={[acd.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+    <Modal visible={visible} animationType="slide" transparent presentationStyle="overFullScreen" statusBarTranslucent onRequestClose={onClose}>
+      <View style={acd.overlay}>
+        <Pressable style={acd.backdrop} onPress={onClose} />
+        <View style={[acd.sheet, { paddingBottom: insets.bottom + 16 }]}>
           <View style={acd.handle} />
           <View style={acd.header}>
             <Text style={acd.title}>New Customer</Text>
@@ -361,12 +357,13 @@ function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
             <TextInput style={[acd.input, panFocused && acd.inputFocused, webFix]} placeholder="Enter PAN/IT number" placeholderTextColor={COLORS.textTertiary} value={pan} onChangeText={v => setPan(v.toUpperCase())} autoCapitalize="characters" onFocus={() => setPanFocused(true)} onBlur={() => setPanFocused(false)} />
             <View style={{ height: 8 }} />
           </ScrollView>
-          <TouchableOpacity style={[acd.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSave} activeOpacity={0.85} disabled={saving}>
-            {saving && <ActivityIndicator size="small" color={COLORS.white} style={{ marginRight: 8 }} />}
-            <Text style={acd.saveBtnTxt}>{saving ? 'Saving...' : 'Save Customer'}</Text>
-          </TouchableOpacity>
+          <View style={acd.footer}>
+            <TouchableOpacity style={[acd.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSave} activeOpacity={0.85} disabled={saving}>
+              {saving && <ActivityIndicator size="small" color={COLORS.white} style={{ marginRight: 8 }} />}
+              <Text style={acd.saveBtnTxt}>{saving ? 'Saving...' : 'Save Customer'}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -2034,8 +2031,10 @@ const ir = StyleSheet.create({
 });
 
 const acd = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
-  sheet: { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%' },
+  overlay: { flex: 1, justifyContent: 'flex-end' },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
+  sheet: { width: '100%', maxHeight: '92%', backgroundColor: COLORS.cardBg, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
+  footer: { paddingHorizontal: SPACING.md, paddingTop: 12, paddingBottom: 4, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
   handle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   title: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
@@ -2064,7 +2063,7 @@ const acd = StyleSheet.create({
   dropItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   dropTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
   dropTxtActive: { fontWeight: '700', color: COLORS.brandPrimary },
-  saveBtn: { flexDirection: 'row', margin: SPACING.md, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
+  saveBtn: { flexDirection: 'row', backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
   saveBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
 });
 
