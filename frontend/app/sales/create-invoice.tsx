@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Pressable,
@@ -237,19 +237,20 @@ function StateAutocomplete({ value, onSelect }: { value: string; onSelect: (v: s
 }
 
 // ─── AddCustomerDrawer ────────────────────────────────────────────────────────
-function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
-  visible: boolean; onClose: () => void;
+export interface AddCustomerDrawerMethods { present: () => void; }
+
+const AddCustomerDrawer = forwardRef<AddCustomerDrawerMethods, {
+  onClose: () => void;
   onSaved: (name: string, success?: boolean) => void;
   company?: { guid?: string; name?: string } | null;
-}) {
+}>(function AddCustomerDrawer({ onClose, onSaved, company }, ref) {
   const sheetRef = useRef<BottomSheetModal>(null);
   const insets = useSafeAreaInsets();
   const snapPoints = useMemo(() => ['90%'], []);
 
-  useEffect(() => {
-    if (visible) sheetRef.current?.present();
-    else sheetRef.current?.dismiss();
-  }, [visible]);
+  useImperativeHandle(ref, () => ({
+    present: () => sheetRef.current?.present(),
+  }));
 
   const [name, setName] = useState('');
   const [openBal, setOpenBal] = useState('');
@@ -434,7 +435,7 @@ function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
       </View>
     </BottomSheetModal>
   );
-}
+});
 
 // ─── TaxEntryRow ─────────────────────────────────────────────────────────────
 function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
@@ -758,7 +759,7 @@ export default function CreateSalesInvoiceScreen() {
   const [ewbApplicable, setEwbApplicable] = useState(false);
   const [eInvoiceApplicable, setEInvoiceApplicable] = useState(false);
 
-  const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const addCustomerRef = useRef<AddCustomerDrawerMethods>(null);
   const [payTerms, setPayTerms] = useState('due_on_receipt');
   const [customDays, setCustomDays] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -1485,7 +1486,7 @@ export default function CreateSalesInvoiceScreen() {
               />
               {!party && (
                 <TouchableOpacity
-                  onPress={() => setShowAddCustomer(true)}
+                  onPress={() => addCustomerRef.current?.present()}
                   activeOpacity={0.6}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6, marginBottom: 2, paddingHorizontal: 2 }}
                 >
@@ -1924,14 +1925,13 @@ export default function CreateSalesInvoiceScreen() {
       <DatePickerModal visible={showTransportDocDatePicker} value={transportDocDate || new Date().toISOString().slice(0, 10)} maxDate={new Date().toISOString().slice(0, 10)} onSelect={(d) => { setTransportDocDate(d); setShowTransportDocDatePicker(false); }} onClose={() => setShowTransportDocDatePicker(false)} />
 
       <AddCustomerDrawer
-        visible={showAddCustomer}
+        ref={addCustomerRef}
         company={company}
-        onClose={() => setShowAddCustomer(false)}
+        onClose={() => {}}
         onSaved={(name, success) => {
           const newOpt: BSSOption = { label: name, value: name };
           setParties(prev => [...prev, newOpt]);
           setParty(name);
-          setShowAddCustomer(false);
           if (success !== false) Alert.alert('✓ Customer Added', `"${name}" has been added and selected.`);
         }}
       />
