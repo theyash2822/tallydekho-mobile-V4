@@ -296,6 +296,7 @@ const AddCustomerDrawer = forwardRef<AddCustomerDrawerMethods, {
       });
       const savedName = name.trim();
       resetForm();
+      sheetRef.current?.dismiss();
       if (result?.queued) Alert.alert('Queued', `"${savedName}" will be created in Tally when desktop connects.`);
       onSaved(savedName, true);
     } catch (err: any) {
@@ -303,7 +304,10 @@ const AddCustomerDrawer = forwardRef<AddCustomerDrawerMethods, {
       const msg = err?.message || '';
       const isOffline = msg.includes('offline') || msg.includes('not connected') || msg.includes('Desktop');
       if (isOffline) {
-        const savedName = name.trim(); resetForm(); onSaved(savedName, false);
+        const savedName = name.trim();
+        resetForm();
+        sheetRef.current?.dismiss();
+        onSaved(savedName, false);
         Alert.alert('Queued', `"${savedName}" will be created in Tally when desktop connects.`);
       } else {
         Alert.alert('Error', msg || 'Failed to create customer. Please try again.');
