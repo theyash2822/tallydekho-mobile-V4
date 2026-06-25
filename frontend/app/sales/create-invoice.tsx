@@ -190,18 +190,34 @@ function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
 // ─── StateDropdown ────────────────────────────────────────────────────────────
 function StateDropdown({ value, onSelect }: { value: string; onSelect: (v: string) => void }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const webFix = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
+  const filtered = query.trim()
+    ? INVOICE_STATES.filter(s => s.toLowerCase().includes(query.toLowerCase()))
+    : INVOICE_STATES;
   return (
     <View>
-      <TouchableOpacity style={[acd.selectBox, open && acd.selectBoxOpen]} onPress={() => setOpen(!open)} activeOpacity={0.7}>
+      <TouchableOpacity style={[acd.selectBox, open && acd.selectBoxOpen]}
+        onPress={() => { setOpen(!open); if (open) setQuery(''); }} activeOpacity={0.7}>
         <Text style={[acd.selectTxt, !value && { color: COLORS.textTertiary }]}>{value || 'Select state'}</Text>
         <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
       </TouchableOpacity>
       {open && (
         <View style={acd.dropList}>
+          <TextInput
+            style={[acd.stateSearch, webFix]}
+            placeholder="Search state…"
+            placeholderTextColor={COLORS.textTertiary}
+            value={query}
+            onChangeText={setQuery}
+            autoFocus
+          />
           <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            {INVOICE_STATES.map((st, idx) => (
-              <TouchableOpacity key={st} style={[acd.dropItem, idx === INVOICE_STATES.length - 1 && { borderBottomWidth: 0 }]}
-                onPress={() => { onSelect(st); setOpen(false); }} activeOpacity={0.7}>
+            {filtered.length === 0 ? (
+              <Text style={[acd.dropTxt, { padding: 12, color: COLORS.textTertiary }]}>No states found</Text>
+            ) : filtered.map((st, idx) => (
+              <TouchableOpacity key={st} style={[acd.dropItem, idx === filtered.length - 1 && { borderBottomWidth: 0 }]}
+                onPress={() => { onSelect(st); setOpen(false); setQuery(''); }} activeOpacity={0.7}>
                 <Text style={[acd.dropTxt, value === st && acd.dropTxtActive]}>{st}</Text>
                 {value === st && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
               </TouchableOpacity>
@@ -2072,6 +2088,7 @@ const acd = StyleSheet.create({
   selectBoxOpen: { borderColor: COLORS.brandPrimary },
   selectTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
   dropList: { backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, marginTop: 4, overflow: 'hidden' },
+  stateSearch: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, paddingHorizontal: 14, paddingVertical: 10, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, backgroundColor: COLORS.pageBg },
   dropItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   dropTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
   dropTxtActive: { fontWeight: '700', color: COLORS.brandPrimary },
