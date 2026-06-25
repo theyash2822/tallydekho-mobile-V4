@@ -260,7 +260,7 @@ function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
     if (!name.trim()) { Alert.alert('Required', 'Customer name is required.'); return; }
     setSaving(true);
     try {
-      await createTallyParty({
+      const result = await createTallyParty({
         companyGuid: company?.guid, companyName: company?.name,
         partyName: name.trim(), openingBalance: parseFloat(openBal) || 0, isCr,
         gstin: gstin.trim(), gstType, creditDays: parseInt(creditDays) || 0,
@@ -268,11 +268,23 @@ function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
         pincode, country: country || 'India',
         bankDetails: bank ? { beneficiaryName, bankName, accountNo, ifsc: ifscCode, branch: bankBranch } : undefined,
       });
-      const savedName = name.trim(); resetForm(); onSaved(savedName, true);
+      const savedName = name.trim();
+      resetForm();
+      if (result?.queued) {
+        Alert.alert('Queued', `"${savedName}" will be created in Tally when desktop connects.`);
+      }
+      onSaved(savedName, true);
     } catch (err: any) {
-      const isOffline = err?.message?.includes('offline') || err?.message?.includes('not connected') || err?.message?.includes('Desktop');
-      const savedName = name.trim(); resetForm(); onSaved(savedName, !isOffline);
-      if (isOffline) Alert.alert('Queued', `"${savedName}" will be created in Tally when desktop connects.`);
+      setSaving(false);
+      const msg = err?.message || '';
+      const isOffline = msg.includes('offline') || msg.includes('not connected') || msg.includes('Desktop');
+      if (isOffline) {
+        const savedName = name.trim(); resetForm(); onSaved(savedName, false);
+        Alert.alert('Queued', `"${savedName}" will be created in Tally when desktop connects.`);
+      } else {
+        // Real error — don't silently succeed
+        Alert.alert('Error', msg || 'Failed to create customer. Please try again.');
+      }
     } finally { setSaving(false); }
   };
 
