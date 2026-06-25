@@ -1411,11 +1411,21 @@ export default function CreateSalesInvoiceScreen() {
                 value={party}
                 onSelect={opt => setParty(opt.value)}
                 onClear={() => setParty('')}
-                onAddNew={() => setShowAddCustomer(true)}
-                addNewLabel="Add New Customer"
                 sheetTitle="Customer / Party"
                 icon="person-outline"
               />
+              {!party && (
+                <TouchableOpacity
+                  onPress={() => setShowAddCustomer(true)}
+                  activeOpacity={0.6}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6, marginBottom: 2, paddingHorizontal: 2 }}
+                >
+                  <Ionicons name="add-circle-outline" size={15} color={COLORS.brandPrimary} />
+                  <Text style={{ fontSize: TYPOGRAPHY.sm, color: COLORS.brandPrimary, fontWeight: '600' }}>
+                    Add New Customer
+                  </Text>
+                </TouchableOpacity>
+              )}
             </>
           )}
 
