@@ -306,6 +306,7 @@ function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
 
   return (
     <Modal visible={visible} animationType="slide" transparent presentationStyle="overFullScreen" statusBarTranslucent onRequestClose={onClose}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <View style={acd.overlay}>
         <Pressable style={acd.backdrop} onPress={onClose} />
         <View style={[acd.sheet, { paddingBottom: insets.bottom + 16 }]}>
@@ -383,7 +384,7 @@ function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
             <TextInput style={[acd.input, gstinFocused && acd.inputFocused, webFix]} placeholder="Enter GSTIN" placeholderTextColor={COLORS.textTertiary} value={gstin} onChangeText={v => setGstin(v.toUpperCase())} autoCapitalize="characters" onFocus={() => setGstinFocused(true)} onBlur={() => setGstinFocused(false)} />
             <Text style={acd.label}>PAN/IT No.</Text>
             <TextInput style={[acd.input, panFocused && acd.inputFocused, webFix]} placeholder="Enter PAN/IT number" placeholderTextColor={COLORS.textTertiary} value={pan} onChangeText={v => setPan(v.toUpperCase())} autoCapitalize="characters" onFocus={() => setPanFocused(true)} onBlur={() => setPanFocused(false)} />
-            <View style={{ height: 8 }} />
+            <View style={{ height: 24 }} />
           </ScrollView>
           <View style={acd.footer}>
             <TouchableOpacity style={[acd.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSave} activeOpacity={0.85} disabled={saving}>
@@ -393,6 +394,7 @@ function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
           </View>
         </View>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
