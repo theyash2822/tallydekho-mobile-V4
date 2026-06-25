@@ -27,6 +27,13 @@ import RegularOptionalToggle, { EntryType } from '../../src/components/forms/Reg
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
 import DatePickerModal, { formatDMY, parseDMY } from '../../src/components/forms/DatePickerModal';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
+import {
+  BottomSheetModal,
+  BottomSheetScrollView,
+  BottomSheetTextInput,
+  BottomSheetBackdrop,
+} from '@gorhom/bottom-sheet';
+import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const todayStr = () => {
@@ -187,37 +194,37 @@ function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
   );
 }
 
-// ─── StateDropdown ────────────────────────────────────────────────────────────
-function StateDropdown({ value, onSelect }: { value: string; onSelect: (v: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const webFix = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
-  const filtered = query.trim()
-    ? INVOICE_STATES.filter(s => s.toLowerCase().includes(query.toLowerCase()))
+// ─── StateAutocomplete ────────────────────────────────────────────────────────
+function StateAutocomplete({ value, onSelect }: { value: string; onSelect: (v: string) => void }) {
+  const [text, setText] = useState(value);
+  const [showSugg, setShowSugg] = useState(false);
+
+  useEffect(() => { setText(value); }, [value]);
+
+  const suggestions = text.trim()
+    ? INVOICE_STATES.filter(s => s.toLowerCase().includes(text.toLowerCase()))
     : INVOICE_STATES;
+
   return (
     <View>
-      <TouchableOpacity style={[acd.selectBox, open && acd.selectBoxOpen]}
-        onPress={() => { setOpen(!open); if (open) setQuery(''); }} activeOpacity={0.7}>
-        <Text style={[acd.selectTxt, !value && { color: COLORS.textTertiary }]}>{value || 'Select state'}</Text>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
-      </TouchableOpacity>
-      {open && (
-        <View style={acd.dropList}>
-          <TextInput
-            style={[acd.stateSearch, webFix]}
-            placeholder="Search state…"
-            placeholderTextColor={COLORS.textTertiary}
-            value={query}
-            onChangeText={setQuery}
-            autoFocus
-          />
-          <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            {filtered.length === 0 ? (
-              <Text style={[acd.dropTxt, { padding: 12, color: COLORS.textTertiary }]}>No states found</Text>
-            ) : filtered.map((st, idx) => (
-              <TouchableOpacity key={st} style={[acd.dropItem, idx === filtered.length - 1 && { borderBottomWidth: 0 }]}
-                onPress={() => { onSelect(st); setOpen(false); setQuery(''); }} activeOpacity={0.7}>
+      <BottomSheetTextInput
+        style={[acd.input, showSugg && acd.inputFocused] as any}
+        placeholder="Type to search state…"
+        placeholderTextColor={COLORS.textTertiary}
+        value={text}
+        onChangeText={v => { setText(v); setShowSugg(true); }}
+        onFocus={() => setShowSugg(true)}
+      />
+      {showSugg && suggestions.length > 0 && (
+        <View style={[acd.dropList, { maxHeight: 220 }]}>
+          <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            {suggestions.slice(0, 7).map((st, idx) => (
+              <TouchableOpacity
+                key={st}
+                style={[acd.dropItem, idx === Math.min(suggestions.length, 7) - 1 && { borderBottomWidth: 0 }]}
+                onPress={() => { onSelect(st); setText(st); setShowSugg(false); }}
+                activeOpacity={0.7}
+              >
                 <Text style={[acd.dropTxt, value === st && acd.dropTxtActive]}>{st}</Text>
                 {value === st && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
               </TouchableOpacity>
@@ -235,7 +242,15 @@ function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
   onSaved: (name: string, success?: boolean) => void;
   company?: { guid?: string; name?: string } | null;
 }) {
+  const sheetRef = useRef<BottomSheetModal>(null);
   const insets = useSafeAreaInsets();
+  const snapPoints = useMemo(() => ['90%'], []);
+
+  useEffect(() => {
+    if (visible) sheetRef.current?.present();
+    else sheetRef.current?.dismiss();
+  }, [visible]);
+
   const [name, setName] = useState('');
   const [openBal, setOpenBal] = useState('');
   const [isCr, setIsCr] = useState(false);
@@ -257,12 +272,6 @@ function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
   const [gstin, setGstin] = useState('');
   const [pan, setPan] = useState('');
   const [saving, setSaving] = useState(false);
-  const [nameFocused, setNameFocused] = useState(false);
-  const [creditFocused, setCreditFocused] = useState(false);
-  const [gstinFocused, setGstinFocused] = useState(false);
-  const [panFocused, setPanFocused] = useState(false);
-  const [balFocused, setBalFocused] = useState(false);
-  const webFix = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
 
   const resetForm = () => {
     setName(''); setOpenBal(''); setIsCr(false); setCreditDays('');
@@ -286,9 +295,7 @@ function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
       });
       const savedName = name.trim();
       resetForm();
-      if (result?.queued) {
-        Alert.alert('Queued', `"${savedName}" will be created in Tally when desktop connects.`);
-      }
+      if (result?.queued) Alert.alert('Queued', `"${savedName}" will be created in Tally when desktop connects.`);
       onSaved(savedName, true);
     } catch (err: any) {
       setSaving(false);
@@ -298,104 +305,134 @@ function AddCustomerDrawer({ visible, onClose, onSaved, company }: {
         const savedName = name.trim(); resetForm(); onSaved(savedName, false);
         Alert.alert('Queued', `"${savedName}" will be created in Tally when desktop connects.`);
       } else {
-        // Real error — don't silently succeed
         Alert.alert('Error', msg || 'Failed to create customer. Please try again.');
       }
     } finally { setSaving(false); }
   };
 
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} onPress={onClose} />
+    ), [onClose]
+  );
+
   return (
-    <Modal visible={visible} animationType="slide" transparent presentationStyle="overFullScreen" statusBarTranslucent onRequestClose={onClose}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <View style={acd.overlay}>
-        <Pressable style={acd.backdrop} onPress={onClose} />
-        <View style={[acd.sheet, { paddingBottom: insets.bottom + 16 }]}>
-          <View style={acd.handle} />
-          <View style={acd.header}>
-            <Text style={acd.title}>New Customer</Text>
-            <Text style={acd.subtitle}>Sundry Debtors</Text>
-            <TouchableOpacity onPress={onClose} style={acd.closeBtn}>
-              <Ionicons name="close" size={22} color={COLORS.textPrimary} />
-            </TouchableOpacity>
-          </View>
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={acd.body}>
-            <Text style={acd.label}>Name <Text style={acd.star}>*</Text></Text>
-            <TextInput style={[acd.input, nameFocused && acd.inputFocused, webFix]} placeholder="Enter customer name" placeholderTextColor={COLORS.textTertiary} value={name} onChangeText={setName} onFocus={() => setNameFocused(true)} onBlur={() => setNameFocused(false)} />
-            <Text style={acd.label}>Opening Balance</Text>
-            <View style={[acd.balBox, balFocused && acd.inputFocused]}>
-              <TextInput style={[acd.balInput, webFix]} placeholder="0.00" placeholderTextColor={COLORS.textTertiary} value={openBal} onChangeText={setOpenBal} keyboardType="numeric" onFocus={() => setBalFocused(true)} onBlur={() => setBalFocused(false)} />
-              <View style={acd.drCrRow}>
-                <Text style={[acd.drCrLbl, !isCr && acd.drCrLblActive]}>Dr</Text>
-                <BrandSwitch value={isCr} onValueChange={setIsCr} />
-                <Text style={[acd.drCrLbl, isCr && acd.drCrLblActive]}>Cr</Text>
-              </View>
-            </View>
-            <Text style={acd.label}>Credit Period (Days)</Text>
-            <TextInput style={[acd.input, creditFocused && acd.inputFocused, webFix]} placeholder="Enter credit period" placeholderTextColor={COLORS.textTertiary} value={creditDays} onChangeText={setCreditDays} keyboardType="numeric" onFocus={() => setCreditFocused(true)} onBlur={() => setCreditFocused(false)} />
-            <View style={acd.divider} />
-            <View style={acd.toggleRow}>
-              <Text style={acd.toggleLbl}>Enable Mailing Details</Text>
-              <BrandSwitch value={mailing} onValueChange={setMailing} />
-            </View>
-            {mailing && (
-              <View style={acd.expandSection}>
-                <Text style={acd.label}>Mailing Name</Text>
-                <TextInput style={[acd.input, webFix]} placeholder="Enter mailing name" placeholderTextColor={COLORS.textTertiary} value={mailingName} onChangeText={setMailingName} />
-                <Text style={acd.label}>Address</Text>
-                <TextInput style={[acd.input, acd.textarea, webFix]} placeholder="Enter address" placeholderTextColor={COLORS.textTertiary} value={address} onChangeText={setAddress} multiline numberOfLines={3} />
-                <Text style={acd.label}>State</Text>
-                <StateDropdown value={stateVal} onSelect={setStateVal} />
-                <View style={acd.row2}>
-                  <View style={{ flex: 1 }}><Text style={acd.label}>Pincode</Text><TextInput style={[acd.input, webFix]} placeholder="Pincode" placeholderTextColor={COLORS.textTertiary} value={pincode} onChangeText={setPincode} keyboardType="numeric" /></View>
-                  <View style={{ flex: 1 }}><Text style={acd.label}>Country</Text><TextInput style={[acd.input, webFix]} value={country} onChangeText={setCountry} placeholderTextColor={COLORS.textTertiary} /></View>
-                </View>
-              </View>
-            )}
-            <View style={acd.toggleRow}>
-              <Text style={acd.toggleLbl}>Provide Bank Details</Text>
-              <BrandSwitch value={bank} onValueChange={setBank} />
-            </View>
-            {bank && (
-              <View style={acd.expandSection}>
-                <Text style={acd.label}>Beneficiary Name</Text><TextInput style={[acd.input, webFix]} placeholder="Enter beneficiary name" placeholderTextColor={COLORS.textTertiary} value={beneficiaryName} onChangeText={setBeneficiaryName} />
-                <Text style={acd.label}>Bank Name</Text><TextInput style={[acd.input, webFix]} placeholder="Enter bank name" placeholderTextColor={COLORS.textTertiary} value={bankName} onChangeText={setBankName} />
-                <Text style={acd.label}>Account Number</Text><TextInput style={[acd.input, webFix]} placeholder="Enter account number" placeholderTextColor={COLORS.textTertiary} value={accountNo} onChangeText={setAccountNo} keyboardType="numeric" />
-                <Text style={acd.label}>IFSC Code</Text><TextInput style={[acd.input, webFix]} placeholder="Enter IFSC code" placeholderTextColor={COLORS.textTertiary} value={ifscCode} onChangeText={v => setIfscCode(v.toUpperCase())} autoCapitalize="characters" />
-                <Text style={acd.label}>Bank Branch</Text><TextInput style={[acd.input, webFix]} placeholder="Enter branch name" placeholderTextColor={COLORS.textTertiary} value={bankBranch} onChangeText={setBankBranch} />
-              </View>
-            )}
-            <View style={acd.divider} />
-            <Text style={acd.label}>GST Registration Type <Text style={acd.star}>*</Text></Text>
-            <TouchableOpacity style={[acd.selectBox, gstOpen && acd.selectBoxOpen]} onPress={() => setGstOpen(!gstOpen)} activeOpacity={0.7}>
-              <Text style={acd.selectTxt}>{gstType}</Text>
-              <Ionicons name={gstOpen ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-            {gstOpen && (
-              <View style={acd.dropList}>
-                {GST_TYPES.map((t, idx) => (
-                  <TouchableOpacity key={t} style={[acd.dropItem, idx === GST_TYPES.length - 1 && { borderBottomWidth: 0 }]} onPress={() => { setGstType(t); setGstOpen(false); }} activeOpacity={0.7}>
-                    <Text style={[acd.dropTxt, gstType === t && acd.dropTxtActive]}>{t}</Text>
-                    {gstType === t && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-            <Text style={acd.label}>GSTIN <Text style={acd.star}>*</Text></Text>
-            <TextInput style={[acd.input, gstinFocused && acd.inputFocused, webFix]} placeholder="Enter GSTIN" placeholderTextColor={COLORS.textTertiary} value={gstin} onChangeText={v => setGstin(v.toUpperCase())} autoCapitalize="characters" onFocus={() => setGstinFocused(true)} onBlur={() => setGstinFocused(false)} />
-            <Text style={acd.label}>PAN/IT No.</Text>
-            <TextInput style={[acd.input, panFocused && acd.inputFocused, webFix]} placeholder="Enter PAN/IT number" placeholderTextColor={COLORS.textTertiary} value={pan} onChangeText={v => setPan(v.toUpperCase())} autoCapitalize="characters" onFocus={() => setPanFocused(true)} onBlur={() => setPanFocused(false)} />
-            <View style={{ height: 24 }} />
-          </ScrollView>
-          <View style={acd.footer}>
-            <TouchableOpacity style={[acd.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSave} activeOpacity={0.85} disabled={saving}>
-              {saving && <ActivityIndicator size="small" color={COLORS.white} style={{ marginRight: 8 }} />}
-              <Text style={acd.saveBtnTxt}>{saving ? 'Saving...' : 'Save Customer'}</Text>
-            </TouchableOpacity>
+    <BottomSheetModal
+      ref={sheetRef}
+      snapPoints={snapPoints}
+      enableDynamicSizing={false}
+      backdropComponent={renderBackdrop}
+      onDismiss={onClose}
+      keyboardBehavior="extend"
+      keyboardBlurBehavior="restore"
+      backgroundStyle={{ backgroundColor: COLORS.cardBg }}
+      handleIndicatorStyle={{ backgroundColor: COLORS.borderStrong, width: 40 }}
+    >
+      <View style={acd.header}>
+        <Text style={acd.title}>New Customer</Text>
+        <Text style={acd.subtitle}>Sundry Debtors</Text>
+        <TouchableOpacity onPress={onClose} style={acd.closeBtn}>
+          <Ionicons name="close" size={22} color={COLORS.textPrimary} />
+        </TouchableOpacity>
+      </View>
+
+      <BottomSheetScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={[acd.body, { paddingBottom: insets.bottom + 80 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={acd.label}>Name <Text style={acd.star}>*</Text></Text>
+        <BottomSheetTextInput style={acd.input as any} placeholder="Enter customer name" placeholderTextColor={COLORS.textTertiary} value={name} onChangeText={setName} />
+
+        <Text style={acd.label}>Opening Balance</Text>
+        <View style={acd.balBox}>
+          <BottomSheetTextInput style={acd.balInput as any} placeholder="0.00" placeholderTextColor={COLORS.textTertiary} value={openBal} onChangeText={setOpenBal} keyboardType="numeric" />
+          <View style={acd.drCrRow}>
+            <Text style={[acd.drCrLbl, !isCr && acd.drCrLblActive]}>Dr</Text>
+            <BrandSwitch value={isCr} onValueChange={setIsCr} />
+            <Text style={[acd.drCrLbl, isCr && acd.drCrLblActive]}>Cr</Text>
           </View>
         </View>
+
+        <Text style={acd.label}>Credit Period (Days)</Text>
+        <BottomSheetTextInput style={acd.input as any} placeholder="Enter credit period" placeholderTextColor={COLORS.textTertiary} value={creditDays} onChangeText={setCreditDays} keyboardType="numeric" />
+
+        <View style={acd.divider} />
+        <View style={acd.toggleRow}>
+          <Text style={acd.toggleLbl}>Enable Mailing Details</Text>
+          <BrandSwitch value={mailing} onValueChange={setMailing} />
+        </View>
+        {mailing && (
+          <View style={acd.expandSection}>
+            <Text style={acd.label}>Mailing Name</Text>
+            <BottomSheetTextInput style={acd.input as any} placeholder="Enter mailing name" placeholderTextColor={COLORS.textTertiary} value={mailingName} onChangeText={setMailingName} />
+            <Text style={acd.label}>Address</Text>
+            <BottomSheetTextInput style={[acd.input, acd.textarea] as any} placeholder="Enter address" placeholderTextColor={COLORS.textTertiary} value={address} onChangeText={setAddress} multiline numberOfLines={3} />
+            <Text style={acd.label}>State</Text>
+            <StateAutocomplete value={stateVal} onSelect={setStateVal} />
+            <View style={acd.row2}>
+              <View style={{ flex: 1 }}>
+                <Text style={acd.label}>Pincode</Text>
+                <BottomSheetTextInput style={acd.input as any} placeholder="Pincode" placeholderTextColor={COLORS.textTertiary} value={pincode} onChangeText={setPincode} keyboardType="numeric" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={acd.label}>Country</Text>
+                <BottomSheetTextInput style={acd.input as any} value={country} onChangeText={setCountry} placeholderTextColor={COLORS.textTertiary} />
+              </View>
+            </View>
+          </View>
+        )}
+
+        <View style={acd.toggleRow}>
+          <Text style={acd.toggleLbl}>Provide Bank Details</Text>
+          <BrandSwitch value={bank} onValueChange={setBank} />
+        </View>
+        {bank && (
+          <View style={acd.expandSection}>
+            <Text style={acd.label}>Beneficiary Name</Text>
+            <BottomSheetTextInput style={acd.input as any} placeholder="Enter beneficiary name" placeholderTextColor={COLORS.textTertiary} value={beneficiaryName} onChangeText={setBeneficiaryName} />
+            <Text style={acd.label}>Bank Name</Text>
+            <BottomSheetTextInput style={acd.input as any} placeholder="Enter bank name" placeholderTextColor={COLORS.textTertiary} value={bankName} onChangeText={setBankName} />
+            <Text style={acd.label}>Account Number</Text>
+            <BottomSheetTextInput style={acd.input as any} placeholder="Enter account number" placeholderTextColor={COLORS.textTertiary} value={accountNo} onChangeText={setAccountNo} keyboardType="numeric" />
+            <Text style={acd.label}>IFSC Code</Text>
+            <BottomSheetTextInput style={acd.input as any} placeholder="Enter IFSC code" placeholderTextColor={COLORS.textTertiary} value={ifscCode} onChangeText={v => setIfscCode(v.toUpperCase())} autoCapitalize="characters" />
+            <Text style={acd.label}>Bank Branch</Text>
+            <BottomSheetTextInput style={acd.input as any} placeholder="Enter branch name" placeholderTextColor={COLORS.textTertiary} value={bankBranch} onChangeText={setBankBranch} />
+          </View>
+        )}
+
+        <View style={acd.divider} />
+        <Text style={acd.label}>GST Registration Type <Text style={acd.star}>*</Text></Text>
+        <TouchableOpacity style={[acd.selectBox, gstOpen && acd.selectBoxOpen]} onPress={() => setGstOpen(!gstOpen)} activeOpacity={0.7}>
+          <Text style={acd.selectTxt}>{gstType}</Text>
+          <Ionicons name={gstOpen ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
+        </TouchableOpacity>
+        {gstOpen && (
+          <View style={acd.dropList}>
+            {GST_TYPES.map((t, idx) => (
+              <TouchableOpacity key={t} style={[acd.dropItem, idx === GST_TYPES.length - 1 && { borderBottomWidth: 0 }]} onPress={() => { setGstType(t); setGstOpen(false); }} activeOpacity={0.7}>
+                <Text style={[acd.dropTxt, gstType === t && acd.dropTxtActive]}>{t}</Text>
+                {gstType === t && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        <Text style={acd.label}>GSTIN</Text>
+        <BottomSheetTextInput style={acd.input as any} placeholder="Enter GSTIN" placeholderTextColor={COLORS.textTertiary} value={gstin} onChangeText={v => setGstin(v.toUpperCase())} autoCapitalize="characters" />
+
+        <Text style={acd.label}>PAN/IT No.</Text>
+        <BottomSheetTextInput style={acd.input as any} placeholder="Enter PAN/IT number" placeholderTextColor={COLORS.textTertiary} value={pan} onChangeText={v => setPan(v.toUpperCase())} autoCapitalize="characters" />
+      </BottomSheetScrollView>
+
+      <View style={[acd.footer, { paddingBottom: insets.bottom + 8 }]}>
+        <TouchableOpacity style={[acd.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSave} activeOpacity={0.85} disabled={saving}>
+          {saving && <ActivityIndicator size="small" color={COLORS.white} style={{ marginRight: 8 }} />}
+          <Text style={acd.saveBtnTxt}>{saving ? 'Saving...' : 'Save Customer'}</Text>
+        </TouchableOpacity>
       </View>
-      </KeyboardAvoidingView>
-    </Modal>
+    </BottomSheetModal>
   );
 }
 
