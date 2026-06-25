@@ -161,49 +161,49 @@ export default function BottomSheetSearch({
           </TouchableOpacity>
         </View>
 
-        {/* Search bar + inline New button row */}
-        <View style={s.searchRow}>
-          <View style={s.searchWrap}>
-            <Ionicons name="search" size={16} color={COLORS.textTertiary} style={{ marginRight: 8 }} />
-            <BottomSheetTextInput
-              style={s.searchInput as any}
-              value={query}
-              onChangeText={setQuery}
-              placeholder={searchPlaceholder || `Search ${(sheetTitle || label || '').toLowerCase()}...`}
-              placeholderTextColor={COLORS.textTertiary}
-              autoFocus={false}
-              returnKeyType="search"
-              autoCorrect={false}
-              autoCapitalize="none"
-              clearButtonMode="while-editing"
-            />
-            {query.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setQuery('')}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              >
-                <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-              </TouchableOpacity>
-            )}
-          </View>
-          {onAddNew && (
+        {/* Search bar — full width */}
+        <View style={s.searchWrap}>
+          <Ionicons name="search" size={16} color={COLORS.textTertiary} style={{ marginRight: 8 }} />
+          <BottomSheetTextInput
+            style={s.searchInput as any}
+            value={query}
+            onChangeText={setQuery}
+            placeholder={searchPlaceholder || `Search ${(sheetTitle || label || '').toLowerCase()}...`}
+            placeholderTextColor={COLORS.textTertiary}
+            autoFocus={false}
+            returnKeyType="search"
+            autoCorrect={false}
+            autoCapitalize="none"
+            clearButtonMode="while-editing"
+          />
+          {query.length > 0 && (
             <TouchableOpacity
-              style={s.addNewInline}
-              onPress={() => { handleClose(); onAddNew!(); }}
-              activeOpacity={0.7}
+              onPress={() => setQuery('')}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
-              <Ionicons name="add" size={16} color={COLORS.brandPrimary} />
-              <Text style={s.addNewInlineTxt}>New</Text>
+              <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
             </TouchableOpacity>
           )}
         </View>
+
+        {/* Add New button — always visible, below search bar */}
+        {onAddNew && (
+          <TouchableOpacity
+            style={s.addNewBelowSearch}
+            onPress={() => { handleClose(); onAddNew!(); }}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="add-circle-outline" size={18} color={COLORS.brandPrimary} />
+            <Text style={s.addNewBelowSearchTxt}>{addNewLabel || 'Add New'}</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Options list — BottomSheetFlatList handles scroll inside sheet */}
         <BottomSheetFlatList
           data={filtered}
           keyExtractor={(item, idx) => item.value || String(idx)}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+          contentContainerStyle={{ paddingTop: 8, paddingBottom: insets.bottom + 16 }}
           ListEmptyComponent={
             <View style={s.empty}>
               <Ionicons name="search-outline" size={20} color={COLORS.textTertiary} />
@@ -276,28 +276,27 @@ const s = StyleSheet.create({
   sheetTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
   closeBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
 
-  // Search row = 80% search + 20% New button
-  searchRow: {
-    flexDirection: 'row', alignItems: 'center',
-    margin: SPACING.md, gap: 8,
-  },
+  // Search bar
   searchWrap: {
-    flex: 4, flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center',
+    marginHorizontal: SPACING.md, marginTop: SPACING.md, marginBottom: 0,
     backgroundColor: COLORS.pageBg,
     borderRadius: RADIUS.md, paddingHorizontal: 12, minHeight: 44,
     borderWidth: 1, borderColor: COLORS.borderDefault,
   },
-  addNewInline: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: COLORS.brandPrimary + '18',
-    borderRadius: RADIUS.md, minHeight: 44, gap: 3,
-    borderWidth: 1, borderColor: COLORS.brandPrimary + '50',
-  },
-  addNewInlineTxt: {
-    fontSize: TYPOGRAPHY.sm, fontWeight: '700' as const, color: COLORS.brandPrimary,
-  },
   searchInput: {
     flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, paddingVertical: 8,
+  },
+  // Add New — fixed row below search, always visible
+  addNewBelowSearch: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginHorizontal: SPACING.md, marginTop: 8,
+    backgroundColor: COLORS.brandPrimary + '12',
+    borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 11,
+    borderWidth: 1, borderColor: COLORS.brandPrimary + '40',
+  },
+  addNewBelowSearchTxt: {
+    fontSize: TYPOGRAPHY.base, fontWeight: '600' as const, color: COLORS.brandPrimary,
   },
 
   // Options
