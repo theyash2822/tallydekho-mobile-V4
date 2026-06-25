@@ -17,6 +17,8 @@ export interface BSSOption {
   label: string;
   value: string;
   subtitle?: string;
+  /** Optional sub-type tag — e.g. 'Cash' | 'Bank' for payment ledger filtering */
+  sub?: string;
 }
 
 interface Props {
@@ -47,8 +49,8 @@ export default function BottomSheetSearch({
   const sheetRef = useRef<BottomSheetModal>(null);
   const insets = useSafeAreaInsets();
 
-  // 60% default, 90% when keyboard is open
-  const snapPoints = useMemo(() => ['60%', '90%'], []);
+  // Always open at 90% — v5 requires enableDynamicSizing={false} to honour snapPoints
+  const snapPoints = useMemo(() => ['90%'], []);
 
   const selected = options.find(o => o.value === value);
   const displayText = selected?.label || '';
@@ -142,6 +144,7 @@ export default function BottomSheetSearch({
         ref={sheetRef}
         snapPoints={snapPoints}
         enablePanDownToClose
+        enableDynamicSizing={false}
         backdropComponent={renderBackdrop}
         keyboardBehavior="extend"
         keyboardBlurBehavior="restore"
