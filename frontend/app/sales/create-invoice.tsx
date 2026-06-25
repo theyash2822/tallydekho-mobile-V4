@@ -92,7 +92,7 @@ const PAY_MODES: DropdownOption[] = [
   { label: 'IMPS', value: 'imps' },
 ];
 
-const GST_TYPES = ['Regular', 'Unregistered', 'Composition'];
+const GST_TYPES = ['Regular', 'Composition', 'Unregistered/Consumer', 'Consumer', 'SEZ', 'Overseas'];
 const INVOICE_STATES = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
   'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
