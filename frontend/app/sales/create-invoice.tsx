@@ -835,7 +835,14 @@ export default function CreateSalesInvoiceScreen() {
       if (!raw) return;
       try {
         const d = JSON.parse(raw);
-        if (d?.party || d?.items?.some((i: any) => i.product)) setShowDraftBanner(true);
+        const DRAFT_TTL_MS = 30 * 60 * 1000; // 30 minutes
+        const isRecent = d?.savedAt && (Date.now() - d.savedAt) < DRAFT_TTL_MS;
+        if (isRecent && (d?.party || d?.items?.some((i: any) => i.product))) {
+          setShowDraftBanner(true);
+        } else if (!isRecent) {
+          // silently discard stale draft
+          AsyncStorage.removeItem(key).catch(() => {});
+        }
       } catch { /* ignore bad draft */ }
     }).catch(() => {});
   }, [company?.guid]);
@@ -843,6 +850,10 @@ export default function CreateSalesInvoiceScreen() {
   // ── Draft: auto-save on any significant field change (debounced 800ms) ───
   useEffect(() => {
     if (!company?.guid) return;
+    // Guard: only save if the form has meaningful data — prevents overwriting a real
+    // draft with an empty form on mount (which would break the Resume banner flow)
+    const hasMeaningfulData = !!party || items.some(i => i.product);
+    if (!hasMeaningfulData) return;
     if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
     draftSaveTimer.current = setTimeout(() => {
       const draft = {
@@ -854,6 +865,7 @@ export default function CreateSalesInvoiceScreen() {
         transportDocNo, transportDocDate,
         collectPayNow, payNowMode, payNowAmount, payNowLedger, payNowRef,
         numberingPolicy,
+        savedAt: Date.now(),
       };
       AsyncStorage.setItem(`tdinvoice_draft_${company.guid}`, JSON.stringify(draft)).catch(() => {});
     }, 800);
