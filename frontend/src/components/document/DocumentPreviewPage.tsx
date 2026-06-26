@@ -593,8 +593,8 @@ function DispatchBlock({ doc }: { doc: VoucherDocument }) {
   if (!d) return null;
 
   const rows: { label: string; value: string }[] = [
-    (d.dispatch_from_address || d.dispatch_from_place) ? { label: 'Dispatch From', value: [d.dispatch_from_address || d.dispatch_from_place, d.dispatch_from_state, d.dispatch_from_pincode].filter(Boolean).join(', ') } : null,
-    d.ship_to_address || d.ship_to_place || d.ship_to_destination ? { label: 'Ship To', value: [d.ship_to_address || d.ship_to_place || d.ship_to_destination, d.ship_to_state].filter(Boolean).join(', ') } : null,
+    (d.dispatch_from_address || d.dispatch_from_place || d.dispatch_from) ? { label: 'Dispatch From', value: [d.dispatch_from_address || d.dispatch_from_place || d.dispatch_from, d.dispatch_from_state, d.dispatch_from_pincode].filter(Boolean).join(', ') } : null,
+    (d.ship_to_address || d.ship_to_place || d.ship_to_destination || d.ship_to) ? { label: 'Ship To', value: [d.ship_to_address || d.ship_to_place || d.ship_to_destination || d.ship_to, d.ship_to_state].filter(Boolean).join(', ') } : null,
     d.transport_mode_simple || d.transport_mode ? { label: 'Transport Mode', value: d.transport_mode_simple || d.transport_mode || '' } : null,
     d.vehicle_number ? { label: 'Vehicle No.', value: d.vehicle_number } : null,
     d.vehicle_type   ? { label: 'Vehicle Type', value: d.vehicle_type } : null,

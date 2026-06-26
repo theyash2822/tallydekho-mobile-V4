@@ -87,6 +87,12 @@ export interface Totals {
 
 export interface PaymentDetails {
   mode: string;
+  /** Tally ledger name used for the payment (e.g. 'HDFC Bank', 'Cash') */
+  ledgerName?: string;
+  /** Payment amount collected at time of invoice */
+  amount?: number;
+  /** Payment reference / UTR / cheque number */
+  reference?: string;
   bankName?: string;
   accountNo?: string;
   ifsc?: string;
@@ -119,10 +125,14 @@ export interface FooterInfo {
 
 // ── Master Document Model ─────────────────────────────────────────────────────
 export interface DispatchDetails {
+  /** Tally-synced vouchers use address/place; app-created vouchers use dispatch_from */
+  dispatch_from?: string;
   dispatch_from_address?: string;
   dispatch_from_place?: string;
   dispatch_from_state?: string;
   dispatch_from_pincode?: string;
+  /** Tally-synced vouchers use address/place; app-created vouchers use ship_to */
+  ship_to?: string;
   ship_to_address?: string;
   ship_to_place?: string;
   ship_to_state?: string;
