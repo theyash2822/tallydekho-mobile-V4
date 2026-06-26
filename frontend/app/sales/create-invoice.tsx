@@ -268,6 +268,7 @@ const AddCustomerDrawer = forwardRef<AddCustomerDrawerMethods, {
   const [accountNo, setAccountNo] = useState('');
   const [ifscCode, setIfscCode] = useState('');
   const [bankBranch, setBankBranch] = useState('');
+  const [phone, setPhone] = useState('');
   const [gstType, setGstType] = useState('Regular');
   const [gstOpen, setGstOpen] = useState(false);
   const [gstin, setGstin] = useState('');
@@ -277,7 +278,7 @@ const AddCustomerDrawer = forwardRef<AddCustomerDrawerMethods, {
   const resetForm = () => {
     setName(''); setOpenBal(''); setIsCr(false); setCreditDays('');
     setMailing(false); setBank(false); setGstType('Regular');
-    setGstin(''); setPan(''); setSaving(false);
+    setGstin(''); setPan(''); setPhone(''); setSaving(false);
     setMailingName(''); setAddress(''); setStateVal(''); setPincode('');
     setBeneficiaryName(''); setBankName(''); setAccountNo(''); setIfscCode(''); setBankBranch('');
   };
@@ -289,7 +290,7 @@ const AddCustomerDrawer = forwardRef<AddCustomerDrawerMethods, {
       const result = await createTallyParty({
         companyGuid: company?.guid, companyName: company?.name,
         partyName: name.trim(), openingBalance: parseFloat(openBal) || 0, isCr,
-        gstin: gstin.trim(), gstType, pan: pan.trim(), creditDays: parseInt(creditDays) || 0,
+        gstin: gstin.trim(), gstType, pan: pan.trim(), phone: phone.trim(), creditDays: parseInt(creditDays) || 0,
         mailingName: mailingName || name.trim(), address, state: stateVal,
         pincode, country: country || 'India',
         bankDetails: bank ? { beneficiaryName, bankName, accountNo, ifsc: ifscCode, branch: bankBranch } : undefined,
@@ -358,6 +359,9 @@ const AddCustomerDrawer = forwardRef<AddCustomerDrawerMethods, {
             <Text style={[acd.drCrLbl, isCr && acd.drCrLblActive]}>Cr</Text>
           </View>
         </View>
+
+        <Text style={acd.label}>Mobile Number</Text>
+        <BottomSheetTextInput style={acd.input as any} placeholder="Enter mobile number" placeholderTextColor={COLORS.textTertiary} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
 
         <Text style={acd.label}>Credit Period (Days)</Text>
         <BottomSheetTextInput style={acd.input as any} placeholder="Enter credit period" placeholderTextColor={COLORS.textTertiary} value={creditDays} onChangeText={setCreditDays} keyboardType="numeric" />

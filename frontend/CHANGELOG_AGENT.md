@@ -1,5 +1,24 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-06-26 — AddCustomerDrawer PAN + Document Type Fixes
+
+### Fixed
+- `pan: pan.trim()` added to `createTallyParty()` payload in `AddCustomerDrawer` `handleSave()` — PAN was captured in form state but never sent to backend
+- `DispatchDetails` type: added optional `dispatch_from` and `ship_to` direct fields (fallback for Tally-synced vouchers)
+- `PaymentDetails` type: added optional `ledgerName`, `amount`, `reference` fields
+- `DocumentPreviewPage.tsx` `DispatchBlock`: added `d.dispatch_from` / `d.ship_to` as fallback in dispatch display
+
+### Files Changed
+- `app/sales/create-invoice.tsx` — `handleSave()` in `AddCustomerDrawer` only
+- `src/types/document.ts` — type additions
+- `src/components/document/DocumentPreviewPage.tsx` — `DispatchBlock` fallback fields
+
+### Commits
+- `03abede7` — PAN fix
+- `909524d5` — document type + dispatch fallback
+
+---
+
 ## 2026-06-09 — Barcode Scan Failure Fix (Mobile)
 
 ### Root Causes Found & Fixed
