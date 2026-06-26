@@ -744,6 +744,8 @@ export default function CreateSalesInvoiceScreen() {
   const [date, setDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [party, setParty] = useState('');
+  const [partyGstin, setPartyGstin] = useState('');
+  const [partyGstRegType, setPartyGstRegType] = useState('');
   const [parties, setParties] = useState<BSSOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -818,7 +820,12 @@ export default function CreateSalesInvoiceScreen() {
     if (!company?.guid) return;
     getParties(company.guid).then((res: any) => {
       const list = res?.data || [];
-      if (list.length > 0) setParties(list.map((p: any) => ({ label: p.name, value: p.name })));
+      if (list.length > 0) setParties(list.map((p: any) => ({
+        label: p.name,
+        value: p.name,
+        subtitle: p.gstin ? `GSTIN: ${p.gstin}` : undefined,
+        data: { gstin: p.gstin || '', gst_registration_type: p.gst_registration_type || '', guid: p.guid || '' },
+      })));
     }).catch(() => {});
   }, [company?.guid]);
 
@@ -1483,12 +1490,29 @@ export default function CreateSalesInvoiceScreen() {
                 placeholder="Search customer..."
                 options={parties}
                 value={party}
-                onSelect={opt => setParty(opt.value)}
-                onClear={() => setParty('')}
+                onSelect={opt => {
+                  setParty(opt.value);
+                  setPartyGstin(opt.data?.gstin || '');
+                  setPartyGstRegType(opt.data?.gst_registration_type || '');
+                }}
+                onClear={() => { setParty(''); setPartyGstin(''); setPartyGstRegType(''); }}
                 sheetTitle="Customer / Party"
                 icon="person-outline"
               />
-              {!party && (
+              {party && partyGstin ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5, marginBottom: 2, paddingHorizontal: 2 }}>
+                  <Ionicons name="shield-checkmark-outline" size={13} color={COLORS.positive} />
+                  <Text style={{ fontSize: TYPOGRAPHY.xs, color: COLORS.positive, fontWeight: '600' }}>{partyGstin}</Text>
+                  {partyGstRegType ? (
+                    <Text style={{ fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary }}>· {partyGstRegType}</Text>
+                  ) : null}
+                </View>
+              ) : party && !partyGstin ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5, marginBottom: 2, paddingHorizontal: 2 }}>
+                  <Ionicons name="alert-circle-outline" size={13} color={COLORS.textTertiary} />
+                  <Text style={{ fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary }}>No GSTIN registered</Text>
+                </View>
+              ) : (
                 <TouchableOpacity
                   onPress={() => addCustomerRef.current?.present()}
                   activeOpacity={0.6}

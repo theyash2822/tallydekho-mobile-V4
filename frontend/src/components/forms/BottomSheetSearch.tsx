@@ -19,6 +19,8 @@ export interface BSSOption {
   subtitle?: string;
   /** Optional sub-type tag — e.g. 'Cash' | 'Bank' for payment ledger filtering */
   sub?: string;
+  /** Arbitrary extra data attached to the option (e.g. gstin, guid) */
+  data?: Record<string, any>;
 }
 
 interface Props {

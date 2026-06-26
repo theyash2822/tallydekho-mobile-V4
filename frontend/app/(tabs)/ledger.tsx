@@ -31,6 +31,8 @@ interface LedgerItem {
   type: 'credit' | 'debit';
   nature?: string;
   phone?: string;
+  gstin?: string;
+  gst_registration_type?: string;
   lastUpdated: string;
 }
 
@@ -497,6 +499,8 @@ export default function LedgerScreen() {
     type: (r.balance_type === 'Cr') ? 'credit' : 'debit',
     nature: r.nature || '',
     phone: r.mobile || r.phone || '',
+    gstin: r.gstin || '',
+    gst_registration_type: r.gst_registration_type || '',
     lastUpdated: r.updated_at || r.alter_date || '',
   });
 
@@ -911,6 +915,11 @@ export default function LedgerScreen() {
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
                 <Text style={styles.itemGroup}>{item.group}</Text>
+                {item.gstin ? (
+                  <Text style={{ fontSize: 10, color: COLORS.positive, marginTop: 1, fontWeight: '500' }} numberOfLines={1}>
+                    {item.gstin}
+                  </Text>
+                ) : null}
               </View>
               {/* Right: balance + Cr/Dr badge */}
               <View style={styles.itemRight}>
