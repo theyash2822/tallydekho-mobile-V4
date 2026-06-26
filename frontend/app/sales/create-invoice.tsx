@@ -289,7 +289,7 @@ const AddCustomerDrawer = forwardRef<AddCustomerDrawerMethods, {
       const result = await createTallyParty({
         companyGuid: company?.guid, companyName: company?.name,
         partyName: name.trim(), openingBalance: parseFloat(openBal) || 0, isCr,
-        gstin: gstin.trim(), gstType, creditDays: parseInt(creditDays) || 0,
+        gstin: gstin.trim(), gstType, pan: pan.trim(), creditDays: parseInt(creditDays) || 0,
         mailingName: mailingName || name.trim(), address, state: stateVal,
         pincode, country: country || 'India',
         bankDetails: bank ? { beneficiaryName, bankName, accountNo, ifsc: ifscCode, branch: bankBranch } : undefined,
