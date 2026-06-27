@@ -16,11 +16,11 @@
 
 import React, {
   useState, useImperativeHandle, forwardRef,
-  ElementType, useEffect,
+  ElementType, useEffect, memo,
 } from 'react';
 import {
   View, Text, TextInput, TextInputProps,
-  TouchableOpacity, StyleSheet, Platform,
+  StyleSheet, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
@@ -73,6 +73,32 @@ export const defaultPartyFormData: PartyFormData = {
   vatEnabled: false, vatDealerType: '', vatTin: '', cstNo: '', formCApplicable: false,
   bankEnabled: false, bankBeneficiaryName: '', bankName: '', bankAccountNo: '', bankIfsc: '', bankBranch: '',
 };
+
+// ─── PartyInput — stable component defined OUTSIDE PartyForm ────────────────
+// CRITICAL: must not be defined inside PartyForm's render body.
+// If defined inside, React creates a new component type on every keystroke
+// which forces TextInput to unmount → keyboard closes.
+interface PartyInputProps extends TextInputProps {
+  label?: string;
+  required?: boolean;
+  IC: ElementType<TextInputProps>; // InputComponent
+}
+const PartyInput = memo(function PartyInput({ label, required: req, IC, ...props }: PartyInputProps) {
+  return (
+    <>
+      {label ? (
+        <Text style={f.label}>
+          {label}{req ? <Text style={f.star}> *</Text> : null}
+        </Text>
+      ) : null}
+      <IC
+        placeholderTextColor={COLORS.textTertiary}
+        style={[f.input, Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any })]}
+        {...props}
+      />
+    </>
+  );
+});
 
 // ─── Options ─────────────────────────────────────────────────────────────────
 const GST_TYPES = [
@@ -165,35 +191,23 @@ const PartyForm = forwardRef<PartyFormRef, {
     },
   }));
 
-  // ── Input render helper ──
-  const Inp = ({ label, required: req, ...props }: TextInputProps & { label?: string; required?: boolean }) => (
-    <>
-      {label && (
-        <Text style={f.label}>
-          {label}{req ? <Text style={f.star}> *</Text> : null}
-        </Text>
-      )}
-      <InputComponent
-        placeholderTextColor={COLORS.textTertiary}
-        style={[f.input, Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any })]}
-        {...props}
-      />
-    </>
-  );
+  // Stable shorthand — passes stable InputComponent reference to the
+  // memoized PartyInput component defined outside this render function.
+  const IC = InputComponent;
 
   return (
     <View>
       {/* ══ CONTACT ══════════════════════════════════════════════════════════ */}
       <Text style={f.sectionTitle}>Contact</Text>
 
-      <Inp label="Mobile Number" placeholder="Enter mobile number"
+      <PartyInput IC={IC} label="Mobile Number" placeholder="Enter mobile number"
         value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
 
-      <Inp label="Email" placeholder="Enter email address"
+      <PartyInput IC={IC} label="Email" placeholder="Enter email address"
         value={email} onChangeText={setEmail}
         keyboardType="email-address" autoCapitalize="none" />
 
-      <Inp label="Website" placeholder="Website (optional)"
+      <PartyInput IC={IC} label="Website" placeholder="Website (optional)"
         value={website} onChangeText={setWebsite}
         autoCapitalize="none" keyboardType="url" />
 
@@ -201,10 +215,10 @@ const PartyForm = forwardRef<PartyFormRef, {
       <View style={f.divider} />
       <Text style={f.sectionTitle}>Mailing Address</Text>
 
-      <Inp label="Address Line 1" placeholder="Street, Building, Shop No."
+      <PartyInput IC={IC} label="Address Line 1" placeholder="Street, Building, Shop No."
         value={addressLine1} onChangeText={setAddressLine1} />
 
-      <Inp label="Address Line 2" placeholder="Area, Landmark (optional)"
+      <PartyInput IC={IC} label="Address Line 2" placeholder="Area, Landmark (optional)"
         value={addressLine2} onChangeText={setAddressLine2} />
 
       <FormDropdown
@@ -224,7 +238,7 @@ const PartyForm = forwardRef<PartyFormRef, {
         placeholder="Select state"
       />
 
-      <Inp label="Pincode" required placeholder="6-digit pincode"
+      <PartyInput IC={IC} label="Pincode" required placeholder="6-digit pincode"
         value={pincode} onChangeText={setPincode}
         keyboardType="numeric" maxLength={6} />
 
@@ -237,7 +251,7 @@ const PartyForm = forwardRef<PartyFormRef, {
 
       {gstUnlocked ? (
         <>
-          <Inp label="PAN / IT No." placeholder="ABCDE1234F"
+          <PartyInput IC={IC} label="PAN / IT No." placeholder="ABCDE1234F"
             value={pan} onChangeText={v => setPan(v.toUpperCase())}
             autoCapitalize="characters" maxLength={10} />
 
@@ -254,7 +268,7 @@ const PartyForm = forwardRef<PartyFormRef, {
           />
 
           {showGstinField && (
-            <Inp label="GSTIN / UIN" placeholder="24ABCDE1234F1Z5"
+            <PartyInput IC={IC} label="GSTIN / UIN" placeholder="24ABCDE1234F1Z5"
               value={gstin} onChangeText={v => setGstin(v.toUpperCase())}
               autoCapitalize="characters" maxLength={15} />
           )}
@@ -276,10 +290,10 @@ const PartyForm = forwardRef<PartyFormRef, {
                 placeholder="Select dealer type"
               />
 
-              <Inp label="VAT TIN No." placeholder="Enter VAT TIN number"
+              <PartyInput IC={IC} label="VAT TIN No." placeholder="Enter VAT TIN number"
                 value={vatTin} onChangeText={setVatTin} />
 
-              <Inp label="CST No." placeholder="Enter CST number"
+              <PartyInput IC={IC} label="CST No." placeholder="Enter CST number"
                 value={cstNo} onChangeText={setCstNo} />
 
               <View style={[f.toggleRow, { marginTop: 12 }]}>
@@ -307,16 +321,16 @@ const PartyForm = forwardRef<PartyFormRef, {
 
       {bankEnabled && (
         <View style={f.expandSection}>
-          <Inp label="Beneficiary Name" placeholder="Enter beneficiary name"
+          <PartyInput IC={IC} label="Beneficiary Name" placeholder="Enter beneficiary name"
             value={bankBeneficiaryName} onChangeText={setBankBeneficiaryName} />
-          <Inp label="Bank Name" placeholder="Enter bank name"
+          <PartyInput IC={IC} label="Bank Name" placeholder="Enter bank name"
             value={bankName} onChangeText={setBankName} />
-          <Inp label="Account Number" placeholder="Enter account number"
+          <PartyInput IC={IC} label="Account Number" placeholder="Enter account number"
             value={bankAccountNo} onChangeText={setBankAccountNo} keyboardType="numeric" />
-          <Inp label="IFSC Code" placeholder="Enter IFSC code"
+          <PartyInput IC={IC} label="IFSC Code" placeholder="Enter IFSC code"
             value={bankIfsc} onChangeText={v => setBankIfsc(v.toUpperCase())}
             autoCapitalize="characters" />
-          <Inp label="Bank Branch" placeholder="Enter branch name"
+          <PartyInput IC={IC} label="Bank Branch" placeholder="Enter branch name"
             value={bankBranch} onChangeText={setBankBranch} />
         </View>
       )}
