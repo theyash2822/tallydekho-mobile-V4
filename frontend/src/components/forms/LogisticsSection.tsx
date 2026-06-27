@@ -39,14 +39,16 @@ interface Props {
   // Must accept functional updater form (prev => ...) so batched calls always
   // operate on the latest state rather than a stale prop snapshot.
   onEntriesChange: React.Dispatch<React.SetStateAction<LogEntry[]>>;
-  taxLedgers: { name: string }[];
-  chargeLedgers: { ledgerName: string; guid?: string }[];
+  // Advanced props — optional so simpler screens (create-order, quotation) can
+  // render the section with basic entries without fetching ledger data.
+  taxLedgers?: { name: string }[];
+  chargeLedgers?: { ledgerName: string; guid?: string }[];
   // Round-off (separate line item — never mixed with logistics rows)
-  roundOffLedgers: { ledgerName: string; guid?: string }[];
-  roundOffLedger: string;
-  roundOffAmount: string;
-  onRoundOffLedgerChange: (v: string) => void;
-  onRoundOffAmountChange: (v: string) => void;
+  roundOffLedgers?: { ledgerName: string; guid?: string }[];
+  roundOffLedger?: string;
+  roundOffAmount?: string;
+  onRoundOffLedgerChange?: (v: string) => void;
+  onRoundOffAmountChange?: (v: string) => void;
 }
 
 const newEntry = (): LogEntry => ({
@@ -65,9 +67,14 @@ const newTaxEntry = (): LogTaxEntry => ({
 });
 
 export default function LogisticsSection({
-  entries, onEntriesChange, taxLedgers, chargeLedgers,
-  roundOffLedgers, roundOffLedger, roundOffAmount,
-  onRoundOffLedgerChange, onRoundOffAmountChange,
+  entries, onEntriesChange,
+  taxLedgers = [],
+  chargeLedgers = [],
+  roundOffLedgers = [],
+  roundOffLedger = '',
+  roundOffAmount = '',
+  onRoundOffLedgerChange = () => {},
+  onRoundOffAmountChange = () => {},
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const chargesTotal = entries.reduce((sum, e) => {
