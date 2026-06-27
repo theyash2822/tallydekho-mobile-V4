@@ -149,8 +149,8 @@ export default function CreateLedgerScreen() {
         companyName: company?.name,
         name:             name.trim(),
         ledger_type:      lType,
-        opening_balance:  parseFloat(openBalance) || 0,
-        is_credit:        isCr,
+        openingBalance:  parseFloat(openBalance) || 0,
+        isCr:             isCr,
         parent:           cfg.group || customGroup || undefined,
       };
 
