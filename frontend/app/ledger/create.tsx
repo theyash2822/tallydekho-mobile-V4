@@ -151,7 +151,7 @@ export default function CreateLedgerScreen() {
         ledger_type:      lType,
         opening_balance:  parseFloat(openBalance) || 0,
         is_credit:        isCr,
-        group:            cfg.group || groupSearch || undefined,
+        parent:           cfg.group || customGroup || undefined,
       };
 
       // Party-specific fields from PartyForm
