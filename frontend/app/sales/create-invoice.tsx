@@ -21,6 +21,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { generateDocumentHTML } from '../../src/utils/documentHelpers';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
+import PartyForm, { PartyFormRef } from '../../src/components/forms/PartyForm';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
@@ -244,56 +245,61 @@ const AddCustomerDrawer = forwardRef<AddCustomerDrawerMethods, {
   onSaved: (name: string, success?: boolean) => void;
   company?: { guid?: string; name?: string } | null;
 }>(function AddCustomerDrawer({ onClose, onSaved, company }, ref) {
-  const sheetRef = useRef<BottomSheetModal>(null);
-  const insets = useSafeAreaInsets();
-  const snapPoints = useMemo(() => ['90%'], []);
+  const sheetRef  = useRef<BottomSheetModal>(null);
+  const formRef   = useRef<PartyFormRef>(null);
+  const insets    = useSafeAreaInsets();
+  const snapPoints = useMemo(() => ['92%'], []);
 
   useImperativeHandle(ref, () => ({
     present: () => sheetRef.current?.present(),
   }));
 
-  const [name, setName] = useState('');
+  const [name,    setName]    = useState('');
   const [openBal, setOpenBal] = useState('');
-  const [isCr, setIsCr] = useState(false);
-  const [creditDays, setCreditDays] = useState('');
-  const [mailing, setMailing] = useState(false);
-  const [bank, setBank] = useState(false);
-  const [mailingName, setMailingName] = useState('');
-  const [address, setAddress] = useState('');
-  const [stateVal, setStateVal] = useState('');
-  const [pincode, setPincode] = useState('');
-  const [country, setCountry] = useState('India');
-  const [beneficiaryName, setBeneficiaryName] = useState('');
-  const [bankName, setBankName] = useState('');
-  const [accountNo, setAccountNo] = useState('');
-  const [ifscCode, setIfscCode] = useState('');
-  const [bankBranch, setBankBranch] = useState('');
-  const [phone, setPhone] = useState('');
-  const [gstType, setGstType] = useState('Regular');
-  const [gstOpen, setGstOpen] = useState(false);
-  const [gstin, setGstin] = useState('');
-  const [pan, setPan] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [isCr,    setIsCr]    = useState(false);
+  const [saving,  setSaving]  = useState(false);
 
   const resetForm = () => {
-    setName(''); setOpenBal(''); setIsCr(false); setCreditDays('');
-    setMailing(false); setBank(false); setGstType('Regular');
-    setGstin(''); setPan(''); setPhone(''); setSaving(false);
-    setMailingName(''); setAddress(''); setStateVal(''); setPincode('');
-    setBeneficiaryName(''); setBankName(''); setAccountNo(''); setIfscCode(''); setBankBranch('');
+    setName(''); setOpenBal(''); setIsCr(false); setSaving(false);
+    formRef.current?.reset();
   };
 
   const handleSave = async () => {
     if (!name.trim()) { Alert.alert('Required', 'Customer name is required.'); return; }
     setSaving(true);
     try {
+      const pd = formRef.current?.getData();
+      const address = [pd?.addressLine1, pd?.addressLine2].filter(Boolean).join('\n');
       const result = await createTallyParty({
-        companyGuid: company?.guid, companyName: company?.name,
-        partyName: name.trim(), openingBalance: parseFloat(openBal) || 0, isCr,
-        gstin: gstin.trim(), gstType, pan: pan.trim(), phone: phone.trim(), creditDays: parseInt(creditDays) || 0,
-        mailingName: mailingName || name.trim(), address, state: stateVal,
-        pincode, country: country || 'India',
-        bankDetails: bank ? { beneficiaryName, bankName, accountNo, ifsc: ifscCode, branch: bankBranch } : undefined,
+        companyGuid:    company?.guid,
+        companyName:    company?.name,
+        partyName:      name.trim(),
+        openingBalance: parseFloat(openBal) || 0,
+        isCr,
+        phone:          pd?.phone?.trim()   || '',
+        email:          pd?.email?.trim()   || '',
+        website:        pd?.website?.trim() || '',
+        gstin:          pd?.gstin?.trim()   || '',
+        gstType:        pd?.gstRegType      || 'Regular',
+        pan:            pd?.pan?.trim()     || '',
+        mailingName:    name.trim(),
+        address,
+        state:          pd?.state   || '',
+        pincode:        pd?.pincode || '',
+        country:        pd?.country || 'India',
+        vatDetails: pd?.vatEnabled ? {
+          dealerType:      pd.vatDealerType,
+          vatTin:          pd.vatTin,
+          cstNo:           pd.cstNo,
+          formCApplicable: pd.formCApplicable,
+        } : undefined,
+        bankDetails: pd?.bankEnabled ? {
+          beneficiaryName: pd.bankBeneficiaryName,
+          bankName:        pd.bankName,
+          accountNo:       pd.bankAccountNo,
+          ifsc:            pd.bankIfsc,
+          branch:          pd.bankBranch,
+        } : undefined,
       });
       const savedName = name.trim();
       resetForm();
@@ -347,12 +353,27 @@ const AddCustomerDrawer = forwardRef<AddCustomerDrawerMethods, {
         contentContainerStyle={[acd.body, { paddingBottom: insets.bottom + 80 }]}
         showsVerticalScrollIndicator={false}
       >
+        {/* ── Name ── */}
         <Text style={acd.label}>Name <Text style={acd.star}>*</Text></Text>
-        <BottomSheetTextInput style={acd.input as any} placeholder="Enter customer name" placeholderTextColor={COLORS.textTertiary} value={name} onChangeText={setName} />
+        <BottomSheetTextInput
+          style={acd.input as any}
+          placeholder="Enter customer name"
+          placeholderTextColor={COLORS.textTertiary}
+          value={name}
+          onChangeText={setName}
+        />
 
+        {/* ── Opening Balance ── */}
         <Text style={acd.label}>Opening Balance</Text>
         <View style={acd.balBox}>
-          <BottomSheetTextInput style={acd.balInput as any} placeholder="0.00" placeholderTextColor={COLORS.textTertiary} value={openBal} onChangeText={setOpenBal} keyboardType="numeric" />
+          <BottomSheetTextInput
+            style={acd.balInput as any}
+            placeholder="0.00"
+            placeholderTextColor={COLORS.textTertiary}
+            value={openBal}
+            onChangeText={setOpenBal}
+            keyboardType="numeric"
+          />
           <View style={acd.drCrRow}>
             <Text style={[acd.drCrLbl, !isCr && acd.drCrLblActive]}>Dr</Text>
             <BrandSwitch value={isCr} onValueChange={setIsCr} />
@@ -360,79 +381,9 @@ const AddCustomerDrawer = forwardRef<AddCustomerDrawerMethods, {
           </View>
         </View>
 
-        <Text style={acd.label}>Mobile Number</Text>
-        <BottomSheetTextInput style={acd.input as any} placeholder="Enter mobile number" placeholderTextColor={COLORS.textTertiary} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-
-        <Text style={acd.label}>Credit Period (Days)</Text>
-        <BottomSheetTextInput style={acd.input as any} placeholder="Enter credit period" placeholderTextColor={COLORS.textTertiary} value={creditDays} onChangeText={setCreditDays} keyboardType="numeric" />
-
+        {/* ── Party Fields via shared PartyForm ── */}
         <View style={acd.divider} />
-        <View style={acd.toggleRow}>
-          <Text style={acd.toggleLbl}>Enable Mailing Details</Text>
-          <BrandSwitch value={mailing} onValueChange={setMailing} />
-        </View>
-        {mailing && (
-          <View style={acd.expandSection}>
-            <Text style={acd.label}>Mailing Name</Text>
-            <BottomSheetTextInput style={acd.input as any} placeholder="Enter mailing name" placeholderTextColor={COLORS.textTertiary} value={mailingName} onChangeText={setMailingName} />
-            <Text style={acd.label}>Address</Text>
-            <BottomSheetTextInput style={[acd.input, acd.textarea] as any} placeholder="Enter address" placeholderTextColor={COLORS.textTertiary} value={address} onChangeText={setAddress} multiline numberOfLines={3} />
-            <Text style={acd.label}>State</Text>
-            <StateAutocomplete value={stateVal} onSelect={setStateVal} />
-            <View style={acd.row2}>
-              <View style={{ flex: 1 }}>
-                <Text style={acd.label}>Pincode</Text>
-                <BottomSheetTextInput style={acd.input as any} placeholder="Pincode" placeholderTextColor={COLORS.textTertiary} value={pincode} onChangeText={setPincode} keyboardType="numeric" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={acd.label}>Country</Text>
-                <BottomSheetTextInput style={acd.input as any} value={country} onChangeText={setCountry} placeholderTextColor={COLORS.textTertiary} />
-              </View>
-            </View>
-          </View>
-        )}
-
-        <View style={acd.toggleRow}>
-          <Text style={acd.toggleLbl}>Provide Bank Details</Text>
-          <BrandSwitch value={bank} onValueChange={setBank} />
-        </View>
-        {bank && (
-          <View style={acd.expandSection}>
-            <Text style={acd.label}>Beneficiary Name</Text>
-            <BottomSheetTextInput style={acd.input as any} placeholder="Enter beneficiary name" placeholderTextColor={COLORS.textTertiary} value={beneficiaryName} onChangeText={setBeneficiaryName} />
-            <Text style={acd.label}>Bank Name</Text>
-            <BottomSheetTextInput style={acd.input as any} placeholder="Enter bank name" placeholderTextColor={COLORS.textTertiary} value={bankName} onChangeText={setBankName} />
-            <Text style={acd.label}>Account Number</Text>
-            <BottomSheetTextInput style={acd.input as any} placeholder="Enter account number" placeholderTextColor={COLORS.textTertiary} value={accountNo} onChangeText={setAccountNo} keyboardType="numeric" />
-            <Text style={acd.label}>IFSC Code</Text>
-            <BottomSheetTextInput style={acd.input as any} placeholder="Enter IFSC code" placeholderTextColor={COLORS.textTertiary} value={ifscCode} onChangeText={v => setIfscCode(v.toUpperCase())} autoCapitalize="characters" />
-            <Text style={acd.label}>Bank Branch</Text>
-            <BottomSheetTextInput style={acd.input as any} placeholder="Enter branch name" placeholderTextColor={COLORS.textTertiary} value={bankBranch} onChangeText={setBankBranch} />
-          </View>
-        )}
-
-        <View style={acd.divider} />
-        <Text style={acd.label}>GST Registration Type <Text style={acd.star}>*</Text></Text>
-        <TouchableOpacity style={[acd.selectBox, gstOpen && acd.selectBoxOpen]} onPress={() => setGstOpen(!gstOpen)} activeOpacity={0.7}>
-          <Text style={acd.selectTxt}>{gstType}</Text>
-          <Ionicons name={gstOpen ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-        {gstOpen && (
-          <View style={acd.dropList}>
-            {GST_TYPES.map((t, idx) => (
-              <TouchableOpacity key={t} style={[acd.dropItem, idx === GST_TYPES.length - 1 && { borderBottomWidth: 0 }]} onPress={() => { setGstType(t); setGstOpen(false); }} activeOpacity={0.7}>
-                <Text style={[acd.dropTxt, gstType === t && acd.dropTxtActive]}>{t}</Text>
-                {gstType === t && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        <Text style={acd.label}>GSTIN</Text>
-        <BottomSheetTextInput style={acd.input as any} placeholder="Enter GSTIN" placeholderTextColor={COLORS.textTertiary} value={gstin} onChangeText={v => setGstin(v.toUpperCase())} autoCapitalize="characters" />
-
-        <Text style={acd.label}>PAN/IT No.</Text>
-        <BottomSheetTextInput style={acd.input as any} placeholder="Enter PAN/IT number" placeholderTextColor={COLORS.textTertiary} value={pan} onChangeText={v => setPan(v.toUpperCase())} autoCapitalize="characters" />
+        <PartyForm ref={formRef} InputComponent={BottomSheetTextInput as any} />
       </BottomSheetScrollView>
 
       <View style={[acd.footer, { paddingBottom: insets.bottom + 8 }]}>

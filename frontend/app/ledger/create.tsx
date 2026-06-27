@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, Alert, TextInput, TextInputProps, ActivityIndicator,
@@ -14,21 +14,21 @@ import RegularOptionalToggle, { EntryType } from '../../src/components/forms/Reg
 import FormDropdown from '../../src/components/forms/FormDropdown';
 import SearchableDropdown from '../../src/components/forms/SearchableDropdown';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
+import PartyForm, { PartyFormRef } from '../../src/components/forms/PartyForm';
 
-// ─── Themed TextInput (no blue focus ring) ────────────────────────────────────
+// ─── Themed TextInput ─────────────────────────────────────────────────────────
 function ThemedInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
   const [focused, setFocused] = useState(false);
   return (
     <TextInput
       style={[
-        s.input,
-        focused && s.inputFocused,
+        s.input, focused && s.inputFocused,
         Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any }),
         style,
       ]}
       placeholderTextColor={COLORS.textTertiary}
-      onFocus={(e) => { setFocused(true); onFocus?.(e); }}
-      onBlur={(e)  => { setFocused(false); onBlur?.(e); }}
+      onFocus={e => { setFocused(true); onFocus?.(e); }}
+      onBlur={e  => { setFocused(false); onBlur?.(e); }}
       {...props}
     />
   );
@@ -44,18 +44,7 @@ const TYPE_CONFIG: Record<LedgerType, { title: string; group: string }> = {
   custom:          { title: 'Custom Groups',     group: '' },
 };
 
-const GST_REG_TYPES = ['Regular', 'Unregistered', 'Composition'];
-
 const DUTY_TYPES = ['CGST', 'SGST', 'IGST', 'Cess', 'Others'];
-
-const INDIAN_STATES = [
-  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
-  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
-  'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram',
-  'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana',
-  'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
-  'Delhi', 'Jammu & Kashmir', 'Ladakh', 'Chandigarh', 'Puducherry',
-];
 
 const ALL_TALLY_GROUPS = [
   'Capital Account', 'Reserves & Surplus', 'Sundry Creditors', 'Sundry Debtors',
@@ -68,22 +57,15 @@ const ALL_TALLY_GROUPS = [
 ];
 
 // ─── Opening Balance Row ──────────────────────────────────────────────────────
-interface BalanceRowProps {
-  value: string;
-  onChange: (v: string) => void;
-  isCr: boolean;
-  onToggleCr: (v: boolean) => void;
-}
-
-function BalanceRow({ value, onChange, isCr, onToggleCr }: BalanceRowProps) {
+function BalanceRow({ value, onChange, isCr, onToggleCr }: {
+  value: string; onChange: (v: string) => void;
+  isCr: boolean; onToggleCr: (v: boolean) => void;
+}) {
   const [focused, setFocused] = useState(false);
   return (
     <View style={[s.balanceBox, focused && s.balanceBoxFocused]}>
       <TextInput
-        style={[
-          s.balanceInput,
-          Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any }),
-        ]}
+        style={[s.balanceInput, Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any })]}
         placeholder="0.00"
         placeholderTextColor={COLORS.textTertiary}
         value={value}
@@ -101,30 +83,12 @@ function BalanceRow({ value, onChange, isCr, onToggleCr }: BalanceRowProps) {
   );
 }
 
-// ─── Toggle Row ───────────────────────────────────────────────────────────────
-interface ToggleRowProps {
-  label: string;
-  value: boolean;
-  onChange: (v: boolean) => void;
-}
-
-function ToggleRow({ label, value, onChange }: ToggleRowProps) {
-  return (
-    <View style={s.toggleRow}>
-      <Text style={s.toggleLabel}>{label}</Text>
-      <BrandSwitch value={value} onValueChange={onChange} />
-    </View>
-  );
-}
-
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CreateLedgerScreen() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ type?: string }>();
+  const router      = useRouter();
+  const insets      = useSafeAreaInsets();
+  const params      = useLocalSearchParams<{ type?: string }>();
   const { company, isPaired } = useAuth();
-  const [submitting, setSubmitting] = useState(false);
-  const [entryType, setEntryType] = useState<EntryType>('regular');
 
   const lType = (
     ['sundry_creditor', 'sundry_debtor', 'duties_taxes', 'custom'].includes(params.type || '')
@@ -132,69 +96,107 @@ export default function CreateLedgerScreen() {
       : 'custom'
   ) as LedgerType;
 
-  const cfg = TYPE_CONFIG[lType];
-  const isParty = lType === 'sundry_creditor' || lType === 'sundry_debtor';
+  const cfg      = TYPE_CONFIG[lType];
+  const isParty  = lType === 'sundry_creditor' || lType === 'sundry_debtor';
   const isDuties = lType === 'duties_taxes';
   const isCustom = lType === 'custom';
-  const showGstSection = isParty || isCustom;
 
-  // ── Common fields
-  const [name, setName] = useState('');
+  // ── Common state
+  const [entryType,   setEntryType]   = useState<EntryType>('regular');
+  const [name,        setName]        = useState('');
   const [openBalance, setOpenBalance] = useState('');
-  const [isCr, setIsCr] = useState(false);
+  const [isCr,        setIsCr]        = useState(false);
+  const [submitting,  setSubmitting]  = useState(false);
 
-  // ── Party fields (Sundry Creditor / Debtor)
-  const [creditDays, setCreditDays] = useState('');
-  const [mailingEnabled, setMailingEnabled] = useState(false);
-  const [bankEnabled, setBankEnabled] = useState(false);
-  // Mailing Details
-  const [mailingName, setMailingName] = useState('');
-  const [address, setAddress] = useState('');
-  const [stateVal, setStateVal] = useState('');
-  const [pincode, setPincode] = useState('');
-  const [country, setCountry] = useState('India');
-  // Bank Details
-  const [beneficiaryName, setBeneficiaryName] = useState('');
-  const [bankName, setBankName] = useState('');
-  const [accountNo, setAccountNo] = useState('');
-  const [ifscCode, setIfscCode] = useState('');
-  const [bankBranch, setBankBranch] = useState('');
-  const [gstRegType, setGstRegType] = useState('Regular');
-  const [gstin, setGstin] = useState('');
-  const [pan, setPan] = useState('');
-
-  // ── Custom group fields
-  const [customGroup, setCustomGroup] = useState('');
-  const [groupSearch, setGroupSearch] = useState('');
-  const [groupDropOpen, setGroupDropOpen] = useState(false);
+  // ── Custom group
+  const [customGroup,        setCustomGroup]        = useState('');
+  const [groupSearch,        setGroupSearch]        = useState('');
+  const [groupDropOpen,      setGroupDropOpen]      = useState(false);
   const [groupSearchFocused, setGroupSearchFocused] = useState(false);
 
-  // ── Duties & Taxes fields
-  const [dutyType, setDutyType] = useState('');
+  // ── Duties & Taxes
+  const [dutyType,   setDutyType]   = useState('');
   const [percentage, setPercentage] = useState('');
+
+  // ── Party form ref (only for sundry debtor / creditor)
+  const formRef = useRef<PartyFormRef>(null);
 
   const filteredGroups = ALL_TALLY_GROUPS.filter(g =>
     g.toLowerCase().includes(groupSearch.toLowerCase())
   );
 
+  // ─── Save ─────────────────────────────────────────────────────────────────
   const handleSave = async () => {
-    if (!name.trim()) { Alert.alert('Required', 'Ledger name is required.'); return; }
-    if (isDuties && !dutyType) { Alert.alert('Required', 'Please select a duty/tax type.'); return; }
-    if (!isPaired) { Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' }); return; }
+    if (!name.trim()) {
+      Alert.alert('Required', 'Ledger name is required.');
+      return;
+    }
+    if (isDuties && !dutyType) {
+      Alert.alert('Required', 'Please select a duty/tax type.');
+      return;
+    }
+    if (!isPaired) {
+      Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' });
+      return;
+    }
+
     try {
       setSubmitting(true);
-      await createLedger({
-        company_guid: company?.guid,
-        name, ledger_type: lType,
-        opening_balance: parseFloat(openBalance) || 0,
-        is_credit: isCr,
-        group: cfg.group || groupSearch || undefined,
-      });
+
+      // Base payload
+      const payload: Record<string, any> = {
+        companyGuid: company?.guid,
+        companyName: company?.name,
+        name:             name.trim(),
+        ledger_type:      lType,
+        opening_balance:  parseFloat(openBalance) || 0,
+        is_credit:        isCr,
+        group:            cfg.group || groupSearch || undefined,
+      };
+
+      // Party-specific fields from PartyForm
+      if (isParty) {
+        const pd = formRef.current?.getData();
+        if (pd) {
+          const address = [pd.addressLine1, pd.addressLine2].filter(Boolean).join('\n');
+          Object.assign(payload, {
+            phone:       pd.phone,
+            email:       pd.email,
+            website:     pd.website,
+            address,
+            state:       pd.state,
+            country:     pd.country || 'India',
+            pincode:     pd.pincode,
+            mailingName: name.trim(),
+            gstRegType:  pd.gstRegType,
+            gstin:       pd.gstin,
+            pan:         pd.pan,
+            vatDetails: pd.vatEnabled ? {
+              dealerType:      pd.vatDealerType,
+              vatTin:          pd.vatTin,
+              cstNo:           pd.cstNo,
+              formCApplicable: pd.formCApplicable,
+            } : undefined,
+            bankDetails: pd.bankEnabled ? {
+              beneficiaryName: pd.bankBeneficiaryName,
+              bankName:        pd.bankName,
+              accountNo:       pd.bankAccountNo,
+              ifsc:            pd.bankIfsc,
+              branch:          pd.bankBranch,
+            } : undefined,
+          });
+        }
+      }
+
+      await createLedger(payload);
+
       Toast.show({ type: 'success', text1: 'Ledger Created', text2: `"${name}" added to Tally.` });
       setTimeout(() => router.back(), 1200);
-    } catch(err:any) {
-      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message||'Could not create ledger.' });
-    } finally { setSubmitting(false); }
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message || 'Could not create ledger.' });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -212,26 +214,18 @@ export default function CreateLedgerScreen() {
         <RegularOptionalToggle value={entryType} onChange={setEntryType} />
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           contentContainerStyle={s.form}
         >
-
           {/* ── Name ── */}
           <Text style={s.label}>Name <Text style={s.required}>*</Text></Text>
-          <ThemedInput
-            placeholder="Enter ledger name"
-            value={name}
-            onChangeText={setName}
-          />
+          <ThemedInput placeholder="Enter ledger name" value={name} onChangeText={setName} />
 
-          {/* ── Custom Group: Under (Group) search ── */}
+          {/* ── Custom group search ── */}
           {isCustom && (
             <SearchableDropdown
               label="Under (Group)"
@@ -247,49 +241,30 @@ export default function CreateLedgerScreen() {
           {/* ── Opening Balance ── */}
           <Text style={s.label}>Opening Balance <Text style={s.required}>*</Text></Text>
           <BalanceRow
-            value={openBalance}
-            onChange={setOpenBalance}
-            isCr={isCr}
-            onToggleCr={setIsCr}
+            value={openBalance} onChange={setOpenBalance}
+            isCr={isCr} onToggleCr={setIsCr}
           />
 
-          {/* ── Credit Period (Party only) ── */}
-          {isParty && (
-            <>
-              <Text style={s.label}>Credit Period (Days)</Text>
-              <ThemedInput
-                placeholder="Enter credit period in days"
-                value={creditDays}
-                onChangeText={setCreditDays}
-                keyboardType="numeric"
-              />
-            </>
-          )}
-
-          {/* ── Duties & Taxes: Type + Percentage side-by-side ── */}
+          {/* ── Duties & Taxes ── */}
           {isDuties && (
             <View style={s.row2}>
-              {/* Type of Duty / Tax */}
               <View style={{ flex: 1 }}>
                 <FormDropdown
                   label="Type of Duty / Tax"
                   required
                   value={dutyType}
-                  options={DUTY_TYPES.map(s => ({ label: s, value: s }))}
+                  options={DUTY_TYPES.map(d => ({ label: d, value: d }))}
                   placeholder="Select type"
                   onSelect={o => setDutyType(o.value)}
                 />
               </View>
-
-              {/* Percentage of Calculation */}
               <View style={{ flex: 1 }}>
-                <Text style={[s.label, { marginTop: 0, marginBottom: 6 }]}>% of Calculation <Text style={s.required}>*</Text></Text>
+                <Text style={[s.label, { marginTop: 0, marginBottom: 6 }]}>
+                  % of Calculation <Text style={s.required}>*</Text>
+                </Text>
                 <View style={s.percentBox}>
                   <TextInput
-                    style={[
-                      s.percentInput,
-                      Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any }),
-                    ]}
+                    style={[s.percentInput, Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any })]}
                     placeholder="0.00"
                     placeholderTextColor={COLORS.textTertiary}
                     value={percentage}
@@ -304,93 +279,11 @@ export default function CreateLedgerScreen() {
             </View>
           )}
 
-          {showGstSection && (
+          {/* ── Party Fields (Sundry Debtor / Creditor) ── */}
+          {isParty && (
             <>
-              {/* Divider */}
               <View style={s.divider} />
-
-              {/* ── Enable Mailing Details ── */}
-              <ToggleRow label="Enable Mailing Details" value={mailingEnabled} onChange={setMailingEnabled} />
-              {mailingEnabled && (
-                <View style={s.expandSection}>
-                  <Text style={s.label}>Mailing Name</Text>
-                  <ThemedInput placeholder="Enter mailing name" value={mailingName} onChangeText={setMailingName} />
-
-                  <Text style={s.label}>Address</Text>
-                  <ThemedInput
-                    placeholder="Enter address"
-                    value={address} onChangeText={setAddress}
-                    multiline numberOfLines={3}
-                    style={s.textarea}
-                  />
-
-                  <FormDropdown
-                    label="State"
-                    value={stateVal}
-                    options={INDIAN_STATES.map(s => ({ label: s, value: s }))}
-                    placeholder="Select state"
-                    onSelect={o => setStateVal(o.value)}
-                  />
-
-                  <View style={s.row2}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.label}>Pincode</Text>
-                      <ThemedInput placeholder="Enter pincode" value={pincode} onChangeText={setPincode} keyboardType="numeric" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.label}>Country</Text>
-                      <ThemedInput value={country} onChangeText={setCountry} />
-                    </View>
-                  </View>
-                </View>
-              )}
-
-              {/* ── Provide Bank Details ── */}
-              <ToggleRow label="Provide Bank Details" value={bankEnabled} onChange={setBankEnabled} />
-              {bankEnabled && (
-                <View style={s.expandSection}>
-                  <Text style={s.label}>Beneficiary Name</Text>
-                  <ThemedInput placeholder="Enter beneficiary name" value={beneficiaryName} onChangeText={setBeneficiaryName} />
-
-                  <Text style={s.label}>Bank Name</Text>
-                  <ThemedInput placeholder="Enter bank name" value={bankName} onChangeText={setBankName} />
-
-                  <Text style={s.label}>Account Number</Text>
-                  <ThemedInput placeholder="Enter account number" value={accountNo} onChangeText={setAccountNo} keyboardType="numeric" />
-
-                  <Text style={s.label}>IFSC Code</Text>
-                  <ThemedInput placeholder="Enter IFSC code" value={ifscCode} onChangeText={v => setIfscCode(v.toUpperCase())} autoCapitalize="characters" />
-
-                  <Text style={s.label}>Bank Branch</Text>
-                  <ThemedInput placeholder="Enter branch name" value={bankBranch} onChangeText={setBankBranch} />
-                </View>
-              )}
-
-              <View style={s.divider} />
-
-              <FormDropdown
-                label="GST Registration Type"
-                required
-                value={gstRegType}
-                options={GST_REG_TYPES.map(s => ({ label: s, value: s }))}
-                onSelect={o => setGstRegType(o.value)}
-              />
-
-              <Text style={s.label}>GSTIN <Text style={s.required}>*</Text></Text>
-              <ThemedInput
-                placeholder="Enter GSTIN"
-                value={gstin}
-                onChangeText={v => setGstin(v.toUpperCase())}
-                autoCapitalize="characters"
-              />
-
-              <Text style={s.label}>PAN/IT No.</Text>
-              <ThemedInput
-                placeholder="Enter PAN/IT number"
-                value={pan}
-                onChangeText={v => setPan(v.toUpperCase())}
-                autoCapitalize="characters"
-              />
+              <PartyForm ref={formRef} />
             </>
           )}
 
@@ -399,9 +292,14 @@ export default function CreateLedgerScreen() {
 
         {/* ── Save Button ── */}
         <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-          <TouchableOpacity style={[s.saveBtn,submitting&&{opacity:0.6}]} onPress={handleSave} activeOpacity={0.85} disabled={submitting}>
-            {submitting&&<ActivityIndicator size="small" color={COLORS.white} style={{marginRight:8}}/>}
-            <Text style={s.saveBtnText}>{submitting?'Saving...':'Save Ledger'}</Text>
+          <TouchableOpacity
+            style={[s.saveBtn, submitting && { opacity: 0.6 }]}
+            onPress={handleSave}
+            activeOpacity={0.85}
+            disabled={submitting}
+          >
+            {submitting && <ActivityIndicator size="small" color={COLORS.white} style={{ marginRight: 8 }} />}
+            <Text style={s.saveBtnText}>{submitting ? 'Saving...' : 'Save Ledger'}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -413,145 +311,39 @@ export default function CreateLedgerScreen() {
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.pageBg },
 
-  // Header
   header: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: COLORS.cardBg,
     paddingHorizontal: SPACING.md, paddingVertical: 14,
     borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
-  backBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary,
-  },
+  backBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
 
-  // Form
   form: { padding: SPACING.md },
-  label: {
-    fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary,
-    marginBottom: 8, marginTop: 18,
-  },
+  label: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, marginBottom: 8, marginTop: 18 },
   required: { color: COLORS.negative },
 
-  // Text Input
   input: {
     borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
     paddingHorizontal: 14, paddingVertical: 13,
-    fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary,
-    backgroundColor: COLORS.cardBg,
-    // Suppress web blue outline
-    ...Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any }),
+    fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, backgroundColor: COLORS.cardBg,
   },
-  inputFocused: {
-    borderColor: COLORS.brandPrimary,
-    borderWidth: 1.5,
-  },
+  inputFocused: { borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
 
-  // Opening Balance
   balanceBox: {
     flexDirection: 'row', alignItems: 'center',
     borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
-    backgroundColor: COLORS.cardBg, paddingLeft: 14, paddingRight: 10,
-    paddingVertical: 4,
+    backgroundColor: COLORS.cardBg, paddingLeft: 14, paddingRight: 10, paddingVertical: 4,
   },
-  balanceBoxFocused: {
-    borderColor: COLORS.brandPrimary,
-    borderWidth: 1.5,
-  },
-  balanceInput: {
-    flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary,
-    paddingVertical: 9,
-  },
-  drCrWrap: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 8,
-  },
-  drCrLabel: {
-    fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textTertiary,
-  },
-  drCrLabelActive: {
-    color: COLORS.textPrimary, fontWeight: '700',
-  },
+  balanceBoxFocused: { borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
+  balanceInput: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, paddingVertical: 9 },
+  drCrWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 8 },
+  drCrLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textTertiary },
+  drCrLabelActive: { color: COLORS.textPrimary, fontWeight: '700' },
 
-  // Search box (Custom group)
-  searchBox: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
-    paddingHorizontal: 14, paddingVertical: 4, backgroundColor: COLORS.cardBg,
-  },
-  searchBoxFocused: {
-    borderColor: COLORS.brandPrimary,
-    borderWidth: 1.5,
-  },
-  searchInput: {
-    flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary,
-    paddingVertical: 9,
-  },
+  row2: { flexDirection: 'row', gap: SPACING.sm, marginTop: 18 },
 
-  // Accordion select box
-  selectBox: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
-    paddingHorizontal: 14, paddingVertical: 14,
-    backgroundColor: COLORS.cardBg,
-  },
-  selectBoxOpen: {
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
-  },
-  selectText: {
-    fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, fontWeight: '600',
-  },
-
-  // Dropdown list
-  dropList: {
-    borderWidth: 1, borderTopWidth: 0,
-    borderColor: COLORS.borderDefault,
-    backgroundColor: COLORS.cardBg,
-    borderBottomLeftRadius: RADIUS.md,
-    borderBottomRightRadius: RADIUS.md,
-    overflow: 'hidden',
-  },
-  dropItem: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 14, paddingVertical: 15,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-  },
-  dropItemText: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
-  dropItemTextActive: { fontWeight: '700' },
-
-  // Toggle row
-  toggleRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 6,
-  },
-  toggleLabel: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
-
-  // Divider
-  divider: {
-    height: 1, backgroundColor: COLORS.borderDefault, marginVertical: 8,
-  },
-  // Expand section (fields revealed when toggle is ON)
-  expandSection: {
-    backgroundColor: COLORS.pageBg,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: COLORS.borderDefault,
-  },
-  textarea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-    paddingTop: 12,
-  },
-
-  // Row of 2 columns — align from top
-  row2: { flexDirection: 'row', gap: 12, marginTop: 18, alignItems: 'flex-start' },
-
-  // Percentage input
   percentBox: {
     flexDirection: 'row', alignItems: 'center',
     borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
@@ -562,28 +354,23 @@ const s = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 13,
   },
   percentSuffix: {
-    backgroundColor: COLORS.pageBg,
+    paddingHorizontal: 14, paddingVertical: 13,
     borderLeftWidth: 1, borderLeftColor: COLORS.borderDefault,
-    paddingHorizontal: 12, paddingVertical: 13,
-    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.pageBg,
   },
-  percentSuffixText: {
-    fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textSecondary,
-  },
+  percentSuffixText: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary, fontWeight: '600' },
 
-  // Footer / Save button
+  divider: { height: 1, backgroundColor: COLORS.borderDefault, marginVertical: 8 },
+
   footer: {
-    paddingHorizontal: SPACING.md, paddingTop: SPACING.md,
-    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
+    paddingHorizontal: SPACING.md, paddingTop: 12,
     backgroundColor: COLORS.cardBg,
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
   },
   saveBtn: {
-    backgroundColor: COLORS.brandPrimary,
-    borderRadius: RADIUS.md, paddingVertical: 15,
-    alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md,
+    paddingVertical: 16,
   },
-  saveBtnText: {
-    fontSize: TYPOGRAPHY.base, fontWeight: '700',
-    color: COLORS.white, letterSpacing: 0.3,
-  },
+  saveBtnText: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
 });
