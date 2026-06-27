@@ -343,7 +343,7 @@ const AddCustomerDrawer = forwardRef<AddCustomerDrawerMethods, {
       <View style={acd.header}>
         <Text style={acd.title}>New Customer</Text>
         <Text style={acd.subtitle}>Sundry Debtors</Text>
-        <TouchableOpacity onPress={onClose} style={acd.closeBtn}>
+        <TouchableOpacity onPress={() => sheetRef.current?.dismiss()} style={acd.closeBtn}>
           <Ionicons name="close" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
       </View>
