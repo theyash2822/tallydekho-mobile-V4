@@ -486,7 +486,7 @@ export default function LedgerScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError]   = useState<string | null>(null);
 
-  const PAGE_SIZE = 50;
+  const PAGE_SIZE = 200;
   const [page,          setPage]          = useState(1);
   const [hasMore,       setHasMore]       = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -527,7 +527,8 @@ export default function LedgerScreen() {
       const rows = res?.data ?? (Array.isArray(res) ? res : []);
       const mappedRows = Array.isArray(rows) ? rows.map(mapLedger) : [];
       setData(mappedRows);
-      setHasMore(Array.isArray(rows) && rows.length === PAGE_SIZE);
+      const _total = res?.meta?.total ?? res?.total ?? 0;
+      setHasMore(_total > 0 ? mappedRows.length < _total : Array.isArray(rows) && rows.length === PAGE_SIZE);
       // API returns total inside res.meta.total (api-v1 shape)
       const total = res?.meta?.total ?? res?.total ?? null;
       if (total != null) setTotalLedgers(total);
@@ -550,7 +551,9 @@ export default function LedgerScreen() {
       const rows = res?.data ?? (Array.isArray(res) ? res : []);
       if (Array.isArray(rows)) {
         setData(prev => [...prev, ...rows.map(mapLedger)]);
-        setHasMore(rows.length === PAGE_SIZE);
+        const _loadedSoFar = (data?.length ?? 0) + rows.length;
+        const _metaTotal = res?.meta?.total ?? res?.total ?? 0;
+        setHasMore(_metaTotal > 0 ? _loadedSoFar < _metaTotal : rows.length === PAGE_SIZE);
         setPage(nextPage);
       }
     } catch (err: any) {
