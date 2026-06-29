@@ -28,6 +28,8 @@ import RegularOptionalToggle, { EntryType } from '../../src/components/forms/Reg
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
 import DatePickerModal, { formatDMY, parseDMY } from '../../src/components/forms/DatePickerModal';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
+import { INDIAN_STATES } from '../../src/constants/indianStates';
+import { getCitiesForState } from '../../src/constants/indianCities';
 import {
   BottomSheetModal,
   BottomSheetScrollView,
@@ -1014,10 +1016,21 @@ export default function CreateSalesInvoiceScreen() {
         if (d.customDays)     setCustomDays(d.customDays);
         if (d.dueDate)        setDueDate(d.dueDate);
         if (d.showDispatch)   setShowDispatch(d.showDispatch);
-        if (d.dispatchFrom)   setDispatchFrom(d.dispatchFrom);
-        if (d.dispatchFromState) setDispatchFromState(d.dispatchFromState);
-        if (d.shipTo)         setShipTo(d.shipTo);
-        if (d.shipToState)    setShipToState(d.shipToState);
+        // Sanitize restored state/city against canonical lists — stale drafts with
+        // free-text values (pre-dropdown era) would otherwise show as empty pickers
+        // while still holding bad values; better to clear and let user re-pick.
+        if (d.dispatchFromState && INDIAN_STATES.includes(d.dispatchFromState)) {
+          setDispatchFromState(d.dispatchFromState);
+          if (d.dispatchFrom && getCitiesForState(d.dispatchFromState).includes(d.dispatchFrom)) {
+            setDispatchFrom(d.dispatchFrom);
+          }
+        }
+        if (d.shipToState && INDIAN_STATES.includes(d.shipToState)) {
+          setShipToState(d.shipToState);
+          if (d.shipTo && getCitiesForState(d.shipToState).includes(d.shipTo)) {
+            setShipTo(d.shipTo);
+          }
+        }
         if (d.transporterName) setTransporterName(d.transporterName);
         if (d.transporterId)  setTransporterId(d.transporterId);
         if (d.transportMode)  setTransportMode(d.transportMode);
@@ -1765,15 +1778,70 @@ export default function CreateSalesInvoiceScreen() {
                 {showDispatch && (
                   <View style={s.payNowBody}>
                     <View style={s.divider} />
-                    {/* Dispatch From: State (left) → City (right) */}
+                    {/* Dispatch From: State (left, dropdown) → City (right, dropdown filtered by state) */}
                     <View style={s.row2}>
-                      <View style={{ flex: 1 }}><Text style={s.fLabel}>Dispatch State</Text><ThemedFInput value={dispatchFromState} onChangeText={setDispatchFromState} placeholder="e.g. Rajasthan" /></View>
-                      <View style={{ flex: 1 }}><Text style={s.fLabel}>Dispatch From</Text><ThemedFInput value={dispatchFrom} onChangeText={setDispatchFrom} placeholder="City / Address" /></View>
+                      <View style={{ flex: 1 }}>
+                        <BottomSheetSearch
+                          label="Dispatch State"
+                          options={INDIAN_STATES.map(st => ({ label: st, value: st }))}
+                          value={dispatchFromState}
+                          onSelect={(opt) => {
+                            setDispatchFromState(opt.value);
+                            // Reset city if it no longer belongs to the new state
+                            const validCities = getCitiesForState(opt.value);
+                            if (dispatchFrom && !validCities.includes(dispatchFrom)) {
+                              setDispatchFrom('');
+                            }
+                          }}
+                          onClear={() => { setDispatchFromState(''); setDispatchFrom(''); }}
+                          placeholder="Select state..."
+                          sheetTitle="Dispatch State"
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <BottomSheetSearch
+                          label="Dispatch From"
+                          options={getCitiesForState(dispatchFromState).map(c => ({ label: c, value: c }))}
+                          value={dispatchFrom}
+                          onSelect={(opt) => setDispatchFrom(opt.value)}
+                          onClear={() => setDispatchFrom('')}
+                          placeholder={dispatchFromState ? 'Select city...' : 'Select state first'}
+                          sheetTitle="Dispatch City"
+                          disabled={!dispatchFromState}
+                        />
+                      </View>
                     </View>
-                    {/* Ship To: State (left) → City (right) */}
+                    {/* Ship To: State (left, dropdown) → City (right, dropdown filtered by state) */}
                     <View style={s.row2}>
-                      <View style={{ flex: 1 }}><Text style={s.fLabel}>Ship To State</Text><ThemedFInput value={shipToState} onChangeText={setShipToState} placeholder="e.g. Madhya Pradesh" /></View>
-                      <View style={{ flex: 1 }}><Text style={s.fLabel}>Ship To</Text><ThemedFInput value={shipTo} onChangeText={setShipTo} placeholder="City / Address" /></View>
+                      <View style={{ flex: 1 }}>
+                        <BottomSheetSearch
+                          label="Ship To State"
+                          options={INDIAN_STATES.map(st => ({ label: st, value: st }))}
+                          value={shipToState}
+                          onSelect={(opt) => {
+                            setShipToState(opt.value);
+                            const validCities = getCitiesForState(opt.value);
+                            if (shipTo && !validCities.includes(shipTo)) {
+                              setShipTo('');
+                            }
+                          }}
+                          onClear={() => { setShipToState(''); setShipTo(''); }}
+                          placeholder="Select state..."
+                          sheetTitle="Ship To State"
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <BottomSheetSearch
+                          label="Ship To"
+                          options={getCitiesForState(shipToState).map(c => ({ label: c, value: c }))}
+                          value={shipTo}
+                          onSelect={(opt) => setShipTo(opt.value)}
+                          onClear={() => setShipTo('')}
+                          placeholder={shipToState ? 'Select city...' : 'Select state first'}
+                          sheetTitle="Ship To City"
+                          disabled={!shipToState}
+                        />
+                      </View>
                     </View>
                     {/* Transport Mode dropdown */}
                     <FormDropdown
