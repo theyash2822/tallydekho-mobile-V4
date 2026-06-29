@@ -159,53 +159,36 @@ export default function LogisticsSection({
         : e
     ));
 
+  // Chevron-only toggle: clicking chevron auto-creates first row if section is empty
+  const toggleSection = () => {
+    if (!expanded && entries.length === 0) {
+      // First expand of empty section → auto-create row 1 so user sees the ledger picker directly
+      onEntriesChange(prev => [...prev, newEntry()]);
+    }
+    setExpanded(!expanded);
+  };
+
   return (
     <View style={ls.container}>
-      {/* Header */}
-      {entries.length > 0 ? (
-        <TouchableOpacity style={ls.header} onPress={() => setExpanded(!expanded)} activeOpacity={0.7}>
-          <View style={ls.headerLeft}>
-            <View style={[ls.headerIcon, expanded ? ls.headerIconActive : undefined]}>
-              <MaterialCommunityIcons name="truck-outline" size={16} color={expanded ? COLORS.warning : COLORS.textSecondary} />
-            </View>
-            <View>
-              <Text style={ls.headerTitle}>Logistics & Shipping</Text>
-              <Text style={ls.headerSub}>
-                {`${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} · ₹${chargesTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
-              </Text>
-            </View>
+      {/* Header — single chevron toggle (works for both empty and populated states) */}
+      <TouchableOpacity style={ls.header} onPress={toggleSection} activeOpacity={0.7}>
+        <View style={ls.headerLeft}>
+          <View style={[ls.headerIcon, expanded ? ls.headerIconActive : undefined]}>
+            <MaterialCommunityIcons name="truck-outline" size={16} color={expanded ? COLORS.warning : COLORS.textSecondary} />
           </View>
-          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-      ) : (
-        <View style={ls.header}>
-          <View style={ls.headerLeft}>
-            <View style={ls.headerIcon}>
-              <MaterialCommunityIcons name="truck-outline" size={16} color={COLORS.textSecondary} />
-            </View>
-            <View>
-              <Text style={ls.headerTitle}>Logistics & Shipping</Text>
-              <Text style={ls.headerSub}>Freight, packing, other charges</Text>
-            </View>
+          <View>
+            <Text style={ls.headerTitle}>Logistics & Shipping</Text>
+            <Text style={ls.headerSub}>
+              {entries.length > 0
+                ? `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} · ₹${chargesTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                : 'Freight, packing, other charges'}
+            </Text>
           </View>
         </View>
-      )}
+        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textSecondary} />
+      </TouchableOpacity>
 
-      {/* Empty state: green dashed add button */}
-      {entries.length === 0 && (
-        <View style={{ paddingHorizontal: SPACING.md, paddingBottom: SPACING.md }}>
-          <TouchableOpacity
-            style={{ borderWidth: 1.5, borderColor: '#22C55E', borderStyle: 'dashed', borderRadius: 8, padding: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 8 }}
-            onPress={addEntry}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="add-circle-outline" size={16} color="#22C55E" />
-            <Text style={{ color: '#22C55E', fontWeight: '600', fontSize: 14 }}>Add Logistics / Shipping Charge</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Body */}
+      {/* Body — only render when expanded (rows always exist when expanded thanks to toggleSection) */}
       {entries.length > 0 && expanded && (
         <View style={ls.body}>
           {/* ── Logistics / Charge entries ── */}

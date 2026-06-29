@@ -93,6 +93,46 @@ const PAY_MODES: DropdownOption[] = [
   { label: 'IMPS', value: 'imps' },
 ];
 
+// Transport Mode — per EWB/GST spec
+const TRANSPORT_MODES: DropdownOption[] = [
+  { label: 'Road', value: 'Road' },
+  { label: 'Rail', value: 'Rail' },
+  { label: 'Air', value: 'Air' },
+  { label: 'Ship', value: 'Ship' },
+  { label: 'Not Applicable', value: 'Not Applicable' },
+];
+
+// Vehicle Type — mapped per Transport Mode
+const VEHICLE_TYPE_MAP: Record<string, DropdownOption[]> = {
+  Road: [
+    { label: 'Regular', value: 'Regular' },
+    { label: 'Over Dimensional Cargo (ODC)', value: 'Over Dimensional' },
+    { label: 'LMV (Light Motor Vehicle)', value: 'LMV' },
+    { label: 'HMV (Heavy Motor Vehicle)', value: 'HMV' },
+    { label: 'Two-Wheeler', value: 'Two-Wheeler' },
+    { label: 'Three-Wheeler', value: 'Three-Wheeler' },
+    { label: 'Tempo', value: 'Tempo' },
+    { label: 'Container', value: 'Container' },
+    { label: 'Trailer', value: 'Trailer' },
+  ],
+  Rail: [
+    { label: 'Goods Train', value: 'Goods Train' },
+    { label: 'Container Train', value: 'Container Train' },
+    { label: 'Wagon', value: 'Wagon' },
+  ],
+  Air: [
+    { label: 'Cargo Plane', value: 'Cargo Plane' },
+  ],
+  Ship: [
+    { label: 'Cargo Ship', value: 'Cargo Ship' },
+    { label: 'Container Ship', value: 'Container Ship' },
+    { label: 'Barge', value: 'Barge' },
+  ],
+  'Not Applicable': [
+    { label: 'Not Applicable', value: 'Not Applicable' },
+  ],
+};
+
 const GST_TYPES = ['Regular', 'Composition', 'Unregistered/Consumer', 'Consumer', 'SEZ', 'Overseas'];
 const INVOICE_STATES = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
@@ -735,6 +775,11 @@ export default function CreateSalesInvoiceScreen() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [payTermsExpanded, setPayTermsExpanded] = useState(false);
 
+  // Auto-scroll to top whenever step changes — ensures Collect Payment is visible on entering Step 3
+  useEffect(() => {
+    scrollRef.current?.scrollTo?.({ y: 0, animated: false });
+  }, [step]);
+
   // Dispatch
   const [showDispatch, setShowDispatch] = useState(false);
   const [dispatchFrom, setDispatchFrom] = useState('');
@@ -829,13 +874,48 @@ export default function CreateSalesInvoiceScreen() {
     }).catch(() => {});
   }, [company?.guid]);
 
-  useEffect(() => {
-    if (!company?.guid) return;
+  // Fetch bank/cash ledgers — used by Collect Payment Now picker (Step 3)
+  const fetchBankLedgers = useCallback(() => {
+    if (!company?.guid) {
+      console.warn('[bank-ledgers] no company guid yet — skipping fetch');
+      return;
+    }
+    console.log('[bank-ledgers] fetching for company:', company.guid);
     getBankLedgers(company.guid).then((res: any) => {
       const list: any[] = res?.data || [];
-      setBankLedgers(list.map(l => ({ label: l.name, value: l.name, sub: l.type === 'cash' ? 'Cash' : 'Bank' })));
-    }).catch(() => {});
+      console.log(`[bank-ledgers] loaded ${list.length} ledgers`);
+      const mapped = list.map(l => {
+        const bal = parseFloat(l.balance || 0);
+        const balStr = bal !== 0
+          ? ` — ₹${Math.abs(bal).toLocaleString('en-IN', { maximumFractionDigits: 0 })} ${l.balance_type || ''}`
+          : '';
+        return {
+          label: `${l.name}${balStr}`,
+          value: l.name,
+          sub: l.type === 'cash' ? 'Cash' : 'Bank',
+        };
+      });
+      setBankLedgers(mapped);
+      if (list.length === 0) {
+        console.warn('[bank-ledgers] API returned 0 ledgers — check ledger "parent" groups in DB');
+      }
+    }).catch((err) => {
+      console.error('[bank-ledgers] fetch failed:', err?.message || err);
+      Toast.show({ type: 'error', text1: 'Could not load payment ledgers', text2: 'Tap the picker to retry' });
+    });
   }, [company?.guid]);
+
+  useEffect(() => {
+    fetchBankLedgers();
+  }, [fetchBankLedgers]);
+
+  // Safety net — refetch on entering Step 3 if list is empty
+  useEffect(() => {
+    if (step === 3 && bankLedgers.length === 0 && company?.guid) {
+      console.log('[bank-ledgers] step 3 reached with empty list — retrying');
+      fetchBankLedgers();
+    }
+  }, [step, bankLedgers.length, company?.guid, fetchBankLedgers]);
 
   useEffect(() => {
     if (!company?.guid) return;
@@ -1604,26 +1684,39 @@ export default function CreateSalesInvoiceScreen() {
                       setPayNowLedger(''); // always clear — user must pick correct ledger
                     }} placeholder="Select payment mode..." required />
                     {/* Payment Ledger picker — filtered by mode type */}
-                    <BottomSheetSearch
-                      label="Payment Ledger"
-                      required
-                      options={
-                        payNowMode === 'cash'
-                          ? bankLedgers.filter(l => l.sub === 'Cash')
-                          : payNowMode
-                            ? bankLedgers.filter(l => l.sub === 'Bank')
-                            : bankLedgers
-                      }
-                      value={payNowLedger}
-                      onSelect={(opt) => setPayNowLedger(opt.value)}
-                      onClear={() => setPayNowLedger('')}
-                      placeholder={
-                        !payNowMode ? 'Select mode first...' :
-                        payNowMode === 'cash' ? 'Select cash ledger...' :
-                        'Select bank ledger...'
-                      }
-                      sheetTitle="Payment Ledger"
-                    />
+                    {bankLedgers.length === 0 ? (
+                      <TouchableOpacity
+                        onPress={fetchBankLedgers}
+                        style={{ paddingVertical: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: COLORS.warning, borderRadius: 8, backgroundColor: '#FFF8E1', flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="refresh-outline" size={16} color={COLORS.warning} />
+                        <Text style={{ color: COLORS.warning, fontWeight: '600', fontSize: 13, flex: 1 }}>
+                          Payment ledgers not loaded — Tap to retry
+                        </Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <BottomSheetSearch
+                        label="Payment Ledger"
+                        required
+                        options={
+                          payNowMode === 'cash'
+                            ? bankLedgers.filter(l => l.sub === 'Cash')
+                            : payNowMode
+                              ? bankLedgers.filter(l => l.sub === 'Bank')
+                              : bankLedgers
+                        }
+                        value={payNowLedger}
+                        onSelect={(opt) => setPayNowLedger(opt.value)}
+                        onClear={() => setPayNowLedger('')}
+                        placeholder={
+                          !payNowMode ? 'Select mode first...' :
+                          payNowMode === 'cash' ? 'Select cash ledger...' :
+                          'Select bank ledger...'
+                        }
+                        sheetTitle="Payment Ledger"
+                      />
+                    )}
                     <View style={s.row2}>
                       <View style={{ flex: 1 }}>
                         <Text style={s.fLabel}>Amount Received (₹)</Text>
@@ -1672,30 +1765,29 @@ export default function CreateSalesInvoiceScreen() {
                 {showDispatch && (
                   <View style={s.payNowBody}>
                     <View style={s.divider} />
+                    {/* Dispatch From: State (left) → City (right) */}
                     <View style={s.row2}>
-                      <View style={{ flex: 1 }}><Text style={s.fLabel}>Dispatch From</Text><ThemedFInput value={dispatchFrom} onChangeText={setDispatchFrom} placeholder="City / Address" /></View>
                       <View style={{ flex: 1 }}><Text style={s.fLabel}>Dispatch State</Text><ThemedFInput value={dispatchFromState} onChangeText={setDispatchFromState} placeholder="e.g. Rajasthan" /></View>
+                      <View style={{ flex: 1 }}><Text style={s.fLabel}>Dispatch From</Text><ThemedFInput value={dispatchFrom} onChangeText={setDispatchFrom} placeholder="City / Address" /></View>
                     </View>
+                    {/* Ship To: State (left) → City (right) */}
                     <View style={s.row2}>
-                      <View style={{ flex: 1 }}><Text style={s.fLabel}>Ship To</Text><ThemedFInput value={shipTo} onChangeText={setShipTo} placeholder="City / Address" /></View>
                       <View style={{ flex: 1 }}><Text style={s.fLabel}>Ship To State</Text><ThemedFInput value={shipToState} onChangeText={setShipToState} placeholder="e.g. Madhya Pradesh" /></View>
+                      <View style={{ flex: 1 }}><Text style={s.fLabel}>Ship To</Text><ThemedFInput value={shipTo} onChangeText={setShipTo} placeholder="City / Address" /></View>
                     </View>
-                    <Text style={s.fLabel}>Transport Mode</Text>
-                    <View style={s.termsRow}>
-                      {['Road', 'Rail', 'Air', 'Ship'].map(mode => (
-                        <TouchableOpacity key={mode} style={[s.termChip, transportMode === mode && s.termChipActive]} onPress={() => setTransportMode(mode)} activeOpacity={0.7}>
-                          <Text style={[s.termChipTxt, transportMode === mode && s.termChipTxtActive]}>{mode}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                    <TouchableOpacity
-                      style={[s.naChip, transportMode === 'Not Applicable' && s.naChipActive]}
-                      onPress={() => setTransportMode('Not Applicable')}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="close-circle-outline" size={13} color={transportMode === 'Not Applicable' ? COLORS.white : COLORS.textTertiary} />
-                      <Text style={[s.naChipTxt, transportMode === 'Not Applicable' && s.naChipTxtActive]}>Not Applicable</Text>
-                    </TouchableOpacity>
+                    {/* Transport Mode dropdown */}
+                    <FormDropdown
+                      label="Transport Mode"
+                      value={transportMode}
+                      options={TRANSPORT_MODES}
+                      onSelect={(o: any) => {
+                        setTransportMode(o.value);
+                        // Reset Vehicle Type to first valid option for the new mode
+                        const firstVt = VEHICLE_TYPE_MAP[o.value]?.[0]?.value || 'Regular';
+                        setVehicleType(firstVt);
+                      }}
+                      placeholder="Select transport mode..."
+                    />
                     <View style={s.row2}>
                       <View style={{ flex: 1 }}><Text style={s.fLabel}>Transporter Name</Text><ThemedFInput value={transporterName} onChangeText={setTransporterName} placeholder="Optional" /></View>
                       <View style={{ flex: 1 }}><Text style={s.fLabel}>Transporter ID</Text><ThemedFInput value={transporterId} onChangeText={setTransporterId} placeholder="GSTIN / ID" /></View>
@@ -1703,14 +1795,14 @@ export default function CreateSalesInvoiceScreen() {
                     <View style={s.row2}>
                       <View style={{ flex: 1 }}><Text style={s.fLabel}>Vehicle Number</Text><ThemedFInput value={vehicleNumber} onChangeText={v => setVehicleNumber(v.toUpperCase())} placeholder="e.g. MH12AB1234" /></View>
                       <View style={{ flex: 1 }}>
-                        <Text style={s.fLabel}>Vehicle Type</Text>
-                        <View style={s.termsRow}>
-                          {['Regular', 'Over Dimensional', 'Not Applicable'].map(vt => (
-                            <TouchableOpacity key={vt} style={[s.termChip, vehicleType === vt && s.termChipActive]} onPress={() => setVehicleType(vt)} activeOpacity={0.7}>
-                              <Text style={[s.termChipTxt, vehicleType === vt && s.termChipTxtActive]}>{vt.split(' ')[0]}</Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
+                        {/* Vehicle Type dropdown — options mapped to selected Transport Mode */}
+                        <FormDropdown
+                          label="Vehicle Type"
+                          value={vehicleType}
+                          options={VEHICLE_TYPE_MAP[transportMode] || VEHICLE_TYPE_MAP.Road}
+                          onSelect={(o: any) => setVehicleType(o.value)}
+                          placeholder="Select vehicle type..."
+                        />
                       </View>
                     </View>
                     <View style={s.row2}>
