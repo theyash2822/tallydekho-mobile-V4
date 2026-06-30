@@ -730,6 +730,20 @@ function ItemRow({
 export default function CreateSalesInvoiceScreen() {
   const router = useRouter();
   const scrollRef = useRef<any>(null);
+  // Notes & Terms: capture Y offsets via onLayout so we can scroll the focused field above the keyboard
+  // (replaces the previous scrollToEnd hack which scrolled PAST Narration onto Terms).
+  // notesCardY = absolute Y of the Notes & Terms card inside the ScrollView's inner content.
+  // narrationOffset / termsOffset = Y of each field relative to that card.
+  const notesCardY     = useRef<number>(0);
+  const narrationOffset = useRef<number>(0);
+  const termsOffset     = useRef<number>(0);
+  const scrollToFieldY = (fieldOffset: number) => {
+    setTimeout(() => {
+      // ~100px headroom above the field so the label is visible above the keyboard
+      const absY = notesCardY.current + fieldOffset;
+      scrollRef.current?.scrollTo?.({ y: Math.max(0, absY - 100), animated: true });
+    }, 250); // wait for keyboard to begin showing before measuring
+  };
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
@@ -1307,7 +1321,7 @@ export default function CreateSalesInvoiceScreen() {
           transport_mode: transportMode,
           transporter_name: transporterName || undefined, transporter_id: transporterId || undefined,
           vehicle_number: vehicleNumber || undefined, vehicle_type: vehicleType,
-          transport_doc_no: transportDocNo || undefined, transport_doc_date: transportDocDate || undefined,
+          transport_doc_no: transportDocNo || undefined, transport_doc_date: transportDocDate ? dmyToISO(transportDocDate) : undefined,
         } : undefined,
       });
 
@@ -1879,7 +1893,11 @@ export default function CreateSalesInvoiceScreen() {
                         <Text style={s.fLabel}>Doc Date</Text>
                         <TouchableOpacity style={[s.fInput, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]} onPress={() => setShowTransportDocDatePicker(true)}>
                           <Text style={{ color: transportDocDate ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.base }}>
-                            {transportDocDate ? (() => { const [y, m, d] = transportDocDate.split('-'); return `${d}/${m}/${y.slice(2)}`; })() : 'Optional'}
+                            {transportDocDate
+                              ? (transportDocDate.includes('-')
+                                  ? (() => { const [y, m, d] = transportDocDate.split('-'); return `${d}/${m}/${y.slice(2)}`; })()
+                                  : transportDocDate)
+                              : 'Optional'}
                           </Text>
                           <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
                         </TouchableOpacity>
@@ -1982,22 +2000,35 @@ export default function CreateSalesInvoiceScreen() {
               </View>
 
               {/* 5. Notes & Terms */}
-              <View style={s.card}>
+              <View style={s.card} onLayout={(e) => { notesCardY.current = e.nativeEvent.layout.y; }}>
                 <View style={s.cardHdr}>
                   <Ionicons name="document-outline" size={18} color={COLORS.textSecondary} />
                   <Text style={s.cardTitle}>Notes & Terms</Text>
                 </View>
-                <FormField
-                  label="Narration"
-                  value={narration}
-                  onChangeText={setNarration}
-                  placeholder="Internal notes..."
-                  multiline
-                  numberOfLines={2}
-                  style={{ minHeight: 60, textAlignVertical: 'top' } as any}
-                  onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd?.({ animated: true }), 200)}
-                />
-                <FormField label="Terms & Conditions" value={termsText} onChangeText={setTermsText} multiline numberOfLines={3} style={{ minHeight: 72, textAlignVertical: 'top' } as any} containerStyle={{ marginBottom: 0 }} onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd?.({ animated: true }), 200)} />
+                <View onLayout={(e) => { narrationOffset.current = e.nativeEvent.layout.y; }}>
+                  <FormField
+                    label="Narration"
+                    value={narration}
+                    onChangeText={setNarration}
+                    placeholder="Internal notes..."
+                    multiline
+                    numberOfLines={2}
+                    style={{ minHeight: 60, textAlignVertical: 'top' } as any}
+                    onFocus={() => scrollToFieldY(narrationOffset.current)}
+                  />
+                </View>
+                <View onLayout={(e) => { termsOffset.current = e.nativeEvent.layout.y; }}>
+                  <FormField
+                    label="Terms & Conditions"
+                    value={termsText}
+                    onChangeText={setTermsText}
+                    multiline
+                    numberOfLines={3}
+                    style={{ minHeight: 72, textAlignVertical: 'top' } as any}
+                    containerStyle={{ marginBottom: 0 }}
+                    onFocus={() => scrollToFieldY(termsOffset.current)}
+                  />
+                </View>
               </View>
             </>
           )}
@@ -2065,7 +2096,7 @@ export default function CreateSalesInvoiceScreen() {
       </Modal>
 
       <DatePickerModal visible={showDatePicker} value={date} minDate={fyStart} maxDate={new Date().toISOString().slice(0, 10)} onSelect={(d) => { setDate(d); setShowDatePicker(false); }} onClose={() => setShowDatePicker(false)} />
-      <DatePickerModal visible={showTransportDocDatePicker} value={transportDocDate || new Date().toISOString().slice(0, 10)} maxDate={new Date().toISOString().slice(0, 10)} onSelect={(d) => { setTransportDocDate(d); setShowTransportDocDatePicker(false); }} onClose={() => setShowTransportDocDatePicker(false)} />
+      <DatePickerModal visible={showTransportDocDatePicker} value={transportDocDate || todayStr()} maxDate={new Date().toISOString().slice(0, 10)} onSelect={(d) => { setTransportDocDate(d); setShowTransportDocDatePicker(false); }} onClose={() => setShowTransportDocDatePicker(false)} />
 
       <AddCustomerDrawer
         ref={addCustomerRef}

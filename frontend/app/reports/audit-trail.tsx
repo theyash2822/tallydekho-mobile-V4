@@ -65,6 +65,10 @@ interface VoucherEntry {
   // For Receipt vouchers auto-created by a collect_payment Sales invoice
   linkedInvoiceRef?: string;   // invoice TDK ref or voucher number
   linkedInvoiceAmt?: number;   // original sales invoice total
+  // Invoice+Receipt split (2026-06-30): parent linkage exposed by /vouchers/my-entries
+  parentInvoiceUuid?: string | null;
+  parentTdkRef?: string | null;
+  parentTallyVoucherNo?: string | null;
   rawAmount?: number;          // raw numeric amount for linking
   rawDate?: string;
   rawParty?: string;
@@ -136,6 +140,9 @@ const mapApiRow = (r: any, fmt: (n: number) => string = (n) => String(n)): Vouch
   conversionStatus: r.conversion_status,
   eInvoiceStatus: r.e_invoice_status,
   eWayBillStatus: r.e_way_bill_status,
+  parentInvoiceUuid: r.parent_invoice_uuid || null,
+  parentTdkRef: r.parent_tdk_reference_no || null,
+  parentTallyVoucherNo: r.parent_tally_voucher_no || null,
 });
 
 // ─── Color Maps ───────────────────────────────────────────────────────────────
@@ -367,6 +374,9 @@ export default function AuditTrailScreen() {
     conversionStatus: p.conversion_status,
     eInvoiceStatus: p.e_invoice_status,
     eWayBillStatus: p.e_way_bill_status,
+    parentInvoiceUuid: p.parent_invoice_uuid || null,
+    parentTdkRef: p.parent_tdk_reference_no || null,
+    parentTallyVoucherNo: p.parent_tally_voucher_no || null,
   });
 
   // ── Fetch data ────────────────────────────────────────────
