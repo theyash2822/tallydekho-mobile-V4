@@ -1238,6 +1238,9 @@ export default function CreateSalesInvoiceScreen() {
 
   // ── Submit ────────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
+    // Dismiss any open keyboard before validation / submit — prevents the keyboard from
+    // hovering over the success modal when user submits with a text field still focused.
+    Keyboard.dismiss();
     if (!party) { Toast.show({ type: 'error', text1: 'Customer required' }); return; }
     if (items.some(i => !i.product)) { Toast.show({ type: 'error', text1: 'All items need a product selected' }); return; }
     const multiWarehouseItems = items.filter(i => i.product && (itemGodowns[i.id]?.length || 0) > 1);
