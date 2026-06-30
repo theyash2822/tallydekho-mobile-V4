@@ -92,7 +92,8 @@ const formatMonth = (dateStr: string) => {
 const isCreditVoucher = (voucherType: string): boolean => {
   const t = (voucherType || '').toLowerCase();
   if (t.includes('receipt'))     return true;
-  if (t.includes('credit note')) return true;
+  // Match both 'credit note' (Tally sync rows) and 'credit_note' (write_queue entry_type)
+  if (t.includes('credit note') || t.includes('credit_note')) return true;
   if (t.includes('sales') && !t.includes('return') && !t.includes('order')) return true;
   return false;
 };
