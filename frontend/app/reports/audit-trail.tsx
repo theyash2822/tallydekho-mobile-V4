@@ -402,8 +402,15 @@ export default function AuditTrailScreen() {
           const queueFiltered = queueRows.filter((q: VoucherEntry) =>
             !q.tdkRef || !postedRows.some((p: VoucherEntry) => p.tdkRef && p.tdkRef === q.tdkRef)
           );
+          // Sort newest-first with tiebreak by tdkRef sequence (e.g. TDK-SAL-2026-0030 > 0029)
+          // so fresh Sales+Receipt pairs land at the TOP of a same-date cluster instead of
+          // being pushed below older same-day entries by the stable-sort's input order.
           const allMerged = [...queueFiltered, ...postedRows]
-            .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+            .sort((a, b) => {
+              const dcmp = (b.date || '').localeCompare(a.date || '');
+              if (dcmp !== 0) return dcmp;
+              return (b.tdkRef || '').localeCompare(a.tdkRef || '');
+            });
 
           // 2026-07-01 UX decision: Receipt tiles render as normal receipt entries — no explicit
           // "Linked to Sales" subtitle. Sales + Receipt appear sequentially in the same date group,
