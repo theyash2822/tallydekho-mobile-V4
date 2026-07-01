@@ -402,15 +402,15 @@ export default function AuditTrailScreen() {
           const queueFiltered = queueRows.filter((q: VoucherEntry) =>
             !q.tdkRef || !postedRows.some((p: VoucherEntry) => p.tdkRef && p.tdkRef === q.tdkRef)
           );
-          // Sort newest-first with tiebreak by tdkRef sequence (e.g. TDK-SAL-2026-0030 > 0029)
-          // so fresh Sales+Receipt pairs land at the TOP of a same-date cluster instead of
-          // being pushed below older same-day entries by the stable-sort's input order.
-          const allMerged = [...queueFiltered, ...postedRows]
-            .sort((a, b) => {
-              const dcmp = (b.date || '').localeCompare(a.date || '');
-              if (dcmp !== 0) return dcmp;
-              return (b.tdkRef || '').localeCompare(a.tdkRef || '');
-            });
+          // Trust backend order (2026-07-01 R3): backend sorts posted rows by
+          // app_vouchers.created_at DESC + av.id ASC, pending rows by wq.created_at DESC.
+          // Both use app-side entry timestamps so pairs render in user-entry order:
+          //   Invoice (submitted first) → Receipt (chained after) within the same pair,
+          //   newest pair on top. Client-side re-sort by v.date DESC was breaking this
+          //   by demoting same-day rows to stable-sort input order.
+          // Only apply a client-side merge order: queue rows (in-progress work) first,
+          // then posted rows — preserving backend-computed order within each group.
+          const allMerged = [...queueFiltered, ...postedRows];
 
           // 2026-07-01 UX decision: Receipt tiles render as normal receipt entries — no explicit
           // "Linked to Sales" subtitle. Sales + Receipt appear sequentially in the same date group,
