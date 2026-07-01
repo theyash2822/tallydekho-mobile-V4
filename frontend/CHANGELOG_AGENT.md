@@ -1,5 +1,40 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-07-01 (R4c) — Audit-Trail: stable-sort merged queue+posted by rawDate DESC
+
+### Context
+User reported June entries above July in Audit Trail. Backend fix (R4a: `ORDER BY v.date DESC` first) landed but symptom persisted. Forensic audit: mobile merge logic `[...queueFiltered, ...postedRows]` was prepending ALL pending above ALL posted regardless of date. 28 stale `failed` write_queue rows from May 27—June 24 (old debug data) were floating to the top and pushing current-July posted entries below them.
+
+### Fixed
+- `app/reports/audit-trail.tsx` — replaced naive concat with stable-sort by `rawDate DESC`:
+  ```ts
+  const combined = [...queueFiltered, ...postedRows];
+  const allMerged = combined.slice().sort((a, b) => {
+    const da = a.rawDate || '';
+    const db = b.rawDate || '';
+    if (da === db) return 0; // stable — preserves original relative order
+    return db.localeCompare(da); // DESC (newest date first)
+  });
+  ```
+- JS/Hermes `Array.sort` is stable — preserves backend's `av.created_at DESC + av.id ASC` order for same-date entries, and keeps queue-first-then-posted ordering within a single date group.
+- `rawDate` is `YYYY-MM-DD` string from backend — `localeCompare` DESC works lexicographically.
+- Updated the surrounding comment that said "trust backend order" (R3-era) so future me doesn't undo this.
+
+### Files
+- `app/reports/audit-trail.tsx` (merge block ~line 416)
+
+### QA
+- `npx tsc --noEmit` — zero errors on audit-trail.tsx 🟢 GREEN
+
+### Commits
+- `086a465a` — fix(audit-trail): re-sort merged queue+posted by rawDate DESC
+
+### Related
+- Backend companions: `008c78a` (R4a ORDER BY), `2dbf825` (R4b shared created_at)
+- Data cleanup: 28 stale failed write_queue rows soft-archived (backend DB, no commit)
+
+---
+
 ## 2026-06-26 — AddCustomerDrawer PAN + Document Type Fixes
 
 ### Fixed
