@@ -15,7 +15,7 @@ import {
   getParties, createSalesInvoice, getStocks, getWarehouses,
   getSalesLedgerAccounts, getTaxLedgers, createTallyParty, lookupBarcode,
   getComplianceConfig, getChargeLedgers, getStockGodowns, getBankLedgers,
-  invoiceSharePdf,
+  invoiceSharePdf, getCompanyProfile,
 } from '../../src/services/api';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -800,8 +800,14 @@ export default function CreateSalesInvoiceScreen() {
   const [showDispatch, setShowDispatch] = useState(false);
   const [dispatchFrom, setDispatchFrom] = useState('');
   const [dispatchFromState, setDispatchFromState] = useState('');
+  const [dispatchFromAddress1, setDispatchFromAddress1] = useState('');
+  const [dispatchFromAddress2, setDispatchFromAddress2] = useState('');
+  const [dispatchFromPincode, setDispatchFromPincode] = useState('');
   const [shipTo, setShipTo] = useState('');
   const [shipToState, setShipToState] = useState('');
+  const [shipToAddress1, setShipToAddress1] = useState('');
+  const [shipToAddress2, setShipToAddress2] = useState('');
+  const [shipToPincode, setShipToPincode] = useState('');
   const [transporterName, setTransporterName] = useState('');
   const [transporterId, setTransporterId] = useState('');
   const [transportMode, setTransportMode] = useState('Road');
@@ -810,6 +816,9 @@ export default function CreateSalesInvoiceScreen() {
   const [transportDocNo, setTransportDocNo] = useState('');
   const [transportDocDate, setTransportDocDate] = useState('');
   const [showTransportDocDatePicker, setShowTransportDocDatePicker] = useState(false);
+
+  // Company profile (for dispatch prefill) — loaded once on mount
+  const [companyProfile, setCompanyProfile] = useState<{ address?: string; state?: string; pincode?: string } | null>(null);
 
   // Collect Payment
   const [collectPayNow, setCollectPayNow] = useState(false);
@@ -840,8 +849,24 @@ export default function CreateSalesInvoiceScreen() {
         label: p.name,
         value: p.name,
         subtitle: p.gstin ? `GSTIN: ${p.gstin}` : undefined,
-        data: { gstin: p.gstin || '', gst_registration_type: p.gst_registration_type || '', guid: p.guid || '' },
+        data: {
+          gstin: p.gstin || '',
+          gst_registration_type: p.gst_registration_type || '',
+          guid: p.guid || '',
+          address: p.address || '',
+          state_name: p.state_name || '',
+          pincode: p.pincode || '',
+        },
       })));
+    }).catch(() => {});
+  }, [company?.guid]);
+
+  // Load company profile once — used to prefill Dispatch From address/pincode
+  useEffect(() => {
+    if (!company?.guid) return;
+    getCompanyProfile(company.guid).then((res: any) => {
+      const d = res?.data;
+      if (d) setCompanyProfile({ address: d.address || '', state: d.state || '', pincode: d.pincode || '' });
     }).catch(() => {});
   }, [company?.guid]);
 
@@ -952,6 +977,36 @@ export default function CreateSalesInvoiceScreen() {
     }).catch(() => {});
   }, [company?.guid]);
 
+  // ── Dispatch From prefill ─ fires when Dispatch section opens and company profile loaded ────────────────────────────────────────────────────────────
+  // Only fills blank fields — user edits are preserved.
+  useEffect(() => {
+    if (!showDispatch || !companyProfile) return;
+    const [c1, c2] = String(companyProfile.address || '').split(/\r?\n/).map(l => l.trim());
+    if (!dispatchFromAddress1 && c1) setDispatchFromAddress1(c1);
+    if (!dispatchFromAddress2 && c2) setDispatchFromAddress2(c2);
+    if (!dispatchFromPincode  && companyProfile.pincode) setDispatchFromPincode(String(companyProfile.pincode));
+    if (!dispatchFromState && companyProfile.state && INDIAN_STATES.includes(companyProfile.state)) {
+      setDispatchFromState(companyProfile.state);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showDispatch, companyProfile]);
+
+  // ── Ship To prefill ─ fires when a party is selected and Dispatch section is open ─────────────────────────────────────────────────────────
+  // Only prefills when the target fields are still empty — user edits win.
+  useEffect(() => {
+    if (!showDispatch || !party) return;
+    const p = parties.find(x => x.value === party);
+    const pd: any = p?.data || {};
+    const [l1, l2] = String(pd.address || '').split(/\r?\n/).map((l: string) => l.trim());
+    if (!shipToAddress1 && l1) setShipToAddress1(l1);
+    if (!shipToAddress2 && l2) setShipToAddress2(l2);
+    if (!shipToPincode  && pd.pincode) setShipToPincode(String(pd.pincode));
+    if (!shipToState && pd.state_name && INDIAN_STATES.includes(pd.state_name)) {
+      setShipToState(pd.state_name);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [party, parties, showDispatch]);
+
   const routeParams = useLocalSearchParams<{ party?: string; fromQuotation?: string }>();
   useEffect(() => {
     if (routeParams?.party) setParty(routeParams.party as string);
@@ -993,6 +1048,8 @@ export default function CreateSalesInvoiceScreen() {
         items, logEntries, roundOffLedger, roundOffAmount,
         payTerms, customDays, dueDate,
         showDispatch, dispatchFrom, dispatchFromState, shipTo, shipToState,
+        dispatchFromAddress1, dispatchFromAddress2, dispatchFromPincode,
+        shipToAddress1, shipToAddress2, shipToPincode,
         transporterName, transporterId, transportMode, vehicleNumber, vehicleType,
         transportDocNo, transportDocDate,
         collectPayNow, payNowMode, payNowAmount, payNowLedger, payNowRef,
@@ -1005,7 +1062,10 @@ export default function CreateSalesInvoiceScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, ledger, party, refNo, entryType, narration, termsText, items, logEntries,
       roundOffLedger, roundOffAmount, payTerms, customDays, dueDate, showDispatch,
-      dispatchFrom, dispatchFromState, shipTo, shipToState, transporterName, transporterId,
+      dispatchFrom, dispatchFromState, shipTo, shipToState,
+      dispatchFromAddress1, dispatchFromAddress2, dispatchFromPincode,
+      shipToAddress1, shipToAddress2, shipToPincode,
+      transporterName, transporterId,
       transportMode, vehicleNumber, vehicleType, transportDocNo, transportDocDate,
       collectPayNow, payNowMode, payNowAmount, payNowLedger, payNowRef, numberingPolicy]);
 
@@ -1045,6 +1105,12 @@ export default function CreateSalesInvoiceScreen() {
             setShipTo(d.shipTo);
           }
         }
+        if (d.dispatchFromAddress1) setDispatchFromAddress1(d.dispatchFromAddress1);
+        if (d.dispatchFromAddress2) setDispatchFromAddress2(d.dispatchFromAddress2);
+        if (d.dispatchFromPincode)  setDispatchFromPincode(d.dispatchFromPincode);
+        if (d.shipToAddress1)       setShipToAddress1(d.shipToAddress1);
+        if (d.shipToAddress2)       setShipToAddress2(d.shipToAddress2);
+        if (d.shipToPincode)        setShipToPincode(d.shipToPincode);
         if (d.transporterName) setTransporterName(d.transporterName);
         if (d.transporterId)  setTransporterId(d.transporterId);
         if (d.transportMode)  setTransportMode(d.transportMode);
@@ -1250,6 +1316,15 @@ export default function CreateSalesInvoiceScreen() {
         Toast.show({ type: 'error', text1: 'Dispatch details required', text2: 'Dispatch From and Ship To are mandatory for E-Way Bill' });
         return;
       }
+      if (!dispatchFromAddress1?.trim() || !shipToAddress1?.trim()) {
+        Toast.show({ type: 'error', text1: 'Address required', text2: 'Address Line 1 is mandatory for both Dispatch From and Ship To' });
+        return;
+      }
+      const isValidPin = (p: string) => /^\d{6}$/.test(String(p || '').trim());
+      if (!isValidPin(dispatchFromPincode) || !isValidPin(shipToPincode)) {
+        Toast.show({ type: 'error', text1: 'Pincode required', text2: 'Enter a valid 6-digit pincode for both Dispatch From and Ship To' });
+        return;
+      }
     }
     if (collectPayNow && !payNowLedger) {
       Toast.show({ type: 'error', text1: 'Payment Ledger required', text2: 'Select a Cash or Bank ledger for payment.' });
@@ -1320,7 +1395,13 @@ export default function CreateSalesInvoiceScreen() {
         } : undefined,
         dispatch_details: showDispatch ? {
           dispatch_from: dispatchFrom, dispatch_from_state: dispatchFromState || undefined,
+          dispatch_from_address1: dispatchFromAddress1 || undefined,
+          dispatch_from_address2: dispatchFromAddress2 || undefined,
+          dispatch_from_pincode:  dispatchFromPincode  || undefined,
           ship_to: shipTo, ship_to_state: shipToState || undefined,
+          ship_to_address1: shipToAddress1 || undefined,
+          ship_to_address2: shipToAddress2 || undefined,
+          ship_to_pincode:  shipToPincode  || undefined,
           transport_mode: transportMode,
           transporter_name: transporterName || undefined, transporter_id: transporterId || undefined,
           vehicle_number: vehicleNumber || undefined, vehicle_type: vehicleType,
@@ -1828,6 +1909,32 @@ export default function CreateSalesInvoiceScreen() {
                         />
                       </View>
                     </View>
+                    {/* Dispatch From: Address Line 1 (required for EWB) */}
+                    <Text style={s.fLabel}>Dispatch Address Line 1{ewbRequired ? ' *' : ''}</Text>
+                    <ThemedFInput
+                      value={dispatchFromAddress1}
+                      onChangeText={setDispatchFromAddress1}
+                      placeholder="Building / Street / Area"
+                    />
+                    <Text style={s.fLabel}>Dispatch Address Line 2</Text>
+                    <ThemedFInput
+                      value={dispatchFromAddress2}
+                      onChangeText={setDispatchFromAddress2}
+                      placeholder="Landmark / Locality (optional)"
+                    />
+                    <View style={s.row2}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.fLabel}>Dispatch Pincode{ewbRequired ? ' *' : ''}</Text>
+                        <ThemedFInput
+                          value={dispatchFromPincode}
+                          onChangeText={(v) => setDispatchFromPincode(v.replace(/[^0-9]/g, '').slice(0, 6))}
+                          keyboardType="numeric"
+                          placeholder="6-digit pincode"
+                          maxLength={6}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }} />
+                    </View>
                     {/* Ship To: State (left, dropdown) → City (right, dropdown filtered by state) */}
                     <View style={s.row2}>
                       <View style={{ flex: 1 }}>
@@ -1859,6 +1966,32 @@ export default function CreateSalesInvoiceScreen() {
                           disabled={!shipToState}
                         />
                       </View>
+                    </View>
+                    {/* Ship To: Address Line 1 (required for EWB) */}
+                    <Text style={s.fLabel}>Ship To Address Line 1{ewbRequired ? ' *' : ''}</Text>
+                    <ThemedFInput
+                      value={shipToAddress1}
+                      onChangeText={setShipToAddress1}
+                      placeholder="Building / Street / Area"
+                    />
+                    <Text style={s.fLabel}>Ship To Address Line 2</Text>
+                    <ThemedFInput
+                      value={shipToAddress2}
+                      onChangeText={setShipToAddress2}
+                      placeholder="Landmark / Locality (optional)"
+                    />
+                    <View style={s.row2}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.fLabel}>Ship To Pincode{ewbRequired ? ' *' : ''}</Text>
+                        <ThemedFInput
+                          value={shipToPincode}
+                          onChangeText={(v) => setShipToPincode(v.replace(/[^0-9]/g, '').slice(0, 6))}
+                          keyboardType="numeric"
+                          placeholder="6-digit pincode"
+                          maxLength={6}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }} />
                     </View>
                     {/* Transport Mode dropdown */}
                     <FormDropdown
