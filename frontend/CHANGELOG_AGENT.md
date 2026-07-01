@@ -1,5 +1,34 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-07-01 (R5) — Dispatch/EWB: address lines + pincode fields in Sales Create Invoice
+
+### Context
+User asked to extend Dispatch/E-Way Bill Details in Sales → Create Invoice — currently only State + City were captured. NIC EWB requires Address Line 1/2 + 6-digit pincode for both dispatch-from and ship-to. User approved plan: addr1 required, addr2 optional, prefill company (dispatch) and party (ship-to), only show mandatory when EWB applicable, no theme/font changes.
+
+### Added
+`app/sales/create-invoice.tsx`:
+- 6 new fields on Dispatch section: `dispatchFromAddress1`, `dispatchFromAddress2`, `dispatchFromPincode`, `shipToAddress1`, `shipToAddress2`, `shipToPincode`
+- `companyProfile` state + `getCompanyProfile(company.guid)` fetch on mount
+- Party dropdown now exposes `address`, `state_name`, `pincode` in `.data` (from expanded `/parties` API response)
+- Prefill effect: when Dispatch section opens AND company profile loaded → split company address on `\n` → fill `dispatchFromAddress1/2/Pincode/State` if still blank
+- Prefill effect: when party selected AND Dispatch section open → read party's address/state/pincode → fill `shipToAddress1/2/Pincode/State` if still blank
+- User edits are always preserved (only blanks get prefilled)
+- Validation extended in `handleSubmit`: when `ewbRequired && showDispatch`, addr1 mandatory both sides + 6-digit pincode enforced via `/^\d{6}$/`
+- Pincode inputs are keyboard-locked to numeric + hard-capped at 6 digits (`replace(/[^0-9]/g, '').slice(0, 6)`)
+- Draft save/restore extended for all 6 new fields
+- `dispatch_details` payload extended with `dispatch_from_address1/2/pincode` + `ship_to_address1/2/pincode`
+
+### UI Rules Enforced
+Zero theme changes. Only `ThemedFInput`, `s.fLabel`, `s.row2`, existing `COLORS` constants used. No new StyleSheet colors, no font family changes.
+
+### QA
+GREEN — QA agent ran `npx tsc --noEmit --skipLibCheck` (zero errors), verified API contract match with backend, verified prefill guards, verified no theme leaks.
+
+### Commit
+`892e8a78` on `main`
+
+---
+
 ## 2026-07-01 (R4c) — Audit-Trail: stable-sort merged queue+posted by rawDate DESC
 
 ### Context
