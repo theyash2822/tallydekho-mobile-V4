@@ -1,4 +1,20 @@
 
+## [2026-07-01] UX — Remove 'Linked to Sales' subtitle on Receipt tiles
+
+### Changed
+- `app/reports/audit-trail.tsx` — removed `↳ Linked to Sales …` subtitle from Receipt entries in My Entries tab.
+- Rationale: Sales + Receipt tiles always render sequentially in the same date group, so pairing is visually implied without needing a hyperlink-style subtitle.
+- Removed dead legacy computation (`linkedInvoiceRef` / `linkedInvoiceAmt`) that populated the deleted subtitle.
+- Kept `parentTdkRef` / `parentTallyVoucherNo` in the `VoucherEntry` model — still returned by `/vouchers/my-entries` and available for future drill-down UX.
+
+### QA
+🟢 GREEN — `npx tsc --noEmit` zero errors, no other refs to removed fields.
+
+### Commits
+- `2a6b57e9` → tallydekho-mobile-V4
+
+---
+
 ## [2026-06-06] QA Testing Agent — movement-analytics.tsx
 
 ### Bugs Fixed (QA inline)
