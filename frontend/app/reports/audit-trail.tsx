@@ -63,8 +63,6 @@ interface VoucherEntry {
   eInvoiceStatus?: string;
   eWayBillStatus?: string;
   // For Receipt vouchers auto-created by a collect_payment Sales invoice
-  linkedInvoiceRef?: string;   // invoice TDK ref or voucher number
-  linkedInvoiceAmt?: number;   // original sales invoice total
   // Invoice+Receipt split (2026-06-30): parent linkage exposed by /vouchers/my-entries
   parentInvoiceUuid?: string | null;
   parentTdkRef?: string | null;
@@ -407,27 +405,11 @@ export default function AuditTrailScreen() {
           const allMerged = [...queueFiltered, ...postedRows]
             .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
-          // Link Receipt rows to their parent Sales invoice when collect_payment was used
-          // Match: same date + same party + receipt amount = collect_payment.amount on the sales row
-          const salesRows = allMerged.filter(e => e.type === 'Sales');
-          const merged = allMerged.map(entry => {
-            if (entry.type !== 'Receipt') return entry;
-            const linked = salesRows.find(s => {
-              const cpAmt = s.rawPayload?.collect_payment?.amount
-                ?? s.rawPayload?.collect_payment?.amount;
-              return s.rawDate === entry.rawDate
-                && s.rawParty === entry.rawParty
-                && cpAmt && Math.abs(parseFloat(cpAmt) - (entry.rawAmount || 0)) < 1;
-            });
-            if (!linked) return entry;
-            return {
-              ...entry,
-              linkedInvoiceRef: linked.tdkRef || linked.ref || linked.tallyVoucherNo || '',
-              linkedInvoiceAmt: linked.rawAmount,
-            };
-          });
-
-          setApiEntries(merged);
+          // 2026-07-01 UX decision: Receipt tiles render as normal receipt entries — no explicit
+          // "Linked to Sales" subtitle. Sales + Receipt appear sequentially in the same date group,
+          // so the linkage is visually implied. Parent linkage data (parentTdkRef / parentTallyVoucherNo)
+          // still flows through the model in case a future drill-down surface uses it.
+          setApiEntries(allMerged);
           setHasMore(false);
         })
         .catch((err: any) => setApiError(err?.message || 'Failed to load entries'))
@@ -954,18 +936,11 @@ export default function AuditTrailScreen() {
                                   )}
                                 </View>
                               )}
-                              {/* Linked Receipt subtitle (Phase D11(d)) — shown on Receipt rows
-                                  paired to a Sales Invoice via collect_payment. Prefer the explicit
-                                  parent ref/voucher returned by /vouchers/my-entries (parent_tdk_reference_no
-                                  / parent_tally_voucher_no). Fall back to the legacy heuristic match. */}
-                              {(entry.parentTdkRef || entry.parentTallyVoucherNo || entry.linkedInvoiceRef) ? (
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-                                  <Ionicons name="link-outline" size={11} color={COLORS.info} />
-                                  <Text style={{ fontSize: 10, color: COLORS.info, fontWeight: '600' }}>
-                                    ↳ Linked to Sales {entry.parentTallyVoucherNo || entry.parentTdkRef || entry.linkedInvoiceRef}
-                                  </Text>
-                                </View>
-                              ) : null}
+                              {/* Receipt rows render as normal tiles (2026-07-01 UX decision). Sales+Receipt
+                                  always appear sequentially in the same date group, so users infer the pairing
+                                  visually — no explicit "Linked to Sales" subtitle needed. Parent linkage data
+                                  (parentTdkRef / parentTallyVoucherNo) still flows through the model for future
+                                  drill-down features. */}
                               <Text style={s.partyTxt}>{entry.party}</Text>
                               <Text style={s.descTxt}>{entry.description}</Text>
                               {activeTab === 'myentries' && entry.currentEntryType === 'optional' && entry.conversionStatus !== 'converted' && (
