@@ -1,4 +1,19 @@
 
+## [2026-07-01] (R2) UX — Same-day sort tiebreak by tdkRef
+
+### Fixed
+- Audit-Trail My Entries: when multiple entries share the same date (common with same-day Sales+Receipt pairs), the previous sort `b.date.localeCompare(a.date)` returned 0 and stable-sort kept input order — pushing the freshest pair below older same-day entries.
+- Added tiebreak: `(b.tdkRef || '').localeCompare(a.tdkRef || '')` → newer sequence wins (e.g. `TDK-SAL-2026-0030 > TDK-SAL-2026-0029`), latest pair now on top of the same-date cluster.
+- Double-guarded with `|| ''` fallback so entries without tdkRef fall through to prior stable behavior.
+
+### QA
+🟢 GREEN (formal subagent R2) — `tsc --noEmit` 0 errors, null-safe verified.
+
+### Commits
+- `468b2f81` → tallydekho-mobile-V4
+
+---
+
 ## [2026-07-01] UX — Remove 'Linked to Sales' subtitle on Receipt tiles
 
 ### Changed
