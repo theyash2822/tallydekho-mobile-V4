@@ -402,15 +402,22 @@ export default function AuditTrailScreen() {
           const queueFiltered = queueRows.filter((q: VoucherEntry) =>
             !q.tdkRef || !postedRows.some((p: VoucherEntry) => p.tdkRef && p.tdkRef === q.tdkRef)
           );
-          // Trust backend order (2026-07-01 R3): backend sorts posted rows by
-          // app_vouchers.created_at DESC + av.id ASC, pending rows by wq.created_at DESC.
-          // Both use app-side entry timestamps so pairs render in user-entry order:
-          //   Invoice (submitted first) → Receipt (chained after) within the same pair,
-          //   newest pair on top. Client-side re-sort by v.date DESC was breaking this
-          //   by demoting same-day rows to stable-sort input order.
-          // Only apply a client-side merge order: queue rows (in-progress work) first,
-          // then posted rows — preserving backend-computed order within each group.
-          const allMerged = [...queueFiltered, ...postedRows];
+          // 2026-07-01 R4: Merge queue + posted, then sort the WHOLE combined list by
+          // rawDate DESC (business date, YYYY-MM-DD text so lexicographic works) with
+          // stable tiebreak preserving each group's own order for same-date entries.
+          // Why the re-sort: stale/failed queue rows can be months old (May/June leftovers
+          // from earlier debugging). Previous naive `[...queue, ...posted]` prepended ALL
+          // pending above ALL posted — which pushed old-month failed rows above current-
+          // month posted rows in Audit Trail, breaking chronological display.
+          // Backend already sorts posted rows by v.date DESC + av.created_at DESC + av.id ASC,
+          // so JS Array.sort's stability preserves that intra-day order.
+          const combined = [...queueFiltered, ...postedRows];
+          const allMerged = combined.slice().sort((a, b) => {
+            const da = a.rawDate || '';
+            const db = b.rawDate || '';
+            if (da === db) return 0; // stable — keeps original relative order within same date
+            return db.localeCompare(da); // DESC (newest date first)
+          });
 
           // 2026-07-01 UX decision: Receipt tiles render as normal receipt entries — no explicit
           // "Linked to Sales" subtitle. Sales + Receipt appear sequentially in the same date group,
