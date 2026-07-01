@@ -1,4 +1,19 @@
 
+## [2026-07-01] (R3) UX — Trust backend order, remove client-side re-sort
+
+### Fixed
+- R2 client-side sort (`b.date.localeCompare(a.date)` then tdkRef tiebreak) was fighting the backend order.
+- Backend now sorts by `av.created_at DESC, av.id ASC` (app-side entry timestamp) — correct business flow: Invoice on top, chained Receipt directly below within same pair.
+- Removed `.sort()` on `allMerged` entirely. Queue rows still merged in front of posted rows (in-progress work always on top).
+
+### QA
+🟢 GREEN (formal subagent R3, mobile side).
+
+### Commits
+- `0c873b0c` → tallydekho-mobile-V4
+
+---
+
 ## [2026-07-01] (R2) UX — Same-day sort tiebreak by tdkRef
 
 ### Fixed
