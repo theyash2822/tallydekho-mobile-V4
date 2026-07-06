@@ -1,4 +1,49 @@
 
+## [2026-07-06] Party Form — Multi-country dropdown + Bank Details removal
+
+### Context
+During the same session as backend Tally 6.2 mailing details fix, user asked to:
+1. Remove Bank Details section from Party Form (not needed on customer ledgers)
+2. Support all 25 countries the app already supports (Settings had multi-country, Party Form was India-only)
+
+### Added
+- **src/constants/countries.ts (NEW)** — Authoritative list of 25 countries (Tally-canonical spellings, sorted alpha): Australia, Bahrain, Bangladesh, Canada, China, France, Germany, India, Japan, Kenya, Kuwait, Malaysia, Nepal, New Zealand, Nigeria, Oman, Qatar, Saudi Arabia, Singapore, South Africa, Sri Lanka, Tanzania, UAE, United Kingdom, United States. Exports `COUNTRIES` (string[]) + `DEFAULT_COUNTRY = 'India'`.
+
+### Changed
+- **src/components/forms/PartyForm.tsx:**
+  - `COUNTRY_OPTIONS` const now maps from `COUNTRIES` constant (was hardcoded India-only, 1 option).
+  - Imports `COUNTRIES, DEFAULT_COUNTRY` from new constants file.
+  - **Bank Details JSX section removed from render** (toggleRow + expandSection with 5 PartyInputs).
+  - Interface field `bankEnabled` + all bank state hooks (bankBeneficiaryName, bankName, bankAccountNo, bankIfsc, bankBranch) + useImperativeHandle getData return values preserved so external refs/PartyFormData interface don't break. `bankEnabled` stays `false` forever, so downstream payload conditionals never fire.
+- **app/ledger/create.tsx:** `bankDetails: pd.bankEnabled ? {...} : undefined` payload block removed. `vatDetails:` block preserved.
+- **app/sales/create-invoice.tsx:** `bankDetails: pd?.bankEnabled ? {...} : undefined` payload block removed. `vatDetails:` block preserved.
+
+### Not changed
+- `app/settings/language.tsx` — uses its own `COUNTRY_TZ` object as source (locale/tz features). Today's Party Form list happens to align 1:1. Future DRY pass can merge them.
+- Backend `bankXml` code in `tally-write.js` — dormant path preserved (never fires when `bankEnabled=false`), ready for future re-enable behind a config flag (e.g. bank details on supplier ledgers only).
+- Read path (Tally → DB sync via ingestProcessor) untouched — if an existing ledger has bank details in Tally, they still populate our DB.
+
+### QA
+🟢 GREEN — LITE subagent (11 checks all passed): TypeScript `npx tsc --noEmit` = 0 errors, PartyForm imports + COUNTRY_OPTIONS wired, Bank JSX cleanly removed, state hooks + interface preserved, both payload files clean, git diff scope shows only 4 expected files.
+
+### Files
+- `frontend/src/constants/countries.ts` (NEW)
+- `frontend/src/components/forms/PartyForm.tsx`
+- `frontend/app/ledger/create.tsx`
+- `frontend/app/sales/create-invoice.tsx`
+
+### Commit
+`75e4aea5` on `main`
+
+### 🔴 Pending user device verification
+Open Party Form (from Ledger → New OR Sales → Invoice → Add Customer). Verify:
+1. Country dropdown now shows 25 options (not just India).
+2. Bank Details toggle + fields are GONE from the form.
+3. Creating a ledger with non-India country (say UAE) syncs correctly to Tally (mailing details show UAE).
+4. Creating a ledger with India works exactly as before (regression sanity).
+
+---
+
 ## [2026-07-01] (R3) UX — Trust backend order, remove client-side re-sort
 
 ### Fixed
