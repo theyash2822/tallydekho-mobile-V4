@@ -279,7 +279,7 @@ export default function CreateLedgerScreen() {
           {isParty && (
             <>
               <View style={s.divider} />
-              <PartyForm ref={formRef} />
+              <PartyForm ref={formRef} companyGuid={company?.guid} />
             </>
           )}
 

@@ -28,6 +28,7 @@ import BrandSwitch from './BrandSwitch';
 import FormDropdown from './FormDropdown';
 import { INDIAN_STATES, stateFromGstin } from '../../constants/indianStates';
 import { COUNTRIES, DEFAULT_COUNTRY } from '../../constants/countries';
+import { getTallyCountries, getTallyStates } from '../../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface PartyFormData {
@@ -115,13 +116,17 @@ const VAT_DEALER_TYPES = [
   { label: 'Unregistered',  value: 'Unregistered' },
 ];
 
-const COUNTRY_OPTIONS = COUNTRIES.map(c => ({ label: c, value: c }));
+// Hardcoded fallback — used when Tally live fetch is empty/offline/unavailable.
+// Order preserved as-is (already sorted alpha).
+const FALLBACK_COUNTRY_OPTIONS = COUNTRIES.map(c => ({ label: c, value: c }));
+const FALLBACK_STATE_OPTIONS   = INDIAN_STATES.map(s => ({ label: s, value: s }));
 
 // ─── Component ────────────────────────────────────────────────────────────────
 const PartyForm = forwardRef<PartyFormRef, {
   InputComponent?: ElementType<TextInputProps>;
   initialData?: Partial<PartyFormData>;
-}>(function PartyForm({ InputComponent = TextInput, initialData }, ref) {
+  companyGuid?: string;
+}>(function PartyForm({ InputComponent = TextInput, initialData, companyGuid }, ref) {
 
   const d = { ...defaultPartyFormData, ...initialData };
 
@@ -166,6 +171,54 @@ const PartyForm = forwardRef<PartyFormRef, {
       if (detected && !state) setState(detected);
     }
   }, [gstin]);
+
+  // 2026-07-06 R6 — Fetch Tally-canonical country + state masters.
+  // Silent background fetch. Fallback to hardcoded COUNTRIES / INDIAN_STATES
+  // if empty/error. Never blocks form render. Never shows error UI.
+  type TallyCountry = { name: string };
+  type TallyState = { name: string; country: string; gstStateCode: string | null };
+  const [tallyCountries, setTallyCountries] = useState<TallyCountry[]>([]);
+  const [tallyStates,    setTallyStates]    = useState<TallyState[]>([]);
+
+  useEffect(() => {
+    if (!companyGuid) return; // no company context yet → fallback only
+    let cancelled = false;
+    (async () => {
+      try {
+        const [cRes, sRes] = await Promise.all([
+          getTallyCountries(companyGuid).catch(() => null),
+          getTallyStates(companyGuid).catch(() => null),
+        ]);
+        if (cancelled) return;
+        const cList = Array.isArray(cRes?.data) ? cRes.data : [];
+        const sList = Array.isArray(sRes?.data) ? sRes.data : [];
+        if (cList.length > 0) setTallyCountries(cList);
+        if (sList.length > 0) setTallyStates(sList);
+      } catch { /* silent — fallback active */ }
+    })();
+    return () => { cancelled = true; };
+  }, [companyGuid]);
+
+  // Country dropdown — prefer Tally masters, fallback to hardcoded 25.
+  const countryOptions = tallyCountries.length > 0
+    ? tallyCountries.map(c => ({ label: c.name, value: c.name }))
+    : FALLBACK_COUNTRY_OPTIONS;
+
+  // State dropdown — country-aware. If Tally has states for selected country,
+  // use those. Else if country is India, use hardcoded INDIAN_STATES.
+  // Else for non-India with no Tally data → empty list (user has to know their
+  // country's states; still safe because form allows submit with empty state).
+  const stateOptions = (() => {
+    if (tallyStates.length > 0) {
+      const filtered = tallyStates
+        .filter(s => (s.country || '').toLowerCase() === (country || '').toLowerCase())
+        .map(s => ({ label: s.name, value: s.name }));
+      if (filtered.length > 0) return filtered;
+    }
+    // Fallback: hardcoded Indian states only when country is India (or empty)
+    if (!country || country === 'India') return FALLBACK_STATE_OPTIONS;
+    return [];
+  })();
 
   // GST section unlocks only when country + state + pincode are filled
   const gstUnlocked = country.trim().length > 0 && state.trim().length > 0 && pincode.trim().length >= 4;
@@ -225,7 +278,7 @@ const PartyForm = forwardRef<PartyFormRef, {
       <FormDropdown
         label="Country"
         value={country}
-        options={COUNTRY_OPTIONS}
+        options={countryOptions}
         onSelect={o => { setCountry(o.value); setState(''); setPincode(''); }}
         placeholder="Select country"
       />
@@ -234,9 +287,9 @@ const PartyForm = forwardRef<PartyFormRef, {
         label="State"
         required
         value={state}
-        options={INDIAN_STATES.map(s => ({ label: s, value: s }))}
+        options={stateOptions}
         onSelect={o => setState(o.value)}
-        placeholder="Select state"
+        placeholder={stateOptions.length > 0 ? "Select state" : "No states available for this country"}
       />
 
       <PartyInput IC={IC} label="Pincode" required placeholder="6-digit pincode"
