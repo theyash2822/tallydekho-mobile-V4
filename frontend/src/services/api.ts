@@ -109,16 +109,6 @@ export const pairWithTally    = (pairing_code: string) => post<any>('/tally-sync
 export const getTallySyncStatus = () => get<any>('/tally-sync/status');
 export const unpairDevice     = () => post<any>('/tally-sync/unpair', {});
 export const getCompanies     = () => get<any>('/companies');
-
-// ── Tally Master Fetch (2026-07-06 R6) ──
-// Fetches country + state master lists directly from Tally via desktop proxy.
-// Backend caches per-company forever after first successful fetch.
-// Returns { status, source: 'cache'|'live'|'live_empty'|'fallback', data: [...] }.
-// Mobile must handle empty data → fallback to hardcoded COUNTRIES / INDIAN_STATES.
-export const getTallyCountries = (companyGuid?: string) =>
-  get<any>(withCompany('/tally/masters/countries', companyGuid));
-export const getTallyStates    = (companyGuid?: string, country?: string) =>
-  get<any>(withCompany('/tally/masters/states', companyGuid, country ? { country } : undefined));
 export const getCompanyYears   = (companyGuid?: string) => get<any>(withCompany('/company/years', companyGuid));
 export const getCompanyProfile  = (companyGuid?: string) => get<any>(withCompany('/company/profile', companyGuid));
 export const uploadCompanyLogo  = (companyGuid: string, logo: string) => post<any>(`/company/${companyGuid}/logo`, { logo });

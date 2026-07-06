@@ -420,7 +420,7 @@ const AddCustomerDrawer = forwardRef<AddCustomerDrawerMethods, {
 
         {/* ── Party Fields via shared PartyForm ── */}
         <View style={acd.divider} />
-        <PartyForm ref={formRef} InputComponent={BottomSheetTextInput as any} companyGuid={company?.guid} />
+        <PartyForm ref={formRef} InputComponent={BottomSheetTextInput as any} />
       </BottomSheetScrollView>
 
       <View style={[acd.footer, { paddingBottom: insets.bottom + 8 }]}>
