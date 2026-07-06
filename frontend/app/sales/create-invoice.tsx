@@ -335,13 +335,8 @@ const AddCustomerDrawer = forwardRef<AddCustomerDrawerMethods, {
           cstNo:           pd.cstNo,
           formCApplicable: pd.formCApplicable,
         } : undefined,
-        bankDetails: pd?.bankEnabled ? {
-          beneficiaryName: pd.bankBeneficiaryName,
-          bankName:        pd.bankName,
-          accountNo:       pd.bankAccountNo,
-          ifsc:            pd.bankIfsc,
-          branch:          pd.bankBranch,
-        } : undefined,
+        // Bank details write removed 2026-07-06 — not needed on customer
+        // ledgers. Read path (Tally → DB sync) still populates bank fields.
       });
       const savedName = name.trim();
       resetForm();

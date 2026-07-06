@@ -27,6 +27,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 import BrandSwitch from './BrandSwitch';
 import FormDropdown from './FormDropdown';
 import { INDIAN_STATES, stateFromGstin } from '../../constants/indianStates';
+import { COUNTRIES, DEFAULT_COUNTRY } from '../../constants/countries';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface PartyFormData {
@@ -114,7 +115,7 @@ const VAT_DEALER_TYPES = [
   { label: 'Unregistered',  value: 'Unregistered' },
 ];
 
-const COUNTRY_OPTIONS = [{ label: 'India', value: 'India' }];
+const COUNTRY_OPTIONS = COUNTRIES.map(c => ({ label: c, value: c }));
 
 // ─── Component ────────────────────────────────────────────────────────────────
 const PartyForm = forwardRef<PartyFormRef, {
@@ -312,28 +313,11 @@ const PartyForm = forwardRef<PartyFormRef, {
         </View>
       )}
 
-      {/* ══ BANK DETAILS ═════════════════════════════════════════════════════ */}
-      <View style={f.divider} />
-      <View style={f.toggleRow}>
-        <Text style={f.toggleLabel}>Bank Details</Text>
-        <BrandSwitch value={bankEnabled} onValueChange={setBankEnabled} />
-      </View>
-
-      {bankEnabled && (
-        <View style={f.expandSection}>
-          <PartyInput IC={IC} label="Beneficiary Name" placeholder="Enter beneficiary name"
-            value={bankBeneficiaryName} onChangeText={setBankBeneficiaryName} />
-          <PartyInput IC={IC} label="Bank Name" placeholder="Enter bank name"
-            value={bankName} onChangeText={setBankName} />
-          <PartyInput IC={IC} label="Account Number" placeholder="Enter account number"
-            value={bankAccountNo} onChangeText={setBankAccountNo} keyboardType="numeric" />
-          <PartyInput IC={IC} label="IFSC Code" placeholder="Enter IFSC code"
-            value={bankIfsc} onChangeText={v => setBankIfsc(v.toUpperCase())}
-            autoCapitalize="characters" />
-          <PartyInput IC={IC} label="Bank Branch" placeholder="Enter branch name"
-            value={bankBranch} onChangeText={setBankBranch} />
-        </View>
-      )}
+      {/* Bank Details section removed 2026-07-06 — not required on customer
+          ledgers; if Tally has bank details we still READ them on sync into
+          our DB, we just don't WRITE from mobile. Interface + state fields
+          kept so callers/refs don't break; bankEnabled stays false so payload
+          bankDetails is always undefined. */}
     </View>
   );
 });
