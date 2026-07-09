@@ -135,3 +135,24 @@ User reported June entries above July in Audit Trail. Backend fix (R4a: `ORDER B
 **Loading states:** ActivityIndicator for initial load, footer spinner for pagination
 
 ### Commit: `8a5247b5` → tallydekho-mobile-V4
+
+## 2026-07-09 — Receipt Voucher rewrite (multi-bill, instrument, preview)
+
+**`app/voucher/create-receipt.tsx`** — full rewrite (~700 lines):
+- Universal Regular/Optional + date-lock (Regular=today, Optional=FY range) mirrored from Sales Invoice.
+- Party picker with Sundry Debtors default + "Show all parties" toggle. **No inline "+ Add Customer"** (per rule: only Sales/Purchase Invoice get that).
+- Multi-bill allocation UI: checkbox list with per-bill editable amounts, FIFO auto-allocate button, live Allocated/Remaining footer, leftover disposition pill (On Account / Advance).
+- Payment method pills → Cash Ledger dropdown for Cash, Bank Ledger for others. Ref field labeled per method (Cheque No / NEFT UTR / RTGS UTR / UPI Ref ID). Instrument date + bank name for Cheque/NEFT/RTGS.
+- Numbering: Tally Series / TallyDekho Series pill.
+- Submit → success overlay with Preview button routing to `/voucher/receipt-preview?tdkRef=...`.
+
+**`app/voucher/receipt-preview.tsx`** — NEW (~350 lines):
+- Fetches via `getReceiptPreview` → backend `/tally/invoice/:tdkRef/preview` (same endpoint as Sales, receipt-branched buildVoucherDocument).
+- Shows provisional watermark until Tally assigns real voucher number.
+- Live refresh via `voucher:tallySynced` + `invoice_posting_updated` sockets.
+- Bottom bar: Share (React Native `Share` API) + Done.
+
+**`src/services/api.ts`:**
+- Added `getPartyOutstandingBills(companyGuid, ledger)` and `getReceiptPreview(tdkRef, companyGuid)`.
+
+**QA:** 🟢 GREEN (LITE, 18/18 checks). `tsc --noEmit` = 0 errors.

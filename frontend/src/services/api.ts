@@ -203,6 +203,14 @@ export const getVouchers       = (companyGuid?: string, type?: string, params?: 
 export const getVoucherById    = (companyGuid?: string, guid?: string) => get<any>(withCompany(`/vouchers/${guid}`, companyGuid));
 export const createPaymentVoucher = (payload: any) => tallyPost<any>('/voucher/payment', payload);
 export const createReceiptVoucher = (payload: any) => tallyPost<any>('/voucher/receipt', payload);
+
+// 2026-07-09: Receipt Voucher screen — outstanding bills per party (bill_outstanding table).
+export const getPartyOutstandingBills = (companyGuid: string, ledger: string) =>
+  get<any>(withCompany('/party/outstanding-bills', companyGuid, { ledger }));
+
+// 2026-07-09: Receipt preview reuses invoice preview endpoint (buildVoucherDocument branches on voucher_type).
+export const getReceiptPreview = (tdkRef: string, companyGuid: string) =>
+  request<any>('GET', `/invoice/${encodeURIComponent(tdkRef)}/preview?companyGuid=${companyGuid}`, undefined, true, 'tally');
 export const createJournalVoucher = (payload: any) => tallyPost<any>('/voucher/journal', payload);
 export const createContraVoucher  = (payload: any) => tallyPost<any>('/voucher/contra', payload);
 
