@@ -1,5 +1,23 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-07-13 — Payment Voucher full rewrite (Receipt parity)
+
+### Added
+- `app/voucher/create-payment.tsx`: Receipt-parity create (Creditors + Show all, Cr-only bills, FIFO, instruments, Settings numbering, preview).
+- `app/voucher/payment-preview.tsx`: share/preview for TDK-PAY.
+- Purchase **Make Payment Now** on `app/purchase/create-invoice.tsx` (pairs via backend `make_payment`).
+
+### Changed
+- `app/voucher/payment.tsx`: real party/date/amount/voucher no/Posted/method list + create shortcut.
+- `src/services/api.ts`: `crOnly` on outstanding bills; `getPaymentPreview`.
+
+### Test
+1. Create Payment → Creditors party with Cr bills → FIFO → Submit → Preview Posted.
+2. Expense ledger (no Cr bills) → empty allocation → On Account/Advance.
+3. Purchase Create → Make Payment Now → submit (when purchase write is live).
+
+---
+
 ## 2026-07-13 — Receipt UI: compact Receipt No. + Date like Sales Invoice
 
 ### Changed

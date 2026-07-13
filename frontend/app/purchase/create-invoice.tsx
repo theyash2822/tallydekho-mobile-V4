@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, Alert, TextInput, Modal, ActivityIndicator,
@@ -10,12 +10,13 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { createPurchaseInvoice } from '../../src/services/api';
+import { createPurchaseInvoice, getBankLedgers } from '../../src/services/api';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import SearchableDropdown, { SDOption } from '../../src/components/forms/SearchableDropdown';
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
+import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import { useSettings } from '../../src/context/SettingsContext';
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
@@ -66,6 +67,11 @@ const PAY_STATUS_OPTS: DropdownOption[] = [
   { label: '15 Days', value: '15d' },
   { label: '30 Days', value: '30d' },
   { label: 'Custom', value: 'custom' },
+];
+const PAY_MODES: DropdownOption[] = [
+  { label: 'Cash', value: 'cash' },
+  { label: 'Bank / NEFT / RTGS / UPI', value: 'bank' },
+  { label: 'Cheque', value: 'cheque' },
 ];
 const LOGISTICS_TYPES: DropdownOption[] = [
   { label: 'Courier', value: 'courier' },
@@ -264,6 +270,28 @@ export default function CreatePurchaseInvoiceScreen() {
   const [narration, setNarration] = useState('');
   const [activeModal, setActiveModal] = useState<ModalState>(null);
 
+  // Make Payment Now (mirrors Sales Collect Payment Now)
+  const [makePayNow, setMakePayNow] = useState(false);
+  const [payNowMode, setPayNowMode] = useState('');
+  const [payNowAmount, setPayNowAmount] = useState('');
+  const [payNowRef, setPayNowRef] = useState('');
+  const [payNowLedger, setPayNowLedger] = useState('');
+  const [bankLedgers, setBankLedgers] = useState<{ label: string; value: string; sub: string }[]>([]);
+
+  const fetchBankLedgers = useCallback(() => {
+    if (!company?.guid) return;
+    getBankLedgers(company.guid, 'all').then((res: any) => {
+      const rows = res?.data || [];
+      setBankLedgers(rows.map((l: any) => ({
+        label: l.name,
+        value: l.name,
+        sub: /cash/i.test(l.parent || l.name || '') ? 'Cash' : 'Bank',
+      })));
+    }).catch(() => setBankLedgers([]));
+  }, [company?.guid]);
+
+  useEffect(() => { fetchBankLedgers(); }, [fetchBankLedgers]);
+
   const updateItem = useCallback((id:string,f:keyof PItem,v:string)=>setItems(prev=>prev.map(i=>i.id===id?{...i,[f]:v}:i)),[]);
   const removeItem = useCallback((id:string)=>setItems(prev=>prev.length>1?prev.filter(i=>i.id!==id):prev),[]);
 
@@ -298,25 +326,57 @@ export default function CreatePurchaseInvoiceScreen() {
 
   const handleSubmit = useCallback(async (draft:boolean)=>{
     if (!isPaired) { Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' }); return; }
+    if (makePayNow && !payNowLedger) {
+      Toast.show({ type: 'error', text1: 'Payment Ledger', text2: 'Select a Cash/Bank ledger for Make Payment Now.' });
+      return;
+    }
     try {
       setSubmitting(true);
+      const vendorLabel = VENDORS.find(v => v.value === vendor)?.label || vendor;
       await createPurchaseInvoice({
-        company_guid: company?.guid,
-        vendor, date, ledger_account: ledger,
+        companyGuid: company?.guid,
+        companyName: company?.name,
+        partyLedger: vendorLabel,
+        date: (() => {
+          // DD/MM/YY → YYYY-MM-DD best-effort
+          const parts = (date || '').split('/');
+          if (parts.length === 3) {
+            const y = parseInt(parts[2], 10);
+            const year = y < 100 ? 2000 + y : y;
+            return `${year}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+          }
+          return date;
+        })(),
+        totalAmount: totals.grand,
+        isOptional: entryType === 'optional',
         vendor_invoice_no: vendorInvNo || undefined,
-        vendor_invoice_date: vendorInvDate || undefined,
-        payment_terms: payTerms,
-        ref_no: purchaseRefNo || undefined,
-        items: items.map(i=>({ stock_item: i.product, qty: parseFloat(i.qty)||0, rate: parseFloat(i.rate)||0, unit: i.unit, discount: parseFloat(i.discount)||0, tax_rate: parseFloat(i.taxRate)||0 })),
+        reference: purchaseRefNo || vendorInvNo || undefined,
+        items: items.map(i => {
+          const c = calcItem(i);
+          return {
+            itemName: PRODUCTS.find(p => p.value === i.product)?.label || i.product,
+            actualQty: parseFloat(i.qty) || 0,
+            billedQty: parseFloat(i.qty) || 0,
+            rate: parseFloat(i.rate) || 0,
+            amount: c.subtotal,
+            purchaseLedger: LEDGER_OPTS.find(l => l.value === ledger)?.label || 'Purchase Account GST',
+          };
+        }),
         narration: narration || undefined,
         is_draft: draft,
+        make_payment: makePayNow && payNowLedger ? {
+          mode: payNowMode,
+          ledgerName: payNowLedger,
+          amount: parseFloat(payNowAmount) || totals.grand,
+          reference: payNowRef || undefined,
+        } : undefined,
       });
       Toast.show({ type: 'success', text1: draft ? 'Draft Saved' : 'Invoice Submitted', text2: draft ? `${invNo} saved as draft.` : `Purchase invoice ${invNo} sent to Tally.` });
       setTimeout(()=>router.back(),1000);
     } catch(err:any) {
       Toast.show({ type: 'error', text1: 'Failed', text2: err?.message||'Could not submit.' });
     } finally { setSubmitting(false); }
-  },[isPaired,company?.guid,vendor,date,ledger,vendorInvNo,vendorInvDate,payTerms,purchaseRefNo,items,narration,invNo,router]);
+  },[isPaired,company?.guid,company?.name,vendor,date,ledger,vendorInvNo,payTerms,purchaseRefNo,items,narration,invNo,router,makePayNow,payNowMode,payNowAmount,payNowLedger,payNowRef,totals.grand,entryType]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -449,6 +509,77 @@ export default function CreatePurchaseInvoiceScreen() {
               <FormField label="Remark" value={logRemark} onChangeText={setLogRemark} placeholder="Logistics notes..." containerStyle={{marginBottom:0}} />
             </View>
           )}
+
+          {/* Make Payment Now */}
+          <View style={s.card}>
+            <TouchableOpacity style={s.payNowToggleRow} onPress={() => setMakePayNow(v => !v)} activeOpacity={0.8}>
+              <View style={s.payNowLeft}>
+                <View style={[s.payNowIcon, { backgroundColor: makePayNow ? COLORS.positiveBg : COLORS.pageBg }]}>
+                  <Ionicons name="cash-outline" size={18} color={makePayNow ? COLORS.positive : COLORS.textSecondary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.payNowTitle}>Make Payment Now</Text>
+                  <Text style={s.payNowSub}>Record payment to vendor at the time of billing</Text>
+                </View>
+              </View>
+              <BrandSwitch value={makePayNow} onValueChange={setMakePayNow} />
+            </TouchableOpacity>
+            {makePayNow && (
+              <View style={s.payNowBody}>
+                <FormDropdown
+                  label="Mode of Payment"
+                  value={payNowMode}
+                  options={PAY_MODES}
+                  onSelect={(o: any) => { setPayNowMode(o.value); setPayNowLedger(''); }}
+                  placeholder="Select payment mode..."
+                  required
+                />
+                <FormDropdown
+                  label={payNowMode === 'cash' ? 'Cash Ledger' : 'Bank Ledger'}
+                  value={payNowLedger}
+                  options={
+                    (payNowMode === 'cash'
+                      ? bankLedgers.filter(l => l.sub === 'Cash')
+                      : payNowMode
+                        ? bankLedgers.filter(l => l.sub === 'Bank')
+                        : bankLedgers
+                    ).map(l => ({ label: l.label, value: l.value }))
+                  }
+                  onSelect={(o: any) => setPayNowLedger(o.value)}
+                  placeholder={!payNowMode ? 'Select mode first...' : payNowMode === 'cash' ? 'Select cash ledger...' : 'Select bank ledger...'}
+                  required
+                />
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.fLabel}>Amount</Text>
+                    <TextInput
+                      style={s.fInput}
+                      value={payNowAmount}
+                      onChangeText={setPayNowAmount}
+                      placeholder={String(Math.round(totals.grand))}
+                      keyboardType="numeric"
+                      placeholderTextColor={COLORS.textTertiary}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.fLabel}>Reference</Text>
+                    <TextInput
+                      style={s.fInput}
+                      value={payNowRef}
+                      onChangeText={setPayNowRef}
+                      placeholder="Txn / Cheque No."
+                      placeholderTextColor={COLORS.textTertiary}
+                    />
+                  </View>
+                </View>
+                {!bankLedgers.length && (
+                  <TouchableOpacity onPress={fetchBankLedgers} style={{ paddingVertical: 10 }}>
+                    <Text style={{ color: COLORS.warning, fontWeight: '600', fontSize: 13 }}>Ledgers not loaded — tap to retry</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </View>
 
           {/* Payment Status */}
           <View style={s.card}>
@@ -650,6 +781,12 @@ const s = StyleSheet.create({
   card:{backgroundColor:COLORS.cardBg,borderRadius:RADIUS.lg,padding:SPACING.md,marginBottom:SPACING.md,borderWidth:1,borderColor:COLORS.borderDefault},
   cardHdr:{flexDirection:'row',alignItems:'center',gap:8,marginBottom:SPACING.md},
   cardTitle:{fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.textPrimary},
+  payNowToggleRow:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingVertical:4},
+  payNowLeft:{flexDirection:'row',alignItems:'center',gap:10,flex:1},
+  payNowIcon:{width:36,height:36,borderRadius:18,alignItems:'center',justifyContent:'center'},
+  payNowTitle:{fontSize:TYPOGRAPHY.sm,fontWeight:'600',color:COLORS.textPrimary},
+  payNowSub:{fontSize:TYPOGRAPHY.xs,color:COLORS.textSecondary},
+  payNowBody:{paddingTop:12,gap:10},
   row2:{flexDirection:'row',gap:12,marginBottom:SPACING.md},
   fLabel:{fontSize:TYPOGRAPHY.sm,fontWeight:'600',color:COLORS.textSecondary,marginBottom:6},
   fInput:{backgroundColor:COLORS.cardBg,borderWidth:1,borderColor:COLORS.borderDefault,borderRadius:RADIUS.md,paddingHorizontal:14,paddingVertical:12,fontSize:TYPOGRAPHY.base,color:COLORS.textPrimary,minHeight:48},

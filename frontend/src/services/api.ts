@@ -208,15 +208,18 @@ export const createReceiptVoucher = (payload: any) => tallyPost<any>('/voucher/r
 export const getPartyOutstandingBills = (
   companyGuid: string,
   ledger: string,
-  opts?: { drOnly?: boolean },
+  opts?: { drOnly?: boolean; crOnly?: boolean },
 ) =>
   get<any>(withCompany('/party/outstanding-bills', companyGuid, {
     ledger,
     ...(opts?.drOnly ? { drOnly: 'true' } : {}),
+    ...(opts?.crOnly ? { crOnly: 'true' } : {}),
   }));
 
-// 2026-07-09: Receipt preview reuses invoice preview endpoint (buildVoucherDocument branches on voucher_type).
+// Receipt / Payment preview reuse invoice preview endpoint (buildVoucherDocument branches on voucher_type).
 export const getReceiptPreview = (tdkRef: string, companyGuid: string) =>
+  request<any>('GET', `/invoice/${encodeURIComponent(tdkRef)}/preview?companyGuid=${companyGuid}`, undefined, true, 'tally');
+export const getPaymentPreview = (tdkRef: string, companyGuid: string) =>
   request<any>('GET', `/invoice/${encodeURIComponent(tdkRef)}/preview?companyGuid=${companyGuid}`, undefined, true, 'tally');
 export const createJournalVoucher = (payload: any) => tallyPost<any>('/voucher/journal', payload);
 export const createContraVoucher  = (payload: any) => tallyPost<any>('/voucher/contra', payload);
