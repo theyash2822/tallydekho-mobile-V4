@@ -1,5 +1,12 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-07-13 — Receipt UI: compact Receipt No. + Date like Sales Invoice
+
+### Changed
+`app/voucher/create-receipt.tsx`: Date no longer full-width. Side-by-side row matches Sales Invoice — locked **Receipt No. (Auto)** + compact **Date** (locked for Regular, picker for Optional).
+
+---
+
 ## 2026-07-13 — Receipt UX polish: Settings numbering, Dr-only bills, clear-on-amount
 
 ### Changed

@@ -329,24 +329,32 @@ export default function CreateReceiptVoucher() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardDismissMode="on-drag">
 
-          {/* ── Numbering + Date row ─────────────────────────────────── */}
+          {/* ── Receipt No. + Date (mirrors Sales Invoice layout) ───── */}
           <View style={s.section}>
-            <View style={s.fieldBlock}>
-              <View style={s.field}>
-                <Text style={s.label}>Date <Text style={s.req}>*</Text></Text>
-                {entryType === 'regular' ? (
-                  <View style={[s.inputWrap, { opacity: 0.55 }]}>
-                    <Ionicons name="calendar-outline" size={16} color={COLORS.textTertiary} />
-                    <Text style={{ flex: 1, color: COLORS.textPrimary }}>{date}</Text>
-                    <Ionicons name="lock-closed-outline" size={14} color={COLORS.textTertiary} />
+            <View style={[s.fieldBlock, { padding: SPACING.md }]}>
+              <View style={s.row2}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.fLabel}>Receipt No.</Text>
+                  <View style={s.autoBox}>
+                    <Text style={s.autoTxt}>Auto</Text>
+                    <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
                   </View>
-                ) : (
-                  <TouchableOpacity style={s.inputWrap} onPress={() => setShowDatePicker(true)}>
-                    <Ionicons name="calendar-outline" size={16} color={COLORS.textTertiary} />
-                    <Text style={{ flex: 1, color: date ? COLORS.textPrimary : COLORS.textTertiary }}>{date || 'Select date'}</Text>
-                    <Ionicons name="chevron-down" size={16} color={COLORS.textTertiary} />
-                  </TouchableOpacity>
-                )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.fLabel}>Date <Text style={s.req}>*</Text></Text>
+                  {entryType === 'regular' ? (
+                    <View style={[s.autoBox, { opacity: 0.55 }]}>
+                      <Text style={s.autoTxt}>{date}</Text>
+                      <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
+                    </View>
+                  ) : (
+                    <TouchableOpacity style={s.fInput} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
+                      <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.sm, fontWeight: '600' }}>
+                        {date || 'Select date'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
             </View>
           </View>
@@ -703,8 +711,14 @@ const s = StyleSheet.create({
   linkTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.brandPrimary },
   fieldBlock: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
   field: { paddingHorizontal: SPACING.md, paddingVertical: 12 },
+  row2: { flexDirection: 'row', gap: 12 },
+  fLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
+  fInput: { backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48, justifyContent: 'center' },
+  autoBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48 },
+  autoTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
   label: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.3 },
   req: { color: COLORS.negative },
+  star: { color: COLORS.negative },
   inputWrap: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 12, backgroundColor: COLORS.pageBg },
   input: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
   rupee: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textSecondary },
