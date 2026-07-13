@@ -832,7 +832,7 @@ export default function CreateSalesInvoiceScreen() {
   const [submitResult, setSubmitResult] = useState<{ tdkRef: string; isQueued: boolean; message: string; invoiceUuid?: string; numberingPolicy?: string; invoiceNumber?: string } | null>(null);
   const [sharePdfLoading, setSharePdfLoading] = useState(false);
 
-  // Numbering policy from compliance config (tally_prime_series | tallydekho_series)
+  // Numbering policy from Settings → Voucher Config only (no on-screen override)
   const [numberingPolicy, setNumberingPolicy] = useState<'tally_prime_series' | 'tallydekho_series'>('tally_prime_series');
 
   // ── Data loading ─────────────────────────────────────────────────────────────

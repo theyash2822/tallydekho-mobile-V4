@@ -205,8 +205,15 @@ export const createPaymentVoucher = (payload: any) => tallyPost<any>('/voucher/p
 export const createReceiptVoucher = (payload: any) => tallyPost<any>('/voucher/receipt', payload);
 
 // 2026-07-09: Receipt Voucher screen — outstanding bills per party (bill_outstanding table).
-export const getPartyOutstandingBills = (companyGuid: string, ledger: string) =>
-  get<any>(withCompany('/party/outstanding-bills', companyGuid, { ledger }));
+export const getPartyOutstandingBills = (
+  companyGuid: string,
+  ledger: string,
+  opts?: { drOnly?: boolean },
+) =>
+  get<any>(withCompany('/party/outstanding-bills', companyGuid, {
+    ledger,
+    ...(opts?.drOnly ? { drOnly: 'true' } : {}),
+  }));
 
 // 2026-07-09: Receipt preview reuses invoice preview endpoint (buildVoucherDocument branches on voucher_type).
 export const getReceiptPreview = (tdkRef: string, companyGuid: string) =>

@@ -5,15 +5,17 @@
  *   • Regular/Optional toggle in header (top-right)
  *   • Regular  → date LOCKED to today
  *     Optional → DatePickerModal (FY range, back-date allowed, no future)
- *   • Numbering policy: tally_prime_series | tallydekho_series
+ *   • Numbering policy: from Settings → Voucher Config only (no on-screen override)
  *   • On submit → success overlay with [Preview] button → routes to /voucher/receipt-preview
  *
- * Receipt-specific behaviors (per user 2026-07-09):
+ * Receipt-specific behaviors (per user 2026-07-09 / 2026-07-13):
  *   • Party picker = existing Sundry Debtors default + "Show all parties" toggle.
  *     NO "+ Add Customer" button (per user rule: only Sales/Purchase Invoice get inline add).
  *   • Party balance chip shown after party selected.
  *   • Payment method: Cash → Cash ledger dropdown | others → Bank ledger dropdown.
  *   • Multi-bill allocation with per-bill editable amounts + FIFO auto-allocate.
+ *     Outstanding list = Dr-only (receivables), sorted by bill_date.
+ *     Clearing receipt amount clears all bill allocations.
  *     Leftover disposition dropdown [On Account | Advance] appears when
  *     SUM(allocated) < Receipt amount.
  *   • Instrument details block (Instrument No + Date + Bank Name) for Cheque/NEFT/RTGS.
@@ -35,7 +37,7 @@ import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomS
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import {
-  createReceiptVoucher, getParties, getBankLedgers, getPartyOutstandingBills,
+  createReceiptVoucher, getParties, getBankLedgers, getPartyOutstandingBills, getComplianceConfig,
 } from '../../src/services/api';
 
 // ── Helpers (mirrors create-invoice.tsx) ─────────────────────────────────────
@@ -86,7 +88,20 @@ export default function CreateReceiptVoucher() {
 
   // ── Header state ──────────────────────────────────────────────────────────
   const [entryType, setEntryType] = useState<EntryType>('regular');
+  // Numbering from Settings → Voucher Config only (no on-screen override)
   const [numberingPolicy, setNumberingPolicy] = useState<'tally_prime_series' | 'tallydekho_series'>('tally_prime_series');
+
+  useEffect(() => {
+    if (!company?.guid) return;
+    getComplianceConfig(company.guid).then((res: any) => {
+      const cfg = res?.data || res;
+      if (cfg?.numbering_policy === 'tallydekho_series') {
+        setNumberingPolicy('tallydekho_series');
+      } else {
+        setNumberingPolicy('tally_prime_series');
+      }
+    }).catch(() => {});
+  }, [company?.guid]);
 
   // ── Date (mirrors Sales Invoice pattern) ──────────────────────────────────
   const [date, setDate] = useState(todayStr());
@@ -125,7 +140,7 @@ export default function CreateReceiptVoucher() {
       if (!company?.guid || !party) { setBills([]); setTotalPending(0); return; }
       setBillsLoading(true);
       try {
-        const res: any = await getPartyOutstandingBills(company.guid, party);
+        const res: any = await getPartyOutstandingBills(company.guid, party, { drOnly: true });
         if (cancelled) return;
         const rows: BillRow[] = (res?.data?.bills || []).map((b: any) => ({
           bill_name: b.bill_name || '',
@@ -137,6 +152,13 @@ export default function CreateReceiptVoucher() {
           selected: false,
           payAmount: '',
         }));
+        // Oldest bill first (API already sorts; keep stable client-side too)
+        rows.sort((a, b) => {
+          if (!a.bill_date && !b.bill_date) return 0;
+          if (!a.bill_date) return 1;
+          if (!b.bill_date) return -1;
+          return String(a.bill_date).localeCompare(String(b.bill_date));
+        });
         setBills(rows);
         setTotalPending(parseFloat(res?.data?.totalPending) || 0);
       } catch (e) {
@@ -161,6 +183,17 @@ export default function CreateReceiptVoucher() {
   const [showInstrumentDatePicker, setShowInstrumentDatePicker] = useState(false);
   const [bankName, setBankName] = useState('');
   const [narration, setNarration] = useState('');
+
+  // Clear bill allocations when receipt amount is cleared / zero
+  useEffect(() => {
+    const n = parseFloat(amount);
+    if (!amount || !Number.isFinite(n) || n <= 0) {
+      setBills(prev => {
+        if (!prev.some(b => b.selected || b.payAmount)) return prev;
+        return prev.map(b => ({ ...b, selected: false, payAmount: '' }));
+      });
+    }
+  }, [amount]);
 
   // Load ledger dropdown per payment method (Cash → cash, else → bank)
   const fetchLedgers = useCallback(async () => {
@@ -300,24 +333,6 @@ export default function CreateReceiptVoucher() {
           <View style={s.section}>
             <View style={s.fieldBlock}>
               <View style={s.field}>
-                <Text style={s.label}>Numbering</Text>
-                <View style={s.pillRow}>
-                  {(['tally_prime_series', 'tallydekho_series'] as const).map(np => (
-                    <TouchableOpacity
-                      key={np}
-                      style={[s.pill, numberingPolicy === np && s.pillActive]}
-                      onPress={() => setNumberingPolicy(np)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={[s.pillTxt, numberingPolicy === np && s.pillActiveTxt]}>
-                        {np === 'tally_prime_series' ? 'Tally Series' : 'TallyDekho Series'}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-              <View style={s.div} />
-              <View style={s.field}>
                 <Text style={s.label}>Date <Text style={s.req}>*</Text></Text>
                 {entryType === 'regular' ? (
                   <View style={[s.inputWrap, { opacity: 0.55 }]}>
@@ -401,8 +416,8 @@ export default function CreateReceiptVoucher() {
               ) : bills.length === 0 ? (
                 <View style={s.emptyBlock}>
                   <Ionicons name="information-circle-outline" size={20} color={COLORS.textTertiary} />
-                  <Text style={s.emptyTxt}>No outstanding bills for this ledger.</Text>
-                  <Text style={s.emptySub}>Receipt will post as an advance / on-account entry — will show as a credit balance on the ledger in Tally.</Text>
+                  <Text style={s.emptyTxt}>No receivable outstanding bills for this party.</Text>
+                  <Text style={s.emptySub}>Only Dr (dues) bills are listed. Receipt will post as an advance / on-account entry.</Text>
                 </View>
               ) : (
                 <View style={s.fieldBlock}>

@@ -1,5 +1,19 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-07-13 — Receipt UX polish: Settings numbering, Dr-only bills, clear-on-amount
+
+### Changed
+- `app/voucher/create-receipt.tsx`: removed Numbering pills; loads policy from `getComplianceConfig` (Settings only). Outstanding fetch uses `drOnly: true`; sorted by bill_date; clearing amount clears bill allocations. Leftover On Account/Advance unchanged.
+- `app/sales/create-invoice.tsx`: clarified Settings-only numbering (already no on-screen override).
+- `src/services/api.ts`: `getPartyOutstandingBills(..., { drOnly })`.
+
+### Test
+1. Settings → Voucher Config → set policy → open Create Receipt → no numbering pills; submit uses Settings policy.
+2. Party with Dr+Cr outstanding → only Dr bills listed, oldest first when dates present.
+3. Auto FIFO → clear amount → all bill checks/amounts cleared.
+
+---
+
 ## 2026-07-01 (R5) — Dispatch/EWB: address lines + pincode fields in Sales Create Invoice
 
 ### Context
