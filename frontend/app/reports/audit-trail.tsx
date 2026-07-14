@@ -117,7 +117,15 @@ const mapVoucherType = (raw: string): Exclude<VoucherType, 'ALL'> => {
 };
 
 const mapApiRow = (r: any, fmt: (n: number) => string = (n) => String(n)): VoucherEntry => ({
-  id: r.guid || String(r.id),
+  // Prefer TDK ref + DB id — vouchers.guid alone can repeat when my-entries JOIN fans out
+  // (e.g. Journal #1 vs Payment #1 same day under loose voucher_type match).
+  id: [
+    r.tdk_reference_no || '',
+    r.guid || '',
+    r.id != null ? String(r.id) : '',
+    r.av_id != null ? String(r.av_id) : '',
+    r._queue_id != null ? `wq${r._queue_id}` : '',
+  ].filter(Boolean).join('_') || `row_${Math.random().toString(36).slice(2, 9)}`,
   ref: r.voucher_number || '',
   date: r.date || '',
   month: formatMonth(r.date),
@@ -393,6 +401,15 @@ export default function AuditTrailScreen() {
       getMyEntries(companyGuid, { from: fromDate, to: toDate, limit: String(PAGE_SIZE), page: 1, lifecycleFilter })
         .then((res: any) => {
           const postedRows = (res?.data ?? []).map((r: any) => ({ ...mapApiRow(r, formatAmount), isMine: true }));
+          // Collapse JOIN fan-out duplicates (same TDK ref / same guid+amount) before render.
+          const postedDeduped: VoucherEntry[] = [];
+          const seenPosted = new Set<string>();
+          for (const p of postedRows) {
+            const k = p.tdkRef || p.id;
+            if (seenPosted.has(k)) continue;
+            seenPosted.add(k);
+            postedDeduped.push(p);
+          }
           const queueRows  = (res?.pending ?? []).map(mapQueueRow);
           // Phase D11(a): dedupe by tdkRef (always populated on both sides) instead of
           // ref/voucher_number which is empty on queue rows (Tally doesn't return it on
@@ -400,7 +417,7 @@ export default function AuditTrailScreen() {
           // number for display — drop the queue duplicate when a posted row exists for
           // the same TDK reference.
           const queueFiltered = queueRows.filter((q: VoucherEntry) =>
-            !q.tdkRef || !postedRows.some((p: VoucherEntry) => p.tdkRef && p.tdkRef === q.tdkRef)
+            !q.tdkRef || !postedDeduped.some((p: VoucherEntry) => p.tdkRef && p.tdkRef === q.tdkRef)
           );
           // 2026-07-01 R4: Merge queue + posted, then sort the WHOLE combined list by
           // rawDate DESC (business date, YYYY-MM-DD text so lexicographic works) with
@@ -411,7 +428,7 @@ export default function AuditTrailScreen() {
           // month posted rows in Audit Trail, breaking chronological display.
           // Backend already sorts posted rows by v.date DESC + av.created_at DESC + av.id ASC,
           // so JS Array.sort's stability preserves that intra-day order.
-          const combined = [...queueFiltered, ...postedRows];
+          const combined = [...queueFiltered, ...postedDeduped];
           const allMerged = combined.slice().sort((a, b) => {
             const da = a.rawDate || '';
             const db = b.rawDate || '';
@@ -808,7 +825,7 @@ export default function AuditTrailScreen() {
                         (entry.syncStatus === 'pending' || entry.syncStatus === 'failed');
 
                       return (
-                        <View key={entry.id}>
+                        <View key={`${entry.id}_${idx}`}>
                           <TouchableOpacity
                             style={[
                               s.entryRow,
