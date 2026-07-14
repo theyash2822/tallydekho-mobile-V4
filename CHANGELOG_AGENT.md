@@ -1,4 +1,27 @@
 
+## [2026-07-14] Payment/Receipt leftover Advance NAME + preview sync copy
+
+### Context
+Tally rejects Advance bill allocations without `<NAME>`; On Account must have no NAME. Same leftover UX existed on Payment and Receipt create screens.
+
+### Changed
+- `create-payment.tsx` / `create-receipt.tsx`: leftover still defaults On Account; Advance sends auto `TDK-ADV-…` name; sheet note explains the rule.
+- `payment-preview.tsx` / `receipt-preview.tsx`: Posted + number pending → clearer banner copy.
+
+### Files
+- `frontend/app/voucher/create-payment.tsx`
+- `frontend/app/voucher/create-receipt.tsx`
+- `frontend/app/voucher/payment-preview.tsx`
+- `frontend/app/voucher/receipt-preview.tsx`
+
+### 🔴 Pending user device verification
+1. Pull latest mobile + restart Mac backend
+2. Multi-bill Payment with leftover **On Account** → should land in Tally
+3. Multi-bill Payment with leftover **Advance** → should land (auto ref name)
+4. Open `TDK-PAY-2026-0003` Preview → should show voucher **#2**
+
+---
+
 ## [2026-07-06] Party Form — Multi-country dropdown + Bank Details removal
 
 ### Context

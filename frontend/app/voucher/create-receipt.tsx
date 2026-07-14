@@ -21,7 +21,7 @@
  *   • Instrument details block (Instrument No + Date + Bank Name) for Cheque/NEFT/RTGS.
  *   • Ref label per method: Cash=hidden, Bank="Reference No.", Cheque="Cheque No.", ...
  */
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Modal,
@@ -82,6 +82,13 @@ interface BillRow {
 
 export default function CreateReceiptVoucher() {
   const router = useRouter();
+  const scrollRef = useRef<ScrollView>(null);
+  const narrationY = useRef(0);
+  const scrollNarrationIntoView = () => {
+    setTimeout(() => {
+      scrollRef.current?.scrollTo?.({ y: Math.max(0, narrationY.current - 100), animated: true });
+    }, 250);
+  };
   const { company, isPaired, selectedFY } = useAuth();
   const { } = useSettings();
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
@@ -261,16 +268,23 @@ export default function CreateReceiptVoucher() {
 
   const buildBillAllocations = () => {
     const blocks: { billRefName?: string; billType: string; amount: number }[] = [];
-    // Agst Ref blocks per selected bill
     bills.forEach(b => {
       const amt = parseFloat(b.payAmount) || 0;
       if (b.selected && amt > 0) {
         blocks.push({ billRefName: b.bill_name, billType: 'Agst Ref', amount: amt });
       }
     });
-    // Leftover block (On Account or Advance)
+    // Same Tally rule as Payment: Advance requires NAME; On Account does not.
     if (remaining > 0.01) {
-      blocks.push({ billType: leftoverType, amount: remaining });
+      if (leftoverType === 'Advance') {
+        blocks.push({
+          billType: 'Advance',
+          billRefName: `TDK-ADV-${Date.now().toString().slice(-6)}`,
+          amount: remaining,
+        });
+      } else {
+        blocks.push({ billType: 'On Account', amount: remaining });
+      }
     }
     return blocks;
   };
@@ -326,8 +340,18 @@ export default function CreateReceiptVoucher() {
         <RegularOptionalToggle value={entryType} onChange={setEntryType} />
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardDismissMode="on-drag">
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'android' ? 80 : 0}
+      >
+        <ScrollView
+          ref={scrollRef}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={s.scroll}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+        >
 
           {/* ── Receipt No. + Date (mirrors Sales Invoice layout) ───── */}
           <View style={s.section}>
@@ -573,7 +597,10 @@ export default function CreateReceiptVoucher() {
           </View>
 
           {/* ── Narration ──────────────────────────────────────────── */}
-          <View style={s.section}>
+          <View
+            style={s.section}
+            onLayout={(e) => { narrationY.current = e.nativeEvent.layout.y; }}
+          >
             <Text style={s.sectionTitle}>Narration</Text>
             <View style={s.fieldBlock}>
               <View style={s.field}>
@@ -586,6 +613,7 @@ export default function CreateReceiptVoucher() {
                   multiline
                   numberOfLines={3}
                   textAlignVertical="top"
+                  onFocus={scrollNarrationIntoView}
                 />
               </View>
             </View>
@@ -608,7 +636,7 @@ export default function CreateReceiptVoucher() {
               <Text style={s.btnPriTxt}>{submitting ? 'Submitting...' : 'Submit Receipt'}</Text>
             </TouchableOpacity>
           </View>
-          <View style={{ height: 40 }} />
+          <View style={{ height: 220 }} />
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -617,6 +645,9 @@ export default function CreateReceiptVoucher() {
         <TouchableOpacity style={ss.overlay} activeOpacity={1} onPress={() => setShowLeftoverPicker(false)}>
           <View style={ss.sheetCard}>
             <Text style={ss.sheetTitle}>Remaining amount will post as</Text>
+            <Text style={{ fontSize: 12, color: COLORS.textTertiary, marginBottom: 4, lineHeight: 16 }}>
+              On Account needs no name. Advance gets an auto ref name (Tally requirement).
+            </Text>
             {(['On Account', 'Advance'] as LeftoverType[]).map(opt => (
               <TouchableOpacity
                 key={opt}

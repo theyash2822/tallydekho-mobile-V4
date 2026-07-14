@@ -145,7 +145,11 @@ export default function PaymentPreviewScreen() {
         {isProvisional && (
           <View style={s.provBanner}>
             <Ionicons name="hourglass-outline" size={14} color="#B45309" />
-            <Text style={s.provTxt}>Provisional — Tally voucher number pending sync</Text>
+            <Text style={s.provTxt}>
+              {doc.numberPending || (postingTag === 'Posted' && !doc?.documentNumber?.match(/^\d/))
+                ? 'Posted — Tally series number pending sync'
+                : 'Provisional — Tally voucher number pending sync'}
+            </Text>
           </View>
         )}
 
