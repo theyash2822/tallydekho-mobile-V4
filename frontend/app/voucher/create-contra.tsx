@@ -1,7 +1,7 @@
 /**
- * Create Contra Voucher — rewrite (2026-07-14)
- * Source (From / Cr) → Destination (To / Dr). Cash|Bank pickers only.
- * Kind inferred from parents. Cash Count → optional denom sheet (hard match gate).
+ * Create Contra Voucher — restore original From/To transfer UI (2026-07-14)
+ * Keeps working Cash|Bank pickers, API payload, Cash Count sheet (no ₹2000 note).
+ * Cash Count card shows whenever amount > 0.
  */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
@@ -28,6 +28,7 @@ const todayStr = () => {
   const d = new Date();
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(-2)}`;
 };
+const todayDisplay = () => new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 const dmyToISO = (dmy: string): string => {
   if (!dmy) return '';
   const parts = dmy.split('/');
@@ -86,17 +87,24 @@ export default function CreateContraVoucher() {
   const [toKind, setToKind] = useState<LedgerKind>(null);
   const [amount, setAmount] = useState('');
   const [instrumentNo, setInstrumentNo] = useState('');
-  const [instrumentDate, setInstrumentDate] = useState('');
-  const [showInstDatePicker, setShowInstDatePicker] = useState(false);
   const [narration, setNarration] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [submitResult, setSubmitResult] = useState<{
-    tdkRef: string; isQueued: boolean; voucherNumber?: string; numberingPolicy?: string;
+    tdkRef: string; isQueued: boolean; voucherNumber?: string;
   } | null>(null);
 
   const [cashCount, setCashCount] = useState<CashCountResult | null>(null);
   const [showCashSheet, setShowCashSheet] = useState(false);
+
+  const classifyKind = useCallback((opt: BSSOption, cashList: BSSOption[]): LedgerKind => {
+    if (opt.sub === 'cash' || opt.sub === 'bank') return opt.sub;
+    if (cashList.some(c => c.value === opt.value)) return 'cash';
+    const parent = String(opt.subtitle || opt.data?.parent || '').toLowerCase();
+    const name = String(opt.value || '').toLowerCase();
+    if (parent.includes('cash') || name.includes('cash')) return 'cash';
+    return 'bank';
+  }, []);
 
   const loadLedgers = useCallback(async () => {
     if (!company?.guid) return;
@@ -107,9 +115,7 @@ export default function CreateContraVoucher() {
       ]);
       const mapList = (rows: any[], kind: 'cash' | 'bank'): BSSOption[] =>
         (rows || []).map((l: any) => ({
-          label: l.closing_balance != null
-            ? `${l.name} — ${formatAmount(Math.abs(parseFloat(l.closing_balance)))} ${parseFloat(l.closing_balance) < 0 ? 'Cr' : 'Dr'}`
-            : l.name,
+          label: l.name,
           value: l.name,
           subtitle: l.parent || kind,
           sub: kind,
@@ -121,7 +127,7 @@ export default function CreateContraVoucher() {
       setCashLedgers([]);
       setBankLedgers([]);
     }
-  }, [company?.guid, formatAmount]);
+  }, [company?.guid]);
 
   useEffect(() => { loadLedgers(); }, [loadLedgers]);
 
@@ -132,33 +138,16 @@ export default function CreateContraVoucher() {
 
   const contraKind = useMemo(() => inferKind(fromKind, toKind), [fromKind, toKind]);
   const bankInvolved = fromKind === 'bank' || toKind === 'bank';
-  const cashInvolved = fromKind === 'cash' || toKind === 'cash';
   const amtNum = parseFloat(amount) || 0;
 
-  // Amount change after matched count → mismatch (user taps Fix; don't auto-open sheet)
   useEffect(() => {
     if (!cashCount?.used) return;
     const counted = sumDenomCounts(cashCount.denominations);
     const matched = Math.abs(counted - amtNum) < 0.005 && amtNum > 0;
     if (cashCount.matched !== matched || cashCount.target !== amtNum) {
-      setCashCount({
-        ...cashCount,
-        matched,
-        counted,
-        target: amtNum,
-      });
+      setCashCount({ ...cashCount, matched, counted, target: amtNum });
     }
   }, [amount]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const kindLabel = useMemo(() => {
-    switch (contraKind) {
-      case 'cash_deposit': return 'Cash → Bank (Deposit)';
-      case 'cash_withdrawal': return 'Bank → Cash (Withdrawal)';
-      case 'bank_transfer': return 'Bank → Bank (Transfer)';
-      case 'cash_transfer': return 'Cash → Cash';
-      default: return 'Select source & destination';
-    }
-  }, [contraKind]);
 
   const cashCardState: 'none' | 'matched' | 'mismatch' = !cashCount?.used
     ? 'none'
@@ -167,9 +156,9 @@ export default function CreateContraVoucher() {
       : 'mismatch';
 
   const canSubmit = useMemo(() => {
-    if (!fromLedger) return 'Select Source (From) ledger';
-    if (!toLedger) return 'Select Destination (To) ledger';
-    if (fromLedger === toLedger) return 'Source and Destination must differ';
+    if (!fromLedger) return 'Select From Ledger';
+    if (!toLedger) return 'Select To Ledger';
+    if (fromLedger === toLedger) return 'From and To must differ';
     if (!(amtNum > 0)) return 'Enter amount';
     if (cashCount?.used && !cashCount.matched) return 'Fix Cash Count to match amount (or clear it)';
     return null;
@@ -177,22 +166,16 @@ export default function CreateContraVoucher() {
 
   const selectFrom = (opt: BSSOption) => {
     setFromLedger(opt.value);
-    setFromKind((opt.sub as LedgerKind) || (cashLedgers.some(c => c.value === opt.value) ? 'cash' : 'bank'));
+    setFromKind(classifyKind(opt, cashLedgers));
   };
   const selectTo = (opt: BSSOption) => {
     setToLedger(opt.value);
-    setToKind((opt.sub as LedgerKind) || (cashLedgers.some(c => c.value === opt.value) ? 'cash' : 'bank'));
+    setToKind(classifyKind(opt, cashLedgers));
   };
 
-  const swapLedgers = () => {
-    if (!fromLedger && !toLedger) return;
-    setFromLedger(toLedger);
-    setToLedger(fromLedger);
-    setFromKind(toKind);
-    setToKind(fromKind);
-  };
-
-  const handleSubmit = async () => {
+  const handleSubmit = async (asOptional?: boolean) => {
+    const et = asOptional ? 'optional' : entryType;
+    if (canSubmit && !asOptional) { Alert.alert('Required', canSubmit); return; }
     if (canSubmit) { Alert.alert('Required', canSubmit); return; }
     if (!isPaired) {
       Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Pair with Tally Desktop first.' });
@@ -210,17 +193,17 @@ export default function CreateContraVoucher() {
         toLedger,
         fromIsCash: fromKind === 'cash',
         toIsCash: toKind === 'cash',
-        fromIsBank: fromKind === 'bank',
-        toIsBank: toKind === 'bank',
+        fromIsBank: fromKind === 'bank' || fromKind == null,
+        toIsBank: toKind === 'bank' || toKind == null,
         contraKind: kind,
-        entryType,
+        entryType: et,
         numbering_policy: numberingPolicy,
         narration: narration || undefined,
       };
-      if (bankInvolved || instrumentNo || instrumentDate) {
+      if (bankInvolved || instrumentNo) {
         payload.instrumentDetails = {
           instrumentNo: instrumentNo || undefined,
-          instrumentDate: instrumentDate ? dmyToISO(instrumentDate) : dmyToISO(date),
+          instrumentDate: dmyToISO(date),
           transactionType: txnTypeForKind(kind),
         };
         if (instrumentNo) payload.reference = instrumentNo;
@@ -240,7 +223,6 @@ export default function CreateContraVoucher() {
         tdkRef,
         isQueued: res?.queued === true,
         voucherNumber: res?.voucherNumber || undefined,
-        numberingPolicy: res?.numberingPolicy || numberingPolicy,
       });
       setShowSuccess(true);
     } catch (e: any) {
@@ -258,6 +240,7 @@ export default function CreateContraVoucher() {
         </TouchableOpacity>
         <Text style={s.hdrTitle}>Contra Voucher</Text>
         <RegularOptionalToggle value={entryType} onChange={setEntryType} />
+        <View style={s.vNoBox}><Text style={s.vNo}>Auto</Text></View>
       </View>
 
       <KeyboardAvoidingView
@@ -273,76 +256,85 @@ export default function CreateContraVoucher() {
           keyboardDismissMode="on-drag"
           onScrollBeginDrag={Keyboard.dismiss}
         >
-          <View style={s.section}>
-            <View style={[s.fieldBlock, { padding: SPACING.md }]}>
-              <View style={s.row2}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.fLabel}>Contra No.</Text>
-                  <View style={s.autoBox}>
-                    <Text style={s.autoTxt}>Auto</Text>
-                    <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
-                  </View>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.fLabel}>Date <Text style={s.req}>*</Text></Text>
-                  {entryType === 'regular' ? (
-                    <View style={[s.autoBox, { opacity: 0.55 }]}>
-                      <Text style={s.autoTxt}>{date}</Text>
-                      <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
-                    </View>
-                  ) : (
-                    <TouchableOpacity style={s.fInput} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
-                      <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.sm, fontWeight: '600' }}>
-                        {date || 'Select date'}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
+          {/* Date info row — original layout */}
+          <View style={s.infoRow}>
+            <TouchableOpacity
+              style={s.infoItem}
+              onPress={() => entryType === 'optional' && setShowDatePicker(true)}
+              activeOpacity={entryType === 'optional' ? 0.7 : 1}
+            >
+              <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
+              <Text style={s.infoTxt}>{entryType === 'regular' ? todayDisplay() : date}</Text>
+            </TouchableOpacity>
+            <View style={s.infoDot} />
+            <View style={s.infoItem}>
+              <Ionicons name="swap-horizontal-outline" size={14} color={COLORS.textSecondary} />
+              <Text style={s.infoTxt}>Contra Entry</Text>
             </View>
           </View>
 
+          {/* Transfer visual — original From / To cards */}
+          <View style={s.transferRow}>
+            <View style={s.transferBox}>
+              <Ionicons name="arrow-up-circle" size={24} color={COLORS.negative} />
+              <Text style={s.transferLabel}>From</Text>
+              <Text style={s.transferName} numberOfLines={2}>{fromLedger || 'Source Account'}</Text>
+            </View>
+            <View style={s.transferMid}>
+              <View style={s.transferArrow}>
+                <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
+              </View>
+              {amount ? <Text style={s.transferAmt}>{currencySymbol}{amount}</Text> : null}
+            </View>
+            <View style={s.transferBox}>
+              <Ionicons name="arrow-down-circle" size={24} color={COLORS.positive} />
+              <Text style={s.transferLabel}>To</Text>
+              <Text style={s.transferName} numberOfLines={2}>{toLedger || 'Destination Account'}</Text>
+            </View>
+          </View>
+
+          {/* Transfer Accounts — original section look, ledger pickers */}
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Transfer</Text>
-            <Text style={s.kindHint}>{kindLabel}</Text>
+            <Text style={s.sectionTitle}>Transfer Accounts</Text>
             <View style={s.fieldBlock}>
-              <View style={{ padding: SPACING.md, gap: 12 }}>
+              <View style={s.field}>
                 <BottomSheetSearch
-                  label="Source (From / Credit)"
+                  label="From Ledger"
                   required
-                  placeholder="Cash or Bank ledger"
+                  placeholder="e.g. Cash in Hand"
                   value={fromLedger}
                   options={allPickers}
                   onSelect={selectFrom}
                   onClear={() => { setFromLedger(''); setFromKind(null); }}
-                  sheetTitle="Select Source"
+                  sheetTitle="Select From Ledger"
                   searchPlaceholder="Search cash / bank..."
-                  icon="arrow-up-circle-outline"
+                  icon="log-out-outline"
                 />
-                <TouchableOpacity style={s.swapBtn} onPress={swapLedgers} activeOpacity={0.8}>
-                  <Ionicons name="swap-vertical" size={18} color={COLORS.brandPrimary} />
-                  <Text style={s.swapTxt}>Swap</Text>
-                </TouchableOpacity>
+              </View>
+              <View style={s.div} />
+              <View style={s.field}>
                 <BottomSheetSearch
-                  label="Destination (To / Debit)"
+                  label="To Ledger"
                   required
-                  placeholder="Cash or Bank ledger"
+                  placeholder="e.g. HDFC Bank Account"
                   value={toLedger}
                   options={allPickers}
                   onSelect={selectTo}
                   onClear={() => { setToLedger(''); setToKind(null); }}
-                  sheetTitle="Select Destination"
+                  sheetTitle="Select To Ledger"
                   searchPlaceholder="Search cash / bank..."
-                  icon="arrow-down-circle-outline"
+                  icon="log-in-outline"
                 />
               </View>
             </View>
           </View>
 
+          {/* Amount + optional instrument */}
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Amount</Text>
+            <Text style={s.sectionTitle}>Transaction Details</Text>
             <View style={s.fieldBlock}>
-              <View style={{ padding: SPACING.md }}>
+              <View style={s.field}>
+                <Text style={s.label}>Amount <Text style={s.req}>*</Text></Text>
                 <View style={s.inputWrap}>
                   <Text style={s.rupee}>{currencySymbol}</Text>
                   <TextInput
@@ -355,37 +347,29 @@ export default function CreateContraVoucher() {
                   />
                 </View>
               </View>
+              {bankInvolved && (
+                <>
+                  <View style={s.div} />
+                  <View style={s.field}>
+                    <Text style={s.label}>Reference No.</Text>
+                    <View style={s.inputWrap}>
+                      <Ionicons name="keypad-outline" size={16} color={COLORS.textTertiary} />
+                      <TextInput
+                        style={s.input}
+                        placeholder="Cheque / reference (optional)"
+                        placeholderTextColor={COLORS.textTertiary}
+                        value={instrumentNo}
+                        onChangeText={setInstrumentNo}
+                      />
+                    </View>
+                  </View>
+                </>
+              )}
             </View>
           </View>
 
-          {bankInvolved && (
-            <View style={s.section}>
-              <Text style={s.sectionTitle}>Instrument</Text>
-              <View style={[s.fieldBlock, { padding: SPACING.md, gap: 12 }]}>
-                <View>
-                  <Text style={s.fLabel}>Instrument No.</Text>
-                  <TextInput
-                    style={s.fInput}
-                    placeholder="Cheque / ref no. (optional)"
-                    placeholderTextColor={COLORS.textTertiary}
-                    value={instrumentNo}
-                    onChangeText={setInstrumentNo}
-                  />
-                </View>
-                <View>
-                  <Text style={s.fLabel}>Instrument Date</Text>
-                  <TouchableOpacity style={s.fInput} onPress={() => setShowInstDatePicker(true)} activeOpacity={0.8}>
-                    <Text style={{ color: instrumentDate ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.sm, fontWeight: '600' }}>
-                      {instrumentDate || date || 'Select date'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <Text style={s.hint}>Tally method defaults by transfer type ({txnTypeForKind(contraKind)}).</Text>
-              </View>
-            </View>
-          )}
-
-          {cashInvolved && amtNum > 0 && (
+          {/* Cash Count — always after amount (>0). Was hidden earlier when cash kind not detected. */}
+          {amtNum > 0 && (
             <View style={s.section}>
               <Text style={s.sectionTitle}>Cash Count</Text>
               <TouchableOpacity
@@ -400,10 +384,12 @@ export default function CreateContraVoucher() {
                 <View style={s.cashLeft}>
                   <View style={[
                     s.cashIcon,
-                    { backgroundColor:
-                      cashCardState === 'matched' ? COLORS.positiveBg
-                        : cashCardState === 'mismatch' ? '#FEE2E2'
-                          : COLORS.pageBg },
+                    {
+                      backgroundColor:
+                        cashCardState === 'matched' ? COLORS.positiveBg
+                          : cashCardState === 'mismatch' ? COLORS.negativeBg
+                            : COLORS.pageBg,
+                    },
                   ]}>
                     <Ionicons
                       name={
@@ -442,35 +428,44 @@ export default function CreateContraVoucher() {
           <View style={s.section}>
             <Text style={s.sectionTitle}>Narration</Text>
             <View style={s.fieldBlock}>
-              <TextInput
-                style={s.textarea}
-                placeholder="Optional notes"
-                placeholderTextColor={COLORS.textTertiary}
-                value={narration}
-                onChangeText={setNarration}
-                multiline
-                textAlignVertical="top"
-              />
+              <View style={s.field}>
+                <Text style={s.label}>Notes</Text>
+                <TextInput
+                  style={s.textarea}
+                  placeholder="Enter Notes"
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={narration}
+                  onChangeText={setNarration}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </View>
             </View>
           </View>
 
-          <TouchableOpacity
-            style={[s.btnPrimary, (!!canSubmit || submitting) && { opacity: 0.55 }]}
-            onPress={handleSubmit}
-            disabled={!!canSubmit || submitting}
-            activeOpacity={0.85}
-          >
-            {submitting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                <Text style={s.btnPrimaryTxt}>
-                  {entryType === 'optional' ? 'Save Optional Contra' : 'Submit Contra'}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
+          <View style={s.btnRow}>
+            <TouchableOpacity
+              style={s.btnSecondary}
+              onPress={() => handleSubmit(true)}
+              activeOpacity={0.8}
+              disabled={submitting}
+            >
+              <Text style={s.btnSecTxt}>Save as Optional</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.btnPrimary, submitting && { opacity: 0.6 }]}
+              onPress={() => handleSubmit(false)}
+              activeOpacity={0.8}
+              disabled={submitting}
+            >
+              {submitting
+                ? <ActivityIndicator size="small" color={COLORS.white} />
+                : <Ionicons name="send" size={16} color={COLORS.white} />}
+              <Text style={s.btnPriTxt}>{submitting ? 'Submitting...' : 'Submit Contra'}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={{ height: 32 }} />
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -479,12 +474,6 @@ export default function CreateContraVoucher() {
         value={date}
         onSelect={(d) => { setDate(d); setShowDatePicker(false); }}
         onClose={() => setShowDatePicker(false)}
-      />
-      <DatePickerModal
-        visible={showInstDatePicker}
-        value={instrumentDate || date}
-        onSelect={(d) => { setInstrumentDate(d); setShowInstDatePicker(false); }}
-        onClose={() => setShowInstDatePicker(false)}
       />
 
       <CashCountSheet
@@ -505,14 +494,9 @@ export default function CreateContraVoucher() {
             <Text style={s.successSub}>
               {submitResult.isQueued ? 'Queued for Tally sync' : 'Posted to Tally'}
             </Text>
-            {!!submitResult.tdkRef && (
-              <Text style={s.successRef}>{submitResult.tdkRef}</Text>
-            )}
-            {!!submitResult.voucherNumber && (
-              <Text style={s.successVno}>#{submitResult.voucherNumber}</Text>
-            )}
+            {!!submitResult.tdkRef && <Text style={s.successRef}>{submitResult.tdkRef}</Text>}
             <TouchableOpacity
-              style={s.btnPrimary}
+              style={[s.btnPrimary, { width: '100%' }]}
               onPress={() => {
                 setShowSuccess(false);
                 if (submitResult.tdkRef) {
@@ -523,14 +507,10 @@ export default function CreateContraVoucher() {
               }}
               activeOpacity={0.85}
             >
-              <Text style={s.btnPrimaryTxt}>View Preview</Text>
+              <Text style={s.btnPriTxt}>View Preview</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={s.btnGhost}
-              onPress={() => { setShowSuccess(false); router.back(); }}
-              activeOpacity={0.8}
-            >
-              <Text style={s.btnGhostTxt}>Done</Text>
+            <TouchableOpacity onPress={() => { setShowSuccess(false); router.back(); }} style={{ paddingVertical: 10 }}>
+              <Text style={{ color: COLORS.textSecondary, fontWeight: '600' }}>Done</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -547,27 +527,49 @@ const s = StyleSheet.create({
   },
   back: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
   hdrTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
-  scroll: { padding: SPACING.md, gap: 14, paddingBottom: 24 },
+  vNoBox: {
+    backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, paddingHorizontal: 10, paddingVertical: 5,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  vNo: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
+  scroll: { padding: SPACING.md, gap: 14 },
+  infoRow: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACING.md, paddingVertical: 12, gap: 12, borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  infoItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  infoTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '500' },
+  infoDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: COLORS.borderStrong },
+  transferRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  transferBox: {
+    flex: 1, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1,
+    borderColor: COLORS.borderDefault, padding: 14, alignItems: 'center', gap: 6,
+  },
+  transferLabel: {
+    fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary,
+    textTransform: 'uppercase', letterSpacing: 0.5,
+  },
+  transferName: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
+  transferMid: { alignItems: 'center', gap: 6 },
+  transferArrow: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.brandPrimary,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  transferAmt: { fontSize: TYPOGRAPHY.xs, fontWeight: '800', color: COLORS.textPrimary },
   section: { gap: 8 },
+  sectionTitle: {
+    fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textSecondary,
+    textTransform: 'uppercase', letterSpacing: 0.5, marginLeft: 2,
+  },
   fieldBlock: {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1,
     borderColor: COLORS.borderDefault, overflow: 'hidden',
   },
-  row2: { flexDirection: 'row', gap: 12 },
-  fLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
-  fInput: {
-    backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault,
-    borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48, justifyContent: 'center',
-    fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '600',
+  field: { paddingHorizontal: SPACING.md, paddingVertical: 14 },
+  label: {
+    fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary,
+    marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.3,
   },
-  autoBox: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault,
-    borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48,
-  },
-  autoTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
-  sectionTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: 0.4 },
-  kindHint: { fontSize: 12, color: COLORS.textTertiary, marginTop: -4 },
   req: { color: COLORS.negative },
   inputWrap: {
     flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: COLORS.borderDefault,
@@ -575,13 +577,11 @@ const s = StyleSheet.create({
   },
   input: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
   rupee: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textSecondary },
-  hint: { fontSize: 12, color: COLORS.textTertiary, lineHeight: 16 },
-  swapBtn: {
-    alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.md,
-    borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg,
+  textarea: {
+    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, padding: 12,
+    fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, backgroundColor: COLORS.pageBg, minHeight: 100,
   },
-  swapTxt: { fontSize: 12, fontWeight: '600', color: COLORS.brandPrimary },
+  div: { height: 1, backgroundColor: COLORS.borderDefault },
   cashCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1,
@@ -590,23 +590,21 @@ const s = StyleSheet.create({
   cashMatched: { borderColor: COLORS.positive },
   cashMismatch: { borderColor: COLORS.negative },
   cashLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  cashIcon: {
-    width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
-  },
+  cashIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   cashTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
   cashSub: { fontSize: 12, color: COLORS.textTertiary, marginTop: 2 },
   cashAction: { fontSize: 13, fontWeight: '700', color: COLORS.brandPrimary },
-  textarea: {
-    borderWidth: 0, padding: 14, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary,
-    backgroundColor: COLORS.cardBg, minHeight: 88,
+  btnRow: { flexDirection: 'row', gap: 10, marginTop: 8 },
+  btnSecondary: {
+    flex: 1, paddingVertical: 14, borderRadius: RADIUS.lg, borderWidth: 1.5,
+    borderColor: COLORS.borderStrong, alignItems: 'center',
   },
+  btnSecTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   btnPrimary: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.lg, paddingVertical: 16,
+    flex: 2, paddingVertical: 14, borderRadius: RADIUS.lg, backgroundColor: COLORS.brandPrimary,
+    alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8,
   },
-  btnPrimaryTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: '#fff' },
-  btnGhost: { alignItems: 'center', paddingVertical: 12 },
-  btnGhostTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+  btnPriTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
   successOverlay: {
     ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 50,
@@ -618,5 +616,4 @@ const s = StyleSheet.create({
   successTitle: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary },
   successSub: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
   successRef: { fontSize: 12, fontWeight: '600', color: COLORS.brandPrimary, marginTop: 4 },
-  successVno: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
 });

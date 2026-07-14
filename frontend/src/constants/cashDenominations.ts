@@ -1,12 +1,13 @@
 /**
  * Currency-keyed cash denomination masters for Contra Cash Count.
  * Order is descending face value (UI + Auto Split greedy).
- * INR includes ₹2000 (still legal tender storage / older notes).
+ * INR UI notes start at ₹500 (no ₹2000). Tally slots keep a leading 2000
+ * position always encoded as 0 so CASHDENOMINATION stays 12 parts.
  */
 export type CashDenomMaster = {
   currency: string;
   symbol: string;
-  /** Face values largest → smallest */
+  /** Face values largest → smallest (UI) */
   notes: number[];
   /** Slot order for Tally CASHDENOMINATION encode (must stay 12 slots). */
   tallySlots: number[];
@@ -16,8 +17,8 @@ export const CASH_DENOMINATION_MASTERS: Record<string, CashDenomMaster> = {
   INR: {
     currency: 'INR',
     symbol: '₹',
-    notes: [2000, 500, 200, 100, 50, 20, 10, 5, 2, 1],
-    // Contra_2: positions after 2000 are 500, 100, … (no 200 slot). Fold 200→100×2 on encode.
+    notes: [500, 200, 100, 50, 20, 10, 5, 2, 1],
+    // Contra_2: leading slot is 2000 (always 0 from app), then 500, 100…
     tallySlots: [2000, 500, 100, 50, 20, 10, 5, 2, 1, 0, 0, 0],
   },
   USD: {
