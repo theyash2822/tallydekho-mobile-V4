@@ -1,7 +1,13 @@
-import React, { useState } from 'react';
+/**
+ * Create Journal Voucher — rewrite (2026-07-14)
+ * Single Dr+Cr pair. Optional Depreciation-on-Asset mode:
+ *   Dr Depreciation expense · Cr Accumulated Depreciation
+ *   Amount = manual WDV base × editable IT rate% (full rate)
+ */
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
+  TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Switch, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,199 +15,591 @@ import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import DatePickerModal from '../../src/components/forms/DatePickerModal';
+import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import { useAuth } from '../../src/context/AuthContext';
-import { createJournalVoucher } from '../../src/services/api';
-import { useSettings } from '../../src/context/SettingsContext';
+import {
+  createJournalVoucher, getLedgers, getComplianceConfig,
+} from '../../src/services/api';
+import {
+  indiaIncomeTaxDepreciationRates,
+  IndiaDepreciationRate,
+} from '../../src/constants/indiaDepreciationRates';
 
-const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-const voucherNo = 'JV-' + String(Math.floor(1000 + Math.random() * 9000));
+const todayStr = () => {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(-2)}`;
+};
+const dmyToISO = (dmy: string): string => {
+  if (!dmy) return '';
+  const parts = dmy.split('/');
+  if (parts.length < 3) return dmy;
+  const [dd, mm, yy] = parts;
+  const year = parseInt(yy) < 100 ? 2000 + parseInt(yy) : parseInt(yy);
+  return `${year}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+};
+const fmtINR = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
 
 export default function CreateJournalVoucher() {
-  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
-  const { company, isPaired } = useAuth();
+  const scrollRef = useRef<ScrollView>(null);
+  const narrationY = useRef(0);
+  const { company, isPaired, selectedFY } = useAuth();
+  const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
+
   const [entryType, setEntryType] = useState<EntryType>('regular');
-  const [debitLedger, setDebitLedger] = useState('');
-  const [creditLedger, setCreditLedger] = useState('');
+  const [numberingPolicy, setNumberingPolicy] = useState<'tally_prime_series' | 'tallydekho_series'>('tally_prime_series');
+
+  useEffect(() => {
+    if (!company?.guid) return;
+    getComplianceConfig(company.guid).then((res: any) => {
+      const cfg = res?.data || res;
+      setNumberingPolicy(cfg?.numbering_policy === 'tallydekho_series' ? 'tallydekho_series' : 'tally_prime_series');
+    }).catch(() => {});
+  }, [company?.guid]);
+
+  const [date, setDate] = useState(todayStr());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  useEffect(() => {
+    if (entryType === 'regular') setDate(todayStr());
+  }, [entryType]);
+
+  const [ledgers, setLedgers] = useState<BSSOption[]>([]);
+  const [drLedger, setDrLedger] = useState('');
+  const [crLedger, setCrLedger] = useState('');
   const [amount, setAmount] = useState('');
-  const [notes, setNotes] = useState('');
+  const [amountManual, setAmountManual] = useState(false);
+  const [narration, setNarration] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [submitResult, setSubmitResult] = useState<{
+    tdkRef: string; isQueued: boolean; voucherNumber?: string; numberingPolicy?: string;
+  } | null>(null);
+
+  // Depreciation mode
+  const [deprOn, setDeprOn] = useState(false);
+  const [wdvBase, setWdvBase] = useState('');
+  const [rateBlock, setRateBlock] = useState<IndiaDepreciationRate | null>(null);
+  const [ratePercent, setRatePercent] = useState('');
+  const [showRatePicker, setShowRatePicker] = useState(false);
+  const [rateSearch, setRateSearch] = useState('');
+
+  const loadLedgers = useCallback(async () => {
+    if (!company?.guid) return;
+    try {
+      const res: any = await getLedgers(company.guid, { limit: '500' });
+      const list = (res?.data || res || []).map((l: any) => ({
+        label: l.name,
+        value: l.name,
+        subtitle: l.parent || l.group || undefined,
+        data: l,
+      }));
+      setLedgers(list);
+    } catch {
+      setLedgers([]);
+    }
+  }, [company?.guid]);
+
+  useEffect(() => { loadLedgers(); }, [loadLedgers]);
+
+  // Recalc amount from WDV × rate when not manually overridden
+  useEffect(() => {
+    if (!deprOn || amountManual) return;
+    const base = parseFloat(wdvBase) || 0;
+    const rate = parseFloat(ratePercent) || 0;
+    if (base > 0 && rate > 0) {
+      const calc = Math.round((base * rate) / 100 * 100) / 100;
+      setAmount(String(calc));
+    }
+  }, [deprOn, wdvBase, ratePercent, amountManual]);
+
+  // Suggest narration in depr mode
+  useEffect(() => {
+    if (!deprOn || !rateBlock) return;
+    const rate = ratePercent || String(rateBlock.ratePercent);
+    setNarration(`Depreciation ${rate}% on WDV (${rateBlock.displayName})`);
+  }, [deprOn, rateBlock, ratePercent]);
+
+  const filteredRates = useMemo(() => {
+    const q = rateSearch.trim().toLowerCase();
+    if (!q) return indiaIncomeTaxDepreciationRates;
+    return indiaIncomeTaxDepreciationRates.filter(
+      (r) =>
+        r.displayName.toLowerCase().includes(q)
+        || r.description.toLowerCase().includes(q)
+        || String(r.ratePercent).includes(q),
+    );
+  }, [rateSearch]);
+
+  const canSubmit = useMemo(() => {
+    if (!drLedger) return 'Select Debit (By) ledger';
+    if (!crLedger) return 'Select Credit (To) ledger';
+    if (!(parseFloat(amount) > 0)) return 'Enter amount';
+    if (deprOn) {
+      if (!(parseFloat(wdvBase) > 0)) return 'Enter WDV / base amount';
+      if (!(parseFloat(ratePercent) > 0)) return 'Select or enter depreciation %';
+    }
+    return null;
+  }, [drLedger, crLedger, amount, deprOn, wdvBase, ratePercent]);
 
   const handleSubmit = async () => {
-    if (!debitLedger.trim()) { Alert.alert('Required', 'Please enter Debit Ledger'); return; }
-    if (!creditLedger.trim()) { Alert.alert('Required', 'Please enter Credit Ledger'); return; }
-    if (!amount.trim()) { Alert.alert('Required', 'Please enter amount'); return; }
-    if (!isPaired) { Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' }); return; }
+    if (canSubmit) { Alert.alert('Required', canSubmit); return; }
+    if (!isPaired) {
+      Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Pair with Tally Desktop first.' });
+      return;
+    }
+    setSubmitting(true);
     try {
-      setSubmitting(true);
-      await createJournalVoucher({
-        company_guid: company?.guid,
-        debit_ledger: debitLedger,
-        credit_ledger: creditLedger,
+      const payload: any = {
+        companyGuid: company?.guid,
+        companyName: company?.name,
+        date: dmyToISO(date),
         amount: parseFloat(amount) || 0,
-        narration: notes || undefined,
-        voucher_type: entryType,
+        drLedger,
+        crLedger,
+        entryType,
+        numbering_policy: numberingPolicy,
+        narration: narration || undefined,
+      };
+      if (deprOn) {
+        payload.depreciationMeta = {
+          baseWdv: parseFloat(wdvBase) || 0,
+          ratePercent: parseFloat(ratePercent) || 0,
+          assetBlock: rateBlock?.assetBlock || null,
+          displayName: rateBlock?.displayName || null,
+          method: 'WDV',
+        };
+      }
+      const res: any = await createJournalVoucher(payload);
+      const tdkRef = res?.tdkRef || res?.tdkReferenceNo || '';
+      setSubmitResult({
+        tdkRef,
+        isQueued: res?.queued === true,
+        voucherNumber: res?.voucherNumber || undefined,
+        numberingPolicy: res?.numberingPolicy || numberingPolicy,
       });
-      Toast.show({ type: 'success', text1: 'Voucher Posted', text2: `Journal Voucher ${voucherNo} posted to Tally.` });
-      setTimeout(() => router.back(), 800);
-    } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message || 'Could not submit. Check Tally connection.' });
+      setShowSuccess(true);
+    } catch (e: any) {
+      Toast.show({ type: 'error', text1: 'Submit Failed', text2: e?.message || 'Check Tally connection.' });
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleSaveOptional = () => {
-    Toast.show({ type: 'info', text1: 'Draft Saved', text2: 'Journal Voucher saved as optional.' });
-    setTimeout(() => router.back(), 1000);
+  const selectRate = (r: IndiaDepreciationRate) => {
+    setRateBlock(r);
+    setRatePercent(String(r.ratePercent));
+    setAmountManual(false);
+    setShowRatePicker(false);
+    setRateSearch('');
   };
 
   return (
-    <SafeAreaView style={s.safe}>
+    <SafeAreaView style={s.safe} edges={['top']}>
       <View style={s.hdr}>
-        <TouchableOpacity onPress={() => router.back()} style={s.back} hitSlop={{ top:8,bottom:8,left:8,right:8 }}>
+        <TouchableOpacity onPress={() => router.back()} style={s.back} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.hdrTitle}>Journal Voucher</Text>
         <RegularOptionalToggle value={entryType} onChange={setEntryType} />
-        <View style={s.vNoBox}><Text style={s.vNo}>{voucherNo}</Text></View>
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+        <ScrollView
+          ref={scrollRef}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={s.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Date + numbering hint */}
+          <View style={s.card}>
+            <Text style={s.cardLbl}>Date</Text>
+            {entryType === 'regular' ? (
+              <View style={s.lockedRow}>
+                <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
+                <Text style={s.lockedTxt}>{date}</Text>
+              </View>
+            ) : (
+              <TouchableOpacity style={s.dateBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
+                <Ionicons name="calendar-outline" size={16} color={COLORS.brandPrimary} />
+                <Text style={s.dateTxt}>{date || 'Select date'}</Text>
+              </TouchableOpacity>
+            )}
+            <Text style={s.hint}>
+              Numbering from Settings · {numberingPolicy === 'tallydekho_series' ? 'TallyDekho series (JOR)' : 'TallyPrime series'}
+            </Text>
+          </View>
 
-          <View style={s.infoRow}>
-            <View style={s.infoItem}>
-              <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
-              <Text style={s.infoTxt}>{today}</Text>
-            </View>
-            <View style={s.infoDot} />
-            <View style={s.infoItem}>
-              <Ionicons name="book-outline" size={14} color={COLORS.textSecondary} />
-              <Text style={s.infoTxt}>Journal Entry</Text>
+          {/* Depreciation toggle */}
+          <View style={s.card}>
+            <View style={s.toggleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.toggleTitle}>Depreciation on Asset</Text>
+                <Text style={s.hint}>
+                  Dr Depreciation expense · Cr Accumulated Depreciation · % of WDV
+                </Text>
+              </View>
+              <Switch
+                value={deprOn}
+                onValueChange={(v) => {
+                  setDeprOn(v);
+                  setAmountManual(false);
+                  if (!v) {
+                    setWdvBase('');
+                    setRateBlock(null);
+                    setRatePercent('');
+                  }
+                }}
+                trackColor={{ false: COLORS.borderDefault, true: COLORS.brandPrimary + '88' }}
+                thumbColor={deprOn ? COLORS.brandPrimary : '#f4f3f4'}
+              />
             </View>
           </View>
 
-          {/* Dr / Cr visual indicator */}
+          {deprOn && (
+            <View style={s.card}>
+              <Text style={s.sectionTitle}>Depreciation calc</Text>
+              <Text style={s.fieldLbl}>Base (WDV) <Text style={s.req}>*</Text></Text>
+              <View style={s.inputWrap}>
+                <Text style={s.rupee}>₹</Text>
+                <TextInput
+                  style={s.input}
+                  placeholder="Enter WDV / base amount"
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={wdvBase}
+                  onChangeText={(t) => { setWdvBase(t); setAmountManual(false); }}
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <Text style={[s.fieldLbl, { marginTop: 12 }]}>Asset block / rate <Text style={s.req}>*</Text></Text>
+              <TouchableOpacity style={s.pickerBtn} onPress={() => setShowRatePicker(true)} activeOpacity={0.7}>
+                <Ionicons name="list-outline" size={16} color={COLORS.brandPrimary} />
+                <Text style={[s.pickerTxt, !rateBlock && { color: COLORS.textTertiary }]} numberOfLines={2}>
+                  {rateBlock ? `${rateBlock.displayName} (${rateBlock.ratePercent}%)` : 'Select Income-tax block'}
+                </Text>
+                <Ionicons name="chevron-down" size={16} color={COLORS.textTertiary} />
+              </TouchableOpacity>
+
+              <Text style={[s.fieldLbl, { marginTop: 12 }]}>Rate % <Text style={s.req}>*</Text></Text>
+              <View style={s.inputWrap}>
+                <TextInput
+                  style={s.input}
+                  placeholder="e.g. 15"
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={ratePercent}
+                  onChangeText={(t) => { setRatePercent(t); setAmountManual(false); }}
+                  keyboardType="numeric"
+                />
+                <Text style={s.rupee}>%</Text>
+              </View>
+              {(parseFloat(wdvBase) > 0 && parseFloat(ratePercent) > 0) && (
+                <Text style={s.calcHint}>
+                  {fmtINR(parseFloat(wdvBase))} × {ratePercent}% = {fmtINR((parseFloat(wdvBase) * parseFloat(ratePercent)) / 100)}
+                </Text>
+              )}
+            </View>
+          )}
+
+          {/* Dr / Cr summary */}
           <View style={s.drCrRow}>
             <View style={[s.drCrBox, { borderColor: COLORS.negative + '60', backgroundColor: COLORS.negativeBg }]}>
-              <Text style={[s.drCrLabel, { color: COLORS.negative }]}>Dr</Text>
-              <Text style={[s.drCrValue, { color: COLORS.negative }]}>{amount ? `₹${amount}` : '—'}</Text>
-              <Text style={s.drCrLedger} numberOfLines={1}>{debitLedger || 'Debit Ledger'}</Text>
+              <Text style={[s.drCrLabel, { color: COLORS.negative }]}>Dr (By)</Text>
+              <Text style={[s.drCrValue, { color: COLORS.negative }]}>{amount ? fmtINR(parseFloat(amount) || 0) : '—'}</Text>
+              <Text style={s.drCrLedger} numberOfLines={2}>{drLedger || (deprOn ? 'Depreciation expense' : 'Debit ledger')}</Text>
             </View>
             <View style={s.arrowBox}>
               <Ionicons name="swap-horizontal" size={20} color={COLORS.textTertiary} />
             </View>
             <View style={[s.drCrBox, { borderColor: COLORS.positive + '60', backgroundColor: COLORS.positiveBg }]}>
-              <Text style={[s.drCrLabel, { color: COLORS.positive }]}>Cr</Text>
-              <Text style={[s.drCrValue, { color: COLORS.positive }]}>{amount ? `₹${amount}` : '—'}</Text>
-              <Text style={s.drCrLedger} numberOfLines={1}>{creditLedger || 'Credit Ledger'}</Text>
+              <Text style={[s.drCrLabel, { color: COLORS.positive }]}>Cr (To)</Text>
+              <Text style={[s.drCrValue, { color: COLORS.positive }]}>{amount ? fmtINR(parseFloat(amount) || 0) : '—'}</Text>
+              <Text style={s.drCrLedger} numberOfLines={2}>{crLedger || (deprOn ? 'Accumulated Dep.' : 'Credit ledger')}</Text>
             </View>
           </View>
 
-          <View style={s.section}>
-            <Text style={s.sectionTitle}>Ledger Entries</Text>
-            <View style={s.fieldBlock}>
-              <View style={s.field}>
-                <View style={s.labelRow}>
-                  <View style={[s.drTag, { backgroundColor: COLORS.negativeBg }]}><Text style={[s.drTagTxt, { color: COLORS.negative }]}>Dr</Text></View>
-                  <Text style={s.label}>Debit Ledger <Text style={s.req}>*</Text></Text>
-                </View>
-                <View style={s.inputWrap}>
-                  <Ionicons name="remove-circle-outline" size={16} color={COLORS.negative} />
-                  <TextInput style={s.input} placeholder="Search Ledger" placeholderTextColor={COLORS.textTertiary} value={debitLedger} onChangeText={setDebitLedger} />
-                  <Ionicons name="search-outline" size={16} color={COLORS.textTertiary} />
-                </View>
-              </View>
-              <View style={s.div} />
-              <View style={s.field}>
-                <View style={s.labelRow}>
-                  <View style={[s.drTag, { backgroundColor: COLORS.positiveBg }]}><Text style={[s.drTagTxt, { color: COLORS.positive }]}>Cr</Text></View>
-                  <Text style={s.label}>Credit Ledger <Text style={s.req}>*</Text></Text>
-                </View>
-                <View style={s.inputWrap}>
-                  <Ionicons name="add-circle-outline" size={16} color={COLORS.positive} />
-                  <TextInput style={s.input} placeholder="Search Ledger" placeholderTextColor={COLORS.textTertiary} value={creditLedger} onChangeText={setCreditLedger} />
-                  <Ionicons name="search-outline" size={16} color={COLORS.textTertiary} />
-                </View>
-              </View>
-            </View>
+          {/* Ledgers */}
+          <View style={s.card}>
+            <Text style={s.sectionTitle}>Ledger entries</Text>
+            <BottomSheetSearch
+              label={deprOn ? 'Debit — Depreciation expense' : 'Debit ledger (By)'}
+              required
+              placeholder="Search ledger"
+              value={drLedger}
+              options={ledgers}
+              onSelect={(opt) => setDrLedger(opt.value)}
+              onClear={() => setDrLedger('')}
+              sheetTitle="Select Debit Ledger"
+              searchPlaceholder="Search ledger…"
+              icon="remove-circle-outline"
+            />
+            <View style={{ height: 10 }} />
+            <BottomSheetSearch
+              label={deprOn ? 'Credit — Accumulated Depreciation' : 'Credit ledger (To)'}
+              required
+              placeholder="Search ledger"
+              value={crLedger}
+              options={ledgers}
+              onSelect={(opt) => setCrLedger(opt.value)}
+              onClear={() => setCrLedger('')}
+              sheetTitle="Select Credit Ledger"
+              searchPlaceholder="Search ledger…"
+              icon="add-circle-outline"
+            />
           </View>
 
-          <View style={s.section}>
+          {/* Amount */}
+          <View style={s.card}>
             <Text style={s.sectionTitle}>Amount</Text>
-            <View style={s.fieldBlock}>
-              <View style={s.field}>
-                <Text style={s.label}>Amount <Text style={s.req}>*</Text></Text>
-                <View style={s.inputWrap}>
-                  <Text style={s.rupee}>₹</Text>
-                  <TextInput style={s.input} placeholder="Enter amount" placeholderTextColor={COLORS.textTertiary} value={amount} onChangeText={setAmount} keyboardType="numeric" />
-                </View>
-              </View>
+            <View style={s.inputWrap}>
+              <Text style={s.rupee}>₹</Text>
+              <TextInput
+                style={s.input}
+                placeholder="Enter amount"
+                placeholderTextColor={COLORS.textTertiary}
+                value={amount}
+                onChangeText={(t) => { setAmount(t); if (deprOn) setAmountManual(true); }}
+                keyboardType="numeric"
+              />
             </View>
+            {deprOn && amountManual && (
+              <TouchableOpacity onPress={() => setAmountManual(false)} style={{ marginTop: 8 }}>
+                <Text style={s.linkTxt}>Recalculate from WDV × %</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
-          <View style={s.section}>
+          {/* Narration */}
+          <View
+            style={s.card}
+            onLayout={(e) => { narrationY.current = e.nativeEvent.layout.y; }}
+          >
             <Text style={s.sectionTitle}>Narration</Text>
-            <View style={s.fieldBlock}>
-              <View style={s.field}>
-                <Text style={s.label}>Notes</Text>
-                <TextInput style={s.textarea} placeholder="Enter Notes" placeholderTextColor={COLORS.textTertiary} value={notes} onChangeText={setNotes} multiline numberOfLines={4} textAlignVertical="top" />
-              </View>
-            </View>
+            <TextInput
+              style={s.textarea}
+              placeholder="Notes (optional)"
+              placeholderTextColor={COLORS.textTertiary}
+              value={narration}
+              onChangeText={setNarration}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+              onFocus={() => {
+                setTimeout(() => {
+                  scrollRef.current?.scrollTo?.({ y: Math.max(0, narrationY.current - 100), animated: true });
+                }, 250);
+              }}
+            />
           </View>
 
-          <View style={s.btnRow}>
-            <TouchableOpacity style={s.btnSecondary} onPress={handleSaveOptional} activeOpacity={0.8}>
-              <Text style={s.btnSecTxt}>Save as Optional</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[s.btnPrimary, submitting && { opacity: 0.6 }]} onPress={handleSubmit} activeOpacity={0.8} disabled={submitting}>
-              {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="send" size={16} color={COLORS.white} />}
-              <Text style={s.btnPriTxt}>{submitting ? 'Submitting...' : 'Submit Journal'}</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={{ height: 32 }} />
+          <TouchableOpacity
+            style={[s.btnPrimary, (!!canSubmit || submitting) && { opacity: 0.6 }]}
+            onPress={handleSubmit}
+            activeOpacity={0.8}
+            disabled={!!canSubmit || submitting}
+          >
+            {submitting
+              ? <ActivityIndicator size="small" color={COLORS.white} />
+              : <Ionicons name="send" size={16} color={COLORS.white} />}
+            <Text style={s.btnPriTxt}>{submitting ? 'Submitting...' : 'Submit Journal'}</Text>
+          </TouchableOpacity>
+          <View style={{ height: 220 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <DatePickerModal
+        visible={showDatePicker}
+        onClose={() => setShowDatePicker(false)}
+        value={date}
+        onSelect={(d) => { setDate(d); setShowDatePicker(false); }}
+        minDate={fyStart}
+      />
+
+      {/* Rate picker modal */}
+      <Modal visible={showRatePicker} animationType="slide" onRequestClose={() => setShowRatePicker(false)}>
+        <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
+          <View style={s.hdr}>
+            <TouchableOpacity onPress={() => setShowRatePicker(false)} style={s.back}>
+              <Ionicons name="close" size={22} color={COLORS.textPrimary} />
+            </TouchableOpacity>
+            <Text style={s.hdrTitle}>Depreciation rates</Text>
+            <View style={{ width: 36 }} />
+          </View>
+          <View style={s.search}>
+            <Ionicons name="search" size={16} color={COLORS.textTertiary} />
+            <TextInput
+              style={s.searchIn}
+              placeholder="Search block or %"
+              placeholderTextColor={COLORS.textTertiary}
+              value={rateSearch}
+              onChangeText={setRateSearch}
+              autoFocus
+            />
+          </View>
+          <ScrollView contentContainerStyle={{ padding: SPACING.md, gap: 8, paddingBottom: 40 }}>
+            {filteredRates.map((r) => (
+              <TouchableOpacity
+                key={r.assetBlock}
+                style={[s.rateRow, rateBlock?.assetBlock === r.assetBlock && s.rateRowActive]}
+                onPress={() => selectRate(r)}
+                activeOpacity={0.7}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={s.rateName}>{r.displayName}</Text>
+                  <Text style={s.rateDesc} numberOfLines={2}>{r.description}</Text>
+                </View>
+                <Text style={s.ratePct}>{r.ratePercent}%</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {showSuccess && submitResult && (
+        <View style={ss.overlay}>
+          <View style={ss.card}>
+            <View style={ss.iconWrap}>
+              <Ionicons
+                name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
+                size={56}
+                color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
+              />
+            </View>
+            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : 'Journal Submitted!'}</Text>
+            <Text style={ss.sub}>
+              {submitResult.isQueued
+                ? 'Entry queued. Will push to Tally when desktop reconnects.'
+                : 'Journal pushed to Tally successfully.'}
+            </Text>
+            {submitResult.numberingPolicy === 'tallydekho_series' && submitResult.voucherNumber && (
+              <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
+                <Text style={ss.refLabel}>Voucher No.</Text>
+                <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.voucherNumber}</Text>
+              </View>
+            )}
+            {!!submitResult.tdkRef && (
+              <View style={ss.refBadge}>
+                <Text style={ss.refLabel}>Reference No.</Text>
+                <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
+              </View>
+            )}
+            <TouchableOpacity
+              style={ss.previewBtn}
+              activeOpacity={0.85}
+              onPress={() => {
+                if (!submitResult.tdkRef) return;
+                router.replace(`/voucher/journal-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}` as any);
+              }}
+            >
+              <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
+              <Text style={ss.previewBtnTxt}>Preview</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={ss.closeBtn} activeOpacity={0.85} onPress={() => { setShowSuccess(false); router.back(); }}>
+              <Text style={ss.closeBtnTxt}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.pageBg },
-  hdr: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  hdr: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.cardBg,
+    paddingHorizontal: SPACING.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
   back: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
   hdrTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
-  vNoBox: { backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: COLORS.borderDefault },
-  vNo: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
   scroll: { padding: SPACING.md, gap: 14 },
-  infoRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, paddingHorizontal: SPACING.md, paddingVertical: 12, gap: 12, borderWidth: 1, borderColor: COLORS.borderDefault },
-  infoItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  infoTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '500' },
-  infoDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: COLORS.borderStrong },
+  card: {
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault,
+    padding: SPACING.md, gap: 8,
+  },
+  cardLbl: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary, textTransform: 'uppercase' },
+  lockedRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  lockedTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
+  dateBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 12, backgroundColor: COLORS.pageBg,
+  },
+  dateTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
+  hint: { fontSize: 12, color: COLORS.textTertiary, lineHeight: 16 },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  toggleTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  sectionTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: 0.4 },
+  fieldLbl: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary, textTransform: 'uppercase' },
+  req: { color: COLORS.negative },
+  inputWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 12, backgroundColor: COLORS.pageBg,
+  },
+  input: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
+  rupee: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textSecondary },
+  pickerBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 12, backgroundColor: COLORS.pageBg,
+  },
+  pickerTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  calcHint: { fontSize: 12, color: COLORS.brandPrimary, fontWeight: '600', marginTop: 4 },
+  linkTxt: { fontSize: 13, color: COLORS.brandPrimary, fontWeight: '600' },
   drCrRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   drCrBox: { flex: 1, borderRadius: RADIUS.lg, borderWidth: 1.5, padding: 14, alignItems: 'center', gap: 4 },
   drCrLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '800', letterSpacing: 1 },
   drCrValue: { fontSize: TYPOGRAPHY.lg, fontWeight: '800' },
-  drCrLedger: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500', maxWidth: 120, textAlign: 'center' },
-  arrowBox: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, alignItems: 'center', justifyContent: 'center' },
-  section: { gap: 8 },
-  sectionTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginLeft: 2 },
-  fieldBlock: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
-  field: { paddingHorizontal: SPACING.md, paddingVertical: 14 },
-  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  label: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: 0.3 },
-  req: { color: COLORS.negative },
-  drTag: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 4 },
-  drTagTxt: { fontSize: 10, fontWeight: '800' },
-  inputWrap: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 12, backgroundColor: COLORS.pageBg },
-  input: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
-  rupee: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textSecondary },
-  textarea: { borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, padding: 12, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, backgroundColor: COLORS.pageBg, minHeight: 100 },
-  div: { height: 1, backgroundColor: COLORS.borderDefault },
-  btnRow: { flexDirection: 'row', gap: 10, marginTop: 8 },
-  btnSecondary: { flex: 1, paddingVertical: 14, borderRadius: RADIUS.lg, borderWidth: 1.5, borderColor: COLORS.borderStrong, alignItems: 'center' },
-  btnSecTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  btnPrimary: { flex: 2, paddingVertical: 14, borderRadius: RADIUS.lg, backgroundColor: COLORS.brandPrimary, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 },
-  btnPriTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
+  drCrLedger: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500', textAlign: 'center' },
+  arrowBox: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.cardBg, borderWidth: 1,
+    borderColor: COLORS.borderDefault, alignItems: 'center', justifyContent: 'center',
+  },
+  textarea: {
+    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, padding: 12,
+    fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, backgroundColor: COLORS.pageBg, minHeight: 88,
+  },
+  btnPrimary: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.lg, paddingVertical: 16,
+  },
+  btnPriTxt: { color: COLORS.white, fontSize: TYPOGRAPHY.base, fontWeight: '700' },
+  search: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: SPACING.md, marginTop: SPACING.sm,
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  searchIn: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
+  rateRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.md, padding: 14, borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  rateRowActive: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary + '10' },
+  rateName: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  rateDesc: { fontSize: 11, color: COLORS.textTertiary, marginTop: 2, lineHeight: 15 },
+  ratePct: { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.brandPrimary },
+});
+
+const ss = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 50,
+  },
+  card: {
+    width: '100%', backgroundColor: COLORS.cardBg, borderRadius: 20, padding: 24, alignItems: 'center', gap: 12,
+  },
+  iconWrap: { marginBottom: 4 },
+  title: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary, textAlign: 'center' },
+  sub: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 20 },
+  refBadge: {
+    width: '100%', borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    padding: 12, backgroundColor: COLORS.pageBg, alignItems: 'center', gap: 4,
+  },
+  refLabel: { fontSize: 11, color: COLORS.textTertiary, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  refVal: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  previewBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, width: '100%', justifyContent: 'center',
+    paddingVertical: 14, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.brandPrimary,
+  },
+  previewBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.brandPrimary },
+  closeBtn: { paddingVertical: 10 },
+  closeBtnTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary, fontWeight: '700' },
 });

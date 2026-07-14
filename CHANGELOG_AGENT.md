@@ -1,4 +1,31 @@
 
+## [2026-07-14] Journal voucher + Depreciation on Asset (v1)
+
+### Context
+Journal was a stub. Rewrite to single Dr+Cr with Receipt/Payment parity; optional Depreciation mode (Dr expense / Cr Acc. Dep, manual WDV × editable IT %).
+
+### Added / Changed
+- `create-journal.tsx` — full rewrite: ledger pickers, date, Settings numbering, optional, success → preview
+- Depreciation toggle + IT rate list (`indiaDepreciationRates.ts`) + WDV base + editable %
+- `journal-preview.tsx` + list polish on `journal.tsx`
+- `getJournalPreview` API helper
+
+### Files
+- `frontend/app/voucher/create-journal.tsx`
+- `frontend/app/voucher/journal.tsx`
+- `frontend/app/voucher/journal-preview.tsx`
+- `frontend/src/constants/indiaDepreciationRates.ts`
+- `frontend/src/services/api.ts`
+
+### 🔴 Pending user device verification
+1. Restart Mac backend + reload Expo / pull latest
+2. Simple Journal Dr+Cr → in Tally
+3. Optional Journal → TDK-OPT-JOR
+4. Depreciation: base 100000 × 15% → 15000; Dr Dep / Cr Acc. Dep → in Tally
+5. Edit rate → amount recalculates (unless amount overridden)
+
+---
+
 ## [2026-07-14] Payment/Receipt leftover Advance NAME + preview sync copy
 
 ### Context
