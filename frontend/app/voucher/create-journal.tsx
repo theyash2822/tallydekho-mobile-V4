@@ -7,7 +7,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Switch, Modal,
+  TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Modal, Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import { useAuth } from '../../src/context/AuthContext';
@@ -87,18 +88,23 @@ export default function CreateJournalVoucher() {
   const loadLedgers = useCallback(async () => {
     if (!company?.guid) return;
     try {
-      const res: any = await getLedgers(company.guid, { limit: '500' });
-      const list = (res?.data || res || []).map((l: any) => ({
+      // Full company list for both By and To (Option A). High limit so picker isn't truncated.
+      const fyParams = selectedFY?.startDate && selectedFY?.endDate
+        ? { from: selectedFY.startDate, to: selectedFY.endDate }
+        : {};
+      const res: any = await getLedgers(company.guid, { limit: '2000', page: '1', ...fyParams });
+      const raw = res?.data ?? res?.rows ?? (Array.isArray(res) ? res : []);
+      const list = (Array.isArray(raw) ? raw : []).map((l: any) => ({
         label: l.name,
         value: l.name,
         subtitle: l.parent || l.group || undefined,
         data: l,
-      }));
+      })).sort((a: BSSOption, b: BSSOption) => a.label.localeCompare(b.label));
       setLedgers(list);
     } catch {
       setLedgers([]);
     }
-  }, [company?.guid]);
+  }, [company?.guid, selectedFY?.startDate, selectedFY?.endDate]);
 
   useEffect(() => { loadLedgers(); }, [loadLedgers]);
 
@@ -194,6 +200,12 @@ export default function CreateJournalVoucher() {
     setRateSearch('');
   };
 
+  const swapLedgers = () => {
+    if (!drLedger && !crLedger) return;
+    setDrLedger(crLedger);
+    setCrLedger(drLedger);
+  };
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       <View style={s.hdr}>
@@ -204,12 +216,18 @@ export default function CreateJournalVoucher() {
         <RegularOptionalToggle value={entryType} onChange={setEntryType} />
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'android' ? 80 : 0}
+      >
         <ScrollView
           ref={scrollRef}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={s.scroll}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          onScrollBeginDrag={Keyboard.dismiss}
         >
           {/* ── Journal No. + Date (mirrors Receipt / Payment layout) ───── */}
           <View style={s.section}>
@@ -241,16 +259,32 @@ export default function CreateJournalVoucher() {
             </View>
           </View>
 
-          {/* Depreciation toggle */}
+          {/* Depreciation toggle — BrandSwitch (same as Collect Payment Now) */}
           <View style={s.card}>
-            <View style={s.toggleRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={s.toggleTitle}>Depreciation on Asset</Text>
-                <Text style={s.hint}>
-                  Dr Depreciation expense · Cr Accumulated Depreciation · % of WDV
-                </Text>
+            <TouchableOpacity
+              style={s.payNowToggleRow}
+              onPress={() => {
+                const v = !deprOn;
+                setDeprOn(v);
+                setAmountManual(false);
+                if (!v) {
+                  setWdvBase('');
+                  setRateBlock(null);
+                  setRatePercent('');
+                }
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={s.payNowLeft}>
+                <View style={[s.payNowIcon, { backgroundColor: deprOn ? COLORS.positiveBg : COLORS.pageBg }]}>
+                  <Ionicons name="trending-down-outline" size={18} color={deprOn ? COLORS.positive : COLORS.textSecondary} />
+                </View>
+                <View style={{ flex: 1, flexShrink: 1 }}>
+                  <Text style={s.payNowTitle}>Depreciation on Asset</Text>
+                  <Text style={s.payNowSub}>Dr expense · Cr Accumulated Depreciation · % of WDV</Text>
+                </View>
               </View>
-              <Switch
+              <BrandSwitch
                 value={deprOn}
                 onValueChange={(v) => {
                   setDeprOn(v);
@@ -261,10 +295,8 @@ export default function CreateJournalVoucher() {
                     setRatePercent('');
                   }
                 }}
-                trackColor={{ false: COLORS.borderDefault, true: COLORS.brandPrimary + '88' }}
-                thumbColor={deprOn ? COLORS.brandPrimary : '#f4f3f4'}
               />
-            </View>
+            </TouchableOpacity>
           </View>
 
           {deprOn && (
@@ -320,7 +352,16 @@ export default function CreateJournalVoucher() {
               <Text style={s.drCrLedger} numberOfLines={2}>{drLedger || (deprOn ? 'Depreciation expense' : 'Debit ledger')}</Text>
             </View>
             <View style={s.arrowBox}>
-              <Ionicons name="swap-horizontal" size={20} color={COLORS.textTertiary} />
+              <TouchableOpacity
+                onPress={swapLedgers}
+                disabled={!drLedger && !crLedger}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={{ opacity: (!drLedger && !crLedger) ? 0.35 : 1 }}
+                accessibilityLabel="Swap debit and credit ledgers"
+              >
+                <Ionicons name="swap-horizontal" size={20} color={COLORS.brandPrimary} />
+              </TouchableOpacity>
             </View>
             <View style={[s.drCrBox, { borderColor: COLORS.positive + '60', backgroundColor: COLORS.positiveBg }]}>
               <Text style={[s.drCrLabel, { color: COLORS.positive }]}>Cr (To)</Text>
@@ -414,7 +455,6 @@ export default function CreateJournalVoucher() {
               : <Ionicons name="send" size={16} color={COLORS.white} />}
             <Text style={s.btnPriTxt}>{submitting ? 'Submitting...' : 'Submit Journal'}</Text>
           </TouchableOpacity>
-          <View style={{ height: 220 }} />
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -523,7 +563,7 @@ const s = StyleSheet.create({
   },
   back: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
   hdrTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
-  scroll: { padding: SPACING.md, gap: 14 },
+  scroll: { padding: SPACING.md, gap: 14, paddingBottom: 24 },
   section: { gap: 8 },
   fieldBlock: {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1,
@@ -545,9 +585,17 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault,
     padding: SPACING.md, gap: 8,
   },
+  payNowToggleRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 4, gap: 10,
+  },
+  payNowLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  payNowIcon: {
+    width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+  },
+  payNowTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  payNowSub: { fontSize: 12, color: COLORS.textTertiary, marginTop: 2, lineHeight: 16 },
   hint: { fontSize: 12, color: COLORS.textTertiary, lineHeight: 16 },
-  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  toggleTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
   sectionTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: 0.4 },
   fieldLbl: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary, textTransform: 'uppercase' },
   req: { color: COLORS.negative },

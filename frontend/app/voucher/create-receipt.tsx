@@ -636,7 +636,7 @@ export default function CreateReceiptVoucher() {
               <Text style={s.btnPriTxt}>{submitting ? 'Submitting...' : 'Submit Receipt'}</Text>
             </TouchableOpacity>
           </View>
-          <View style={{ height: 220 }} />
+          <View style={{ height: 24 }} />
         </ScrollView>
       </KeyboardAvoidingView>
 

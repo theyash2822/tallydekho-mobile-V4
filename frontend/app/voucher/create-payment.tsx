@@ -625,7 +625,7 @@ export default function CreatePaymentVoucher() {
             </TouchableOpacity>
           </View>
           {/* Extra space so keyboard doesn't cover narration/submit */}
-          <View style={{ height: 220 }} />
+          <View style={{ height: 24 }} />
         </ScrollView>
       </KeyboardAvoidingView>
 
