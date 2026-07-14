@@ -211,23 +211,34 @@ export default function CreateJournalVoucher() {
           contentContainerStyle={s.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Date + numbering hint */}
-          <View style={s.card}>
-            <Text style={s.cardLbl}>Date</Text>
-            {entryType === 'regular' ? (
-              <View style={s.lockedRow}>
-                <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
-                <Text style={s.lockedTxt}>{date}</Text>
+          {/* ── Journal No. + Date (mirrors Receipt / Payment layout) ───── */}
+          <View style={s.section}>
+            <View style={[s.fieldBlock, { padding: SPACING.md }]}>
+              <View style={s.row2}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.fLabel}>Journal No.</Text>
+                  <View style={s.autoBox}>
+                    <Text style={s.autoTxt}>Auto</Text>
+                    <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
+                  </View>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.fLabel}>Date <Text style={s.req}>*</Text></Text>
+                  {entryType === 'regular' ? (
+                    <View style={[s.autoBox, { opacity: 0.55 }]}>
+                      <Text style={s.autoTxt}>{date}</Text>
+                      <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
+                    </View>
+                  ) : (
+                    <TouchableOpacity style={s.fInput} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
+                      <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.sm, fontWeight: '600' }}>
+                        {date || 'Select date'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
-            ) : (
-              <TouchableOpacity style={s.dateBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
-                <Ionicons name="calendar-outline" size={16} color={COLORS.brandPrimary} />
-                <Text style={s.dateTxt}>{date || 'Select date'}</Text>
-              </TouchableOpacity>
-            )}
-            <Text style={s.hint}>
-              Numbering from Settings · {numberingPolicy === 'tallydekho_series' ? 'TallyDekho series (JOR)' : 'TallyPrime series'}
-            </Text>
+            </View>
           </View>
 
           {/* Depreciation toggle */}
@@ -513,18 +524,27 @@ const s = StyleSheet.create({
   back: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
   hdrTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
   scroll: { padding: SPACING.md, gap: 14 },
+  section: { gap: 8 },
+  fieldBlock: {
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1,
+    borderColor: COLORS.borderDefault, overflow: 'hidden',
+  },
+  row2: { flexDirection: 'row', gap: 12 },
+  fLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
+  fInput: {
+    backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48, justifyContent: 'center',
+  },
+  autoBox: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48,
+  },
+  autoTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
   card: {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault,
     padding: SPACING.md, gap: 8,
   },
-  cardLbl: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary, textTransform: 'uppercase' },
-  lockedRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  lockedTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
-  dateBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: COLORS.borderDefault,
-    borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 12, backgroundColor: COLORS.pageBg,
-  },
-  dateTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
   hint: { fontSize: 12, color: COLORS.textTertiary, lineHeight: 16 },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   toggleTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
