@@ -1,4 +1,32 @@
 
+## [2026-07-14] Contra voucher rewrite + Cash Count sheet
+
+### Context
+Contra was a stub (fake CV no, free-text, wrong API keys). Rewrite: Source→Destination Cash|Bank only, inferred kind, instruments, optional Cash Count → Tally CASHDENOMINATION (hard match gate).
+
+### Added / Changed
+- `create-contra.tsx` — full rewrite: pickers, Contra No.+Date, instruments, Cash Count card, Regular/Optional, success → preview
+- `CashCountSheet.tsx` — denomination cards, Auto Split / Clear / Use Last, match-only Apply
+- `cashDenominations.ts` — currency-keyed masters (INR includes ₹2000)
+- `contra.tsx` list polish + `contra-preview.tsx` + `getContraPreview`
+
+### Files
+- `frontend/app/voucher/create-contra.tsx`
+- `frontend/app/voucher/contra.tsx`
+- `frontend/app/voucher/contra-preview.tsx`
+- `frontend/src/components/forms/CashCountSheet.tsx`
+- `frontend/src/constants/cashDenominations.ts`
+- `frontend/src/services/api.ts`
+
+### 🔴 Pending user device verification
+- Cash→Bank + matched Cash Count → Tally has denom
+- Mismatch blocks submit
+- Skip Cash Count OK
+- Bank→Cash / Bank→Bank / Cash→Cash
+- Optional → `TDK-OPT-CON-…`
+
+---
+
 ## [2026-07-14] Journal voucher + Depreciation on Asset (v1)
 
 ### Context

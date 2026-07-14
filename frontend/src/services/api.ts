@@ -223,6 +223,8 @@ export const getPaymentPreview = (tdkRef: string, companyGuid: string) =>
   request<any>('GET', `/invoice/${encodeURIComponent(tdkRef)}/preview?companyGuid=${companyGuid}`, undefined, true, 'tally');
 export const getJournalPreview = (tdkRef: string, companyGuid: string) =>
   request<any>('GET', `/invoice/${encodeURIComponent(tdkRef)}/preview?companyGuid=${companyGuid}`, undefined, true, 'tally');
+export const getContraPreview = (tdkRef: string, companyGuid: string) =>
+  request<any>('GET', `/invoice/${encodeURIComponent(tdkRef)}/preview?companyGuid=${companyGuid}`, undefined, true, 'tally');
 export const createJournalVoucher = (payload: any) => tallyPost<any>('/voucher/journal', payload);
 export const createContraVoucher  = (payload: any) => tallyPost<any>('/voucher/contra', payload);
 
