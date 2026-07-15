@@ -158,24 +158,10 @@ export default function InvoicePreviewScreen() {
     );
   }
 
-  // DocumentPreviewPage renders its own SafeAreaView(top,left,right)
-  // so we use a plain View here to avoid double-applying the top inset
+  // DocumentPreviewPage owns SafeAreaView(top). Never place banners above it —
+  // they sit under the device status bar and get clipped.
   return (
     <View style={s.safe}>
-      {/* Status banner */}
-      {isProvisional ? (
-        <View style={s.provisionalBanner}>
-          <Ionicons name="time-outline" size={15} color="#92400E" />
-          <Text style={s.provisionalTxt}>
-            Provisional — Pending Tally Posting. Auto-updates when synced.
-          </Text>
-        </View>
-      ) : (
-        <View style={s.postedBanner}>
-          <Ionicons name="checkmark-circle-outline" size={15} color="#166534" />
-          <Text style={s.postedTxt}>Posted to TallyPrime</Text>
-        </View>
-      )}
       <DocumentPreviewPage
         document={doc}
         isProvisional={isProvisional}
@@ -199,16 +185,4 @@ const s = StyleSheet.create({
   errorTxt:   { fontSize: 14, color: COLORS.negative, textAlign: 'center' },
   retryBtn:   { marginTop: 8, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md },
   retryTxt:   { fontSize: 14, color: COLORS.white, fontWeight: '600' },
-  provisionalBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#FFF8E1', paddingHorizontal: SPACING.md, paddingVertical: 8,
-    borderBottomWidth: 1, borderBottomColor: '#F59E0B22',
-  },
-  provisionalTxt: { fontSize: 12, color: '#92400E', flex: 1 },
-  postedBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#F0FDF4', paddingHorizontal: SPACING.md, paddingVertical: 8,
-    borderBottomWidth: 1, borderBottomColor: '#22C55E22',
-  },
-  postedTxt: { fontSize: 12, color: '#166534' },
 });

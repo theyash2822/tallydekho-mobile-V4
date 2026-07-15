@@ -844,9 +844,20 @@ export default function AuditTrailScreen() {
                                 // ImportData API — tallyVoucherNo is the reconciled value from app_vouchers)
                                 const docId = entry.tallyVoucherNo || entry.ref;
                                 if (!docId) {
-                                  // If we have a TDK reference, show provisional preview
+                                  // Route provisional preview by TDK voucher family (not always Sales invoice UI)
                                   if (entry.tdkRef) {
-                                    router.push(`/sales/invoice-preview?tdkRef=${encodeURIComponent(entry.tdkRef)}` as any);
+                                    const ref = entry.tdkRef;
+                                    let route = `/sales/invoice-preview?tdkRef=${encodeURIComponent(ref)}`;
+                                    if (/TDK-(?:OPT-)?CON-/i.test(ref)) {
+                                      route = `/voucher/contra-preview?tdkRef=${encodeURIComponent(ref)}`;
+                                    } else if (/TDK-(?:OPT-)?JOR-/i.test(ref)) {
+                                      route = `/voucher/journal-preview?tdkRef=${encodeURIComponent(ref)}`;
+                                    } else if (/TDK-(?:OPT-)?PAY-/i.test(ref)) {
+                                      route = `/voucher/payment-preview?tdkRef=${encodeURIComponent(ref)}`;
+                                    } else if (/TDK-(?:OPT-)?RCP-/i.test(ref)) {
+                                      route = `/voucher/receipt-preview?tdkRef=${encodeURIComponent(ref)}`;
+                                    }
+                                    router.push(route as any);
                                   } else {
                                     Alert.alert(
                                       'Not yet synced',
