@@ -620,22 +620,17 @@ export default function CreateReceiptVoucher() {
           </View>
 
           {/* ── Submit ─────────────────────────────────────────────── */}
-          <View style={s.btnRow}>
-            <TouchableOpacity style={s.btnSecondary} onPress={() => router.back()} activeOpacity={0.8}>
-              <Text style={s.btnSecTxt}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[s.btnPrimary, (submitting || !!canSubmit) && { opacity: 0.6 }]}
-              onPress={handleSubmit}
-              activeOpacity={0.8}
-              disabled={submitting || !!canSubmit}
-            >
-              {submitting
-                ? <ActivityIndicator size="small" color={COLORS.white} />
-                : <Ionicons name="send" size={16} color={COLORS.white} />}
-              <Text style={s.btnPriTxt}>{submitting ? 'Submitting...' : 'Submit Receipt'}</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={[s.btnPrimary, (submitting || !!canSubmit) && { opacity: 0.6 }]}
+            onPress={handleSubmit}
+            activeOpacity={0.8}
+            disabled={submitting || !!canSubmit}
+          >
+            {submitting
+              ? <ActivityIndicator size="small" color={COLORS.white} />
+              : <Ionicons name="send" size={16} color={COLORS.white} />}
+            <Text style={s.btnPriTxt}>{submitting ? 'Submitting...' : 'Submit Receipt Voucher'}</Text>
+          </TouchableOpacity>
           <View style={{ height: 24 }} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -780,10 +775,10 @@ const s = StyleSheet.create({
   leftoverPill: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: COLORS.brandPrimary + '55', borderRadius: RADIUS.full, paddingHorizontal: 10, paddingVertical: 3, backgroundColor: COLORS.brandPrimary + '11' },
   leftoverPillTxt: { fontSize: 11, fontWeight: '800', color: COLORS.brandPrimary },
   errTxt: { fontSize: 12, color: COLORS.negative, fontWeight: '600', marginTop: 2 },
-  btnRow: { flexDirection: 'row', gap: 10, marginTop: 8 },
-  btnSecondary: { flex: 1, paddingVertical: 14, borderRadius: RADIUS.lg, borderWidth: 1.5, borderColor: COLORS.borderStrong, alignItems: 'center' },
-  btnSecTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  btnPrimary: { flex: 2, paddingVertical: 14, borderRadius: RADIUS.lg, backgroundColor: COLORS.brandPrimary, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 },
+  btnPrimary: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.lg, paddingVertical: 16, marginTop: 8,
+  },
   btnPriTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
 });
 

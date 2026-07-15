@@ -173,9 +173,7 @@ export default function CreateContraVoucher() {
     setToKind(classifyKind(opt, cashLedgers));
   };
 
-  const handleSubmit = async (asOptional?: boolean) => {
-    const et = asOptional ? 'optional' : entryType;
-    if (canSubmit && !asOptional) { Alert.alert('Required', canSubmit); return; }
+  const handleSubmit = async () => {
     if (canSubmit) { Alert.alert('Required', canSubmit); return; }
     if (!isPaired) {
       Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Pair with Tally Desktop first.' });
@@ -196,7 +194,7 @@ export default function CreateContraVoucher() {
         fromIsBank: fromKind === 'bank' || fromKind == null,
         toIsBank: toKind === 'bank' || toKind == null,
         contraKind: kind,
-        entryType: et,
+        entryType,
         numbering_policy: numberingPolicy,
         narration: narration || undefined,
       };
@@ -444,27 +442,17 @@ export default function CreateContraVoucher() {
             </View>
           </View>
 
-          <View style={s.btnRow}>
-            <TouchableOpacity
-              style={s.btnSecondary}
-              onPress={() => handleSubmit(true)}
-              activeOpacity={0.8}
-              disabled={submitting}
-            >
-              <Text style={s.btnSecTxt}>Save as Optional</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[s.btnPrimary, submitting && { opacity: 0.6 }]}
-              onPress={() => handleSubmit(false)}
-              activeOpacity={0.8}
-              disabled={submitting}
-            >
-              {submitting
-                ? <ActivityIndicator size="small" color={COLORS.white} />
-                : <Ionicons name="send" size={16} color={COLORS.white} />}
-              <Text style={s.btnPriTxt}>{submitting ? 'Submitting...' : 'Submit Contra'}</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={[s.btnPrimary, (!!canSubmit || submitting) && { opacity: 0.6 }]}
+            onPress={handleSubmit}
+            activeOpacity={0.8}
+            disabled={!!canSubmit || submitting}
+          >
+            {submitting
+              ? <ActivityIndicator size="small" color={COLORS.white} />
+              : <Ionicons name="send" size={16} color={COLORS.white} />}
+            <Text style={s.btnPriTxt}>{submitting ? 'Submitting...' : 'Submit Contra Voucher'}</Text>
+          </TouchableOpacity>
           <View style={{ height: 32 }} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -594,15 +582,9 @@ const s = StyleSheet.create({
   cashTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
   cashSub: { fontSize: 12, color: COLORS.textTertiary, marginTop: 2 },
   cashAction: { fontSize: 13, fontWeight: '700', color: COLORS.brandPrimary },
-  btnRow: { flexDirection: 'row', gap: 10, marginTop: 8 },
-  btnSecondary: {
-    flex: 1, paddingVertical: 14, borderRadius: RADIUS.lg, borderWidth: 1.5,
-    borderColor: COLORS.borderStrong, alignItems: 'center',
-  },
-  btnSecTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   btnPrimary: {
-    flex: 2, paddingVertical: 14, borderRadius: RADIUS.lg, backgroundColor: COLORS.brandPrimary,
-    alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.lg, paddingVertical: 16, marginTop: 8,
   },
   btnPriTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
   successOverlay: {
