@@ -181,7 +181,15 @@ export default function JournalPreviewScreen() {
         {dep && (
           <View style={s.card}>
             <Text style={s.secTitle}>Depreciation</Text>
+            <Text style={s.meta}>
+              {dep.method === 'direct_write_down' ? 'Direct write-down (Cr Asset)' : (dep.method || 'WDV')}
+            </Text>
+            {!!dep.assetLedger && <Text style={s.meta}>Asset: {dep.assetLedger}</Text>}
+            {!!dep.expenseLedger && <Text style={s.meta}>Expense: {dep.expenseLedger}</Text>}
             <Text style={s.meta}>Base (WDV): {fmtINR(dep.baseWdv)}</Text>
+            {dep.assetClosingFetched != null && (
+              <Text style={s.meta}>Fetched closing: {fmtINR(dep.assetClosingFetched)}</Text>
+            )}
             <Text style={s.meta}>Rate: {dep.ratePercent}%{dep.displayName ? ` · ${dep.displayName}` : ''}</Text>
           </View>
         )}

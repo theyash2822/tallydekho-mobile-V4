@@ -1,4 +1,27 @@
 
+## [2026-07-15] Journal Depreciation — Direct write-down (Cr Asset)
+
+### Context
+Depreciation mode incorrectly used Acc. Dep as credit. Correct Tally Direct method: Dr Depreciation · Cr Asset; Base = asset FY closing (editable).
+
+### Added / Changed
+- Depr mode: Credit = Asset; Base prefilled from ledger `closing_balance`; swap disabled
+- Removed depr narration autofill
+- `depreciationMeta.method = direct_write_down` + asset/expense names
+- journal-preview shows Direct / asset write-down
+
+### Files
+- `frontend/app/voucher/create-journal.tsx`
+- `frontend/app/voucher/journal-preview.tsx`
+
+### Device checklist
+1. Depr ON → pick Asset (Cr) → Base = closing
+2. Rate 15% → amount = base × 15%
+3. Pick Depreciation expense (Dr) → submit
+4. Tally: asset reduced by dep amount
+
+---
+
 ## [2026-07-14] Contra voucher rewrite + Cash Count sheet
 
 ### Context

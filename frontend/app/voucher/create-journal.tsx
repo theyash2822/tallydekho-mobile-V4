@@ -1,8 +1,8 @@
 /**
  * Create Journal Voucher — rewrite (2026-07-14)
- * Single Dr+Cr pair. Optional Depreciation-on-Asset mode:
- *   Dr Depreciation expense · Cr Accumulated Depreciation
- *   Amount = manual WDV base × editable IT rate% (full rate)
+ * Single Dr+Cr pair. Optional Depreciation-on-Asset (Direct / write-down):
+ *   Dr Depreciation expense · Cr Asset ledger
+ *   Base WDV = asset FY closing (editable) × IT rate%
  */
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
@@ -77,9 +77,10 @@ export default function CreateJournalVoucher() {
     tdkRef: string; isQueued: boolean; voucherNumber?: string; numberingPolicy?: string;
   } | null>(null);
 
-  // Depreciation mode
+  // Depreciation mode (Direct: Dr expense · Cr asset)
   const [deprOn, setDeprOn] = useState(false);
   const [wdvBase, setWdvBase] = useState('');
+  const [assetClosingFetched, setAssetClosingFetched] = useState<number | null>(null);
   const [rateBlock, setRateBlock] = useState<IndiaDepreciationRate | null>(null);
   const [ratePercent, setRatePercent] = useState('');
   const [showRatePicker, setShowRatePicker] = useState(false);
@@ -94,12 +95,20 @@ export default function CreateJournalVoucher() {
         : {};
       const res: any = await getLedgers(company.guid, { limit: '2000', page: '1', ...fyParams });
       const raw = res?.data ?? res?.rows ?? (Array.isArray(res) ? res : []);
-      const list = (Array.isArray(raw) ? raw : []).map((l: any) => ({
-        label: l.name,
-        value: l.name,
-        subtitle: l.parent || l.group || undefined,
-        data: l,
-      })).sort((a: BSSOption, b: BSSOption) => a.label.localeCompare(b.label));
+      const list = (Array.isArray(raw) ? raw : []).map((l: any) => {
+        const close = parseFloat(l.closing_balance);
+        const hasClose = Number.isFinite(close);
+        const balHint = hasClose
+          ? `${fmtINR(Math.abs(close))} ${l.balance_type || ''}`.trim()
+          : null;
+        const parent = l.parent || l.group || '';
+        return {
+          label: l.name,
+          value: l.name,
+          subtitle: [parent, balHint].filter(Boolean).join(' · ') || undefined,
+          data: l,
+        };
+      }).sort((a: BSSOption, b: BSSOption) => a.label.localeCompare(b.label));
       setLedgers(list);
     } catch {
       setLedgers([]);
@@ -119,12 +128,35 @@ export default function CreateJournalVoucher() {
     }
   }, [deprOn, wdvBase, ratePercent, amountManual]);
 
-  // Suggest narration in depr mode
-  useEffect(() => {
-    if (!deprOn || !rateBlock) return;
-    const rate = ratePercent || String(rateBlock.ratePercent);
-    setNarration(`Depreciation ${rate}% on WDV (${rateBlock.displayName})`);
-  }, [deprOn, rateBlock, ratePercent]);
+  /** Credit picker in depr mode = Asset → fill editable Base from FY closing. */
+  const selectCrLedger = (opt: BSSOption) => {
+    setCrLedger(opt.value);
+    if (!deprOn) return;
+    const raw = opt.data?.closing_balance;
+    const close = parseFloat(raw);
+    if (Number.isFinite(close) && Math.abs(close) > 0) {
+      const abs = Math.abs(close);
+      setAssetClosingFetched(abs);
+      setWdvBase(String(abs));
+      setAmountManual(false);
+    } else {
+      setAssetClosingFetched(null);
+      setWdvBase('');
+      Toast.show({
+        type: 'info',
+        text1: 'No closing balance',
+        text2: 'Enter WDV / base amount manually.',
+      });
+    }
+  };
+
+  const resetDeprFields = () => {
+    setWdvBase('');
+    setAssetClosingFetched(null);
+    setRateBlock(null);
+    setRatePercent('');
+    setAmountManual(false);
+  };
 
   const filteredRates = useMemo(() => {
     const q = rateSearch.trim().toLowerCase();
@@ -138,13 +170,17 @@ export default function CreateJournalVoucher() {
   }, [rateSearch]);
 
   const canSubmit = useMemo(() => {
+    if (deprOn) {
+      if (!crLedger) return 'Select Asset (Credit) ledger';
+      if (!drLedger) return 'Select Depreciation expense (Debit) ledger';
+      if (!(parseFloat(wdvBase) > 0)) return 'Enter WDV / base amount';
+      if (!(parseFloat(ratePercent) > 0)) return 'Select or enter depreciation %';
+      if (!(parseFloat(amount) > 0)) return 'Enter amount';
+      return null;
+    }
     if (!drLedger) return 'Select Debit (By) ledger';
     if (!crLedger) return 'Select Credit (To) ledger';
     if (!(parseFloat(amount) > 0)) return 'Enter amount';
-    if (deprOn) {
-      if (!(parseFloat(wdvBase) > 0)) return 'Enter WDV / base amount';
-      if (!(parseFloat(ratePercent) > 0)) return 'Select or enter depreciation %';
-    }
     return null;
   }, [drLedger, crLedger, amount, deprOn, wdvBase, ratePercent]);
 
@@ -169,11 +205,14 @@ export default function CreateJournalVoucher() {
       };
       if (deprOn) {
         payload.depreciationMeta = {
+          method: 'direct_write_down',
           baseWdv: parseFloat(wdvBase) || 0,
           ratePercent: parseFloat(ratePercent) || 0,
+          assetLedger: crLedger,
+          expenseLedger: drLedger,
+          assetClosingFetched,
           assetBlock: rateBlock?.assetBlock || null,
           displayName: rateBlock?.displayName || null,
-          method: 'WDV',
         };
       }
       const res: any = await createJournalVoucher(payload);
@@ -201,6 +240,7 @@ export default function CreateJournalVoucher() {
   };
 
   const swapLedgers = () => {
+    if (deprOn) return; // Direct depr: Cr must stay the asset
     if (!drLedger && !crLedger) return;
     setDrLedger(crLedger);
     setCrLedger(drLedger);
@@ -259,19 +299,15 @@ export default function CreateJournalVoucher() {
             </View>
           </View>
 
-          {/* Depreciation toggle — BrandSwitch (same as Collect Payment Now) */}
+          {/* Depreciation toggle — Direct write-down method */}
           <View style={s.card}>
             <TouchableOpacity
               style={s.payNowToggleRow}
               onPress={() => {
                 const v = !deprOn;
                 setDeprOn(v);
-                setAmountManual(false);
-                if (!v) {
-                  setWdvBase('');
-                  setRateBlock(null);
-                  setRatePercent('');
-                }
+                if (!v) resetDeprFields();
+                else setAmountManual(false);
               }}
               activeOpacity={0.8}
             >
@@ -281,19 +317,15 @@ export default function CreateJournalVoucher() {
                 </View>
                 <View style={{ flex: 1, flexShrink: 1 }}>
                   <Text style={s.payNowTitle}>Depreciation on Asset</Text>
-                  <Text style={s.payNowSub}>Dr expense · Cr Accumulated Depreciation · % of WDV</Text>
+                  <Text style={s.payNowSub}>Dr expense · Cr Asset · % of asset closing (WDV)</Text>
                 </View>
               </View>
               <BrandSwitch
                 value={deprOn}
                 onValueChange={(v) => {
                   setDeprOn(v);
-                  setAmountManual(false);
-                  if (!v) {
-                    setWdvBase('');
-                    setRateBlock(null);
-                    setRatePercent('');
-                  }
+                  if (!v) resetDeprFields();
+                  else setAmountManual(false);
                 }}
               />
             </TouchableOpacity>
@@ -302,18 +334,25 @@ export default function CreateJournalVoucher() {
           {deprOn && (
             <View style={s.card}>
               <Text style={s.sectionTitle}>Depreciation calc</Text>
-              <Text style={s.fieldLbl}>Base (WDV) <Text style={s.req}>*</Text></Text>
+              <Text style={s.hint}>Pick the Asset under Credit (To) first — Base fills from its closing balance.</Text>
+
+              <Text style={[s.fieldLbl, { marginTop: 8 }]}>Base (WDV) <Text style={s.req}>*</Text></Text>
               <View style={s.inputWrap}>
                 <Text style={s.rupee}>₹</Text>
                 <TextInput
                   style={s.input}
-                  placeholder="Enter WDV / base amount"
+                  placeholder="From asset closing / enter manually"
                   placeholderTextColor={COLORS.textTertiary}
                   value={wdvBase}
                   onChangeText={(t) => { setWdvBase(t); setAmountManual(false); }}
                   keyboardType="numeric"
                 />
               </View>
+              {assetClosingFetched != null && (
+                <Text style={s.calcHint}>
+                  From ledger closing: {fmtINR(assetClosingFetched)} (editable)
+                </Text>
+              )}
 
               <Text style={[s.fieldLbl, { marginTop: 12 }]}>Asset block / rate <Text style={s.req}>*</Text></Text>
               <TouchableOpacity style={s.pickerBtn} onPress={() => setShowRatePicker(true)} activeOpacity={0.7}>
@@ -354,10 +393,10 @@ export default function CreateJournalVoucher() {
             <View style={s.arrowBox}>
               <TouchableOpacity
                 onPress={swapLedgers}
-                disabled={!drLedger && !crLedger}
+                disabled={deprOn || (!drLedger && !crLedger)}
                 activeOpacity={0.7}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={{ opacity: (!drLedger && !crLedger) ? 0.35 : 1 }}
+                style={{ opacity: (deprOn || (!drLedger && !crLedger)) ? 0.35 : 1 }}
                 accessibilityLabel="Swap debit and credit ledgers"
               >
                 <Ionicons name="swap-horizontal" size={20} color={COLORS.brandPrimary} />
@@ -366,38 +405,70 @@ export default function CreateJournalVoucher() {
             <View style={[s.drCrBox, { borderColor: COLORS.positive + '60', backgroundColor: COLORS.positiveBg }]}>
               <Text style={[s.drCrLabel, { color: COLORS.positive }]}>Cr (To)</Text>
               <Text style={[s.drCrValue, { color: COLORS.positive }]}>{amount ? fmtINR(parseFloat(amount) || 0) : '—'}</Text>
-              <Text style={s.drCrLedger} numberOfLines={2}>{crLedger || (deprOn ? 'Accumulated Dep.' : 'Credit ledger')}</Text>
+              <Text style={s.drCrLedger} numberOfLines={2}>{crLedger || (deprOn ? 'Asset ledger' : 'Credit ledger')}</Text>
             </View>
           </View>
 
-          {/* Ledgers */}
+          {/* Ledgers — in depr mode: pick Asset (Cr) then Depreciation expense (Dr) */}
           <View style={s.card}>
             <Text style={s.sectionTitle}>Ledger entries</Text>
-            <BottomSheetSearch
-              label={deprOn ? 'Debit — Depreciation expense' : 'Debit ledger (By)'}
-              required
-              placeholder="Search ledger"
-              value={drLedger}
-              options={ledgers}
-              onSelect={(opt) => setDrLedger(opt.value)}
-              onClear={() => setDrLedger('')}
-              sheetTitle="Select Debit Ledger"
-              searchPlaceholder="Search ledger…"
-              icon="remove-circle-outline"
-            />
-            <View style={{ height: 10 }} />
-            <BottomSheetSearch
-              label={deprOn ? 'Credit — Accumulated Depreciation' : 'Credit ledger (To)'}
-              required
-              placeholder="Search ledger"
-              value={crLedger}
-              options={ledgers}
-              onSelect={(opt) => setCrLedger(opt.value)}
-              onClear={() => setCrLedger('')}
-              sheetTitle="Select Credit Ledger"
-              searchPlaceholder="Search ledger…"
-              icon="add-circle-outline"
-            />
+            {deprOn ? (
+              <>
+                <BottomSheetSearch
+                  label="Credit — Asset (write-down)"
+                  required
+                  placeholder="e.g. Rolls Royal / Plant & Machinery"
+                  value={crLedger}
+                  options={ledgers}
+                  onSelect={selectCrLedger}
+                  onClear={() => { setCrLedger(''); setWdvBase(''); setAssetClosingFetched(null); }}
+                  sheetTitle="Select Asset Ledger"
+                  searchPlaceholder="Search asset ledger…"
+                  icon="add-circle-outline"
+                />
+                <View style={{ height: 10 }} />
+                <BottomSheetSearch
+                  label="Debit — Depreciation expense"
+                  required
+                  placeholder="e.g. Depreciation"
+                  value={drLedger}
+                  options={ledgers}
+                  onSelect={(opt) => setDrLedger(opt.value)}
+                  onClear={() => setDrLedger('')}
+                  sheetTitle="Select Depreciation Expense"
+                  searchPlaceholder="Search expense ledger…"
+                  icon="remove-circle-outline"
+                />
+              </>
+            ) : (
+              <>
+                <BottomSheetSearch
+                  label="Debit ledger (By)"
+                  required
+                  placeholder="Search ledger"
+                  value={drLedger}
+                  options={ledgers}
+                  onSelect={(opt) => setDrLedger(opt.value)}
+                  onClear={() => setDrLedger('')}
+                  sheetTitle="Select Debit Ledger"
+                  searchPlaceholder="Search ledger…"
+                  icon="remove-circle-outline"
+                />
+                <View style={{ height: 10 }} />
+                <BottomSheetSearch
+                  label="Credit ledger (To)"
+                  required
+                  placeholder="Search ledger"
+                  value={crLedger}
+                  options={ledgers}
+                  onSelect={(opt) => setCrLedger(opt.value)}
+                  onClear={() => setCrLedger('')}
+                  sheetTitle="Select Credit Ledger"
+                  searchPlaceholder="Search ledger…"
+                  icon="add-circle-outline"
+                />
+              </>
+            )}
           </View>
 
           {/* Amount */}
