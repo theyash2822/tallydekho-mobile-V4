@@ -331,58 +331,6 @@ export default function CreateJournalVoucher() {
             </TouchableOpacity>
           </View>
 
-          {deprOn && (
-            <View style={s.card}>
-              <Text style={s.sectionTitle}>Depreciation calc</Text>
-              <Text style={s.hint}>Pick the Asset under Credit (To) first — Base fills from its closing balance.</Text>
-
-              <Text style={[s.fieldLbl, { marginTop: 8 }]}>Base (WDV) <Text style={s.req}>*</Text></Text>
-              <View style={s.inputWrap}>
-                <Text style={s.rupee}>₹</Text>
-                <TextInput
-                  style={s.input}
-                  placeholder="From asset closing / enter manually"
-                  placeholderTextColor={COLORS.textTertiary}
-                  value={wdvBase}
-                  onChangeText={(t) => { setWdvBase(t); setAmountManual(false); }}
-                  keyboardType="numeric"
-                />
-              </View>
-              {assetClosingFetched != null && (
-                <Text style={s.calcHint}>
-                  From ledger closing: {fmtINR(assetClosingFetched)} (editable)
-                </Text>
-              )}
-
-              <Text style={[s.fieldLbl, { marginTop: 12 }]}>Asset block / rate <Text style={s.req}>*</Text></Text>
-              <TouchableOpacity style={s.pickerBtn} onPress={() => setShowRatePicker(true)} activeOpacity={0.7}>
-                <Ionicons name="list-outline" size={16} color={COLORS.brandPrimary} />
-                <Text style={[s.pickerTxt, !rateBlock && { color: COLORS.textTertiary }]} numberOfLines={2}>
-                  {rateBlock ? `${rateBlock.displayName} (${rateBlock.ratePercent}%)` : 'Select Income-tax block'}
-                </Text>
-                <Ionicons name="chevron-down" size={16} color={COLORS.textTertiary} />
-              </TouchableOpacity>
-
-              <Text style={[s.fieldLbl, { marginTop: 12 }]}>Rate % <Text style={s.req}>*</Text></Text>
-              <View style={s.inputWrap}>
-                <TextInput
-                  style={s.input}
-                  placeholder="e.g. 15"
-                  placeholderTextColor={COLORS.textTertiary}
-                  value={ratePercent}
-                  onChangeText={(t) => { setRatePercent(t); setAmountManual(false); }}
-                  keyboardType="numeric"
-                />
-                <Text style={s.rupee}>%</Text>
-              </View>
-              {(parseFloat(wdvBase) > 0 && parseFloat(ratePercent) > 0) && (
-                <Text style={s.calcHint}>
-                  {fmtINR(parseFloat(wdvBase))} × {ratePercent}% = {fmtINR((parseFloat(wdvBase) * parseFloat(ratePercent)) / 100)}
-                </Text>
-              )}
-            </View>
-          )}
-
           {/* Dr / Cr summary */}
           <View style={s.drCrRow}>
             <View style={[s.drCrBox, { borderColor: COLORS.negative + '60', backgroundColor: COLORS.negativeBg }]}>
@@ -409,7 +357,7 @@ export default function CreateJournalVoucher() {
             </View>
           </View>
 
-          {/* Ledgers — in depr mode: pick Asset (Cr) then Depreciation expense (Dr) */}
+          {/* Ledger entries FIRST — then depreciation calc (when on) */}
           <View style={s.card}>
             <Text style={s.sectionTitle}>Ledger entries</Text>
             {deprOn ? (
@@ -470,6 +418,58 @@ export default function CreateJournalVoucher() {
               </>
             )}
           </View>
+
+          {deprOn && (
+            <View style={s.card}>
+              <Text style={s.sectionTitle}>Depreciation calc</Text>
+              <Text style={s.hint}>Base fills from the Asset closing above — you can still edit it.</Text>
+
+              <Text style={[s.fieldLbl, { marginTop: 8 }]}>Base (WDV) <Text style={s.req}>*</Text></Text>
+              <View style={s.inputWrap}>
+                <Text style={s.rupee}>₹</Text>
+                <TextInput
+                  style={s.input}
+                  placeholder="From asset closing / enter manually"
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={wdvBase}
+                  onChangeText={(t) => { setWdvBase(t); setAmountManual(false); }}
+                  keyboardType="numeric"
+                />
+              </View>
+              {assetClosingFetched != null && (
+                <Text style={s.calcHint}>
+                  From ledger closing: {fmtINR(assetClosingFetched)} (editable)
+                </Text>
+              )}
+
+              <Text style={[s.fieldLbl, { marginTop: 12 }]}>Asset block / rate <Text style={s.req}>*</Text></Text>
+              <TouchableOpacity style={s.pickerBtn} onPress={() => setShowRatePicker(true)} activeOpacity={0.7}>
+                <Ionicons name="list-outline" size={16} color={COLORS.brandPrimary} />
+                <Text style={[s.pickerTxt, !rateBlock && { color: COLORS.textTertiary }]} numberOfLines={2}>
+                  {rateBlock ? `${rateBlock.displayName} (${rateBlock.ratePercent}%)` : 'Select Income-tax block'}
+                </Text>
+                <Ionicons name="chevron-down" size={16} color={COLORS.textTertiary} />
+              </TouchableOpacity>
+
+              <Text style={[s.fieldLbl, { marginTop: 12 }]}>Rate % <Text style={s.req}>*</Text></Text>
+              <View style={s.inputWrap}>
+                <TextInput
+                  style={s.input}
+                  placeholder="e.g. 15"
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={ratePercent}
+                  onChangeText={(t) => { setRatePercent(t); setAmountManual(false); }}
+                  keyboardType="numeric"
+                />
+                <Text style={s.rupee}>%</Text>
+              </View>
+              {(parseFloat(wdvBase) > 0 && parseFloat(ratePercent) > 0) && (
+                <Text style={s.calcHint}>
+                  {fmtINR(parseFloat(wdvBase))} × {ratePercent}% = {fmtINR((parseFloat(wdvBase) * parseFloat(ratePercent)) / 100)}
+                </Text>
+              )}
+            </View>
+          )}
 
           {/* Amount */}
           <View style={s.card}>
