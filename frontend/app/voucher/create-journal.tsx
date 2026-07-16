@@ -20,8 +20,9 @@ import DatePickerModal from '../../src/components/forms/DatePickerModal';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import { useAuth } from '../../src/context/AuthContext';
 import {
-  createJournalVoucher, getLedgers, getComplianceConfig,
+  createJournalVoucher, getLedgers,
 } from '../../src/services/api';
+import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
 import {
   indiaIncomeTaxDepreciationRates,
   IndiaDepreciationRate,
@@ -49,15 +50,7 @@ export default function CreateJournalVoucher() {
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
 
   const [entryType, setEntryType] = useState<EntryType>('regular');
-  const [numberingPolicy, setNumberingPolicy] = useState<'tally_prime_series' | 'tallydekho_series'>('tally_prime_series');
-
-  useEffect(() => {
-    if (!company?.guid) return;
-    getComplianceConfig(company.guid).then((res: any) => {
-      const cfg = res?.data || res;
-      setNumberingPolicy(cfg?.numbering_policy === 'tallydekho_series' ? 'tallydekho_series' : 'tally_prime_series');
-    }).catch(() => {});
-  }, [company?.guid]);
+  const { numberingPolicy } = useNumberingPolicy(company?.guid);
 
   const [date, setDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);

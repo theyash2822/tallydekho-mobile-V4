@@ -1,5 +1,48 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-07-16 — PartyForm worldwide country / division + GST India-only
+
+### Changed
+- `PartyForm`: countries/states from `/api/geo/*`; field label = Emirate/Province/Division/State
+- GST Details section hidden when country ≠ India
+- `getGeoCountries` / `getGeoStates` in `api.ts`
+
+### Test
+1. Sales → Create Invoice → +Add Customer
+2. Country Nepal → label Province → pick Gandaki → GST hidden
+3. Country UAE → Emirate → Dubai → GST hidden
+4. Country India → State + GST as before
+
+---
+
+## 2026-07-16 — Universal numbering: lock REFERENCE path + Strategy C fallback
+
+Expanded `DECISIONS.md` + `useNumberingPolicy` + ingest comment:
+- Primary: REFERENCE match for all vouchers
+- Fallbacks (ordered): Sales bill-ref → Batch JOIN → Strategy C unique-only
+- Forbidden: narration as primary identity; inventing UI series numbers
+
+---
+
+### Changed
+- New `src/hooks/useNumberingPolicy.ts` — Settings-only numbering for all create screens
+- Wired hook: Sales Invoice, Receipt, Payment, Journal, Contra
+- Contra: Journal-style **Contra No. + Date** row; removed header Auto chip + old info-row date
+- Keyboard: Receipt/Payment dismiss on scroll-drag; Contra narration scrolls into view
+- Fixed Contra `settings.currency` for CashCountSheet
+
+### Files
+- `src/hooks/useNumberingPolicy.ts`
+- `app/voucher/create-{contra,receipt,payment,journal}.tsx`
+- `app/sales/create-invoice.tsx`
+
+### Test
+1. Contra create shows Contra No. | Date like Journal
+2. No numbering pills on create screens — Settings only
+3. Narration focus scrolls above keyboard; drag dismisses keyboard
+
+---
+
 ## 2026-07-13 — Payment Voucher full rewrite (Receipt parity)
 
 ### Added

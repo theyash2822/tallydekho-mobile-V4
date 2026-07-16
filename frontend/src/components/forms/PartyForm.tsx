@@ -5,13 +5,9 @@
  *  - app/ledger/create.tsx          (standalone page, uses regular TextInput)
  *  - app/sales/create-invoice.tsx   (Add Customer BottomSheet, uses BottomSheetTextInput)
  *
- * Usage:
- *   const formRef = useRef<PartyFormRef>(null);
- *   <PartyForm ref={formRef} />
- *   const data = formRef.current.getData();   // on save
- *   formRef.current.reset();                  // on dismiss / after save
- *
- * Pass InputComponent={BottomSheetTextInput} when rendering inside a BottomSheet.
+ * Country / division pickers load Tally-exact spellings from /api/geo/*.
+ * Division field label follows country (State / Emirate / Province / Division).
+ * GST Details only for India — fades away for other countries.
  */
 
 import React, {
@@ -26,33 +22,28 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 import BrandSwitch from './BrandSwitch';
 import FormDropdown from './FormDropdown';
-import { INDIAN_STATES, stateFromGstin } from '../../constants/indianStates';
-import { COUNTRIES, DEFAULT_COUNTRY } from '../../constants/countries';
+import { stateFromGstin } from '../../constants/indianStates';
+import { DEFAULT_COUNTRY } from '../../constants/countries';
+import { getGeoCountries, getGeoStates } from '../../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface PartyFormData {
-  // Contact
   phone: string;
   email: string;
   website: string;
-  // Mailing address
   addressLine1: string;
   addressLine2: string;
-  // Location (required before GST unlocks)
   country: string;
   state: string;
   pincode: string;
-  // GST
   pan: string;
   gstRegType: string;
   gstin: string;
-  // VAT (legacy, toggle)
   vatEnabled: boolean;
   vatDealerType: string;
   vatTin: string;
   cstNo: string;
   formCApplicable: boolean;
-  // Bank (toggle)
   bankEnabled: boolean;
   bankBeneficiaryName: string;
   bankName: string;
@@ -75,14 +66,10 @@ export const defaultPartyFormData: PartyFormData = {
   bankEnabled: false, bankBeneficiaryName: '', bankName: '', bankAccountNo: '', bankIfsc: '', bankBranch: '',
 };
 
-// ─── PartyInput — stable component defined OUTSIDE PartyForm ────────────────
-// CRITICAL: must not be defined inside PartyForm's render body.
-// If defined inside, React creates a new component type on every keystroke
-// which forces TextInput to unmount → keyboard closes.
 interface PartyInputProps extends TextInputProps {
   label?: string;
   required?: boolean;
-  IC: ElementType<TextInputProps>; // InputComponent
+  IC: ElementType<TextInputProps>;
 }
 const PartyInput = memo(function PartyInput({ label, required: req, IC, ...props }: PartyInputProps) {
   return (
@@ -101,7 +88,6 @@ const PartyInput = memo(function PartyInput({ label, required: req, IC, ...props
   );
 });
 
-// ─── Options ─────────────────────────────────────────────────────────────────
 const GST_TYPES = [
   { label: 'Regular',                value: 'Regular' },
   { label: 'Composition',            value: 'Composition' },
@@ -115,9 +101,6 @@ const VAT_DEALER_TYPES = [
   { label: 'Unregistered',  value: 'Unregistered' },
 ];
 
-const COUNTRY_OPTIONS = COUNTRIES.map(c => ({ label: c, value: c }));
-
-// ─── Component ────────────────────────────────────────────────────────────────
 const PartyForm = forwardRef<PartyFormRef, {
   InputComponent?: ElementType<TextInputProps>;
   initialData?: Partial<PartyFormData>;
@@ -125,33 +108,27 @@ const PartyForm = forwardRef<PartyFormRef, {
 
   const d = { ...defaultPartyFormData, ...initialData };
 
-  // Contact
   const [phone,   setPhone]   = useState(d.phone);
   const [email,   setEmail]   = useState(d.email);
   const [website, setWebsite] = useState(d.website);
 
-  // Mailing address
   const [addressLine1, setAddressLine1] = useState(d.addressLine1);
   const [addressLine2, setAddressLine2] = useState(d.addressLine2);
 
-  // Location
-  const [country, setCountry] = useState(d.country);
+  const [country, setCountry] = useState(d.country || DEFAULT_COUNTRY);
   const [state,   setState]   = useState(d.state);
   const [pincode, setPincode] = useState(d.pincode);
 
-  // GST
   const [pan,        setPan]        = useState(d.pan);
   const [gstRegType, setGstRegType] = useState(d.gstRegType);
   const [gstin,      setGstin]      = useState(d.gstin);
 
-  // VAT
   const [vatEnabled,      setVatEnabled]      = useState(d.vatEnabled);
   const [vatDealerType,   setVatDealerType]   = useState(d.vatDealerType);
   const [vatTin,          setVatTin]          = useState(d.vatTin);
   const [cstNo,           setCstNo]           = useState(d.cstNo);
   const [formCApplicable, setFormCApplicable] = useState(d.formCApplicable);
 
-  // Bank
   const [bankEnabled,         setBankEnabled]         = useState(d.bankEnabled);
   const [bankBeneficiaryName, setBankBeneficiaryName] = useState(d.bankBeneficiaryName);
   const [bankName,            setBankName]            = useState(d.bankName);
@@ -159,46 +136,112 @@ const PartyForm = forwardRef<PartyFormRef, {
   const [bankIfsc,            setBankIfsc]            = useState(d.bankIfsc);
   const [bankBranch,          setBankBranch]          = useState(d.bankBranch);
 
-  // Auto-detect state from GSTIN when user types it
+  const [countryOptions, setCountryOptions] = useState<{ label: string; value: string }[]>(
+    [{ label: DEFAULT_COUNTRY, value: DEFAULT_COUNTRY }]
+  );
+  const [divisionLabel, setDivisionLabel] = useState('State');
+  const [stateOptions, setStateOptions] = useState<{ label: string; value: string }[]>([]);
+  const [geoLoading, setGeoLoading] = useState(false);
+
+  const isIndia = country.trim().toLowerCase() === 'india';
+
   useEffect(() => {
+    getGeoCountries()
+      .then((res: any) => {
+        const rows = res?.data || [];
+        if (!Array.isArray(rows) || rows.length === 0) return;
+        setCountryOptions(rows.map((r: any) => ({ label: r.name, value: r.name })));
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!country) {
+      setStateOptions([]);
+      setDivisionLabel('State');
+      return;
+    }
+    let cancelled = false;
+    setGeoLoading(true);
+    getGeoStates(country)
+      .then((res: any) => {
+        if (cancelled) return;
+        setDivisionLabel(res?.meta?.division_label || 'State');
+        const rows = res?.data || [];
+        setStateOptions(
+          (Array.isArray(rows) ? rows : []).map((r: any) => ({
+            label: r.name || r.state_name,
+            value: r.name || r.state_name,
+          }))
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStateOptions([]);
+          setDivisionLabel('State');
+        }
+      })
+      .finally(() => { if (!cancelled) setGeoLoading(false); });
+    return () => { cancelled = true; };
+  }, [country]);
+
+  useEffect(() => {
+    if (!isIndia) return;
     if (gstin.length === 15) {
       const detected = stateFromGstin(gstin);
       if (detected && !state) setState(detected);
     }
-  }, [gstin]);
+  }, [gstin, isIndia]);
 
-  // GST section unlocks only when country + state + pincode are filled
-  const gstUnlocked = country.trim().length > 0 && state.trim().length > 0 && pincode.trim().length >= 4;
-  // GSTIN field hidden for Unregistered/Consumer
+  const gstUnlocked = isIndia && state.trim().length > 0 && pincode.trim().length >= 4;
   const showGstinField = gstRegType !== 'Unregistered/Consumer';
 
-  // ── Ref API ──
+  const onSelectCountry = (o: { value: string }) => {
+    const next = o.value;
+    setCountry(next);
+    setState('');
+    setPincode('');
+    if (next.trim().toLowerCase() !== 'india') {
+      setPan('');
+      setGstRegType('Regular');
+      setGstin('');
+      setVatEnabled(false);
+      setVatDealerType('');
+      setVatTin('');
+      setCstNo('');
+      setFormCApplicable(false);
+    }
+  };
+
   useImperativeHandle(ref, () => ({
     getData: () => ({
       phone, email, website,
       addressLine1, addressLine2,
       country, state, pincode,
-      pan, gstRegType, gstin,
-      vatEnabled, vatDealerType, vatTin, cstNo, formCApplicable,
+      pan: isIndia ? pan : '',
+      gstRegType: isIndia ? gstRegType : 'Unregistered/Consumer',
+      gstin: isIndia ? gstin : '',
+      vatEnabled: isIndia ? vatEnabled : false,
+      vatDealerType: isIndia ? vatDealerType : '',
+      vatTin: isIndia ? vatTin : '',
+      cstNo: isIndia ? cstNo : '',
+      formCApplicable: isIndia ? formCApplicable : false,
       bankEnabled, bankBeneficiaryName, bankName, bankAccountNo, bankIfsc, bankBranch,
     }),
     reset: () => {
       setPhone(''); setEmail(''); setWebsite('');
       setAddressLine1(''); setAddressLine2('');
-      setCountry('India'); setState(''); setPincode('');
+      setCountry(DEFAULT_COUNTRY); setState(''); setPincode('');
       setPan(''); setGstRegType('Regular'); setGstin('');
       setVatEnabled(false); setVatDealerType(''); setVatTin(''); setCstNo(''); setFormCApplicable(false);
       setBankEnabled(false); setBankBeneficiaryName(''); setBankName(''); setBankAccountNo(''); setBankIfsc(''); setBankBranch('');
     },
   }));
 
-  // Stable shorthand — passes stable InputComponent reference to the
-  // memoized PartyInput component defined outside this render function.
   const IC = InputComponent;
 
   return (
     <View>
-      {/* ══ CONTACT ══════════════════════════════════════════════════════════ */}
       <Text style={f.sectionTitle}>Contact</Text>
 
       <PartyInput IC={IC} label="Mobile Number" placeholder="Enter mobile number"
@@ -212,7 +255,6 @@ const PartyForm = forwardRef<PartyFormRef, {
         value={website} onChangeText={setWebsite}
         autoCapitalize="none" keyboardType="url" />
 
-      {/* ══ MAILING ADDRESS ══════════════════════════════════════════════════ */}
       <View style={f.divider} />
       <Text style={f.sectionTitle}>Mailing Address</Text>
 
@@ -225,92 +267,107 @@ const PartyForm = forwardRef<PartyFormRef, {
       <FormDropdown
         label="Country"
         value={country}
-        options={COUNTRY_OPTIONS}
-        onSelect={o => { setCountry(o.value); setState(''); setPincode(''); }}
+        options={countryOptions}
+        onSelect={onSelectCountry}
         placeholder="Select country"
       />
 
       <FormDropdown
-        label="State"
-        required
+        label={divisionLabel}
+        required={stateOptions.length > 0}
         value={state}
-        options={INDIAN_STATES.map(s => ({ label: s, value: s }))}
+        options={stateOptions}
         onSelect={o => setState(o.value)}
-        placeholder="Select state"
+        placeholder={
+          geoLoading
+            ? `Loading ${divisionLabel.toLowerCase()}…`
+            : stateOptions.length === 0
+              ? `No ${divisionLabel.toLowerCase()} list for this country`
+              : `Select ${divisionLabel.toLowerCase()}`
+        }
       />
 
-      <PartyInput IC={IC} label="Pincode" required placeholder="6-digit pincode"
-        value={pincode} onChangeText={setPincode}
-        keyboardType="numeric" maxLength={6} />
+      <PartyInput
+        IC={IC}
+        label="Pincode"
+        required={isIndia}
+        placeholder={isIndia ? '6-digit pincode' : 'Postal / ZIP code'}
+        value={pincode}
+        onChangeText={setPincode}
+        keyboardType="numeric"
+        maxLength={isIndia ? 6 : 12}
+      />
 
-      {/* ══ GST DETAILS ══════════════════════════════════════════════════════ */}
-      <View style={f.divider} />
-      <View style={f.sectionHeaderRow}>
-        <Text style={f.sectionTitle}>GST Details</Text>
-        {!gstUnlocked && <Text style={f.lockHint}>Fill State &amp; Pincode first</Text>}
-      </View>
-
-      {gstUnlocked ? (
+      {isIndia && (
         <>
-          <PartyInput IC={IC} label="PAN / IT No." placeholder="ABCDE1234F"
-            value={pan} onChangeText={v => setPan(v.toUpperCase())}
-            autoCapitalize="characters" maxLength={10} />
-
-          <FormDropdown
-            label="GST Registration Type"
-            required
-            value={gstRegType}
-            options={GST_TYPES}
-            onSelect={o => {
-              setGstRegType(o.value);
-              if (o.value === 'Unregistered/Consumer') setGstin('');
-            }}
-            placeholder="Select GST type"
-          />
-
-          {showGstinField && (
-            <PartyInput IC={IC} label="GSTIN / UIN" placeholder="24ABCDE1234F1Z5"
-              value={gstin} onChangeText={v => setGstin(v.toUpperCase())}
-              autoCapitalize="characters" maxLength={15} />
-          )}
-
-          {/* ── VAT Details (legacy toggle) ── */}
           <View style={f.divider} />
-          <View style={f.toggleRow}>
-            <Text style={f.toggleLabel}>VAT Details</Text>
-            <BrandSwitch value={vatEnabled} onValueChange={setVatEnabled} />
+          <View style={f.sectionHeaderRow}>
+            <Text style={f.sectionTitle}>GST Details</Text>
+            {!gstUnlocked && <Text style={f.lockHint}>Fill {divisionLabel} &amp; Pincode first</Text>}
           </View>
 
-          {vatEnabled && (
-            <View style={f.expandSection}>
+          {gstUnlocked ? (
+            <>
+              <PartyInput IC={IC} label="PAN / IT No." placeholder="ABCDE1234F"
+                value={pan} onChangeText={v => setPan(v.toUpperCase())}
+                autoCapitalize="characters" maxLength={10} />
+
               <FormDropdown
-                label="Type of Dealer"
-                value={vatDealerType}
-                options={VAT_DEALER_TYPES}
-                onSelect={o => setVatDealerType(o.value)}
-                placeholder="Select dealer type"
+                label="GST Registration Type"
+                required
+                value={gstRegType}
+                options={GST_TYPES}
+                onSelect={o => {
+                  setGstRegType(o.value);
+                  if (o.value === 'Unregistered/Consumer') setGstin('');
+                }}
+                placeholder="Select GST type"
               />
 
-              <PartyInput IC={IC} label="VAT TIN No." placeholder="Enter VAT TIN number"
-                value={vatTin} onChangeText={setVatTin} />
+              {showGstinField && (
+                <PartyInput IC={IC} label="GSTIN / UIN" placeholder="24ABCDE1234F1Z5"
+                  value={gstin} onChangeText={v => setGstin(v.toUpperCase())}
+                  autoCapitalize="characters" maxLength={15} />
+              )}
 
-              <PartyInput IC={IC} label="CST No." placeholder="Enter CST number"
-                value={cstNo} onChangeText={setCstNo} />
-
-              <View style={[f.toggleRow, { marginTop: 12 }]}>
-                <Text style={f.toggleLabel}>Sales / Purchase against Form C</Text>
-                <BrandSwitch value={formCApplicable} onValueChange={setFormCApplicable} />
+              <View style={f.divider} />
+              <View style={f.toggleRow}>
+                <Text style={f.toggleLabel}>VAT Details</Text>
+                <BrandSwitch value={vatEnabled} onValueChange={setVatEnabled} />
               </View>
+
+              {vatEnabled && (
+                <View style={f.expandSection}>
+                  <FormDropdown
+                    label="Type of Dealer"
+                    value={vatDealerType}
+                    options={VAT_DEALER_TYPES}
+                    onSelect={o => setVatDealerType(o.value)}
+                    placeholder="Select dealer type"
+                  />
+
+                  <PartyInput IC={IC} label="VAT TIN No." placeholder="Enter VAT TIN number"
+                    value={vatTin} onChangeText={setVatTin} />
+
+                  <PartyInput IC={IC} label="CST No." placeholder="Enter CST number"
+                    value={cstNo} onChangeText={setCstNo} />
+
+                  <View style={[f.toggleRow, { marginTop: 12 }]}>
+                    <Text style={f.toggleLabel}>Sales / Purchase against Form C</Text>
+                    <BrandSwitch value={formCApplicable} onValueChange={setFormCApplicable} />
+                  </View>
+                </View>
+              )}
+            </>
+          ) : (
+            <View style={f.lockedBox}>
+              <Ionicons name="lock-closed-outline" size={18} color={COLORS.textTertiary} />
+              <Text style={f.lockedText}>
+                Enter {divisionLabel.toLowerCase()} and pincode above to unlock GST details
+              </Text>
             </View>
           )}
         </>
-      ) : (
-        <View style={f.lockedBox}>
-          <Ionicons name="lock-closed-outline" size={18} color={COLORS.textTertiary} />
-          <Text style={f.lockedText}>
-            Enter country, state and pincode above to unlock GST details
-          </Text>
-        </View>
       )}
 
       {/* Bank Details section removed 2026-07-06 — not required on customer
@@ -324,7 +381,6 @@ const PartyForm = forwardRef<PartyFormRef, {
 
 export default PartyForm;
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const f = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.base,

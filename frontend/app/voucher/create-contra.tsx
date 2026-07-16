@@ -20,15 +20,15 @@ import CashCountSheet, { CashCountResult } from '../../src/components/forms/Cash
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import {
-  createContraVoucher, getBankLedgers, getComplianceConfig,
+  createContraVoucher, getBankLedgers,
 } from '../../src/services/api';
 import { sumDenomCounts } from '../../src/constants/cashDenominations';
+import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
 
 const todayStr = () => {
   const d = new Date();
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(-2)}`;
 };
-const todayDisplay = () => new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 const dmyToISO = (dmy: string): string => {
   if (!dmy) return '';
   const parts = dmy.split('/');
@@ -60,18 +60,11 @@ export default function CreateContraVoucher() {
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
   const { company, isPaired } = useAuth();
-  const { currency, formatAmount, currencySymbol } = useSettings();
+  const { settings, formatAmount, currencySymbol } = useSettings();
 
   const [entryType, setEntryType] = useState<EntryType>('regular');
-  const [numberingPolicy, setNumberingPolicy] = useState<'tally_prime_series' | 'tallydekho_series'>('tally_prime_series');
-
-  useEffect(() => {
-    if (!company?.guid) return;
-    getComplianceConfig(company.guid).then((res: any) => {
-      const cfg = res?.data || res;
-      setNumberingPolicy(cfg?.numbering_policy === 'tallydekho_series' ? 'tallydekho_series' : 'tally_prime_series');
-    }).catch(() => {});
-  }, [company?.guid]);
+  const { numberingPolicy } = useNumberingPolicy(company?.guid);
+  const narrationY = useRef(0);
 
   const [date, setDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -238,7 +231,6 @@ export default function CreateContraVoucher() {
         </TouchableOpacity>
         <Text style={s.hdrTitle}>Contra Voucher</Text>
         <RegularOptionalToggle value={entryType} onChange={setEntryType} />
-        <View style={s.vNoBox}><Text style={s.vNo}>Auto</Text></View>
       </View>
 
       <KeyboardAvoidingView
@@ -254,20 +246,33 @@ export default function CreateContraVoucher() {
           keyboardDismissMode="on-drag"
           onScrollBeginDrag={Keyboard.dismiss}
         >
-          {/* Date info row — original layout */}
-          <View style={s.infoRow}>
-            <TouchableOpacity
-              style={s.infoItem}
-              onPress={() => entryType === 'optional' && setShowDatePicker(true)}
-              activeOpacity={entryType === 'optional' ? 0.7 : 1}
-            >
-              <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
-              <Text style={s.infoTxt}>{entryType === 'regular' ? todayDisplay() : date}</Text>
-            </TouchableOpacity>
-            <View style={s.infoDot} />
-            <View style={s.infoItem}>
-              <Ionicons name="swap-horizontal-outline" size={14} color={COLORS.textSecondary} />
-              <Text style={s.infoTxt}>Contra Entry</Text>
+          {/* ── Contra No. + Date (mirrors Journal / Receipt / Payment) ───── */}
+          <View style={s.section}>
+            <View style={[s.fieldBlock, { padding: SPACING.md }]}>
+              <View style={s.row2}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.fLabel}>Contra No.</Text>
+                  <View style={s.autoBox}>
+                    <Text style={s.autoTxt}>Auto</Text>
+                    <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
+                  </View>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.fLabel}>Date <Text style={s.req}>*</Text></Text>
+                  {entryType === 'regular' ? (
+                    <View style={[s.autoBox, { opacity: 0.55 }]}>
+                      <Text style={s.autoTxt}>{date}</Text>
+                      <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
+                    </View>
+                  ) : (
+                    <TouchableOpacity style={s.fInput} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
+                      <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.sm, fontWeight: '600' }}>
+                        {date || 'Select date'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
             </View>
           </View>
 
@@ -423,7 +428,10 @@ export default function CreateContraVoucher() {
             </View>
           )}
 
-          <View style={s.section}>
+          <View
+            style={s.section}
+            onLayout={(e) => { narrationY.current = e.nativeEvent.layout.y; }}
+          >
             <Text style={s.sectionTitle}>Narration</Text>
             <View style={s.fieldBlock}>
               <View style={s.field}>
@@ -437,6 +445,11 @@ export default function CreateContraVoucher() {
                   multiline
                   numberOfLines={4}
                   textAlignVertical="top"
+                  onFocus={() => {
+                    setTimeout(() => {
+                      scrollRef.current?.scrollTo?.({ y: Math.max(0, narrationY.current - 100), animated: true });
+                    }, 250);
+                  }}
                 />
               </View>
             </View>
@@ -468,7 +481,7 @@ export default function CreateContraVoucher() {
         visible={showCashSheet}
         onClose={() => setShowCashSheet(false)}
         targetAmount={amtNum}
-        currency={currency}
+        currency={settings.currency}
         initialCounts={cashCount?.used ? cashCount.denominations : null}
         onApply={(r) => setCashCount(r)}
         onClear={() => setCashCount(null)}
@@ -515,19 +528,19 @@ const s = StyleSheet.create({
   },
   back: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
   hdrTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
-  vNoBox: {
-    backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, paddingHorizontal: 10, paddingVertical: 5,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
+  scroll: { padding: SPACING.md, gap: 14, paddingBottom: 24 },
+  row2: { flexDirection: 'row', gap: 12 },
+  fLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
+  fInput: {
+    backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48, justifyContent: 'center',
   },
-  vNo: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
-  scroll: { padding: SPACING.md, gap: 14 },
-  infoRow: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
-    paddingHorizontal: SPACING.md, paddingVertical: 12, gap: 12, borderWidth: 1, borderColor: COLORS.borderDefault,
+  autoBox: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48,
   },
-  infoItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  infoTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '500' },
-  infoDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: COLORS.borderStrong },
+  autoTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
   transferRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   transferBox: {
     flex: 1, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1,

@@ -179,6 +179,12 @@ export const getChargeLedgers = (companyGuid?: string) =>
 
 // Create customer/party in Tally
 export const createTallyParty = (payload: any) => tallyPost<any>('/master/party', payload);
+
+// Geo masters (Tally country / state-emirate-province spellings)
+export const getGeoCountries = () => get<any>('/geo/countries');
+export const getGeoStates = (country: string) =>
+  get<any>(`/geo/states?country=${encodeURIComponent(country)}`);
+
 export const createSalesOrder    = (payload: any) => tallyPost<any>('/voucher/sales-order', payload);
 export const createQuotation     = (payload: any) => tallyPost<any>('/voucher/sales-order', payload);
 export const createCreditNote    = (payload: any) => tallyPost<any>('/voucher/credit-note', payload);

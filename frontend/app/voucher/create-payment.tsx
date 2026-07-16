@@ -11,7 +11,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Modal,
+  TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Modal, Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,8 +24,9 @@ import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomS
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import {
-  createPaymentVoucher, getParties, getBankLedgers, getPartyOutstandingBills, getComplianceConfig,
+  createPaymentVoucher, getParties, getBankLedgers, getPartyOutstandingBills,
 } from '../../src/services/api';
+import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
 
 // ── Helpers (mirrors create-invoice.tsx) ─────────────────────────────────────
 const todayStr = () => {
@@ -83,20 +84,8 @@ export default function CreatePaymentVoucher() {
 
   // ── Header state ──────────────────────────────────────────────────────────
   const [entryType, setEntryType] = useState<EntryType>('regular');
-  // Numbering from Settings → Voucher Config only (no on-screen override)
-  const [numberingPolicy, setNumberingPolicy] = useState<'tally_prime_series' | 'tallydekho_series'>('tally_prime_series');
-
-  useEffect(() => {
-    if (!company?.guid) return;
-    getComplianceConfig(company.guid).then((res: any) => {
-      const cfg = res?.data || res;
-      if (cfg?.numbering_policy === 'tallydekho_series') {
-        setNumberingPolicy('tallydekho_series');
-      } else {
-        setNumberingPolicy('tally_prime_series');
-      }
-    }).catch(() => {});
-  }, [company?.guid]);
+  // Universal numbering — Settings → Voucher Config only (no on-screen override)
+  const { numberingPolicy } = useNumberingPolicy(company?.guid);
 
   // ── Date (mirrors Sales Invoice pattern) ──────────────────────────────────
   const [date, setDate] = useState(todayStr());
@@ -339,6 +328,7 @@ export default function CreatePaymentVoucher() {
           contentContainerStyle={s.scroll}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
+          onScrollBeginDrag={Keyboard.dismiss}
         >
 
           {/* ── Payment No. + Date (mirrors Sales Invoice layout) ───── */}

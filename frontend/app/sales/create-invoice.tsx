@@ -20,6 +20,7 @@ import {
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { generateDocumentHTML } from '../../src/utils/documentHelpers';
+import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import PartyForm, { PartyFormRef } from '../../src/components/forms/PartyForm';
 import FormField from '../../src/components/forms/FormField';
@@ -832,8 +833,8 @@ export default function CreateSalesInvoiceScreen() {
   const [submitResult, setSubmitResult] = useState<{ tdkRef: string; isQueued: boolean; message: string; invoiceUuid?: string; numberingPolicy?: string; invoiceNumber?: string } | null>(null);
   const [sharePdfLoading, setSharePdfLoading] = useState(false);
 
-  // Numbering policy from Settings → Voucher Config only (no on-screen override)
-  const [numberingPolicy, setNumberingPolicy] = useState<'tally_prime_series' | 'tallydekho_series'>('tally_prime_series');
+  // Universal numbering — Settings → Voucher Config only (no on-screen override)
+  const { numberingPolicy, setNumberingPolicy } = useNumberingPolicy(company?.guid);
 
   // ── Data loading ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -964,10 +965,6 @@ export default function CreateSalesInvoiceScreen() {
       }
       if (cfg?.e_invoice_applicable === 'applicable_configured') {
         setEInvoiceApplicable(true);
-      }
-      // Wire numbering policy from Settings → Voucher Config
-      if (cfg?.numbering_policy === 'tallydekho_series') {
-        setNumberingPolicy('tallydekho_series');
       }
     }).catch(() => {});
   }, [company?.guid]);
