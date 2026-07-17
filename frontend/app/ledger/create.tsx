@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, Alert, TextInput, TextInputProps, ActivityIndicator,
@@ -36,6 +36,7 @@ function ThemedInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type LedgerType = 'sundry_creditor' | 'sundry_debtor' | 'duties_taxes' | 'custom';
+type CustomProfile = 'simple' | 'bank' | 'tradingGst' | 'pnlGst' | '';
 
 const TYPE_CONFIG: Record<LedgerType, { title: string; group: string }> = {
   sundry_creditor: { title: 'Sundry Creditors', group: 'Sundry Creditors' },
@@ -48,14 +49,75 @@ const DUTY_CATEGORIES = ['GST', 'CST', 'VAT', 'Others'] as const;
 const GST_TAX_TYPES     = ['IGST', 'CGST', 'SGST/UTGST', 'Cess'] as const;
 const OTHER_TAX_TYPES   = ['VAT', 'Not Applicable'] as const;
 
-const ALL_TALLY_GROUPS = [
-  'Capital Account', 'Reserves & Surplus', 'Sundry Creditors', 'Sundry Debtors',
-  'Bank Accounts', 'Bank OD Accounts', 'Cash-in-Hand', 'Duties & Taxes',
-  'Fixed Assets', 'Investments', 'Loans & Advances (Asset)', 'Loans (Liability)',
-  'Secured Loans', 'Unsecured Loans', 'Current Assets', 'Current Liabilities',
-  'Provisions', 'Deposits (Asset)', 'Stock-in-Hand', 'Sales Accounts',
-  'Purchase Accounts', 'Direct Expenses', 'Indirect Expenses',
-  'Direct Income', 'Indirect Income', 'Misc. Expenses (Asset)',
+/** Locked Custom Groups Under list — Tally-exact spellings only. */
+const CUSTOM_GROUPS = [
+  'Cash-in-hand',
+  'Bank Accounts',
+  'Bank OD A/c',
+  'Fixed Assets',
+  'Investments',
+  'Deposits (Asset)',
+  'Loans & Advances (Asset)',
+  'Current Assets',
+  'Capital Account',
+  'Reserves & Surplus',
+  'Secured Loans',
+  'Unsecured Loans',
+  'Current Liabilities',
+  'Provisions',
+  'Sales Accounts',
+  'Purchase Accounts',
+  'Direct Expenses',
+  'Indirect Expenses',
+  'Direct Incomes',
+  'Indirect Incomes',
+] as const;
+
+const DEFAULT_CR_GROUPS = new Set([
+  'Capital Account',
+  'Reserves & Surplus',
+  'Secured Loans',
+  'Unsecured Loans',
+  'Current Liabilities',
+  'Provisions',
+  'Bank OD A/c',
+]);
+
+const HIDE_OB_GROUPS = new Set([
+  'Sales Accounts',
+  'Purchase Accounts',
+  'Direct Expenses',
+  'Indirect Expenses',
+  'Direct Incomes',
+  'Indirect Incomes',
+]);
+
+const BANK_GROUPS = new Set(['Bank Accounts', 'Bank OD A/c']);
+const TRADING_GST_GROUPS = new Set(['Sales Accounts', 'Purchase Accounts']);
+const PNL_GST_GROUPS = new Set([
+  'Direct Expenses', 'Indirect Expenses', 'Direct Incomes', 'Indirect Incomes',
+]);
+
+function profileForGroup(group: string): CustomProfile {
+  if (!group) return '';
+  if (BANK_GROUPS.has(group)) return 'bank';
+  if (TRADING_GST_GROUPS.has(group)) return 'tradingGst';
+  if (PNL_GST_GROUPS.has(group)) return 'pnlGst';
+  return 'simple';
+}
+
+const GST_APPLICABILITY_OPTS = [
+  { label: 'Applicable', value: 'Applicable' },
+  { label: 'Not Applicable', value: 'Not Applicable' },
+];
+const TYPE_OF_SUPPLY_OPTS = [
+  { label: 'Goods', value: 'Goods' },
+  { label: 'Services', value: 'Services' },
+];
+const TAXABILITY_OPTS = [
+  { label: 'Taxable', value: 'Taxable' },
+  { label: 'Exempt', value: 'Exempt' },
+  { label: 'Nil Rated', value: 'Nil Rated' },
 ];
 
 // ─── Opening Balance Row ──────────────────────────────────────────────────────
@@ -111,15 +173,26 @@ export default function CreateLedgerScreen() {
   const [submitting,  setSubmitting]  = useState(false);
 
   // ── Custom group
-  const [customGroup,        setCustomGroup]        = useState('');
-  const [groupSearch,        setGroupSearch]        = useState('');
-  const [groupDropOpen,      setGroupDropOpen]      = useState(false);
-  const [groupSearchFocused, setGroupSearchFocused] = useState(false);
+  const [customGroup, setCustomGroup] = useState('');
 
-  // ── Duties & Taxes (Tally Prime: Type of Duty/Tax → conditional Tax type)
+  // ── Bank (Custom → Bank Accounts / Bank OD A/c)
+  const [bankAccountNo, setBankAccountNo] = useState('');
+  const [bankIfsc,      setBankIfsc]      = useState('');
+  const [bankBranch,    setBankBranch]    = useState('');
+  const [bankHolder,    setBankHolder]    = useState('');
+  const [bankName,      setBankName]      = useState('');
+
+  // ── Duties & Taxes
   const [dutyCategory, setDutyCategory] = useState('');
-  const [taxType,        setTaxType]        = useState('');
-  const [percentage,     setPercentage]     = useState('');
+  const [taxType,      setTaxType]      = useState('');
+  const [percentage,   setPercentage]   = useState('');
+
+  // ── Trading / P&L GST (Custom)
+  const [gstApplicable, setGstApplicable] = useState('');
+  const [typeOfSupply,  setTypeOfSupply]  = useState('');
+  const [taxability,    setTaxability]    = useState('');
+  const [hsnCode,       setHsnCode]       = useState('');
+  const [gstRate,       setGstRate]       = useState('');
 
   const showTaxType = dutyCategory === 'GST' || dutyCategory === 'Others';
   const taxTypeOptions = dutyCategory === 'GST'
@@ -128,17 +201,39 @@ export default function CreateLedgerScreen() {
       ? OTHER_TAX_TYPES
       : [];
 
-  // ── Party form ref (only for sundry debtor / creditor)
   const formRef = useRef<PartyFormRef>(null);
 
-  const filteredGroups = ALL_TALLY_GROUPS.filter(g =>
-    g.toLowerCase().includes(groupSearch.toLowerCase())
+  const customProfile = useMemo(
+    () => (isCustom ? profileForGroup(customGroup) : ''),
+    [isCustom, customGroup],
   );
+  const showOpeningBalance = !isCustom || !HIDE_OB_GROUPS.has(customGroup);
+  const isBankProfile = customProfile === 'bank';
+  const isGstProfile  = customProfile === 'tradingGst' || customProfile === 'pnlGst';
+  const showTypeOfSupply = isGstProfile && (
+    customProfile === 'tradingGst'
+    || customGroup === 'Direct Incomes'
+    || customGroup === 'Indirect Incomes'
+  );
+  const gstDetailsVisible = isGstProfile && gstApplicable === 'Applicable';
+
+  const onSelectCustomGroup = (group: string) => {
+    setCustomGroup(group);
+    setIsCr(DEFAULT_CR_GROUPS.has(group));
+    if (HIDE_OB_GROUPS.has(group)) setOpenBalance('');
+    // Reset profile-specific fields when Under changes
+    setBankAccountNo(''); setBankIfsc(''); setBankBranch(''); setBankHolder(''); setBankName('');
+    setGstApplicable(''); setTypeOfSupply(''); setTaxability(''); setHsnCode(''); setGstRate('');
+  };
 
   // ─── Save ─────────────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!name.trim()) {
       Alert.alert('Required', 'Ledger name is required.');
+      return;
+    }
+    if (isCustom && !customGroup) {
+      Alert.alert('Required', 'Please select Under (Group).');
       return;
     }
     if (isDuties && !dutyCategory) {
@@ -149,6 +244,18 @@ export default function CreateLedgerScreen() {
       Alert.alert('Required', 'Please select Tax type.');
       return;
     }
+    if (isGstProfile && !gstApplicable) {
+      Alert.alert('Required', 'Please select GST Applicability.');
+      return;
+    }
+    if (gstDetailsVisible && !taxability) {
+      Alert.alert('Required', 'Please select Taxability.');
+      return;
+    }
+    if (gstDetailsVisible && showTypeOfSupply && !typeOfSupply) {
+      Alert.alert('Required', 'Please select Type of Supply.');
+      return;
+    }
     if (!isPaired) {
       Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' });
       return;
@@ -157,18 +264,17 @@ export default function CreateLedgerScreen() {
     try {
       setSubmitting(true);
 
-      // Base payload
       const payload: Record<string, any> = {
         companyGuid: company?.guid,
         companyName: company?.name,
-        name:             name.trim(),
-        ledger_type:      lType,
-        openingBalance:  parseFloat(openBalance) || 0,
-        isCr:             isCr,
-        parent:           cfg.group || customGroup || undefined,
+        name:            name.trim(),
+        ledger_type:     lType,
+        openingBalance:  showOpeningBalance ? (parseFloat(openBalance) || 0) : 0,
+        isCr,
+        parent:          cfg.group || customGroup || undefined,
+        isBillWise:      isParty ? 'Yes' : 'No',
       };
 
-      // Duties & Taxes — Tally statutory fields
       if (isDuties) {
         Object.assign(payload, {
           dutyCategory,
@@ -177,7 +283,32 @@ export default function CreateLedgerScreen() {
         });
       }
 
-      // Party-specific fields from PartyForm
+      if (isBankProfile) {
+        Object.assign(payload, {
+          bankDetails: {
+            accountNo:        bankAccountNo.trim() || undefined,
+            ifsc:             bankIfsc.trim().toUpperCase() || undefined,
+            branch:           bankBranch.trim() || undefined,
+            beneficiaryName:  bankHolder.trim() || undefined,
+            bankName:         bankName.trim() || undefined,
+          },
+        });
+      }
+
+      if (isGstProfile) {
+        const rate = parseFloat(gstRate) || 0;
+        Object.assign(payload, {
+          gstApplicable,
+          typeOfSupply: showTypeOfSupply ? typeOfSupply : undefined,
+          taxability: gstDetailsVisible ? taxability : undefined,
+          hsnCode: gstDetailsVisible ? hsnCode.trim() : undefined,
+          igstRate: gstDetailsVisible ? rate : 0,
+          cgstRate: gstDetailsVisible ? rate / 2 : 0,
+          sgstRate: gstDetailsVisible ? rate / 2 : 0,
+          inventoryValuesAffected: customProfile === 'tradingGst' ? 'No' : undefined,
+        });
+      }
+
       if (isParty) {
         const pd = formRef.current?.getData();
         if (pd) {
@@ -200,9 +331,6 @@ export default function CreateLedgerScreen() {
               cstNo:           pd.cstNo,
               formCApplicable: pd.formCApplicable,
             } : undefined,
-            // Bank details write removed 2026-07-06 — not needed on customer
-            // ledgers. Read path (Tally → DB sync) still populates bank
-            // fields on existing ledgers.
           });
         }
       }
@@ -220,7 +348,6 @@ export default function CreateLedgerScreen() {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      {/* ── Header ── */}
       <View style={s.header}>
         <TouchableOpacity
           onPress={() => router.back()}
@@ -244,27 +371,128 @@ export default function CreateLedgerScreen() {
           <Text style={s.label}>Name <Text style={s.required}>*</Text></Text>
           <ThemedInput placeholder="Enter ledger name" value={name} onChangeText={setName} />
 
-          {/* ── Custom group search ── */}
+          {/* ── Custom: Under first ── */}
           {isCustom && (
             <SearchableDropdown
               label="Under (Group)"
               required
-              placeholder="Search or type group name..."
-              options={ALL_TALLY_GROUPS.map(g => ({ label: g, value: g }))}
+              placeholder="Select group first..."
+              options={CUSTOM_GROUPS.map(g => ({ label: g, value: g }))}
               value={customGroup}
-              onSelect={o => setCustomGroup(o.value)}
+              onSelect={o => onSelectCustomGroup(o.value)}
               icon="folder-outline"
             />
           )}
 
-          {/* ── Opening Balance ── */}
-          <Text style={s.label}>Opening Balance <Text style={s.required}>*</Text></Text>
-          <BalanceRow
-            value={openBalance} onChange={setOpenBalance}
-            isCr={isCr} onToggleCr={setIsCr}
-          />
+          {isCustom && customGroup === 'Bank OD A/c' && (
+            <Text style={s.helper}>
+              Use Bank OD A/c only for overdraft / cash-credit / loan-type bank accounts.
+              For a normal bank account, use Bank Accounts.
+            </Text>
+          )}
 
-          {/* ── Duties & Taxes ── */}
+          {/* ── Opening Balance (hidden for P&L Custom groups) ── */}
+          {showOpeningBalance && (
+            <>
+              <Text style={s.label}>Opening Balance</Text>
+              <BalanceRow
+                value={openBalance} onChange={setOpenBalance}
+                isCr={isCr} onToggleCr={setIsCr}
+              />
+            </>
+          )}
+
+          {/* ── Bank fields (Custom → Bank / Bank OD) ── */}
+          {isBankProfile && (
+            <>
+              <Text style={s.sectionTitle}>Bank Details</Text>
+              <Text style={s.label}>Account Number</Text>
+              <ThemedInput
+                placeholder="Account number"
+                value={bankAccountNo}
+                onChangeText={setBankAccountNo}
+                keyboardType="number-pad"
+              />
+              <Text style={s.label}>IFSC Code</Text>
+              <ThemedInput
+                placeholder="IFSC"
+                value={bankIfsc}
+                onChangeText={t => setBankIfsc(t.toUpperCase())}
+                autoCapitalize="characters"
+              />
+              <Text style={s.label}>Branch</Text>
+              <ThemedInput placeholder="Branch name" value={bankBranch} onChangeText={setBankBranch} />
+              <Text style={s.label}>Account Holder Name</Text>
+              <ThemedInput placeholder="Account holder" value={bankHolder} onChangeText={setBankHolder} />
+              <Text style={s.label}>Bank Name</Text>
+              <ThemedInput placeholder="Bank name" value={bankName} onChangeText={setBankName} />
+            </>
+          )}
+
+          {/* ── GST block (Custom → Sales / Purchase / Income / Expense) ── */}
+          {isGstProfile && (
+            <>
+              <Text style={s.sectionTitle}>GST Details</Text>
+              <FormDropdown
+                label="GST Applicability"
+                required
+                value={gstApplicable}
+                options={GST_APPLICABILITY_OPTS}
+                placeholder="Select"
+                onSelect={o => {
+                  setGstApplicable(o.value);
+                  if (o.value !== 'Applicable') {
+                    setTypeOfSupply(''); setTaxability(''); setHsnCode(''); setGstRate('');
+                  }
+                }}
+              />
+              {gstDetailsVisible && showTypeOfSupply && (
+                <FormDropdown
+                  label="Type of Supply"
+                  required
+                  value={typeOfSupply}
+                  options={TYPE_OF_SUPPLY_OPTS}
+                  placeholder="Select"
+                  onSelect={o => setTypeOfSupply(o.value)}
+                />
+              )}
+              {gstDetailsVisible && (
+                <>
+                  <FormDropdown
+                    label="Taxability"
+                    required
+                    value={taxability}
+                    options={TAXABILITY_OPTS}
+                    placeholder="Select"
+                    onSelect={o => setTaxability(o.value)}
+                  />
+                  <Text style={s.label}>HSN / SAC</Text>
+                  <ThemedInput
+                    placeholder="HSN or SAC code"
+                    value={hsnCode}
+                    onChangeText={setHsnCode}
+                    autoCapitalize="characters"
+                  />
+                  <Text style={s.label}>GST Rate %</Text>
+                  <View style={s.percentBox}>
+                    <TextInput
+                      style={[s.percentInput, Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any })]}
+                      placeholder="0"
+                      placeholderTextColor={COLORS.textTertiary}
+                      value={gstRate}
+                      onChangeText={setGstRate}
+                      keyboardType="decimal-pad"
+                    />
+                    <View style={s.percentSuffix}>
+                      <Text style={s.percentSuffixText}>%</Text>
+                    </View>
+                  </View>
+                </>
+              )}
+            </>
+          )}
+
+          {/* ── Duties & Taxes (dedicated tile) ── */}
           {isDuties && (
             <>
               <FormDropdown
@@ -307,7 +535,7 @@ export default function CreateLedgerScreen() {
             </>
           )}
 
-          {/* ── Party Fields (Sundry Debtor / Creditor) ── */}
+          {/* ── Party Fields (Sundry Debtor / Creditor dedicated tiles) ── */}
           {isParty && (
             <>
               <View style={s.divider} />
@@ -318,7 +546,6 @@ export default function CreateLedgerScreen() {
           <View style={{ height: 20 }} />
         </ScrollView>
 
-        {/* ── Save Button ── */}
         <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <TouchableOpacity
             style={[s.saveBtn, submitting && { opacity: 0.6 }]}
@@ -351,6 +578,13 @@ const s = StyleSheet.create({
   form: { padding: SPACING.md },
   label: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, marginBottom: 8, marginTop: 18 },
   required: { color: COLORS.negative },
+  sectionTitle: {
+    fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary,
+    marginTop: 22, marginBottom: 2,
+  },
+  helper: {
+    fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 8, lineHeight: 18,
+  },
 
   input: {
     borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
@@ -369,8 +603,6 @@ const s = StyleSheet.create({
   drCrWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 8 },
   drCrLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textTertiary },
   drCrLabelActive: { color: COLORS.textPrimary, fontWeight: '700' },
-
-  row2: { flexDirection: 'row', gap: SPACING.sm, marginTop: 18 },
 
   percentBox: {
     flexDirection: 'row', alignItems: 'center',
