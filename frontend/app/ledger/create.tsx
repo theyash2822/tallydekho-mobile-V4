@@ -44,7 +44,9 @@ const TYPE_CONFIG: Record<LedgerType, { title: string; group: string }> = {
   custom:          { title: 'Custom Groups',     group: '' },
 };
 
-const DUTY_TYPES = ['CGST', 'SGST', 'IGST', 'Cess', 'Others'];
+const DUTY_CATEGORIES = ['GST', 'CST', 'VAT', 'Others'] as const;
+const GST_TAX_TYPES     = ['IGST', 'CGST', 'SGST/UTGST', 'Cess'] as const;
+const OTHER_TAX_TYPES   = ['VAT', 'Not Applicable'] as const;
 
 const ALL_TALLY_GROUPS = [
   'Capital Account', 'Reserves & Surplus', 'Sundry Creditors', 'Sundry Debtors',
@@ -114,9 +116,17 @@ export default function CreateLedgerScreen() {
   const [groupDropOpen,      setGroupDropOpen]      = useState(false);
   const [groupSearchFocused, setGroupSearchFocused] = useState(false);
 
-  // ── Duties & Taxes
-  const [dutyType,   setDutyType]   = useState('');
-  const [percentage, setPercentage] = useState('');
+  // ── Duties & Taxes (Tally Prime: Type of Duty/Tax → conditional Tax type)
+  const [dutyCategory, setDutyCategory] = useState('');
+  const [taxType,        setTaxType]        = useState('');
+  const [percentage,     setPercentage]     = useState('');
+
+  const showTaxType = dutyCategory === 'GST' || dutyCategory === 'Others';
+  const taxTypeOptions = dutyCategory === 'GST'
+    ? GST_TAX_TYPES
+    : dutyCategory === 'Others'
+      ? OTHER_TAX_TYPES
+      : [];
 
   // ── Party form ref (only for sundry debtor / creditor)
   const formRef = useRef<PartyFormRef>(null);
@@ -131,8 +141,12 @@ export default function CreateLedgerScreen() {
       Alert.alert('Required', 'Ledger name is required.');
       return;
     }
-    if (isDuties && !dutyType) {
-      Alert.alert('Required', 'Please select a duty/tax type.');
+    if (isDuties && !dutyCategory) {
+      Alert.alert('Required', 'Please select Type of Duty / Tax.');
+      return;
+    }
+    if (isDuties && showTaxType && !taxType) {
+      Alert.alert('Required', 'Please select Tax type.');
       return;
     }
     if (!isPaired) {
@@ -153,6 +167,15 @@ export default function CreateLedgerScreen() {
         isCr:             isCr,
         parent:           cfg.group || customGroup || undefined,
       };
+
+      // Duties & Taxes — Tally statutory fields
+      if (isDuties) {
+        Object.assign(payload, {
+          dutyCategory,
+          taxType: showTaxType ? taxType : undefined,
+          percentage: parseFloat(percentage) || 0,
+        });
+      }
 
       // Party-specific fields from PartyForm
       if (isParty) {
@@ -243,36 +266,45 @@ export default function CreateLedgerScreen() {
 
           {/* ── Duties & Taxes ── */}
           {isDuties && (
-            <View style={s.row2}>
-              <View style={{ flex: 1 }}>
+            <>
+              <FormDropdown
+                label="Type of Duty / Tax"
+                required
+                value={dutyCategory}
+                options={DUTY_CATEGORIES.map(d => ({ label: d, value: d }))}
+                placeholder="Select type"
+                onSelect={o => {
+                  setDutyCategory(o.value);
+                  setTaxType('');
+                }}
+              />
+
+              {showTaxType && (
                 <FormDropdown
-                  label="Type of Duty / Tax"
+                  label="Tax type"
                   required
-                  value={dutyType}
-                  options={DUTY_TYPES.map(d => ({ label: d, value: d }))}
-                  placeholder="Select type"
-                  onSelect={o => setDutyType(o.value)}
+                  value={taxType}
+                  options={taxTypeOptions.map(t => ({ label: t, value: t }))}
+                  placeholder="Select tax type"
+                  onSelect={o => setTaxType(o.value)}
                 />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[s.label, { marginTop: 0, marginBottom: 6 }]}>
-                  % of Calculation <Text style={s.required}>*</Text>
-                </Text>
-                <View style={s.percentBox}>
-                  <TextInput
-                    style={[s.percentInput, Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any })]}
-                    placeholder="0.00"
-                    placeholderTextColor={COLORS.textTertiary}
-                    value={percentage}
-                    onChangeText={setPercentage}
-                    keyboardType="decimal-pad"
-                  />
-                  <View style={s.percentSuffix}>
-                    <Text style={s.percentSuffixText}>%</Text>
-                  </View>
+              )}
+
+              <Text style={s.label}>% of Calculation</Text>
+              <View style={s.percentBox}>
+                <TextInput
+                  style={[s.percentInput, Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any })]}
+                  placeholder="0.00"
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={percentage}
+                  onChangeText={setPercentage}
+                  keyboardType="decimal-pad"
+                />
+                <View style={s.percentSuffix}>
+                  <Text style={s.percentSuffixText}>%</Text>
                 </View>
               </View>
-            </View>
+            </>
           )}
 
           {/* ── Party Fields (Sundry Debtor / Creditor) ── */}
