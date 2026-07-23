@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, TextInput, ActivityIndicator,
-  FlatList,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,8 +10,10 @@ import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { createWarehouse, getWarehouses } from '../../src/services/api';
+import FormDropdown from '../../src/components/forms/FormDropdown';
 
 const WEB = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
+const TOP_LEVEL_VALUE = '';
 
 function ThemedInput({
   style, onFocus: of_, onBlur: ob_, ...props
@@ -35,26 +36,22 @@ export default function CreateWarehouseScreen() {
   const { company, isPaired } = useAuth();
   const [submitting, setSubmitting] = useState(false);
 
-  // Form fields — only what Tally needs
   const [name,    setName]    = useState('');
-  const [parent,  setParent]  = useState('');
+  const [parent,  setParent]  = useState(TOP_LEVEL_VALUE);
   const [address, setAddress] = useState('');
+  const [parentOptions, setParentOptions] = useState<{ label: string; value: string }[]>([
+    { label: 'None (top-level)', value: TOP_LEVEL_VALUE },
+  ]);
 
-  // Parent autocomplete
-  const [warehouseNames, setWarehouseNames] = useState<string[]>(['Primary']);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const suggestions = warehouseNames.filter(w =>
-    w.toLowerCase().includes(parent.toLowerCase()) && w !== parent
-  );
-
-  // Load existing warehouses for parent autocomplete
   useEffect(() => {
     if (!company?.guid) return;
     getWarehouses(company.guid).then((res: any) => {
       const names: string[] = (res?.data ?? []).map((w: any) => w.name).filter(Boolean);
-      // Always include Primary at top
-      const all = ['Primary', ...names.filter(n => n !== 'Primary')];
-      setWarehouseNames(all);
+      const unique = Array.from(new Set(names));
+      setParentOptions([
+        { label: 'None (top-level)', value: TOP_LEVEL_VALUE },
+        ...unique.map(n => ({ label: n, value: n })),
+      ]);
     }).catch(() => {});
   }, [company?.guid]);
 
@@ -73,27 +70,27 @@ export default function CreateWarehouseScreen() {
         companyGuid:  company?.guid,
         companyName:  company?.name,
         name:         name.trim(),
-        parentGodown: parent.trim() || 'Primary',
+        // Empty = top-level; backend skips <PARENT> (and also ignores literal "Primary")
+        parentGodown: parent.trim(),
         address:      address.trim() || undefined,
       });
       Toast.show({ type: 'success', text1: 'Warehouse Created', text2: `"${name}" sent to Tally successfully.` });
       setTimeout(() => router.back(), 1200);
     } catch (err: any) {
       const raw = err?.message || '';
-      // Give user-friendly message for common Tally errors
       const msg = raw.includes('does not exist')
-        ? `Parent godown not found in Tally. Leave Parent empty or enter an exact godown name from Tally.`
+        ? `Parent godown not found in Tally. Choose None (top-level) or an existing godown.`
         : raw.includes('timeout')
         ? 'Tally not responding. Make sure Tally Prime is open.'
         : raw || 'Could not create warehouse.';
       Toast.show({ type: 'error', text1: 'Failed', text2: msg });
     } finally {
-      setSubmitting(false); }
+      setSubmitting(false);
+    }
   };
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      {/* Header — no RegularOptionalToggle */}
       <View style={s.header}>
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
@@ -108,7 +105,6 @@ export default function CreateWarehouseScreen() {
           contentContainerStyle={s.form}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Name — required */}
           <Text style={s.label}>Warehouse Name <Text style={s.star}>*</Text></Text>
           <ThemedInput
             placeholder="e.g. Delhi Warehouse"
@@ -118,35 +114,16 @@ export default function CreateWarehouseScreen() {
           />
           <Text style={s.hint}>This name will be created as a Godown in Tally</Text>
 
-          {/* Parent — with autocomplete */}
-          <Text style={s.label}>Parent Godown</Text>
-          <View style={{ position: 'relative', zIndex: 10 }}>
-            <ThemedInput
-              placeholder="Leave empty for top-level warehouse"
-              value={parent}
-              onChangeText={v => { setParent(v); setShowSuggestions(true); }}
-              onFocus={() => setShowSuggestions(true)}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-            />
-            {showSuggestions && suggestions.length > 0 && (
-              <View style={s.suggestions}>
-                {suggestions.slice(0, 6).map(w => (
-                  <TouchableOpacity
-                    key={w}
-                    style={s.suggestionItem}
-                    onPress={() => { setParent(w); setShowSuggestions(false); }}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="business-outline" size={14} color={COLORS.textSecondary} />
-                    <Text style={s.suggestionTxt}>{w}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
-          <Text style={s.hint}>Leave empty for a top-level warehouse. Type to search existing godowns as parent.</Text>
+          <FormDropdown
+            label="Parent Godown"
+            value={parent}
+            options={parentOptions}
+            placeholder={parentOptions.length > 1 ? 'Select parent godown' : 'Loading...'}
+            onSelect={o => setParent(o.value)}
+            containerStyle={s.parentDropdown}
+          />
+          <Text style={s.hint}>Choose None for a top-level warehouse, or pick an existing godown as parent.</Text>
 
-          {/* Address — optional */}
           <Text style={s.label}>Address <Text style={s.optional}>(optional)</Text></Text>
           <ThemedInput
             placeholder="e.g. Plot 42, Industrial Area, Delhi"
@@ -185,16 +162,11 @@ const s = StyleSheet.create({
   label:       { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 8, marginTop: 20 },
   star:        { color: COLORS.negative },
   optional:    { fontSize: TYPOGRAPHY.xs, fontWeight: '400', color: COLORS.textTertiary },
-  hint:        { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 6 },
+  hint:        { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 6, marginBottom: 4 },
+  parentDropdown: { marginTop: 20, marginBottom: 0 },
   input:       { borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 13, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, backgroundColor: COLORS.cardBg },
   inputFocused:{ borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
   textarea:    { minHeight: 80, textAlignVertical: 'top', paddingTop: 12 },
-
-  // Autocomplete
-  suggestions:    { position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, marginTop: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 6, zIndex: 999 },
-  suggestionItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  suggestionTxt:  { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
-
   footer:    { paddingHorizontal: SPACING.md, paddingTop: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
   saveBtn:   { backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 15, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' },
   saveBtnTxt:{ fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },

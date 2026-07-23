@@ -39,7 +39,7 @@ interface Props {
   // Must accept functional updater form (prev => ...) so batched calls always
   // operate on the latest state rather than a stale prop snapshot.
   onEntriesChange: React.Dispatch<React.SetStateAction<LogEntry[]>>;
-  // Advanced props — optional so simpler screens (create-order, quotation) can
+  // Advanced props — optional so simpler screens (create-order) can
   // render the section with basic entries without fetching ledger data.
   taxLedgers?: { name: string }[];
   chargeLedgers?: { ledgerName: string; guid?: string }[];

@@ -65,7 +65,6 @@ function _bankBlock(bankInfo?: PDFBankInfo | null, align: 'left' | 'right' = 'ri
 export const DOC_TYPE_CONFIG: Record<DocumentType, { label: string; color: string; bg: string }> = {
   sales_invoice:    { label: 'Tax Invoice',       color: '#2D7D46', bg: '#E8F5E9' },
   sales_order:      { label: 'Sales Order',       color: '#1565C0', bg: '#E3F2FD' },
-  quotation:        { label: 'Quotation',         color: '#6A1B9A', bg: '#F3E5F5' },
   delivery_note:    { label: 'Delivery Note',     color: '#00838F', bg: '#E0F7FA' },
   credit_note:      { label: 'Credit Note',       color: '#EF6C00', bg: '#FFF3E0' },
   debit_note:       { label: 'Debit Note',        color: '#C62828', bg: '#FFEBEE' },
@@ -89,7 +88,7 @@ export function generateDocumentHTML(doc: VoucherDocument, logoUri?: string | nu
   const hasEntries = !!(doc.ledgerEntries && doc.ledgerEntries.length > 0);
   const t = doc.totals;
   const isVoucher = ['payment_voucher','receipt_voucher','contra_voucher','journal_voucher'].includes(doc.documentType);
-  const isOrder = ['sales_order','purchase_order','quotation'].includes(doc.documentType);
+  const isOrder = ['sales_order','purchase_order'].includes(doc.documentType);
   const isDelivery = doc.documentType === 'delivery_note';
 
   const fmt = (n: number) => '₹' + Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -485,7 +484,7 @@ function _generateFormat3HTML(doc: VoucherDocument, logoUri?: string | null, ter
   const hasItems = !!(doc.items && doc.items.length > 0);
   const hasEntries = !!(doc.ledgerEntries && doc.ledgerEntries.length > 0);
   const isVoucher = ['payment_voucher','receipt_voucher','contra_voucher','journal_voucher'].includes(doc.documentType);
-  const isOrder = ['sales_order','purchase_order','quotation'].includes(doc.documentType);
+  const isOrder = ['sales_order','purchase_order'].includes(doc.documentType);
   const fmt = (n: number) => '₹' + Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const cell = (label: string, value: string) =>
     `<td style="border:1px solid #ddd;padding:5px 8px;vertical-align:top;font-size:10px;width:50%"><span style="color:#888;font-size:8px;display:block;text-transform:uppercase;">${label}</span><b>${value || ''}</b></td>`;
@@ -661,7 +660,6 @@ export const TX_TO_DOC_TYPE: Record<string, DocumentType> = {
   // Standard types
   'Sales Invoice':    'sales_invoice',
   'Sales Order':      'sales_order',
-  'Quotation':        'quotation',
   'Delivery Note':    'delivery_note',
   'Credit Note':      'credit_note',
   'Debit Note':       'debit_note',

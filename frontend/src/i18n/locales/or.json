@@ -231,7 +231,6 @@
     "title": "ବିକ୍ରୟ",
     "invoice": "ଇନ୍‌ଭଏସ",
     "order": "ଅର୍ଡର",
-    "quotation": "କୋଟେସନ",
     "creditNote": "କ୍ରେଡିଟ ନୋଟ",
     "deliveryNote": "ଡେଲିଭରି ନୋଟ",
     "create": "ଇନ୍‌ଭଏସ ତିଆରି କରନ୍ତୁ",
@@ -266,7 +265,6 @@
   "pdf": {
     "invoice": "ଇନ୍‌ଭଏସ",
     "taxInvoice": "କର ଇନ୍‌ଭଏସ",
-    "quotation": "କୋଟେସନ",
     "deliveryNote": "ଡେଲିଭରି ନୋଟ",
     "creditNote": "କ୍ରେଡିଟ ନୋଟ",
     "debitNote": "ଡେବିଟ ନୋଟ",

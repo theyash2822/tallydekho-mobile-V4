@@ -101,7 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [company, setCompanyState] = useState<Company | null>(null);
   const [user, setUserState] = useState<UserInfo | null>(null);
 
-  const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.243:3001';
+  const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.240:3001';
 
   // Restore persisted state on mount
   useEffect(() => {

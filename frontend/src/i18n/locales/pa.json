@@ -231,7 +231,6 @@
     "title": "ਵਿਕਰੀ",
     "invoice": "ਇਨਵੌਇਸ",
     "order": "ਆਰਡਰ",
-    "quotation": "ਕੋਟੇਸ਼ਨ",
     "creditNote": "ਕ੍ਰੈਡਿਟ ਨੋਟ",
     "deliveryNote": "ਡਿਲਿਵਰੀ ਨੋਟ",
     "create": "ਇਨਵੌਇਸ ਬਣਾਓ",
@@ -266,7 +265,6 @@
   "pdf": {
     "invoice": "ਇਨਵੌਇਸ",
     "taxInvoice": "ਟੈਕਸ ਇਨਵੌਇਸ",
-    "quotation": "ਕੋਟੇਸ਼ਨ",
     "deliveryNote": "ਡਿਲਿਵਰੀ ਨੋਟ",
     "creditNote": "ਕ੍ਰੈਡਿਟ ਨੋਟ",
     "debitNote": "ਡੈਬਿਟ ਨੋਟ",

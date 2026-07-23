@@ -173,19 +173,6 @@ export const MOCK_SALES_ORDERS = {
   ],
 };
 
-// ── Quotations ────────────────────────────────────────────────────────────────
-export const MOCK_QUOTATIONS = {
-  summary: { total: '₹5,20,000', accepted: 8, pending: 14, docs: 22 },
-  items: [
-    { id: 'QT-00156', party: 'XYZ Retail',         date: '10/01/25', time: '11:00 AM', amount: '₹28,000', status: 'accepted' },
-    { id: 'QT-00155', party: 'ABC Traders',         date: '10/01/25', time: '09:00 AM', amount: '₹45,000', status: 'pending' },
-    { id: 'QT-00154', party: 'Kumar & Sons',        date: '09/01/25', time: '03:00 PM', amount: '₹32,000', status: 'accepted' },
-    { id: 'QT-00153', party: 'PQR Exports',         date: '09/01/25', time: '10:00 AM', amount: '₹18,500', status: 'expired' },
-    { id: 'QT-00152', party: 'Sharma Electronics',  date: '08/01/25', time: '02:00 PM', amount: '₹55,000', status: 'pending' },
-    { id: 'QT-00151', party: 'Delhi Suppliers',     date: '08/01/25', time: '11:30 AM', amount: '₹12,000', status: 'accepted' },
-  ],
-};
-
 // ── Credit Notes ──────────────────────────────────────────────────────────────
 export const MOCK_CREDIT_NOTES = {
   summary: { total: '₹42,500', count: 8, docs: 8 },
@@ -353,7 +340,6 @@ export const QUICK_ACTIONS = [
     icon: 'trending-up',
     items: [
       { id: 'create_invoice',      label: 'Create Invoice',      route: '/sales/create-invoice' },
-      { id: 'create_quotation',    label: 'Create Quotation',    route: '/sales/create-quotation' },
       { id: 'create_sales_order',  label: 'Create Sales Order',  route: '/sales/create-order' },
       { id: 'create_delivery_note',label: 'Create Delivery Note',route: '/sales/create-delivery-note' },
       { id: 'credit_note',         label: 'Credit Note',         route: '/sales/create-credit-note' },

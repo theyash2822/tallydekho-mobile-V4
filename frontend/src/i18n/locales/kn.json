@@ -231,7 +231,6 @@
     "title": "ಮಾರಾಟ",
     "invoice": "ಇನ್‌ವಾಯ್ಸ್",
     "order": "ಆರ್ಡರ್",
-    "quotation": "ಕೋಟೇಶನ್",
     "creditNote": "ಕ್ರೆಡಿಟ್ ನೋಟ್",
     "deliveryNote": "ಡೆಲಿವರಿ ನೋಟ್",
     "create": "ಇನ್‌ವಾಯ್ಸ್ ರಚಿಸಿ",
@@ -266,7 +265,6 @@
   "pdf": {
     "invoice": "ಇನ್‌ವಾಯ್ಸ್",
     "taxInvoice": "ತೆರಿಗೆ ಇನ್‌ವಾಯ್ಸ್",
-    "quotation": "ಕೋಟೇಶನ್",
     "deliveryNote": "ಡೆಲಿವರಿ ನೋಟ್",
     "creditNote": "ಕ್ರೆಡಿಟ್ ನೋಟ್",
     "debitNote": "ಡೆಬಿಟ್ ನೋಟ್",

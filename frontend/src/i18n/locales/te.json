@@ -231,7 +231,6 @@
     "title": "అమ్మకాలు",
     "invoice": "ఇన్వాయిస్",
     "order": "ఆర్డర్",
-    "quotation": "కొటేషన్",
     "creditNote": "క్రెడిట్ నోట్",
     "deliveryNote": "డెలివరీ నోట్",
     "create": "ఇన్వాయిస్ సృష్టించు",
@@ -266,7 +265,6 @@
   "pdf": {
     "invoice": "ఇన్వాయిస్",
     "taxInvoice": "పన్ను ఇన్వాయిస్",
-    "quotation": "కొటేషన్",
     "deliveryNote": "డెలివరీ నోట్",
     "creditNote": "క్రెడిట్ నోట్",
     "debitNote": "డెబిట్ నోట్",

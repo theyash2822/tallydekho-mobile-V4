@@ -27,7 +27,6 @@ const DOC_TYPE_TO_CONFIG_ID: Record<string, string> = {
   'purchase_invoice': 'purchase_inv',
   'sales_order':      'sales_order',
   'purchase_order':   'purchase_order',
-  'quotation':        'quotation',
   'credit_note':      'credit_note',
   'debit_note':       'debit_note',
   'delivery_note':    'delivery_note',

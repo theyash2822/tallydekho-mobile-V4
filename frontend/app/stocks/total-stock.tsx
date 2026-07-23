@@ -22,8 +22,8 @@ import FilterBottomSheet, { FilterChipGroup } from '../../src/components/FilterB
 import { StockItem } from '../../src/data/stockData';
 import { useSettings } from '../../src/context/SettingsContext';
 
-// ─── Module-level stock cache (persists across navigation, clears on sync) ─────
-const _stockCache: Record<string, { data: StockItem[]; ts: number }> = {};
+import { getStockListCache, clearStockListCache } from '../../src/utils/stockCache';
+export { clearStockListCache };
 
 // ─── SWIPEABLE STOCK CARD ─────────────────────────────────────────────────────
 
@@ -227,8 +227,8 @@ export default function TotalStockScreen() {
         category: r.category || '', group: r.group_name || '',
         qty: +(r.closing_qty || 0),
         value: r.closing_value ? formatAmount(Math.round(+r.closing_value)) : formatAmount(0),
-        unit: r.unit || 'pcs', warehouse: r.warehouse_name || 'Default',
-        warehouseId: r.warehouse_name || 'WH01', reorderLevel: +(r.reorder_level || 0),
+        unit: r.unit || 'pcs', warehouse: r.primary_warehouse || r.warehouse_name || 'Default',
+        warehouseId: r.primary_warehouse || r.warehouse_name || 'WH01', reorderLevel: +(r.reorder_level || 0),
         status: +r.closing_qty <= 0 ? 'out_of_stock' : +r.closing_qty <= +(r.reorder_level||0) ? 'low_stock' : 'in_stock',
       }));
       setWhFilteredStocks(mapped);
@@ -240,6 +240,7 @@ export default function TotalStockScreen() {
 
     // ── Module-level cache: 5-min TTL, invalidated on every Tally sync ──
     const cacheKey = `${companyGuid}:${lastSyncAt}`;
+    const _stockCache = getStockListCache();
     const cached = _stockCache[cacheKey];
     if (cached && Date.now() - cached.ts < 5 * 60 * 1000) {
       setLiveStocks(cached.data);
@@ -259,11 +260,12 @@ export default function TotalStockScreen() {
         qty: +(r.closing_qty || 0),
         value: r.closing_value ? formatAmount(Math.round(+r.closing_value)) : formatAmount(0),
         unit: r.unit || 'pcs',
-        warehouse: r.warehouse_name || 'Default',
-        warehouseId: r.warehouse_name || 'WH01',
+        warehouse: r.primary_warehouse || r.warehouse_name || 'Default',
+        warehouseId: r.primary_warehouse || r.warehouse_name || 'WH01',
         reorderLevel: +(r.reorder_level || 0),
         status: +r.closing_qty <= 0 ? 'out_of_stock' : +r.closing_qty <= +(r.reorder_level||0) ? 'low_stock' : 'in_stock',
       }));
+      const _stockCache = getStockListCache();
       _stockCache[cacheKey] = { data: mapped, ts: Date.now() };
       if (mapped.length) setLiveStocks(mapped);
     }).catch(() => {}).finally(() => setIsLoading(false));
@@ -584,8 +586,8 @@ export default function TotalStockScreen() {
                 qty: +(r.closing_qty || 0),
                 value: r.closing_value ? formatAmount(Math.round(+r.closing_value)) : formatAmount(0),
                 unit: r.unit || 'pcs',
-                warehouse: r.warehouse_name || 'Default',
-                warehouseId: r.warehouse_name || 'WH01',
+                warehouse: r.primary_warehouse || r.warehouse_name || 'Default',
+                warehouseId: r.primary_warehouse || r.warehouse_name || 'WH01',
                 reorderLevel: +(r.reorder_level || 0),
                 status: +r.closing_qty <= 0 ? 'out_of_stock' : +r.closing_qty <= +(r.reorder_level||0) ? 'low_stock' : 'in_stock',
               }));

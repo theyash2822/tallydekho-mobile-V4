@@ -27,7 +27,6 @@ const VOUCHER_TYPES = [
   { id: 'purchase_inv',   label: 'Purchase Invoice',  icon: 'cart-outline'             },
   { id: 'sales_order',    label: 'Sales Order',       icon: 'bag-outline'              },
   { id: 'purchase_order', label: 'Purchase Order',    icon: 'cube-outline'             },
-  { id: 'quotation',      label: 'Quotation',         icon: 'document-text-outline'    },
   { id: 'credit_note',    label: 'Credit Note',       icon: 'arrow-undo-outline'       },
   { id: 'debit_note',     label: 'Debit Note',        icon: 'arrow-redo-outline'       },
   { id: 'delivery_note',  label: 'Delivery Note',     icon: 'bicycle-outline'          },
@@ -38,7 +37,6 @@ const DEFAULT_TERMS: Record<string, string[]> = {
   purchase_inv:   ['All payments subject to receipt and verification of goods.', 'Disputes must be raised within 7 days of receipt.'],
   sales_order:    ['Order confirmation required within 48 hours.', 'Prices are valid for 7 days from order date.'],
   purchase_order: ['Delivery must match PO specifications exactly.', 'Advance payment required before dispatch.'],
-  quotation:      ['This quotation is valid for 15 days from issue date.', 'Prices are subject to change without prior notice.'],
   credit_note:    ['Credit to be adjusted against next invoice.', 'Credit is non-refundable and non-transferable.'],
   debit_note:     ['Debit note raised against purchase invoice reference.', 'Amount payable within 15 days of issue.'],
   delivery_note:  ['Goods dispatched as per order specifications.', 'Recipient must verify quantity and condition on delivery.'],
@@ -370,7 +368,6 @@ export default function VoucherConfigScreen() {
         documentType: id === 'purchase_inv' ? 'purchase_invoice'
           : id === 'sales_order' ? 'sales_order'
           : id === 'purchase_order' ? 'purchase_order'
-          : id === 'quotation' ? 'quotation'
           : id === 'credit_note' ? 'credit_note'
           : id === 'debit_note' ? 'debit_note'
           : id === 'delivery_note' ? 'delivery_note'

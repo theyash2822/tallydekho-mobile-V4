@@ -48,12 +48,10 @@ Auth guard redirects: unauthenticated → (auth)/index, authenticated → (tabs)
 | create-order.tsx | Create sales order |
 | create-credit-note.tsx | Create credit note |
 | create-delivery-note.tsx | Create delivery note |
-| create-quotation.tsx | Create quotation |
 | credit-note.tsx | Credit note list |
 | delivery-note.tsx | Delivery note list |
 | ewaybill.tsx | E-Way Bill |
 | order.tsx | Order list |
-| quotation.tsx | Quotation list |
 
 ### Purchase: app/purchase/
 | File | Screen |

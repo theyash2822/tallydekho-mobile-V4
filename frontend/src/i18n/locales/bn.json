@@ -231,7 +231,6 @@
     "title": "বিক্রয়",
     "invoice": "ইনভয়েস",
     "order": "অর্ডার",
-    "quotation": "কোটেশন",
     "creditNote": "ক্রেডিট নোট",
     "deliveryNote": "ডেলিভারি নোট",
     "create": "ইনভয়েস তৈরি করুন",
@@ -266,7 +265,6 @@
   "pdf": {
     "invoice": "ইনভয়েস",
     "taxInvoice": "কর ইনভয়েস",
-    "quotation": "কোটেশন",
     "deliveryNote": "ডেলিভারি নোট",
     "creditNote": "ক্রেডিট নোট",
     "debitNote": "ডেবিট নোট",

@@ -10,6 +10,7 @@ import { StockItem } from '../../data/stockData';
 import { getStockGodowns, createStockAdjustment } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS } from '../../constants/colors';
+import { clearStockListCache } from '../../utils/stockCache';
 
 import {
   InlineDropdownField, InlineField, ReadonlyField,
@@ -141,6 +142,7 @@ export function StockAdjustmentModal({
         note,
       });
       const queued = res?.queued || res?.status === 'queued';
+      clearStockListCache();
       Toast.show({
         type: 'success',
         text1: queued ? 'Adjustment Queued ⏳' : 'Adjustment Saved ✅',

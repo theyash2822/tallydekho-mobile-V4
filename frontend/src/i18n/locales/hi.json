@@ -231,7 +231,6 @@
     "title": "बिक्री",
     "invoice": "इनवॉइस",
     "order": "ऑर्डर",
-    "quotation": "कोटेशन",
     "creditNote": "क्रेडिट नोट",
     "deliveryNote": "डिलीवरी नोट",
     "create": "इनवॉइस बनाएं",
@@ -266,7 +265,6 @@
   "pdf": {
     "invoice": "इनवॉइस",
     "taxInvoice": "कर इनवॉइस",
-    "quotation": "कोटेशन",
     "deliveryNote": "डिलीवरी नोट",
     "creditNote": "क्रेडिट नोट",
     "debitNote": "डेबिट नोट",

@@ -7,7 +7,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.243:3001';
+const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.240:3001';
 
 // ── Token helpers ────────────────────────────────────────────
 const getToken = async (): Promise<string | null> => {
@@ -159,7 +159,6 @@ export const searchDashboard   = (q: string, companyGuid?: string) => get<any>(w
 
 export const getSalesInvoices  = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/invoices', companyGuid, params));
 export const getSalesOrders    = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/orders', companyGuid, params));
-export const getSalesQuotations = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/quotations', companyGuid, params));
 export const getCreditNotes    = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/credit-notes', companyGuid, params));
 export const getDeliveryNotes  = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/delivery-notes', companyGuid, params));
 export const getEWayBills      = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/ewaybills', companyGuid, params));
@@ -186,7 +185,6 @@ export const getGeoStates = (country: string) =>
   get<any>(`/geo/states?country=${encodeURIComponent(country)}`);
 
 export const createSalesOrder    = (payload: any) => tallyPost<any>('/voucher/sales-order', payload);
-export const createQuotation     = (payload: any) => tallyPost<any>('/voucher/sales-order', payload);
 export const createCreditNote    = (payload: any) => tallyPost<any>('/voucher/credit-note', payload);
 export const createDeliveryNote  = (payload: any) => tallyPost<any>('/voucher/delivery-note', payload);
 
@@ -230,6 +228,10 @@ export const getPaymentPreview = (tdkRef: string, companyGuid: string) =>
 export const getJournalPreview = (tdkRef: string, companyGuid: string) =>
   request<any>('GET', `/invoice/${encodeURIComponent(tdkRef)}/preview?companyGuid=${companyGuid}`, undefined, true, 'tally');
 export const getContraPreview = (tdkRef: string, companyGuid: string) =>
+  request<any>('GET', `/invoice/${encodeURIComponent(tdkRef)}/preview?companyGuid=${companyGuid}`, undefined, true, 'tally');
+export const getStockAdjustmentPreview = (tdkRef: string, companyGuid: string) =>
+  request<any>('GET', `/invoice/${encodeURIComponent(tdkRef)}/preview?companyGuid=${companyGuid}`, undefined, true, 'tally');
+export const getStockTransferPreview = (tdkRef: string, companyGuid: string) =>
   request<any>('GET', `/invoice/${encodeURIComponent(tdkRef)}/preview?companyGuid=${companyGuid}`, undefined, true, 'tally');
 export const createJournalVoucher = (payload: any) => tallyPost<any>('/voucher/journal', payload);
 export const createContraVoucher  = (payload: any) => tallyPost<any>('/voucher/contra', payload);
@@ -519,3 +521,7 @@ export const invoiceSharePdf = (
   waitForTallyNumber = true,
   maxWaitMs = 10000
 ) => request<any>('POST', `/invoice/${encodeURIComponent(tdkRef)}/share-pdf`, { companyGuid, waitForTallyNumber, maxWaitMs }, true, 'tally');
+
+// Sales Order Preview — reuses the same /tally/invoice/:tdkRef/preview endpoint
+// (backend serves the app_vouchers snapshot for any voucher type keyed by tdkRef).
+export const getOrderPreview = (tdkRef: string, companyGuid: string) => getInvoicePreview(tdkRef, companyGuid);

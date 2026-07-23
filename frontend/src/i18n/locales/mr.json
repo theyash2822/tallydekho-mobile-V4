@@ -231,7 +231,6 @@
     "title": "विक्री",
     "invoice": "इन्व्हॉइस",
     "order": "ऑर्डर",
-    "quotation": "कोटेशन",
     "creditNote": "क्रेडिट नोट",
     "deliveryNote": "डिलिव्हरी नोट",
     "create": "इन्व्हॉइस तयार करा",
@@ -266,7 +265,6 @@
   "pdf": {
     "invoice": "इन्व्हॉइस",
     "taxInvoice": "कर इन्व्हॉइस",
-    "quotation": "कोटेशन",
     "deliveryNote": "डिलिव्हरी नोट",
     "creditNote": "क्रेडिट नोट",
     "debitNote": "डेबिट नोट",

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput, Modal, ActivityIndicator,
+  KeyboardAvoidingView, Platform, TextInput, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,11 +10,11 @@ import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { createStockItem, getStockGroups, getStockUnits, getWarehouses } from '../../src/services/api';
+import { clearStockListCache } from '../../src/utils/stockCache';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import FormDropdown from '../../src/components/forms/FormDropdown';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 
-const TAX_RATES = ['0%', '5%', '12%', '18%', '28%']; // Standard GST slabs — not mock data
 const WEB = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
 const todayStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; };
 
@@ -51,10 +51,35 @@ function InrInput({ value, onChange, placeholder }: { value: string; onChange: (
   );
 }
 
+/** Tax rate field — matches FormDropdown label + control height for side-by-side rows. */
+function TaxRateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <View style={s.fieldWrap}>
+      <Text style={s.fieldLabel}>Tax rate</Text>
+      <View style={[s.taxBox, focused && s.inputFocused]}>
+        <TextInput
+          style={[s.taxInput, WEB]}
+          placeholder="e.g. 18"
+          placeholderTextColor={COLORS.textTertiary}
+          value={value}
+          onChangeText={onChange}
+          keyboardType="decimal-pad"
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+        />
+        <View style={s.taxBadge}>
+          <Text style={s.taxBadgeTxt}>%</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export default function CreateStockItemScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { company, isPaired } = useAuth();
+  const { company } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [entryType, setEntryType] = useState<EntryType>('regular');
   const [groupOptions,     setGroupOptions]     = useState<{label:string;value:string}[]>([]);
@@ -90,34 +115,103 @@ export default function CreateStockItemScreen() {
   const [salePrice, setSalePrice] = useState('');
   const [expiryDate, setExpiryDate] = useState(todayStr());
   const [batchNo, setBatchNo] = useState('');
-  const [generateBarcode, setGenerateBarcode] = useState(true);
+  const [generateBarcode, setGenerateBarcode] = useState(false);
   const [bcItemName, setBcItemName] = useState(true);
   const [bcSku, setBcSku] = useState(false);
   const [bcSalePrice, setBcSalePrice] = useState(false);
 
   const handleSave = async () => {
-    if (!productName.trim()) { Alert.alert('Required', 'Product name is required.'); return; }
-    if (!isPaired) { Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' }); return; }
+    if (!productName.trim()) {
+      Toast.show({ type: 'error', text1: 'Required', text2: 'Product name is required.' });
+      return;
+    }
+    if (!group) {
+      Toast.show({ type: 'error', text1: 'Group Required', text2: 'Select a stock group from the list.' });
+      return;
+    }
+    if (!unit) {
+      Toast.show({ type: 'error', text1: 'Unit Required', text2: 'Select a unit of measure.' });
+      return;
+    }
+    if (!company?.guid) {
+      Toast.show({ type: 'error', text1: 'No Company', text2: 'Select a company first.' });
+      return;
+    }
     try {
       setSubmitting(true);
-      await createStockItem({
-        company_guid: company?.guid,
-        name: productName,
-        group: group || undefined,
-        unit: unit || undefined,
-        tax_rate: parseFloat(taxRate) || 0,
-        purchase_price: parseFloat(purchasePrice) || 0,
-        sale_price: parseFloat(salePrice) || 0,
-        opening_qty: parseFloat(quantity) || 0,
-        warehouse: warehouse || undefined,
-        batch_no: batchNo || undefined,
-        expiry_date: expiryDate || undefined,
+      const igst = parseFloat(String(taxRate).replace('%', '')) || 0;
+      const itemName = productName.trim();
+      const res: any = await createStockItem({
+        companyGuid: company.guid,
+        companyName: company.name || '',
+        name: itemName,
+        groupName: group,
+        unit: unit || 'Nos',
+        openingQty: parseFloat(quantity) || 0,
+        openingRate: parseFloat(purchasePrice) || 0,
+        warehouse: warehouse || '',
+        salePrice: parseFloat(salePrice) || 0,
+        igstRate: igst,
+        cgstRate: igst / 2,
+        sgstRate: igst / 2,
+        hsnCode: '',
+        generateBarcode: !!generateBarcode,
+        barcodeLabel: generateBarcode
+          ? { itemName: !!bcItemName, sku: !!bcSku, salePrice: !!bcSalePrice }
+          : undefined,
       });
-      Toast.show({ type: 'success', text1: 'Item Saved', text2: `"${productName}" added to Tally.` });
-      setTimeout(()=>router.back(),1000);
-    } catch(err:any) {
-      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message||'Could not save item.' });
-    } finally { setSubmitting(false); }
+      clearStockListCache();
+
+      const queued = res?.queued;
+      const stockGuid = res?.stockGuid || res?.data?.stockGuid || null;
+      const barcode = res?.barcode || null;
+
+      if (generateBarcode && barcode && stockGuid) {
+        Toast.show({
+          type: 'success',
+          text1: queued ? 'Item Queued + Barcode ✅' : 'Item + Barcode Saved ✅',
+          text2: `Barcode: ${barcode}`,
+        });
+        // Open label preview with selected label content prefs
+        setTimeout(() => {
+          router.replace({
+            pathname: '/stocks/label-preview',
+            params: {
+              ids: stockGuid,
+              labelSize: '50×30 mm',
+              copies: '1',
+              showSku: bcSku ? '1' : '0',
+              showPrice: bcSalePrice ? '1' : '0',
+              showBatch: '0',
+            },
+          } as any);
+        }, 600);
+        return;
+      }
+
+      if (generateBarcode && !barcode) {
+        Toast.show({
+          type: 'info',
+          text1: queued ? 'Item Queued ⏳' : 'Item Saved ✅',
+          text2: res?.barcodeError
+            ? `Barcode failed: ${res.barcodeError}`
+            : 'Item saved. Generate barcode from item detail after sync.',
+        });
+      } else {
+        Toast.show({
+          type: 'success',
+          text1: queued ? 'Item Queued ⏳' : 'Item Saved ✅',
+          text2: queued
+            ? 'Will create in Tally when desktop connects.'
+            : `"${itemName}" added to Tally.`,
+        });
+      }
+      setTimeout(() => router.back(), 1000);
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Failed', text2: err?.message || 'Could not save item.' });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -139,6 +233,7 @@ export default function CreateStockItemScreen() {
           {/* Group */}
           <FormDropdown
             label="Group"
+            required
             value={group}
             options={groupOptions}
             placeholder={groupOptions.length > 0 ? 'Select group' : 'Loading...'}
@@ -149,9 +244,9 @@ export default function CreateStockItemScreen() {
           <Text style={s.label}>Product name <Text style={s.star}>*</Text></Text>
           <ThemedInput placeholder="Enter product name" value={productName} onChangeText={setProductName} />
 
-          {/* Unit + Tax Rate */}
+          {/* Unit + Tax Rate — shared field geometry so labels/controls align */}
           <View style={s.row2}>
-            <View style={{ flex: 1 }}>
+            <View style={s.rowCol}>
               <FormDropdown
                 label="Unit of measure"
                 required
@@ -159,16 +254,11 @@ export default function CreateStockItemScreen() {
                 options={unitOptions}
                 placeholder={unitOptions.length > 0 ? 'Select unit' : 'Loading...'}
                 onSelect={o => setUnit(o.value)}
+                containerStyle={s.rowDropdown}
               />
             </View>
-            <View style={{ flex: 1 }}>
-              <FormDropdown
-                label="Tax rate"
-                value={taxRate}
-                options={TAX_RATES.map(s => ({ label: s, value: s }))}
-                placeholder="Select tax rate"
-                onSelect={o => setTaxRate(o.value)}
-              />
+            <View style={s.rowCol}>
+              <TaxRateInput value={taxRate} onChange={setTaxRate} />
             </View>
           </View>
 
@@ -219,7 +309,8 @@ export default function CreateStockItemScreen() {
             <BrandSwitch value={generateBarcode} onValueChange={setGenerateBarcode} />
           </View>
 
-          {/* Barcode content checkboxes */}
+          {/* Barcode content checkboxes — map to label print prefs (SKU / Sale Price).
+              Item name is always printed on labels; checkbox kept for clarity. */}
           {generateBarcode && (
             <View style={s.checkRow}>
               {([
@@ -274,7 +365,28 @@ const s = StyleSheet.create({
     color: COLORS.textPrimary, backgroundColor: COLORS.cardBg,
   },
   inputFocused: { borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
-  row2: { flexDirection: 'row', gap: 12, marginTop: 4 },
+  row2: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginTop: 4 },
+  rowCol: { flex: 1, minWidth: 0 },
+  // Match FormDropdown wrap + label so Unit / Tax sit on the same baseline
+  rowDropdown: { marginBottom: SPACING.md },
+  fieldWrap: { marginBottom: SPACING.md },
+  fieldLabel: {
+    fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6,
+  },
+  taxBox: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    backgroundColor: COLORS.cardBg, overflow: 'hidden', minHeight: 48,
+  },
+  taxInput: {
+    flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary,
+    paddingHorizontal: 14, paddingVertical: 12, minHeight: 48,
+  },
+  taxBadge: {
+    backgroundColor: COLORS.pageBg, borderLeftWidth: 1, borderLeftColor: COLORS.borderDefault,
+    paddingHorizontal: 12, minHeight: 48, alignItems: 'center', justifyContent: 'center',
+  },
+  taxBadgeTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textSecondary },
   selectBox: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,

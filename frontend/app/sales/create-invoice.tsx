@@ -777,6 +777,9 @@ export default function CreateSalesInvoiceScreen() {
   const [customDays, setCustomDays] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [refNo, setRefNo] = useState('');
+  // Set when this invoice is created by converting a Sales Order (see prefill effect below).
+  // Sent to backend as `againstOrderNo` so the invoice can be traced back to its source order.
+  const [againstOrderNo, setAgainstOrderNo] = useState('');
   const [items, setItems] = useState<InvoiceItem[]>([newItem()]);
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
   const [roundOffLedger, setRoundOffLedger] = useState('');
@@ -999,10 +1002,9 @@ export default function CreateSalesInvoiceScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [party, parties, showDispatch]);
 
-  const routeParams = useLocalSearchParams<{ party?: string; fromQuotation?: string }>();
+  const routeParams = useLocalSearchParams<{ party?: string }>();
   useEffect(() => {
     if (routeParams?.party) setParty(routeParams.party as string);
-    if (routeParams?.fromQuotation) setRefNo(routeParams.fromQuotation as string);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1023,6 +1025,41 @@ export default function CreateSalesInvoiceScreen() {
           AsyncStorage.removeItem(key).catch(() => {});
         }
       } catch { /* ignore bad draft */ }
+    }).catch(() => {});
+  }, [company?.guid]);
+
+  // ── Sales Order → Invoice prefill: "Convert to Sales Invoice" writes this key
+  //    before navigating here. Applied immediately (no banner) — checked AFTER the
+  //    draft-restore-on-mount logic above so a genuine unsaved invoice draft still
+  //    surfaces its own Resume banner independently of this conversion flow.
+  useEffect(() => {
+    if (!company?.guid) return;
+    const key = `tdso_to_invoice_prefill_${company.guid}`;
+    AsyncStorage.getItem(key).then(raw => {
+      if (!raw) return;
+      try {
+        const d = JSON.parse(raw);
+        const PREFILL_TTL_MS = 30 * 60 * 1000; // 30 minutes
+        const isFresh = d?.savedAt && (Date.now() - d.savedAt) < PREFILL_TTL_MS;
+        if (!isFresh) { AsyncStorage.removeItem(key).catch(() => {}); return; }
+        if (d.party)          setParty(d.party);
+        if (d.ledger)         setLedger(d.ledger);
+        if (d.date)           setDate(d.date);
+        if (d.refNo)          setRefNo(d.refNo);
+        if (d.narration)      setNarration(d.narration);
+        if (d.termsText)      setTermsText(d.termsText);
+        if (d.items?.length)  setItems(d.items);
+        if (d.logEntries?.length) setLogEntries(d.logEntries);
+        if (d.roundOffLedger) setRoundOffLedger(d.roundOffLedger);
+        if (d.roundOffAmount) setRoundOffAmount(d.roundOffAmount);
+        if (d.dueDate)        setDueDate(d.dueDate);
+        // againstOrderNo must be Tally's Sales Order voucher number (not a TDK- ref).
+        if (d.againstOrderNo && !String(d.againstOrderNo).startsWith('TDK-')) {
+          setAgainstOrderNo(d.againstOrderNo);
+        }
+        Toast.show({ type: 'success', text1: 'Sales Order Loaded', text2: 'Review and submit to convert to an invoice.' });
+      } catch { /* ignore bad prefill */ }
+      AsyncStorage.removeItem(key).catch(() => {});
     }).catch(() => {});
   }, [company?.guid]);
 
@@ -1359,6 +1396,7 @@ export default function CreateSalesInvoiceScreen() {
         numbering_policy: numberingPolicy,
         totalAmount: totals.grand, reference: refNo || undefined,
         narration: narration || undefined,
+        againstOrderNo: againstOrderNo || undefined,
         items: items.map(item => ({
           itemName: item.product,
           billedQty: parseFloat(item.qty) || 0,
@@ -1420,7 +1458,7 @@ export default function CreateSalesInvoiceScreen() {
     collectPayNow, payNowMode, payNowAmount, payNowRef, payNowLedger, logEntries, roundOffLedger, roundOffAmount,
     transportMode, transporterName, transporterId, vehicleNumber, vehicleType, transportDocNo, transportDocDate,
     dispatchFromState, shipToState,
-    numberingPolicy,
+    numberingPolicy, againstOrderNo,
   ]);
 
   // ── Render ────────────────────────────────────────────────────────────────────

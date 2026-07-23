@@ -1,7 +1,8 @@
 import React, { useState, useRef, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, TextInput, TextInputProps, ActivityIndicator,
+  KeyboardAvoidingView, Platform, Alert, TextInput, TextInputProps,
+  ActivityIndicator, Keyboard,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,7 +13,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { createLedger } from '../../src/services/api';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import FormDropdown from '../../src/components/forms/FormDropdown';
-import SearchableDropdown from '../../src/components/forms/SearchableDropdown';
+import BottomSheetSearch from '../../src/components/forms/BottomSheetSearch';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import PartyForm, { PartyFormRef } from '../../src/components/forms/PartyForm';
 
@@ -360,26 +361,36 @@ export default function CreateLedgerScreen() {
         <RegularOptionalToggle value={entryType} onChange={setEntryType} />
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          contentContainerStyle={s.form}
+          onScrollBeginDrag={Keyboard.dismiss}
+          contentContainerStyle={[s.form, { paddingBottom: 32 }]}
         >
           {/* ── Name ── */}
-          <Text style={s.label}>Name <Text style={s.required}>*</Text></Text>
-          <ThemedInput placeholder="Enter ledger name" value={name} onChangeText={setName} />
+          <View style={s.field}>
+            <Text style={s.label}>Name <Text style={s.required}>*</Text></Text>
+            <ThemedInput placeholder="Enter ledger name" value={name} onChangeText={setName} />
+          </View>
 
-          {/* ── Custom: Under first ── */}
+          {/* ── Custom: Under first (bottom sheet + search) ── */}
           {isCustom && (
-            <SearchableDropdown
+            <BottomSheetSearch
               label="Under (Group)"
               required
               placeholder="Select group first..."
+              sheetTitle="Under (Group)"
+              searchPlaceholder="Search groups..."
               options={CUSTOM_GROUPS.map(g => ({ label: g, value: g }))}
               value={customGroup}
               onSelect={o => onSelectCustomGroup(o.value)}
+              onClear={() => onSelectCustomGroup('')}
               icon="folder-outline"
             />
           )}
@@ -393,45 +404,55 @@ export default function CreateLedgerScreen() {
 
           {/* ── Opening Balance (hidden for P&L Custom groups) ── */}
           {showOpeningBalance && (
-            <>
+            <View style={s.field}>
               <Text style={s.label}>Opening Balance</Text>
               <BalanceRow
                 value={openBalance} onChange={setOpenBalance}
                 isCr={isCr} onToggleCr={setIsCr}
               />
-            </>
+            </View>
           )}
 
           {/* ── Bank fields (Custom → Bank / Bank OD) ── */}
           {isBankProfile && (
-            <>
+            <View style={s.section}>
               <Text style={s.sectionTitle}>Bank Details</Text>
-              <Text style={s.label}>Account Number</Text>
-              <ThemedInput
-                placeholder="Account number"
-                value={bankAccountNo}
-                onChangeText={setBankAccountNo}
-                keyboardType="number-pad"
-              />
-              <Text style={s.label}>IFSC Code</Text>
-              <ThemedInput
-                placeholder="IFSC"
-                value={bankIfsc}
-                onChangeText={t => setBankIfsc(t.toUpperCase())}
-                autoCapitalize="characters"
-              />
-              <Text style={s.label}>Branch</Text>
-              <ThemedInput placeholder="Branch name" value={bankBranch} onChangeText={setBankBranch} />
-              <Text style={s.label}>Account Holder Name</Text>
-              <ThemedInput placeholder="Account holder" value={bankHolder} onChangeText={setBankHolder} />
-              <Text style={s.label}>Bank Name</Text>
-              <ThemedInput placeholder="Bank name" value={bankName} onChangeText={setBankName} />
-            </>
+              <View style={s.field}>
+                <Text style={s.label}>Account Number</Text>
+                <ThemedInput
+                  placeholder="Account number"
+                  value={bankAccountNo}
+                  onChangeText={setBankAccountNo}
+                  keyboardType="number-pad"
+                />
+              </View>
+              <View style={s.field}>
+                <Text style={s.label}>IFSC Code</Text>
+                <ThemedInput
+                  placeholder="IFSC"
+                  value={bankIfsc}
+                  onChangeText={t => setBankIfsc(t.toUpperCase())}
+                  autoCapitalize="characters"
+                />
+              </View>
+              <View style={s.field}>
+                <Text style={s.label}>Branch</Text>
+                <ThemedInput placeholder="Branch name" value={bankBranch} onChangeText={setBankBranch} />
+              </View>
+              <View style={s.field}>
+                <Text style={s.label}>Account Holder Name</Text>
+                <ThemedInput placeholder="Account holder" value={bankHolder} onChangeText={setBankHolder} />
+              </View>
+              <View style={s.field}>
+                <Text style={s.label}>Bank Name</Text>
+                <ThemedInput placeholder="Bank name" value={bankName} onChangeText={setBankName} />
+              </View>
+            </View>
           )}
 
           {/* ── GST block (Custom → Sales / Purchase / Income / Expense) ── */}
           {isGstProfile && (
-            <>
+            <View style={s.section}>
               <Text style={s.sectionTitle}>GST Details</Text>
               <FormDropdown
                 label="GST Applicability"
@@ -466,35 +487,39 @@ export default function CreateLedgerScreen() {
                     placeholder="Select"
                     onSelect={o => setTaxability(o.value)}
                   />
-                  <Text style={s.label}>HSN / SAC</Text>
-                  <ThemedInput
-                    placeholder="HSN or SAC code"
-                    value={hsnCode}
-                    onChangeText={setHsnCode}
-                    autoCapitalize="characters"
-                  />
-                  <Text style={s.label}>GST Rate %</Text>
-                  <View style={s.percentBox}>
-                    <TextInput
-                      style={[s.percentInput, Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any })]}
-                      placeholder="0"
-                      placeholderTextColor={COLORS.textTertiary}
-                      value={gstRate}
-                      onChangeText={setGstRate}
-                      keyboardType="decimal-pad"
+                  <View style={s.field}>
+                    <Text style={s.label}>HSN / SAC</Text>
+                    <ThemedInput
+                      placeholder="HSN or SAC code"
+                      value={hsnCode}
+                      onChangeText={setHsnCode}
+                      autoCapitalize="characters"
                     />
-                    <View style={s.percentSuffix}>
-                      <Text style={s.percentSuffixText}>%</Text>
+                  </View>
+                  <View style={s.field}>
+                    <Text style={s.label}>GST Rate %</Text>
+                    <View style={s.percentBox}>
+                      <TextInput
+                        style={[s.percentInput, Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any })]}
+                        placeholder="0"
+                        placeholderTextColor={COLORS.textTertiary}
+                        value={gstRate}
+                        onChangeText={setGstRate}
+                        keyboardType="decimal-pad"
+                      />
+                      <View style={s.percentSuffix}>
+                        <Text style={s.percentSuffixText}>%</Text>
+                      </View>
                     </View>
                   </View>
                 </>
               )}
-            </>
+            </View>
           )}
 
           {/* ── Duties & Taxes (dedicated tile) ── */}
           {isDuties && (
-            <>
+            <View style={s.section}>
               <FormDropdown
                 label="Type of Duty / Tax"
                 required
@@ -518,21 +543,23 @@ export default function CreateLedgerScreen() {
                 />
               )}
 
-              <Text style={s.label}>% of Calculation</Text>
-              <View style={s.percentBox}>
-                <TextInput
-                  style={[s.percentInput, Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any })]}
-                  placeholder="0.00"
-                  placeholderTextColor={COLORS.textTertiary}
-                  value={percentage}
-                  onChangeText={setPercentage}
-                  keyboardType="decimal-pad"
-                />
-                <View style={s.percentSuffix}>
-                  <Text style={s.percentSuffixText}>%</Text>
+              <View style={s.field}>
+                <Text style={s.label}>% of Calculation</Text>
+                <View style={s.percentBox}>
+                  <TextInput
+                    style={[s.percentInput, Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any })]}
+                    placeholder="0.00"
+                    placeholderTextColor={COLORS.textTertiary}
+                    value={percentage}
+                    onChangeText={setPercentage}
+                    keyboardType="decimal-pad"
+                  />
+                  <View style={s.percentSuffix}>
+                    <Text style={s.percentSuffixText}>%</Text>
+                  </View>
                 </View>
               </View>
-            </>
+            </View>
           )}
 
           {/* ── Party Fields (Sundry Debtor / Creditor dedicated tiles) ── */}
@@ -542,8 +569,6 @@ export default function CreateLedgerScreen() {
               <PartyForm ref={formRef} />
             </>
           )}
-
-          <View style={{ height: 20 }} />
         </ScrollView>
 
         <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
@@ -576,14 +601,20 @@ const s = StyleSheet.create({
   headerTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
 
   form: { padding: SPACING.md },
-  label: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, marginBottom: 8, marginTop: 18 },
+  // One spacing contract: label → control gap 6, field block gap md
+  field: { marginBottom: SPACING.md },
+  label: {
+    fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6,
+  },
   required: { color: COLORS.negative },
+  section: { marginTop: 8 },
   sectionTitle: {
     fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary,
-    marginTop: 22, marginBottom: 2,
+    marginBottom: 12,
   },
   helper: {
-    fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 8, lineHeight: 18,
+    fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary,
+    marginTop: -4, marginBottom: SPACING.md, lineHeight: 18,
   },
 
   input: {
@@ -620,7 +651,7 @@ const s = StyleSheet.create({
   },
   percentSuffixText: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary, fontWeight: '600' },
 
-  divider: { height: 1, backgroundColor: COLORS.borderDefault, marginVertical: 8 },
+  divider: { height: 1, backgroundColor: COLORS.borderDefault, marginVertical: SPACING.md },
 
   footer: {
     paddingHorizontal: SPACING.md, paddingTop: 12,

@@ -40,14 +40,20 @@ interface Props {
   triggerStyle?: ViewStyle;
   disabled?: boolean;
   compact?: boolean;
+  /** When true, sheet stays open for multi-check; confirm via footer CTA */
+  multiSelect?: boolean;
+  confirmLabel?: (count: number) => string;
+  onMultiConfirm?: (opts: BSSOption[]) => void;
 }
 
 export default function BottomSheetSearch({
   label, required, placeholder, value, options, onSelect, onClear,
   onAddNew, addNewLabel, sheetTitle, searchPlaceholder,
   icon, containerStyle, triggerStyle, disabled, compact,
+  multiSelect, confirmLabel, onMultiConfirm,
 }: Props) {
   const [query, setQuery] = useState('');
+  const [pending, setPending] = useState<Set<string>>(new Set());
   const sheetRef = useRef<BottomSheetModal>(null);
   const insets = useSafeAreaInsets();
 
@@ -67,18 +73,36 @@ export default function BottomSheetSearch({
   const handleOpen = useCallback(() => {
     if (disabled) return;
     setQuery('');
+    if (multiSelect) setPending(new Set());
     sheetRef.current?.present();
-  }, [disabled]);
+  }, [disabled, multiSelect]);
 
   const handleClose = useCallback(() => {
     setQuery('');
+    if (multiSelect) setPending(new Set());
     sheetRef.current?.dismiss();
-  }, []);
+  }, [multiSelect]);
 
   const handleSelect = useCallback((opt: BSSOption) => {
+    if (multiSelect) {
+      setPending(prev => {
+        const next = new Set(prev);
+        if (next.has(opt.value)) next.delete(opt.value);
+        else next.add(opt.value);
+        return next;
+      });
+      return;
+    }
     onSelect(opt);
     handleClose();
-  }, [onSelect, handleClose]);
+  }, [multiSelect, onSelect, handleClose]);
+
+  const handleMultiConfirm = useCallback(() => {
+    if (!onMultiConfirm || pending.size === 0) return;
+    const picked = options.filter(o => pending.has(o.value));
+    onMultiConfirm(picked);
+    handleClose();
+  }, [onMultiConfirm, pending, options, handleClose]);
 
   const handleClear = useCallback(() => {
     if (onClear) onClear();
@@ -205,7 +229,10 @@ export default function BottomSheetSearch({
           data={filtered}
           keyExtractor={(item, idx) => item.value || String(idx)}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingTop: 8, paddingBottom: insets.bottom + 16 }}
+          contentContainerStyle={{
+            paddingTop: 8,
+            paddingBottom: multiSelect ? insets.bottom + 80 : insets.bottom + 16,
+          }}
           ListEmptyComponent={
             <View style={s.empty}>
               <Ionicons name="search-outline" size={20} color={COLORS.textTertiary} />
@@ -215,19 +242,26 @@ export default function BottomSheetSearch({
             </View>
           }
           ListFooterComponent={null}
-          renderItem={({ item, index }) => (
+          renderItem={({ item, index }) => {
+            const isActive = multiSelect ? pending.has(item.value) : item.value === value;
+            return (
             <TouchableOpacity
               style={[
                 s.optRow,
-                index === filtered.length - 1 && !onAddNew && { borderBottomWidth: 0 },
-                item.value === value && s.optRowActive,
+                index === filtered.length - 1 && !onAddNew && !multiSelect && { borderBottomWidth: 0 },
+                isActive && s.optRowActive,
               ]}
               onPress={() => handleSelect(item)}
               activeOpacity={0.7}
             >
+              {multiSelect ? (
+                <View style={[s.checkbox, isActive && s.checkboxOn]}>
+                  {isActive ? <Ionicons name="checkmark" size={14} color={COLORS.white} /> : null}
+                </View>
+              ) : null}
               <View style={{ flex: 1 }}>
                 <Text
-                  style={[s.optLabel, item.value === value && s.optLabelActive]}
+                  style={[s.optLabel, isActive && s.optLabelActive]}
                   numberOfLines={1}
                 >
                   {item.label}
@@ -236,12 +270,27 @@ export default function BottomSheetSearch({
                   <Text style={s.optSub} numberOfLines={1}>{item.subtitle}</Text>
                 ) : null}
               </View>
-              {item.value === value && (
+              {!multiSelect && isActive && (
                 <Ionicons name="checkmark" size={18} color={COLORS.brandPrimary} />
               )}
             </TouchableOpacity>
-          )}
+          );}}
         />
+
+        {multiSelect ? (
+          <View style={[s.multiFooter, { paddingBottom: insets.bottom + 12 }]}>
+            <TouchableOpacity
+              style={[s.multiConfirmBtn, pending.size === 0 && s.multiConfirmDisabled]}
+              onPress={handleMultiConfirm}
+              disabled={pending.size === 0}
+              activeOpacity={0.85}
+            >
+              <Text style={s.multiConfirmTxt}>
+                {confirmLabel ? confirmLabel(pending.size) : `Add Selected (${pending.size})`}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
       </BottomSheetModal>
     </View>
   );
@@ -317,5 +366,22 @@ const s = StyleSheet.create({
   },
   emptyTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
 
+  checkbox: {
+    width: 22, height: 22, borderRadius: 6, marginRight: 12,
+    borderWidth: 2, borderColor: COLORS.borderStrong,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  checkboxOn: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
+  multiFooter: {
+    paddingHorizontal: SPACING.md, paddingTop: 12,
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
+    backgroundColor: COLORS.cardBg,
+  },
+  multiConfirmBtn: {
+    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md,
+    paddingVertical: 14, alignItems: 'center',
+  },
+  multiConfirmDisabled: { opacity: 0.45 },
+  multiConfirmTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
 
 });

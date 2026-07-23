@@ -21,7 +21,7 @@ const AMBER = '#A89060';
 type TabType = 'myentries' | 'daybook';
 type SyncStatus = 'synced' | 'pending' | 'processing' | 'failed';
 type VoucherType =
-  | 'ALL' | 'Sales' | 'Purchase' | 'Payment' | 'Receipt'
+  | 'ALL' | 'Sales' | 'Sales Order' | 'Purchase' | 'Payment' | 'Receipt'
   | 'Journal' | 'Contra' | 'Debit Note' | 'Credit Note' | 'Delivery Note'
   | 'Stock Transfer' | 'Adjustment' | 'Stock Edit' | 'New Item' | 'New Ledger' | 'New Warehouse';
 
@@ -75,7 +75,7 @@ interface VoucherEntry {
 
 // ─── Voucher Types ────────────────────────────────────────────────────────────
 const VOUCHER_TYPES: VoucherType[] = [
-  'ALL', 'Sales', 'Purchase', 'Payment', 'Receipt',
+  'ALL', 'Sales', 'Sales Order', 'Purchase', 'Payment', 'Receipt',
   'Journal', 'Contra', 'Debit Note', 'Credit Note', 'Delivery Note',
   'Stock Transfer', 'Adjustment', 'Stock Edit', 'New Item', 'New Ledger', 'New Warehouse',
 ];
@@ -98,7 +98,9 @@ const isCreditVoucher = (voucherType: string): boolean => {
 
 const mapVoucherType = (raw: string): Exclude<VoucherType, 'ALL'> => {
   const s = (raw || '').toLowerCase();
+  if (s.includes('sales') && s.includes('order')) return 'Sales Order';
   if (s.includes('sales')) return 'Sales';
+  if (s.includes('purchase') && s.includes('order')) return 'Purchase';
   if (s.includes('purchase')) return 'Purchase';
   if (s.includes('payment')) return 'Payment';
   if (s.includes('receipt')) return 'Receipt';
@@ -154,7 +156,7 @@ const mapApiRow = (r: any, fmt: (n: number) => string = (n) => String(n)): Vouch
 
 // ─── Color Maps ───────────────────────────────────────────────────────────────
 const TYPE_COLORS: Record<string, string> = {
-  'Sales': '#2D7D46', 'Purchase': '#2563EB', 'Payment': '#C0392B',
+  'Sales': '#2D7D46', 'Sales Order': '#059669', 'Purchase': '#2563EB', 'Payment': '#C0392B',
   'Receipt': '#2D7D46', 'Journal': '#D97706', 'Contra': '#7C3AED',
   'Debit Note': '#C0392B', 'Credit Note': '#2D7D46', 'Delivery Note': '#0891B2',
 };
@@ -848,7 +850,9 @@ export default function AuditTrailScreen() {
                                   if (entry.tdkRef) {
                                     const ref = entry.tdkRef;
                                     let route = `/sales/invoice-preview?tdkRef=${encodeURIComponent(ref)}`;
-                                    if (/TDK-(?:OPT-)?CON-/i.test(ref)) {
+                                    if (/TDK-(?:OPT-)?SOR-/i.test(ref) || entry.type === 'Sales Order') {
+                                      route = `/sales/order-preview?tdkRef=${encodeURIComponent(ref)}`;
+                                    } else if (/TDK-(?:OPT-)?CON-/i.test(ref)) {
                                       route = `/voucher/contra-preview?tdkRef=${encodeURIComponent(ref)}`;
                                     } else if (/TDK-(?:OPT-)?JOR-/i.test(ref)) {
                                       route = `/voucher/journal-preview?tdkRef=${encodeURIComponent(ref)}`;
@@ -856,6 +860,10 @@ export default function AuditTrailScreen() {
                                       route = `/voucher/payment-preview?tdkRef=${encodeURIComponent(ref)}`;
                                     } else if (/TDK-(?:OPT-)?RCP-/i.test(ref)) {
                                       route = `/voucher/receipt-preview?tdkRef=${encodeURIComponent(ref)}`;
+                                    } else if (/TDK-(?:OPT-)?PHY-/i.test(ref)) {
+                                      route = `/stocks/adjustment-preview?tdkRef=${encodeURIComponent(ref)}`;
+                                    } else if (/TDK-(?:OPT-)?STJ-/i.test(ref)) {
+                                      route = `/stocks/transfer-preview?tdkRef=${encodeURIComponent(ref)}`;
                                     }
                                     router.push(route as any);
                                   } else {
@@ -994,7 +1002,7 @@ export default function AuditTrailScreen() {
                               <Text style={s.entryDateTxt}>{entry.date}</Text>
                             </View>
 
-                            {/* Amount */}
+                            {/* Amount + SO convert shortcut */}
                             <View style={s.amtCol}>
                               <Text style={[s.amtTxt, { color: entry.isCredit ? COLORS.negative : COLORS.positive }]}>
                                 {entry.amount}
@@ -1002,6 +1010,16 @@ export default function AuditTrailScreen() {
                               <Text style={[s.drCrLbl, { color: entry.isCredit ? COLORS.negative : COLORS.positive }]}>
                                 {entry.isCredit ? 'Cr' : 'Dr'}
                               </Text>
+                              {activeTab === 'myentries' && entry.type === 'Sales Order' && entry.tdkRef && !multiSelect ? (
+                                <TouchableOpacity
+                                  style={{ marginTop: 6, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: '#05966918' }}
+                                  onPress={() => router.push(`/sales/order-preview?tdkRef=${encodeURIComponent(entry.tdkRef!)}` as any)}
+                                  activeOpacity={0.75}
+                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                >
+                                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#059669' }}>Convert</Text>
+                                </TouchableOpacity>
+                              ) : null}
                             </View>
                           </TouchableOpacity>
                           {idx < entries.length - 1 ? <View style={s.divider} /> : null}

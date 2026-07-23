@@ -22,13 +22,6 @@ const fmtRs = (n: number | null | undefined, unit = '') =>
     ? `₹${(+n).toLocaleString('en-IN')}${unit}`
     : '—';
 
-const MOV_CONFIG = {
-  Purchase:     { color: COLORS.positive },
-  Sale:         { color: COLORS.negative },
-  Transfer:     { color: COLORS.info     },
-  'Stock Journal': { color: COLORS.info  },
-};
-
 // ─── REAL CODE128B BARCODE ──────────────────────────────────────────────────
 // Uses encodeCode128B from barcode.ts — same encoder as label-preview.tsx.
 // Integer virtual coords + viewBox scaling → bar ratios exact, no drift.
@@ -122,7 +115,8 @@ export default function ItemDetailScreen() {
   const [movements,  setMovements]  = useState<any[]>([]);
   const [movLoading, setMovLoading] = useState(true);
   const [rateData,   setRateData]   = useState<any>(null);
-  const [godowns,    setGodowns]    = useState<{ name: string; qty: number }[]>([]);
+  const [godowns,    setGodowns]    = useState<{ name: string; qty: number; pct?: number }[]>([]);
+  const [godownMeta, setGodownMeta] = useState<{ reconciled?: boolean; unassignedQty?: number; unit?: string }>({});
   const [calOpen,    setCalOpen]    = useState(false);
   const [dateFrom,   setDateFrom]   = useState('');
   const [dateTo,     setDateTo]     = useState('');
@@ -138,7 +132,17 @@ export default function ItemDetailScreen() {
       .finally(() => setItemLoading(false));
     // Fetch warehouse breakdown
     getStockGodowns(companyGuid, id as string)
-      .then((res: any) => { if (res?.data?.warehouses) setGodowns(res.data.warehouses); })
+      .then((res: any) => {
+        const d = res?.data;
+        if (d?.warehouses) {
+          setGodowns(d.warehouses);
+          setGodownMeta({
+            reconciled: d.reconciled,
+            unassignedQty: d.unassignedQty,
+            unit: d.unit,
+          });
+        }
+      })
       .catch(() => {});
     // Fetch primary barcode from stock_barcodes
     getBarcodesByGuids(companyGuid, [id as string])
@@ -172,6 +176,8 @@ export default function ItemDetailScreen() {
   const avgPurchRate  = rateData?.avgPurchaseRate ? fmtRs(Math.round(+rateData.avgPurchaseRate), '/unit') : '—';
   const sellingPrice  = rateData?.lastSellRate && +rateData.lastSellRate > 0 ? fmtRs(rateData.lastSellRate, '/unit') : '—';
   const narration     = liveItem?.alias || '—';
+  const itemUnit      = liveItem?.unit || godownMeta.unit || 'pcs';
+  const godownSum     = godowns.reduce((s, g) => s + (g.name === 'Unassigned' ? 0 : g.qty), 0);
 
   const qtyColor = totalQty == null ? COLORS.textSecondary
     : totalQty < 0 ? COLORS.negative
@@ -259,8 +265,26 @@ export default function ItemDetailScreen() {
           {godowns.length > 0 && (
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Warehouse Breakdown</Text>
+              {!godownMeta.reconciled && (godownMeta.unassignedQty ?? 0) > 0 && (
+                <View style={styles.reconcileBanner}>
+                  <Ionicons name="information-circle-outline" size={14} color="#B45309" />
+                  <Text style={styles.reconcileTxt}>
+                    Godown totals ({godownSum.toLocaleString('en-IN')}) differ from book qty ({totalQty?.toLocaleString('en-IN')}). Unassigned qty shown below.
+                  </Text>
+                </View>
+              )}
               {godowns.map((g, i) => (
-                <PricingRow key={`wh-${i}`} label={g.name} value={String(g.qty)} />
+                <View key={`wh-${i}`} style={[pr.row, g.name === 'Unassigned' && { backgroundColor: '#FFFBEB' }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={pr.label}>{g.name}</Text>
+                    {g.pct != null && g.pct > 0 && g.name !== 'Unassigned' && (
+                      <Text style={styles.whPct}>{g.pct}% of total</Text>
+                    )}
+                  </View>
+                  <Text style={[pr.value, g.name === 'Unassigned' && { color: '#B45309' }]}>
+                    {g.qty.toLocaleString('en-IN')} {itemUnit}
+                  </Text>
+                </View>
               ))}
             </View>
           )}
@@ -318,21 +342,32 @@ export default function ItemDetailScreen() {
               </Text>
             ) : (
               movements.map((m: any, i: number) => {
+                const isTransfer = !!m.is_transfer;
                 const qty      = +(m.qty || 0);
-                const isInward = (m.type || '').toLowerCase().includes('purchase') || qty > 0;
-                const qtyLabel = `${isInward ? '+' : '-'}${Math.abs(qty)}`;
-                const isPos    = isInward;
-                const cfg      = (MOV_CONFIG as any)[m.type || m.voucher_type] || MOV_CONFIG.Transfer;
+                const isInward = !isTransfer && ((m.type || '').toLowerCase().includes('purchase') || qty > 0);
+                const qtyLabel = isTransfer
+                  ? `${qty} ${itemUnit}`
+                  : `${isInward ? '+' : '-'}${Math.abs(qty)}`;
+                const isPos    = isTransfer || isInward;
+                const typeLabel = isTransfer ? 'Transfer' : (m.type || m.voucher_type || '—');
+                const refExtra = isTransfer && m.from_warehouse && m.to_warehouse
+                  ? `${m.from_warehouse} → ${m.to_warehouse}`
+                  : (m.reference || '');
                 return (
                   <View key={`mv-${i}-${m.voucher_number || i}`} style={styles.mvRow}>
-                    <View style={[styles.mvDot, { backgroundColor: isPos ? COLORS.positive : COLORS.negative }]} />
+                    <View style={[styles.mvDot, { backgroundColor: isTransfer ? COLORS.info : (isPos ? COLORS.positive : COLORS.negative) }]} />
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.mvType}>{m.type || m.voucher_type || '—'}</Text>
+                      <Text style={styles.mvType}>{typeLabel}</Text>
                       <Text style={styles.mvRef}>
-                        {m.voucher_number || '—'} · {m.date ? new Date(m.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'}
+                        {m.voucher_number || '—'}
+                        {refExtra ? ` · ${refExtra}` : ''}
+                        {' · '}
+                        {m.date ? new Date(m.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'}
                       </Text>
                     </View>
-                    <Text style={[styles.mvQty, { color: isPos ? COLORS.positive : COLORS.negative }]}>{qtyLabel}</Text>
+                    <Text style={[styles.mvQty, { color: isTransfer ? COLORS.info : (isPos ? COLORS.positive : COLORS.negative) }]}>
+                      {isTransfer ? '↔' : ''}{qtyLabel}
+                    </Text>
                   </View>
                 );
               })
@@ -391,4 +426,10 @@ const styles = StyleSheet.create({
   mvType: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
   mvRef:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 1 },
   mvQty:  { fontSize: TYPOGRAPHY.base, fontWeight: '800', minWidth: 46, textAlign: 'right' as const },
+  reconcileBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: '#FEF3C7', borderRadius: RADIUS.sm, padding: 10, marginBottom: 8,
+  },
+  reconcileTxt: { flex: 1, fontSize: TYPOGRAPHY.xs, color: '#B45309', lineHeight: 16 },
+  whPct: { fontSize: 10, color: COLORS.textTertiary, marginTop: 2 },
 });

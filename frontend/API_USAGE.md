@@ -61,8 +61,8 @@ getKPIPayments, getKPIReceipts, getKPILoansODs
 All: GET /api/kpi/<type> + ?companyGuid&fy
 
 ## Sales / Purchase
-getSalesInvoices, getSalesOrders, getSalesQuotations, getSalesCreditNotes,
-getSalesDeliveryNotes, getPurchaseInvoices, getPurchaseOrders, getPurchaseDebitNotes
+getSalesInvoices, getSalesOrders, getCreditNotes,
+getDeliveryNotes, getPurchaseInvoices, getPurchaseOrders, getPurchaseDebitNotes
 All: GET /api/sales/* or /api/purchase/* + ?companyGuid&fy
 
 ## Vouchers

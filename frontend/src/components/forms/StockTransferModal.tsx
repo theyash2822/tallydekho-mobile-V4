@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, Modal, ScrollView,
-  KeyboardAvoidingView, Platform, Keyboard, StyleSheet,
+  Keyboard, StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,12 +10,24 @@ import { StockItem } from '../../data/stockData';
 import { getWarehouses, getStockGodowns, createStockTransfer } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS } from '../../constants/colors';
+import { clearStockListCache } from '../../utils/stockCache';
 
 import {
   InlineDropdownField, InlineField, ReadonlyField,
   QtyStepperField, ItemHeaderCard, SubmitButton,
   modalStyles as ms,
 } from './StockFormHelpers';
+
+function parseGodownNames(res: any): string[] {
+  const d = res?.data;
+  if (d?.warehouses && Array.isArray(d.warehouses)) {
+    return d.warehouses.map((g: any) => g.name || g).filter(Boolean);
+  }
+  if (Array.isArray(d)) {
+    return d.map((g: any) => (typeof g === 'string' ? g : g.name)).filter(Boolean);
+  }
+  return [];
+}
 
 export function StockTransferModal({
   visible, item, onClose,
@@ -24,22 +36,26 @@ export function StockTransferModal({
 }) {
   const insets = useSafeAreaInsets();
   const { company } = useAuth();
+  const scrollRef = useRef<ScrollView>(null);
 
-  const [sourceWhName, setSourceWhName] = useState('');   // godown name (what Tally uses)
+  const [sourceWhName, setSourceWhName] = useState('');
   const [destWhName,   setDestWhName]   = useState('');
   const [transferQty,  setTransferQty]  = useState(1);
   const [narration,    setNarration]    = useState('');
 
-  // All warehouses in company (for destination)
   const [allWarehouses, setAllWarehouses] = useState<string[]>([]);
-  // Warehouses where THIS item has stock (for source)
   const [itemGodowns,   setItemGodowns]   = useState<string[]>([]);
   const [isSubmitting,  setIsSubmitting]  = useState(false);
+
+  const scrollNoteIntoView = useCallback(() => {
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd?.({ animated: true });
+    }, 250);
+  }, []);
 
   useEffect(() => {
     if (!visible || !company?.guid || !item) return;
 
-    // Fetch all company warehouses (for destination dropdown)
     getWarehouses(company.guid).then((res: any) => {
       const wh: string[] = Array.isArray(res?.data)
         ? res.data.map((w: any) => w.name).filter(Boolean)
@@ -47,21 +63,17 @@ export function StockTransferModal({
       setAllWarehouses(wh);
     }).catch(() => {});
 
-    // Fetch godowns where this item has stock (for source dropdown)
     getStockGodowns(company.guid, item.id).then((res: any) => {
-      const godowns: string[] = Array.isArray(res?.data) ? res.data : [];
+      const godowns = parseGodownNames(res);
       setItemGodowns(godowns);
-      // Auto-select if only one source godown
       if (godowns.length === 1) {
         setSourceWhName(godowns[0]);
       } else if (godowns.length === 0) {
-        // Fallback to item's warehouse field
         setSourceWhName(item.warehouse || '');
       } else {
         setSourceWhName('');
       }
     }).catch(() => {
-      // Fallback: use item.warehouse
       setSourceWhName(item.warehouse || '');
     });
 
@@ -70,9 +82,7 @@ export function StockTransferModal({
     setNarration('');
   }, [visible, item?.id, company?.guid]);
 
-  // Source options = godowns where stock exists
   const sourceOptions = itemGodowns.map(n => ({ id: n, label: n }));
-  // Dest options = all warehouses except source
   const destOptions   = allWarehouses
     .filter(n => n !== sourceWhName)
     .map(n => ({ id: n, label: n }));
@@ -117,6 +127,7 @@ export function StockTransferModal({
         }],
       });
       Keyboard.dismiss();
+      clearStockListCache();
       const queued = res?.queued;
       reset(); onClose();
       setTimeout(() => Toast.show({
@@ -139,8 +150,8 @@ export function StockTransferModal({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
         <TouchableOpacity style={[ms.overlay, StyleSheet.absoluteFillObject]} activeOpacity={1} onPress={handleClose} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
-        <View style={[ms.sheet, { paddingBottom: 0 }]}>
+        {/* Option A: no KeyboardAvoidingView — ScrollView insets + scrollToEnd only */}
+        <View style={[ms.sheet, { paddingBottom: 0, maxHeight: '92%' }]}>
           <View style={ms.handle} />
 
           <View style={ms.titleRow}>
@@ -151,18 +162,18 @@ export function StockTransferModal({
           </View>
 
           <ScrollView
+            ref={scrollRef}
+            style={{ flexGrow: 1 }}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={ms.scroll}
+            contentContainerStyle={[ms.scroll, { paddingBottom: 56 }]}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets
           >
             {item ? <ItemHeaderCard item={item} /> : null}
 
-            {/* Source Warehouse — auto-selected if only 1 godown */}
             {sourceOptions.length === 1 ? (
-              <ReadonlyField
-                label="Source Warehouse"
-                value={sourceWhName}
-              />
+              <ReadonlyField label="Source Warehouse" value={sourceWhName} />
             ) : (
               <InlineDropdownField
                 label="Source Warehouse"
@@ -175,13 +186,8 @@ export function StockTransferModal({
               />
             )}
 
-            {/* On-hand Qty */}
-            <ReadonlyField
-              label="On-hand Qty"
-              value={item ? String(item.qty) : '—'}
-            />
+            <ReadonlyField label="On-hand Qty" value={item ? String(item.qty) : '—'} />
 
-            {/* Destination Warehouse */}
             <InlineDropdownField
               label="Destination Warehouse"
               options={destOptions}
@@ -192,7 +198,6 @@ export function StockTransferModal({
               required
             />
 
-            {/* Qty to Transfer */}
             <QtyStepperField
               label="Qty to Transfer"
               subLabel="(required)"
@@ -200,13 +205,13 @@ export function StockTransferModal({
               onChange={setTransferQty}
             />
 
-            {/* Narration */}
             <InlineField
               label="Narration"
               value={narration}
               onChange={setNarration}
               placeholder="Optional note"
               multiline
+              onFocus={scrollNoteIntoView}
             />
           </ScrollView>
 
@@ -220,7 +225,6 @@ export function StockTransferModal({
             />
           </View>
         </View>
-        </KeyboardAvoidingView>
       </View>
     </Modal>
   );

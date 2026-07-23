@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, Modal, ScrollView, TextInput,
-  KeyboardAvoidingView, Platform, StyleSheet,
+  StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,9 +10,10 @@ import { StockItem } from '../../data/stockData';
 import { getWarehouses, createStockTransfer } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
+import { clearStockListCache } from '../../utils/stockCache';
 
 import {
-  InlineDropdownField, InlineField, ReadonlyField,
+  InlineDropdownField, InlineField,
   QtyStepperField, SubmitButton,
   modalStyles as ms,
 } from './StockFormHelpers';
@@ -26,12 +27,19 @@ export function BulkTransferModal({
 }) {
   const insets = useSafeAreaInsets();
   const { company } = useAuth();
+  const scrollRef = useRef<ScrollView>(null);
 
   const [rows,             setRows]             = useState<TransferRow[]>([]);
   const [search,           setSearch]           = useState('');
   const [destWhId,         setDestWhId]         = useState('');
   const [narration,        setNarration]        = useState('');
   const [warehouseOptions, setWarehouseOptions] = useState<{id:string;label:string}[]>([]);
+
+  const scrollNoteIntoView = useCallback(() => {
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd?.({ animated: true });
+    }, 250);
+  }, []);
 
   useEffect(() => {
     if (visible) {
@@ -48,7 +56,6 @@ export function BulkTransferModal({
     }
   }, [visible]);
 
-  // Search filters the pre-selected rows (not adds new items)
   const filteredRows = search.trim()
     ? rows.filter(r =>
         r.item.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -92,6 +99,7 @@ export function BulkTransferModal({
         items:       itemsList,
       });
       const queued = res?.queued;
+      clearStockListCache();
       Toast.show({
         type: 'success',
         text1: queued ? 'Transfer Queued ⏳' : 'Transfer Created ✅',
@@ -110,11 +118,9 @@ export function BulkTransferModal({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
         <TouchableOpacity style={[ms.overlay, StyleSheet.absoluteFillObject]} activeOpacity={1} onPress={handleClose} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
-        <View style={[ms.sheet, { paddingBottom: 0 }]}>
+        <View style={[ms.sheet, { paddingBottom: 0, maxHeight: '92%' }]}>
           <View style={ms.handle} />
 
-          {/* Header */}
           <View style={ms.titleRow}>
             <View>
               <Text style={ms.title}>Bulk Transfer</Text>
@@ -125,7 +131,6 @@ export function BulkTransferModal({
             </TouchableOpacity>
           </View>
 
-          {/* Search bar — filters pre-selected items */}
           <View style={bt.searchWrap}>
             <Ionicons name="search-outline" size={15} color={COLORS.textTertiary} />
             <TextInput
@@ -143,11 +148,14 @@ export function BulkTransferModal({
           </View>
 
           <ScrollView
+            ref={scrollRef}
+            style={{ flexGrow: 1 }}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={ms.scroll}
+            contentContainerStyle={[ms.scroll, { paddingBottom: 56 }]}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets
           >
-            {/* Items list */}
             {filteredRows.map(r => (
               <View key={r.item.id} style={bt.itemCard}>
                 <View style={bt.itemHeader}>
@@ -176,7 +184,6 @@ export function BulkTransferModal({
 
             <View style={ms.divider} />
 
-            {/* Destination */}
             <InlineDropdownField
               label="Destination Warehouse *"
               options={warehouseOptions}
@@ -192,6 +199,7 @@ export function BulkTransferModal({
               onChange={setNarration}
               placeholder="Optional note"
               multiline
+              onFocus={scrollNoteIntoView}
             />
           </ScrollView>
 
@@ -205,7 +213,6 @@ export function BulkTransferModal({
             />
           </View>
         </View>
-        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -219,5 +226,5 @@ const bt = StyleSheet.create({
   itemHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
   itemName:   { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   itemSku:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
-  emptyTxt:   { textAlign: 'center', color: COLORS.textTertiary, fontSize: TYPOGRAPHY.sm, paddingVertical: 16 },
+  emptyTxt:   { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary, textAlign: 'center', paddingVertical: 16 },
 });

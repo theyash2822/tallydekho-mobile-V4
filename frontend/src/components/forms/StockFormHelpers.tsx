@@ -135,6 +135,64 @@ const qs = StyleSheet.create({
   val:   { flex: 1, textAlign: 'center', fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
 });
 
+/** Compact qty row: [-] [typed input] [+] — for dense list tiles */
+export function CompactQtyInput({
+  value, onChange, min = 1,
+}: {
+  value: number; onChange: (v: number) => void; min?: number;
+}) {
+  const [text, setText] = React.useState(String(value));
+  React.useEffect(() => { setText(String(value)); }, [value]);
+
+  const commit = (raw: string) => {
+    const n = parseInt(raw.replace(/\D/g, ''), 10);
+    if (!isNaN(n) && n >= min) {
+      onChange(n);
+      setText(String(n));
+    } else {
+      setText(String(value));
+    }
+  };
+
+  return (
+    <View style={cq.row}>
+      <TouchableOpacity
+        style={cq.btn}
+        onPress={() => onChange(Math.max(min, value - 1))}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="remove" size={16} color={COLORS.textPrimary} />
+      </TouchableOpacity>
+      <TextInput
+        style={cq.input}
+        value={text}
+        onChangeText={setText}
+        onBlur={() => commit(text)}
+        onSubmitEditing={() => commit(text)}
+        keyboardType="number-pad"
+        returnKeyType="done"
+        selectTextOnFocus
+      />
+      <TouchableOpacity style={cq.btn} onPress={() => onChange(value + 1)} activeOpacity={0.7}>
+        <Ionicons name="add" size={16} color={COLORS.textPrimary} />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const cq = StyleSheet.create({
+  row: {
+    flexDirection: 'row', alignItems: 'center', flex: 1,
+    backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.sm, minHeight: 36, overflow: 'hidden',
+  },
+  btn: { width: 34, height: 36, alignItems: 'center', justifyContent: 'center' },
+  input: {
+    flex: 1, textAlign: 'center', fontSize: TYPOGRAPHY.base, fontWeight: '700',
+    color: COLORS.textPrimary, paddingVertical: 4, minWidth: 40,
+  },
+});
+
 // ─── 3-STATE SUBMIT BUTTON ────────────────────────────────────────────────────
 export function SubmitButton({
   idleLabel, loadingLabel, successLabel, onValidate, onDone,
@@ -243,9 +301,11 @@ const rf = StyleSheet.create({
 // ─── INLINE TEXT FIELD ────────────────────────────────────────────────────────
 export function InlineField({
   label, value, onChange, placeholder, keyboardType, multiline, required,
+  onFocus: onFocusProp, onBlur: onBlurProp,
 }: {
   label: string; value: string; onChange: (v: string) => void; placeholder?: string;
   keyboardType?: any; multiline?: boolean; required?: boolean;
+  onFocus?: () => void; onBlur?: () => void;
 }) {
   const [focused, setFocused] = useState(false);
   return (
@@ -261,8 +321,8 @@ export function InlineField({
         placeholderTextColor={COLORS.textTertiary}
         keyboardType={keyboardType}
         multiline={multiline}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
+        onFocus={() => { setFocused(true); onFocusProp?.(); }}
+        onBlur={() => { setFocused(false); onBlurProp?.(); }}
       />
     </View>
   );

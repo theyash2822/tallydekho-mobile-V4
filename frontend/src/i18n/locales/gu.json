@@ -231,7 +231,6 @@
     "title": "વેચાણ",
     "invoice": "ઇન્વૉઇસ",
     "order": "ઓર્ડર",
-    "quotation": "અવતરણ",
     "creditNote": "ક્રેડિટ નોટ",
     "deliveryNote": "ડિલિવરી નોટ",
     "create": "ઇન્વૉઇસ બનાવો",
@@ -266,7 +265,6 @@
   "pdf": {
     "invoice": "ઇન્વૉઇસ",
     "taxInvoice": "કર ઇન્વૉઇસ",
-    "quotation": "અવતરણ",
     "deliveryNote": "ડિલિવરી નોટ",
     "creditNote": "ક્રેડિટ નોટ",
     "debitNote": "ડેબિટ નોટ",

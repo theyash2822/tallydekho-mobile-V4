@@ -1,5 +1,20 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-07-23 — Sales Order 2-step create + convert to invoice
+
+### Added / Changed
+- `create-order.tsx`: 2-step flow (Order Details → Items & Review); live parties/stocks/warehouses/ledgers; Due Date; Terms & Conditions; no Add Customer; Regular/Optional; logistics/taxes; success Preview / Share / Convert to Invoice
+- `order-preview.tsx`: preview + Convert to Invoice (AsyncStorage prefill)
+- `create-invoice.tsx`: reads `tdso_to_invoice_prefill_*`, sends `againstOrderNo`
+- Audit Trail: Sales Order type/filter; SOR → order-preview; Convert shortcut
+- Quotation removed from FAB / routes (Sales Order kept)
+- `getOrderPreview` API alias
+
+### Test
+See device checklist in session reply / `.memory/CURRENT_TASKS.md`
+
+---
+
 ## 2026-07-16 — PartyForm worldwide country / division + GST India-only
 
 ### Changed

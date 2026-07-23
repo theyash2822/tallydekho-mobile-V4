@@ -231,7 +231,6 @@
     "title": "Sales",
     "invoice": "Invoice",
     "order": "Order",
-    "quotation": "Quotation",
     "creditNote": "Credit Note",
     "deliveryNote": "Delivery Note",
     "create": "Create Invoice",
@@ -266,7 +265,6 @@
   "pdf": {
     "invoice": "Invoice",
     "taxInvoice": "Tax Invoice",
-    "quotation": "Quotation",
     "deliveryNote": "Delivery Note",
     "creditNote": "Credit Note",
     "debitNote": "Debit Note",
