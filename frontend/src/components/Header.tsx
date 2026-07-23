@@ -52,13 +52,23 @@ const Header: React.FC<HeaderProps> = ({
   const [liveFYObjects,   setLiveFYObjects]   = useState<{ label: string; startDate: string; endDate: string }[]>([]);
   const [liveFYYears,     setLiveFYYears]     = useState<string[]>([]);
 
-  // Load real companies from API
+  // Load real companies from API — refresh after each desktop sync bump
   useEffect(() => {
+    if (!isPaired) return;
     getCompanies().then((res: any) => {
       const cos = res?.data ?? [];
       if (cos.length) setLiveCompanies(cos);
     }).catch(() => {});
-  }, []);
+  }, [isPaired, lastSyncAt]);
+
+  // Also refresh when opening the company picker (covers mid-session desktop switches)
+  useEffect(() => {
+    if (!showCompanyModal || !isPaired) return;
+    getCompanies().then((res: any) => {
+      const cos = res?.data ?? [];
+      if (cos.length) setLiveCompanies(cos);
+    }).catch(() => {});
+  }, [showCompanyModal, isPaired]);
 
   // Sync company name when AuthContext updates
   useEffect(() => {

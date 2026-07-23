@@ -206,25 +206,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!json?.success) return;
         const { is_paired, desktop_online, company: statusCompany } = json.data ?? {};
         if (typeof is_paired === 'boolean') {
-          const wasUnpaired = !isPaired && is_paired;
-          setIsPairedState(is_paired);
-          AsyncStorage.setItem('is_paired', is_paired ? 'true' : 'false').catch(() => {});
-
-          // When device just got paired: update company from status response
-          if (wasUnpaired && is_paired && statusCompany?.guid && !company?.guid) {
-            const c = { guid: statusCompany.guid, name: statusCompany.name, gstin: statusCompany.gstin || null };
-            setCompanyState(c);
-            AsyncStorage.setItem('company_data', JSON.stringify(c)).catch(() => {});
-          }
+          setIsPairedState(prev => {
+            const wasUnpaired = !prev && is_paired;
+            AsyncStorage.setItem('is_paired', is_paired ? 'true' : 'false').catch(() => {});
+            // Pairing transition with no cached company → adopt status company
+            if (wasUnpaired && is_paired && statusCompany?.guid) {
+              setCompanyState(cur => {
+                if (cur?.guid) return cur;
+                const c = { guid: statusCompany.guid, name: statusCompany.name, gstin: statusCompany.gstin || null };
+                AsyncStorage.setItem('company_data', JSON.stringify(c)).catch(() => {});
+                return c;
+              });
+            }
+            return is_paired;
+          });
         }
         if (typeof desktop_online === 'boolean') {
           setIsDesktopOnlineState(desktop_online);
         }
+
+        // After desktop syncs a different/new company, active set changes (old cos
+        // marked is_active=false). Drop inactive cached company and adopt active one.
+        if (is_paired && statusCompany?.guid) {
+          try {
+            const cosRes = await fetch(`${BASE_URL}/api/companies`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (cosRes.ok) {
+              const cosJson = await cosRes.json();
+              const list: { id: string; name: string; gstin?: string | null }[] = cosJson?.data || [];
+              setCompanyState(cur => {
+                const stillActive = !!(cur?.guid && list.some(c => c.id === cur.guid));
+                if (stillActive) return cur;
+                const pick = list.find(c => c.id === statusCompany.guid) || list[0];
+                if (!pick) return cur;
+                const c = { guid: pick.id, name: pick.name, gstin: pick.gstin || null };
+                AsyncStorage.setItem('company_data', JSON.stringify(c)).catch(() => {});
+                return c;
+              });
+            }
+          } catch { /* keep cached */ }
+        }
+
         // Track last_seen changes — when desktop syncs, last_seen advances
-        // Use Date.now() (always unique) to guarantee useEffect deps change each sync
         const deviceLastSeen = json.data?.device?.last_seen;
         if (deviceLastSeen && typeof deviceLastSeen === 'number') {
-          // deviceLastSeen is Unix seconds; convert to ms for comparison
           setLastSyncAt(prev => (deviceLastSeen * 1000) > prev ? (deviceLastSeen * 1000) : prev);
         }
       } catch {
@@ -233,7 +259,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     poll(); // immediate check on mount / auth change
-    // Poll every 10s — fast enough to detect unpair within ~10s without hammering the server
     const interval = setInterval(poll, 10_000);
     return () => clearInterval(interval);
   }, [isAuthenticated, BASE_URL]);
