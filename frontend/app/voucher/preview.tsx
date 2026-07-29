@@ -66,33 +66,12 @@ export default function VoucherPreviewScreen() {
   // ── Item table (Credit Note / Debit Note) ────────────────────────────────
   const ItemTable = ({ showQty = true }: { showQty?: boolean }) => {
     if (!items.length) {
-      // Render sample data for demo
-      const sampleItems = type === 'credit_note'
-        ? [
-            { no: '1', item: 'HR-Sheet 2 mm (2.4 × 1.2m)', qty: '10 pcs × 550', price: '₹5,50,500' },
-            { no: '2', item: 'GST 18%', qty: '', price: '₹99,000' },
-          ]
-        : [
-            { no: '1', item: 'Quality claim charge', qty: '', price: '-₹1,00,000' },
-            { no: '2', item: 'GST 18%', qty: '', price: '-₹18,000' },
-          ];
       return (
         <View style={pv.table}>
-          <View style={pv.tHead}>
-            <Text style={[pv.th, { flex: 0.25 }]}>#</Text>
-            <Text style={[pv.th, { flex: 1 }]}>ITEM</Text>
-            {showQty && <Text style={[pv.th, { flex: 0.7 }]}>QTY</Text>}
-            <Text style={[pv.th, { flex: 0.7, textAlign: 'right' }]}>PRICE</Text>
+          <View style={pv.tRow}>
+            <Text style={[pv.td, { flex: 1, color: COLORS.textTertiary }]}>No item details available</Text>
           </View>
-          {sampleItems.map((row, i) => (
-            <View key={i} style={[pv.tRow, i < sampleItems.length - 1 && pv.tRowBorder]}>
-              <Text style={[pv.td, { flex: 0.25 }]}>{row.no}</Text>
-              <Text style={[pv.td, { flex: 1 }]} numberOfLines={2}>{row.item}</Text>
-              {showQty && <Text style={[pv.td, { flex: 0.7 }]}>{row.qty || '\u2014'}</Text>}
-              <Text style={[pv.td, { flex: 0.7, textAlign: 'right' }]}>{row.price}</Text>
-            </View>
-          ))}
-          <AmountRow value={p.amount || (type === 'credit_note' ? '\u20b96,49,000' : '\u20b91,18,000')} />
+          <AmountRow value={p.amount || '\u2014'} />
         </View>
       );
     }
@@ -209,8 +188,8 @@ export default function VoucherPreviewScreen() {
       case 'credit_note':
         return (
           <>
-            <Field label="VOUCHER NUMBER" value={p.voucherNumber || 'CN-00712'} />
-            <Field label="DATE" value={p.date || '09 Jul 2025'} />
+            <Field label="VOUCHER NUMBER" value={p.voucherNumber || '\u2014'} />
+            <Field label="DATE" value={p.date || '\u2014'} />
             <Field label="CUSTOMER" value={p.customer || '\u2014'} />
             <Field label="AGAINST" value={p.against || '\u2014'} />
             <ItemTable showQty={true} />

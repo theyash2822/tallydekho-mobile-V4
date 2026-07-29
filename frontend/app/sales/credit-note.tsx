@@ -1,98 +1,182 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
-import { ErrorBanner } from '../../src/components/ApiStateViews';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { EmptyState, ErrorState, LoadingState } from '../../src/components/ApiStateViews';
+import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { getCreditNotes } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
+import { useApiData } from '../../src/hooks/useApiData';
+import { getCreditNotes } from '../../src/services/api';
 
-const SC: Record<string,string> = { issued: COLORS.warning, settled: COLORS.positive };
-const SL: Record<string,string> = { issued: 'Issued', settled: 'Settled' };
+type CreditNoteRow = {
+  id: string;
+  voucherNumber: string;
+  party: string;
+  date: string;
+  amount: number;
+  status: 'posted' | 'optional' | 'cancelled' | 'synced';
+  reference: string;
+};
+
+const statusLabel: Record<CreditNoteRow['status'], string> = {
+  posted: 'Posted',
+  optional: 'Optional',
+  cancelled: 'Cancelled',
+  synced: 'Synced',
+};
+
+const statusColor: Record<CreditNoteRow['status'], string> = {
+  posted: COLORS.positive,
+  optional: COLORS.warning,
+  cancelled: COLORS.negative,
+  synced: COLORS.info,
+};
+
+function normalizeRows(raw: any): CreditNoteRow[] {
+  const rows = Array.isArray(raw?.data) ? raw.data : Array.isArray(raw?.creditNotes) ? raw.creditNotes : Array.isArray(raw) ? raw : [];
+  return rows.map((row: any) => {
+    const isOptional = row.is_optional === true || row.current_entry_type === 'optional' || row.original_entry_type === 'optional';
+    const isPosted = row.books_impact_status === 'posted' || row.tally_sync_status === 'synced';
+    return {
+      id: String(row.guid || row.voucher_guid || row.id || ''),
+      voucherNumber: String(row.voucher_number || row.tally_voucher_no || row.tdk_reference_no || 'Pending from TallyPrime'),
+      party: String(row.party_name || row.party_ledger || ''),
+      date: String(row.date || ''),
+      amount: Math.abs(Number(row.party_amount ?? row.amount ?? row.total_amount) || 0),
+      status: row.is_cancelled ? 'cancelled' : isOptional ? 'optional' : isPosted ? 'posted' : 'synced',
+      reference: String(row.reference || row.tdk_reference_no || ''),
+    };
+  }).filter((row: CreditNoteRow) => !!row.id);
+}
 
 export default function CreditNotesScreen() {
-  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
+  const { company, selectedFY } = useAuth();
+  const { formatAmount, formatDate } = useSettings();
   const [search, setSearch] = useState('');
-  const [apiError, setApiError] = useState<string | null>(null);
-  const { company } = useAuth();
-  const companyGuid = company?.guid;
-  const [liveData, setLiveData] = useState<any[]>([]);
 
-  useEffect(() => {
-    if (!companyGuid) return;
-    getCreditNotes(companyGuid).then((res: any) => {
-      const rows = res?.data ?? [];
-      if (rows.length) setLiveData(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), party: r.party_name||'', date: r.date||'', amount: formatAmount(Math.abs(+r.amount||0)), status: 'confirmed' })));
-    }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
-  }, [companyGuid]);
+  const notesState = useApiData<CreditNoteRow[]>(
+    () => getCreditNotes(company!.guid, {
+      from: selectedFY?.startDate,
+      to: selectedFY?.endDate,
+      limit: '500',
+    }),
+    [company?.guid, selectedFY?.startDate, selectedFY?.endDate],
+    {
+      enabled: !!company?.guid,
+      transform: normalizeRows,
+      emptyCheck: rows => rows.length === 0,
+    },
+  );
 
-  const filtered = (liveData).filter(n => !search || n.party.toLowerCase().includes(search.toLowerCase()) || n.id.toLowerCase().includes(search.toLowerCase()));
+  const filtered = useMemo(() => (notesState.data || []).filter(note => {
+    const needle = search.trim().toLowerCase();
+    return !needle
+      || note.party.toLowerCase().includes(needle)
+      || note.voucherNumber.toLowerCase().includes(needle)
+      || note.reference.toLowerCase().includes(needle);
+  }), [notesState.data, search]);
+
+  const total = (notesState.data || []).reduce((sum, note) => sum + note.amount, 0);
 
   return (
-    <SafeAreaView style={s.safe}>
-      <View style={s.hdr}>
-        <TouchableOpacity onPress={() => router.back()} style={s.back} hitSlop={{ top:8,bottom:8,left:8,right:8 }}><Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} /></TouchableOpacity>
-        <Text style={s.hdrTitle}>Credit Notes</Text>
-        <TouchableOpacity style={s.hdrAct}><Ionicons name="ellipsis-vertical" size={20} color={COLORS.textPrimary} /></TouchableOpacity>
+    <SafeAreaView style={s.safe} edges={['top']}>
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => router.back()} style={s.back}>
+          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
+        </TouchableOpacity>
+        <Text style={s.title}>Credit Notes</Text>
       </View>
-      {apiError && <ErrorBanner message={apiError} />}
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
-        <View style={s.filterRow}>
-          <TouchableOpacity style={s.dd}><Ionicons name="calendar-outline" size={13} color={COLORS.textSecondary} /><Text style={s.ddTxt}>June 25</Text><Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} /></TouchableOpacity>
-          <TouchableOpacity style={s.dd}><Text style={s.ddTxt}>Status</Text><Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} /></TouchableOpacity>
-          <TouchableOpacity style={s.dd}><Text style={s.ddTxt}>FY 2025-26</Text><Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} /></TouchableOpacity>
-        </View>
-        <View style={s.search}><Ionicons name="search" size={16} color={COLORS.textTertiary} />
-          <TextInput style={s.searchIn} placeholder="Search credit notes..." placeholderTextColor={COLORS.textTertiary} value={search} onChangeText={setSearch} />
-        </View>
-        <View style={s.statsRow}>
-          {[{l:'Total',v:'₹0'},{l:'Issued',v:'0'},{l:'Docs',v:String(liveData.length)}].map(st=>(
-            <View key={st.l} style={s.stat}><Text style={s.statV}>{st.v}</Text><Text style={s.statL}>{st.l}</Text></View>
-          ))}
-          <View style={s.stat}><Text style={s.statV}>Jan 25</Text><Text style={s.statL}>Period</Text></View>
-        </View>
-        <View style={s.secHdr}><Text style={s.secT}>Credit Notes</Text></View>
-        <View style={s.card}>
-          {filtered.map((n, idx) => (
-            <View key={n.id}>
-              <TouchableOpacity style={s.row} activeOpacity={0.7}>
-                <View style={s.rowL}>
-                  <View style={[s.dot, { backgroundColor: SC[n.status] || '#9CA3AF' }]} />
-                  <View style={s.rInfo}>
-                    <View style={s.topR}><Text style={[s.stLbl, { color: SC[n.status] }]}>{SL[n.status]}</Text><Text style={s.docId}>{n.id}</Text></View>
-                    <Text style={s.party}>{n.party}</Text>
-                    <Text style={s.meta}>{n.date} · {n.time} · Ref: {n.ref}</Text>
-                  </View>
+
+      {notesState.loading ? (
+        <LoadingState message="Loading credit notes..." />
+      ) : notesState.error ? (
+        <ErrorState message={notesState.error} onRetry={notesState.reload} />
+      ) : notesState.isEmpty ? (
+        <EmptyState title="No credit notes" subtitle="No Sales Returns were found in the selected financial year." icon="return-up-back-outline" />
+      ) : (
+        <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+          <View style={s.search}>
+            <Ionicons name="search" size={17} color={COLORS.textTertiary} />
+            <TextInput
+              style={s.searchInput}
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search voucher, party or reference..."
+              placeholderTextColor={COLORS.textTertiary}
+            />
+          </View>
+
+          <View style={s.stats}>
+            <View style={s.stat}><Text style={s.statValue}>{notesState.data?.length || 0}</Text><Text style={s.statLabel}>Documents</Text></View>
+            <View style={s.stat}><Text style={s.statValue}>{formatAmount(total)}</Text><Text style={s.statLabel}>Credit value</Text></View>
+          </View>
+
+          {filtered.length === 0 ? (
+            <View style={s.noResults}><Text style={s.noResultsText}>No matching credit notes.</Text></View>
+          ) : (
+            <View style={s.card}>
+              {filtered.map((note, index) => (
+                <View key={note.id}>
+                  <TouchableOpacity
+                    style={s.row}
+                    activeOpacity={0.75}
+                    onPress={() => router.push(`/document/${encodeURIComponent(note.id)}?type=credit_note` as any)}
+                  >
+                    <View style={[s.dot, { backgroundColor: statusColor[note.status] }]} />
+                    <View style={{ flex: 1 }}>
+                      <View style={s.rowTop}>
+                        <Text style={[s.status, { color: statusColor[note.status] }]}>{statusLabel[note.status]}</Text>
+                        <Text style={s.number}>{note.voucherNumber}</Text>
+                      </View>
+                      <Text style={s.party}>{note.party || 'Party unavailable'}</Text>
+                      <Text style={s.meta}>
+                        {formatDate(note.date)}
+                        {note.reference ? ` · Ref ${note.reference}` : ''}
+                      </Text>
+                    </View>
+                    <View style={s.amountWrap}>
+                      <Text style={s.amount}>{formatAmount(note.amount)}</Text>
+                      <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
+                    </View>
+                  </TouchableOpacity>
+                  {index < filtered.length - 1 && <View style={s.divider} />}
                 </View>
-                <View style={s.rowR}><Text style={s.amt}>{n.amount}</Text>
-                  <TouchableOpacity style={s.shareB}><Ionicons name="share-outline" size={14} color={COLORS.positive} /><Text style={s.shareT}>Share</Text></TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-              {idx < filtered.length - 1 && <View style={s.div} />}
+              ))}
             </View>
-          ))}
-        </View>
-      </ScrollView>
+          )}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
-  safe:{flex:1,backgroundColor:COLORS.pageBg}, hdr:{flexDirection:'row',alignItems:'center',gap:12,backgroundColor:COLORS.cardBg,paddingHorizontal:SPACING.md,paddingVertical:14,borderBottomWidth:1,borderBottomColor:COLORS.borderDefault},
-  back:{width:36,height:36,borderRadius:18,backgroundColor:COLORS.pageBg,alignItems:'center',justifyContent:'center'}, hdrTitle:{flex:1,fontSize:TYPOGRAPHY.md,fontWeight:'700',color:COLORS.textPrimary}, hdrAct:{width:36,height:36,alignItems:'center',justifyContent:'center'},
-  filterRow:{flexDirection:'row',gap:8,paddingHorizontal:SPACING.md,paddingTop:SPACING.md}, dd:{flexDirection:'row',alignItems:'center',gap:5,backgroundColor:COLORS.cardBg,borderRadius:RADIUS.md,paddingHorizontal:10,paddingVertical:10,borderWidth:1,borderColor:COLORS.borderDefault,flex:1},
-  ddTxt:{flex:1,fontSize:12,color:COLORS.textSecondary}, search:{flexDirection:'row',alignItems:'center',gap:8,backgroundColor:COLORS.cardBg,borderRadius:RADIUS.md,marginHorizontal:SPACING.md,marginTop:SPACING.sm,paddingHorizontal:14,paddingVertical:12,borderWidth:1,borderColor:COLORS.borderDefault},
-  searchIn:{flex:1,fontSize:TYPOGRAPHY.base,color:COLORS.textPrimary}, statsRow:{flexDirection:'row',gap:8,marginHorizontal:SPACING.md,marginTop:SPACING.md},
-  stat:{flex:1,backgroundColor:COLORS.cardBg,borderRadius:RADIUS.md,padding:12,alignItems:'center',borderWidth:1,borderColor:COLORS.borderDefault}, statV:{fontSize:TYPOGRAPHY.sm,fontWeight:'700',color:COLORS.textPrimary}, statL:{fontSize:TYPOGRAPHY.xs,color:COLORS.textSecondary,marginTop:3},
-  secHdr:{flexDirection:'row',alignItems:'center',marginHorizontal:SPACING.md,marginTop:SPACING.md,marginBottom:SPACING.sm}, secT:{fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.textPrimary},
-  card:{backgroundColor:COLORS.cardBg,marginHorizontal:SPACING.md,borderRadius:RADIUS.lg,borderWidth:1,borderColor:COLORS.borderDefault,overflow:'hidden'},
-  row:{flexDirection:'row',alignItems:'flex-start',justifyContent:'space-between',paddingHorizontal:SPACING.md,paddingVertical:14,gap:12}, rowL:{flexDirection:'row',alignItems:'flex-start',gap:10,flex:1},
-  dot:{width:9,height:9,borderRadius:5,marginTop:4}, rInfo:{flex:1,gap:3}, topR:{flexDirection:'row',alignItems:'center',gap:8}, stLbl:{fontSize:TYPOGRAPHY.xs,fontWeight:'600'}, docId:{fontSize:TYPOGRAPHY.xs,color:COLORS.textSecondary},
-  party:{fontSize:TYPOGRAPHY.sm,fontWeight:'600',color:COLORS.textPrimary}, meta:{fontSize:TYPOGRAPHY.xs,color:COLORS.textTertiary}, rowR:{alignItems:'flex-end',gap:8}, amt:{fontSize:TYPOGRAPHY.base,fontWeight:'700',color:COLORS.textPrimary},
-  shareB:{flexDirection:'row',alignItems:'center',gap:4,paddingHorizontal:10,paddingVertical:5,backgroundColor:COLORS.positiveBg,borderRadius:RADIUS.md}, shareT:{fontSize:TYPOGRAPHY.xs,color:COLORS.positive,fontWeight:'600'},
-  div:{height:1,backgroundColor:COLORS.borderDefault,marginLeft:16},
+  safe: { flex: 1, backgroundColor: COLORS.pageBg },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: SPACING.md, paddingVertical: 14, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  back: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.pageBg },
+  title: { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
+  scroll: { padding: SPACING.md, paddingBottom: 32, gap: 12 },
+  search: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 13, minHeight: 48, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
+  searchInput: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
+  stats: { flexDirection: 'row', gap: 10 },
+  stat: { flex: 1, padding: 14, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
+  statValue: { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
+  statLabel: { marginTop: 3, fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  card: { borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg, overflow: 'hidden' },
+  row: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: SPACING.md },
+  dot: { width: 9, height: 9, borderRadius: 5, marginTop: 5 },
+  rowTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  status: { fontSize: TYPOGRAPHY.xs, fontWeight: '800' },
+  number: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  party: { marginTop: 4, fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  meta: { marginTop: 3, fontSize: 11, color: COLORS.textTertiary },
+  amountWrap: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  amount: { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
+  divider: { height: 1, marginLeft: 35, backgroundColor: COLORS.borderDefault },
+  noResults: { padding: 28, alignItems: 'center' },
+  noResultsText: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
 });

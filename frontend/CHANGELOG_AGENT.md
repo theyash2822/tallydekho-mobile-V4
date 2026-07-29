@@ -1,5 +1,27 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-07-29 — Credit Note 2-step Sales Return rewrite
+
+### Changed
+- `create-credit-note.tsx`: replaced all mock parties, invoices, inventory, warehouses, barcode mappings, and fake CN number with a production two-step flow
+- Step 1 loads live parties, then every Sales invoice for that party in the selected FY; linked invoice is required and loads `/sales/invoices/:id/credit-note-context`
+- Step 2 contains only original invoice lines, initially unselected, with sold / previously returned / remaining quantities; return qty is capped to backend cumulative remaining quantity
+- Original unit/rate stay locked; original Sales ledger and godown are prefilled but editable from live masters; tax rows are prefilled from return context and remain editable
+- Submit uses the camelCase credit-note contract with selected items/taxes, `linked_invoice`, `isOptional`, `original_entry_type`, and Settings-only `numbering_policy`
+- Success overlay reports queued/posted state, real Tally number or `Pending from TallyPrime`, TDK reference, and real Preview/Share actions
+- `voucher/preview.tsx`: removed credit/debit note demo item and credit-note number/date fallbacks
+- `credit-note.tsx`: removed placeholder filters/stats/share UI; added real FY-scoped loading/error/empty list and synced document opening
+- `api.ts`: added `getSalesInvoiceCreditNoteContext`
+
+### Test
+1. Sales → Credit Note → select party; verify all FY Sales invoices load, including paid invoices
+2. Select invoice; verify context loads and all original items start unchecked
+3. Select a line; verify qty cannot exceed Remaining, unit/rate are locked, and ledger/godown/tax are real
+4. Enter mandatory narration and submit Regular and Optional returns
+5. Verify queued/posted result, Tally number/TDK ref, Preview/Share, then open the synced row from Credit Notes
+
+---
+
 ## 2026-07-29 — Delivery Note 3-step + Invoice-style REG/OPT date lock
 
 ### Changed

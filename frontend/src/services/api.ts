@@ -158,6 +158,8 @@ export const searchDashboard   = (q: string, companyGuid?: string) => get<any>(w
 // ══════════════════════════════════════════════════════════════
 
 export const getSalesInvoices  = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/invoices', companyGuid, params));
+export const getSalesInvoiceCreditNoteContext = (invoiceId: string, companyGuid: string) =>
+  get<any>(withCompany(`/sales/invoices/${encodeURIComponent(invoiceId)}/credit-note-context`, companyGuid));
 export const getSalesOrders    = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/orders', companyGuid, params));
 export const getCreditNotes    = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/credit-notes', companyGuid, params));
 export const getDeliveryNotes  = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/delivery-notes', companyGuid, params));

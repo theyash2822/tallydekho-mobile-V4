@@ -1,4 +1,20 @@
 
+## [2026-07-29] Credit Note — 2-step invoice-linked Sales Return
+
+### Changed
+- `frontend/app/sales/create-credit-note.tsx`: live Details & Invoice → Returned Items & Review flow; mandatory FY Sales invoice and backend cumulative-return context
+- Original invoice items start unselected; qty is capped to backend remaining; original unit/rate lock while Sales ledger, godown, and context taxes remain editable
+- Production camelCase submit, Settings numbering, REG/OPT FY date behavior, and queued/posted success with real Preview/Share
+- `frontend/app/sales/credit-note.tsx`: real FY list states and synced `/document/[id]` opening
+- `frontend/app/voucher/preview.tsx`: removed credit-note demo fallbacks
+- `frontend/src/services/api.ts`: added credit-note-context helper
+- `frontend/API_USAGE.md`: documented read/write contract
+
+### Test
+Select party → invoice → return context; select lines within remaining qty, add reason, submit, preview/share, and open the synced list row.
+
+---
+
 ## [2026-07-29] Delivery Note — 3-step + Invoice-style REG/OPT date lock
 
 ### Changed

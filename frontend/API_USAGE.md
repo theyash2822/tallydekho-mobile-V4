@@ -65,6 +65,11 @@ getSalesInvoices, getSalesOrders, getCreditNotes,
 getDeliveryNotes, getPurchaseInvoices, getPurchaseOrders, getPurchaseDebitNotes
 All: GET /api/sales/* or /api/purchase/* + ?companyGuid&fy
 
+Credit Note Sales Return:
+- `getSalesInvoices(companyGuid, { partyName, from, to, limit })` — all Sales invoices for the selected party and FY
+- `getSalesInvoiceCreditNoteContext(invoiceId, companyGuid)` — `GET /api/sales/invoices/:id/credit-note-context?companyGuid=...`; returns original invoice lines plus cumulative returned/remaining quantities, original Sales ledger/godown, and tax context
+- `createCreditNote(payload)` — `POST /tally/voucher/credit-note` with camelCase voucher payload, selected return lines, taxes, `linked_invoice`, `original_entry_type`, and `numbering_policy`
+
 ## Vouchers
 getVouchers, getMyEntries, getVoucherById, retryVoucherEntry
 Write: POST /tally/* (via tallyPost)
