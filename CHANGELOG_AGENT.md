@@ -1,4 +1,61 @@
 
+## [2026-07-29] Delivery Note — 2-step rewrite on live masters
+
+### Context
+`create-delivery-note.tsx` was a mock stub: hard-coded party/invoice/product/dispatch
+arrays, a fake `DN-00235` badge shown as the voucher number, and a submit payload
+(`company_guid`, `stock_item`, `dispatch_method`, …) that did not match
+`POST /tally/voucher/delivery-note`. Rewritten as a 2-step screen using the same
+patterns as `create-order.tsx` / `create-invoice.tsx`.
+
+### Added / Changed
+- Step 1 "Details": sales ledger (`getSalesLedgerAccounts`), party (`getParties`),
+  date, and an optional linked Sales Order loaded only after a party is chosen
+  (`getSalesOrders({ partyName })`); changing/clearing the party clears the linked order
+- Step 2 "Items & Dispatch": live `getStocks` item picker with per-item godown
+  (`getStockGodowns`, `getWarehouses`), qty/unit/rate/derived amount, per-item sales
+  ledger, per-item tax rows (`getTaxLedgers`), `LogisticsSection`
+  (`getChargeLedgers`), dispatch block and narration
+- Numbering comes from `useNumberingPolicy` — no invented number, no on-screen
+  override pill; Regular/Optional toggle is submitted as `isOptional`
+- Payload now matches the backend contract: `companyGuid`, `companyName`,
+  `partyLedger`, ISO `date`, `totalAmount`, `items[{itemName, actualQty, billedQty,
+  unit, rate, amount, salesLedger, godown, trackingNumber}]`, `taxes`, `logistics`,
+  `narration`, `isOptional`, `numbering_policy`, `dispatch_details`, `linked_order`
+- Success overlay reports the real result: Tally voucher number when returned,
+  otherwise "Pending from TallyPrime"; Preview is only offered when the response
+  carries a TDK reference
+- Validations: ledger/party/date before step 2; ≥1 item with qty and rate; sales
+  ledger per item; godown required when an item has multiple godowns; vehicle
+  number format
+- Removed all mock arrays (`PARTIES`, `INVOICES`, `DISPATCH_METHODS`, `PRODUCTS`,
+  `UNITS`) — units now derive from live stock masters
+
+### Files
+- `frontend/app/sales/create-delivery-note.tsx`
+
+### Device checklist
+1. Sales → Create Delivery Note → ledger + party load from Tally
+2. Pick a party → linked Sales Order list loads for that party only
+3. Change the party → linked Sales Order clears and reloads
+4. Step 2 → pick a product → godown list loads; qty × rate drives Amount
+5. Add a tax row → rate auto-fills amount → Grand Total updates
+6. Toggle Dispatch → fill transport mode / doc / destination / vehicle → submit
+7. Tally receives the Delivery Note; success card shows the Tally number, never a
+   fabricated one
+8. OPT toggle → voucher lands as optional in Tally
+
+### Risks / follow-up
+- Backend now consumes the full contract, writes accounting/GST/dispatch/order-link
+  XML, returns `tdkReferenceNo`, and persists `app_vouchers`.
+- Linked Sales Orders use exact backend `partyName` filtering plus selected-FY
+  `from`/`to`; changing party clears the selection.
+- Item units are read-only from the live stock master. A unitless item sends a bare
+  rate instead of inventing `pcs`.
+- Live Tally import/reconciliation remains the required device smoke test.
+
+---
+
 ## [2026-07-15] Journal Depreciation — Direct write-down (Cr Asset)
 
 ### Context

@@ -119,10 +119,7 @@ export default function VoucherPreviewScreen() {
 
   // ── Delivery item table ──────────────────────────────────────────────────
   const DeliveryTable = () => {
-    const rows = deliveryItems.length ? deliveryItems : [
-      { no: '1', item: 'A101 2 mm Sheet', qty: '80 pcs' },
-      { no: '2', item: 'B2307 Packing Set', qty: '10 pcs' },
-    ];
+    const rows = deliveryItems;
     return (
       <View style={pv.table}>
         <View style={pv.tHead}>
@@ -130,22 +127,26 @@ export default function VoucherPreviewScreen() {
           <Text style={[pv.th, { flex: 1 }]}>ITEM</Text>
           <Text style={[pv.th, { flex: 0.6, textAlign: 'right' }]}>QTY</Text>
         </View>
-        {rows.map((row, i) => (
+        {rows.length === 0 ? (
+          <View style={pv.tRow}>
+            <Text style={[pv.td, { flex: 1 }]}>No items</Text>
+          </View>
+        ) : rows.map((row, i) => (
           <View key={i} style={[pv.tRow, i < rows.length - 1 && pv.tRowBorder]}>
             <Text style={[pv.td, { flex: 0.25 }]}>{row.no}</Text>
             <Text style={[pv.td, { flex: 1 }]}>{row.item}</Text>
             <Text style={[pv.td, { flex: 0.6, textAlign: 'right' }]}>{row.qty}</Text>
           </View>
         ))}
-        {(p.totalPackages || '4 cartons') && (
+        {!!p.totalPackages && (
           <View style={pv.summaryRow}>
             <Text style={pv.sumLbl}>Total Packages</Text>
-            <Text style={pv.sumVal}>{p.totalPackages || '4 cartons'}</Text>
+            <Text style={pv.sumVal}>{p.totalPackages}</Text>
           </View>
         )}
         <View style={[pv.summaryRow, { borderTopWidth: 1, borderTopColor: COLORS.borderDefault }]}>
           <Text style={pv.sumLbl}>Total Quantity</Text>
-          <Text style={pv.sumVal}>{p.totalQty || '90 Pcs'}</Text>
+          <Text style={pv.sumVal}>{p.totalQty || '\u2014'}</Text>
         </View>
       </View>
     );
@@ -232,9 +233,9 @@ export default function VoucherPreviewScreen() {
       case 'delivery_note':
         return (
           <>
-            <Field label="VOUCHER NUMBER" value={p.voucherNumber || 'DN-00418'} />
-            <Field label="DATE" value={p.date || '09 Jul 2025 \u2013 14:15'} />
-            <Field label="CUSTOMER" value={p.customer || '\u2014'} />
+            <Field label="VOUCHER NUMBER" value={p.voucherNumber || '\u2014'} />
+            <Field label="DATE" value={p.date || '\u2014'} />
+            <Field label="CUSTOMER" value={p.customer || p.party || '\u2014'} />
             <Field label="DISPATCH FROM" value={p.dispatchFrom || '\u2014'} />
             <Field label="SHIP TO" value={p.shipTo || '\u2014'} />
             <Field label="DISPATCH MODE" value={p.dispatchMode || '\u2014'} />

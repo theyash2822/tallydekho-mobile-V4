@@ -1,5 +1,37 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-07-29 — Delivery Note 2-step rewrite on live masters
+
+### Added / Changed
+- `create-delivery-note.tsx`: full rewrite as a 2-step flow (Details → Items & Dispatch),
+  replacing the mock stub (hard-coded parties/invoices/products/dispatch methods and a
+  fake `DN-00235` number)
+- Step 1: `getSalesLedgerAccounts`, `getParties`, date, and an optional linked Sales
+  Order via `getSalesOrders({ partyName })` fetched only after a party is selected;
+  party change clears it; selected-FY `from`/`to` scopes the list
+- Step 2: `getStocks` picker + per-item `getStockGodowns`/`getWarehouses`, per-item sales
+  ledger, per-item taxes (`getTaxLedgers`), `LogisticsSection` (`getChargeLedgers`),
+  dispatch fields and narration
+- Numbering via `useNumberingPolicy` (no on-screen override, no invented number);
+  Regular/Optional submitted as `isOptional`
+- Payload aligned to `POST /tally/voucher/delivery-note`: `companyGuid`, `companyName`,
+  `partyLedger`, ISO `date`, `totalAmount`, `items[{itemName, actualQty, billedQty, unit,
+  rate, amount, salesLedger, godown, trackingNumber}]`, `taxes`, `logistics`, `narration`,
+  `isOptional`, `numbering_policy`, `dispatch_details`, `linked_order`
+- Success overlay shows the Tally voucher number when returned, else "Pending from
+  TallyPrime"; Preview only rendered when a TDK reference comes back
+- Delivery Note preview now uses submitted customer/items/dispatch/order data and
+  removes all hardcoded demo fallbacks
+- Item unit is read-only from the live stock master; unitless items send a bare rate
+
+### API
+No new endpoint. `/sales/orders` now supports exact `partyName` filtering.
+
+### Test
+See device checklist in `CHANGELOG_AGENT.md` at the mobile repo root.
+
+---
+
 ## 2026-07-23 — Sales Order 2-step create + convert to invoice
 
 ### Added / Changed
