@@ -1,5 +1,25 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-07-29 — Delivery Note 3-step + Invoice-style REG/OPT date lock
+
+### Changed
+- `create-delivery-note.tsx`: rewritten as **3 steps**
+  1. **Details** — Sales Ledger, locked DN No, Party, Linked Sales Order; REG/OPT like Sales Invoice
+  2. **Order & Dispatch** — screenshot fields (Order No read-only from Step 1; Mode/Terms of Payment; Other References; Terms of Delivery; Dispatch Doc No; Dispatched through; Destination; Carrier; LR/Bill of Lading + date; Motor Vehicle No)
+  3. **Items & Logistics** — items/taxes/logistics/narration/submit
+- **Regular:** date snaps to today and stays locked; **Optional:** date unlocked within selected FY (`fyStart`–`fyEnd`)
+- Linked SO select → prefill Step 3 via `getOrderPreview` (TDK snapshot) or `getVoucherById` (synced inventory); qty editable for partial delivery; godown/tax remain editable
+- Submit sends `original_entry_type` + expanded `dispatch_details` matching backend Order/Dispatch tags
+- Dropped Transporter ID / Vehicle Type from main DN UI (not on screenshot); internal `trackingNumber` still set from linked SO for item `TRACKINGNUMBER`
+
+### Test
+1. Reload Expo → FAB Delivery Note → confirm 3-step indicator
+2. REG date locked; flip OPT → pick past/future in FY; flip REG → today again
+3. Party Airen International → link SO #1 → items appear in Step 3
+4. Fill Order/Dispatch → submit with desktop paired → verify fields in Tally
+
+---
+
 ## 2026-07-29 — Delivery Note 2-step rewrite on live masters
 
 ### Added / Changed

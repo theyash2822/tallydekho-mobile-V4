@@ -1,9 +1,10 @@
 /**
  * create-delivery-note.tsx
- * Delivery Note — 2-step create flow
+ * Delivery Note — 3-step create flow (Sales Invoice REG/OPT date lock)
  *
- * Step 1 "Details"        — sales ledger, party, date, optional linked Sales Order
- * Step 2 "Items & Dispatch" — stock items with godown/taxes, logistics, dispatch, narration
+ * Step 1 "Details"           — sales ledger, DN no, party, date, optional Linked SO
+ * Step 2 "Order & Dispatch"  — screenshot Order + Dispatch fields
+ * Step 3 "Items & Logistics" — SO-prefilled or manual items, taxes, logistics, submit
  *
  * All masters are live (no mock arrays). Numbering comes from Settings → Voucher
  * Config via `useNumberingPolicy`; the screen never invents a voucher number.
@@ -22,16 +23,14 @@ import { useAuth } from '../../src/context/AuthContext';
 import {
   getParties, createDeliveryNote, getStocks, getWarehouses,
   getSalesLedgerAccounts, getTaxLedgers, getChargeLedgers, getStockGodowns,
-  getSalesOrders,
+  getSalesOrders, getVoucherById, getOrderPreview,
 } from '../../src/services/api';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
 import FormField from '../../src/components/forms/FormField';
-import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
-import BrandSwitch from '../../src/components/forms/BrandSwitch';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const todayStr = () => {
@@ -70,27 +69,6 @@ const calcItem = (item: DNItem) => {
   return { amount, taxAmt, subtotal: amount + taxAmt };
 };
 
-// Transport Mode / Vehicle Type — same EWB-spec lists used by create-invoice.tsx
-const TRANSPORT_MODES: DropdownOption[] = [
-  { label: 'Road', value: 'Road' },
-  { label: 'Rail', value: 'Rail' },
-  { label: 'Air', value: 'Air' },
-  { label: 'Ship', value: 'Ship' },
-];
-
-const VEHICLE_TYPE_MAP: Record<string, DropdownOption[]> = {
-  Road: [
-    { label: 'Regular', value: 'Regular' },
-    { label: 'Over Dimensional Cargo (ODC)', value: 'Over Dimensional' },
-  ],
-  Rail: [{ label: 'Regular', value: 'Regular' }],
-  Air: [{ label: 'Regular', value: 'Regular' }],
-  Ship: [
-    { label: 'Regular', value: 'Regular' },
-    { label: 'Over Dimensional Cargo (ODC)', value: 'Over Dimensional' },
-  ],
-};
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface StockItem {
   id?: number;
@@ -124,7 +102,12 @@ interface DNItem {
   taxEntries: TaxLedgerEntry[];
 }
 
-interface LinkedOrder { voucherNumber: string; date: string; }
+interface LinkedOrder {
+  voucherNumber: string;
+  date: string;
+  guid?: string;
+  tdkRef?: string;
+}
 
 const newItem = (salesLedger = '', warehouseName = ''): DNItem => ({
   id: Date.now().toString() + Math.random().toString(36).slice(2),
@@ -155,10 +138,11 @@ function ThemedFInput({ style, onFocus, onBlur, keyboardType, ...props }: TextIn
 }
 
 // ─── StepIndicator ────────────────────────────────────────────────────────────
-function StepIndicator({ step }: { step: 1 | 2 }) {
+function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
   const STEPS = [
     { num: 1 as const, label: 'Details' },
-    { num: 2 as const, label: 'Items & Dispatch' },
+    { num: 2 as const, label: 'Order & Dispatch' },
+    { num: 3 as const, label: 'Items & Logistics' },
   ];
   return (
     <View style={si.wrap}>
@@ -170,7 +154,7 @@ function StepIndicator({ step }: { step: 1 | 2 }) {
                 ? <Ionicons name="checkmark" size={13} color={COLORS.white} />
                 : <Text style={[si.circleNum, step === st.num && si.circleNumActive]}>{st.num}</Text>}
             </View>
-            <Text style={[si.label, step === st.num && si.labelActive]}>{st.label}</Text>
+            <Text style={[si.label, step === st.num && si.labelActive]} numberOfLines={1}>{st.label}</Text>
           </View>
           {idx < STEPS.length - 1 && <View style={[si.line, step > st.num && si.lineDone]} />}
         </React.Fragment>
@@ -443,9 +427,10 @@ export default function CreateDeliveryNoteScreen() {
   const insets = useSafeAreaInsets();
   const { company, selectedFY, isPaired } = useAuth();
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
+  const fyEnd = selectedFY?.endDate || `${new Date().getFullYear() + 1}-03-31`;
 
   // ── Core state ───────────────────────────────────────────────────────────────
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [entryType, setEntryType] = useState<EntryType>('regular');
   const [date, setDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -455,6 +440,7 @@ export default function CreateDeliveryNoteScreen() {
   const [partyGstRegType, setPartyGstRegType] = useState('');
   const [parties, setParties] = useState<BSSOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [loadingOrderItems, setLoadingOrderItems] = useState(false);
 
   // Linked Sales Order — fetched only once a party is chosen
   const [linkedOrderOpts, setLinkedOrderOpts] = useState<BSSOption[]>([]);
@@ -478,17 +464,21 @@ export default function CreateDeliveryNoteScreen() {
   const [roundOffAmount, setRoundOffAmount] = useState('');
   const [narration, setNarration] = useState('');
 
-  // Dispatch
-  const [showDispatch, setShowDispatch] = useState(false);
-  const [transportMode, setTransportMode] = useState('Road');
-  const [vehicleType, setVehicleType] = useState('Regular');
-  const [transporterName, setTransporterName] = useState('');
-  const [transporterId, setTransporterId] = useState('');
-  const [vehicleNumber, setVehicleNumber] = useState('');
-  const [transportDocNo, setTransportDocNo] = useState('');
-  const [transportDocDate, setTransportDocDate] = useState('');
-  const [showDocDatePicker, setShowDocDatePicker] = useState(false);
+  // Step 2 — Order Details
+  const [modeOfPayment, setModeOfPayment] = useState('');
+  const [otherReferences, setOtherReferences] = useState('');
+  const [termsOfDelivery, setTermsOfDelivery] = useState('');
+
+  // Step 2 — Dispatch Details
+  const [dispatchDocNo, setDispatchDocNo] = useState('');
+  const [dispatchedThrough, setDispatchedThrough] = useState('');
   const [shipToDestination, setShipToDestination] = useState('');
+  const [carrierName, setCarrierName] = useState('');
+  const [billOfLadingNo, setBillOfLadingNo] = useState('');
+  const [lrDate, setLrDate] = useState('');
+  const [showLrDatePicker, setShowLrDatePicker] = useState(false);
+  const [vehicleNumber, setVehicleNumber] = useState('');
+  // Internal tracking for later DN→Invoice (not on screenshot)
   const [trackingNumber, setTrackingNumber] = useState('');
 
   // Success
@@ -502,6 +492,11 @@ export default function CreateDeliveryNoteScreen() {
   const numberingDisplay = numberingPolicy === 'tallydekho_series'
     ? 'Auto · TallyDekho series'
     : 'Auto · Tally series';
+
+  const handleEntryTypeChange = useCallback((next: EntryType) => {
+    setEntryType(next);
+    if (next === 'regular') setDate(todayStr());
+  }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollTo?.({ y: 0, animated: false });
@@ -602,7 +597,11 @@ export default function CreateDeliveryNoteScreen() {
               value: String(r.voucher_number),
               subtitle: [isoToDMY(r.date), r.amount != null ? `₹${Math.abs(Number(r.amount) || 0).toLocaleString('en-IN')}` : '']
                 .filter(Boolean).join(' · '),
-              data: { date: toISODate(r.date) },
+              data: {
+                date: toISODate(r.date),
+                guid: r.guid || '',
+                tdkRef: r.tdk_reference_no || '',
+              },
             }))
         );
       })
@@ -683,14 +682,22 @@ export default function CreateDeliveryNoteScreen() {
     } : i));
   }, []);
 
-  // ── Party change clears the linked Sales Order ────────────────────────────────
+  // ── Party change clears the linked Sales Order + SO-prefilled items ───────────
+  const resetItemsBlank = useCallback(() => {
+    const autoWarehouse = warehouses.length === 1 ? warehouses[0].name : '';
+    setItems([newItem(ledger, autoWarehouse)]);
+    setItemGodowns({});
+  }, [warehouses, ledger]);
+
   const handlePartySelect = useCallback((opt: BSSOption) => {
     setParty(opt.value);
     setPartyGstin(opt.data?.gstin || '');
     setPartyGstRegType(opt.data?.gst_registration_type || '');
     setLinkedOrder(null);
     setLinkedOrderOpts([]);
-  }, []);
+    setTrackingNumber('');
+    resetItemsBlank();
+  }, [resetItemsBlank]);
 
   const handlePartyClear = useCallback(() => {
     setParty('');
@@ -698,17 +705,160 @@ export default function CreateDeliveryNoteScreen() {
     setPartyGstRegType('');
     setLinkedOrder(null);
     setLinkedOrderOpts([]);
-  }, []);
+    setTrackingNumber('');
+    resetItemsBlank();
+  }, [resetItemsBlank]);
+
+  /** Prefill Step 3 from linked Sales Order — voucher_inventory_items, with optional app_vouchers snapshot for taxes. */
+  const applyOrderPrefill = useCallback(async (order: LinkedOrder) => {
+    if (!company?.guid) return;
+    setLoadingOrderItems(true);
+    try {
+      let mapped: DNItem[] = [];
+      let logisticsFromPayload: LogEntry[] = [];
+
+      // Prefer app_vouchers snapshot when TDK-created SO exists (richer tax/logistics).
+      if (order.tdkRef) {
+        try {
+          const preview: any = await getOrderPreview(order.tdkRef, company.guid);
+          const doc = preview?.data || preview || {};
+          const raw = doc.rawPayload || {};
+          const rawItems = Array.isArray(raw.items) ? raw.items : [];
+          if (rawItems.length) {
+            mapped = rawItems.map((it: any) => ({
+              id: Date.now().toString() + Math.random().toString(36).slice(2),
+              warehouse: it.godown || it.warehouse || (warehouses.length === 1 ? warehouses[0].name : ''),
+              product: it.itemName || it.product || it.name || '',
+              qty: String(it.billedQty ?? it.actualQty ?? it.qty ?? 1),
+              unit: it.unit || '',
+              rate: String(it.rate ?? 0),
+              salesLedger: it.salesLedger || ledger,
+              taxEntries: Array.isArray(it.taxEntries)
+                ? it.taxEntries.map((t: any) => ({
+                  id: Date.now().toString() + Math.random().toString(36).slice(2),
+                  ledgerName: t.ledgerName || '',
+                  taxRate: String(t.taxRate ?? ''),
+                  taxAmount: String(t.taxAmount ?? ''),
+                }))
+                : [],
+            }));
+            // Attach voucher-level taxes to first line when per-item taxEntries absent
+            if (mapped[0] && (!mapped[0].taxEntries || mapped[0].taxEntries.length === 0)
+                && Array.isArray(raw.taxes) && raw.taxes.length) {
+              mapped[0] = {
+                ...mapped[0],
+                taxEntries: raw.taxes.map((t: any) => ({
+                  id: Date.now().toString() + Math.random().toString(36).slice(2),
+                  ledgerName: t.ledgerName || '',
+                  taxRate: String(t.taxRate ?? ''),
+                  taxAmount: String(t.taxAmount ?? ''),
+                })),
+              };
+            }
+            if (Array.isArray(raw.logistics) && raw.logistics.length) {
+              logisticsFromPayload = raw.logistics.map((lg: any) => ({
+                id: Date.now().toString() + Math.random().toString(36).slice(2),
+                ledgerName: lg.ledgerName || '',
+                amount: String(lg.amount ?? ''),
+                addTaxes: Array.isArray(lg.taxes) && lg.taxes.length > 0,
+                taxEntries: (lg.taxes || []).map((t: any) => ({
+                  id: Date.now().toString() + Math.random().toString(36).slice(2),
+                  ledgerName: t.ledgerName || '',
+                  taxRate: String(t.taxRate ?? ''),
+                  taxAmount: String(t.taxAmount ?? ''),
+                })),
+              }));
+            }
+          }
+        } catch { /* fall through to voucher inventory */ }
+      }
+
+      // Synced Tally SO (or preview miss) — pull inventory lines by guid / voucher number
+      if (!mapped.length) {
+        const res: any = await getVoucherById(company.guid, order.guid || order.voucherNumber);
+        const invItems: any[] = res?.data?.items || [];
+        mapped = invItems
+          .filter(it => it.stock_item_name)
+          .map(it => ({
+            id: Date.now().toString() + Math.random().toString(36).slice(2),
+            warehouse: it.godown_name || (warehouses.length === 1 ? warehouses[0].name : ''),
+            product: it.stock_item_name || '',
+            qty: String(it.billed_qty ?? it.actual_qty ?? 1),
+            unit: it.unit || '',
+            rate: String(it.rate ?? 0),
+            salesLedger: ledger,
+            taxEntries: [],
+          }));
+      }
+
+      if (mapped.length) {
+        setItems(mapped);
+        setItemGodowns({});
+        // Warm godown lists for prefilled products (non-blocking)
+        mapped.forEach(async (row) => {
+          const si2 = stockItems.find(st => st.name === row.product);
+          if (!si2?.guid || !company?.guid) return;
+          try {
+            const gRes: any = await getStockGodowns(company.guid, si2.guid);
+            const godownList: Godown[] = gRes?.data?.warehouses || [];
+            const finalGodowns: Godown[] = godownList.length > 0
+              ? godownList
+              : [{ name: row.warehouse || 'Main Location', qty: si2.closing_qty ?? 0 }];
+            setItemGodowns(prev => ({ ...prev, [row.id]: finalGodowns }));
+            if (!row.warehouse && finalGodowns.length === 1) {
+              setItems(prev => prev.map(i => i.id === row.id ? { ...i, warehouse: finalGodowns[0].name } : i));
+            }
+          } catch { /* leave warehouse editable */ }
+        });
+        if (logisticsFromPayload.length) setLogEntries(logisticsFromPayload);
+        Toast.show({ type: 'success', text1: 'Sales Order loaded', text2: `${mapped.length} item${mapped.length === 1 ? '' : 's'} ready in Step 3` });
+      } else {
+        Toast.show({ type: 'info', text1: 'Order linked', text2: 'No line items found — add them in Step 3' });
+      }
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Could not load order items', text2: err?.message || 'Add items manually in Step 3' });
+    } finally {
+      setLoadingOrderItems(false);
+    }
+  }, [company?.guid, ledger, warehouses, stockItems]);
+
+  const handleLinkedOrderSelect = useCallback((opt: BSSOption) => {
+    const order: LinkedOrder = {
+      voucherNumber: opt.value,
+      date: opt.data?.date || '',
+      guid: opt.data?.guid || '',
+      tdkRef: opt.data?.tdkRef || '',
+    };
+    setLinkedOrder(order);
+    setTrackingNumber(prev => prev || opt.value);
+    applyOrderPrefill(order);
+  }, [applyOrderPrefill]);
+
+  const handleLinkedOrderClear = useCallback(() => {
+    setLinkedOrder(null);
+    setTrackingNumber('');
+    resetItemsBlank();
+    setLogEntries([]);
+  }, [resetItemsBlank]);
 
   // ── Navigation ───────────────────────────────────────────────────────────────
   const goNext = useCallback(() => {
-    if (!ledger) { Toast.show({ type: 'error', text1: 'Sales Ledger required' }); return; }
-    if (!party) { Toast.show({ type: 'error', text1: 'Customer / Party required' }); return; }
-    if (!date) { Toast.show({ type: 'error', text1: 'Date required' }); return; }
-    setStep(2);
-  }, [ledger, party, date]);
+    if (step === 1) {
+      if (!ledger) { Toast.show({ type: 'error', text1: 'Sales Ledger required' }); return; }
+      if (!party) { Toast.show({ type: 'error', text1: 'Customer / Party required' }); return; }
+      if (!date) { Toast.show({ type: 'error', text1: 'Date required' }); return; }
+      setStep(2);
+      return;
+    }
+    if (step === 2) {
+      setStep(3);
+    }
+  }, [step, ledger, party, date]);
 
-  const goBack = useCallback(() => setStep(1), []);
+  const goBack = useCallback(() => {
+    if (step === 3) setStep(2);
+    else if (step === 2) setStep(1);
+  }, [step]);
 
   // ── Computed ─────────────────────────────────────────────────────────────────
   const totals = useMemo(() => {
@@ -752,7 +902,7 @@ export default function CreateDeliveryNoteScreen() {
     if (multiGodownItems.some(i => !i.warehouse)) {
       Toast.show({ type: 'error', text1: 'Select godown for all items' }); return;
     }
-    if (showDispatch && vehicleNumber.trim() && !/^[A-Z0-9-]{6,15}$/.test(vehicleNumber.trim())) {
+    if (vehicleNumber.trim() && !/^[A-Z0-9-]{6,15}$/.test(vehicleNumber.trim())) {
       Toast.show({ type: 'error', text1: 'Invalid vehicle number', text2: 'Use letters/digits only, e.g. MH12AB1234' }); return;
     }
 
@@ -772,6 +922,12 @@ export default function CreateDeliveryNoteScreen() {
           ? [{ ledgerName: roundOffLedger, amount: parseFloat(roundOffAmount) || 0, taxes: [] }]
           : []),
       ];
+
+      const hasDispatch = !!(
+        modeOfPayment || otherReferences || termsOfDelivery
+        || dispatchDocNo || dispatchedThrough || shipToDestination
+        || carrierName || billOfLadingNo || lrDate || vehicleNumber
+      );
 
       const result: any = await createDeliveryNote({
         companyGuid: company.guid,
@@ -805,16 +961,19 @@ export default function CreateDeliveryNoteScreen() {
         logistics: allLogistics,
         narration: narration || undefined,
         isOptional: entryType === 'optional',
+        original_entry_type: entryType,
         numbering_policy: numberingPolicy,
-        dispatch_details: showDispatch ? {
-          transport_mode: transportMode,
-          vehicle_type: vehicleType,
-          vehicle_number: vehicleNumber || undefined,
-          transporter_name: transporterName || undefined,
-          transporter_id: transporterId || undefined,
-          transport_doc_no: transportDocNo || undefined,
-          transport_doc_date: transportDocDate ? dmyToISO(transportDocDate) : undefined,
+        dispatch_details: hasDispatch ? {
+          mode_of_payment: modeOfPayment || undefined,
+          other_references: otherReferences || undefined,
+          terms_of_delivery: termsOfDelivery || undefined,
+          transport_doc_no: dispatchDocNo || undefined,
+          dispatched_through: dispatchedThrough || undefined,
           ship_to: shipToDestination || undefined,
+          carrier_name: carrierName || undefined,
+          bill_of_lading_no: billOfLadingNo || undefined,
+          lr_date: lrDate ? dmyToISO(lrDate) : undefined,
+          vehicle_number: vehicleNumber || undefined,
         } : undefined,
         linked_order: linkedOrder
           ? { order_no: linkedOrder.voucherNumber, order_date: linkedOrder.date }
@@ -834,8 +993,8 @@ export default function CreateDeliveryNoteScreen() {
   }, [
     company, isPaired, ledger, party, date, items, itemGodowns, totals.grand, warehouses,
     logEntries, roundOffLedger, roundOffAmount, narration, entryType, numberingPolicy,
-    showDispatch, transportMode, vehicleType, vehicleNumber, transporterName, transporterId,
-    transportDocNo, transportDocDate, shipToDestination, trackingNumber, linkedOrder,
+    modeOfPayment, otherReferences, termsOfDelivery, dispatchDocNo, dispatchedThrough,
+    shipToDestination, carrierName, billOfLadingNo, lrDate, vehicleNumber, trackingNumber, linkedOrder,
   ]);
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -901,10 +1060,10 @@ export default function CreateDeliveryNoteScreen() {
                       amount: String(totals.grand),
                       narration,
                       totalQty: Object.entries(qtyByUnit).map(([u, q]) => `${q} ${u}`).join(' · '),
-                      ...(showDispatch ? {
+                      ...(shipToDestination || dispatchedThrough || vehicleNumber || billOfLadingNo ? {
                         shipTo: shipToDestination,
-                        dispatchMode: transportMode,
-                        vehicleLR: [vehicleNumber, transportDocNo].filter(Boolean).join(' / '),
+                        dispatchMode: dispatchedThrough,
+                        vehicleLR: [vehicleNumber, billOfLadingNo || dispatchDocNo].filter(Boolean).join(' / '),
                       } : {}),
                       ...(linkedOrder ? { againstSO: linkedOrder.voucherNumber } : {}),
                       deliveryItems: JSON.stringify(deliveryItems),
@@ -933,7 +1092,7 @@ export default function CreateDeliveryNoteScreen() {
           <Text style={s.headerTitle}>Delivery Note</Text>
           <Text style={s.headerSub}>{numberingDisplay}</Text>
         </View>
-        <RegularOptionalToggle value={entryType} onChange={setEntryType} />
+        <RegularOptionalToggle value={entryType} onChange={handleEntryTypeChange} />
       </View>
 
       <StepIndicator step={step} />
@@ -973,9 +1132,16 @@ export default function CreateDeliveryNoteScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={s.fLabel}>Date <Text style={s.star}>*</Text></Text>
-                    <TouchableOpacity style={s.fInput} onPress={() => setShowDatePicker(true)}>
-                      <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary }}>{date || 'Select date'}</Text>
-                    </TouchableOpacity>
+                    {entryType === 'regular' ? (
+                      <View style={[s.autoBox, { opacity: 0.55 }]}>
+                        <Text style={s.autoTxt}>{date}</Text>
+                        <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
+                      </View>
+                    ) : (
+                      <TouchableOpacity style={s.fInput} onPress={() => setShowDatePicker(true)}>
+                        <Text style={{ color: date ? COLORS.textPrimary : COLORS.textTertiary }}>{date || 'Select date'}</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
                 <Text style={s.helperTxt}>
@@ -1020,20 +1186,26 @@ export default function CreateDeliveryNoteScreen() {
                     }
                     options={linkedOrderOpts}
                     value={linkedOrder?.voucherNumber || ''}
-                    onSelect={opt => {
-                      setLinkedOrder({ voucherNumber: opt.value, date: opt.data?.date || '' });
-                      setTrackingNumber(prev => prev || opt.value);
-                    }}
-                    onClear={() => setLinkedOrder(null)}
+                    onSelect={handleLinkedOrderSelect}
+                    onClear={handleLinkedOrderClear}
                     sheetTitle="Linked Sales Order"
                     icon="link-outline"
                     disabled={linkedOrdersLoading || linkedOrderOpts.length === 0}
                   />
-                  {linkedOrdersLoading && (
+                  {(linkedOrdersLoading || loadingOrderItems) && (
                     <View style={s.gstRow}>
                       <ActivityIndicator size="small" color={COLORS.brandPrimary} />
-                      <Text style={s.gstSubTxt}>Fetching sales orders for {party}...</Text>
+                      <Text style={s.gstSubTxt}>
+                        {loadingOrderItems
+                          ? `Loading items from order #${linkedOrder?.voucherNumber || ''}...`
+                          : `Fetching sales orders for ${party}...`}
+                      </Text>
                     </View>
+                  )}
+                  {linkedOrder && !loadingOrderItems && (
+                    <Text style={s.helperTxt}>
+                      Order #{linkedOrder.voucherNumber} linked — items prefilled for Step 3 (qty editable for partial delivery).
+                    </Text>
                   )}
                 </View>
               ) : (
@@ -1042,8 +1214,113 @@ export default function CreateDeliveryNoteScreen() {
             </>
           )}
 
-          {/* ═══════════ STEP 2: Items & Dispatch ═══════════ */}
+          {/* ═══════════ STEP 2: Order & Dispatch ═══════════ */}
           {step === 2 && (
+            <>
+              <View style={s.card}>
+                <View style={s.cardHdr}>
+                  <Ionicons name="receipt-outline" size={18} color={COLORS.brandPrimary} />
+                  <Text style={s.cardTitle}>Order Details</Text>
+                </View>
+                <Text style={s.fLabel}>Order No(s)</Text>
+                <View style={[s.autoBox, { marginBottom: SPACING.md }]}>
+                  <Text style={s.autoTxt} numberOfLines={1}>
+                    {linkedOrder?.voucherNumber
+                      ? `#${linkedOrder.voucherNumber}${linkedOrder.date ? ` · ${isoToDMY(linkedOrder.date)}` : ''}`
+                      : 'No linked sales order'}
+                  </Text>
+                  <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
+                </View>
+                <Text style={s.fLabel}>Mode/Terms of Payment</Text>
+                <ThemedFInput
+                  value={modeOfPayment}
+                  onChangeText={setModeOfPayment}
+                  placeholder="e.g. Against Delivery / 30 Days"
+                  style={{ marginBottom: SPACING.md }}
+                />
+                <Text style={s.fLabel}>Other References</Text>
+                <ThemedFInput
+                  value={otherReferences}
+                  onChangeText={setOtherReferences}
+                  placeholder="Customer PO / other ref"
+                  style={{ marginBottom: SPACING.md }}
+                />
+                <Text style={s.fLabel}>Terms of Delivery</Text>
+                <ThemedFInput
+                  value={termsOfDelivery}
+                  onChangeText={setTermsOfDelivery}
+                  placeholder="e.g. FOR Destination"
+                  multiline
+                  numberOfLines={2}
+                  style={{ minHeight: 60, textAlignVertical: 'top', marginBottom: 0 }}
+                />
+              </View>
+
+              <View style={s.card}>
+                <View style={s.cardHdr}>
+                  <Ionicons name="car-outline" size={18} color={COLORS.brandPrimary} />
+                  <Text style={s.cardTitle}>Dispatch Details</Text>
+                </View>
+                <Text style={s.fLabel}>Dispatch Doc No.</Text>
+                <ThemedFInput
+                  value={dispatchDocNo}
+                  onChangeText={setDispatchDocNo}
+                  placeholder="Optional"
+                  style={{ marginBottom: SPACING.md }}
+                />
+                <Text style={s.fLabel}>Dispatched through</Text>
+                <ThemedFInput
+                  value={dispatchedThrough}
+                  onChangeText={setDispatchedThrough}
+                  placeholder="e.g. Road / Courier name"
+                  style={{ marginBottom: SPACING.md }}
+                />
+                <Text style={s.fLabel}>Destination</Text>
+                <ThemedFInput
+                  value={shipToDestination}
+                  onChangeText={setShipToDestination}
+                  placeholder="City / place of delivery"
+                  style={{ marginBottom: SPACING.md }}
+                />
+                <Text style={s.fLabel}>Carrier Name/Agent</Text>
+                <ThemedFInput
+                  value={carrierName}
+                  onChangeText={setCarrierName}
+                  placeholder="Optional"
+                  style={{ marginBottom: SPACING.md }}
+                />
+                <View style={s.row2}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.fLabel}>Bill of Lading/LR-RR No.</Text>
+                    <ThemedFInput value={billOfLadingNo} onChangeText={setBillOfLadingNo} placeholder="Optional" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.fLabel}>LR Date</Text>
+                    <TouchableOpacity
+                      style={[s.fInput, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                      onPress={() => setShowLrDatePicker(true)}
+                    >
+                      <Text style={{ color: lrDate ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.base }}>
+                        {lrDate || 'Optional'}
+                      </Text>
+                      <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <Text style={s.fLabel}>Motor Vehicle No.</Text>
+                <ThemedFInput
+                  value={vehicleNumber}
+                  onChangeText={v => setVehicleNumber(v.toUpperCase())}
+                  placeholder="e.g. MH12AB1234"
+                  autoCapitalize="characters"
+                  maxLength={15}
+                />
+              </View>
+            </>
+          )}
+
+          {/* ═══════════ STEP 3: Items & Logistics ═══════════ */}
+          {step === 3 && (
             <>
               <View style={s.sectionHdr}>
                 <Ionicons name="cube-outline" size={16} color={COLORS.textPrimary} />
@@ -1088,91 +1365,6 @@ export default function CreateDeliveryNoteScreen() {
                 onRoundOffLedgerChange={setRoundOffLedger}
                 onRoundOffAmountChange={setRoundOffAmount}
               />
-
-              {/* Dispatch details */}
-              <View style={s.card}>
-                <TouchableOpacity style={s.toggleRow} onPress={() => setShowDispatch(v => !v)} activeOpacity={0.8}>
-                  <View style={s.toggleLeft}>
-                    <View style={[s.toggleIcon, { backgroundColor: showDispatch ? '#EFF6FF' : COLORS.pageBg }]}>
-                      <Ionicons name="car-outline" size={18} color={showDispatch ? COLORS.info : COLORS.textSecondary} />
-                    </View>
-                    <View style={{ flex: 1, flexShrink: 1 }}>
-                      <Text style={s.toggleTitle}>Dispatch Details</Text>
-                      <Text style={s.toggleSub}>Transport mode, doc, destination & vehicle</Text>
-                    </View>
-                  </View>
-                  <BrandSwitch value={showDispatch} onValueChange={setShowDispatch} />
-                </TouchableOpacity>
-                {showDispatch && (
-                  <View style={s.toggleBody}>
-                    <View style={s.divider} />
-                    <FormDropdown
-                      label="Transport Mode"
-                      value={transportMode}
-                      options={TRANSPORT_MODES}
-                      onSelect={(o: DropdownOption) => {
-                        setTransportMode(o.value);
-                        setVehicleType(VEHICLE_TYPE_MAP[o.value]?.[0]?.value || 'Regular');
-                      }}
-                      placeholder="Select transport mode..."
-                    />
-                    <View style={s.row2}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.fLabel}>Transporter Name</Text>
-                        <ThemedFInput value={transporterName} onChangeText={setTransporterName} placeholder="Optional" />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.fLabel}>Transporter ID</Text>
-                        <ThemedFInput value={transporterId} onChangeText={setTransporterId} placeholder="GSTIN / ID" />
-                      </View>
-                    </View>
-                    <View style={s.row2}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.fLabel}>Vehicle Number</Text>
-                        <ThemedFInput
-                          value={vehicleNumber}
-                          onChangeText={v => setVehicleNumber(v.toUpperCase())}
-                          placeholder="e.g. MH12AB1234"
-                          autoCapitalize="characters"
-                          maxLength={15}
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <FormDropdown
-                          label="Vehicle Type"
-                          value={vehicleType}
-                          options={VEHICLE_TYPE_MAP[transportMode] || VEHICLE_TYPE_MAP.Road}
-                          onSelect={(o: DropdownOption) => setVehicleType(o.value)}
-                          placeholder="Select vehicle type..."
-                        />
-                      </View>
-                    </View>
-                    <View style={s.row2}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.fLabel}>Doc / LR / RR No.</Text>
-                        <ThemedFInput value={transportDocNo} onChangeText={setTransportDocNo} placeholder="Optional" />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.fLabel}>Doc Date</Text>
-                        <TouchableOpacity style={[s.fInput, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]} onPress={() => setShowDocDatePicker(true)}>
-                          <Text style={{ color: transportDocDate ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.base }}>
-                            {transportDocDate || 'Optional'}
-                          </Text>
-                          <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                    <Text style={s.fLabel}>Destination</Text>
-                    <ThemedFInput value={shipToDestination} onChangeText={setShipToDestination} placeholder="City / place of delivery" />
-                    <Text style={s.fLabel}>Tracking Number</Text>
-                    <ThemedFInput
-                      value={trackingNumber}
-                      onChangeText={setTrackingNumber}
-                      placeholder={linkedOrder ? linkedOrder.voucherNumber : 'Used by Tally to link this delivery'}
-                    />
-                  </View>
-                )}
-              </View>
 
               {/* Running total */}
               <View style={s.runningTotalCard}>
@@ -1231,7 +1423,7 @@ export default function CreateDeliveryNoteScreen() {
 
         {/* Footer */}
         <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-          {step === 2 && (
+          {step === 3 && (
             <View style={s.grandTotalBar}>
               <View>
                 <Text style={s.grandTotalMeta}>
@@ -1245,13 +1437,23 @@ export default function CreateDeliveryNoteScreen() {
           <View style={s.footerBtnRow}>
             {step === 1 && (
               <TouchableOpacity style={s.fullNextBtn} onPress={goNext} activeOpacity={0.7}>
-                <Text style={s.nextBtnTxt}>Next: Items & Dispatch →</Text>
+                <Text style={s.nextBtnTxt}>Next: Order & Dispatch →</Text>
               </TouchableOpacity>
             )}
             {step === 2 && (
               <>
                 <TouchableOpacity style={s.backOutlineBtn} onPress={goBack} activeOpacity={0.7}>
                   <Text style={s.backOutlineTxt}>← Details</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.fullNextBtn} onPress={goNext} activeOpacity={0.7}>
+                  <Text style={s.nextBtnTxt}>Next: Items →</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            {step === 3 && (
+              <>
+                <TouchableOpacity style={s.backOutlineBtn} onPress={goBack} activeOpacity={0.7}>
+                  <Text style={s.backOutlineTxt}>← Dispatch</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[s.submitBtn, submitting && { opacity: 0.6 }]} onPress={handleSubmit} activeOpacity={0.7} disabled={submitting}>
                   {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />}
@@ -1263,8 +1465,22 @@ export default function CreateDeliveryNoteScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      <DatePickerModal visible={showDatePicker} value={date} minDate={fyStart} maxDate={selectedFY?.endDate} onSelect={(d) => { setDate(d); setShowDatePicker(false); }} onClose={() => setShowDatePicker(false)} title="Delivery Note Date" />
-      <DatePickerModal visible={showDocDatePicker} value={transportDocDate || date} onSelect={(d) => { setTransportDocDate(d); setShowDocDatePicker(false); }} onClose={() => setShowDocDatePicker(false)} title="Transport Doc Date" />
+      <DatePickerModal
+        visible={showDatePicker}
+        value={date}
+        minDate={fyStart}
+        maxDate={fyEnd}
+        onSelect={(d) => { setDate(d); setShowDatePicker(false); }}
+        onClose={() => setShowDatePicker(false)}
+        title="Delivery Note Date"
+      />
+      <DatePickerModal
+        visible={showLrDatePicker}
+        value={lrDate || date}
+        onSelect={(d) => { setLrDate(d); setShowLrDatePicker(false); }}
+        onClose={() => setShowLrDatePicker(false)}
+        title="LR / Bill of Lading Date"
+      />
     </SafeAreaView>
   );
 }
@@ -1376,9 +1592,9 @@ const si = StyleSheet.create({
   circleDone: { borderColor: '#1C1C1C', backgroundColor: '#1C1C1C' },
   circleNum: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' as const, color: COLORS.textTertiary },
   circleNumActive: { color: COLORS.white },
-  label: { fontSize: TYPOGRAPHY.xs, fontWeight: '600' as const, color: COLORS.textTertiary },
+  label: { fontSize: 10, fontWeight: '600' as const, color: COLORS.textTertiary, maxWidth: 72, textAlign: 'center' as const },
   labelActive: { color: '#C9A84C', fontWeight: '700' as const },
-  line: { flex: 1, height: 2, backgroundColor: COLORS.borderDefault, marginBottom: 18, marginHorizontal: 6 },
+  line: { flex: 1, height: 2, backgroundColor: COLORS.borderDefault, marginBottom: 18, marginHorizontal: 4 },
   lineDone: { backgroundColor: COLORS.brandPrimary },
 });
 

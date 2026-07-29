@@ -1,4 +1,17 @@
 
+## [2026-07-29] Delivery Note — 3-step + Invoice-style REG/OPT date lock
+
+### Changed
+- `frontend/app/sales/create-delivery-note.tsx`: 3 steps (Details → Order & Dispatch → Items & Logistics)
+- REG locks date to today; OPT unlocks within selected FY
+- Linked SO prefills Step 3 via `getOrderPreview` / `getVoucherById`
+- Order/Dispatch screenshot fields; submit sends `original_entry_type` + expanded `dispatch_details`
+
+### Test
+Reload Expo → Delivery Note → link SO → fill Order/Dispatch → submit → verify in Tally.
+
+---
+
 ## [2026-07-29] Delivery Note — 2-step rewrite on live masters
 
 ### Context
