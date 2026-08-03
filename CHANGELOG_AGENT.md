@@ -1,3 +1,19 @@
+## [2026-08-03] Credit Note — GST reversal item-wise
+
+### Changed
+- `frontend/app/sales/create-credit-note.tsx`
+  - Amount from original net taxable/unit (discount-safe)
+  - Per-item GST reversal rows (CGST/SGST or IGST) from original invoice
+  - Summary: Returned item value / GST reversal / Total customer credit
+  - Tax ledgers read-only; backend recalculates on submit
+  - QA fix: trust explicit server `returnTaxMode`; include `sgstAmount` when inferring
+
+### Test
+Select taxable invoice → return qty → see line GST + summary credit total.
+Exempt invoice → GST reversal ₹0.
+
+---
+
 ## [2026-08-03] Credit Note — qty drives amount + disable reason
 
 ### Changed

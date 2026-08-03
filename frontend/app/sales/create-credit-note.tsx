@@ -33,7 +33,6 @@ import {
   getSalesInvoiceCreditNoteContext,
   getSalesInvoices,
   getSalesLedgerAccounts,
-  getTaxLedgers,
   getWarehouses,
 } from '../../src/services/api';
 
@@ -61,6 +60,8 @@ type ReturnItem = {
   manualAmount: boolean;
   unit: string;
   rate: number;
+  netTaxablePerUnit: number;
+  discount: number;
   salesLedger: string;
   godown: string;
   taxRate?: number;
@@ -71,7 +72,16 @@ type ReturnTax = {
   ledger: string;
   rate: string;
   amount: string;
-  manualAmount: boolean;
+  kind?: string;
+};
+
+type TaxGeometry = {
+  allocationMode: 'item_rate' | 'proportional' | 'none';
+  fallbackUsed: boolean;
+  isInterstate: boolean;
+  originalTaxable: number;
+  originalTaxTotal: number;
+  singleSlabRate: number | null;
 };
 
 type CreditNoteContext = {
@@ -80,12 +90,20 @@ type CreditNoteContext = {
   taxes: ReturnTax[];
   salesLedger: string;
   salesLedgerCandidates: string[];
+  returnTaxMode: 'SALES_RETURN_WITH_GST' | 'SALES_RETURN_WITHOUT_GST';
+  taxGeometry: TaxGeometry;
 };
 
 type SubmitResult = {
   tdkRef: string;
   voucherNumber?: string;
   isQueued: boolean;
+};
+
+type LineTaxRow = {
+  ledger: string;
+  rate: number;
+  amount: number;
 };
 
 const num = (value: unknown): number => {
@@ -116,12 +134,105 @@ const isoToDMY = (value: string) => {
 const formatQty = (value: number) => Number(value.toFixed(4)).toString();
 const formatMoney = (value: number) => `₹${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 
-/** Line return value: qty × rate unless the user overrode amount after entering qty. */
+const unitNet = (item: ReturnItem) => (
+  item.netTaxablePerUnit > 0 ? item.netTaxablePerUnit : item.rate
+);
+
+/** Line return taxable: qty × original net taxable/unit (or manual amount). */
 const lineReturnAmount = (item: ReturnItem): number => {
   const qty = num(item.returnQty);
   if (qty <= 0) return 0;
   if (item.manualAmount) return Math.max(0, num(item.returnAmount));
-  return Number((qty * item.rate).toFixed(2));
+  return Number((qty * unitNet(item)).toFixed(2));
+};
+
+const classifyTaxKind = (name: string) => {
+  if (/igst/i.test(name)) return 'igst';
+  if (/cgst/i.test(name)) return 'cgst';
+  if (/sgst|utgst/i.test(name)) return 'sgst';
+  if (/cess/i.test(name)) return 'cess';
+  if (/\bgst\b/i.test(name)) return 'gst';
+  return 'other';
+};
+
+/** Live GST reverse for one line — mirrors backend creditNoteTax.js. */
+const lineGstRows = (
+  item: ReturnItem,
+  taxes: ReturnTax[],
+  geometry: TaxGeometry,
+  returnTaxMode: CreditNoteContext['returnTaxMode'],
+): LineTaxRow[] => {
+  const taxable = lineReturnAmount(item);
+  if (!(taxable > 0) || returnTaxMode !== 'SALES_RETURN_WITH_GST' || geometry.allocationMode === 'none') {
+    return [];
+  }
+
+  if (geometry.allocationMode === 'proportional') {
+    const base = geometry.originalTaxable > 0 ? geometry.originalTaxable : 0;
+    if (!(base > 0)) return [];
+    return taxes.map(tax => ({
+      ledger: tax.ledger,
+      rate: num(tax.rate),
+      amount: Number((num(tax.amount) * (taxable / base)).toFixed(2)),
+    })).filter(t => t.amount > 0);
+  }
+
+  const gstRate = item.taxRate || geometry.singleSlabRate || taxes.reduce((s, t) => s + num(t.rate), 0);
+  if (!(gstRate > 0)) return [];
+
+  const kinds = taxes.map(t => ({ ...t, kind: t.kind || classifyTaxKind(t.ledger) }));
+  const cgst = kinds.filter(t => t.kind === 'cgst');
+  const sgst = kinds.filter(t => t.kind === 'sgst');
+  const igst = kinds.filter(t => t.kind === 'igst');
+  const gst = kinds.filter(t => t.kind === 'gst');
+  const cess = kinds.filter(t => t.kind === 'cess');
+  const rows: LineTaxRow[] = [];
+
+  if (igst.length && geometry.isInterstate) {
+    for (const tax of igst) {
+      rows.push({
+        ledger: tax.ledger,
+        rate: Number((gstRate / igst.length).toFixed(2)),
+        amount: Number((taxable * gstRate / igst.length / 100).toFixed(2)),
+      });
+    }
+  } else if (cgst.length || sgst.length) {
+    const half = gstRate / 2;
+    for (const tax of cgst) {
+      rows.push({
+        ledger: tax.ledger,
+        rate: Number((half / Math.max(1, cgst.length)).toFixed(2)),
+        amount: Number((taxable * half / Math.max(1, cgst.length) / 100).toFixed(2)),
+      });
+    }
+    for (const tax of sgst) {
+      rows.push({
+        ledger: tax.ledger,
+        rate: Number((half / Math.max(1, sgst.length)).toFixed(2)),
+        amount: Number((taxable * half / Math.max(1, sgst.length) / 100).toFixed(2)),
+      });
+    }
+  } else if (gst.length) {
+    for (const tax of gst) {
+      rows.push({
+        ledger: tax.ledger,
+        rate: Number((gstRate / gst.length).toFixed(2)),
+        amount: Number((taxable * gstRate / gst.length / 100).toFixed(2)),
+      });
+    }
+  }
+
+  for (const tax of cess) {
+    const rate = num(tax.rate);
+    if (!(rate > 0)) continue;
+    rows.push({
+      ledger: tax.ledger,
+      rate,
+      amount: Number((taxable * rate / 100).toFixed(2)),
+    });
+  }
+
+  return rows.filter(r => r.amount > 0);
 };
 
 function normalizeInvoices(raw: any): InvoiceChoice[] {
@@ -183,6 +294,13 @@ function normalizeContext(raw: any, selected: InvoiceChoice): CreditNoteContext 
     const remainingQty = explicitRemaining === undefined
       ? Math.max(0, soldQty - previouslyReturnedQty)
       : Math.max(0, num(explicitRemaining));
+    const rate = Math.abs(num(first(row.rate, row.originalRate, row.original_rate)));
+    const soldAmount = Math.abs(num(first(row.soldAmount, row.sold_amount, row.amount)));
+    const netTaxablePerUnit = Math.abs(num(first(
+      row.netTaxablePerUnit,
+      row.net_taxable_per_unit,
+      soldQty > 0 && soldAmount > 0 ? soldAmount / soldQty : rate,
+    )));
     return {
       id: String(first(row.id, row.lineId, row.line_id, row.inventoryEntryId, `${index}-${first(row.itemName, row.stock_item_name, row.name, 'item')}`)),
       lineId: first(row.lineId, row.line_id, row.inventoryEntryId, row.inventory_entry_id),
@@ -195,10 +313,12 @@ function normalizeContext(raw: any, selected: InvoiceChoice): CreditNoteContext 
       returnAmount: '',
       manualAmount: false,
       unit: String(first(row.unit, row.baseUnit, row.base_unit, '') || ''),
-      rate: Math.abs(num(first(row.rate, row.originalRate, row.original_rate))),
+      rate,
+      netTaxablePerUnit: netTaxablePerUnit || rate,
+      discount: Math.abs(num(first(row.discount, 0))),
       salesLedger: String(first(row.salesLedger, row.sales_ledger, row.ledger, defaultSalesLedger, '') || ''),
       godown: String(first(row.godown, row.godownName, row.godown_name, row.warehouse, row.warehouseName, 'Main Location') || 'Main Location'),
-      taxRate: num(first(row.taxRate, row.tax_rate, row.gstRate, row.gst_rate)) || undefined,
+      taxRate: num(first(row.gstRate, row.gst_rate, row.taxRate, row.tax_rate)) || undefined,
     };
   }).filter((item: ReturnItem) => !!item.itemName);
 
@@ -218,14 +338,11 @@ function normalizeContext(raw: any, selected: InvoiceChoice): CreditNoteContext 
     const contextAmount = Math.abs(num(first(row.returnAmount, row.return_amount, row.amount, row.taxAmount, row.tax_amount)));
     const existing = acc.find(t => t.ledger.trim().toLowerCase() === ledger.trim().toLowerCase());
     if (existing) {
-      // Same ledger can appear once per invoice line — collapse to one editable row.
-      // Context rates are amount_i / fullTaxableBase (understated per duplicate); sum them.
       const mergedAmount = num(existing.amount) + contextAmount;
       existing.amount = mergedAmount ? String(Number(mergedAmount.toFixed(2))) : existing.amount;
       if (rate > 0) {
         existing.rate = String(Number((num(existing.rate) + rate).toFixed(4)));
       }
-      existing.manualAmount = num(existing.rate) <= 0 && num(existing.amount) > 0;
       return acc;
     }
     acc.push({
@@ -233,7 +350,7 @@ function normalizeContext(raw: any, selected: InvoiceChoice): CreditNoteContext 
       ledger,
       rate: String(rate || ''),
       amount: contextAmount ? String(contextAmount) : '',
-      manualAmount: rate <= 0 && contextAmount > 0,
+      kind: String(first(row.kind, classifyTaxKind(ledger))),
     });
     return acc;
   }, []);
@@ -247,12 +364,40 @@ function normalizeContext(raw: any, selected: InvoiceChoice): CreditNoteContext 
     .map((row: any) => String(first(row?.ledgerName, row?.ledger_name, row?.name, typeof row === 'string' ? row : '') || ''))
     .filter(Boolean);
 
+  const geometryRaw = body.taxGeometry || body.tax_geometry || {};
+  const rawReturnTaxMode = String(first(body.returnTaxMode, body.return_tax_mode, ''));
+  // Trust explicit server mode; only infer when context omitted it.
+  const returnTaxMode: CreditNoteContext['returnTaxMode'] =
+    rawReturnTaxMode === 'SALES_RETURN_WITHOUT_GST'
+      ? 'SALES_RETURN_WITHOUT_GST'
+      : rawReturnTaxMode === 'SALES_RETURN_WITH_GST'
+        ? 'SALES_RETURN_WITH_GST'
+        : (taxes.length > 0
+          || num(body.gst?.cgstAmount) > 0
+          || num(body.gst?.sgstAmount) > 0
+          || num(body.gst?.igstAmount) > 0
+          ? 'SALES_RETURN_WITH_GST'
+          : 'SALES_RETURN_WITHOUT_GST');
+
+  const taxGeometry: TaxGeometry = {
+    allocationMode: (['item_rate', 'proportional', 'none'].includes(String(geometryRaw.allocationMode))
+      ? geometryRaw.allocationMode
+      : (returnTaxMode === 'SALES_RETURN_WITHOUT_GST' ? 'none' : (items.every(i => num(i.taxRate) > 0) ? 'item_rate' : 'proportional'))) as TaxGeometry['allocationMode'],
+    fallbackUsed: !!geometryRaw.fallbackUsed,
+    isInterstate: !!geometryRaw.isInterstate || taxes.some(t => /igst/i.test(t.ledger)) && !taxes.some(t => /cgst|sgst/i.test(t.ledger)),
+    originalTaxable: num(first(geometryRaw.originalTaxable, body.gst?.taxableAmount, body.totals?.itemsTotal)),
+    originalTaxTotal: num(first(geometryRaw.originalTaxTotal, body.totals?.taxTotal, taxes.reduce((s, t) => s + num(t.amount), 0))),
+    singleSlabRate: geometryRaw.singleSlabRate != null ? num(geometryRaw.singleSlabRate) : null,
+  };
+
   return {
     invoice,
     items,
     taxes,
     salesLedger: String(first(defaultSalesLedger, items[0]?.salesLedger, salesLedgerCandidates[0], '') || ''),
     salesLedgerCandidates: [...new Set([defaultSalesLedger, ...salesLedgerCandidates, ...items.map(i => i.salesLedger)].filter(Boolean))],
+    returnTaxMode,
+    taxGeometry,
   };
 }
 
@@ -276,6 +421,15 @@ export default function CreateCreditNoteScreen() {
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceChoice | null>(null);
   const [items, setItems] = useState<ReturnItem[]>([]);
   const [taxes, setTaxes] = useState<ReturnTax[]>([]);
+  const [returnTaxMode, setReturnTaxMode] = useState<CreditNoteContext['returnTaxMode']>('SALES_RETURN_WITHOUT_GST');
+  const [taxGeometry, setTaxGeometry] = useState<TaxGeometry>({
+    allocationMode: 'none',
+    fallbackUsed: false,
+    isInterstate: false,
+    originalTaxable: 0,
+    originalTaxTotal: 0,
+    singleSlabRate: null,
+  });
   const [invoiceSalesLedgers, setInvoiceSalesLedgers] = useState<string[]>([]);
   const [narration, setNarration] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -293,11 +447,6 @@ export default function CreateCreditNoteScreen() {
   );
   const salesLedgersState = useApiData<any[]>(
     () => getSalesLedgerAccounts(company!.guid),
-    [company?.guid],
-    { enabled: !!company?.guid, transform: res => Array.isArray(res?.data) ? res.data : [] },
-  );
-  const taxLedgersState = useApiData<any[]>(
-    () => getTaxLedgers(company!.guid),
     [company?.guid],
     { enabled: !!company?.guid, transform: res => Array.isArray(res?.data) ? res.data : [] },
   );
@@ -340,6 +489,8 @@ export default function CreateCreditNoteScreen() {
     setSelectedInvoice(contextState.data.invoice);
     setItems(contextState.data.items);
     setTaxes(contextState.data.taxes);
+    setReturnTaxMode(contextState.data.returnTaxMode);
+    setTaxGeometry(contextState.data.taxGeometry);
     setInvoiceSalesLedgers(contextState.data.salesLedgerCandidates);
     setStep(2);
   }, [contextState.data]);
@@ -382,33 +533,62 @@ export default function CreateCreditNoteScreen() {
     return [...names].map(name => ({ label: name, value: name }));
   }, [warehousesState.data, items]);
 
-  const taxLedgerOptions: BSSOption[] = useMemo(() => {
-    const names = new Set<string>();
-    (taxLedgersState.data || []).forEach((row: any) => row.name && names.add(row.name));
-    taxes.forEach(tax => tax.ledger && names.add(tax.ledger));
-    return [...names].map(name => ({ label: name, value: name }));
-  }, [taxLedgersState.data, taxes]);
-
   const selectedItems = useMemo(() => items.filter(item => item.selected), [items]);
   const subtotal = useMemo(() => selectedItems.reduce(
     (sum, item) => sum + lineReturnAmount(item),
     0,
   ), [selectedItems]);
-  const combinedTaxRate = useMemo(
-    () => taxes.reduce((sum, tax) => sum + Math.max(0, num(tax.rate)), 0),
-    [taxes],
-  );
-  const taxAmounts = useMemo(() => taxes.map(tax => tax.manualAmount
-    ? Math.max(0, num(tax.amount))
-    : subtotal * Math.max(0, num(tax.rate)) / 100
-  ), [taxes, subtotal]);
-  const taxTotal = taxAmounts.reduce((sum, amount) => sum + amount, 0);
+
+  const lineTaxMap = useMemo(() => {
+    const map = new Map<string, LineTaxRow[]>();
+    for (const item of selectedItems) {
+      map.set(item.id, lineGstRows(item, taxes, taxGeometry, returnTaxMode));
+    }
+    return map;
+  }, [selectedItems, taxes, taxGeometry, returnTaxMode]);
+
+  const computedTaxes = useMemo(() => {
+    if (returnTaxMode !== 'SALES_RETURN_WITH_GST' || taxGeometry.allocationMode === 'none') return [];
+    if (taxGeometry.allocationMode === 'proportional' && taxGeometry.originalTaxable > 0) {
+      const ratio = subtotal / taxGeometry.originalTaxable;
+      return taxes.map(tax => ({
+        id: tax.id,
+        ledger: tax.ledger,
+        rate: num(tax.rate),
+        amount: Number((num(tax.amount) * ratio).toFixed(2)),
+      })).filter(t => t.amount > 0);
+    }
+    const byLedger = new Map<string, { id: string; ledger: string; rate: number; amount: number }>();
+    for (const item of selectedItems) {
+      for (const row of lineTaxMap.get(item.id) || []) {
+        const key = row.ledger.trim().toLowerCase();
+        const current = byLedger.get(key);
+        if (current) {
+          current.amount = Number((current.amount + row.amount).toFixed(2));
+        } else {
+          byLedger.set(key, { id: key, ledger: row.ledger, rate: row.rate, amount: row.amount });
+        }
+      }
+    }
+    return [...byLedger.values()];
+  }, [returnTaxMode, taxGeometry, taxes, subtotal, selectedItems, lineTaxMap]);
+
+  const taxTotal = computedTaxes.reduce((sum, tax) => sum + tax.amount, 0);
   const totalAmount = subtotal + taxTotal;
 
   const clearInvoice = useCallback(() => {
     setSelectedInvoice(null);
     setItems([]);
     setTaxes([]);
+    setReturnTaxMode('SALES_RETURN_WITHOUT_GST');
+    setTaxGeometry({
+      allocationMode: 'none',
+      fallbackUsed: false,
+      isInterstate: false,
+      originalTaxable: 0,
+      originalTaxTotal: 0,
+      singleSlabRate: null,
+    });
     setInvoiceSalesLedgers([]);
     setStep(1);
   }, []);
@@ -435,8 +615,8 @@ export default function CreateCreditNoteScreen() {
         };
       }
       const qty = item.remainingQty;
-      const amount = qty > 0 && item.rate > 0
-        ? String(Number((qty * item.rate).toFixed(2)))
+      const amount = qty > 0 && unitNet(item) > 0
+        ? String(Number((qty * unitNet(item)).toFixed(2)))
         : '';
       return {
         ...item,
@@ -453,10 +633,10 @@ export default function CreateCreditNoteScreen() {
     const parsed = num(sanitized);
     const capped = parsed > item.remainingQty ? formatQty(item.remainingQty) : sanitized;
     const qty = num(capped);
-    // Qty always drives amount; editing amount afterward sets manualAmount.
+    const net = unitNet(item);
     updateItem(item.id, {
       returnQty: capped,
-      returnAmount: qty > 0 ? String(Number((qty * item.rate).toFixed(2))) : '',
+      returnAmount: qty > 0 ? String(Number((qty * net).toFixed(2))) : '',
       manualAmount: false,
       selected: qty > 0 ? true : item.selected,
     });
@@ -467,10 +647,6 @@ export default function CreateCreditNoteScreen() {
     const sanitized = value.replace(/[^0-9.]/g, '');
     updateItem(item.id, { returnAmount: sanitized, manualAmount: true });
   }, [updateItem]);
-
-  const updateTax = useCallback((id: string, changes: Partial<ReturnTax>) => {
-    setTaxes(current => current.map(tax => tax.id === id ? { ...tax, ...changes } : tax));
-  }, []);
 
   const stepOneError = useMemo(() => {
     if (!party) return 'Select a party';
@@ -496,12 +672,12 @@ export default function CreateCreditNoteScreen() {
       if (!item.salesLedger) return `Select Sales ledger for ${item.itemName}`;
       if (!item.godown) return `Select godown for ${item.itemName}`;
     }
-    if (taxes.some(tax => !tax.ledger || num(tax.rate) < 0 || taxAmounts[taxes.indexOf(tax)] < 0)) {
+    if (returnTaxMode === 'SALES_RETURN_WITH_GST' && computedTaxes.some(tax => !tax.ledger || tax.amount < 0)) {
       return 'Complete the tax ledger details';
     }
     if (!narration.trim()) return 'Reason / narration is required';
     return null;
-  }, [company, party, selectedInvoice, selectedItems, taxes, taxAmounts, narration]);
+  }, [company, party, selectedInvoice, selectedItems, returnTaxMode, computedTaxes, narration]);
 
   const handleSubmit = async () => {
     if (submissionError) {
@@ -543,10 +719,10 @@ export default function CreateCreditNoteScreen() {
             remainingQty: item.remainingQty,
           };
         }),
-        taxes: taxes.map((tax, index) => ({
+        taxes: computedTaxes.map(tax => ({
           ledgerName: tax.ledger,
-          taxRate: num(tax.rate),
-          taxAmount: taxAmounts[index],
+          taxRate: tax.rate,
+          taxAmount: tax.amount,
           taxableValue: subtotal,
         })),
         isOptional: entryType === 'optional',
@@ -580,7 +756,7 @@ export default function CreateCreditNoteScreen() {
   const previewItems = useMemo(() => selectedItems.map((item, index) => ({
     no: String(index + 1),
     item: item.itemName,
-    qty: `${formatQty(num(item.returnQty))}${item.unit ? ` ${item.unit}` : ''} × ${formatMoney(item.rate)}`,
+    qty: `${formatQty(num(item.returnQty))}${item.unit ? ` ${item.unit}` : ''} × ${formatMoney(unitNet(item))}`,
     price: formatMoney(lineReturnAmount(item)),
   })), [selectedItems]);
 
@@ -735,9 +911,9 @@ export default function CreateCreditNoteScreen() {
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.label}>Unit / Original Rate</Text>
+                  <Text style={s.label}>Unit / Original Net Rate</Text>
                   <View style={s.lockedField}>
-                    <Text style={s.lockedText}>{item.unit || '—'} · {formatMoney(item.rate)}</Text>
+                    <Text style={s.lockedText}>{item.unit || '—'} · {formatMoney(unitNet(item))}</Text>
                     <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
                   </View>
                 </View>
@@ -762,7 +938,7 @@ export default function CreateCreditNoteScreen() {
                 containerStyle={{ marginBottom: 0 }}
               />
               <View style={s.amountField}>
-                <Text style={s.label}>Return Amount <Text style={s.required}>*</Text></Text>
+                <Text style={s.label}>Returned Taxable Value <Text style={s.required}>*</Text></Text>
                 <TextInput
                   style={[s.textInput, num(item.returnQty) <= 0 && s.textInputDisabled]}
                   value={item.returnAmount}
@@ -770,71 +946,81 @@ export default function CreateCreditNoteScreen() {
                   keyboardType="decimal-pad"
                   editable={num(item.returnQty) > 0}
                   placeholder={num(item.returnQty) > 0
-                    ? formatMoney(num(item.returnQty) * item.rate)
+                    ? formatMoney(num(item.returnQty) * unitNet(item))
                     : 'Enter return quantity first'}
                   placeholderTextColor={COLORS.textTertiary}
                 />
                 <Text style={s.amountHelper}>
                   {num(item.returnQty) > 0
                     ? (item.manualAmount
-                      ? 'Edited manually — change qty to recalculate from invoice rate.'
-                      : `Auto from ${formatQty(num(item.returnQty))} × ${formatMoney(item.rate)}. You can edit if needed.`)
-                    : 'Enter Return Qty first — amount fills from invoice rate.'}
+                      ? 'Edited manually — change qty to recalculate from original invoice net rate.'
+                      : `Auto from ${formatQty(num(item.returnQty))} × ${formatMoney(unitNet(item))} (original net taxable/unit).`)
+                    : 'Enter Return Qty first — amount fills from original invoice.'}
                 </Text>
-                {combinedTaxRate > 0 && lineReturnAmount(item) > 0 ? (
-                  <Text style={s.lineTaxHint}>
-                    Est. tax on this line: {formatMoney(lineReturnAmount(item) * combinedTaxRate / 100)}
-                    {' '}({Number(combinedTaxRate.toFixed(2))}% of return amount)
-                  </Text>
-                ) : null}
               </View>
+              {(lineTaxMap.get(item.id) || []).length > 0 && (
+                <View style={s.lineTaxBox}>
+                  <Text style={s.lineTaxTitle}>GST reversal (this item)</Text>
+                  {(lineTaxMap.get(item.id) || []).map(row => (
+                    <View key={`${item.id}-${row.ledger}`} style={s.lineTaxRow}>
+                      <Text style={s.lineTaxLabel}>{row.ledger}{row.rate > 0 ? ` @ ${row.rate}%` : ''}</Text>
+                      <Text style={s.lineTaxValue}>{formatMoney(row.amount)}</Text>
+                    </View>
+                  ))}
+                  <View style={s.lineTaxRow}>
+                    <Text style={s.lineTaxTotalLabel}>Line credit</Text>
+                    <Text style={s.lineTaxTotalValue}>
+                      {formatMoney(lineReturnAmount(item) + (lineTaxMap.get(item.id) || []).reduce((sum, row) => sum + row.amount, 0))}
+                    </Text>
+                  </View>
+                </View>
+              )}
             </View>
           )}
         </View>
       ))}
 
-      <Text style={s.sectionTitle}>Taxes from Original Invoice</Text>
+      <Text style={s.sectionTitle}>GST Reversal</Text>
       <View style={s.card}>
-        {taxes.length === 0 ? (
-          <Text style={s.emptyText}>No tax ledger entries were returned for this invoice.</Text>
+        {returnTaxMode === 'SALES_RETURN_WITHOUT_GST' ? (
+          <Text style={s.emptyText}>Original invoice had no GST — no tax will be reversed.</Text>
+        ) : computedTaxes.length === 0 ? (
+          <Text style={s.emptyText}>Select returned items to see GST reversal.</Text>
         ) : (
           <>
-            <Text style={s.taxIntro}>
-              Tax amounts update from return subtotal × each ledger rate (same rates as the original invoice).
-            </Text>
-            {taxes.map((tax, index) => (
-          <View key={tax.id} style={[s.taxBlock, index < taxes.length - 1 && s.divider]}>
-            <BottomSheetSearch
-              label="Tax Ledger"
-              required
-              options={taxLedgerOptions}
-              value={tax.ledger}
-              onSelect={option => updateTax(tax.id, { ledger: option.value })}
-              placeholder="Select tax ledger..."
-              containerStyle={{ marginBottom: 10 }}
-              icon="calculator-outline"
-            />
-            <View style={s.row2}>
-              <View style={{ flex: 1 }}>
-                <Text style={s.label}>Rate %</Text>
-                <TextInput
-                  style={s.textInput}
-                  value={tax.rate}
-                  onChangeText={value => updateTax(tax.id, { rate: value.replace(/[^0-9.]/g, ''), manualAmount: false })}
-                  keyboardType="decimal-pad"
-                />
+            {taxGeometry.fallbackUsed || taxGeometry.allocationMode === 'proportional' ? (
+              <Text style={s.taxIntro}>
+                Tax allocated from original invoice totals (proportional to returned taxable value).
+              </Text>
+            ) : (
+              <Text style={s.taxIntro}>
+                GST reversed from original invoice rates (CGST/SGST or IGST). Not today’s item master.
+              </Text>
+            )}
+            {computedTaxes.map((tax, index) => (
+              <View key={tax.id} style={[s.taxBlock, index < computedTaxes.length - 1 && s.divider]}>
+                <View style={s.row2}>
+                  <View style={{ flex: 1.4 }}>
+                    <Text style={s.label}>Tax Ledger</Text>
+                    <View style={s.lockedField}>
+                      <Text style={s.lockedText}>{tax.ledger}</Text>
+                      <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
+                    </View>
+                  </View>
+                  <View style={{ flex: 0.7 }}>
+                    <Text style={s.label}>Rate %</Text>
+                    <View style={s.lockedField}>
+                      <Text style={s.lockedText}>{tax.rate > 0 ? String(tax.rate) : '—'}</Text>
+                    </View>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.label}>Tax Amount</Text>
+                    <View style={s.lockedField}>
+                      <Text style={s.lockedText}>{formatMoney(tax.amount)}</Text>
+                    </View>
+                  </View>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.label}>Tax Amount</Text>
-                <TextInput
-                  style={s.textInput}
-                  value={tax.manualAmount ? tax.amount : String(Number(taxAmounts[index].toFixed(2)))}
-                  onChangeText={value => updateTax(tax.id, { amount: value.replace(/[^0-9.]/g, ''), manualAmount: true })}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-            </View>
-          </View>
             ))}
           </>
         )}
@@ -859,10 +1045,10 @@ export default function CreateCreditNoteScreen() {
         />
         <View style={s.summary}>
           <SummaryRow label="Selected items" value={String(selectedItems.length)} />
-          <SummaryRow label="Return subtotal" value={formatMoney(subtotal)} />
-          <SummaryRow label="Taxes" value={formatMoney(taxTotal)} />
+          <SummaryRow label="Returned item value" value={formatMoney(subtotal)} />
+          <SummaryRow label="GST reversal" value={formatMoney(taxTotal)} />
           <View style={s.summaryDivider} />
-          <SummaryRow label="Credit Note total" value={formatMoney(totalAmount)} strong />
+          <SummaryRow label="Total customer credit" value={formatMoney(totalAmount)} strong />
         </View>
       </View>
     </>
@@ -1060,7 +1246,13 @@ const s = StyleSheet.create({
   itemBody: { padding: SPACING.md, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
   amountField: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
   amountHelper: { marginTop: 5, fontSize: 10, color: COLORS.textTertiary, lineHeight: 14 },
-  lineTaxHint: { marginTop: 6, fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, lineHeight: 15 },
+  lineTaxBox: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, gap: 6 },
+  lineTaxTitle: { fontSize: 11, fontWeight: '800', color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: 0.3 },
+  lineTaxRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  lineTaxLabel: { fontSize: 12, color: COLORS.textSecondary, flex: 1 },
+  lineTaxValue: { fontSize: 12, fontWeight: '700', color: COLORS.textPrimary },
+  lineTaxTotalLabel: { fontSize: 12, fontWeight: '800', color: COLORS.textPrimary },
+  lineTaxTotalValue: { fontSize: 13, fontWeight: '900', color: COLORS.textPrimary },
   taxIntro: { fontSize: 11, color: COLORS.textTertiary, lineHeight: 16, marginBottom: 12 },
   taxBlock: { paddingVertical: 4 },
   divider: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, paddingBottom: 14, marginBottom: 14 },
