@@ -151,8 +151,20 @@ const classifyTaxKind = (name: string) => {
   if (/cgst/i.test(name)) return 'cgst';
   if (/sgst|utgst/i.test(name)) return 'sgst';
   if (/cess/i.test(name)) return 'cess';
-  if (/\bgst\b/i.test(name)) return 'gst';
+  if (/^\s*gst\s*$/i.test(name) || /^gst\s*\d/i.test(name)) return 'gst';
   return 'other';
+};
+
+/** Match backend: drop bare GST when CGST/SGST/IGST already exist (logistics GST). */
+const filterStockReturnTaxes = <T extends { ledger: string }>(rows: T[]): T[] => {
+  const kinds = rows.map(r => classifyTaxKind(r.ledger));
+  const hasSplit = kinds.some(k => k === 'cgst' || k === 'sgst' || k === 'igst');
+  return rows.filter((row, i) => {
+    const kind = kinds[i];
+    if (kind === 'cgst' || kind === 'sgst' || kind === 'igst' || kind === 'cess') return true;
+    if (kind === 'gst') return !hasSplit;
+    return false;
+  });
 };
 
 /** Live GST reverse for one line — mirrors backend creditNoteTax.js. */
@@ -337,7 +349,8 @@ function normalizeContext(raw: any, selected: InvoiceChoice): CreditNoteContext 
     body.gst?.taxes,
     invoiceRaw.taxes,
   );
-  const taxes = (Array.isArray(sourceTaxes) ? sourceTaxes : []).reduce((acc: ReturnTax[], row: any, index: number) => {
+  const taxes = filterStockReturnTaxes(
+    (Array.isArray(sourceTaxes) ? sourceTaxes : []).reduce((acc: ReturnTax[], row: any, index: number) => {
     const ledger = String(first(row.ledger, row.ledgerName, row.ledger_name, row.name, '') || '');
     if (!ledger) return acc;
     const rate = num(first(row.rate, row.taxRate, row.tax_rate, row.percentage));
@@ -359,7 +372,8 @@ function normalizeContext(raw: any, selected: InvoiceChoice): CreditNoteContext 
       kind: String(first(row.kind, classifyTaxKind(ledger))),
     });
     return acc;
-  }, []);
+  }, []),
+  );
 
   const candidateRows = (Array.isArray(body.salesLedgerCandidates) && body.salesLedgerCandidates.length > 0)
     ? body.salesLedgerCandidates
