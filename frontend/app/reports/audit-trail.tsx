@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Dimensions, Modal, Alert, ActivityIndicator,
@@ -295,6 +295,9 @@ export default function AuditTrailScreen() {
   const [selected,       setSelected]       = useState<string[]>([]);
   const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
   const [lifecycleFilter, setLifecycleFilter] = useState<LifecycleFilter>('all');
+  const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
+  const retryingRef = useRef<Set<string>>(new Set());
+  const bulkRetryingRef = useRef(false);
 
   // ── API State ─────────────────────────────────────────────
   const [apiEntries, setApiEntries] = useState<VoucherEntry[]>([]);
@@ -559,30 +562,99 @@ export default function AuditTrailScreen() {
     return                              { icon: 'checkmark-circle-outline' as const, color: COLORS.positive, borderColor: 'transparent' };
   };
 
+  // Queued/failed can be retried once. Synced and in-flight must not re-push —
+  // re-forwarding the same XML creates duplicate vouchers in Tally.
+  const canRetryEntry = (entry: VoucherEntry) =>
+    entry.syncStatus === 'pending' || entry.syncStatus === 'failed';
+
+  const markRetrying = (id: string, on: boolean) => {
+    if (on) retryingRef.current.add(id);
+    else retryingRef.current.delete(id);
+    setRetryingIds(new Set(retryingRef.current));
+  };
+
   const handleSinglePush = async (entry: VoucherEntry) => {
     const rawId = (entry.id || '').replace('wq_', '');
     if (!rawId) return;
-    Toast.show({ type: 'info', text1: 'Retrying...', text2: `${entry.ref} — ${entry.party}`, visibilityTime: 1400 });
+    if (!canRetryEntry(entry)) {
+      Toast.show({
+        type: 'info',
+        text1: entry.syncStatus === 'processing' ? 'Already pushing' : 'Already synced',
+        text2: entry.syncStatus === 'processing'
+          ? 'Wait for the current push to finish.'
+          : 'This entry is already in Tally.',
+        visibilityTime: 2200,
+      });
+      return;
+    }
+    if (retryingRef.current.has(rawId)) return;
+
+    markRetrying(rawId, true);
+    Toast.show({ type: 'info', text1: 'Retrying...', text2: `${entry.ref || entry.tdkRef || ''} — ${entry.party}`, visibilityTime: 1400 });
     try {
-      await retryMyEntry(rawId);
-      Toast.show({ type: 'info', text1: 'Retry queued', text2: 'Will push when desktop connects.', visibilityTime: 2500 });
-    } catch {
-      Toast.show({ type: 'error', text1: 'Retry failed', text2: 'Please try again.', visibilityTime: 2500 });
+      const result: any = await retryMyEntry(rawId);
+      if (result?.alreadySuccess) {
+        Toast.show({ type: 'success', text1: 'Already in Tally', text2: result?.message || 'No need to retry.', visibilityTime: 2500 });
+      } else if (result?.alreadyProcessing) {
+        Toast.show({ type: 'info', text1: 'Push in progress', text2: result?.message || 'Wait for it to finish.', visibilityTime: 2500 });
+      } else if (result?.success === false) {
+        Toast.show({ type: 'error', text1: 'Retry failed', text2: result?.message || 'Please try again.', visibilityTime: 2500 });
+      } else {
+        Toast.show({
+          type: 'info',
+          text1: result?.queued ? 'Still queued' : 'Pushed',
+          text2: result?.message || (result?.queued ? 'Will push when desktop connects.' : 'Sent to Tally.'),
+          visibilityTime: 2500,
+        });
+      }
+      setRefreshKey(k => k + 1);
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Retry failed', text2: err?.message || 'Please try again.', visibilityTime: 2500 });
+    } finally {
+      markRetrying(rawId, false);
     }
   };
 
   const handleBulkPush = async () => {
-    if (selected.length === 0) return;
-    const count = selected.length;
-    Toast.show({ type: 'info', text1: `Retrying ${count} entr${count === 1 ? 'y' : 'ies'}...`, text2: 'Syncing to Tally Prime', visibilityTime: 1600 });
-    const ids = selected.map(id => (id || '').replace('wq_', '')).filter(Boolean);
-    let failed = 0;
-    await Promise.allSettled(ids.map(id => retryMyEntry(id).catch(() => { failed++; })));
-    if (failed === 0) {
-      Toast.show({ type: 'info', text1: `${count} entr${count === 1 ? 'y' : 'ies'} queued`, text2: 'Will push when desktop connects.', visibilityTime: 3000 });
-    } else {
-      Toast.show({ type: 'error', text1: `${failed} failed`, text2: `${count - failed} queued, ${failed} errored. Try again.`, visibilityTime: 3000 });
+    if (selected.length === 0 || bulkRetryingRef.current) return;
+    const retryable = selected
+      .map(id => apiEntries.find(e => e.id === id) || filtered.find(e => e.id === id))
+      .filter((e): e is VoucherEntry => !!e && canRetryEntry(e));
+    if (retryable.length === 0) {
+      Toast.show({ type: 'info', text1: 'Nothing to retry', text2: 'Select queued or failed entries only.', visibilityTime: 2500 });
+      return;
     }
+
+    bulkRetryingRef.current = true;
+    const count = retryable.length;
+    Toast.show({ type: 'info', text1: `Retrying ${count} entr${count === 1 ? 'y' : 'ies'}...`, text2: 'Syncing to Tally Prime', visibilityTime: 1600 });
+    const ids = retryable.map(e => (e.id || '').replace('wq_', '')).filter(Boolean);
+    ids.forEach(id => markRetrying(id, true));
+    let failed = 0;
+    let skipped = 0;
+    await Promise.allSettled(ids.map(async id => {
+      try {
+        const result: any = await retryMyEntry(id);
+        if (result?.alreadyProcessing || result?.alreadySuccess) skipped++;
+        else if (result?.success === false) failed++;
+      } catch {
+        failed++;
+      } finally {
+        markRetrying(id, false);
+      }
+    }));
+    bulkRetryingRef.current = false;
+    if (failed === 0) {
+      Toast.show({
+        type: 'info',
+        text1: `${count - skipped} entr${count - skipped === 1 ? 'y' : 'ies'} queued`,
+        text2: skipped ? `${skipped} already handled.` : 'Will push when desktop connects.',
+        visibilityTime: 3000,
+      });
+    } else {
+      Toast.show({ type: 'error', text1: `${failed} failed`, text2: `${count - failed} handled, ${failed} errored.`, visibilityTime: 3000 });
+    }
+    setRefreshKey(k => k + 1);
     clearSelection();
   };
 
@@ -893,12 +965,17 @@ export default function AuditTrailScreen() {
                               <TouchableOpacity
                                 style={[s.statusIcon, { backgroundColor: sInfo.color + '18' }]}
                                 onPress={() => {
-                                  if (entry.syncStatus !== 'synced') handleSinglePush(entry);
+                                  if (canRetryEntry(entry)) handleSinglePush(entry);
                                 }}
-                                activeOpacity={entry.syncStatus !== 'synced' ? 0.7 : 1}
+                                activeOpacity={canRetryEntry(entry) ? 0.7 : 1}
+                                disabled={!canRetryEntry(entry) || retryingIds.has((entry.id || '').replace('wq_', ''))}
                                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                               >
-                                <Ionicons name={sInfo.icon} size={19} color={sInfo.color} />
+                                {retryingIds.has((entry.id || '').replace('wq_', '')) ? (
+                                  <ActivityIndicator size="small" color={sInfo.color} />
+                                ) : (
+                                  <Ionicons name={sInfo.icon} size={19} color={sInfo.color} />
+                                )}
                               </TouchableOpacity>
                             ) : null}
 

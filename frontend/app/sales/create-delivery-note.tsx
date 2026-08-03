@@ -440,6 +440,7 @@ export default function CreateDeliveryNoteScreen() {
   const [partyGstRegType, setPartyGstRegType] = useState('');
   const [parties, setParties] = useState<BSSOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [loadingOrderItems, setLoadingOrderItems] = useState(false);
 
   // Linked Sales Order — fetched only once a party is chosen
@@ -884,6 +885,7 @@ export default function CreateDeliveryNoteScreen() {
   // ── Submit ────────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
     Keyboard.dismiss();
+    if (submittingRef.current) return;
     if (!isPaired) { Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Pair with Tally Desktop before creating a delivery note.' }); return; }
     if (!company?.guid) { Toast.show({ type: 'error', text1: 'No company selected' }); return; }
     if (!ledger) { Toast.show({ type: 'error', text1: 'Sales Ledger required' }); return; }
@@ -907,6 +909,7 @@ export default function CreateDeliveryNoteScreen() {
     }
 
     setSubmitting(true);
+    submittingRef.current = true;
     try {
       const allLogistics = [
         ...logEntries.map(e => ({
@@ -985,9 +988,10 @@ export default function CreateDeliveryNoteScreen() {
       const voucherNumber = result?.voucherNumber || result?.data?.voucherNumber || undefined;
       setSubmitResult({ tdkRef, isQueued, message: result?.message || '', voucherNumber });
       setShowSuccess(true);
+      return;
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Submit Failed', text2: err?.message || 'Check Tally connection.' });
-    } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }, [

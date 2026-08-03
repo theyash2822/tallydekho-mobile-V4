@@ -755,6 +755,7 @@ export default function CreateSalesInvoiceScreen() {
   const [partyGstRegType, setPartyGstRegType] = useState('');
   const [parties, setParties] = useState<BSSOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   // API data
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
@@ -1336,6 +1337,7 @@ export default function CreateSalesInvoiceScreen() {
     // Dismiss any open keyboard before validation / submit — prevents the keyboard from
     // hovering over the success modal when user submits with a text field still focused.
     Keyboard.dismiss();
+    if (submittingRef.current) return;
     if (!party) { Toast.show({ type: 'error', text1: 'Customer required' }); return; }
     if (items.some(i => !i.product)) { Toast.show({ type: 'error', text1: 'All items need a product selected' }); return; }
     const multiWarehouseItems = items.filter(i => i.product && (itemGodowns[i.id]?.length || 0) > 1);
@@ -1372,6 +1374,7 @@ export default function CreateSalesInvoiceScreen() {
     }
 
     setSubmitting(true);
+    submittingRef.current = true;
     try {
       const allLogistics = [
         ...logEntries.map(e => ({
@@ -1447,9 +1450,12 @@ export default function CreateSalesInvoiceScreen() {
       setSubmitResult({ tdkRef, isQueued, message: result?.message || '', invoiceUuid, numberingPolicy: respNumberingPolicy, invoiceNumber });
       setShowSuccess(true);
       clearDraftOnSubmit();
+      // Keep the lock after success so a second tap cannot mint another invoice
+      // while the success overlay is still up.
+      return;
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Submit Failed', text2: err?.message || 'Check Tally connection.' });
-    } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }, [

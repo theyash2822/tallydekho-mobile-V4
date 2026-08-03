@@ -1,5 +1,36 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-08-03 — Stop double-submit and Audit Trail re-push duplicates
+
+### Changed
+- `create-invoice.tsx`, `create-credit-note.tsx`, `create-delivery-note.tsx`: immediate
+  `useRef` submit lock so a second tap cannot fire while one request is in flight; lock
+  stays held after success while the result overlay is shown.
+- `reports/audit-trail.tsx`: Retry only for queued (`pending`) or `failed` entries;
+  ignore synced/processing; per-entry in-flight lock + spinner; bulk push skips
+  non-retryable rows. Prevents re-forwarding the same XML into Tally.
+
+### QA
+- TypeScript: pass on touched files
+- ESLint: 0 errors on touched files (pre-existing warnings only)
+
+---
+
+## 2026-07-30 — Credit Note amount input and semantic colors
+
+### Changed
+- `create-credit-note.tsx`: Return Amount is now a required editable field per selected
+  item. It auto-calculates from return quantity × original invoice rate until manually
+  edited; subtotal, tax, total and submit payload all use the entered amount.
+- Replaced Credit Note's red badge, amount and primary-action styling with the universal
+  neutral brand palette. Red remains reserved for validation/errors.
+
+### QA
+- TypeScript: pass (`tsc --noEmit`)
+- Targeted ESLint: 0 errors, 1 pre-existing hook dependency warning
+
+---
+
 ## 2026-07-29 — Credit Note 2-step Sales Return rewrite
 
 ### Changed

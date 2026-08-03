@@ -57,6 +57,8 @@ type ReturnItem = {
   remainingQty: number;
   selected: boolean;
   returnQty: string;
+  returnAmount: string;
+  manualAmount: boolean;
   unit: string;
   rate: number;
   salesLedger: string;
@@ -182,6 +184,8 @@ function normalizeContext(raw: any, selected: InvoiceChoice): CreditNoteContext 
       remainingQty,
       selected: false,
       returnQty: '',
+      returnAmount: '',
+      manualAmount: false,
       unit: String(first(row.unit, row.baseUnit, row.base_unit, '') || ''),
       rate: Math.abs(num(first(row.rate, row.originalRate, row.original_rate))),
       salesLedger: String(first(row.salesLedger, row.sales_ledger, row.ledger, defaultSalesLedger, '') || ''),
@@ -252,6 +256,7 @@ export default function CreateCreditNoteScreen() {
   const [invoiceSalesLedgers, setInvoiceSalesLedgers] = useState<string[]>([]);
   const [narration, setNarration] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
 
   useEffect(() => {
@@ -363,7 +368,7 @@ export default function CreateCreditNoteScreen() {
 
   const selectedItems = useMemo(() => items.filter(item => item.selected), [items]);
   const subtotal = useMemo(() => selectedItems.reduce(
-    (sum, item) => sum + (num(item.returnQty) * item.rate),
+    (sum, item) => sum + num(item.returnAmount),
     0,
   ), [selectedItems]);
   const taxAmounts = useMemo(() => taxes.map(tax => tax.manualAmount
@@ -392,7 +397,13 @@ export default function CreateCreditNoteScreen() {
 
   const toggleItem = useCallback((id: string) => {
     setItems(current => current.map(item => item.id === id
-      ? { ...item, selected: !item.selected, returnQty: item.selected ? '' : item.returnQty }
+      ? {
+          ...item,
+          selected: !item.selected,
+          returnQty: item.selected ? '' : item.returnQty,
+          returnAmount: item.selected ? '' : item.returnAmount,
+          manualAmount: item.selected ? false : item.manualAmount,
+        }
       : item
     ));
   }, []);
@@ -401,7 +412,17 @@ export default function CreateCreditNoteScreen() {
     const sanitized = value.replace(/[^0-9.]/g, '');
     const parsed = num(sanitized);
     const capped = parsed > item.remainingQty ? formatQty(item.remainingQty) : sanitized;
-    updateItem(item.id, { returnQty: capped, selected: parsed > 0 ? true : item.selected });
+    const qty = num(capped);
+    updateItem(item.id, {
+      returnQty: capped,
+      returnAmount: item.manualAmount ? item.returnAmount : (qty > 0 ? String(Number((qty * item.rate).toFixed(2))) : ''),
+      selected: parsed > 0 ? true : item.selected,
+    });
+  }, [updateItem]);
+
+  const updateReturnAmount = useCallback((item: ReturnItem, value: string) => {
+    const sanitized = value.replace(/[^0-9.]/g, '');
+    updateItem(item.id, { returnAmount: sanitized, manualAmount: true });
   }, [updateItem]);
 
   const updateTax = useCallback((id: string, changes: Partial<ReturnTax>) => {
@@ -428,6 +449,7 @@ export default function CreateCreditNoteScreen() {
       if (qty <= 0) return `Enter return quantity for ${item.itemName}`;
       if (qty > item.remainingQty) return `${item.itemName} exceeds remaining quantity`;
       if (item.rate <= 0) return `Original rate is missing for ${item.itemName}`;
+      if (num(item.returnAmount) <= 0) return `Enter return amount for ${item.itemName}`;
       if (!item.salesLedger) return `Select Sales ledger for ${item.itemName}`;
       if (!item.godown) return `Select godown for ${item.itemName}`;
     }
@@ -443,12 +465,15 @@ export default function CreateCreditNoteScreen() {
       Alert.alert('Required', submissionError);
       return;
     }
+    if (!selectedInvoice) return;
     if (!isPaired) {
       Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Pair with Tally Desktop first.' });
       return;
     }
+    if (submittingRef.current) return;
 
     setSubmitting(true);
+    submittingRef.current = true;
     try {
       const payload = {
         companyGuid: company!.guid,
@@ -462,8 +487,9 @@ export default function CreateCreditNoteScreen() {
           actualQty: num(item.returnQty),
           billedQty: num(item.returnQty),
           unit: item.unit,
-          rate: item.rate,
-          amount: num(item.returnQty) * item.rate,
+          rate: num(item.returnAmount) / num(item.returnQty),
+          originalRate: item.rate,
+          amount: num(item.returnAmount),
           salesLedger: item.salesLedger,
           godown: item.godown,
           soldQty: item.soldQty,
@@ -496,9 +522,10 @@ export default function CreateCreditNoteScreen() {
         voucherNumber: first(body.voucherNumber, body.tallyVoucherNumber, body.tally_voucher_no, response?.voucherNumber),
         isQueued: response?.queued === true || body?.queued === true || String(first(body.status, response?.status, '')).toLowerCase() === 'queued',
       });
+      return;
     } catch (error: any) {
       Toast.show({ type: 'error', text1: 'Submit Failed', text2: error?.message || 'Could not create credit note.' });
-    } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -687,9 +714,19 @@ export default function CreateCreditNoteScreen() {
                 icon="business-outline"
                 containerStyle={{ marginBottom: 0 }}
               />
-              <View style={s.lineAmount}>
-                <Text style={s.lineLabel}>Return value</Text>
-                <Text style={s.lineValue}>{formatMoney(num(item.returnQty) * item.rate)}</Text>
+              <View style={s.amountField}>
+                <Text style={s.label}>Return Amount <Text style={s.required}>*</Text></Text>
+                <TextInput
+                  style={s.textInput}
+                  value={item.returnAmount}
+                  onChangeText={value => updateReturnAmount(item, value)}
+                  keyboardType="decimal-pad"
+                  placeholder={item.returnQty ? formatMoney(num(item.returnQty) * item.rate) : 'Enter return quantity first'}
+                  placeholderTextColor={COLORS.textTertiary}
+                />
+                <Text style={s.amountHelper}>
+                  Auto-calculated from quantity × original rate; you can edit it.
+                </Text>
               </View>
             </View>
           )}
@@ -940,17 +977,16 @@ const s = StyleSheet.create({
   changeText: { fontSize: TYPOGRAPHY.xs, fontWeight: '800', color: COLORS.brandPrimary },
   natureRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.cardBg, padding: 12, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md },
   natureLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
-  natureBadge: { paddingHorizontal: 10, paddingVertical: 5, backgroundColor: COLORS.negativeBg, borderRadius: RADIUS.full },
-  natureText: { fontSize: TYPOGRAPHY.xs, fontWeight: '800', color: COLORS.negative },
+  natureBadge: { paddingHorizontal: 10, paddingVertical: 5, backgroundColor: COLORS.activeBg, borderRadius: RADIUS.full },
+  natureText: { fontSize: TYPOGRAPHY.xs, fontWeight: '800', color: COLORS.textPrimary },
   itemCard: { backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.lg, overflow: 'hidden' },
   itemCardSelected: { borderColor: COLORS.brandPrimary },
   itemHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: SPACING.md },
   itemName: { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
   itemMeta: { fontSize: 11, color: COLORS.textSecondary, marginTop: 4, lineHeight: 16 },
   itemBody: { padding: SPACING.md, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
-  lineAmount: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
-  lineLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
-  lineValue: { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.negative },
+  amountField: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
+  amountHelper: { marginTop: 5, fontSize: 10, color: COLORS.textTertiary, lineHeight: 14 },
   taxBlock: { paddingVertical: 4 },
   divider: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, paddingBottom: 14, marginBottom: 14 },
   emptyText: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary, lineHeight: 20 },
@@ -961,9 +997,9 @@ const s = StyleSheet.create({
   summaryValue: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   summaryDivider: { height: 1, backgroundColor: COLORS.borderDefault, marginVertical: 3 },
   summaryStrong: { fontWeight: '800', color: COLORS.textPrimary },
-  summaryTotal: { fontSize: TYPOGRAPHY.md, fontWeight: '900', color: COLORS.negative },
+  summaryTotal: { fontSize: TYPOGRAPHY.md, fontWeight: '900', color: COLORS.textPrimary },
   footer: { flexDirection: 'row', gap: 10, paddingHorizontal: SPACING.md, paddingTop: 12, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
-  primaryBtn: { flex: 1, minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: RADIUS.lg, backgroundColor: COLORS.negative },
+  primaryBtn: { flex: 1, minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: RADIUS.lg, backgroundColor: COLORS.brandPrimary },
   primaryText: { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.white },
   secondaryBtn: { minWidth: 90, minHeight: 50, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault },
   secondaryText: { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textSecondary },
