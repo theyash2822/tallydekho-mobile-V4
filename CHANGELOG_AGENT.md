@@ -1,3 +1,16 @@
+## [2026-08-03] Credit Note — item_attributed GST (phases 1–3 client)
+
+### Changed
+- `frontend/app/sales/create-credit-note.tsx`
+  - Reads per-item `taxEntries` + `allocationMode: item_attributed`
+  - VAT treated as goods tax; bare GST kept when sole GST style
+  - Line GST reverse uses item taxEntries (5%/18%/9%) instead of blended invoice rate
+
+### Test
+QA YELLOW — reload Expo after pull; return mixed-rate invoice → per-item rates, no packing GST.
+
+---
+
 ## [2026-08-03] Credit Note — GST reversal item-wise
 
 ### Changed

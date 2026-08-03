@@ -65,6 +65,13 @@ type ReturnItem = {
   salesLedger: string;
   godown: string;
   taxRate?: number;
+  taxEntries?: {
+    ledgerName: string;
+    taxRate: number;
+    taxAmount: number;
+    taxableValue?: number;
+    kind?: string;
+  }[];
 };
 
 type ReturnTax = {
@@ -76,7 +83,7 @@ type ReturnTax = {
 };
 
 type TaxGeometry = {
-  allocationMode: 'item_rate' | 'proportional' | 'none';
+  allocationMode: 'item_attributed' | 'item_rate' | 'proportional' | 'none';
   fallbackUsed: boolean;
   isInterstate: boolean;
   originalTaxable: number;
@@ -151,7 +158,8 @@ const classifyTaxKind = (name: string) => {
   if (/cgst/i.test(name)) return 'cgst';
   if (/sgst|utgst/i.test(name)) return 'sgst';
   if (/cess/i.test(name)) return 'cess';
-  if (/^\s*gst\s*$/i.test(name) || /^gst\s*\d/i.test(name)) return 'gst';
+  if (/vat/i.test(name)) return 'vat';
+  if (/^\s*gst\s*$/i.test(name) || /^gst\s*\d/i.test(name) || /\bgst\b/i.test(name)) return 'gst';
   return 'other';
 };
 
@@ -161,7 +169,7 @@ const filterStockReturnTaxes = <T extends { ledger: string }>(rows: T[]): T[] =>
   const hasSplit = kinds.some(k => k === 'cgst' || k === 'sgst' || k === 'igst');
   return rows.filter((row, i) => {
     const kind = kinds[i];
-    if (kind === 'cgst' || kind === 'sgst' || kind === 'igst' || kind === 'cess') return true;
+    if (kind === 'cgst' || kind === 'sgst' || kind === 'igst' || kind === 'cess' || kind === 'vat') return true;
     if (kind === 'gst') return !hasSplit;
     return false;
   });
@@ -177,6 +185,22 @@ const lineGstRows = (
   const taxable = lineReturnAmount(item);
   if (!(taxable > 0) || returnTaxMode !== 'SALES_RETURN_WITH_GST' || geometry.allocationMode === 'none') {
     return [];
+  }
+
+  if (geometry.allocationMode === 'item_attributed' && Array.isArray(item.taxEntries) && item.taxEntries.length) {
+    return item.taxEntries.map(te => {
+      const ledger = String(te.ledgerName || '').trim();
+      let rate = num(te.taxRate);
+      const origTax = Math.abs(num(te.taxAmount));
+      const origBase = Math.abs(num(te.taxableValue)) || (item.soldQty > 0 ? item.soldQty * unitNet(item) : 0);
+      if (!(rate > 0) && origBase > 0 && origTax > 0) {
+        rate = Number(((origTax / origBase) * 100).toFixed(2));
+      }
+      const amount = rate > 0
+        ? Number((taxable * rate / 100).toFixed(2))
+        : (origBase > 0 ? Number((origTax * (taxable / origBase)).toFixed(2)) : 0);
+      return { ledger, rate, amount };
+    }).filter(t => t.ledger && t.amount > 0);
   }
 
   if (geometry.allocationMode === 'proportional') {
@@ -203,6 +227,7 @@ const lineGstRows = (
   const sgst = kinds.filter(t => t.kind === 'sgst');
   const igst = kinds.filter(t => t.kind === 'igst');
   const gst = kinds.filter(t => t.kind === 'gst');
+  const vat = kinds.filter(t => t.kind === 'vat');
   const cess = kinds.filter(t => t.kind === 'cess');
   const rows: LineTaxRow[] = [];
 
@@ -236,6 +261,15 @@ const lineGstRows = (
         ledger: tax.ledger,
         rate: Number((gstRate / gst.length).toFixed(2)),
         amount: Number((taxable * gstRate / gst.length / 100).toFixed(2)),
+      });
+    }
+  } else if (vat.length) {
+    for (const tax of vat) {
+      const rate = num(tax.rate) > 0 ? num(tax.rate) : gstRate;
+      rows.push({
+        ledger: tax.ledger,
+        rate: Number((rate / vat.length).toFixed(2)),
+        amount: Number((taxable * rate / vat.length / 100).toFixed(2)),
       });
     }
   }
@@ -337,6 +371,15 @@ function normalizeContext(raw: any, selected: InvoiceChoice): CreditNoteContext 
       salesLedger: String(first(row.salesLedger, row.sales_ledger, row.ledger, defaultSalesLedger, '') || ''),
       godown: String(first(row.godown, row.godownName, row.godown_name, row.warehouse, row.warehouseName, 'Main Location') || 'Main Location'),
       taxRate: num(first(row.gstRate, row.gst_rate, row.taxRate, row.tax_rate)) || undefined,
+      taxEntries: Array.isArray(row.taxEntries)
+        ? row.taxEntries.map((te: any) => ({
+          ledgerName: String(first(te.ledgerName, te.ledger_name, te.ledger, '') || ''),
+          taxRate: num(first(te.taxRate, te.tax_rate, te.rate)),
+          taxAmount: Math.abs(num(first(te.taxAmount, te.tax_amount, te.amount))),
+          taxableValue: Math.abs(num(first(te.taxableValue, te.taxable_value))),
+          kind: String(first(te.kind, classifyTaxKind(String(te.ledgerName || te.ledger || '')))),
+        })).filter((te: any) => te.ledgerName)
+        : undefined,
     };
   }).filter((item: ReturnItem) => !!item.itemName);
 
@@ -422,11 +465,13 @@ function normalizeContext(raw: any, selected: InvoiceChoice): CreditNoteContext 
   );
 
   const taxGeometry: TaxGeometry = {
-    allocationMode: (['item_rate', 'proportional', 'none'].includes(String(geometryRaw.allocationMode))
+    allocationMode: (['item_attributed', 'item_rate', 'proportional', 'none'].includes(String(geometryRaw.allocationMode))
       ? geometryRaw.allocationMode
       : (returnTaxMode === 'SALES_RETURN_WITHOUT_GST'
         ? 'none'
-        : (items.every(i => num(i.taxRate) > 0) && taxes.length > 0 ? 'item_rate' : 'proportional'))) as TaxGeometry['allocationMode'],
+        : (items.every(i => Array.isArray(i.taxEntries) && (i.taxEntries?.length || 0) > 0)
+          ? 'item_attributed'
+          : (items.every(i => num(i.taxRate) > 0) && taxes.length > 0 ? 'item_rate' : 'proportional')))) as TaxGeometry['allocationMode'],
     fallbackUsed: !!geometryRaw.fallbackUsed || String(geometryRaw.allocationMode) === 'proportional',
     isInterstate: !!geometryRaw.isInterstate || (taxes.some(t => /igst/i.test(t.ledger)) && !taxes.some(t => /cgst|sgst/i.test(t.ledger))),
     originalTaxable: inferredOriginalTaxable,
