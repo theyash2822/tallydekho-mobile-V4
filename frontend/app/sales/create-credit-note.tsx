@@ -452,6 +452,7 @@ export default function CreateCreditNoteScreen() {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const narrationY = useRef(0);
+  const narrationInputRef = useRef<TextInput>(null);
   const { company, selectedFY, isPaired } = useAuth();
   const { formatAmount } = useSettings();
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
@@ -487,7 +488,12 @@ export default function CreateCreditNoteScreen() {
   }, [entryType]);
 
   useEffect(() => {
-    if (submitResult) Keyboard.dismiss();
+    if (!submitResult) return;
+    narrationInputRef.current?.blur();
+    Keyboard.dismiss();
+    const t1 = setTimeout(() => Keyboard.dismiss(), 50);
+    const t2 = setTimeout(() => Keyboard.dismiss(), 300);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [submitResult]);
 
   const partiesState = useApiData<any[]>(
@@ -738,6 +744,11 @@ export default function CreateCreditNoteScreen() {
   }, [company, party, selectedInvoice, selectedItems, returnTaxMode, computedTaxes, narration]);
 
   const handleSubmit = async () => {
+    // Same pattern as Sales Invoice: dismiss BEFORE validation so the success
+    // modal never sits under a still-focused narration field / iOS keyboard.
+    narrationInputRef.current?.blur();
+    Keyboard.dismiss();
+
     if (submissionError) {
       Alert.alert('Required', submissionError);
       return;
@@ -1092,6 +1103,7 @@ export default function CreateCreditNoteScreen() {
       >
         <Text style={s.label}>Reason / Narration <Text style={s.required}>*</Text></Text>
         <TextInput
+          ref={narrationInputRef}
           style={s.textArea}
           value={narration}
           onChangeText={setNarration}
@@ -1100,6 +1112,7 @@ export default function CreateCreditNoteScreen() {
           textAlignVertical="top"
           placeholder="Why are these goods being returned?"
           placeholderTextColor={COLORS.textTertiary}
+          blurOnSubmit
           onFocus={() => setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, narrationY.current - 80), animated: true }), 250)}
         />
         <View style={s.summary}>
@@ -1138,6 +1151,7 @@ export default function CreateCreditNoteScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'android' ? 80 : 0}
+        enabled={!submitResult}
       >
         <ScrollView
           ref={scrollRef}
@@ -1163,7 +1177,12 @@ export default function CreateCreditNoteScreen() {
             <TouchableOpacity
               style={[s.primaryBtn, ((step === 1 && !!stepOneError) || (step === 2 && (!!submissionError || submitting))) && s.disabledBtn]}
               disabled={(step === 1 && !!stepOneError) || (step === 2 && (!!submissionError || submitting))}
-              onPress={() => step === 1 ? setStep(2) : handleSubmit()}
+              onPress={() => {
+                narrationInputRef.current?.blur();
+                Keyboard.dismiss();
+                if (step === 1) setStep(2);
+                else handleSubmit();
+              }}
             >
               {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : (
                 <Ionicons name={step === 1 ? 'arrow-forward' : 'return-up-back'} size={18} color={COLORS.white} />
