@@ -486,6 +486,10 @@ export default function CreateCreditNoteScreen() {
     if (entryType === 'regular') setDate(todayDMY());
   }, [entryType]);
 
+  useEffect(() => {
+    if (submitResult) Keyboard.dismiss();
+  }, [submitResult]);
+
   const partiesState = useApiData<any[]>(
     () => getParties(company!.guid),
     [company?.guid],
@@ -794,9 +798,10 @@ export default function CreateCreditNoteScreen() {
 
       const response: any = await createCreditNote(payload);
       const body = response?.data ?? response ?? {};
+      Keyboard.dismiss();
       setSubmitResult({
         tdkRef: String(first(body.tdkReferenceNo, body.tdkRef, body.tdk_reference_no, response?.tdkReferenceNo, response?.tdkRef, '') || ''),
-        voucherNumber: first(body.voucherNumber, body.tallyVoucherNumber, body.tally_voucher_no, response?.voucherNumber),
+        voucherNumber: first(body.voucherNumber, body.creditNoteNumber, body.tallyVoucherNumber, body.tally_voucher_no, response?.voucherNumber),
         isQueued: response?.queued === true || body?.queued === true || String(first(body.status, response?.status, '')).toLowerCase() === 'queued',
       });
       return;
@@ -1180,7 +1185,13 @@ export default function CreateCreditNoteScreen() {
       />
 
       {!!submitResult && (
-        <View style={ss.overlay}>
+        <View
+          style={ss.overlay}
+          onStartShouldSetResponder={() => {
+            Keyboard.dismiss();
+            return true;
+          }}
+        >
           <View style={ss.card}>
             <Ionicons
               name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
@@ -1195,7 +1206,10 @@ export default function CreateCreditNoteScreen() {
             </Text>
             <View style={ss.refBox}>
               <Text style={ss.refLabel}>Credit Note No.</Text>
-              <Text style={ss.refValue}>{submitResult.voucherNumber || 'Pending from TallyPrime'}</Text>
+              <Text style={ss.refValue}>
+                {submitResult.voucherNumber
+                  || (submitResult.isQueued ? 'Will be assigned when synced' : 'Check Day Book in TallyPrime')}
+              </Text>
             </View>
             {!!submitResult.tdkRef && (
               <View style={ss.refBox}>
@@ -1206,30 +1220,33 @@ export default function CreateCreditNoteScreen() {
             <View style={ss.actionRow}>
               <TouchableOpacity
                 style={ss.actionBtn}
-                onPress={() => router.push({
-                  pathname: '/voucher/preview',
-                  params: {
-                    type: 'credit_note',
-                    voucherNumber: submitResult.voucherNumber || 'Pending from TallyPrime',
-                    date,
-                    customer: party,
-                    against: selectedInvoice?.voucherNumber || '',
-                    amount: formatMoney(totalAmount),
-                    narration: narration.trim(),
-                    items: JSON.stringify(previewItems),
-                    tdkRef: submitResult.tdkRef,
-                  },
-                } as any)}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  router.push({
+                    pathname: '/voucher/preview',
+                    params: {
+                      type: 'credit_note',
+                      voucherNumber: submitResult.voucherNumber || submitResult.tdkRef || 'Credit Note',
+                      date,
+                      customer: party,
+                      against: selectedInvoice?.voucherNumber || '',
+                      amount: formatMoney(totalAmount),
+                      narration: narration.trim(),
+                      items: JSON.stringify(previewItems),
+                      tdkRef: submitResult.tdkRef,
+                    },
+                  } as any);
+                }}
               >
                 <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
                 <Text style={ss.actionText}>Preview</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={ss.actionBtn} onPress={shareSubmitted}>
+              <TouchableOpacity style={ss.actionBtn} onPress={() => { Keyboard.dismiss(); shareSubmitted(); }}>
                 <Ionicons name="share-outline" size={18} color={COLORS.brandPrimary} />
                 <Text style={ss.actionText}>Share</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity style={ss.closeBtn} onPress={() => router.back()}>
+            <TouchableOpacity style={ss.closeBtn} onPress={() => { Keyboard.dismiss(); router.back(); }}>
               <Text style={ss.closeText}>Close</Text>
             </TouchableOpacity>
           </View>
