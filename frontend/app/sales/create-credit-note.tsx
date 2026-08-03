@@ -169,12 +169,18 @@ const lineGstRows = (
 
   if (geometry.allocationMode === 'proportional') {
     const base = geometry.originalTaxable > 0 ? geometry.originalTaxable : 0;
-    if (!(base > 0)) return [];
-    return taxes.map(tax => ({
-      ledger: tax.ledger,
-      rate: num(tax.rate),
-      amount: Number((num(tax.amount) * (taxable / base)).toFixed(2)),
-    })).filter(t => t.amount > 0);
+    return taxes.map(tax => {
+      const rate = num(tax.rate);
+      const fromShare = base > 0 && num(tax.amount) > 0
+        ? Number((num(tax.amount) * (taxable / base)).toFixed(2))
+        : 0;
+      const fromRate = rate > 0 ? Number((taxable * rate / 100).toFixed(2)) : 0;
+      return {
+        ledger: tax.ledger,
+        rate,
+        amount: fromShare > 0 ? fromShare : fromRate,
+      };
+    }).filter(t => t.amount > 0);
   }
 
   const gstRate = item.taxRate || geometry.singleSlabRate || taxes.reduce((s, t) => s + num(t.rate), 0);
@@ -379,15 +385,41 @@ function normalizeContext(raw: any, selected: InvoiceChoice): CreditNoteContext 
           ? 'SALES_RETURN_WITH_GST'
           : 'SALES_RETURN_WITHOUT_GST');
 
+  // gst.taxableAmount is often 0 on invoices that still have CGST/SGST ledger legs
+  // (e.g. Tax Free Sale A/C + output GST). Never treat 0 as a real taxable base.
+  const positive = (...values: unknown[]) => {
+    for (const value of values) {
+      const n = num(value);
+      if (n > 0) return n;
+    }
+    return 0;
+  };
+  const inferredOriginalTaxable = positive(
+    geometryRaw.originalTaxable,
+    body.gst?.taxableAmount,
+    body.totals?.salesLedgerTotal,
+    body.totals?.itemsTotal,
+    items.reduce((sum, item) => sum + (item.netTaxablePerUnit > 0 ? item.netTaxablePerUnit * item.soldQty : 0), 0),
+  );
+  const inferredOriginalTaxTotal = positive(
+    geometryRaw.originalTaxTotal,
+    body.totals?.taxTotal,
+    taxes.reduce((sum, tax) => sum + num(tax.amount), 0),
+  );
+
   const taxGeometry: TaxGeometry = {
     allocationMode: (['item_rate', 'proportional', 'none'].includes(String(geometryRaw.allocationMode))
       ? geometryRaw.allocationMode
-      : (returnTaxMode === 'SALES_RETURN_WITHOUT_GST' ? 'none' : (items.every(i => num(i.taxRate) > 0) ? 'item_rate' : 'proportional'))) as TaxGeometry['allocationMode'],
-    fallbackUsed: !!geometryRaw.fallbackUsed,
-    isInterstate: !!geometryRaw.isInterstate || taxes.some(t => /igst/i.test(t.ledger)) && !taxes.some(t => /cgst|sgst/i.test(t.ledger)),
-    originalTaxable: num(first(geometryRaw.originalTaxable, body.gst?.taxableAmount, body.totals?.itemsTotal)),
-    originalTaxTotal: num(first(geometryRaw.originalTaxTotal, body.totals?.taxTotal, taxes.reduce((s, t) => s + num(t.amount), 0))),
-    singleSlabRate: geometryRaw.singleSlabRate != null ? num(geometryRaw.singleSlabRate) : null,
+      : (returnTaxMode === 'SALES_RETURN_WITHOUT_GST'
+        ? 'none'
+        : (items.every(i => num(i.taxRate) > 0) && taxes.length > 0 ? 'item_rate' : 'proportional'))) as TaxGeometry['allocationMode'],
+    fallbackUsed: !!geometryRaw.fallbackUsed || String(geometryRaw.allocationMode) === 'proportional',
+    isInterstate: !!geometryRaw.isInterstate || (taxes.some(t => /igst/i.test(t.ledger)) && !taxes.some(t => /cgst|sgst/i.test(t.ledger))),
+    originalTaxable: inferredOriginalTaxable,
+    originalTaxTotal: inferredOriginalTaxTotal,
+    singleSlabRate: geometryRaw.singleSlabRate != null && num(geometryRaw.singleSlabRate) > 0
+      ? num(geometryRaw.singleSlabRate)
+      : null,
   };
 
   return {
@@ -549,14 +581,22 @@ export default function CreateCreditNoteScreen() {
 
   const computedTaxes = useMemo(() => {
     if (returnTaxMode !== 'SALES_RETURN_WITH_GST' || taxGeometry.allocationMode === 'none') return [];
-    if (taxGeometry.allocationMode === 'proportional' && taxGeometry.originalTaxable > 0) {
-      const ratio = subtotal / taxGeometry.originalTaxable;
-      return taxes.map(tax => ({
-        id: tax.id,
-        ledger: tax.ledger,
-        rate: num(tax.rate),
-        amount: Number((num(tax.amount) * ratio).toFixed(2)),
-      })).filter(t => t.amount > 0);
+    if (taxGeometry.allocationMode === 'proportional') {
+      const base = taxGeometry.originalTaxable;
+      return taxes.map(tax => {
+        const rate = num(tax.rate);
+        const fromShare = base > 0 && num(tax.amount) > 0
+          ? Number((num(tax.amount) * (subtotal / base)).toFixed(2))
+          : 0;
+        const fromRate = rate > 0 ? Number((subtotal * rate / 100).toFixed(2)) : 0;
+        const amount = fromShare > 0 ? fromShare : fromRate;
+        return {
+          id: tax.id,
+          ledger: tax.ledger,
+          rate,
+          amount,
+        };
+      }).filter(t => t.amount > 0);
     }
     const byLedger = new Map<string, { id: string; ledger: string; rate: number; amount: number }>();
     for (const item of selectedItems) {
