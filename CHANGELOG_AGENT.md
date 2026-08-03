@@ -1,3 +1,18 @@
+## [2026-08-03] Credit Note — qty drives amount + disable reason
+
+### Changed
+- `frontend/app/sales/create-credit-note.tsx`
+  - Selecting an item prefills remaining Return Qty and Amount (qty × invoice rate)
+  - Qty always recalculates Amount; Amount locked until Qty > 0
+  - Subtotal / submit use `lineReturnAmount` (no orphan amount without qty)
+  - Footer shows why Continue / Issue Credit Note is disabled
+  - Per-line estimated tax hint; client merge of duplicate tax ledgers sums rates
+
+### Test
+QA YELLOW — ship with backend tax collapse. Device: select item → qty/amount fill →
+fill narration → Issue enables; tax rows one per ledger.
+
+---
 
 ## [2026-07-29] Credit Note — 2-step invoice-linked Sales Return
 

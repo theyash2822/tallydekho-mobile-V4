@@ -116,6 +116,14 @@ const isoToDMY = (value: string) => {
 const formatQty = (value: number) => Number(value.toFixed(4)).toString();
 const formatMoney = (value: number) => `₹${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 
+/** Line return value: qty × rate unless the user overrode amount after entering qty. */
+const lineReturnAmount = (item: ReturnItem): number => {
+  const qty = num(item.returnQty);
+  if (qty <= 0) return 0;
+  if (item.manualAmount) return Math.max(0, num(item.returnAmount));
+  return Number((qty * item.rate).toFixed(2));
+};
+
 function normalizeInvoices(raw: any): InvoiceChoice[] {
   const rows = Array.isArray(raw?.data) ? raw.data : Array.isArray(raw?.invoices) ? raw.invoices : Array.isArray(raw) ? raw : [];
   return rows
@@ -203,17 +211,32 @@ function normalizeContext(raw: any, selected: InvoiceChoice): CreditNoteContext 
     body.gst?.taxes,
     invoiceRaw.taxes,
   );
-  const taxes = (Array.isArray(sourceTaxes) ? sourceTaxes : []).map((row: any, index: number): ReturnTax => {
+  const taxes = (Array.isArray(sourceTaxes) ? sourceTaxes : []).reduce((acc: ReturnTax[], row: any, index: number) => {
+    const ledger = String(first(row.ledger, row.ledgerName, row.ledger_name, row.name, '') || '');
+    if (!ledger) return acc;
     const rate = num(first(row.rate, row.taxRate, row.tax_rate, row.percentage));
     const contextAmount = Math.abs(num(first(row.returnAmount, row.return_amount, row.amount, row.taxAmount, row.tax_amount)));
-    return {
-      id: String(first(row.id, row.ledger, row.ledgerName, row.ledger_name, index)),
-      ledger: String(first(row.ledger, row.ledgerName, row.ledger_name, row.name, '') || ''),
+    const existing = acc.find(t => t.ledger.trim().toLowerCase() === ledger.trim().toLowerCase());
+    if (existing) {
+      // Same ledger can appear once per invoice line — collapse to one editable row.
+      // Context rates are amount_i / fullTaxableBase (understated per duplicate); sum them.
+      const mergedAmount = num(existing.amount) + contextAmount;
+      existing.amount = mergedAmount ? String(Number(mergedAmount.toFixed(2))) : existing.amount;
+      if (rate > 0) {
+        existing.rate = String(Number((num(existing.rate) + rate).toFixed(4)));
+      }
+      existing.manualAmount = num(existing.rate) <= 0 && num(existing.amount) > 0;
+      return acc;
+    }
+    acc.push({
+      id: `${ledger}__${index}`,
+      ledger,
       rate: String(rate || ''),
       amount: contextAmount ? String(contextAmount) : '',
       manualAmount: rate <= 0 && contextAmount > 0,
-    };
-  }).filter((tax: ReturnTax) => !!tax.ledger);
+    });
+    return acc;
+  }, []);
 
   const candidateRows = (Array.isArray(body.salesLedgerCandidates) && body.salesLedgerCandidates.length > 0)
     ? body.salesLedgerCandidates
@@ -368,9 +391,13 @@ export default function CreateCreditNoteScreen() {
 
   const selectedItems = useMemo(() => items.filter(item => item.selected), [items]);
   const subtotal = useMemo(() => selectedItems.reduce(
-    (sum, item) => sum + num(item.returnAmount),
+    (sum, item) => sum + lineReturnAmount(item),
     0,
   ), [selectedItems]);
+  const combinedTaxRate = useMemo(
+    () => taxes.reduce((sum, tax) => sum + Math.max(0, num(tax.rate)), 0),
+    [taxes],
+  );
   const taxAmounts = useMemo(() => taxes.map(tax => tax.manualAmount
     ? Math.max(0, num(tax.amount))
     : subtotal * Math.max(0, num(tax.rate)) / 100
@@ -396,16 +423,29 @@ export default function CreateCreditNoteScreen() {
   }, []);
 
   const toggleItem = useCallback((id: string) => {
-    setItems(current => current.map(item => item.id === id
-      ? {
+    setItems(current => current.map(item => {
+      if (item.id !== id) return item;
+      if (item.selected) {
+        return {
           ...item,
-          selected: !item.selected,
-          returnQty: item.selected ? '' : item.returnQty,
-          returnAmount: item.selected ? '' : item.returnAmount,
-          manualAmount: item.selected ? false : item.manualAmount,
-        }
-      : item
-    ));
+          selected: false,
+          returnQty: '',
+          returnAmount: '',
+          manualAmount: false,
+        };
+      }
+      const qty = item.remainingQty;
+      const amount = qty > 0 && item.rate > 0
+        ? String(Number((qty * item.rate).toFixed(2)))
+        : '';
+      return {
+        ...item,
+        selected: true,
+        returnQty: qty > 0 ? formatQty(qty) : '',
+        returnAmount: amount,
+        manualAmount: false,
+      };
+    }));
   }, []);
 
   const updateReturnQty = useCallback((item: ReturnItem, value: string) => {
@@ -413,14 +453,17 @@ export default function CreateCreditNoteScreen() {
     const parsed = num(sanitized);
     const capped = parsed > item.remainingQty ? formatQty(item.remainingQty) : sanitized;
     const qty = num(capped);
+    // Qty always drives amount; editing amount afterward sets manualAmount.
     updateItem(item.id, {
       returnQty: capped,
-      returnAmount: item.manualAmount ? item.returnAmount : (qty > 0 ? String(Number((qty * item.rate).toFixed(2))) : ''),
-      selected: parsed > 0 ? true : item.selected,
+      returnAmount: qty > 0 ? String(Number((qty * item.rate).toFixed(2))) : '',
+      manualAmount: false,
+      selected: qty > 0 ? true : item.selected,
     });
   }, [updateItem]);
 
   const updateReturnAmount = useCallback((item: ReturnItem, value: string) => {
+    if (num(item.returnQty) <= 0) return;
     const sanitized = value.replace(/[^0-9.]/g, '');
     updateItem(item.id, { returnAmount: sanitized, manualAmount: true });
   }, [updateItem]);
@@ -449,7 +492,7 @@ export default function CreateCreditNoteScreen() {
       if (qty <= 0) return `Enter return quantity for ${item.itemName}`;
       if (qty > item.remainingQty) return `${item.itemName} exceeds remaining quantity`;
       if (item.rate <= 0) return `Original rate is missing for ${item.itemName}`;
-      if (num(item.returnAmount) <= 0) return `Enter return amount for ${item.itemName}`;
+      if (lineReturnAmount(item) <= 0) return `Enter return amount for ${item.itemName}`;
       if (!item.salesLedger) return `Select Sales ledger for ${item.itemName}`;
       if (!item.godown) return `Select godown for ${item.itemName}`;
     }
@@ -481,21 +524,25 @@ export default function CreateCreditNoteScreen() {
         date: dmyToISO(date),
         partyLedger: party,
         totalAmount,
-        items: selectedItems.map(item => ({
-          lineId: item.lineId,
-          itemName: item.itemName,
-          actualQty: num(item.returnQty),
-          billedQty: num(item.returnQty),
-          unit: item.unit,
-          rate: num(item.returnAmount) / num(item.returnQty),
-          originalRate: item.rate,
-          amount: num(item.returnAmount),
-          salesLedger: item.salesLedger,
-          godown: item.godown,
-          soldQty: item.soldQty,
-          previouslyReturnedQty: item.previouslyReturnedQty,
-          remainingQty: item.remainingQty,
-        })),
+        items: selectedItems.map(item => {
+          const amount = lineReturnAmount(item);
+          const qty = num(item.returnQty);
+          return {
+            lineId: item.lineId,
+            itemName: item.itemName,
+            actualQty: qty,
+            billedQty: qty,
+            unit: item.unit,
+            rate: qty > 0 ? amount / qty : item.rate,
+            originalRate: item.rate,
+            amount,
+            salesLedger: item.salesLedger,
+            godown: item.godown,
+            soldQty: item.soldQty,
+            previouslyReturnedQty: item.previouslyReturnedQty,
+            remainingQty: item.remainingQty,
+          };
+        }),
         taxes: taxes.map((tax, index) => ({
           ledgerName: tax.ledger,
           taxRate: num(tax.rate),
@@ -534,7 +581,7 @@ export default function CreateCreditNoteScreen() {
     no: String(index + 1),
     item: item.itemName,
     qty: `${formatQty(num(item.returnQty))}${item.unit ? ` ${item.unit}` : ''} × ${formatMoney(item.rate)}`,
-    price: formatMoney(num(item.returnQty) * item.rate),
+    price: formatMoney(lineReturnAmount(item)),
   })), [selectedItems]);
 
   const shareSubmitted = async () => {
@@ -717,16 +764,29 @@ export default function CreateCreditNoteScreen() {
               <View style={s.amountField}>
                 <Text style={s.label}>Return Amount <Text style={s.required}>*</Text></Text>
                 <TextInput
-                  style={s.textInput}
+                  style={[s.textInput, num(item.returnQty) <= 0 && s.textInputDisabled]}
                   value={item.returnAmount}
                   onChangeText={value => updateReturnAmount(item, value)}
                   keyboardType="decimal-pad"
-                  placeholder={item.returnQty ? formatMoney(num(item.returnQty) * item.rate) : 'Enter return quantity first'}
+                  editable={num(item.returnQty) > 0}
+                  placeholder={num(item.returnQty) > 0
+                    ? formatMoney(num(item.returnQty) * item.rate)
+                    : 'Enter return quantity first'}
                   placeholderTextColor={COLORS.textTertiary}
                 />
                 <Text style={s.amountHelper}>
-                  Auto-calculated from quantity × original rate; you can edit it.
+                  {num(item.returnQty) > 0
+                    ? (item.manualAmount
+                      ? 'Edited manually — change qty to recalculate from invoice rate.'
+                      : `Auto from ${formatQty(num(item.returnQty))} × ${formatMoney(item.rate)}. You can edit if needed.`)
+                    : 'Enter Return Qty first — amount fills from invoice rate.'}
                 </Text>
+                {combinedTaxRate > 0 && lineReturnAmount(item) > 0 ? (
+                  <Text style={s.lineTaxHint}>
+                    Est. tax on this line: {formatMoney(lineReturnAmount(item) * combinedTaxRate / 100)}
+                    {' '}({Number(combinedTaxRate.toFixed(2))}% of return amount)
+                  </Text>
+                ) : null}
               </View>
             </View>
           )}
@@ -737,7 +797,12 @@ export default function CreateCreditNoteScreen() {
       <View style={s.card}>
         {taxes.length === 0 ? (
           <Text style={s.emptyText}>No tax ledger entries were returned for this invoice.</Text>
-        ) : taxes.map((tax, index) => (
+        ) : (
+          <>
+            <Text style={s.taxIntro}>
+              Tax amounts update from return subtotal × each ledger rate (same rates as the original invoice).
+            </Text>
+            {taxes.map((tax, index) => (
           <View key={tax.id} style={[s.taxBlock, index < taxes.length - 1 && s.divider]}>
             <BottomSheetSearch
               label="Tax Ledger"
@@ -770,7 +835,9 @@ export default function CreateCreditNoteScreen() {
               </View>
             </View>
           </View>
-        ))}
+            ))}
+          </>
+        )}
       </View>
 
       <Text style={s.sectionTitle}>Reason & Summary</Text>
@@ -839,21 +906,26 @@ export default function CreateCreditNoteScreen() {
         </ScrollView>
 
         <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-          {step === 2 && (
-            <TouchableOpacity style={s.secondaryBtn} onPress={() => setStep(1)} disabled={submitting}>
-              <Text style={s.secondaryText}>Back</Text>
-            </TouchableOpacity>
+          {!!(step === 1 ? stepOneError : submissionError) && (
+            <Text style={s.footerError}>{step === 1 ? stepOneError : submissionError}</Text>
           )}
-          <TouchableOpacity
-            style={[s.primaryBtn, ((step === 1 && !!stepOneError) || (step === 2 && (!!submissionError || submitting))) && s.disabledBtn]}
-            disabled={(step === 1 && !!stepOneError) || (step === 2 && (!!submissionError || submitting))}
-            onPress={() => step === 1 ? setStep(2) : handleSubmit()}
-          >
-            {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : (
-              <Ionicons name={step === 1 ? 'arrow-forward' : 'return-up-back'} size={18} color={COLORS.white} />
+          <View style={s.footerRow}>
+            {step === 2 && (
+              <TouchableOpacity style={s.secondaryBtn} onPress={() => setStep(1)} disabled={submitting}>
+                <Text style={s.secondaryText}>Back</Text>
+              </TouchableOpacity>
             )}
-            <Text style={s.primaryText}>{submitting ? 'Submitting...' : step === 1 ? 'Continue' : 'Issue Credit Note'}</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.primaryBtn, ((step === 1 && !!stepOneError) || (step === 2 && (!!submissionError || submitting))) && s.disabledBtn]}
+              disabled={(step === 1 && !!stepOneError) || (step === 2 && (!!submissionError || submitting))}
+              onPress={() => step === 1 ? setStep(2) : handleSubmit()}
+            >
+              {submitting ? <ActivityIndicator size="small" color={COLORS.white} /> : (
+                <Ionicons name={step === 1 ? 'arrow-forward' : 'return-up-back'} size={18} color={COLORS.white} />
+              )}
+              <Text style={s.primaryText}>{submitting ? 'Submitting...' : step === 1 ? 'Continue' : 'Issue Credit Note'}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </KeyboardAvoidingView>
 
@@ -967,6 +1039,7 @@ const s = StyleSheet.create({
   inputField: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, backgroundColor: COLORS.cardBg },
   inputText: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
   textInput: { minHeight: 46, paddingHorizontal: 12, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, backgroundColor: COLORS.pageBg, color: COLORS.textPrimary, fontSize: TYPOGRAPHY.sm },
+  textInputDisabled: { opacity: 0.55 },
   helper: { marginTop: 10, fontSize: 11, color: COLORS.textTertiary, lineHeight: 16 },
   inlineState: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, backgroundColor: COLORS.pageBg, marginTop: 2 },
   inlineText: { flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, lineHeight: 17 },
@@ -987,6 +1060,8 @@ const s = StyleSheet.create({
   itemBody: { padding: SPACING.md, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
   amountField: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
   amountHelper: { marginTop: 5, fontSize: 10, color: COLORS.textTertiary, lineHeight: 14 },
+  lineTaxHint: { marginTop: 6, fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, lineHeight: 15 },
+  taxIntro: { fontSize: 11, color: COLORS.textTertiary, lineHeight: 16, marginBottom: 12 },
   taxBlock: { paddingVertical: 4 },
   divider: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, paddingBottom: 14, marginBottom: 14 },
   emptyText: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary, lineHeight: 20 },
@@ -998,7 +1073,9 @@ const s = StyleSheet.create({
   summaryDivider: { height: 1, backgroundColor: COLORS.borderDefault, marginVertical: 3 },
   summaryStrong: { fontWeight: '800', color: COLORS.textPrimary },
   summaryTotal: { fontSize: TYPOGRAPHY.md, fontWeight: '900', color: COLORS.textPrimary },
-  footer: { flexDirection: 'row', gap: 10, paddingHorizontal: SPACING.md, paddingTop: 12, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
+  footer: { gap: 8, paddingHorizontal: SPACING.md, paddingTop: 12, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
+  footerError: { fontSize: 12, fontWeight: '600', color: COLORS.negative, lineHeight: 16 },
+  footerRow: { flexDirection: 'row', gap: 10 },
   primaryBtn: { flex: 1, minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: RADIUS.lg, backgroundColor: COLORS.brandPrimary },
   primaryText: { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.white },
   secondaryBtn: { minWidth: 90, minHeight: 50, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault },
