@@ -1,3 +1,21 @@
+## [2026-08-05] Purchase Invoice — Sales-parity 3-step + dual scanner
+
+### Changed
+- `frontend/app/purchase/create-invoice.tsx` — full rewrite:
+  - 3 steps: Details → Items → Review (Sales pattern)
+  - Live Purchase ledgers, parties, stocks, warehouses, tax/charge ledgers
+  - + Add Vendor (Sundry Creditors)
+  - Scan e-Invoice QR + Scan/Upload Bill (in-house; no OCR_MOCK)
+  - Make Payment Now → `make_payment` (Payment voucher, not Receipt)
+  - `voucherType: 'Purchase'`, numbering policy, REG/OPT date lock
+  - Post-submit success overlay + preview/share PDF
+- `frontend/src/services/api.ts` — `getPurchaseLedgerAccounts`
+
+### Test
+FAB → Purchase Invoice → 3-step with live Tally masters → submit → Payment if Make Payment Now.
+
+---
+
 ## [2026-08-03] Credit Note — item_attributed GST (phases 1–3 client)
 
 ### Changed

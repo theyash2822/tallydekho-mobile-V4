@@ -197,6 +197,8 @@ export const createDeliveryNote  = (payload: any) => tallyPost<any>('/voucher/de
 export const getPurchaseInvoices = (companyGuid?: string, params?: any) => get<any>(withCompany('/purchase/invoices', companyGuid, params));
 export const getPurchaseOrders   = (companyGuid?: string, params?: any) => get<any>(withCompany('/purchase/orders', companyGuid, params));
 export const getDebitNotes       = (companyGuid?: string, params?: any) => get<any>(withCompany('/purchase/debit-notes', companyGuid, params));
+export const getPurchaseLedgerAccounts = (companyGuid?: string) =>
+  get<any>(withCompany('/purchase/ledger-accounts', companyGuid));
 export const createPurchaseInvoice = (payload: any) => tallyPost<any>('/voucher/purchase', payload);
 export const createPurchaseOrder   = (payload: any) => tallyPost<any>('/voucher/purchase-order', payload);
 export const createDebitNote       = (payload: any) => tallyPost<any>('/voucher/debit-note', payload);

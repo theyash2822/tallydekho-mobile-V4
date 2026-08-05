@@ -70,6 +70,12 @@ Credit Note Sales Return:
 - `getSalesInvoiceCreditNoteContext(invoiceId, companyGuid)` — `GET /api/sales/invoices/:id/credit-note-context?companyGuid=...`; returns original invoice lines plus cumulative returned/remaining quantities, original Sales ledger/godown, and tax context
 - `createCreditNote(payload)` — `POST /tally/voucher/credit-note` with camelCase voucher payload, selected return lines, taxes, `linked_invoice`, `original_entry_type`, and `numbering_policy`
 
+Purchase Invoice (3-step create, `purchase/create-invoice.tsx`):
+- `getPurchaseLedgerAccounts(companyGuid)` — `GET /api/purchase/ledger-accounts` — Purchase Accounts group ledgers only (now consumed by the create screen; wrapper pre-existed in `api.ts`)
+- `getParties(companyGuid, { type: 'vendor' })` — `GET /api/parties?type=vendor` — server-side filters to `parent ILIKE '%Sundry Creditor%'`
+- `createTallyParty({ ..., parent: 'Sundry Creditors' })` — "Add New Vendor" drawer
+- `createPurchaseInvoice(payload)` — `POST /tally/voucher/purchase` with `voucherType: 'Purchase'`, `items`, `taxes`, `logistics`, `make_payment`, `isOptional`/`original_entry_type`, `numbering_policy`
+
 ## Vouchers
 getVouchers, getMyEntries, getVoucherById, retryVoucherEntry
 Write: POST /tally/* (via tallyPost)

@@ -1,5 +1,39 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-08-05 — Purchase Invoice 3-step Sales-parity rewrite
+
+### Changed
+- `purchase/create-invoice.tsx`: full rewrite from single-scroll mock screen to a
+  3-step flow (`StepIndicator`: Invoice Details → Items → Review & Submit), mirroring
+  `sales/create-invoice.tsx` structure/patterns.
+- Step 1: Scan e-Invoice QR (best-effort GST e-invoice JSON parse → Vendor Invoice
+  No./Date; raw value fallback on parse failure) and Scan/Upload Bill (camera or
+  `expo-image-picker` gallery, no OCR — Toast prompts manual entry); live Purchase
+  Ledger (`getPurchaseLedgerAccounts`), locked auto Our Ref No., REG-locked/OPT-datepicker
+  Date, live Vendor picker (`getParties(guid, { type: 'vendor' })`) with "Add New Vendor"
+  (`createTallyParty` with `parent: 'Sundry Creditors'`), Vendor Invoice No./Date,
+  Purchase Reference.
+- Step 2: live stock items/warehouses/tax ledgers via `BottomSheetSearch` `ItemRow`
+  (product, per-item godown, qty/rate/discount, multi tax-ledger entries), barcode scan
+  reusing `sales/product-scanner` + `barcodePicker` + `lookupBarcode`, optional
+  `LogisticsSection` (feeds `logistics[]` in submit payload), running total.
+- Step 3: "Make Payment Now" toggle (bank/cash ledgers via `getBankLedgers`, partial/full
+  payment status chip), invoice summary, narration, submit → `createPurchaseInvoice`
+  with `voucherType: 'Purchase'`, `isOptional`/`original_entry_type`, `numbering_policy`
+  (`useNumberingPolicy`), `make_payment`; success overlay with tdkRef/invoice number,
+  Preview (`/sales/invoice-preview?tdkRef=`, generic route) and Share PDF
+  (`invoiceSharePdf` + `generateDocumentHTML`).
+- Removed all mock data (`LEDGER_OPTS`, `VENDORS`, `PRODUCTS`, `OCR_MOCK`, hardcoded
+  `PINV-00089`) and the old single-step OCR-mock layout.
+- `getPurchaseLedgerAccounts` already existed in `services/api.ts` (`GET
+  /purchase/ledger-accounts`) — no API changes needed.
+- FAB route `/purchase/create-invoice` unchanged.
+
+### QA
+- TypeScript: `tsc --noEmit` — 0 errors project-wide after the rewrite.
+
+---
+
 ## 2026-08-03 — Stop double-submit and Audit Trail re-push duplicates
 
 ### Changed
