@@ -1,3 +1,16 @@
+## [2026-08-06] Purchase Invoice e-Way Bill / Transport Details
+
+### Added
+- `create-invoice.tsx`: toggle **E-Way Bill / Transport Details** (Sales parity) — e-Way Bill No/Date, Place of Party, Transporter, Part B; submits `dispatch_details` to `POST /voucher/purchase`
+
+### Note
+Requires backend purchase EWB + stock hard-sync protect commit. Ship To prefill uses company profile when state is in INDIAN_STATES.
+
+### Test
+PI step 1 → toggle on → fill fields → submit → Tally shows Additional Details. Toggle off → unchanged purchase create.
+
+---
+
 ## [2026-08-06] Tax ledger % autofill on select
 
 ### Added
