@@ -1,3 +1,17 @@
+## [2026-08-06] Purchase Invoice/Order — forensic UX fixes (QA YELLOW)
+
+### Fixed
+- `create-invoice.tsx`: QR close overlay outside CameraView; bill scan via ImagePicker; narration keyboard scroll; destination warehouse = all company godowns; discount UI = sales; Add Vendor drawer padding
+- `create-order.tsx`: product → then warehouse; barcode close outside CameraView
+
+### Note
+Bill photo is local URI only (not uploaded with invoice). PO still mock masters.
+
+### Test
+PI: QR dismiss, bill attach chip, warehouse list after product, narration scroll, vendor drawer padding.
+
+---
+
 ## [2026-08-05] Purchase Invoice — Sales-parity 3-step + dual scanner
 
 ### Changed

@@ -40,12 +40,6 @@ const WAREHOUSES: SDOption[] = [
   { label: 'Store B', value: 'store_b' },
   { label: 'Delhi Depot', value: 'delhi_depot' },
 ];
-const WAREHOUSE_PRODUCTS: Record<string, string[]> = {
-  main_wh:     ['jbl_speaker','samsung_j1','lycan_hp','sony_xm5','jbl_wired'],
-  store_a:     ['jbl_speaker','lycan_hp'],
-  store_b:     ['samsung_j1','sony_xm5'],
-  delhi_depot: ['jbl_wired'],
-};
 const ALL_PRODUCTS: SDOption[] = [
   { label: 'JBL Portable Speaker', value: 'jbl_speaker' },
   { label: 'Samsung Galaxy J1 Bluetooth', value: 'samsung_j1' },
@@ -117,17 +111,29 @@ function BarcodeScannerModal({ visible, onScan, onClose }: { visible:boolean; on
   }
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={bs.safe} edges={['top']}>
-        <View style={bs.header}>
-          <TouchableOpacity onPress={onClose} style={bs.closeBtn}><Ionicons name="close" size={24} color={COLORS.textPrimary} /></TouchableOpacity>
-          <Text style={bs.title}>Scan Barcode</Text>
-          <TouchableOpacity onPress={()=>{scanned.current=false;}} style={bs.rescanBtn}><Text style={bs.rescanText}>Rescan</Text></TouchableOpacity>
-        </View>
-        <CameraView style={bs.camera} facing="back"
+      <View style={[bs.safe, { backgroundColor: '#000' }]}>
+        <CameraView
+          style={StyleSheet.absoluteFillObject}
+          facing="back"
           barcodeScannerSettings={{barcodeTypes:['qr','ean13','ean8','code128','code39']}}
-          onBarcodeScanned={handleBarcodeScanned} />
-        <View style={bs.overlay}><View style={bs.scanFrame} /><Text style={bs.hint}>Point camera at product barcode</Text></View>
-      </SafeAreaView>
+          onBarcodeScanned={handleBarcodeScanned}
+        />
+        <SafeAreaView style={StyleSheet.absoluteFillObject} edges={['top']} pointerEvents="box-none">
+          <View style={[bs.header, { backgroundColor: 'transparent', borderBottomWidth: 0 }]} pointerEvents="box-none">
+            <TouchableOpacity onPress={onClose} style={[bs.closeBtn, { backgroundColor: 'rgba(0,0,0,0.55)' }]} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <Ionicons name="close" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={[bs.title, { color: '#fff' }]}>Scan Barcode</Text>
+            <TouchableOpacity onPress={()=>{scanned.current=false;}} style={bs.rescanBtn}>
+              <Text style={[bs.rescanText, { color: '#fff' }]}>Rescan</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={bs.overlay} pointerEvents="none">
+            <View style={bs.scanFrame} />
+            <Text style={bs.hint}>Point camera at product barcode</Text>
+          </View>
+        </SafeAreaView>
+      </View>
     </Modal>
   );
 }
@@ -152,25 +158,16 @@ function ItemRow({ item, onUpdate, onRemove, onModal }: {
 }) {
   const calc = calcItem(item);
   const warehouseLabel = WAREHOUSES.find(w=>w.value===item.warehouse)?.label;
-  const availableProducts = item.warehouse
-    ? ALL_PRODUCTS.filter(p=>(WAREHOUSE_PRODUCTS[item.warehouse]||[]).includes(p.value))
-    : ALL_PRODUCTS;
-  const productName = availableProducts.find(p=>p.value===item.product)?.label
-    || ALL_PRODUCTS.find(p=>p.value===item.product)?.label;
+  const productName = ALL_PRODUCTS.find(p=>p.value===item.product)?.label;
 
   return (
     <View style={ir.card}>
-      {/* Warehouse FIRST */}
-      <TouchableOpacity style={[ir.warehouseBtn,item.warehouse&&ir.warehouseBtnActive]} onPress={()=>onModal({type:'warehouse',itemId:item.id})} activeOpacity={0.7}>
-        <Ionicons name="business-outline" size={13} color={item.warehouse?COLORS.info:COLORS.textTertiary} />
-        <Text style={[ir.warehouseTxt,!warehouseLabel&&ir.phTxt]}>{warehouseLabel||'Select Warehouse first...'}</Text>
-        <Ionicons name="chevron-down" size={11} color={COLORS.textSecondary} />
-      </TouchableOpacity>
+      {/* Product first, then destination warehouse */}
       <View style={ir.topRow}>
         <TouchableOpacity style={ir.prodBtn} onPress={()=>onModal({type:'product',itemId:item.id})} activeOpacity={0.7}>
           <Ionicons name="cube-outline" size={13} color={COLORS.textSecondary} />
           <Text style={[ir.prodTxt,!item.product&&ir.phTxt]} numberOfLines={1}>
-            {productName||(item.warehouse?'Select product...':'Select warehouse first')}
+            {productName||'Select product...'}
           </Text>
           <Ionicons name="chevron-down" size={12} color={COLORS.textSecondary} />
         </TouchableOpacity>
@@ -181,6 +178,13 @@ function ItemRow({ item, onUpdate, onRemove, onModal }: {
           <Ionicons name="close-circle" size={20} color={COLORS.negative} />
         </TouchableOpacity>
       </View>
+      {item.product ? (
+        <TouchableOpacity style={[ir.warehouseBtn,item.warehouse&&ir.warehouseBtnActive]} onPress={()=>onModal({type:'warehouse',itemId:item.id})} activeOpacity={0.7}>
+          <Ionicons name="business-outline" size={13} color={item.warehouse?COLORS.info:COLORS.textTertiary} />
+          <Text style={[ir.warehouseTxt,!warehouseLabel&&ir.phTxt]}>{warehouseLabel||'Select warehouse for this stock...'}</Text>
+          <Ionicons name="chevron-down" size={11} color={COLORS.textSecondary} />
+        </TouchableOpacity>
+      ) : null}
       <View style={ir.row}>
         <View style={ir.qBox}><Text style={ir.ml}>Qty</Text>
           <TextInput style={ir.mi} value={item.qty} onChangeText={v=>onUpdate(item.id,'qty',v)} keyboardType="numeric" placeholder="1" placeholderTextColor={COLORS.textTertiary} /></View>
@@ -193,7 +197,7 @@ function ItemRow({ item, onUpdate, onRemove, onModal }: {
       <View style={ir.row}>
         <View style={ir.discRow}>
           <TouchableOpacity style={ir.discType} onPress={()=>onUpdate(item.id,'discountType',item.discountType==='%'?'flat':'%')} activeOpacity={0.7}>
-            <Text style={ir.discTypeTxt}>{item.discountType}</Text>
+            <Text style={ir.discTypeTxt}>{item.discountType==='%'?'%':'₹'}</Text>
           </TouchableOpacity>
           <TextInput style={ir.discInput} value={item.discount} onChangeText={v=>onUpdate(item.id,'discount',v)} keyboardType="numeric" placeholder="0" placeholderTextColor={COLORS.textTertiary} />
           <Text style={ir.dl}>Disc</Text>
@@ -358,19 +362,18 @@ export default function CreatePurchaseOrderScreen() {
           <TouchableOpacity style={{flex:1}} activeOpacity={1} onPress={closeModal} />
           <View style={m.sheet}>
           <View style={m.handle}/><Text style={m.title}>Select Product</Text>
-          {(()=>{
-            const item=items.find(i=>i.id===activeModal?.itemId);
-            const filtered=item?.warehouse?ALL_PRODUCTS.filter(p=>(WAREHOUSE_PRODUCTS[item.warehouse]||[]).includes(p.value)):ALL_PRODUCTS;
-            return (<ScrollView showsVerticalScrollIndicator={false}>
-              {item?.warehouse?(<View style={m.whHint}><Ionicons name="business-outline" size={13} color={COLORS.info} /><Text style={m.whHintTxt}>From: {WAREHOUSES.find(w=>w.value===item.warehouse)?.label}</Text></View>)
-                :(<View style={m.whHint}><Ionicons name="alert-circle-outline" size={13} color={COLORS.warning} /><Text style={[m.whHintTxt,{color:COLORS.warning}]}>Select warehouse first</Text></View>)}
-              {filtered.map(p=>(<TouchableOpacity key={p.value} style={[m.opt,item?.product===p.value&&m.optA]}
-                onPress={()=>{if(activeModal)updateItem(activeModal.itemId,'product',p.value);closeModal();}} activeOpacity={0.7}>
-                <View style={m.optRow}><Ionicons name="cube-outline" size={16} color={COLORS.textSecondary} /><Text style={[m.optTxt,item?.product===p.value&&m.optTxtA]}>{p.label}</Text></View>
-                {item?.product===p.value&&<Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
-              </TouchableOpacity>))}
-            </ScrollView>);
-          })()}
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {ALL_PRODUCTS.map(p=>{
+              const item=items.find(i=>i.id===activeModal?.itemId);
+              return (
+                <TouchableOpacity key={p.value} style={[m.opt,item?.product===p.value&&m.optA]}
+                  onPress={()=>{if(activeModal)updateItem(activeModal.itemId,'product',p.value);closeModal();}} activeOpacity={0.7}>
+                  <View style={m.optRow}><Ionicons name="cube-outline" size={16} color={COLORS.textSecondary} /><Text style={[m.optTxt,item?.product===p.value&&m.optTxtA]}>{p.label}</Text></View>
+                  {item?.product===p.value&&<Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
           </View>
         </View>
       </Modal>
@@ -395,10 +398,15 @@ export default function CreatePurchaseOrderScreen() {
           <TouchableOpacity style={{flex:1}} activeOpacity={1} onPress={closeModal} />
           <View style={m.sheet}>
           <View style={m.handle}/><Text style={m.title}>Select Warehouse</Text>
+          <View style={m.whHint}>
+            <Ionicons name="business-outline" size={13} color={COLORS.info} />
+            <Text style={m.whHintTxt}>Where should this stock be received?</Text>
+          </View>
           <ScrollView showsVerticalScrollIndicator={false}>
             {WAREHOUSES.map(w=>(<TouchableOpacity key={w.value} style={m.opt}
-              onPress={()=>{if(activeModal){updateItem(activeModal.itemId,'warehouse',w.value);updateItem(activeModal.itemId,'product','');}closeModal();}} activeOpacity={0.7}>
+              onPress={()=>{if(activeModal){updateItem(activeModal.itemId,'warehouse',w.value);}closeModal();}} activeOpacity={0.7}>
               <View style={m.optRow}><Ionicons name="business-outline" size={16} color={COLORS.info} /><Text style={m.optTxt}>{w.label}</Text></View>
+              {items.find(i=>i.id===activeModal?.itemId)?.warehouse===w.value&&<Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
             </TouchableOpacity>))}
           </ScrollView>
           </View>

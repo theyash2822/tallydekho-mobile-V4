@@ -283,9 +283,11 @@ const AddVendorDrawer = forwardRef<AddVendorDrawerMethods, {
       handleIndicatorStyle={{ backgroundColor: COLORS.borderStrong, width: 40 }}
     >
       <View style={acd.header}>
-        <Text style={acd.title}>New Vendor</Text>
-        <Text style={acd.subtitle}>Sundry Creditors</Text>
-        <TouchableOpacity onPress={() => sheetRef.current?.dismiss()} style={acd.closeBtn}>
+        <View style={{ flex: 1 }}>
+          <Text style={acd.title}>New Vendor</Text>
+          <Text style={[acd.subtitle, { marginTop: 2 }]}>Sundry Creditors</Text>
+        </View>
+        <TouchableOpacity onPress={() => sheetRef.current?.dismiss()} style={acd.closeBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="close" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
       </View>
@@ -322,7 +324,9 @@ const AddVendorDrawer = forwardRef<AddVendorDrawerMethods, {
         </View>
 
         <View style={acd.divider} />
-        <PartyForm ref={formRef} InputComponent={BottomSheetTextInput as any} />
+        <View style={{ paddingBottom: SPACING.sm }}>
+          <PartyForm ref={formRef} InputComponent={BottomSheetTextInput as any} />
+        </View>
       </BottomSheetScrollView>
 
       <View style={[acd.footer, { paddingBottom: insets.bottom + 8 }]}>
@@ -405,13 +409,14 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
 
 // ─── ItemRow ─────────────────────────────────────────────────────────────────
 function ItemRow({
-  item, stockItems, taxLedgers, godowns,
+  item, stockItems, warehouses, taxLedgers, godowns,
   onProductSelect, onProductClear, onUpdate, onRemove, onOpenModal, onBarcodePress,
   onAddTaxEntry, onUpdateTaxEntry, onRemoveTaxEntry,
   itemIndex, canRemove,
 }: {
   item: InvoiceItem;
   stockItems: StockItem[];
+  warehouses: Warehouse[];
   taxLedgers: { name: string }[];
   godowns: Godown[];
   onProductSelect: (itemId: string, opt: BSSOption) => void;
@@ -439,12 +444,25 @@ function ItemRow({
   const productLabel = stockItem ? (stockItem.displayName || stockItem.name) : '';
   const headerLabel = productLabel || `Item ${itemIndex + 1}`;
 
-  const warehouseOpts: BSSOption[] = godowns.length > 0
-    ? godowns.map(g => ({ label: g.name, value: g.name, subtitle: `${Math.round(g.qty)} ${stockItem?.unit || 'units'} available` }))
+  // Purchase = destination godown: show ALL company warehouses (not only those with qty>0).
+  // Godown qty is shown as an on-hand hint when available.
+  const qtyByWh = useMemo(() => {
+    const map: Record<string, number> = {};
+    godowns.forEach(g => { map[g.name] = g.qty; });
+    return map;
+  }, [godowns]);
+  const warehouseOpts: BSSOption[] = warehouses.length > 0
+    ? warehouses.map(w => ({
+        label: w.name,
+        value: w.name,
+        subtitle: qtyByWh[w.name] != null
+          ? `On hand: ${Math.round(qtyByWh[w.name])} ${stockItem?.unit || 'units'}`
+          : 'Receive stock here',
+      }))
     : item.product
-      ? [{ label: 'Main Location', value: 'Main Location', subtitle: stockItem?.closing_qty != null ? `${Math.round(stockItem.closing_qty)} ${stockItem?.unit || 'units'} available` : 'Default warehouse' }]
+      ? [{ label: 'Main Location', value: 'Main Location', subtitle: 'Default warehouse' }]
       : [];
-  const needsWarehouseDropdown = item.product ? warehouseOpts.length >= 1 : false;
+  const needsWarehouseDropdown = !!item.product && warehouseOpts.length >= 1;
 
   return (
     <View style={ir.card}>
@@ -491,7 +509,7 @@ function ItemRow({
           {item.product ? (
             needsWarehouseDropdown ? (
               <View>
-                <Text style={ir.fieldLabel}>Warehouse <Text style={ir.star}>*</Text></Text>
+                <Text style={ir.fieldLabel}>Receive in Warehouse <Text style={ir.star}>*</Text></Text>
                 <BottomSheetSearch
                   placeholder="Select warehouse..."
                   options={warehouseOpts}
@@ -601,6 +619,15 @@ function ItemRow({
 export default function CreatePurchaseInvoiceScreen() {
   const router = useRouter();
   const scrollRef = useRef<any>(null);
+  // Scroll focused fields (e.g. narration) above the keyboard — same pattern as sales invoice.
+  const notesCardY = useRef<number>(0);
+  const narrationOffset = useRef<number>(0);
+  const scrollToFieldY = (fieldOffset: number) => {
+    setTimeout(() => {
+      const absY = notesCardY.current + fieldOffset;
+      scrollRef.current?.scrollTo?.({ y: Math.max(0, absY - 100), animated: true });
+    }, 250);
+  };
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
@@ -660,7 +687,7 @@ export default function CreatePurchaseInvoiceScreen() {
 
   // e-Invoice QR / Bill scan
   const [showCamera, setShowCamera] = useState(false);
-  const [scanMode, setScanMode] = useState<'qr' | 'bill'>('qr');
+  const [billAttachmentUri, setBillAttachmentUri] = useState<string | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const scannedRef = useRef(false);
 
@@ -775,32 +802,26 @@ export default function CreatePurchaseInvoiceScreen() {
 
   const handleProductSelect = useCallback(async (itemId: string, opt: BSSOption) => {
     const si = stockItems.find(s => s.name === opt.value);
+    // Destination warehouse: auto-pick only when company has exactly one warehouse.
+    const autoWh = warehouses.length === 1 ? warehouses[0].name : '';
     setItems(prev => prev.map(i => i.id === itemId ? {
       ...i,
       product: opt.value,
       unit: si?.unit || i.unit,
       rate: si?.rate != null ? String(si.rate) : i.rate,
-      warehouse: '',
+      warehouse: autoWh,
     } : i));
-    if (!si || !company?.guid) {
-      if (warehouses.length === 1) updateItem(itemId, 'warehouse', warehouses[0].name);
-      return;
-    }
+    if (!si || !company?.guid) return;
     try {
-      const stockIdentifier = si.guid || '';
+      // Prefer Tally GUID; backend also accepts stock name as fallback.
+      const stockIdentifier = si.guid || si.name;
       const res: any = await getStockGodowns(company.guid, stockIdentifier);
       const godownList: Godown[] = res?.data?.warehouses || [];
-      const finalGodowns: Godown[] = godownList.length > 0
-        ? godownList
-        : [{ name: 'Main Location', qty: si.closing_qty ?? 0 }];
-      setItemGodowns(prev => ({ ...prev, [itemId]: finalGodowns }));
-      if (finalGodowns.length === 1) {
-        setItems(prev => prev.map(i => i.id === itemId ? { ...i, warehouse: finalGodowns[0].name } : i));
-      }
+      setItemGodowns(prev => ({ ...prev, [itemId]: godownList }));
     } catch {
-      setItems(prev => prev.map(i => i.id === itemId ? { ...i, warehouse: 'Main Location' } : i));
+      setItemGodowns(prev => ({ ...prev, [itemId]: [] }));
     }
-  }, [stockItems, company?.guid, warehouses, updateItem]);
+  }, [stockItems, company?.guid, warehouses]);
 
   const handleProductClear = useCallback((itemId: string) => {
     setItems(prev => prev.map(i => i.id === itemId ? { ...i, product: '', unit: 'pcs', rate: '', warehouse: '' } : i));
@@ -834,7 +855,6 @@ export default function CreatePurchaseInvoiceScreen() {
   const openQrScanner = useCallback(async () => {
     if (permission && !permission.granted && permission.canAskAgain) await requestPermission();
     scannedRef.current = false;
-    setScanMode('qr');
     setShowCamera(true);
   }, [permission, requestPermission]);
 
@@ -843,10 +863,24 @@ export default function CreatePurchaseInvoiceScreen() {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Take Photo', onPress: async () => {
-          if (permission && !permission.granted && permission.canAskAgain) await requestPermission();
-          scannedRef.current = false;
-          setScanMode('bill');
-          setShowCamera(true);
+          try {
+            const camPerm = await ImagePicker.requestCameraPermissionsAsync();
+            if (!camPerm.granted) {
+              Toast.show({ type: 'error', text1: 'Permission required', text2: 'Allow camera access to photograph the bill.' });
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              quality: 0.75,
+              allowsEditing: false,
+            });
+            if (!result.canceled && result.assets?.[0]?.uri) {
+              setBillAttachmentUri(result.assets[0].uri);
+              Toast.show({ type: 'success', text1: 'Bill photo attached', text2: 'Enter invoice details manually below.' });
+            }
+          } catch {
+            Toast.show({ type: 'error', text1: 'Could not open camera' });
+          }
         },
       },
       {
@@ -857,9 +891,13 @@ export default function CreatePurchaseInvoiceScreen() {
               Toast.show({ type: 'error', text1: 'Permission required', text2: 'Allow photo library access to pick a bill image.' });
               return;
             }
-            const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7 });
-            if (!result.canceled) {
-              Toast.show({ type: 'success', text1: 'Bill captured', text2: 'Enter details manually below.' });
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              quality: 0.75,
+            });
+            if (!result.canceled && result.assets?.[0]?.uri) {
+              setBillAttachmentUri(result.assets[0].uri);
+              Toast.show({ type: 'success', text1: 'Bill attached', text2: 'Enter invoice details manually below.' });
             }
           } catch {
             Toast.show({ type: 'error', text1: 'Could not open photo library' });
@@ -867,7 +905,7 @@ export default function CreatePurchaseInvoiceScreen() {
         },
       },
     ]);
-  }, [permission, requestPermission]);
+  }, []);
 
   // Best-effort GST e-invoice QR payload parsing.
   const applyEInvoiceQrData = useCallback((raw: string) => {
@@ -907,12 +945,13 @@ export default function CreatePurchaseInvoiceScreen() {
     if (scannedRef.current) return;
     scannedRef.current = true;
     setShowCamera(false);
-    if (scanMode === 'qr') {
-      applyEInvoiceQrData(data);
-    } else {
-      Toast.show({ type: 'success', text1: 'Bill captured', text2: 'Enter details manually below.' });
-    }
-  }, [scanMode, applyEInvoiceQrData]);
+    applyEInvoiceQrData(data);
+  }, [applyEInvoiceQrData]);
+
+  const closeCamera = useCallback(() => {
+    scannedRef.current = false;
+    setShowCamera(false);
+  }, []);
 
   // ── Navigation ───────────────────────────────────────────────────────────────
   const goNext = useCallback(() => {
@@ -928,13 +967,15 @@ export default function CreatePurchaseInvoiceScreen() {
       if (items.some(i => i.product && (!(parseFloat(i.qty) > 0) || !(parseFloat(i.rate) > 0)))) {
         Toast.show({ type: 'error', text1: 'All items need qty and rate' }); return;
       }
-      const multiWarehouseItems = items.filter(i => i.product && (itemGodowns[i.id]?.length || 0) > 1);
-      if (multiWarehouseItems.some(i => !i.warehouse)) {
+      // Match submit: any company warehouse list requires an explicit destination pick
+      // (auto-filled when length === 1; user may still clear it).
+      const needsWarehouse = items.filter(i => i.product && warehouses.length > 0);
+      if (needsWarehouse.some(i => !i.warehouse)) {
         Toast.show({ type: 'error', text1: 'Select warehouse for all items' }); return;
       }
       setStep(3);
     }
-  }, [step, purchaseLedger, vendor, items, itemGodowns]);
+  }, [step, purchaseLedger, vendor, items, warehouses]);
 
   const goBack = useCallback(() => {
     setStep(prev => Math.max(1, prev - 1) as 1 | 2 | 3);
@@ -983,8 +1024,8 @@ export default function CreatePurchaseInvoiceScreen() {
     if (submittingRef.current) return;
     if (!vendor) { Toast.show({ type: 'error', text1: 'Vendor required' }); return; }
     if (items.some(i => !i.product)) { Toast.show({ type: 'error', text1: 'All items need a product selected' }); return; }
-    const multiWarehouseItems = items.filter(i => i.product && (itemGodowns[i.id]?.length || 0) > 1);
-    if (multiWarehouseItems.some(i => !i.warehouse)) { Toast.show({ type: 'error', text1: 'Warehouse required for all items' }); return; }
+    const needsWarehouse = items.filter(i => i.product && warehouses.length > 0);
+    if (needsWarehouse.some(i => !i.warehouse)) { Toast.show({ type: 'error', text1: 'Warehouse required for all items' }); return; }
     if (makePayNow && !payNowLedger) {
       Toast.show({ type: 'error', text1: 'Payment Ledger required', text2: 'Select a Cash or Bank ledger for Make Payment Now.' });
       return;
@@ -1075,7 +1116,7 @@ export default function CreatePurchaseInvoiceScreen() {
       setSubmitting(false);
     }
   }, [
-    vendor, items, itemGodowns, company, date, purchaseLedger, entryType, totals.grand, narration, warehouses,
+    vendor, items, company, date, purchaseLedger, entryType, totals.grand, narration, warehouses,
     makePayNow, payNowMode, payNowAmount, payNowRef, payNowLedger, logEntries, roundOffLedger, roundOffAmount,
     numberingPolicy, vendorInvNo, vendorInvDate, purchaseRefNo,
   ]);
@@ -1206,7 +1247,7 @@ export default function CreatePurchaseInvoiceScreen() {
 
       <StepIndicator step={step} />
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'android' ? 120 : 0}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 120}>
         <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" onScrollBeginDrag={Keyboard.dismiss}>
 
           {/* ═══════════ STEP 1 ═══════════ */}
@@ -1233,6 +1274,15 @@ export default function CreatePurchaseInvoiceScreen() {
                     <Text style={s.scanBtnOutlineTxt}>Scan / Upload Bill</Text>
                   </TouchableOpacity>
                 </View>
+                {billAttachmentUri ? (
+                  <View style={s.billAttachedRow}>
+                    <Ionicons name="checkmark-circle" size={16} color={COLORS.positive} />
+                    <Text style={s.billAttachedTxt} numberOfLines={1}>Bill photo attached</Text>
+                    <TouchableOpacity onPress={() => setBillAttachmentUri(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="close-circle" size={18} color={COLORS.textTertiary} />
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
               </View>
 
               <BottomSheetSearch
@@ -1354,6 +1404,7 @@ export default function CreatePurchaseInvoiceScreen() {
                   item={item}
                   itemIndex={idx}
                   canRemove={items.length > 1}
+                  warehouses={warehouses}
                   godowns={itemGodowns[item.id] || []}
                   onProductSelect={handleProductSelect}
                   onProductClear={handleProductClear}
@@ -1362,11 +1413,7 @@ export default function CreatePurchaseInvoiceScreen() {
                   onOpenModal={setActiveModal}
                   onBarcodePress={(itemId) => {
                     barcodePicker.set((result) => {
-                      const si = stockItems.find(s2 => s2.name === result.productName);
-                      setItems(prev => prev.map(i => {
-                        if (i.id !== itemId) return i;
-                        return { ...i, product: result.productName, unit: result.unit || si?.unit || i.unit, rate: si?.rate != null ? String(si.rate) : i.rate };
-                      }));
+                      handleProductSelect(itemId, { label: result.productName, value: result.productName });
                     });
                     router.push(`/sales/product-scanner?companyGuid=${company?.guid}` as any);
                   }}
@@ -1560,21 +1607,27 @@ export default function CreatePurchaseInvoiceScreen() {
               </View>
 
               {/* Narration */}
-              <View style={s.card}>
+              <View
+                style={s.card}
+                onLayout={(e) => { notesCardY.current = e.nativeEvent.layout.y; }}
+              >
                 <View style={s.cardHdr}>
                   <Ionicons name="document-outline" size={18} color={COLORS.textSecondary} />
                   <Text style={s.cardTitle}>Narration</Text>
                 </View>
-                <FormField
-                  label="Narration"
-                  value={narration}
-                  onChangeText={setNarration}
-                  placeholder="Internal notes..."
-                  multiline
-                  numberOfLines={2}
-                  style={{ minHeight: 60, textAlignVertical: 'top' } as any}
-                  containerStyle={{ marginBottom: 0 }}
-                />
+                <View onLayout={(e) => { narrationOffset.current = e.nativeEvent.layout.y; }}>
+                  <FormField
+                    label="Narration"
+                    value={narration}
+                    onChangeText={setNarration}
+                    placeholder="Internal notes..."
+                    multiline
+                    numberOfLines={2}
+                    onFocus={() => scrollToFieldY(narrationOffset.current)}
+                    style={{ minHeight: 60, textAlignVertical: 'top' } as any}
+                    containerStyle={{ marginBottom: 0 }}
+                  />
+                </View>
               </View>
             </>
           )}
@@ -1643,61 +1696,51 @@ export default function CreatePurchaseInvoiceScreen() {
 
       <DatePickerModal visible={showDatePicker} value={date} minDate={fyStart} maxDate={new Date().toISOString().slice(0, 10)} onSelect={(d) => { setDate(d); setShowDatePicker(false); }} onClose={() => setShowDatePicker(false)} />
 
-      {/* QR / Bill Camera Modal */}
-      <Modal visible={showCamera} animationType="slide" statusBarTranslucent onRequestClose={() => setShowCamera(false)}>
+      {/* QR Camera Modal — overlay OUTSIDE CameraView so close button receives touches */}
+      <Modal visible={showCamera} animationType="slide" statusBarTranslucent onRequestClose={closeCamera}>
         <View style={cam.container}>
           {permission?.granted ? (
-            <CameraView
-              style={StyleSheet.absoluteFillObject}
-              facing="back"
-              barcodeScannerSettings={{ barcodeTypes: ['qr', 'ean13', 'ean8', 'code128'] }}
-              onBarcodeScanned={handleBarcodeScanned}
-            >
-              <View style={cam.overlay}>
-                <SafeAreaView edges={['top']} style={cam.topBar}>
-                  <TouchableOpacity style={cam.closeBtn} onPress={() => setShowCamera(false)} activeOpacity={0.7}>
+            <>
+              <CameraView
+                style={StyleSheet.absoluteFillObject}
+                facing="back"
+                barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                onBarcodeScanned={handleBarcodeScanned}
+              />
+              <View style={[cam.overlay, StyleSheet.absoluteFillObject]} pointerEvents="box-none">
+                <SafeAreaView edges={['top']} style={cam.topBar} pointerEvents="box-none">
+                  <TouchableOpacity style={cam.closeBtn} onPress={closeCamera} activeOpacity={0.7} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                     <Ionicons name="close" size={26} color="#fff" />
                   </TouchableOpacity>
-                  <Text style={cam.topTitle}>{scanMode === 'qr' ? 'Scan e-Invoice QR' : 'Scan Bill'}</Text>
+                  <Text style={cam.topTitle}>Scan e-Invoice QR</Text>
                   <View style={{ width: 44 }} />
                 </SafeAreaView>
-                <View style={cam.frameArea}>
+                <View style={cam.frameArea} pointerEvents="none">
                   <View style={cam.scanFrame}>
                     <View style={[cam.corner, cam.tl]} /><View style={[cam.corner, cam.tr]} />
                     <View style={[cam.corner, cam.bl]} /><View style={[cam.corner, cam.br]} />
                     <View style={cam.scanLine} />
                   </View>
-                  <Text style={cam.frameHint}>
-                    {scanMode === 'qr' ? 'Align the e-Invoice QR code within the frame' : 'Align the vendor bill within the frame — tap capture below'}
-                  </Text>
+                  <Text style={cam.frameHint}>Align the e-Invoice QR code within the frame</Text>
                 </View>
-                <View style={cam.bottomBar}>
-                  {scanMode === 'bill' && (
-                    <TouchableOpacity
-                      style={cam.captureBtn}
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        setShowCamera(false);
-                        Toast.show({ type: 'success', text1: 'Bill captured', text2: 'Enter details manually below.' });
-                      }}
-                    >
-                      <View style={cam.captureRing}><View style={cam.captureDot} /></View>
-                    </TouchableOpacity>
-                  )}
-                  <Text style={cam.captureLabel}>{scanMode === 'qr' ? 'Waiting for QR code...' : 'Tap to Capture'}</Text>
+                <View style={cam.bottomBar} pointerEvents="box-none">
+                  <Text style={cam.captureLabel}>Waiting for QR code...</Text>
+                  <TouchableOpacity style={cam.skipBtn} onPress={closeCamera} activeOpacity={0.7}>
+                    <Text style={[cam.skipTxt, { color: 'rgba(255,255,255,0.85)' }]}>Cancel</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
-            </CameraView>
+            </>
           ) : (
             <View style={cam.permBox}>
               <View style={cam.permIconBox}><Ionicons name="camera-outline" size={52} color={COLORS.textTertiary} /></View>
               <Text style={cam.permTitle}>Camera Access Required</Text>
-              <Text style={cam.permSub}>Allow camera access to scan e-Invoice QR codes{'\n'}or capture vendor bills</Text>
+              <Text style={cam.permSub}>Allow camera access to scan e-Invoice QR codes</Text>
               <TouchableOpacity style={cam.permBtn} onPress={requestPermission} activeOpacity={0.7}>
                 <Ionicons name="camera" size={16} color="#fff" />
                 <Text style={cam.permBtnTxt}>Allow Camera Access</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={cam.skipBtn} onPress={() => setShowCamera(false)} activeOpacity={0.7}>
+              <TouchableOpacity style={cam.skipBtn} onPress={closeCamera} activeOpacity={0.7}>
                 <Text style={cam.skipTxt}>Cancel</Text>
               </TouchableOpacity>
             </View>
@@ -1734,6 +1777,8 @@ const s = StyleSheet.create({
   scanTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
   scanSub: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
   scanBtns: { flexDirection: 'row', gap: 10 },
+  billAttachedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, backgroundColor: COLORS.positive + '12', borderRadius: RADIUS.sm, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.positive + '40' },
+  billAttachedTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.positive },
   scanBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 12 },
   scanBtnTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white, textAlign: 'center' },
   scanBtnOutline: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, paddingVertical: 12, borderWidth: 1.5, borderColor: COLORS.borderStrong },
@@ -1813,21 +1858,21 @@ const si = StyleSheet.create({
 });
 
 const acd = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  title: { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
-  subtitle: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginLeft: 8, flex: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  title: { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
+  subtitle: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
   closeBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-  body: { padding: SPACING.md },
-  label: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6, marginTop: SPACING.sm },
+  body: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm },
+  label: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6, marginTop: 12 },
   star: { color: COLORS.negative },
   input: { backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, minHeight: 48 },
-  balBox: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  balInput: { flex: 1, backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, minHeight: 48 },
-  drCrRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  drCrLbl: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textTertiary },
+  balBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingLeft: 14, paddingRight: 8, minHeight: 48 },
+  balInput: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, paddingVertical: 12 },
+  drCrRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  drCrLbl: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary, fontWeight: '600' },
   drCrLblActive: { color: COLORS.brandPrimary },
-  divider: { height: 1, backgroundColor: COLORS.borderDefault, marginVertical: SPACING.md },
-  footer: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
+  divider: { height: 1, backgroundColor: COLORS.borderDefault, marginVertical: 12 },
+  footer: { paddingHorizontal: SPACING.md, paddingTop: 12, paddingBottom: 4, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
   saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 14 },
   saveBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
 });
@@ -1852,11 +1897,11 @@ const ir = StyleSheet.create({
   miniInput: { backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 10, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, minHeight: 40 },
   unitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, paddingHorizontal: 10, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.borderDefault, minHeight: 40 },
   unitTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary },
-  discFullRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  discInner: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.borderDefault, paddingHorizontal: 8, paddingVertical: 4, minHeight: 40 },
-  discTypeBtn: { backgroundColor: COLORS.brandPrimary, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 4 },
-  discTypeTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '800', color: '#fff' },
-  discInput: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, textAlign: 'right', paddingVertical: 2 },
+  discFullRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, gap: 8 },
+  discInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  discTypeBtn: { backgroundColor: COLORS.brandPrimary + '18', borderWidth: 1, borderColor: COLORS.brandPrimary + '40', borderRadius: RADIUS.sm, paddingHorizontal: 10, paddingVertical: 7, minWidth: 36, alignItems: 'center' },
+  discTypeTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.brandPrimary },
+  discInput: { width: 64, backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 7, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, textAlign: 'center' },
   taxableRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, paddingHorizontal: 10, paddingVertical: 8 },
   taxableLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
   taxableVal: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
