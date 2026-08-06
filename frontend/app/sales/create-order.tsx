@@ -25,6 +25,7 @@ import RegularOptionalToggle, { EntryType } from '../../src/components/forms/Reg
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
 import DatePickerModal, { parseDMY } from '../../src/components/forms/DatePickerModal';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
+import { taxFieldsFromLedgerSelect, resolveTaxLedgerRate } from '../../src/utils/taxLedgerHelpers';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const todayStr = () => {
@@ -160,12 +161,15 @@ function StepIndicator({ step }: { step: 1 | 2 }) {
 // ─── TaxEntryRow ─────────────────────────────────────────────────────────────
 function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
   entry: TaxLedgerEntry;
-  taxLedgers: { name: string }[];
+  taxLedgers: { name: string; guid?: string; taxRate?: number }[];
   onUpdate: (field: keyof TaxLedgerEntry, val: string) => void;
   onRemove: () => void;
   taxable: number;
 }) {
-  const taxOpts: BSSOption[] = taxLedgers.map(l => ({ label: l.name, value: l.name }));
+  const taxOpts: BSSOption[] = taxLedgers.map(l => {
+    const rate = resolveTaxLedgerRate(l);
+    return { label: l.name, value: l.name, subtitle: rate > 0 ? `${rate}%` : undefined };
+  });
   return (
     <View style={ir.taxEntryCard}>
       {/* Row 1: Ledger + Remove */}
@@ -175,8 +179,17 @@ function TaxEntryRow({ entry, taxLedgers, onUpdate, onRemove, taxable }: {
             compact
             options={taxOpts}
             value={entry.ledgerName}
-            onSelect={opt => onUpdate('ledgerName', opt.value)}
-            onClear={() => onUpdate('ledgerName', '')}
+            onSelect={opt => {
+              const applied = taxFieldsFromLedgerSelect(opt.value, taxLedgers, taxable);
+              onUpdate('ledgerName', applied.ledgerName);
+              onUpdate('taxRate', applied.taxRate);
+              onUpdate('taxAmount', applied.taxAmount);
+            }}
+            onClear={() => {
+              onUpdate('ledgerName', '');
+              onUpdate('taxRate', '');
+              onUpdate('taxAmount', '');
+            }}
             placeholder="Select tax ledger..."
             sheetTitle="Tax Ledger"
           />
@@ -236,7 +249,7 @@ function ItemRow({
 }: {
   item: OrderItem;
   stockItems: StockItem[];
-  taxLedgers: { name: string }[];
+  taxLedgers: { name: string; guid?: string; taxRate?: number }[];
   godowns: Godown[];
   onProductSelect: (itemId: string, opt: BSSOption) => void;
   onProductClear: (itemId: string) => void;
@@ -456,7 +469,7 @@ export default function CreateSalesOrderScreen() {
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [salesLedgers, setSalesLedgers] = useState<{ name: string; guid?: string }[]>([]);
-  const [taxLedgers, setTaxLedgers] = useState<{ name: string }[]>([]);
+  const [taxLedgers, setTaxLedgers] = useState<{ name: string; guid?: string; taxRate?: number }[]>([]);
   const [chargeLedgers, setChargeLedgers] = useState<{ ledgerName: string; guid?: string }[]>([]);
   const [roundOffLedgers, setRoundOffLedgers] = useState<{ ledgerName: string; guid?: string }[]>([]);
   const [companyProfile, setCompanyProfile] = useState<{ address?: string; state?: string; pincode?: string; gstin?: string; pan?: string; phone?: string; email?: string } | null>(null);

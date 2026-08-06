@@ -1,3 +1,14 @@
+## [2026-08-06] Tax ledger % autofill on select
+
+### Added
+- `src/utils/taxLedgerHelpers.ts` — resolve rate from API `taxRate` or name (`@ 9%`)
+- Sales/Purchase Invoice, Sales Order, Delivery Note TaxEntryRow + LogisticsSection: selecting CGST/SGST autofills editable Rate % + Amount
+
+### Note
+Requires backend ledger sync so `ledgers.tax_rate` is populated; name parse works as interim fallback.
+
+---
+
 ## [2026-08-06] Purchase Invoice/Order — forensic UX fixes (QA YELLOW)
 
 ### Fixed

@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, TextInput, StyleSheet } from 'react-nativ
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 import BottomSheetSearch, { BSSOption } from './BottomSheetSearch';
+import { taxFieldsFromLedgerSelect, resolveTaxLedgerRate, TaxLedgerOption } from '../../utils/taxLedgerHelpers';
 
 export interface LogTaxEntry {
   id: string;
@@ -41,7 +42,7 @@ interface Props {
   onEntriesChange: React.Dispatch<React.SetStateAction<LogEntry[]>>;
   // Advanced props — optional so simpler screens (create-order) can
   // render the section with basic entries without fetching ledger data.
-  taxLedgers?: { name: string }[];
+  taxLedgers?: TaxLedgerOption[];
   chargeLedgers?: { ledgerName: string; guid?: string }[];
   // Round-off (separate line item — never mixed with logistics rows)
   roundOffLedgers?: { ledgerName: string; guid?: string }[];
@@ -96,10 +97,10 @@ export default function LogisticsSection({
     value: l.ledgerName,
   }));
 
-  const taxLedgerOpts: BSSOption[] = taxLedgers.map(l => ({
-    label: l.name,
-    value: l.name,
-  }));
+  const taxLedgerOpts: BSSOption[] = taxLedgers.map(l => {
+    const rate = resolveTaxLedgerRate(l);
+    return { label: l.name, value: l.name, subtitle: rate > 0 ? `${rate}%` : undefined };
+  });
 
   const roundOffOpts: BSSOption[] = roundOffLedgers.map(l => ({
     label: l.ledgerName,
@@ -151,6 +152,22 @@ export default function LogisticsSection({
           }
         : e
     ));
+
+  const applyTaxLedgerToEntry = (entryId: string, taxId: string, ledgerName: string, taxableBase: number) => {
+    const applied = taxFieldsFromLedgerSelect(ledgerName, taxLedgers, taxableBase);
+    onEntriesChange(prev => prev.map(e =>
+      e.id === entryId
+        ? {
+            ...e,
+            taxEntries: e.taxEntries.map(t =>
+              t.id === taxId
+                ? { ...t, ledgerName: applied.ledgerName, taxRate: applied.taxRate, taxAmount: applied.taxAmount }
+                : t
+            ),
+          }
+        : e
+    ));
+  };
 
   const removeTaxEntry = (entryId: string, taxId: string) =>
     onEntriesChange(prev => prev.map(e =>
@@ -246,8 +263,21 @@ export default function LogisticsSection({
                               compact
                               options={taxLedgerOpts}
                               value={taxEntry.ledgerName}
-                              onSelect={opt => updateTaxEntry(entry.id, taxEntry.id, 'ledgerName', opt.value)}
-                              onClear={() => updateTaxEntry(entry.id, taxEntry.id, 'ledgerName', '')}
+                              onSelect={opt => applyTaxLedgerToEntry(entry.id, taxEntry.id, opt.value, base)}
+                              onClear={() => {
+                                onEntriesChange(prev => prev.map(e =>
+                                  e.id === entry.id
+                                    ? {
+                                        ...e,
+                                        taxEntries: e.taxEntries.map(t =>
+                                          t.id === taxEntry.id
+                                            ? { ...t, ledgerName: '', taxRate: '', taxAmount: '' }
+                                            : t
+                                        ),
+                                      }
+                                    : e
+                                ));
+                              }}
                               placeholder="Select tax ledger..."
                               sheetTitle="Tax Ledger"
                             />
