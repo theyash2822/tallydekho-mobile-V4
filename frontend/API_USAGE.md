@@ -70,6 +70,12 @@ Credit Note Sales Return:
 - `getSalesInvoiceCreditNoteContext(invoiceId, companyGuid)` — `GET /api/sales/invoices/:id/credit-note-context?companyGuid=...`; returns original invoice lines plus cumulative returned/remaining quantities, original Sales ledger/godown, and tax context
 - `createCreditNote(payload)` — `POST /tally/voucher/credit-note` with camelCase voucher payload, selected return lines, taxes, `linked_invoice`, `original_entry_type`, and `numbering_policy`
 
+Debit Note Purchase Return:
+- `getPurchaseInvoices(companyGuid, { partyName, from, to, limit })` — Purchase invoices for selected vendor and FY
+- `getPurchaseInvoiceDebitNoteContext(invoiceId, companyGuid)` — `GET /api/purchase/invoices/:id/debit-note-context?companyGuid=...`; remaining qty + Purchase ledger/tax context
+- `getPurchaseLedgerAccounts(companyGuid)` — Purchase Accounts group
+- `createDebitNote(payload)` — `POST /tally/voucher/debit-note` with `linked_invoice`, items (`purchaseLedger`), taxes, `numbering_policy`
+
 Purchase Invoice (3-step create, `purchase/create-invoice.tsx`):
 - `getPurchaseLedgerAccounts(companyGuid)` — `GET /api/purchase/ledger-accounts` — Purchase Accounts group ledgers only (now consumed by the create screen; wrapper pre-existed in `api.ts`)
 - `getParties(companyGuid, { type: 'vendor' })` — `GET /api/parties?type=vendor` — server-side filters to `parent ILIKE '%Sundry Creditor%'`

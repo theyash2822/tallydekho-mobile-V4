@@ -1,6 +1,20 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
-## 2026-08-06 — Purchase Order SO-parity + PO→PI convert prefill
+## 2026-08-06 — Debit Note = Credit Note mirror (Purchase Return)
+
+### Changed
+- `purchase/create-debit-note.tsx`: full rewrite from mock form → CN 2-step flow
+  (Vendor + Purchase Invoice → return items / GST / submit). Uses
+  `getPurchaseInvoices`, `getPurchaseInvoiceDebitNoteContext`,
+  `getPurchaseLedgerAccounts`, `createDebitNote` with `linked_invoice` +
+  `purchaseLedger`. Success overlay like Credit Note. No invented voucher numbers.
+- `src/services/api.ts`: `getPurchaseInvoiceDebitNoteContext`
+- `purchase/debit-note.tsx`: list maps `party_name` → `vendor` for search/display
+
+### QA
+- Prefer `npx tsc --noEmit` on frontend after pull
+
+---
 
 ### Changed
 - `purchase/create-order.tsx`: full rewrite to Sales Order 2-step parity (Order Details →

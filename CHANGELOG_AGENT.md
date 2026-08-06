@@ -1,3 +1,18 @@
+## [2026-08-06] Debit Note — Credit Note mirror (Purchase Return)
+
+### Changed
+- `create-debit-note.tsx`: full rewrite — pick Purchase Invoice → return qty (capped) → `createDebitNote` with `linked_invoice`; TDK-DBN via backend
+- `api.ts`: `getPurchaseInvoiceDebitNoteContext`
+- `debit-note.tsx`: list vendor mapping polish
+
+### Locked
+Always against PI; prefix **DBN** (not Delivery Note DN).
+
+### Test
+FAB → Debit Note → select PI → return qty → submit → Tally Debit Note with Agst Ref + `02-Purchase Return`.
+
+---
+
 ## [2026-08-06] Purchase Order — SO parity + convert to Purchase Invoice
 
 ### Changed
