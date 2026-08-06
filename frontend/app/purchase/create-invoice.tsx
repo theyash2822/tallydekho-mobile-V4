@@ -16,7 +16,7 @@ import {
   getParties, createPurchaseInvoice, getStocks, getWarehouses,
   getPurchaseLedgerAccounts, getTaxLedgers, createTallyParty,
   getChargeLedgers, getStockGodowns, getBankLedgers,
-  invoiceSharePdf, getCompanyProfile,
+  invoiceSharePdf,
 } from '../../src/services/api';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -31,8 +31,6 @@ import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/compon
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import { taxFieldsFromLedgerSelect, resolveTaxLedgerRate } from '../../src/utils/taxLedgerHelpers';
-import { INDIAN_STATES } from '../../src/constants/indianStates';
-import { getCitiesForState } from '../../src/constants/indianCities';
 import {
   BottomSheetModal,
   BottomSheetScrollView,
@@ -122,37 +120,6 @@ const newItem = (warehouseName = ''): InvoiceItem => ({
 });
 
 type ModalState = { type: 'unit'; itemId: string } | null;
-
-const TRANSPORT_MODES: DropdownOption[] = [
-  { label: 'Road', value: 'Road' },
-  { label: 'Rail', value: 'Rail' },
-  { label: 'Air', value: 'Air' },
-  { label: 'Ship', value: 'Ship' },
-  { label: 'Not Applicable', value: 'Not Applicable' },
-];
-
-const VEHICLE_TYPE_MAP: Record<string, DropdownOption[]> = {
-  Road: [
-    { label: 'Regular', value: 'Regular' },
-    { label: 'Over Dimensional Cargo (ODC)', value: 'Over Dimensional' },
-    { label: 'Not Applicable', value: 'Not Applicable' },
-  ],
-  Rail: [
-    { label: 'Goods Train', value: 'Goods Train' },
-    { label: 'Not Applicable', value: 'Not Applicable' },
-  ],
-  Air: [
-    { label: 'Cargo Aircraft', value: 'Cargo Aircraft' },
-    { label: 'Not Applicable', value: 'Not Applicable' },
-  ],
-  Ship: [
-    { label: 'Cargo Ship', value: 'Cargo Ship' },
-    { label: 'Not Applicable', value: 'Not Applicable' },
-  ],
-  'Not Applicable': [
-    { label: 'Not Applicable', value: 'Not Applicable' },
-  ],
-};
 
 // ─── ThemedFInput ──────────────────────────────────────────────────────────────
 function ThemedFInput({ style, onFocus, onBlur, keyboardType, ...props }: TextInputProps) {
@@ -726,30 +693,6 @@ export default function CreatePurchaseInvoiceScreen() {
   const [payNowLedger, setPayNowLedger] = useState('');
   const [bankLedgers, setBankLedgers] = useState<BSSOption[]>([]);
 
-  // Dispatch / E-Way Bill (Tally Additional Details)
-  const [showDispatch, setShowDispatch] = useState(false);
-  const [ewbNumber, setEwbNumber] = useState('');
-  const [ewbDate, setEwbDate] = useState('');
-  const [dispatchFrom, setDispatchFrom] = useState('');
-  const [dispatchFromState, setDispatchFromState] = useState('');
-  const [dispatchFromAddress1, setDispatchFromAddress1] = useState('');
-  const [dispatchFromAddress2, setDispatchFromAddress2] = useState('');
-  const [dispatchFromPincode, setDispatchFromPincode] = useState('');
-  const [shipTo, setShipTo] = useState('');
-  const [shipToState, setShipToState] = useState('');
-  const [shipToAddress1, setShipToAddress1] = useState('');
-  const [shipToAddress2, setShipToAddress2] = useState('');
-  const [shipToPincode, setShipToPincode] = useState('');
-  const [transporterName, setTransporterName] = useState('');
-  const [transporterId, setTransporterId] = useState('');
-  const [transportMode, setTransportMode] = useState('Not Applicable');
-  const [vehicleNumber, setVehicleNumber] = useState('');
-  const [vehicleType, setVehicleType] = useState('Not Applicable');
-  const [transportDocNo, setTransportDocNo] = useState('');
-  const [transportDocDate, setTransportDocDate] = useState('');
-  const [showTransportDocDatePicker, setShowTransportDocDatePicker] = useState(false);
-  const [companyProfile, setCompanyProfile] = useState<{ address?: string; state?: string; pincode?: string } | null>(null);
-
   // Success
   const [showSuccess, setShowSuccess] = useState(false);
   const [submitResult, setSubmitResult] = useState<{ tdkRef: string; isQueued: boolean; message: string; invoiceUuid?: string; numberingPolicy?: string; invoiceNumber?: string } | null>(null);
@@ -850,30 +793,6 @@ export default function CreatePurchaseInvoiceScreen() {
   }, [company?.guid]);
 
   useEffect(() => { fetchBankLedgers(); }, [fetchBankLedgers]);
-
-  useEffect(() => {
-    if (!company?.guid) return;
-    getCompanyProfile(company.guid).then((res: any) => {
-      const p = res?.data || res || null;
-      if (p) setCompanyProfile({ address: p.address || '', state: p.state || '', pincode: p.pincode || '' });
-    }).catch(() => {});
-  }, [company?.guid]);
-
-  // Prefill Ship To (our company = receive location) when EWB toggled on
-  // Only fills blank fields — user edits are preserved. (Sales parity: INDIAN_STATES guard)
-  useEffect(() => {
-    if (!showDispatch || !companyProfile) return;
-    if (!shipToState && companyProfile.state && INDIAN_STATES.includes(companyProfile.state)) {
-      setShipToState(companyProfile.state);
-    }
-    if (!shipToPincode && companyProfile.pincode) setShipToPincode(companyProfile.pincode);
-    if (!shipToAddress1 && companyProfile.address) {
-      const lines = String(companyProfile.address).split('\n').map(l => l.trim()).filter(Boolean);
-      if (lines[0]) setShipToAddress1(lines[0]);
-      if (lines[1]) setShipToAddress2(lines[1]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showDispatch, companyProfile]);
 
   useEffect(() => {
     if (step === 3 && bankLedgers.length === 0 && company?.guid) fetchBankLedgers();
@@ -1194,23 +1113,6 @@ export default function CreatePurchaseInvoiceScreen() {
         reference: vendorInvNo || purchaseRefNo || undefined,
         vendorInvoiceNo: vendorInvNo || undefined,
         vendorInvoiceDate: vendorInvDate ? dmyToISO(vendorInvDate) : undefined,
-        dispatch_details: showDispatch ? {
-          ewb_number: ewbNumber || undefined,
-          ewb_date: ewbDate ? dmyToISO(ewbDate) : undefined,
-          dispatch_from: dispatchFrom, dispatch_from_state: dispatchFromState || undefined,
-          dispatch_from_address1: dispatchFromAddress1 || undefined,
-          dispatch_from_address2: dispatchFromAddress2 || undefined,
-          dispatch_from_pincode: dispatchFromPincode || undefined,
-          ship_to: shipTo, ship_to_state: shipToState || undefined,
-          ship_to_address1: shipToAddress1 || undefined,
-          ship_to_address2: shipToAddress2 || undefined,
-          ship_to_pincode: shipToPincode || undefined,
-          transport_mode: transportMode,
-          transporter_name: transporterName || undefined, transporter_id: transporterId || undefined,
-          vehicle_number: vehicleNumber || undefined, vehicle_type: vehicleType,
-          transport_doc_no: transportDocNo || undefined,
-          transport_doc_date: transportDocDate ? dmyToISO(transportDocDate) : undefined,
-        } : undefined,
       });
 
       const tdkRef = result?.tdkReferenceNo || result?.tdkRef || result?.data?.tdkReferenceNo || '';
@@ -1230,9 +1132,6 @@ export default function CreatePurchaseInvoiceScreen() {
     vendor, items, company, date, purchaseLedger, entryType, totals.grand, narration, warehouses,
     makePayNow, payNowMode, payNowAmount, payNowRef, payNowLedger, logEntries, roundOffLedger, roundOffAmount,
     numberingPolicy, vendorInvNo, vendorInvDate, purchaseRefNo,
-    showDispatch, ewbNumber, ewbDate, dispatchFrom, dispatchFromState, dispatchFromAddress1, dispatchFromAddress2,
-    dispatchFromPincode, shipTo, shipToState, shipToAddress1, shipToAddress2, shipToPincode,
-    transportMode, transporterName, transporterId, vehicleNumber, vehicleType, transportDocNo, transportDocDate,
   ]);
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -1498,173 +1397,6 @@ export default function CreatePurchaseInvoiceScreen() {
                   placeholder="Optional"
                   containerStyle={{ marginBottom: 0 }}
                 />
-              </View>
-
-              {/* Dispatch / E-Way Bill — Tally Additional Details */}
-              <View style={s.card}>
-                <TouchableOpacity style={s.payNowToggleRow} onPress={() => setShowDispatch(v => !v)} activeOpacity={0.8}>
-                  <View style={s.payNowLeft}>
-                    <View style={[s.payNowIcon, { backgroundColor: showDispatch ? '#EFF6FF' : COLORS.pageBg }]}>
-                      <Ionicons name="car-outline" size={18} color={showDispatch ? COLORS.info : COLORS.textSecondary} />
-                    </View>
-                    <View style={{ flex: 1, flexShrink: 1 }}>
-                      <Text style={s.payNowTitle}>E-Way Bill / Transport Details</Text>
-                      <Text style={s.payNowSub}>Matches Tally Additional Details (e-Way Bill, Place, Part B)</Text>
-                    </View>
-                  </View>
-                  <BrandSwitch value={showDispatch} onValueChange={setShowDispatch} />
-                </TouchableOpacity>
-                {showDispatch && (
-                  <View style={s.payNowBody}>
-                    <View style={s.divider} />
-                    <Text style={s.sectionMiniTitle}>e-Way Bill Details</Text>
-                    <View style={s.row2}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.fLabel}>e-Way Bill No.</Text>
-                        <ThemedFInput value={ewbNumber} onChangeText={setEwbNumber} placeholder="Optional" keyboardType="numeric" />
-                      </View>
-                      <DateInput label="e-Way Bill Date" value={ewbDate} onChange={setEwbDate} maxDate={new Date().toISOString().slice(0, 10)} />
-                    </View>
-
-                    <Text style={s.sectionMiniTitle}>Place of Party</Text>
-                    <View style={s.row2}>
-                      <View style={{ flex: 1 }}>
-                        <BottomSheetSearch
-                          label="Dispatch From State"
-                          options={INDIAN_STATES.map(st => ({ label: st, value: st }))}
-                          value={dispatchFromState}
-                          onSelect={(opt) => {
-                            setDispatchFromState(opt.value);
-                            const validCities = getCitiesForState(opt.value);
-                            if (dispatchFrom && !validCities.includes(dispatchFrom)) setDispatchFrom('');
-                          }}
-                          onClear={() => { setDispatchFromState(''); setDispatchFrom(''); }}
-                          placeholder="Select state..."
-                          sheetTitle="Dispatch State"
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <BottomSheetSearch
-                          label="Dispatch From"
-                          options={getCitiesForState(dispatchFromState).map(c => ({ label: c, value: c }))}
-                          value={dispatchFrom}
-                          onSelect={(opt) => setDispatchFrom(opt.value)}
-                          onClear={() => setDispatchFrom('')}
-                          placeholder={dispatchFromState ? 'Select city...' : 'Select state first'}
-                          sheetTitle="Dispatch City"
-                          disabled={!dispatchFromState}
-                        />
-                      </View>
-                    </View>
-                    <Text style={s.fLabel}>Dispatch Address Line 1</Text>
-                    <ThemedFInput value={dispatchFromAddress1} onChangeText={setDispatchFromAddress1} placeholder="Building / Street / Area" />
-                    <Text style={s.fLabel}>Dispatch Address Line 2</Text>
-                    <ThemedFInput value={dispatchFromAddress2} onChangeText={setDispatchFromAddress2} placeholder="Landmark (optional)" />
-                    <View style={s.row2}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.fLabel}>Dispatch Pincode</Text>
-                        <ThemedFInput
-                          value={dispatchFromPincode}
-                          onChangeText={(v) => setDispatchFromPincode(v.replace(/[^0-9]/g, '').slice(0, 6))}
-                          keyboardType="numeric"
-                          placeholder="6-digit"
-                          maxLength={6}
-                        />
-                      </View>
-                      <View style={{ flex: 1 }} />
-                    </View>
-
-                    <View style={s.row2}>
-                      <View style={{ flex: 1 }}>
-                        <BottomSheetSearch
-                          label="Ship To State"
-                          options={INDIAN_STATES.map(st => ({ label: st, value: st }))}
-                          value={shipToState}
-                          onSelect={(opt) => {
-                            setShipToState(opt.value);
-                            const validCities = getCitiesForState(opt.value);
-                            if (shipTo && !validCities.includes(shipTo)) setShipTo('');
-                          }}
-                          onClear={() => { setShipToState(''); setShipTo(''); }}
-                          placeholder="Select state..."
-                          sheetTitle="Ship To State"
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <BottomSheetSearch
-                          label="Ship To"
-                          options={getCitiesForState(shipToState).map(c => ({ label: c, value: c }))}
-                          value={shipTo}
-                          onSelect={(opt) => setShipTo(opt.value)}
-                          onClear={() => setShipTo('')}
-                          placeholder={shipToState ? 'Select city...' : 'Select state first'}
-                          sheetTitle="Ship To City"
-                          disabled={!shipToState}
-                        />
-                      </View>
-                    </View>
-                    <Text style={s.fLabel}>Ship To Address Line 1</Text>
-                    <ThemedFInput value={shipToAddress1} onChangeText={setShipToAddress1} placeholder="Building / Street / Area" />
-                    <Text style={s.fLabel}>Ship To Address Line 2</Text>
-                    <ThemedFInput value={shipToAddress2} onChangeText={setShipToAddress2} placeholder="Landmark (optional)" />
-                    <View style={s.row2}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.fLabel}>Ship To Pincode</Text>
-                        <ThemedFInput
-                          value={shipToPincode}
-                          onChangeText={(v) => setShipToPincode(v.replace(/[^0-9]/g, '').slice(0, 6))}
-                          keyboardType="numeric"
-                          placeholder="6-digit"
-                          maxLength={6}
-                        />
-                      </View>
-                      <View style={{ flex: 1 }} />
-                    </View>
-
-                    <Text style={s.sectionMiniTitle}>Transport Details</Text>
-                    <View style={s.row2}>
-                      <View style={{ flex: 1 }}><Text style={s.fLabel}>Transporter Name</Text><ThemedFInput value={transporterName} onChangeText={setTransporterName} placeholder="Optional / None" /></View>
-                      <View style={{ flex: 1 }}><Text style={s.fLabel}>Transporter ID</Text><ThemedFInput value={transporterId} onChangeText={setTransporterId} placeholder="GSTIN / ID" /></View>
-                    </View>
-
-                    <Text style={s.sectionMiniTitle}>Part B Details</Text>
-                    <FormDropdown
-                      label="Mode"
-                      value={transportMode}
-                      options={TRANSPORT_MODES}
-                      onSelect={(o: any) => {
-                        setTransportMode(o.value);
-                        const firstVt = VEHICLE_TYPE_MAP[o.value]?.[0]?.value || 'Not Applicable';
-                        setVehicleType(firstVt);
-                      }}
-                      placeholder="Select transport mode..."
-                    />
-                    <View style={s.row2}>
-                      <View style={{ flex: 1 }}><Text style={s.fLabel}>Doc / Lading / RR / AirWay No.</Text><ThemedFInput value={transportDocNo} onChangeText={setTransportDocNo} placeholder="Optional" /></View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.fLabel}>Doc Date</Text>
-                        <TouchableOpacity style={[s.fInput, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]} onPress={() => setShowTransportDocDatePicker(true)}>
-                          <Text style={{ color: transportDocDate ? COLORS.textPrimary : COLORS.textTertiary, fontSize: TYPOGRAPHY.base }}>
-                            {transportDocDate || 'Optional'}
-                          </Text>
-                          <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                    <View style={s.row2}>
-                      <View style={{ flex: 1 }}><Text style={s.fLabel}>Vehicle Number</Text><ThemedFInput value={vehicleNumber} onChangeText={v => setVehicleNumber(v.toUpperCase())} placeholder="e.g. RJ02AB1234" /></View>
-                      <View style={{ flex: 1 }}>
-                        <FormDropdown
-                          label="Vehicle Type"
-                          value={vehicleType}
-                          options={VEHICLE_TYPE_MAP[transportMode] || VEHICLE_TYPE_MAP['Not Applicable']}
-                          onSelect={(o: any) => setVehicleType(o.value)}
-                          placeholder="Select vehicle type..."
-                        />
-                      </View>
-                    </View>
-                  </View>
-                )}
               </View>
             </>
           )}
@@ -1976,7 +1708,6 @@ export default function CreatePurchaseInvoiceScreen() {
       </Modal>
 
       <DatePickerModal visible={showDatePicker} value={date} minDate={fyStart} maxDate={new Date().toISOString().slice(0, 10)} onSelect={(d) => { setDate(d); setShowDatePicker(false); }} onClose={() => setShowDatePicker(false)} />
-      <DatePickerModal visible={showTransportDocDatePicker} value={transportDocDate || todayStr()} maxDate={new Date().toISOString().slice(0, 10)} onSelect={(d) => { setTransportDocDate(d); setShowTransportDocDatePicker(false); }} onClose={() => setShowTransportDocDatePicker(false)} />
 
       {/* QR Camera Modal — overlay OUTSIDE CameraView so close button receives touches */}
       <Modal visible={showCamera} animationType="slide" statusBarTranslucent onRequestClose={closeCamera}>
@@ -2096,7 +1827,6 @@ const s = StyleSheet.create({
   payNowTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
   payNowSub: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
   payNowBody: { paddingTop: 12, gap: 10 },
-  sectionMiniTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, marginTop: 4, marginBottom: 2, textDecorationLine: 'underline' },
   divider: { height: 1, backgroundColor: COLORS.borderDefault, marginBottom: 2 },
   payStatusChip: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1 },
   payStatusPaid: { backgroundColor: COLORS.positiveBg, borderColor: COLORS.positive + '40' },
