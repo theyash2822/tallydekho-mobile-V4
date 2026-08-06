@@ -1,5 +1,27 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-08-06 — Purchase Order SO-parity + PO→PI convert prefill
+
+### Changed
+- `purchase/create-order.tsx`: full rewrite to Sales Order 2-step parity (Order Details →
+  Items & Review). Live vendors (`getParties` type vendor), purchase ledgers
+  (`getPurchaseLedgerAccounts`), stocks/warehouses/tax/charge ledgers, destination
+  warehouses (all company warehouses like PI), tax ledger autofill, LogisticsSection,
+  RegularOptionalToggle, `useNumberingPolicy`, barcode via `sales/product-scanner`.
+  Submit → `createPurchaseOrder` (`POST /voucher/purchase-order`). Success overlay:
+  Share PDF (local), Convert to Purchase Invoice, Done. Preview omitted (no PO preview route).
+- Convert writes `tdpo_to_invoice_prefill_${companyGuid}` (TTL 30 min on read) then
+  `router.replace('/purchase/create-invoice')`. `againstOrderNo` = Tally voucherNumber only.
+- `purchase/create-invoice.tsx`: reads that prefill on mount (party→vendor, ledger→
+  purchaseLedger, date/items/logEntries/roundOff/narration/refNo); state
+  `againstOrderNo` sent on `createPurchaseInvoice`. Skips TDK- prefixed order numbers.
+- No sales files touched. No EWB on PO. Add Vendor drawer omitted (SO has no Add Party).
+
+### QA
+- `tsc --noEmit`: 0 errors (project-wide).
+
+---
+
 ## 2026-08-05 — Purchase Invoice 3-step Sales-parity rewrite
 
 ### Changed

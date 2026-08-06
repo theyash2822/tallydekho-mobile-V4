@@ -1,3 +1,14 @@
+## [2026-08-06] Purchase Order — SO parity + convert to Purchase Invoice
+
+### Changed
+- `create-order.tsx`: full rewrite — live vendors/stocks/warehouses/purchase ledgers, numbering, logistics, `createPurchaseOrder` submit, success Convert → PI
+- `create-invoice.tsx`: reads `tdpo_to_invoice_prefill_*` (30m TTL); sends `againstOrderNo` on submit
+
+### Test
+FAB → Purchase Order → live masters → submit → Convert to Purchase Invoice → PI prefills → submit with ORDERNO link.
+
+---
+
 ## [2026-08-06] Purchase Invoice — remove e-Way Bill / Dispatch
 
 ### Removed

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Platform, Alert, TextInput, Modal, TextInputProps, ActivityIndicator, Keyboard, KeyboardAvoidingView,
@@ -707,6 +708,42 @@ export default function CreatePurchaseInvoiceScreen() {
   // Universal numbering — Settings → Voucher Config only (no on-screen override)
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
 
+  // Set when this invoice is created by converting a Purchase Order.
+  // Sent to backend as `againstOrderNo` so the invoice can be traced back to its source order.
+  const [againstOrderNo, setAgainstOrderNo] = useState('');
+
+  // ── Purchase Order → Invoice prefill: "Convert to Purchase Invoice" writes this key
+  //    before navigating here. Applied immediately (no banner).
+  useEffect(() => {
+    if (!company?.guid) return;
+    const key = `tdpo_to_invoice_prefill_${company.guid}`;
+    AsyncStorage.getItem(key).then(raw => {
+      if (!raw) return;
+      try {
+        const d = JSON.parse(raw);
+        const PREFILL_TTL_MS = 30 * 60 * 1000; // 30 minutes
+        const isFresh = d?.savedAt && (Date.now() - d.savedAt) < PREFILL_TTL_MS;
+        if (!isFresh) { AsyncStorage.removeItem(key).catch(() => {}); return; }
+        // SO-shaped keys → PI state (party→vendor, ledger→purchaseLedger)
+        if (d.party)          setVendor(d.party);
+        if (d.ledger)         setPurchaseLedger(d.ledger);
+        if (d.date)           setDate(d.date);
+        if (d.refNo)          setPurchaseRefNo(d.refNo);
+        if (d.narration)      setNarration(d.narration);
+        if (d.items?.length)  setItems(d.items);
+        if (d.logEntries?.length) setLogEntries(d.logEntries);
+        if (d.roundOffLedger) setRoundOffLedger(d.roundOffLedger);
+        if (d.roundOffAmount) setRoundOffAmount(d.roundOffAmount);
+        // againstOrderNo must be Tally's Purchase Order voucher number (not a TDK- ref).
+        if (d.againstOrderNo && !String(d.againstOrderNo).startsWith('TDK-')) {
+          setAgainstOrderNo(d.againstOrderNo);
+        }
+        Toast.show({ type: 'success', text1: 'Purchase Order Loaded', text2: 'Review and submit to convert to an invoice.' });
+      } catch { /* ignore bad prefill */ }
+      AsyncStorage.removeItem(key).catch(() => {});
+    }).catch(() => {});
+  }, [company?.guid]);
+
   // ── Data loading ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!company?.guid) return;
@@ -1113,6 +1150,7 @@ export default function CreatePurchaseInvoiceScreen() {
         reference: vendorInvNo || purchaseRefNo || undefined,
         vendorInvoiceNo: vendorInvNo || undefined,
         vendorInvoiceDate: vendorInvDate ? dmyToISO(vendorInvDate) : undefined,
+        againstOrderNo: againstOrderNo || undefined,
       });
 
       const tdkRef = result?.tdkReferenceNo || result?.tdkRef || result?.data?.tdkReferenceNo || '';
@@ -1131,7 +1169,7 @@ export default function CreatePurchaseInvoiceScreen() {
   }, [
     vendor, items, company, date, purchaseLedger, entryType, totals.grand, narration, warehouses,
     makePayNow, payNowMode, payNowAmount, payNowRef, payNowLedger, logEntries, roundOffLedger, roundOffAmount,
-    numberingPolicy, vendorInvNo, vendorInvDate, purchaseRefNo,
+    numberingPolicy, vendorInvNo, vendorInvDate, purchaseRefNo, againstOrderNo,
   ]);
 
   // ── Render ────────────────────────────────────────────────────────────────────
