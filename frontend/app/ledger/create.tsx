@@ -11,7 +11,6 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { createLedger } from '../../src/services/api';
-import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import FormDropdown from '../../src/components/forms/FormDropdown';
 import BottomSheetSearch from '../../src/components/forms/BottomSheetSearch';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
@@ -167,11 +166,11 @@ export default function CreateLedgerScreen() {
   const isCustom = lType === 'custom';
 
   // ── Common state
-  const [entryType,   setEntryType]   = useState<EntryType>('regular');
   const [name,        setName]        = useState('');
   const [openBalance, setOpenBalance] = useState('');
   const [isCr,        setIsCr]        = useState(false);
   const [submitting,  setSubmitting]  = useState(false);
+  const [submitResult, setSubmitResult] = useState<{ queueId: number | string; isQueued: boolean; name: string } | null>(null);
 
   // ── Custom group
   const [customGroup, setCustomGroup] = useState('');
@@ -336,16 +335,65 @@ export default function CreateLedgerScreen() {
         }
       }
 
-      await createLedger(payload);
+      const res: any = await createLedger(payload);
+      const queueId = res?.queueId ?? res?.data?.queueId;
+      const isQueued = !!(res?.queued);
 
-      Toast.show({ type: 'success', text1: 'Ledger Created', text2: `"${name}" added to Tally.` });
-      setTimeout(() => router.back(), 1200);
+      if (queueId) {
+        setSubmitResult({ queueId, isQueued, name: name.trim() });
+      } else {
+        Toast.show({ type: 'success', text1: 'Ledger Created', text2: `"${name}" added to Tally.` });
+        setTimeout(() => router.back(), 1200);
+      }
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Failed', text2: err?.message || 'Could not create ledger.' });
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (submitResult) {
+    return (
+      <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
+        <View style={ss.overlay}>
+          <View style={ss.card}>
+            <View style={ss.iconWrap}>
+              <Ionicons
+                name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
+                size={56}
+                color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
+              />
+            </View>
+            <Text style={ss.title}>
+              {submitResult.isQueued ? 'Saved. Pending Sync' : 'Ledger Created!'}
+            </Text>
+            <Text style={ss.sub}>
+              {submitResult.isQueued
+                ? 'Entry queued. Will push to Tally when desktop reconnects.'
+                : `"${submitResult.name}" pushed to Tally successfully.`}
+            </Text>
+            <TouchableOpacity
+              style={ss.previewBtn}
+              activeOpacity={0.85}
+              onPress={() => {
+                router.replace(`/masters/preview?queueId=${encodeURIComponent(String(submitResult.queueId))}` as any);
+              }}
+            >
+              <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
+              <Text style={ss.previewBtnTxt}>Preview</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={ss.doneBtn}
+              activeOpacity={0.85}
+              onPress={() => router.back()}
+            >
+              <Text style={ss.doneBtnTxt}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -358,7 +406,7 @@ export default function CreateLedgerScreen() {
           <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>{cfg.title}</Text>
-        <RegularOptionalToggle value={entryType} onChange={setEntryType} />
+        <View style={{ width: 36 }} />
       </View>
 
       <KeyboardAvoidingView
@@ -664,4 +712,33 @@ const s = StyleSheet.create({
     paddingVertical: 16,
   },
   saveBtnText: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+});
+
+const ss = StyleSheet.create({
+  overlay: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    padding: SPACING.lg, backgroundColor: COLORS.pageBg,
+  },
+  card: {
+    width: '100%', maxWidth: 400, backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.lg, padding: 24, alignItems: 'center',
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  iconWrap: { marginBottom: 12 },
+  title: { fontSize: 20, fontWeight: '800', color: COLORS.textPrimary, textAlign: 'center' },
+  sub: {
+    marginTop: 8, fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary,
+    textAlign: 'center', lineHeight: 20, marginBottom: 20,
+  },
+  previewBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderWidth: 1.5, borderColor: COLORS.brandPrimary, borderRadius: RADIUS.md,
+    paddingVertical: 13, width: '100%', marginBottom: 10,
+  },
+  previewBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.brandPrimary },
+  doneBtn: {
+    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md,
+    paddingVertical: 13, width: '100%', alignItems: 'center',
+  },
+  doneBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
 });

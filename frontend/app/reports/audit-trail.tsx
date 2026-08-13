@@ -53,6 +53,9 @@ interface VoucherEntry {
   syncStatus?: SyncStatus;
   action?: 'Created' | 'Edited' | 'Deleted';
   isMine: boolean;
+  /** Master writes (ledger/bank/warehouse/item) — no Regular/Optional badges */
+  isMaster?: boolean;
+  queueId?: number | string | null;
   // Lifecycle fields
   tdkRef?: string;
   tallyVoucherNo?: string;
@@ -72,6 +75,9 @@ interface VoucherEntry {
   rawParty?: string;
   rawPayload?: any;            // _payload for queue rows
 }
+
+const MASTER_ENTRY_TYPES = new Set(['party', 'bank', 'warehouse', 'item', 'alter_stock_item']);
+const isMasterEntryType = (t?: string) => !!t && MASTER_ENTRY_TYPES.has(String(t).toLowerCase());
 
 // ─── Voucher Types ────────────────────────────────────────────────────────────
 const VOUCHER_TYPES: VoucherType[] = [
@@ -112,8 +118,8 @@ const mapVoucherType = (raw: string): Exclude<VoucherType, 'ALL'> => {
   if (s.includes('transfer')) return 'Stock Transfer';
   if (s.includes('adjustment')) return 'Adjustment';
   if (s.includes('stock edit') || s.includes('alter')) return 'Stock Edit';
-  if (s.includes('new item')) return 'New Item';
-  if (s.includes('new ledger') || s.includes('party')) return 'New Ledger';
+  if (s.includes('new item') || s === 'item') return 'New Item';
+  if (s.includes('new ledger') || s.includes('party') || s === 'bank' || s.includes('new party')) return 'New Ledger';
   if (s.includes('new warehouse') || s.includes('warehouse')) return 'New Warehouse';
   return 'Journal';
 };
@@ -141,6 +147,8 @@ const mapApiRow = (r: any, fmt: (n: number) => string = (n) => String(n)): Vouch
   isCredit: isCreditVoucher(r.voucher_type),
   syncStatus: 'synced' as const,
   isMine: true,
+  isMaster: !!(r._is_master || isMasterEntryType(r.voucher_type)),
+  queueId: r._queue_id ?? null,
   tdkRef: r.tdk_reference_no || '',
   tallyVoucherNo: r.av_tally_voucher_no || r.voucher_number || '',
   originalEntryType: r.original_entry_type,
@@ -378,6 +386,8 @@ export default function AuditTrailScreen() {
       : p._queue_status === 'processing' ? 'processing' : 'pending',
     action: 'Created',
     isMine: true,
+    isMaster: !!(p._is_master || isMasterEntryType(p.voucher_type)),
+    queueId: p._queue_id ?? null,
     tdkRef: p.tdk_reference_no || '',
     // av_tally_voucher_no = app_vouchers.tally_voucher_no (populated by ingestProcessor reconciliation).
     // p.voucher_number = wq.tally_voucher_number which is often empty (Tally ImportData doesn't return it).
@@ -517,10 +527,11 @@ export default function AuditTrailScreen() {
         const ss = e.syncStatus;
         const ei = e.eInvoiceStatus;
         const ew = e.eWayBillStatus;
-        if (lifecycleFilter === 'pending_sync')       return ss === 'pending' || ss === 'processing';
-        if (lifecycleFilter === 'regular')            return ct === 'regular' || (!ct && ss === 'synced');
-        if (lifecycleFilter === 'optional')           return ct === 'optional';
-        if (lifecycleFilter === 'originally_optional') return ot === 'optional' && ct === 'regular';
+        if (lifecycleFilter === 'pending_sync')       return ss === 'pending' || ss === 'processing'
+          || (e.isMaster && e.booksImpactStatus === 'not_posted' && ss === 'synced');
+        if (lifecycleFilter === 'regular')            return e.isMaster || ct === 'regular' || (!ct && ss === 'synced');
+        if (lifecycleFilter === 'optional')           return !e.isMaster && ct === 'optional';
+        if (lifecycleFilter === 'originally_optional') return !e.isMaster && ot === 'optional' && ct === 'regular';
         if (lifecycleFilter === 'failed')             return ss === 'failed';
         if (lifecycleFilter === 'irn_pending')        return !['not_applicable','not_required','generated','cancelled'].includes(ei || 'not_applicable');
         if (lifecycleFilter === 'ewb_pending')        return !['not_applicable','not_required','generated','cancelled'].includes(ew || 'not_applicable');
@@ -912,7 +923,15 @@ export default function AuditTrailScreen() {
                             onPress={() => {
                               if (multiSelect) {
                                 toggleSelect(entry.id);
-                              } else {
+                              } else if (entry.isMaster || entry.queueId) {
+                                const qid = entry.queueId
+                                  || (String(entry.id).startsWith('wq_') ? String(entry.id).replace(/^wq_/, '') : null);
+                                if (qid && (entry.isMaster || ['New Ledger', 'New Warehouse', 'New Item', 'Stock Edit'].includes(entry.type))) {
+                                  router.push(`/masters/preview?queueId=${encodeURIComponent(String(qid))}` as any);
+                                  return;
+                                }
+                              }
+                              if (!multiSelect) {
                                 // Use Tally voucher number when available (My Entries queue rows have
                                 // empty ref since wq.tally_voucher_number is never returned by Tally's
                                 // ImportData API — tallyVoucherNo is the reconciled value from app_vouchers)
@@ -1016,17 +1035,17 @@ export default function AuditTrailScreen() {
                               {/* Lifecycle Badges — My Entries only */}
                               {activeTab === 'myentries' && (
                                 <View style={lb.row}>
-                                  {entry.currentEntryType === 'optional' && (
+                                  {!entry.isMaster && entry.currentEntryType === 'optional' && (
                                     <View style={[lb.badge, lb.optional]}>
                                       <Text style={[lb.badgeTxt, { color: AMBER }]}>Optional</Text>
                                     </View>
                                   )}
-                                  {(entry.currentEntryType === 'regular' || (!entry.currentEntryType && entry.syncStatus === 'synced')) && (
+                                  {!entry.isMaster && (entry.currentEntryType === 'regular' || (!entry.currentEntryType && entry.syncStatus === 'synced')) && (
                                     <View style={[lb.badge, lb.regular]}>
                                       <Text style={[lb.badgeTxt, { color: COLORS.positive }]}>Regular</Text>
                                     </View>
                                   )}
-                                  {entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
+                                  {!entry.isMaster && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
                                     <View style={[lb.badge, lb.origOptional]}>
                                       <Text style={[lb.badgeTxt, { color: COLORS.info }]}>Orig. Optional</Text>
                                     </View>
@@ -1041,7 +1060,12 @@ export default function AuditTrailScreen() {
                                       <Text style={[lb.badgeTxt, { color: COLORS.negative }]}>Failed</Text>
                                     </View>
                                   )}
-                                  {entry.booksImpactStatus === 'not_posted' && entry.syncStatus !== 'failed' && (
+                                  {entry.isMaster && entry.booksImpactStatus === 'not_posted' && entry.syncStatus === 'synced' && (
+                                    <View style={[lb.badge, lb.notPosted]}>
+                                      <Text style={[lb.badgeTxt, { color: AMBER }]}>Awaiting Sync</Text>
+                                    </View>
+                                  )}
+                                  {entry.booksImpactStatus === 'not_posted' && entry.syncStatus !== 'failed' && !(entry.isMaster && entry.syncStatus === 'synced') && (
                                     <View style={[lb.badge, lb.notPosted]}>
                                       <Text style={[lb.badgeTxt, { color: AMBER }]}>Not Posted</Text>
                                     </View>

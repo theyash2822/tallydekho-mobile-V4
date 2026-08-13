@@ -66,7 +66,7 @@ export default function CreateWarehouseScreen() {
     }
     try {
       setSubmitting(true);
-      await createWarehouse({
+      const res: any = await createWarehouse({
         companyGuid:  company?.guid,
         companyName:  company?.name,
         name:         name.trim(),
@@ -74,6 +74,11 @@ export default function CreateWarehouseScreen() {
         parentGodown: parent.trim(),
         address:      address.trim() || undefined,
       });
+      const queueId = res?.queueId ?? res?.data?.queueId;
+      if (queueId) {
+        router.replace(`/masters/preview?queueId=${encodeURIComponent(String(queueId))}` as any);
+        return;
+      }
       Toast.show({ type: 'success', text1: 'Warehouse Created', text2: `"${name}" sent to Tally successfully.` });
       setTimeout(() => router.back(), 1200);
     } catch (err: any) {

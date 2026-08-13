@@ -11,7 +11,6 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { createStockItem, getStockGroups, getStockUnits, getWarehouses } from '../../src/services/api';
 import { clearStockListCache } from '../../src/utils/stockCache';
-import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
 import FormDropdown from '../../src/components/forms/FormDropdown';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 
@@ -81,7 +80,6 @@ export default function CreateStockItemScreen() {
   const insets = useSafeAreaInsets();
   const { company } = useAuth();
   const [submitting, setSubmitting] = useState(false);
-  const [entryType, setEntryType] = useState<EntryType>('regular');
   const [groupOptions,     setGroupOptions]     = useState<{label:string;value:string}[]>([]);
   const [warehouseOptions, setWarehouseOptions] = useState<{label:string;value:string}[]>([]);
   const [unitOptions,      setUnitOptions]      = useState<{label:string;value:string}[]>([]);
@@ -206,6 +204,13 @@ export default function CreateStockItemScreen() {
             : `"${itemName}" added to Tally.`,
         });
       }
+      const queueId = res?.queueId ?? res?.data?.queueId;
+      if (queueId && !(generateBarcode && barcode && stockGuid)) {
+        setTimeout(() => {
+          router.replace(`/masters/preview?queueId=${encodeURIComponent(String(queueId))}` as any);
+        }, 800);
+        return;
+      }
       setTimeout(() => router.back(), 1000);
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Failed', text2: err?.message || 'Could not save item.' });
@@ -221,7 +226,7 @@ export default function CreateStockItemScreen() {
           <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Add New Item</Text>
-        <RegularOptionalToggle value={entryType} onChange={setEntryType} />
+        <View style={{ width: 36 }} />
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

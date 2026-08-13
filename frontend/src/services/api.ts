@@ -254,6 +254,10 @@ export const getLedgerDetail   = (companyGuid?: string, id?: string, params?: an
 export const getLedgerStatement = (companyGuid?: string, id?: string, fy?: string, params?: any) => get<any>(withCompany(`/ledgers/${id}/statement`, companyGuid, { ...(fy ? { fy } : {}), ...params }));
 export const createLedger      = (payload: any) => tallyPost<any>('/master/party', payload);
 
+/** Master/ledger preview keyed by write_queue.id (not TDK ref). */
+export const getMasterPreview = (queueId: string | number, companyGuid: string) =>
+  request<any>('GET', `/master/${encodeURIComponent(String(queueId))}/preview?companyGuid=${companyGuid}`, undefined, true, 'tally');
+
 // ══════════════════════════════════════════════════════════════
 // STOCKS
 // ══════════════════════════════════════════════════════════════
