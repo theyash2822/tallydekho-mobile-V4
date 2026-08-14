@@ -1,6 +1,6 @@
 // ── Document Type Enum ────────────────────────────────────────────────────────
 export type DocumentType =
-  | 'sales_invoice'  | 'sales_order'
+  | 'sales_invoice'  | 'proforma_invoice' | 'sales_order'
   | 'delivery_note'  | 'credit_note'  | 'debit_note'
   | 'purchase_invoice' | 'purchase_order' | 'receipt_note'
   | 'payment_voucher' | 'receipt_voucher' | 'contra_voucher'

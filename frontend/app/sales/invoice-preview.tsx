@@ -10,24 +10,28 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, ActivityIndicator, StyleSheet, TouchableOpacity,
+  View, Text, ActivityIndicator, StyleSheet, TouchableOpacity, Alert,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context'; // used for loading/error states only
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { getInvoicePreview } from '../../src/services/api';
+import { getInvoicePreview, convertProformaInvoice } from '../../src/services/api';
 import DocumentPreviewPage from '../../src/components/document/DocumentPreviewPage';
 import { VoucherDocument } from '../../src/types/document';
 import { getSocket } from '../../src/services/socketService';
 
 // Map backend response to VoucherDocument
 function mapToVoucherDocument(data: any): VoucherDocument {
+  const isProforma = data.documentType === 'proforma_invoice';
+  const converted = data.conversionStatus === 'converted' || data.currentEntryType === 'regular';
+  const titleKind = isProforma && !converted ? 'Proforma Invoice' : 'Invoice';
   return {
     id: data.tdkRef || data.invoiceUuid || String(Date.now()),
     documentType: data.documentType || 'sales_invoice',
-    documentTitle: `Invoice - ${data.documentNumber || data.tdkRef || ''}`,
+    documentTitle: `${titleKind} - ${data.documentNumber || data.tdkRef || ''}`,
     documentNumber: data.documentNumber || 'Pending from TallyPrime',
     date: data.documentDate || '',
     company: {
@@ -83,6 +87,8 @@ export default function InvoicePreviewScreen() {
   const [error, setError] = useState<string | null>(null);
   const [isProvisional, setIsProvisional] = useState(false);
   const [postingTag, setPostingTag] = useState('Not Posted');
+  const [canConvertProforma, setCanConvertProforma] = useState(false);
+  const [converting, setConverting] = useState(false);
 
   const fetchPreview = useCallback(async () => {
     if (!tdkRef || !company?.guid) return;
@@ -94,6 +100,7 @@ export default function InvoicePreviewScreen() {
         setDoc(mapToVoucherDocument(res.data));
         setIsProvisional(res.data.isProvisional ?? false);
         setPostingTag(res.data.postingTag || 'Not Posted');
+        setCanConvertProforma(!!res.data.canConvertProforma);
       } else {
         setError('Could not load invoice preview.');
       }
@@ -103,6 +110,37 @@ export default function InvoicePreviewScreen() {
       setLoading(false);
     }
   }, [tdkRef, company?.guid]);
+
+  const handleConvertProforma = useCallback(async () => {
+    if (!tdkRef || !company?.guid) return;
+    Alert.alert(
+      'Convert to Invoice',
+      'This will post the same Tally voucher as a regular Sales Invoice (no longer optional).',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Convert',
+          onPress: async () => {
+            setConverting(true);
+            try {
+              const res: any = await convertProformaInvoice({
+                companyGuid: company.guid,
+                companyName: company.name,
+                tdkRef,
+              });
+              if (!res?.status) throw new Error(res?.message || 'Convert failed');
+              Toast.show({ type: 'success', text1: 'Converted', text2: res.message || 'Now a Sales Invoice' });
+              await fetchPreview();
+            } catch (e: any) {
+              Toast.show({ type: 'error', text1: 'Convert failed', text2: e?.message || 'Try again after sync.' });
+            } finally {
+              setConverting(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [tdkRef, company?.guid, company?.name, fetchPreview]);
 
   useEffect(() => { fetchPreview(); }, [fetchPreview]);
 
@@ -162,10 +200,27 @@ export default function InvoicePreviewScreen() {
   // they sit under the device status bar and get clipped.
   return (
     <View style={s.safe}>
-      <DocumentPreviewPage
-        document={doc}
-        isProvisional={isProvisional}
-      />
+      <View style={{ flex: 1 }}>
+        <DocumentPreviewPage
+          document={doc}
+          isProvisional={isProvisional}
+        />
+      </View>
+      {canConvertProforma && (
+        <SafeAreaView edges={['bottom']} style={s.convertBar}>
+          <TouchableOpacity
+            style={[s.convertBtn, converting && { opacity: 0.7 }]}
+            activeOpacity={0.85}
+            disabled={converting}
+            onPress={handleConvertProforma}
+          >
+            {converting
+              ? <ActivityIndicator size="small" color={COLORS.white} />
+              : <Ionicons name="repeat-outline" size={16} color={COLORS.white} />}
+            <Text style={s.convertBtnTxt}>{converting ? 'Converting…' : 'Convert to Sales Invoice'}</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      )}
     </View>
   );
 }
@@ -185,4 +240,10 @@ const s = StyleSheet.create({
   errorTxt:   { fontSize: 14, color: COLORS.negative, textAlign: 'center' },
   retryBtn:   { marginTop: 8, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md },
   retryTxt:   { fontSize: 14, color: COLORS.white, fontWeight: '600' },
+  convertBar: { backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, paddingHorizontal: SPACING.md, paddingTop: 10 },
+  convertBtn: {
+    flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.info, borderRadius: RADIUS.md, paddingVertical: 14,
+  },
+  convertBtnTxt: { fontSize: 15, fontWeight: '700', color: COLORS.white },
 });

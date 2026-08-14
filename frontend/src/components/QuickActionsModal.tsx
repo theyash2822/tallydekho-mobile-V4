@@ -29,6 +29,7 @@ const SECTIONS = [
     icon: 'receipt-outline' as const,
     items: [
       { id: 'sale-invoice',  label: 'Create Invoice',      route: '/sales/create-invoice',       icon: 'document-text-outline' as const },
+      { id: 'sale-proforma', label: 'Proforma Invoice',    route: '/sales/create-proforma',      icon: 'document-outline' as const },
       { id: 'sale-order',    label: 'Create Sales Orders',  route: '/sales/create-order',         icon: 'list-outline' as const },
       { id: 'sale-delivery', label: 'Create Delivery Note', route: '/sales/create-delivery-note', icon: 'car-outline' as const },
       { id: 'sale-credit',   label: 'Credit Note',          route: '/sales/create-credit-note',   icon: 'return-up-back-outline' as const },

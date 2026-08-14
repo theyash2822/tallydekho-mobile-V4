@@ -64,6 +64,7 @@ function _bankBlock(bankInfo?: PDFBankInfo | null, align: 'left' | 'right' = 'ri
 // ── Document type config (label + brand color) ────────────────────────────────
 export const DOC_TYPE_CONFIG: Record<DocumentType, { label: string; color: string; bg: string }> = {
   sales_invoice:    { label: 'Tax Invoice',       color: '#2D7D46', bg: '#E8F5E9' },
+  proforma_invoice: { label: 'Proforma Invoice',  color: '#1565C0', bg: '#E3F2FD' },
   sales_order:      { label: 'Sales Order',       color: '#1565C0', bg: '#E3F2FD' },
   delivery_note:    { label: 'Delivery Note',     color: '#00838F', bg: '#E0F7FA' },
   credit_note:      { label: 'Credit Note',       color: '#EF6C00', bg: '#FFF3E0' },
@@ -659,6 +660,7 @@ ${mainTable}
 export const TX_TO_DOC_TYPE: Record<string, DocumentType> = {
   // Standard types
   'Sales Invoice':    'sales_invoice',
+  'Proforma Invoice': 'proforma_invoice',
   'Sales Order':      'sales_order',
   'Delivery Note':    'delivery_note',
   'Credit Note':      'credit_note',

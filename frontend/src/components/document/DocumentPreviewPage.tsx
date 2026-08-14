@@ -24,6 +24,7 @@ const VOUCHER_CONFIG_KEY = 'voucherConfig';
 
 const DOC_TYPE_TO_CONFIG_ID: Record<string, string> = {
   'sales_invoice':    'sales_inv',
+  'proforma_invoice': 'sales_inv',
   'purchase_invoice': 'purchase_inv',
   'sales_order':      'sales_order',
   'purchase_order':   'purchase_order',

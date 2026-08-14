@@ -21,7 +21,7 @@ const AMBER = '#A89060';
 type TabType = 'myentries' | 'daybook';
 type SyncStatus = 'synced' | 'pending' | 'processing' | 'failed';
 type VoucherType =
-  | 'ALL' | 'Sales' | 'Sales Order' | 'Purchase' | 'Payment' | 'Receipt'
+  | 'ALL' | 'Sales' | 'Proforma Invoice' | 'Sales Order' | 'Purchase' | 'Payment' | 'Receipt'
   | 'Journal' | 'Contra' | 'Debit Note' | 'Credit Note' | 'Delivery Note'
   | 'Stock Transfer' | 'Adjustment' | 'Stock Edit' | 'New Item' | 'New Ledger' | 'New Warehouse';
 
@@ -81,7 +81,7 @@ const isMasterEntryType = (t?: string) => !!t && MASTER_ENTRY_TYPES.has(String(t
 
 // ─── Voucher Types ────────────────────────────────────────────────────────────
 const VOUCHER_TYPES: VoucherType[] = [
-  'ALL', 'Sales', 'Sales Order', 'Purchase', 'Payment', 'Receipt',
+  'ALL', 'Sales', 'Proforma Invoice', 'Sales Order', 'Purchase', 'Payment', 'Receipt',
   'Journal', 'Contra', 'Debit Note', 'Credit Note', 'Delivery Note',
   'Stock Transfer', 'Adjustment', 'Stock Edit', 'New Item', 'New Ledger', 'New Warehouse',
 ];
@@ -98,12 +98,14 @@ const isCreditVoucher = (voucherType: string): boolean => {
   if (t.includes('receipt'))     return true;
   // Match both 'credit note' (Tally sync rows) and 'credit_note' (write_queue entry_type)
   if (t.includes('credit note') || t.includes('credit_note')) return true;
+  if (t.includes('proforma')) return true;
   if (t.includes('sales') && !t.includes('return') && !t.includes('order')) return true;
   return false;
 };
 
 const mapVoucherType = (raw: string): Exclude<VoucherType, 'ALL'> => {
   const s = (raw || '').toLowerCase();
+  if (s.includes('proforma')) return 'Proforma Invoice';
   if (s.includes('sales') && s.includes('order')) return 'Sales Order';
   if (s.includes('sales')) return 'Sales';
   if (s.includes('purchase') && s.includes('order')) return 'Purchase';
@@ -137,14 +139,14 @@ const mapApiRow = (r: any, fmt: (n: number) => string = (n) => String(n)): Vouch
   ref: r.voucher_number || '',
   date: r.date || '',
   month: formatMonth(r.date),
-  type: mapVoucherType(r.voucher_type),
+  type: mapVoucherType(r.app_voucher_type || r.voucher_type),
   party: r.party_name || '',
   description: r.voucher_type || '',
   amount: fmt(Math.abs(+r.amount || 0)),
   rawAmount: Math.abs(+r.amount || 0),
   rawDate: r.date || '',
   rawParty: r.party_name || '',
-  isCredit: isCreditVoucher(r.voucher_type),
+  isCredit: isCreditVoucher(r.app_voucher_type || r.voucher_type),
   syncStatus: 'synced' as const,
   isMine: true,
   isMaster: !!(r._is_master || isMasterEntryType(r.voucher_type)),
@@ -164,7 +166,7 @@ const mapApiRow = (r: any, fmt: (n: number) => string = (n) => String(n)): Vouch
 
 // ─── Color Maps ───────────────────────────────────────────────────────────────
 const TYPE_COLORS: Record<string, string> = {
-  'Sales': '#2D7D46', 'Sales Order': '#059669', 'Purchase': '#2563EB', 'Payment': '#C0392B',
+  'Sales': '#2D7D46', 'Proforma Invoice': '#1565C0', 'Sales Order': '#059669', 'Purchase': '#2563EB', 'Payment': '#C0392B',
   'Receipt': '#2D7D46', 'Journal': '#D97706', 'Contra': '#7C3AED',
   'Debit Note': '#C0392B', 'Credit Note': '#2D7D46', 'Delivery Note': '#0891B2',
 };
@@ -343,6 +345,7 @@ export default function AuditTrailScreen() {
     sales_order: 'Sales Order', purchase_order: 'Purchase Order',
     credit_note: 'Credit Note', debit_note: 'Debit Note',
     delivery_note: 'Delivery Note',
+    proforma: 'Proforma Invoice', proforma_invoice: 'Proforma Invoice',
   };
 
   // Build a human-readable changes summary for alter_stock_item tiles
@@ -365,7 +368,7 @@ export default function AuditTrailScreen() {
     ref:  p.voucher_number || '',
     date: p.date || '',
     month: formatMonth(p.date),
-    type: mapVoucherType(WQ_ENTRY_LABEL[p.voucher_type || ''] || p.voucher_type || 'Journal'),
+    type: mapVoucherType(WQ_ENTRY_LABEL[p.app_voucher_type || p.voucher_type || ''] || p.app_voucher_type || p.voucher_type || 'Journal'),
     // For stock edits: show item name as party, changes as description
     party: p.voucher_type === 'alter_stock_item'
       ? (p.party_name || '')
@@ -1035,7 +1038,12 @@ export default function AuditTrailScreen() {
                               {/* Lifecycle Badges — My Entries only */}
                               {activeTab === 'myentries' && (
                                 <View style={lb.row}>
-                                  {!entry.isMaster && entry.currentEntryType === 'optional' && (
+                                  {!entry.isMaster && entry.type === 'Proforma Invoice' && entry.currentEntryType === 'optional' && (
+                                    <View style={[lb.badge, lb.optional]}>
+                                      <Text style={[lb.badgeTxt, { color: AMBER }]}>Proforma</Text>
+                                    </View>
+                                  )}
+                                  {!entry.isMaster && entry.type !== 'Proforma Invoice' && entry.currentEntryType === 'optional' && (
                                     <View style={[lb.badge, lb.optional]}>
                                       <Text style={[lb.badgeTxt, { color: AMBER }]}>Optional</Text>
                                     </View>
@@ -1045,7 +1053,12 @@ export default function AuditTrailScreen() {
                                       <Text style={[lb.badgeTxt, { color: COLORS.positive }]}>Regular</Text>
                                     </View>
                                   )}
-                                  {!entry.isMaster && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
+                                  {!entry.isMaster && entry.type === 'Proforma Invoice' && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
+                                    <View style={[lb.badge, lb.origOptional]}>
+                                      <Text style={[lb.badgeTxt, { color: COLORS.info }]}>From Proforma</Text>
+                                    </View>
+                                  )}
+                                  {!entry.isMaster && entry.type !== 'Proforma Invoice' && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
                                     <View style={[lb.badge, lb.origOptional]}>
                                       <Text style={[lb.badgeTxt, { color: COLORS.info }]}>Orig. Optional</Text>
                                     </View>
@@ -1094,10 +1107,16 @@ export default function AuditTrailScreen() {
                                   drill-down features. */}
                               <Text style={s.partyTxt}>{entry.party}</Text>
                               <Text style={s.descTxt}>{entry.description}</Text>
-                              {activeTab === 'myentries' && entry.currentEntryType === 'optional' && entry.conversionStatus !== 'converted' && (
+                              {activeTab === 'myentries' && entry.type === 'Proforma Invoice' && entry.currentEntryType === 'optional' && entry.conversionStatus !== 'converted' && (
+                                <Text style={{ fontSize: 9, color: AMBER, fontWeight: '700' }}>PROFORMA (OPTIONAL)</Text>
+                              )}
+                              {activeTab === 'myentries' && entry.type !== 'Proforma Invoice' && entry.currentEntryType === 'optional' && entry.conversionStatus !== 'converted' && (
                                 <Text style={{ fontSize: 9, color: AMBER, fontWeight: '700' }}>OPTIONAL VOUCHER NO.</Text>
                               )}
-                              {activeTab === 'myentries' && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
+                              {activeTab === 'myentries' && entry.type === 'Proforma Invoice' && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
+                                <Text style={{ fontSize: 9, color: COLORS.info, fontWeight: '700' }}>CONVERTED FROM PROFORMA</Text>
+                              )}
+                              {activeTab === 'myentries' && entry.type !== 'Proforma Invoice' && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
                                 <Text style={{ fontSize: 9, color: COLORS.info, fontWeight: '700' }}>ORIG. ENTRY TYPE: OPTIONAL</Text>
                               )}
                               <Text style={s.entryDateTxt}>{entry.date}</Text>
@@ -1111,6 +1130,16 @@ export default function AuditTrailScreen() {
                               <Text style={[s.drCrLbl, { color: entry.isCredit ? COLORS.negative : COLORS.positive }]}>
                                 {entry.isCredit ? 'Cr' : 'Dr'}
                               </Text>
+                              {activeTab === 'myentries' && entry.type === 'Proforma Invoice' && entry.tdkRef && !multiSelect ? (
+                                <TouchableOpacity
+                                  style={{ marginTop: 6, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: '#1565C018' }}
+                                  onPress={() => router.push(`/sales/invoice-preview?tdkRef=${encodeURIComponent(entry.tdkRef!)}` as any)}
+                                  activeOpacity={0.75}
+                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                >
+                                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#1565C0' }}>Preview</Text>
+                                </TouchableOpacity>
+                              ) : null}
                               {activeTab === 'myentries' && entry.type === 'Sales Order' && entry.tdkRef && !multiSelect ? (
                                 <TouchableOpacity
                                   style={{ marginTop: 6, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: '#05966918' }}

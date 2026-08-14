@@ -7,12 +7,12 @@ import {
 import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, usePathname } from 'expo-router';
 import { barcodePicker } from '../../src/utils/barcodePicker';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import {
-  getParties, createSalesInvoice, getStocks, getWarehouses,
+  getParties, createSalesInvoice, createProformaInvoice, getStocks, getWarehouses,
   getSalesLedgerAccounts, getTaxLedgers, createTallyParty, lookupBarcode,
   getComplianceConfig, getChargeLedgers, getStockGodowns, getBankLedgers,
   invoiceSharePdf, getCompanyProfile,
@@ -756,9 +756,12 @@ export default function CreateSalesInvoiceScreen() {
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
+  const pathname = usePathname();
+  const isProforma = (pathname || '').includes('create-proforma');
+  const draftPrefix = isProforma ? 'tdproforma_draft' : 'tdinvoice_draft';
 
   // ── Core state ───────────────────────────────────────────────────────────────
-  const [entryType, setEntryType] = useState<EntryType>('regular');
+  const [entryType, setEntryType] = useState<EntryType>(isProforma ? 'optional' : 'regular');
   const [ledger, setLedger] = useState('');
   const [invoiceNo] = useState('');
   const [date, setDate] = useState(todayStr());
@@ -1016,6 +1019,10 @@ export default function CreateSalesInvoiceScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [party, parties, showDispatch]);
 
+  useEffect(() => {
+    if (isProforma) setEntryType('optional');
+  }, [isProforma]);
+
   const routeParams = useLocalSearchParams<{ party?: string }>();
   useEffect(() => {
     if (routeParams?.party) setParty(routeParams.party as string);
@@ -1025,7 +1032,7 @@ export default function CreateSalesInvoiceScreen() {
   // ── Draft: check for saved draft on mount ────────────────────────────────
   useEffect(() => {
     if (!company?.guid) return;
-    const key = `tdinvoice_draft_${company.guid}`;
+    const key = `${draftPrefix}_${company.guid}`;
     AsyncStorage.getItem(key).then(raw => {
       if (!raw) return;
       try {
@@ -1099,7 +1106,7 @@ export default function CreateSalesInvoiceScreen() {
         numberingPolicy,
         savedAt: Date.now(),
       };
-      AsyncStorage.setItem(`tdinvoice_draft_${company.guid}`, JSON.stringify(draft)).catch(() => {});
+      AsyncStorage.setItem(`${draftPrefix}_${company.guid}`, JSON.stringify(draft)).catch(() => {});
     }, 800);
     return () => { if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1114,7 +1121,7 @@ export default function CreateSalesInvoiceScreen() {
 
   const restoreDraft = useCallback(() => {
     if (!company?.guid) return;
-    AsyncStorage.getItem(`tdinvoice_draft_${company.guid}`).then(raw => {
+    AsyncStorage.getItem(`${draftPrefix}_${company.guid}`).then(raw => {
       if (!raw) return;
       try {
         const d = JSON.parse(raw);
@@ -1174,13 +1181,13 @@ export default function CreateSalesInvoiceScreen() {
 
   const discardDraft = useCallback(() => {
     if (!company?.guid) return;
-    AsyncStorage.removeItem(`tdinvoice_draft_${company.guid}`).catch(() => {});
+    AsyncStorage.removeItem(`${draftPrefix}_${company.guid}`).catch(() => {});
     setShowDraftBanner(false);
   }, [company?.guid]);
 
   const clearDraftOnSubmit = useCallback(() => {
     if (!company?.guid) return;
-    AsyncStorage.removeItem(`tdinvoice_draft_${company.guid}`).catch(() => {});
+    AsyncStorage.removeItem(`${draftPrefix}_${company.guid}`).catch(() => {});
   }, [company?.guid]);
 
   // Due date auto-calc
@@ -1370,11 +1377,11 @@ export default function CreateSalesInvoiceScreen() {
         return;
       }
     }
-    if (collectPayNow && !payNowLedger) {
+    if (!isProforma && collectPayNow && !payNowLedger) {
       Toast.show({ type: 'error', text1: 'Payment Ledger required', text2: 'Select a Cash or Bank ledger for payment.' });
       return;
     }
-    if (collectPayNow && payNowLedger) {
+    if (!isProforma && collectPayNow && payNowLedger) {
       const pAmt = parseFloat(payNowAmount) || 0;
       if (pAmt <= 0) {
         Toast.show({ type: 'error', text1: 'Invalid payment amount', text2: 'Payment amount must be greater than 0.' });
@@ -1404,11 +1411,12 @@ export default function CreateSalesInvoiceScreen() {
           : []),
       ];
 
-      const result: any = await createSalesInvoice({
+      const createFn = isProforma ? createProformaInvoice : createSalesInvoice;
+      const result: any = await createFn({
         companyGuid: company?.guid, companyName: company?.name,
         partyLedger: party, date: dmyToISO(date),
-        salesLedger: ledger, isOptional: entryType === 'optional',
-        original_entry_type: entryType, voucherType: 'Sales',
+        salesLedger: ledger, isOptional: isProforma ? true : entryType === 'optional',
+        original_entry_type: isProforma ? 'optional' : entryType, voucherType: 'Sales',
         numbering_policy: numberingPolicy,
         totalAmount: totals.grand, reference: refNo || undefined,
         narration: narration || undefined,
@@ -1435,7 +1443,7 @@ export default function CreateSalesInvoiceScreen() {
             });
         }),
         logistics: allLogistics,
-        collect_payment: collectPayNow && payNowLedger ? {
+        collect_payment: !isProforma && collectPayNow && payNowLedger ? {
           mode: payNowMode, ledgerName: payNowLedger,
           amount: parseFloat(payNowAmount) || 0, reference: payNowRef || undefined,
         } : undefined,
@@ -1477,7 +1485,7 @@ export default function CreateSalesInvoiceScreen() {
     collectPayNow, payNowMode, payNowAmount, payNowRef, payNowLedger, logEntries, roundOffLedger, roundOffAmount,
     transportMode, transporterName, transporterId, vehicleNumber, vehicleType, transportDocNo, transportDocDate,
     dispatchFromState, shipToState,
-    numberingPolicy, againstOrderNo,
+    numberingPolicy, againstOrderNo, isProforma,
   ]);
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -1494,11 +1502,11 @@ export default function CreateSalesInvoiceScreen() {
                 color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
               />
             </View>
-            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : 'Invoice Submitted!'}</Text>
+            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : (isProforma ? 'Proforma Submitted!' : 'Invoice Submitted!')}</Text>
             <Text style={ss.sub}>
               {submitResult.isQueued
                 ? 'Entry queued. Will push to Tally when desktop reconnects.'
-                : 'Invoice pushed to Tally successfully.'}
+                : (isProforma ? 'Proforma pushed to Tally as optional Sales.' : 'Invoice pushed to Tally successfully.')}
             </Text>
             {/* TallyDekho Series: show invoice number immediately */}
             {submitResult.numberingPolicy === 'tallydekho_series' && submitResult.invoiceNumber && (
@@ -1628,10 +1636,10 @@ export default function CreateSalesInvoiceScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={s.headerTitle}>Sales Invoice</Text>
-          <Text style={s.headerSub}>{invoiceNo || 'INV-Auto'}</Text>
+          <Text style={s.headerTitle}>{isProforma ? 'Proforma Invoice' : 'Sales Invoice'}</Text>
+          <Text style={s.headerSub}>{isProforma ? 'Always optional' : (invoiceNo || 'INV-Auto')}</Text>
         </View>
-        <RegularOptionalToggle value={entryType} onChange={setEntryType} />
+        {!isProforma && <RegularOptionalToggle value={entryType} onChange={setEntryType} />}
       </View>
 
       <StepIndicator step={step} />
@@ -1655,11 +1663,11 @@ export default function CreateSalesInvoiceScreen() {
               <View style={s.card}>
                 <View style={s.cardHdr}>
                   <Ionicons name="document-text-outline" size={18} color={COLORS.brandPrimary} />
-                  <Text style={s.cardTitle}>Invoice Details</Text>
+                  <Text style={s.cardTitle}>{isProforma ? 'Proforma Details' : 'Invoice Details'}</Text>
                 </View>
                 <View style={s.row2}>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.fLabel}>Invoice No.</Text>
+                    <Text style={s.fLabel}>{isProforma ? 'Proforma No.' : 'Invoice No.'}</Text>
                     <View style={s.autoBox}>
                       <Text style={s.autoTxt}>{invoiceNo || 'Auto'}</Text>
                       <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
@@ -1667,7 +1675,7 @@ export default function CreateSalesInvoiceScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={s.fLabel}>Date <Text style={s.star}>*</Text></Text>
-                    {entryType === 'regular' ? (
+                    {entryType === 'regular' && !isProforma ? (
                       <View style={[s.autoBox, { opacity: 0.55 }]}>
                         <Text style={s.autoTxt}>{date}</Text>
                         <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
@@ -1822,7 +1830,8 @@ export default function CreateSalesInvoiceScreen() {
           {/* ═══════════ STEP 3 ═══════════ */}
           {step === 3 && (
             <>
-              {/* 1. Collect Payment Now */}
+              {/* 1. Collect Payment Now — not on Proforma (not a tax invoice yet) */}
+              {!isProforma && (
               <View style={s.card}>
                 <TouchableOpacity style={s.payNowToggleRow} onPress={() => setCollectPayNow(v => !v)} activeOpacity={0.8}>
                   <View style={s.payNowLeft}>
@@ -1907,6 +1916,7 @@ export default function CreateSalesInvoiceScreen() {
                   </View>
                 )}
               </View>
+              )}
 
               {/* 2. Dispatch / EWB */}
               <View style={s.card}>

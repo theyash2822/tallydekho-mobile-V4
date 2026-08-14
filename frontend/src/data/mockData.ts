@@ -340,6 +340,7 @@ export const QUICK_ACTIONS = [
     icon: 'trending-up',
     items: [
       { id: 'create_invoice',      label: 'Create Invoice',      route: '/sales/create-invoice' },
+      { id: 'create_proforma',     label: 'Proforma Invoice',    route: '/sales/create-proforma' },
       { id: 'create_sales_order',  label: 'Create Sales Order',  route: '/sales/create-order' },
       { id: 'create_delivery_note',label: 'Create Delivery Note',route: '/sales/create-delivery-note' },
       { id: 'credit_note',         label: 'Credit Note',         route: '/sales/create-credit-note' },

@@ -165,6 +165,8 @@ export const getCreditNotes    = (companyGuid?: string, params?: any) => get<any
 export const getDeliveryNotes  = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/delivery-notes', companyGuid, params));
 export const getEWayBills      = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/ewaybills', companyGuid, params));
 export const createSalesInvoice  = (payload: any) => tallyPost<any>('/voucher/sales', payload);
+export const createProformaInvoice = (payload: any) => tallyPost<any>('/voucher/proforma', payload);
+export const convertProformaInvoice = (payload: any) => tallyPost<any>('/voucher/proforma/convert', payload);
 
 // Sales ledger accounts (Sales Accounts group only)
 export const getSalesLedgerAccounts = (companyGuid?: string) =>

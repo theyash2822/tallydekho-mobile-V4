@@ -1,3 +1,16 @@
+## [2026-08-14] Proforma Invoice
+
+### Added
+- Sales menu + FAB: Proforma Invoice (`/sales/create-proforma`) — always optional, no Regular toggle
+- `createProformaInvoice` / `convertProformaInvoice` API
+- Preview title Proforma Invoice; Convert to Sales Invoice when synced
+- My Entries: Proforma badge vs Optional on Sales Invoice
+
+### Unchanged
+- Create Invoice Regular/Optional
+
+---
+
 ## [2026-08-06] Debit Note — Credit Note mirror (Purchase Return)
 
 ### Changed
