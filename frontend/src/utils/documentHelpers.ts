@@ -1,9 +1,7 @@
 import { DocumentType, VoucherDocument } from '../types/document';
-import { useSettings } from '../context/SettingsContext';
 
 // ── Currency formatter ────────────────────────────────────────────────────────
 export function formatCurrency(amount: number): string {
-  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   return '\u20b9' + Math.abs(amount).toLocaleString('en-IN', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -64,7 +62,7 @@ function _bankBlock(bankInfo?: PDFBankInfo | null, align: 'left' | 'right' = 'ri
 // ── Document type config (label + brand color) ────────────────────────────────
 export const DOC_TYPE_CONFIG: Record<DocumentType, { label: string; color: string; bg: string }> = {
   sales_invoice:    { label: 'Tax Invoice',       color: '#2D7D46', bg: '#E8F5E9' },
-  proforma_invoice: { label: 'Proforma Invoice',  color: '#1565C0', bg: '#E3F2FD' },
+  proforma_invoice: { label: 'Proforma Invoice',  color: '#1A1A1A', bg: '#F5F4EF' },
   sales_order:      { label: 'Sales Order',       color: '#1565C0', bg: '#E3F2FD' },
   delivery_note:    { label: 'Delivery Note',     color: '#00838F', bg: '#E0F7FA' },
   credit_note:      { label: 'Credit Note',       color: '#EF6C00', bg: '#FFF3E0' },
@@ -84,13 +82,16 @@ export interface PDFBankInfo { bankName?: string | null; accountNo?: string | nu
 export function generateDocumentHTML(doc: VoucherDocument, logoUri?: string | null, format: 1 | 2 | 3 = 1, terms?: string[], qrImage?: string | null, bankInfo?: PDFBankInfo | null): string {
   if (format === 2) return _generateFormat2HTML(doc, logoUri, terms, qrImage, bankInfo);
   if (format === 3) return _generateFormat3HTML(doc, logoUri, terms, qrImage, bankInfo);
-  const cfg = DOC_TYPE_CONFIG[doc.documentType];
+  const cfg = DOC_TYPE_CONFIG[doc.documentType] || DOC_TYPE_CONFIG.sales_invoice;
   const hasItems = !!(doc.items && doc.items.length > 0);
   const hasEntries = !!(doc.ledgerEntries && doc.ledgerEntries.length > 0);
   const t = doc.totals;
   const isVoucher = ['payment_voucher','receipt_voucher','contra_voucher','journal_voucher'].includes(doc.documentType);
   const isOrder = ['sales_order','purchase_order'].includes(doc.documentType);
   const isDelivery = doc.documentType === 'delivery_note';
+  const isProforma = doc.documentType === 'proforma_invoice';
+  const numberLabel = isProforma ? 'Proforma No.' : 'Invoice No.';
+  const footerKind = isVoucher ? 'Voucher' : (isProforma ? 'Proforma Invoice' : 'Invoice');
 
   const fmt = (n: number) => '₹' + Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const cell = (label: string, value: string, colspan = 1) =>
@@ -105,7 +106,7 @@ export function generateDocumentHTML(doc: VoucherDocument, logoUri?: string | nu
     <tr>${cell('Reference No.', doc.reference || '')}${cell('Other References', '')}</tr>
     <tr>${cell("Buyer's Order No.", '')}${cell('Dated', '')}</tr>
     <tr>${cell('Terms of Delivery', '', 2)}</tr>` : `
-    <tr>${cell('Invoice No.', doc.documentNumber)}${cell('Dated', doc.date)}</tr>
+    <tr>${cell(numberLabel, doc.documentNumber)}${cell('Dated', doc.date)}</tr>
     <tr>${cell('Delivery Note', '')}${cell('Mode/Terms of Payment', '')}</tr>
     <tr>${cell('Reference No. & Date.', doc.reference || '')}${cell('Other References', '')}</tr>
     <tr>${cell("Buyer's Order No.", '')}${cell('Dated', '')}</tr>
@@ -298,13 +299,13 @@ ${mainTable}
     <td style="border:1px solid #999;padding:6px 10px;vertical-align:top">
       <b style="font-size:10px">Company's PAN${doc.company?.gstin ? ' : ' + doc.company.gstin.slice(2,12) : ''}</b>
       <div style="font-size:9px;color:#777;text-transform:uppercase;margin-top:6px;margin-bottom:2px">Declaration</div>
-      <div style="font-size:9px;color:#444;line-height:1.5">We declare that this ${isVoucher ? 'voucher' : 'invoice'} shows the actual ${isVoucher ? 'transaction' : 'price of the goods described'} and that all particulars are true and correct.</div>
+      <div style="font-size:9px;color:#444;line-height:1.5">We declare that this ${isVoucher ? 'voucher' : (isProforma ? 'proforma invoice' : 'invoice')} shows the actual ${isVoucher ? 'transaction' : 'price of the goods described'} and that all particulars are true and correct.</div>
       ${terms && terms.length > 0 ? `<div style="font-size:9px;color:#777;text-transform:uppercase;margin-top:8px;margin-bottom:3px;font-weight:bold">Terms &amp; Conditions</div><ol style="font-size:9px;color:#444;padding-left:16px;margin:0;line-height:1.6">${terms.map(term => `<li>${term}</li>`).join('')}</ol>` : ''}
     </td>
   </tr>
 </table>
 
-<div style="text-align:center;font-size:9px;color:#555;padding:6px;border-top:1px solid #999">This is a Computer Generated ${isVoucher ? 'Voucher' : 'Invoice'}</div>
+<div style="text-align:center;font-size:9px;color:#555;padding:6px;border-top:1px solid #999">This is a Computer Generated ${footerKind}</div>
 </div>
 </body></html>`;
 }
@@ -314,11 +315,13 @@ ${mainTable}
 
 // ── Format 2 — Modern layout ─────────────────────────────────────────────────
 function _generateFormat2HTML(doc: VoucherDocument, logoUri?: string | null, terms?: string[], qrImage?: string | null, bankInfo?: PDFBankInfo | null): string {
-  const cfg = DOC_TYPE_CONFIG[doc.documentType];
+  const cfg = DOC_TYPE_CONFIG[doc.documentType] || DOC_TYPE_CONFIG.sales_invoice;
   const t = doc.totals;
   const hasItems = !!(doc.items && doc.items.length > 0);
   const hasEntries = !!(doc.ledgerEntries && doc.ledgerEntries.length > 0);
   const isVoucher = ['payment_voucher','receipt_voucher','contra_voucher','journal_voucher'].includes(doc.documentType);
+  const isProforma = doc.documentType === 'proforma_invoice';
+  const footerKind = isVoucher ? 'Voucher' : (isProforma ? 'Proforma Invoice' : 'Invoice');
   const fmt = (n: number) => '₹' + Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const itemRows = hasItems ? doc.items!.map((item, i) => `
@@ -461,7 +464,7 @@ function _generateFormat2HTML(doc: VoucherDocument, logoUri?: string | null, ter
   <!-- Footer -->
   <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:24px;padding-top:16px;border-top:1px solid #e8e8e8;">
     <div style="font-size:9px;color:#aaa;line-height:1.5;">
-      This is a Computer Generated ${isVoucher ? 'Voucher' : 'Invoice'}
+      This is a Computer Generated ${footerKind}
       ${doc.company?.gstin ? `<br/>PAN: ${doc.company.gstin.slice(2,12)}` : ''}
     </div>
     <div style="text-align:center;min-width:150px;">
@@ -480,12 +483,15 @@ function _generateFormat2HTML(doc: VoucherDocument, logoUri?: string | null, ter
 
 // ── Format 3 — Detailed layout ────────────────────────────────────────────────
 function _generateFormat3HTML(doc: VoucherDocument, logoUri?: string | null, terms?: string[], qrImage?: string | null, bankInfo?: PDFBankInfo | null): string {
-  const cfg = DOC_TYPE_CONFIG[doc.documentType];
+  const cfg = DOC_TYPE_CONFIG[doc.documentType] || DOC_TYPE_CONFIG.sales_invoice;
   const t = doc.totals;
   const hasItems = !!(doc.items && doc.items.length > 0);
   const hasEntries = !!(doc.ledgerEntries && doc.ledgerEntries.length > 0);
   const isVoucher = ['payment_voucher','receipt_voucher','contra_voucher','journal_voucher'].includes(doc.documentType);
   const isOrder = ['sales_order','purchase_order'].includes(doc.documentType);
+  const isProforma = doc.documentType === 'proforma_invoice';
+  const numberLabel = isProforma ? 'Proforma No.' : 'Invoice No.';
+  const footerKind = isVoucher ? 'Voucher' : (isProforma ? 'Proforma Invoice' : 'Invoice');
   const fmt = (n: number) => '₹' + Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const cell = (label: string, value: string) =>
     `<td style="border:1px solid #ddd;padding:5px 8px;vertical-align:top;font-size:10px;width:50%"><span style="color:#888;font-size:8px;display:block;text-transform:uppercase;">${label}</span><b>${value || ''}</b></td>`;
@@ -517,7 +523,7 @@ function _generateFormat3HTML(doc: VoucherDocument, logoUri?: string | null, ter
     <tr>${cell('Reference No.', doc.reference || '')}${cell('Other References', '')}</tr>
     <tr>${cell("Buyer's Order No.", '')}${cell('Dated', '')}</tr>
     <tr>${cell('Terms of Delivery', '')}${cell('', '')}</tr>` : `
-    <tr>${cell('Invoice No.', doc.documentNumber)}${cell('Dated', doc.date)}</tr>
+    <tr>${cell(numberLabel, doc.documentNumber)}${cell('Dated', doc.date)}</tr>
     <tr>${cell('Delivery Note', '')}${cell('Mode/Terms of Payment', '')}</tr>
     <tr>${cell('Reference No. & Date.', doc.reference || '')}${cell('Other References', '')}</tr>
     <tr>${cell("Buyer's Order No.", '')}${cell('Dated', '')}</tr>
@@ -651,7 +657,7 @@ ${mainTable}
   </tr>
 </table>
 
-<div style="text-align:center;font-size:9px;color:#666;padding:5px;border-top:1px solid #ccc;">This is a Computer Generated ${isVoucher ? 'Voucher' : 'Invoice'}</div>
+<div style="text-align:center;font-size:9px;color:#666;padding:5px;border-top:1px solid #ccc;">This is a Computer Generated ${footerKind}</div>
 </div>
 </body></html>`;
 }

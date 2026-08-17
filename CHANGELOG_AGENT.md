@@ -1,3 +1,13 @@
+## [2026-08-17] Proforma UX polish
+
+### Fixed
+- Share/PDF: stamp **Proforma Invoice** / Proforma No. (not Tax Invoice) while unconverted
+- Preview Convert bar: brand black (`#1A1A1A`), not blue
+- My Entries: **Preview** + **Convert** chips (confirm → convert API); sync gate toast if not ready
+- Removed invalid `useSettings` from `formatCurrency`
+
+---
+
 ## [2026-08-14] Proforma Invoice
 
 ### Added

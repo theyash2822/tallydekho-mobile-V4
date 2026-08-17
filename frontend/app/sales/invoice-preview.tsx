@@ -243,7 +243,7 @@ const s = StyleSheet.create({
   convertBar: { backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, paddingHorizontal: SPACING.md, paddingTop: 10 },
   convertBtn: {
     flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: COLORS.info, borderRadius: RADIUS.md, paddingVertical: 14,
+    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 14,
   },
   convertBtnTxt: { fontSize: 15, fontWeight: '700', color: COLORS.white },
 });

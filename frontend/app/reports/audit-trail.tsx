@@ -10,7 +10,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
-import { getVouchers, getMyEntries, retryMyEntry } from '../../src/services/api';
+import { getVouchers, getMyEntries, retryMyEntry, convertProformaInvoice } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 import { socketService } from '../../src/services/socketService';
 
@@ -166,7 +166,7 @@ const mapApiRow = (r: any, fmt: (n: number) => string = (n) => String(n)): Vouch
 
 // ─── Color Maps ───────────────────────────────────────────────────────────────
 const TYPE_COLORS: Record<string, string> = {
-  'Sales': '#2D7D46', 'Proforma Invoice': '#1565C0', 'Sales Order': '#059669', 'Purchase': '#2563EB', 'Payment': '#C0392B',
+  'Sales': '#2D7D46', 'Proforma Invoice': '#1A1A1A', 'Sales Order': '#059669', 'Purchase': '#2563EB', 'Payment': '#C0392B',
   'Receipt': '#2D7D46', 'Journal': '#D97706', 'Contra': '#7C3AED',
   'Debit Note': '#C0392B', 'Credit Note': '#2D7D46', 'Delivery Note': '#0891B2',
 };
@@ -308,6 +308,8 @@ export default function AuditTrailScreen() {
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
   const retryingRef = useRef<Set<string>>(new Set());
   const bulkRetryingRef = useRef(false);
+  const convertingRef = useRef<Set<string>>(new Set());
+  const [convertingIds, setConvertingIds] = useState<Set<string>>(new Set());
 
   // ── API State ─────────────────────────────────────────────
   const [apiEntries, setApiEntries] = useState<VoucherEntry[]>([]);
@@ -670,6 +672,56 @@ export default function AuditTrailScreen() {
     }
     setRefreshKey(k => k + 1);
     clearSelection();
+  };
+
+  const canConvertProformaEntry = (entry: VoucherEntry) =>
+    entry.type === 'Proforma Invoice'
+    && entry.currentEntryType === 'optional'
+    && entry.conversionStatus !== 'converted'
+    && !!entry.tdkRef
+    && (!!entry.tallyVoucherNo || entry.syncStatus === 'synced');
+
+  const handleConvertProforma = (entry: VoucherEntry) => {
+    if (!entry.tdkRef || !company?.guid) return;
+    if (!canConvertProformaEntry(entry)) {
+      Toast.show({
+        type: 'info',
+        text1: 'Wait for sync',
+        text2: 'Convert after Tally syncs this Proforma.',
+        visibilityTime: 2800,
+      });
+      return;
+    }
+    if (convertingRef.current.has(entry.tdkRef)) return;
+    Alert.alert(
+      'Convert to Invoice',
+      'This will post the same Tally voucher as a regular Sales Invoice (no longer optional).',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Convert',
+          onPress: async () => {
+            convertingRef.current.add(entry.tdkRef!);
+            setConvertingIds(new Set(convertingRef.current));
+            try {
+              const res: any = await convertProformaInvoice({
+                companyGuid: company.guid,
+                companyName: company.name,
+                tdkRef: entry.tdkRef,
+              });
+              if (!res?.status) throw new Error(res?.message || 'Convert failed');
+              Toast.show({ type: 'success', text1: 'Converted', text2: res.message || 'Now a Sales Invoice' });
+              setRefreshKey(k => k + 1);
+            } catch (e: any) {
+              Toast.show({ type: 'error', text1: 'Convert failed', text2: e?.message || 'Try again after sync.' });
+            } finally {
+              convertingRef.current.delete(entry.tdkRef!);
+              setConvertingIds(new Set(convertingRef.current));
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleShare = () =>
@@ -1131,14 +1183,33 @@ export default function AuditTrailScreen() {
                                 {entry.isCredit ? 'Cr' : 'Dr'}
                               </Text>
                               {activeTab === 'myentries' && entry.type === 'Proforma Invoice' && entry.tdkRef && !multiSelect ? (
-                                <TouchableOpacity
-                                  style={{ marginTop: 6, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: '#1565C018' }}
-                                  onPress={() => router.push(`/sales/invoice-preview?tdkRef=${encodeURIComponent(entry.tdkRef!)}` as any)}
-                                  activeOpacity={0.75}
-                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                >
-                                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#1565C0' }}>Preview</Text>
-                                </TouchableOpacity>
+                                <View style={{ marginTop: 6, gap: 4, alignItems: 'flex-end' }}>
+                                  <TouchableOpacity
+                                    style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: COLORS.brandPrimary + '14' }}
+                                    onPress={() => router.push(`/sales/invoice-preview?tdkRef=${encodeURIComponent(entry.tdkRef!)}` as any)}
+                                    activeOpacity={0.75}
+                                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                  >
+                                    <Text style={{ fontSize: 10, fontWeight: '700', color: COLORS.brandPrimary }}>Preview</Text>
+                                  </TouchableOpacity>
+                                  {entry.currentEntryType === 'optional' && entry.conversionStatus !== 'converted' ? (
+                                    <TouchableOpacity
+                                      style={{
+                                        paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
+                                        backgroundColor: COLORS.brandPrimary,
+                                        opacity: convertingIds.has(entry.tdkRef) ? 0.6 : 1,
+                                      }}
+                                      onPress={() => handleConvertProforma(entry)}
+                                      activeOpacity={0.75}
+                                      disabled={convertingIds.has(entry.tdkRef)}
+                                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                    >
+                                      <Text style={{ fontSize: 10, fontWeight: '700', color: COLORS.white }}>
+                                        {convertingIds.has(entry.tdkRef) ? '…' : 'Convert'}
+                                      </Text>
+                                    </TouchableOpacity>
+                                  ) : null}
+                                </View>
                               ) : null}
                               {activeTab === 'myentries' && entry.type === 'Sales Order' && entry.tdkRef && !multiSelect ? (
                                 <TouchableOpacity

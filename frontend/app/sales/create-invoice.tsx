@@ -1551,11 +1551,14 @@ export default function CreateSalesInvoiceScreen() {
                   const docData = res?.data;
                   if (!docData) throw new Error('No invoice data returned');
 
+                  const docType = docData.documentType
+                    || (isProforma ? 'proforma_invoice' : 'sales_invoice');
+                  const titleKind = docType === 'proforma_invoice' ? 'Proforma Invoice' : 'Invoice';
                   // Build minimal VoucherDocument for PDF generation
                   // NOTE: backend returns grandTotal; generateDocumentHTML expects `total` — normalise here
                   const pdfDoc = {
-                    documentTitle: `Invoice - ${docData.documentNumber}`,
-                    documentType: docData.documentType || 'sales_invoice',
+                    documentTitle: `${titleKind} - ${docData.documentNumber}`,
+                    documentType: docType,
                     documentNumber: docData.documentNumber || docData.invoiceNumberLabel || 'Pending from TallyPrime',
                     documentDate: docData.documentDate || '',
                     company: docData.company || {},
@@ -1586,7 +1589,7 @@ export default function CreateSalesInvoiceScreen() {
 
                   // Open native share sheet
                   const canShare = await Sharing.isAvailableAsync();
-                  const fileName = docData.fileName || `Invoice-${submitResult.tdkRef}.pdf`;
+                  const fileName = docData.fileName || `${titleKind.replace(/\s+/g, '-')}-${submitResult.tdkRef}.pdf`;
                   if (canShare) {
                     await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: fileName, UTI: 'com.adobe.pdf' });
                   } else {
