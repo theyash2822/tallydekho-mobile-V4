@@ -7,12 +7,17 @@ import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
-import { getVouchers, getMyEntries, retryMyEntry, convertProformaInvoice } from '../../src/services/api';
+import { getVouchers, getMyEntries, retryMyEntry, getInvoicePreview } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 import { socketService } from '../../src/services/socketService';
+import {
+  buildProformaToInvoicePrefillFromPreview,
+  proformaPrefillStorageKey,
+} from '../../src/utils/proformaToInvoicePrefill';
 
 const SCREEN_W = Dimensions.get('window').width;
 const AMBER = '#A89060';
@@ -693,35 +698,22 @@ export default function AuditTrailScreen() {
       return;
     }
     if (convertingRef.current.has(entry.tdkRef)) return;
-    Alert.alert(
-      'Convert to Invoice',
-      'This will post the same Tally voucher as a regular Sales Invoice (no longer optional).',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Convert',
-          onPress: async () => {
-            convertingRef.current.add(entry.tdkRef!);
-            setConvertingIds(new Set(convertingRef.current));
-            try {
-              const res: any = await convertProformaInvoice({
-                companyGuid: company.guid,
-                companyName: company.name,
-                tdkRef: entry.tdkRef,
-              });
-              if (!res?.status) throw new Error(res?.message || 'Convert failed');
-              Toast.show({ type: 'success', text1: 'Converted', text2: res.message || 'Now a Sales Invoice' });
-              setRefreshKey(k => k + 1);
-            } catch (e: any) {
-              Toast.show({ type: 'error', text1: 'Convert failed', text2: e?.message || 'Try again after sync.' });
-            } finally {
-              convertingRef.current.delete(entry.tdkRef!);
-              setConvertingIds(new Set(convertingRef.current));
-            }
-          },
-        },
-      ]
-    );
+    convertingRef.current.add(entry.tdkRef);
+    setConvertingIds(new Set(convertingRef.current));
+    (async () => {
+      try {
+        const res: any = await getInvoicePreview(entry.tdkRef!, company.guid);
+        if (!res?.status || !res?.data) throw new Error(res?.message || 'Could not load Proforma');
+        const prefill = buildProformaToInvoicePrefillFromPreview(res.data, entry.tdkRef!);
+        await AsyncStorage.setItem(proformaPrefillStorageKey(company.guid), JSON.stringify(prefill));
+        router.push('/sales/create-invoice' as any);
+      } catch (e: any) {
+        Toast.show({ type: 'error', text1: 'Could not start invoice', text2: e?.message || 'Try again after sync.' });
+      } finally {
+        convertingRef.current.delete(entry.tdkRef!);
+        setConvertingIds(new Set(convertingRef.current));
+      }
+    })();
   };
 
   const handleShare = () =>

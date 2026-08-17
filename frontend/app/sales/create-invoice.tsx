@@ -12,11 +12,15 @@ import { barcodePicker } from '../../src/utils/barcodePicker';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import {
-  getParties, createSalesInvoice, createProformaInvoice, getStocks, getWarehouses,
+  getParties, createSalesInvoice, createProformaInvoice, convertProformaInvoice, getStocks, getWarehouses,
   getSalesLedgerAccounts, getTaxLedgers, createTallyParty, lookupBarcode,
   getComplianceConfig, getChargeLedgers, getStockGodowns, getBankLedgers,
   invoiceSharePdf, getCompanyProfile,
 } from '../../src/services/api';
+import {
+  proformaPrefillStorageKey,
+  buildProformaToInvoicePrefillFromForm,
+} from '../../src/utils/proformaToInvoicePrefill';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { generateDocumentHTML } from '../../src/utils/documentHelpers';
@@ -797,6 +801,8 @@ export default function CreateSalesInvoiceScreen() {
   // Set when this invoice is created by converting a Sales Order (see prefill effect below).
   // Sent to backend as `againstOrderNo` so the invoice can be traced back to its source order.
   const [againstOrderNo, setAgainstOrderNo] = useState('');
+  const [convertProformaTdkRef, setConvertProformaTdkRef] = useState('');
+  const [convertTallyVoucherNo, setConvertTallyVoucherNo] = useState('');
   const [items, setItems] = useState<InvoiceItem[]>([newItem()]);
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
   const [roundOffLedger, setRoundOffLedger] = useState('');
@@ -1033,7 +1039,9 @@ export default function CreateSalesInvoiceScreen() {
   useEffect(() => {
     if (!company?.guid) return;
     const key = `${draftPrefix}_${company.guid}`;
-    AsyncStorage.getItem(key).then(raw => {
+    const convertKey = proformaPrefillStorageKey(company.guid);
+    Promise.all([AsyncStorage.getItem(key), AsyncStorage.getItem(convertKey)]).then(([raw, convertRaw]) => {
+      if (convertRaw) return; // Proforma convert owns the form — don't overlay an old invoice draft
       if (!raw) return;
       try {
         const d = JSON.parse(raw);
@@ -1083,6 +1091,39 @@ export default function CreateSalesInvoiceScreen() {
       AsyncStorage.removeItem(key).catch(() => {});
     }).catch(() => {});
   }, [company?.guid]);
+
+  // ── Proforma → Invoice prefill: Convert opens this screen. Submit Alters the
+  //    same Tally voucher (ISOPTIONAL=No) — it does not create a second invoice.
+  useEffect(() => {
+    if (!company?.guid || isProforma) return;
+    const key = proformaPrefillStorageKey(company.guid);
+    AsyncStorage.getItem(key).then(raw => {
+      if (!raw) return;
+      try {
+        const d = JSON.parse(raw);
+        const PREFILL_TTL_MS = 30 * 60 * 1000;
+        const isFresh = d?.savedAt && (Date.now() - d.savedAt) < PREFILL_TTL_MS;
+        if (!isFresh) { AsyncStorage.removeItem(key).catch(() => {}); return; }
+        if (d.party)          setParty(d.party);
+        if (d.ledger)         setLedger(d.ledger);
+        if (d.date)           setDate(d.date);
+        if (d.refNo)          setRefNo(d.refNo);
+        if (d.narration)      setNarration(d.narration);
+        if (d.termsText)      setTermsText(d.termsText);
+        if (d.items?.length)  setItems(d.items);
+        if (d.logEntries?.length) setLogEntries(d.logEntries);
+        if (d.roundOffLedger) setRoundOffLedger(d.roundOffLedger);
+        if (d.roundOffAmount) setRoundOffAmount(d.roundOffAmount);
+        if (d.dueDate)        setDueDate(d.dueDate);
+        if (d.convertProformaTdkRef) setConvertProformaTdkRef(d.convertProformaTdkRef);
+        if (d.tallyVoucherNo) setConvertTallyVoucherNo(d.tallyVoucherNo);
+        setEntryType('regular');
+        setShowDraftBanner(false);
+        Toast.show({ type: 'success', text1: 'Proforma Loaded', text2: 'Review and submit. Same Tally voucher becomes the invoice.' });
+      } catch { /* ignore bad prefill */ }
+      AsyncStorage.removeItem(key).catch(() => {});
+    }).catch(() => {});
+  }, [company?.guid, isProforma]);
 
   // ── Draft: auto-save on any significant field change (debounced 800ms) ───
   useEffect(() => {
@@ -1411,8 +1452,7 @@ export default function CreateSalesInvoiceScreen() {
           : []),
       ];
 
-      const createFn = isProforma ? createProformaInvoice : createSalesInvoice;
-      const result: any = await createFn({
+      const payload = {
         companyGuid: company?.guid, companyName: company?.name,
         partyLedger: party, date: dmyToISO(date),
         salesLedger: ledger, isOptional: isProforma ? true : entryType === 'optional',
@@ -1429,6 +1469,9 @@ export default function CreateSalesInvoiceScreen() {
           amount: calcItem(item).taxable,
           salesLedger: ledger,
           godown: item.warehouse || warehouses[0]?.name || 'Main Location',
+          discountType: item.discountType,
+          discount: parseFloat(item.discount) || 0,
+          taxEntries: item.taxEntries,
         })),
         taxes: items.flatMap(item => {
           const taxable = calcItem(item).taxable;
@@ -1461,9 +1504,23 @@ export default function CreateSalesInvoiceScreen() {
           vehicle_number: vehicleNumber || undefined, vehicle_type: vehicleType,
           transport_doc_no: transportDocNo || undefined, transport_doc_date: transportDocDate ? dmyToISO(transportDocDate) : undefined,
         } : undefined,
-      });
+      };
 
-      const tdkRef = result?.data?.tdkReferenceNo || result?.tdkReferenceNo || '';
+      const result: any = convertProformaTdkRef
+        ? await convertProformaInvoice({
+            ...payload,
+            tdkRef: convertProformaTdkRef,
+            isOptional: false,
+            original_entry_type: 'optional',
+          })
+        : await (isProforma ? createProformaInvoice : createSalesInvoice)(payload);
+
+      if (!result?.status) throw new Error(result?.message || 'Submit failed');
+      if (convertProformaTdkRef && result?.data?.status === false) {
+        throw new Error(result?.data?.message || result?.message || 'Tally did not update the voucher');
+      }
+
+      const tdkRef = result?.tdkReferenceNo || result?.data?.tdkReferenceNo || convertProformaTdkRef || '';
       const isQueued = result?.queued === true;
       const invoiceUuid = result?.invoiceUuid || result?.data?.invoiceUuid || undefined;
       const respNumberingPolicy = result?.numberingPolicy || numberingPolicy;
@@ -1485,8 +1542,25 @@ export default function CreateSalesInvoiceScreen() {
     collectPayNow, payNowMode, payNowAmount, payNowRef, payNowLedger, logEntries, roundOffLedger, roundOffAmount,
     transportMode, transporterName, transporterId, vehicleNumber, vehicleType, transportDocNo, transportDocDate,
     dispatchFromState, shipToState,
-    numberingPolicy, againstOrderNo, isProforma,
+    numberingPolicy, againstOrderNo, isProforma, convertProformaTdkRef,
   ]);
+
+  const handleConvertProformaFromSuccess = useCallback(async () => {
+    if (!company?.guid || !submitResult?.tdkRef) return;
+    try {
+      const prefill = buildProformaToInvoicePrefillFromForm({
+        party, ledger, date, refNo, narration, termsText,
+        items, logEntries, roundOffLedger, roundOffAmount, dueDate,
+        tdkRef: submitResult.tdkRef,
+        tallyVoucherNo: submitResult.invoiceNumber,
+      });
+      await AsyncStorage.setItem(proformaPrefillStorageKey(company.guid), JSON.stringify(prefill));
+      setShowSuccess(false);
+      router.replace('/sales/create-invoice');
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Could not start invoice', text2: err?.message || '' });
+    }
+  }, [company?.guid, submitResult, party, ledger, date, refNo, narration, termsText, items, logEntries, roundOffLedger, roundOffAmount, dueDate, router]);
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
@@ -1502,14 +1576,14 @@ export default function CreateSalesInvoiceScreen() {
                 color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
               />
             </View>
-            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : (isProforma ? 'Proforma Submitted!' : 'Invoice Submitted!')}</Text>
+            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : (isProforma ? 'Proforma Submitted!' : (convertProformaTdkRef ? 'Converted to Sales Invoice!' : 'Invoice Submitted!'))}</Text>
             <Text style={ss.sub}>
               {submitResult.isQueued
                 ? 'Entry queued. Will push to Tally when desktop reconnects.'
-                : (isProforma ? 'Proforma pushed to Tally as optional Sales.' : 'Invoice pushed to Tally successfully.')}
+                : (isProforma ? 'Proforma pushed to Tally as optional Sales.' : (convertProformaTdkRef ? 'Same Tally voucher is now a regular Sales Invoice.' : 'Invoice pushed to Tally successfully.'))}
             </Text>
             {/* TallyDekho Series: show invoice number immediately */}
-            {submitResult.numberingPolicy === 'tallydekho_series' && submitResult.invoiceNumber && (
+            {!!submitResult.invoiceNumber && (
               <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
                 <Text style={ss.refLabel}>Invoice No.</Text>
                 <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.invoiceNumber}</Text>
@@ -1608,6 +1682,17 @@ export default function CreateSalesInvoiceScreen() {
               <Text style={ss.pdfBtnTxt}>{sharePdfLoading ? 'PDF is creating...' : 'Share PDF'}</Text>
             </TouchableOpacity>
 
+            {isProforma && !convertProformaTdkRef && (
+              <TouchableOpacity
+                style={ss.convertBtn}
+                activeOpacity={0.85}
+                onPress={handleConvertProformaFromSuccess}
+              >
+                <Ionicons name="repeat-outline" size={18} color={COLORS.white} />
+                <Text style={ss.convertBtnTxt}>Convert to Sales Invoice</Text>
+              </TouchableOpacity>
+            )}
+
             {/* Done — navigates away without waiting for Tally */}
             <TouchableOpacity style={ss.doneBtn} activeOpacity={0.85} onPress={() => {
               setShowSuccess(false);
@@ -1640,9 +1725,15 @@ export default function CreateSalesInvoiceScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>{isProforma ? 'Proforma Invoice' : 'Sales Invoice'}</Text>
-          <Text style={s.headerSub}>{isProforma ? 'Always optional' : (invoiceNo || 'INV-Auto')}</Text>
+          <Text style={s.headerSub}>
+            {isProforma
+              ? 'Always optional'
+              : (convertProformaTdkRef
+                ? (convertTallyVoucherNo || 'From Proforma')
+                : (invoiceNo || 'INV-Auto'))}
+          </Text>
         </View>
-        {!isProforma && <RegularOptionalToggle value={entryType} onChange={setEntryType} />}
+        {!isProforma && !convertProformaTdkRef && <RegularOptionalToggle value={entryType} onChange={setEntryType} />}
       </View>
 
       <StepIndicator step={step} />
@@ -2534,6 +2625,8 @@ const ss = StyleSheet.create({
   previewBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.brandPrimary },
   pdfBtn: { flexDirection: 'row', gap: 8, backgroundColor: COLORS.brandPrimary, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, width: '100%', justifyContent: 'center', alignItems: 'center' },
   pdfBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+  convertBtn: { flexDirection: 'row', gap: 8, backgroundColor: COLORS.brandPrimary, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, width: '100%', justifyContent: 'center', alignItems: 'center' },
+  convertBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
   waBtn: { flexDirection: 'row', gap: 8, backgroundColor: '#25D366', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, width: '100%', justifyContent: 'center', alignItems: 'center' },
   waBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
   irnBtn: { flexDirection: 'row', gap: 8, backgroundColor: COLORS.info, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, width: '100%', justifyContent: 'center', alignItems: 'center' },

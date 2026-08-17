@@ -10,18 +10,23 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, ActivityIndicator, StyleSheet, TouchableOpacity, Alert,
+  View, Text, ActivityIndicator, StyleSheet, TouchableOpacity,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context'; // used for loading/error states only
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { getInvoicePreview, convertProformaInvoice } from '../../src/services/api';
+import { getInvoicePreview } from '../../src/services/api';
 import DocumentPreviewPage from '../../src/components/document/DocumentPreviewPage';
 import { VoucherDocument } from '../../src/types/document';
 import { getSocket } from '../../src/services/socketService';
+import {
+  buildProformaToInvoicePrefillFromPreview,
+  proformaPrefillStorageKey,
+} from '../../src/utils/proformaToInvoicePrefill';
 
 // Map backend response to VoucherDocument
 function mapToVoucherDocument(data: any): VoucherDocument {
@@ -89,6 +94,7 @@ export default function InvoicePreviewScreen() {
   const [postingTag, setPostingTag] = useState('Not Posted');
   const [canConvertProforma, setCanConvertProforma] = useState(false);
   const [converting, setConverting] = useState(false);
+  const [rawData, setRawData] = useState<any>(null);
 
   const fetchPreview = useCallback(async () => {
     if (!tdkRef || !company?.guid) return;
@@ -98,6 +104,7 @@ export default function InvoicePreviewScreen() {
       const res = await getInvoicePreview(tdkRef, company.guid);
       if (res?.status && res?.data) {
         setDoc(mapToVoucherDocument(res.data));
+        setRawData(res.data);
         setIsProvisional(res.data.isProvisional ?? false);
         setPostingTag(res.data.postingTag || 'Not Posted');
         setCanConvertProforma(!!res.data.canConvertProforma);
@@ -112,35 +119,17 @@ export default function InvoicePreviewScreen() {
   }, [tdkRef, company?.guid]);
 
   const handleConvertProforma = useCallback(async () => {
-    if (!tdkRef || !company?.guid) return;
-    Alert.alert(
-      'Convert to Invoice',
-      'This will post the same Tally voucher as a regular Sales Invoice (no longer optional).',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Convert',
-          onPress: async () => {
-            setConverting(true);
-            try {
-              const res: any = await convertProformaInvoice({
-                companyGuid: company.guid,
-                companyName: company.name,
-                tdkRef,
-              });
-              if (!res?.status) throw new Error(res?.message || 'Convert failed');
-              Toast.show({ type: 'success', text1: 'Converted', text2: res.message || 'Now a Sales Invoice' });
-              await fetchPreview();
-            } catch (e: any) {
-              Toast.show({ type: 'error', text1: 'Convert failed', text2: e?.message || 'Try again after sync.' });
-            } finally {
-              setConverting(false);
-            }
-          },
-        },
-      ]
-    );
-  }, [tdkRef, company?.guid, company?.name, fetchPreview]);
+    if (!tdkRef || !company?.guid || !rawData) return;
+    setConverting(true);
+    try {
+      const prefill = buildProformaToInvoicePrefillFromPreview(rawData, tdkRef);
+      await AsyncStorage.setItem(proformaPrefillStorageKey(company.guid), JSON.stringify(prefill));
+      router.replace('/sales/create-invoice');
+    } catch (e: any) {
+      Toast.show({ type: 'error', text1: 'Could not start invoice', text2: e?.message || '' });
+      setConverting(false);
+    }
+  }, [tdkRef, company?.guid, rawData, router]);
 
   useEffect(() => { fetchPreview(); }, [fetchPreview]);
 
@@ -217,7 +206,7 @@ export default function InvoicePreviewScreen() {
             {converting
               ? <ActivityIndicator size="small" color={COLORS.white} />
               : <Ionicons name="repeat-outline" size={16} color={COLORS.white} />}
-            <Text style={s.convertBtnTxt}>{converting ? 'Converting…' : 'Convert to Sales Invoice'}</Text>
+            <Text style={s.convertBtnTxt}>{converting ? 'Starting invoice...' : 'Convert to Sales Invoice'}</Text>
           </TouchableOpacity>
         </SafeAreaView>
       )}

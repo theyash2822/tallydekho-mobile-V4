@@ -1,3 +1,13 @@
+## [2026-08-17] Proforma convert opens Sales Invoice form
+
+### Changed
+- Convert (preview, My Entries, Proforma success) opens **Create Invoice** with Proforma data filled in
+- Submit **Alters the same Tally voucher** (optional → regular) — no second invoice
+- Convert API accepts edited items/taxes/party/amount from the form
+- Draft Resume banner is skipped when a Proforma-convert prefill is present (avoids overlaying an old invoice draft onto the Alter)
+
+---
+
 ## [2026-08-17] Proforma UX polish
 
 ### Fixed
