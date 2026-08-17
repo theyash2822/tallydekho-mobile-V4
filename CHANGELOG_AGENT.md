@@ -1,3 +1,11 @@
+## [2026-08-17] Proforma XML + My Entries after convert
+
+### Fixed
+- Converted Proforma in My Entries shows **Sales** + **From Proforma** (not Proforma Invoice title)
+- Submit payload includes item **unit** for Tally qty/rate
+
+---
+
 ## [2026-08-17] Proforma convert opens Sales Invoice form
 
 ### Changed

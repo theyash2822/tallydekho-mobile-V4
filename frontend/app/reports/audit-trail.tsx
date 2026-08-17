@@ -131,6 +131,16 @@ const mapVoucherType = (raw: string): Exclude<VoucherType, 'ALL'> => {
   return 'Journal';
 };
 
+const isConvertedProformaRow = (r: any) => {
+  const appType = String(r.app_voucher_type || r.voucher_type || '').toLowerCase();
+  const ref = String(r.tdk_reference_no || '');
+  const isPf = appType.includes('proforma') || ref.startsWith('TDK-PRF-');
+  return isPf && (r.conversion_status === 'converted' || r.current_entry_type === 'regular');
+};
+
+const isProformaOrigin = (entry: { type?: string; tdkRef?: string }) =>
+  entry.type === 'Proforma Invoice' || (entry.tdkRef || '').startsWith('TDK-PRF-');
+
 const mapApiRow = (r: any, fmt: (n: number) => string = (n) => String(n)): VoucherEntry => ({
   // Prefer TDK ref + DB id — vouchers.guid alone can repeat when my-entries JOIN fans out
   // (e.g. Journal #1 vs Payment #1 same day under loose voucher_type match).
@@ -144,7 +154,7 @@ const mapApiRow = (r: any, fmt: (n: number) => string = (n) => String(n)): Vouch
   ref: r.voucher_number || '',
   date: r.date || '',
   month: formatMonth(r.date),
-  type: mapVoucherType(r.app_voucher_type || r.voucher_type),
+  type: isConvertedProformaRow(r) ? 'Sales' : mapVoucherType(r.app_voucher_type || r.voucher_type),
   party: r.party_name || '',
   description: r.voucher_type || '',
   amount: fmt(Math.abs(+r.amount || 0)),
@@ -375,7 +385,7 @@ export default function AuditTrailScreen() {
     ref:  p.voucher_number || '',
     date: p.date || '',
     month: formatMonth(p.date),
-    type: mapVoucherType(WQ_ENTRY_LABEL[p.app_voucher_type || p.voucher_type || ''] || p.app_voucher_type || p.voucher_type || 'Journal'),
+    type: isConvertedProformaRow(p) ? 'Sales' : mapVoucherType(WQ_ENTRY_LABEL[p.app_voucher_type || p.voucher_type || ''] || p.app_voucher_type || p.voucher_type || 'Journal'),
     // For stock edits: show item name as party, changes as description
     party: p.voucher_type === 'alter_stock_item'
       ? (p.party_name || '')
@@ -1097,12 +1107,12 @@ export default function AuditTrailScreen() {
                                       <Text style={[lb.badgeTxt, { color: COLORS.positive }]}>Regular</Text>
                                     </View>
                                   )}
-                                  {!entry.isMaster && entry.type === 'Proforma Invoice' && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
+                                  {!entry.isMaster && isProformaOrigin(entry) && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
                                     <View style={[lb.badge, lb.origOptional]}>
                                       <Text style={[lb.badgeTxt, { color: COLORS.info }]}>From Proforma</Text>
                                     </View>
                                   )}
-                                  {!entry.isMaster && entry.type !== 'Proforma Invoice' && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
+                                  {!entry.isMaster && !isProformaOrigin(entry) && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
                                     <View style={[lb.badge, lb.origOptional]}>
                                       <Text style={[lb.badgeTxt, { color: COLORS.info }]}>Orig. Optional</Text>
                                     </View>
@@ -1157,10 +1167,10 @@ export default function AuditTrailScreen() {
                               {activeTab === 'myentries' && entry.type !== 'Proforma Invoice' && entry.currentEntryType === 'optional' && entry.conversionStatus !== 'converted' && (
                                 <Text style={{ fontSize: 9, color: AMBER, fontWeight: '700' }}>OPTIONAL VOUCHER NO.</Text>
                               )}
-                              {activeTab === 'myentries' && entry.type === 'Proforma Invoice' && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
+                              {activeTab === 'myentries' && isProformaOrigin(entry) && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
                                 <Text style={{ fontSize: 9, color: COLORS.info, fontWeight: '700' }}>CONVERTED FROM PROFORMA</Text>
                               )}
-                              {activeTab === 'myentries' && entry.type !== 'Proforma Invoice' && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
+                              {activeTab === 'myentries' && !isProformaOrigin(entry) && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
                                 <Text style={{ fontSize: 9, color: COLORS.info, fontWeight: '700' }}>ORIG. ENTRY TYPE: OPTIONAL</Text>
                               )}
                               <Text style={s.entryDateTxt}>{entry.date}</Text>
@@ -1174,7 +1184,7 @@ export default function AuditTrailScreen() {
                               <Text style={[s.drCrLbl, { color: entry.isCredit ? COLORS.negative : COLORS.positive }]}>
                                 {entry.isCredit ? 'Cr' : 'Dr'}
                               </Text>
-                              {activeTab === 'myentries' && entry.type === 'Proforma Invoice' && entry.tdkRef && !multiSelect ? (
+                              {activeTab === 'myentries' && isProformaOrigin(entry) && entry.tdkRef && !multiSelect ? (
                                 <View style={{ marginTop: 6, gap: 4, alignItems: 'flex-end' }}>
                                   <TouchableOpacity
                                     style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: COLORS.brandPrimary + '14' }}

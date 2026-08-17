@@ -1469,6 +1469,7 @@ export default function CreateSalesInvoiceScreen() {
           amount: calcItem(item).taxable,
           salesLedger: ledger,
           godown: item.warehouse || warehouses[0]?.name || 'Main Location',
+          unit: item.unit || '',
           discountType: item.discountType,
           discount: parseFloat(item.discount) || 0,
           taxEntries: item.taxEntries,
