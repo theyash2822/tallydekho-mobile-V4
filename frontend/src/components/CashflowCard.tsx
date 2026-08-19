@@ -21,8 +21,8 @@ interface CashflowCardProps {
   totalExpense?: number;
 }
 
-const RADIUS_SIZE = 80;
-const STROKE_W = 18;
+const RADIUS_SIZE = 62;
+const STROKE_W = 12;
 const SIZE = (RADIUS_SIZE + STROKE_W) * 2 + 4;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS_SIZE;
 const CENTER = SIZE / 2;
@@ -56,77 +56,77 @@ const CashflowCard: React.FC<CashflowCardProps> = ({
         <Text style={styles.tapHint}>Tap ring to see breakdown</Text>
       </View>
 
-      {/* Ring Chart — tap to toggle income/expense tooltip */}
-      <View style={styles.chartWrap}>
-        <TouchableOpacity
-          activeOpacity={0.85}
-          onPress={() => setShowTooltip(p => !p)}
-          style={styles.svgContainer}
-        >
-          <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
-            {/* Outcome background track */}
-            <Circle
-              cx={CENTER}
-              cy={CENTER}
-              r={RADIUS_SIZE}
-              fill="none"
-              stroke={RING_OUTCOME}
-              strokeWidth={STROKE_W}
-            />
-            {/* Income arc */}
-            <Circle
-              cx={CENTER}
-              cy={CENTER}
-              r={RADIUS_SIZE}
-              fill="none"
-              stroke={RING_INCOME}
-              strokeWidth={STROKE_W}
-              strokeDasharray={`${incomeArc} ${CIRCUMFERENCE}`}
-              strokeLinecap="round"
-              transform={`rotate(-90 ${CENTER} ${CENTER})`}
-            />
-          </Svg>
-
-          {/* Center Label */}
-          <View style={styles.centerLabel}>
-            {showTooltip ? (
-              <>
-                <View style={styles.tooltipRow}>
-                  <View style={[styles.tooltipDot, { backgroundColor: RING_INCOME }]} />
-                  <View>
-                    <Text style={styles.tooltipLabel}>Income</Text>
-                    <Text style={styles.tooltipValue}>{incomeDisplay}</Text>
-                  </View>
-                </View>
-                <View style={styles.tooltipDivider} />
-                <View style={styles.tooltipRow}>
-                  <View style={[styles.tooltipDot, { backgroundColor: '#A0A0A0' }]} />
-                  <View>
-                    <Text style={styles.tooltipLabel}>Expense</Text>
-                    <Text style={styles.tooltipValue}>{expenseDisplay}</Text>
-                  </View>
-                </View>
-              </>
-            ) : (
-              <>
-                <Text style={styles.netCashLabel}>Net Cash</Text>
-                <Text style={styles.netCashValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>₹{netCash.toLocaleString('en-IN')}</Text>
-                <Text style={styles.updatedText}>Updated {updatedAt}</Text>
-              </>
-            )}
-          </View>
-        </TouchableOpacity>
-      </View>
-
-      {/* Legend */}
-      <View style={styles.legend}>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendLine, { backgroundColor: RING_OUTCOME, borderWidth: 1, borderColor: COLORS.borderDefault }]} />
-          <Text style={styles.legendText}>Outcome</Text>
+      {/* Compact split layout: ring left, information right */}
+      <View style={styles.contentRow}>
+        <View style={styles.chartWrap}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => setShowTooltip(p => !p)}
+            style={styles.svgContainer}
+          >
+            <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
+              {/* Outcome background track */}
+              <Circle
+                cx={CENTER}
+                cy={CENTER}
+                r={RADIUS_SIZE}
+                fill="none"
+                stroke={RING_OUTCOME}
+                strokeWidth={STROKE_W}
+              />
+              {/* Income arc */}
+              <Circle
+                cx={CENTER}
+                cy={CENTER}
+                r={RADIUS_SIZE}
+                fill="none"
+                stroke={RING_INCOME}
+                strokeWidth={STROKE_W}
+                strokeDasharray={`${incomeArc} ${CIRCUMFERENCE}`}
+                strokeLinecap="round"
+                transform={`rotate(-90 ${CENTER} ${CENTER})`}
+              />
+            </Svg>
+          </TouchableOpacity>
         </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendLine, { backgroundColor: RING_INCOME }]} />
-          <Text style={styles.legendText}>Income</Text>
+
+        <View style={styles.infoWrap}>
+          <Text style={styles.netCashLabel}>Net Cash</Text>
+          <Text style={styles.netCashValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>₹{netCash.toLocaleString('en-IN')}</Text>
+          <Text style={styles.updatedText}>Updated {updatedAt}</Text>
+
+          {/* Legend */}
+          <View style={styles.legend}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendLine, { backgroundColor: RING_OUTCOME, borderWidth: 1, borderColor: COLORS.borderDefault }]} />
+              <Text style={styles.legendText}>Outcome</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendLine, { backgroundColor: RING_INCOME }]} />
+              <Text style={styles.legendText}>Income</Text>
+            </View>
+          </View>
+
+          {/* Breakdown appears on tap; information remains same */}
+          {showTooltip && (
+            <View style={styles.tooltipCard}>
+              <View style={styles.tooltipRow}>
+                <View style={[styles.tooltipDot, { backgroundColor: RING_INCOME }]} />
+                <View>
+                  <Text style={styles.tooltipLabel}>Income</Text>
+                  <Text style={styles.tooltipValue}>{incomeDisplay}</Text>
+                </View>
+              </View>
+              <View style={styles.tooltipDivider} />
+              <View style={styles.tooltipRow}>
+                <View style={[styles.tooltipDot, { backgroundColor: '#A0A0A0' }]} />
+                <View>
+                  <Text style={styles.tooltipLabel}>Expense</Text>
+                  <Text style={styles.tooltipValue}>{expenseDisplay}</Text>
+                </View>
+              </View>
+            </View>
+          )}
         </View>
       </View>
 
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   iconWrap: {
     width: 28, height: 28, borderRadius: 14,
@@ -179,37 +179,33 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: TYPOGRAPHY.md, fontWeight: '600', color: COLORS.textPrimary },
   tapHint: { flex: 1, textAlign: 'right', fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  contentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   chartWrap: {
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'center',
   },
   svgContainer: {
     width: SIZE,
     height: SIZE,
     position: 'relative',
   },
-  centerLabel: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 28,
+  infoWrap: {
+    flex: 1,
+    paddingLeft: 10,
   },
   netCashLabel: {
     fontSize: TYPOGRAPHY.sm,
     color: COLORS.textSecondary,
-    fontWeight: '400',
-    textAlign: 'center',
+    fontWeight: '400'
   },
   netCashValue: {
-    fontSize: TYPOGRAPHY.xxl,
+    fontSize: TYPOGRAPHY.xl,
     fontWeight: '700',
     color: COLORS.textPrimary,
     letterSpacing: -0.5,
-    textAlign: 'center',
   },
   updatedText: {
     fontSize: TYPOGRAPHY.xs,
@@ -218,9 +214,9 @@ const styles = StyleSheet.create({
   },
   legend: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 24,
-    marginBottom: 12,
+    justifyContent: 'flex-start',
+    gap: 16,
+    marginTop: 8,
   },
   legendItem: {
     flexDirection: 'row',
@@ -239,7 +235,7 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: COLORS.borderDefault,
-    marginBottom: 12,
+    marginVertical: 10,
   },
   metricsGrid: {
     flexDirection: 'row',
@@ -247,7 +243,7 @@ const styles = StyleSheet.create({
   },
   metricCell: {
     width: '50%',
-    padding: 10,
+    padding: 8,
   },
   metricBorderRight: {
     borderRightWidth: 1,
@@ -270,7 +266,7 @@ const styles = StyleSheet.create({
   // ── Tooltip (tap to reveal) ─────────────────────────────────────────────────
   tooltipRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 4,
+    paddingVertical: 3,
   },
   tooltipDot: {
     width: 10, height: 10, borderRadius: 5,
@@ -283,6 +279,15 @@ const styles = StyleSheet.create({
   },
   tooltipDivider: {
     height: 1, backgroundColor: COLORS.borderDefault, marginVertical: 4,
+  },
+  tooltipCard: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    backgroundColor: COLORS.pageBg,
   },
 });
 
