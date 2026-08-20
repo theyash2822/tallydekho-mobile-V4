@@ -211,6 +211,21 @@ export default function StocksDashboard() {
           <Ionicons name="chevron-forward" size={17} color={COLORS.textTertiary} />
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={s.linkRow}
+          activeOpacity={0.85}
+          onPress={() => router.push('/stocks/warehouses' as any)}
+        >
+          <View style={s.linkIcon}>
+            <Ionicons name="business-outline" size={17} color={COLORS.textSecondary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.linkTitle}>Warehouses</Text>
+            <Text style={s.linkSub}>{d.warehouses.total} storage locations</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={17} color={COLORS.textTertiary} />
+        </TouchableOpacity>
+
         {/* ── Stock Value by Category ── */}
         <View style={s.card}>
           <View style={s.cardHead}>

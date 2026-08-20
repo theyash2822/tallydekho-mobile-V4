@@ -1,0 +1,26 @@
+{
+  "summary": "Frontend-only regression verified for Stock dashboard. The new 'Warehouses' quick-link row (icon + 'Warehouses' + '5 storage locations' + chevron) is present below 'Stock Reports' and correctly navigates to /stocks/warehouses. The Warehouses screen renders correctly with header 'Warehouses', summary strip (5 / 64% / 377), and warehouse cards (Mumbai Central, Delhi Hub, Bangalore South, Chennai Port, Kolkata East) — no 'Unmatched Route'. Full regression on Stock dashboard nav targets passed: Hero→/stocks/total-stock, Movements→/stocks/fast-slow, Low-Stock→/stocks/reorder-queue, Fast-Moving→/stocks/movement-analytics, Aged Stock→/stocks/aged-items, Stock Health→/stocks/on-hand-stock, Reorder Queue strip→/stocks/reorder-queue, Stock Reports→/stocks/reports. Note: nothing to fix in this fix scope; a couple of pre-existing (unrelated) console warnings observed and captured as code-review notes.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_16.json"],
+  "action_items": [
+    "Optional: Add testID to Stock dashboard quick-link rows (e.g., testID='stock-warehouses-link', 'stock-reports-link') to remove reliance on text-based selectors in future tests.",
+    "Pre-existing (out-of-scope) console noise on Stock Reports screen: 'Unexpected text node: . A text node cannot be a child of a <View>' and deprecated 'TouchableMixin'/'shadow*'/'pointerEvents' warnings — safe to defer, but worth cleaning up in a subsequent pass."
+  ],
+  "critical_code_review_comments": [
+    "stocks.tsx: interactive tiles/rows (Hero, tiles, Stock Health card, Reorder strip, Stock Reports row, Warehouses row) lack testID attributes; consider adding for stable e2e testing.",
+    "stocks.tsx uses window/root scroll semantics fine on web, but the last quick-link row 'Warehouses' initially sits behind the bottom tab bar on a 390x844 viewport before user scrolls — content paddingBottom (110) already accounts for this, and the row scrolls into view normally with a small user scroll, so acceptable."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100%"},
+  "seed_data_creation": "None — mock-first app using MOCK_STOCK_DASHBOARD and static WAREHOUSES list.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Auth bypass: set localStorage 'auth_token'='mock_token_123' then reload; tap 'Skip' if onboarding shows; then tap bottom-tab 'Stocks'. To reach the 'Warehouses' quick-link row on 390x844 viewport, scroll the inner RN ScrollView (window.scroll doesn't scroll it) — use a JS eval that walks elements and increments scrollTop on the first overflowY:scroll/auto element. Confirmed working URLs: /stocks/warehouses, /stocks/reports, /stocks/on-hand-stock, /stocks/total-stock, /stocks/fast-slow, /stocks/reorder-queue, /stocks/movement-analytics, /stocks/aged-items.",
+  "rca_of_issue": "Original regression: replacing 'Warehouse Utilisation' card with 'Stock Health' card removed the only dashboard entry point to the Warehouses screen. Fix (already applied in stocks.tsx lines 214–227): added a compact linkRow below 'Stock Reports' that routes to /stocks/warehouses. Verified in browser — router.push('/stocks/warehouses') triggers Expo Router navigation and the target screen (warehouses.tsx) renders correctly."
+}
