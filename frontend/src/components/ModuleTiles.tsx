@@ -5,6 +5,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 import ShimmerPlaceholder from './ShimmerPlaceholder';
 
+// ── Compact large amounts so they never clip in the narrow tile ──────────────
+const compactAmount = (raw: string): string => {
+  const num = Number(String(raw).replace(/[^0-9.]/g, ''));
+  if (!isFinite(num) || num === 0) return raw;
+  if (num >= 1_00_00_000) return `₹${(num / 1_00_00_000).toFixed(2)}Cr`;
+  if (num >= 1_00_000)    return `₹${(num / 1_00_000).toFixed(2)}L`;
+  return raw; // small enough to show in full
+};
+
 // ── Per-module minimalistic color identity ──────────────────────────────────
 const IDENTITY: Record<string, { accent: string; tint: string }> = {
   sales:     { accent: COLORS.positive, tint: COLORS.positiveBg },
@@ -67,7 +76,14 @@ export default function ModuleTiles({ metrics, isLoading }: Props) {
             </View>
 
             <Text style={s.label} numberOfLines={1}>{item.label}</Text>
-            <Text style={s.amount} numberOfLines={1} adjustsFontSizeToFit>{item.amount}</Text>
+            <Text
+              style={s.amount}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              {compactAmount(item.amount)}
+            </Text>
 
             <View style={s.trendRow}>
               <Ionicons
@@ -90,6 +106,7 @@ const s = StyleSheet.create({
     gap: 10,
     paddingHorizontal: SPACING.md,
     marginTop: SPACING.md,
+    marginBottom: SPACING.md,
   },
   tile: {
     flex: 1,
