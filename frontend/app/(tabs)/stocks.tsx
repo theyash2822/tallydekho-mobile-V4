@@ -80,7 +80,7 @@ export default function StocksDashboard() {
   ];
 
   const STAT_TILES = [
-    { id: 'warehouses', label: 'Warehouses',  value: `${d.warehouses.utilization}%`, sub: `Utilisation · ${d.warehouses.total} total`, icon: 'business-outline',      accent: COLORS.info,     tint: COLORS.infoBg,     route: '/stocks/warehouses' },
+    { id: 'warehouses', label: 'Warehouses',  value: String(d.warehouses.total),     sub: 'Active locations',                           icon: 'business-outline',      accent: COLORS.info,     tint: COLORS.infoBg,     route: '/stocks/warehouses' },
     { id: 'low',        label: 'Low-Stock',   value: String(d.lowStockCount),        sub: 'Items below reorder',                        icon: 'alert-circle-outline', accent: COLORS.negative, tint: COLORS.negativeBg, route: '/stocks/reorder-queue' },
     { id: 'fast',       label: 'Fast-Moving', value: String(d.fastMovingCount),      sub: 'Active SKUs',                                icon: 'flash-outline',        accent: COLORS.positive, tint: COLORS.positiveBg, route: '/stocks/movement-analytics' },
     { id: 'aged',       label: 'Aged Stock',  value: d.agedInventory.value,          sub: `${d.agedInventory.days} days old`,           icon: 'time-outline',         accent: COLORS.warning,  tint: COLORS.warningBg,  route: '/stocks/aged-items' },
