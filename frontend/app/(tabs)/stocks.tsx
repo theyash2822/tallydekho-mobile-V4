@@ -99,14 +99,6 @@ export default function StocksDashboard() {
           <Text style={s.headerSub}>Inventory overview</Text>
         </View>
         <View style={s.headerActions}>
-          <TouchableOpacity
-            style={s.reportsBtn}
-            activeOpacity={0.85}
-            onPress={() => router.push('/stocks/reports' as any)}
-          >
-            <Ionicons name="bar-chart" size={15} color={COLORS.white} />
-            <Text style={s.reportsBtnTxt}>Reports</Text>
-          </TouchableOpacity>
           {SECONDARY_ACTIONS.map(a => (
             <TouchableOpacity
               key={a.id}
@@ -269,12 +261,6 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.3 },
   headerSub:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2, fontWeight: '500' },
   headerActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  reportsBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    height: 36, paddingHorizontal: 12, borderRadius: RADIUS.sm,
-    backgroundColor: COLORS.brandPrimary,
-  },
-  reportsBtnTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white },
   actionBtn: {
     width: 36, height: 36, borderRadius: RADIUS.sm,
     alignItems: 'center', justifyContent: 'center',
