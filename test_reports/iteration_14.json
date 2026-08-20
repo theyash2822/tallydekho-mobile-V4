@@ -1,0 +1,33 @@
+{
+  "summary": "Frontend-only test of the redesigned Stock Reports screen (/app/frontend/app/stocks/reports.tsx). All four sections render correctly: (1) summary strip (₹13.0L / 1,240 SKUs / 4.2x), (2) Stock Value Trend SVG area+line chart with +6.4% pill and Jan..Jun labels, (3) Value by Category SVG donut with ₹13.00L center and legend (Electronics 40% / Apparel 26% / Grocery 20% / Hardware 14%), and (4) All Reports list with 7 links. Verified SVG rendering (2 <svg>, 2 <path>, 11 <circle> nodes). All 7 report links navigate to their correct existing routes with NO 'Unmatched Route'. Header back chevron correctly returns from /stocks/reports to /stocks. No pageerrors and no red-screen. Two console warnings are non-blocking react-native-web polyfill noise (deprecated `pointerEvents` prop and `transform-origin` from react-native-svg <G rotation origin=...>) — reports.tsx itself uses `pointerEvents=\"none\"` on the donut center overlay.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/stocks/reports", "issues": ["Minor: reports.tsx uses `<View pointerEvents=\"none\">` prop (line 167) which is deprecated on RN-web — should be moved to `style={{ pointerEvents: 'none' }}`. Not blocking rendering."]}
+    ],
+    "react_native_issues": [
+      {"component": "reports.tsx StockReportsScreen", "issue": "Deprecated `pointerEvents` prop on <View> — RN-web warns to move it into style. Reference: /app/frontend/app/stocks/reports.tsx:167"},
+      {"component": "reports.tsx Donut (react-native-svg)", "issue": "Console warning on web: 'Invalid DOM property transform-origin. Did you mean transformOrigin?' emitted by <G rotation={-90} origin=\"...\"/> in Donut. Non-blocking (donut still renders correctly). Reference: /app/frontend/app/stocks/reports.tsx:78"}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Optional / low-priority) Migrate `pointerEvents=\"none\"` to `style={{ pointerEvents: 'none' }}` on the donut center overlay View in /app/frontend/app/stocks/reports.tsx:167 to silence the RN-web deprecation warning.",
+    "(Optional) The `transform-origin` warning comes from react-native-svg <G rotation origin=.../> and is a known library-level RN-web quirk — safe to ignore or filed as a note."
+  ],
+  "critical_code_review_comments": [
+    "Divisions by zero are guarded (`|| 1` for compTotal, range), good.",
+    "TrendAreaChart width uses `SW - SPACING.md*2 - SPACING.md*2` — this correctly accounts for outer scroll padding + card padding; renders full-bleed and visible.",
+    "All 7 REPORTS routes match existing screen files under /app/frontend/app/stocks/ — verified against the directory listing (stock-ledger, valuation-summary, expiry-schedule, fast-slow, transfer-history, stock-snapshot, negative-stock).",
+    "Text-transform 'uppercase' on 'All Reports' label — visible on screen as 'ALL REPORTS'."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100% (4/4 test scenarios pass)"},
+  "seed_data_creation": "None. Uses static MOCK_STOCK_REPORTS in /app/frontend/src/data/mockData.ts.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "To reach the Stock Reports screen: 1) set localStorage.auth_token='mock_token_123' and reload, 2) tap 'Skip' on onboarding, 3) tap 'Stocks' bottom tab, 4) tap 'Stock Reports' row. NOTE: Do NOT use page.goto() directly to /stocks/reports — the RootLayout uses a module-level `_onboardingShownThisSession` flag that resets on every full page reload, causing a redirect to /onboarding. Always dismiss onboarding first, then SPA-navigate via tab taps.",
+  "rca_of_issue": "N/A — no bugs found. All four review requirements verified: (1) all four sections render, (2) all 7 links land on real screens, (3) header back returns to /stocks, (4) SVG charts render (2 svg / 2 path / 11 circle nodes visible in DOM & screenshots)."
+}

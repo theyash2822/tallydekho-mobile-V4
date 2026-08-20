@@ -38,6 +38,32 @@ export const MOCK_STOCK_DASHBOARD = {
   ],
 };
 
+export const MOCK_STOCK_REPORTS = {
+  totalValue: '₹13.0L',
+  totalSkus: '1,240',
+  turnover: '4.2x',
+  currentValueNum: 1300000,
+  valueTrend: 6.4,
+  valueTrendPositive: true,
+  // stock value over last 6 months (in ₹ lakhs)
+  trend: [
+    { label: 'Jan', value: 9.8 },
+    { label: 'Feb', value: 10.4 },
+    { label: 'Mar', value: 11.1 },
+    { label: 'Apr', value: 10.6 },
+    { label: 'May', value: 12.2 },
+    { label: 'Jun', value: 13.0 },
+  ],
+  // value by category (monochrome ramp)
+  composition: [
+    { label: 'Electronics', value: 520000, color: '#1A1A1A' },
+    { label: 'Apparel',     value: 340000, color: '#6B6A66' },
+    { label: 'Grocery',     value: 260000, color: '#A6A49F' },
+    { label: 'Hardware',    value: 180000, color: '#D4D3CE' },
+  ],
+};
+
+
 export const MOCK_KPI_STRIP = [
   { id: 'cash', label: 'Cash In Hand', amount: '₹10,00,000', icon: 'cash-outline', route: '/kpi/cash-in-hand' },
   { id: 'bank', label: 'Bank Balance', amount: '₹8,00,000', icon: 'card-outline', route: '/kpi/bank-balance' },
