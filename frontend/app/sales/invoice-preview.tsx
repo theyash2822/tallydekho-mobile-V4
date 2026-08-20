@@ -27,60 +27,7 @@ import {
   buildProformaToInvoicePrefillFromPreview,
   proformaPrefillStorageKey,
 } from '../../src/utils/proformaToInvoicePrefill';
-
-// Map backend response to VoucherDocument
-function mapToVoucherDocument(data: any): VoucherDocument {
-  const isProforma = data.documentType === 'proforma_invoice';
-  const converted = data.conversionStatus === 'converted' || data.currentEntryType === 'regular';
-  const titleKind = isProforma && !converted ? 'Proforma Invoice' : 'Invoice';
-  return {
-    id: data.tdkRef || data.invoiceUuid || String(Date.now()),
-    documentType: data.documentType || 'sales_invoice',
-    documentTitle: `${titleKind} - ${data.documentNumber || data.tdkRef || ''}`,
-    documentNumber: data.documentNumber || 'Pending from TallyPrime',
-    date: data.documentDate || '',
-    company: {
-      name: data.company?.name || '',
-      address: data.company?.address || '',
-      gstin: data.company?.gstin || '',
-      pan: data.company?.pan || '',
-      phone: data.company?.phone || '',
-      email: data.company?.email || '',
-      state: data.company?.state || '',
-    },
-    party: {
-      name: data.party?.name || '',
-      address: data.party?.address || '',
-      gstin: data.party?.gstin || '',
-      pan: data.party?.pan || '',
-      phone: data.party?.phone || '',
-    },
-    items: (data.items || []).map((item: any, idx: number) => ({
-      id: item.id || String(idx),
-      name: item.name || '',
-      qty: parseFloat(item.qty) || 0,
-      unit: item.unit || 'Nos',
-      rate: parseFloat(item.rate) || 0,
-      discount: parseFloat(item.discount) || 0,
-      taxAmount: parseFloat(item.taxAmount) || 0,
-      amount: parseFloat(item.amount) || 0,
-    })),
-    taxes: (data.taxLines || []).map((t: any) => ({
-      description: t.description || 'Tax',
-      rate: parseFloat(t.rate) || 0,
-      taxableAmount: parseFloat(t.taxableAmount) || 0,
-      total: parseFloat(t.total) || 0,
-    })),
-    totals: {
-      subtotal: parseFloat(data.totals?.subtotal) || 0,
-      taxTotal: parseFloat(data.totals?.taxTotal) || 0,
-      total: parseFloat(data.totals?.grandTotal || data.totals?.total) || 0,
-      roundOff: parseFloat(data.totals?.roundOff) || 0,
-    },
-    narration: data.narration || '',
-    dispatchDetails: data.dispatchDetails || data.dispatch_details || undefined,
-  };
-}
+import { toVoucherDocument } from '../../src/utils/voucherDocumentAdapter';
 
 export default function InvoicePreviewScreen() {
   const { tdkRef } = useLocalSearchParams<{ tdkRef: string }>();
@@ -103,7 +50,7 @@ export default function InvoicePreviewScreen() {
       setError(null);
       const res = await getInvoicePreview(tdkRef, company.guid);
       if (res?.status && res?.data) {
-        setDoc(mapToVoucherDocument(res.data));
+        setDoc(toVoucherDocument(res.data));
         setRawData(res.data);
         setIsProvisional(res.data.isProvisional ?? false);
         setPostingTag(res.data.postingTag || 'Not Posted');

@@ -13,6 +13,7 @@ import Toast from 'react-native-toast-message';
 import { useAuth } from '../../src/context/AuthContext';
 import { getEWBList, getEWBPending, generateEWayBill } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
+import { shareCompliancePdfSafely } from '../../src/utils/voucherPdf';
 
 const EWB_COLORS: Record<string, string> = {
   generated: COLORS.positive,
@@ -31,6 +32,7 @@ export default function EWayBillScreen() {
   const [notApplicableMsg, setNotApplicableMsg] = useState('');
   const [apiError, setApiError] = useState<string | null>(null);
   const [generatingIds, setGeneratingIds] = useState<string[]>([]);
+  const [sharingId, setSharingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!companyGuid) return;
@@ -53,6 +55,16 @@ export default function EWayBillScreen() {
         amount:  formatAmount(Math.abs(+(r.amount) || 0)),
         status:  forcedStatus || (r.ewb_number ? 'generated' : 'pending'),
         ewb_no:  r.ewb_number    || null,
+        // Kept raw for the e-Way Bill PDF sheet.
+        voucherType:   r.voucher_type || '',
+        amountValue:   Math.abs(+(r.amount) || 0),
+        ewbDate:       r.ewb_date       || '',
+        validTill:     r.valid_till     || '',
+        vehicleNo:     r.vehicle_no     || '',
+        transporterId: r.transporter_id || '',
+        distanceKm:    r.distance_km    || '',
+        supplyType:    r.supply_type    || '',
+        subSupplyType: r.sub_supply_type || '',
       });
       const generatedBills = generatedRows.map(r => mapRow(r, 'generated'));
       const pendingBills   = pendingRows.map(r => mapRow(r, 'pending'));
@@ -97,6 +109,30 @@ export default function EWayBillScreen() {
     } finally {
       setGeneratingIds(prev => prev.filter(id => id !== item.id));
     }
+  };
+
+  const handleSharePdf = async (bill: any) => {
+    setSharingId(bill.id);
+    await shareCompliancePdfSafely('ewaybill', {
+      ewbNo: bill.ewb_no,
+      ewbDate: bill.ewbDate || bill.date,
+      validTill: bill.validTill,
+      vehicleNo: bill.vehicleNo,
+      transporterId: bill.transporterId,
+      distanceKm: bill.distanceKm,
+      supplyType: bill.supplyType,
+      subSupplyType: bill.subSupplyType,
+      voucherNumber: bill.id,
+      voucherType: bill.voucherType,
+      date: bill.date,
+      partyName: bill.company,
+      amount: bill.amountValue,
+    }, {
+      name: company?.name,
+      address: (company as any)?.address,
+      gstin: (company as any)?.gstin,
+    }, { onBeforeShare: () => setSharingId(null) });
+    setSharingId(null);
   };
 
   const allBills = liveBills;
@@ -292,6 +328,22 @@ export default function EWayBillScreen() {
                     <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7}>
                       <Ionicons name="calendar-outline" size={14} color={COLORS.info} />
                       <Text style={[styles.actionText, { color: COLORS.info }]}>Extend Validity</Text>
+                    </TouchableOpacity>
+                    <View style={styles.actionDivider} />
+                    <TouchableOpacity
+                      style={styles.actionBtn}
+                      activeOpacity={0.7}
+                      onPress={() => handleSharePdf(bill)}
+                      disabled={sharingId === bill.id}
+                    >
+                      {sharingId === bill.id ? (
+                        <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+                      ) : (
+                        <>
+                          <Ionicons name="share-outline" size={14} color={COLORS.brandPrimary} />
+                          <Text style={[styles.actionText, { color: COLORS.brandPrimary }]}>Share PDF</Text>
+                        </>
+                      )}
                     </TouchableOpacity>
                   </View>
                 )}

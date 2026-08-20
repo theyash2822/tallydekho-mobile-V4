@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { socketService } from '../services/socketService';
+import { clearVoucherConfigCache } from '../utils/voucherPdf';
 
 // ── Storage helpers ──────────────────────────────────────────
 const storeToken = async (token: string) => {
@@ -144,6 +145,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async () => {
     socketService.disconnect();
     await removeToken();
+    // The PDF format choice is user-level and cached in memory, so it has to go
+    // or the next account inherits this one's layouts.
+    clearVoucherConfigCache();
     setIsAuthenticated(false);
     setIsPairedState(false);
     setCompanyState(null);

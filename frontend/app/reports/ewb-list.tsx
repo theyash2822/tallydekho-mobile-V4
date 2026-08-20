@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Share, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Share, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -9,6 +9,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { fyInfoToParam } from '../../src/context/AuthContext';
 import { getEWBList, getEWBPending } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
+import { shareCompliancePdfSafely } from '../../src/utils/voucherPdf';
 
 // Data loaded from API
 
@@ -31,6 +32,7 @@ export default function EWBListScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [fromDate, setFromDate] = useState(selectedFY?.startDate || '');
   const [toDate,   setToDate]   = useState(selectedFY?.endDate   || '');
+  const [sharingId, setSharingId] = useState<string | null>(null);
 
   // Always sync dates when selectedFY changes
   useEffect(() => {
@@ -54,6 +56,16 @@ export default function EWBListScreen() {
       date: item.date || '',
       amount: Math.abs(+item.amount || 0).toLocaleString('en-IN'),
       status: item.ewb_status || defaultStatus,
+      // Kept raw for the e-Way Bill PDF sheet.
+      voucherNumber: item.voucher_number || item.voucher_no || '',
+      amountValue: Math.abs(+item.amount || 0),
+      ewbDate: item.ewb_date || '',
+      validTill: item.valid_till || '',
+      vehicleNo: item.vehicle_no || '',
+      transporterId: item.transporter_id || '',
+      distanceKm: item.distance_km || '',
+      supplyType: item.supply_type || '',
+      subSupplyType: item.sub_supply_type || '',
     });
     Promise.all([
       getEWBList(company.guid, dateParams).catch(() => ({ data: [] })),
@@ -71,6 +83,31 @@ export default function EWBListScreen() {
     setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
 
   const cancelSelect = () => setSelected([]);
+
+  const handleSharePdf = async (item: any) => {
+    setSharingId(item.id);
+    await shareCompliancePdfSafely('ewaybill', {
+      ewbNo: item.ewbNo,
+      ewbDate: item.ewbDate || item.date,
+      validTill: item.validTill,
+      vehicleNo: item.vehicleNo,
+      transporterId: item.transporterId,
+      distanceKm: item.distanceKm,
+      supplyType: item.supplyType,
+      subSupplyType: item.subSupplyType,
+      voucherNumber: item.voucherNumber,
+      voucherType: item.type,
+      date: item.date,
+      partyName: item.party,
+      shipTo: item.route,
+      amount: item.amountValue,
+    }, {
+      name: company?.name,
+      address: (company as any)?.address,
+      gstin: (company as any)?.gstin,
+    }, { onBeforeShare: () => setSharingId(null) });
+    setSharingId(null);
+  };
 
   const handleShare = async () => {
     const lines = ewbData
@@ -170,6 +207,24 @@ export default function EWBListScreen() {
                 </View>
                 <Text style={s.amount}>{'\u20b9'}{item.amount}</Text>
               </View>
+
+              {!!item.ewbNo && (
+                <TouchableOpacity
+                  style={s.rowShareBtn}
+                  onPress={() => handleSharePdf(item)}
+                  activeOpacity={0.85}
+                  disabled={sharingId === item.id}
+                >
+                  {sharingId === item.id ? (
+                    <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+                  ) : (
+                    <>
+                      <Ionicons name="share-outline" size={14} color={COLORS.brandPrimary} />
+                      <Text style={s.rowShareTxt}>Share PDF</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
             </TouchableOpacity>
           );
         })}
@@ -278,4 +333,12 @@ const s = StyleSheet.create({
     paddingHorizontal: 18, paddingVertical: 12, borderRadius: RADIUS.md,
   },
   shareActionTxt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
+
+  rowShareBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center',
+    alignSelf: 'flex-start', minWidth: 44,
+    borderWidth: 1, borderColor: COLORS.brandPrimary, borderRadius: RADIUS.md,
+    paddingVertical: 8, paddingHorizontal: 14,
+  },
+  rowShareTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.brandPrimary },
 });

@@ -10,6 +10,7 @@ import { fyInfoToParam } from '../../src/context/AuthContext';
 import { getEInvoiceGenerated, getEInvoicePending, generateEInvoice } from '../../src/services/api';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useSettings } from '../../src/context/SettingsContext';
+import { shareCompliancePdfSafely } from '../../src/utils/voucherPdf';
 
 // Data loaded from API
 
@@ -33,6 +34,7 @@ export default function EInvoiceListScreen() {
   const [toDate,         setToDate]         = useState(selectedFY?.endDate   || '');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [generatingIds,  setGeneratingIds]  = useState<string[]>([]);
+  const [sharingId,      setSharingId]      = useState<string | null>(null);
 
   // Always sync dates when selectedFY changes (user may switch FY from home screen)
   useEffect(() => {
@@ -61,6 +63,12 @@ export default function EInvoiceListScreen() {
           date: i.date || '',
           amount: Math.abs(+i.amount || 0).toLocaleString('en-IN'),
           status,
+          // Kept raw for the acknowledgement sheet PDF.
+          voucherType: i.voucher_type || '',
+          amountValue: Math.abs(+i.amount || 0),
+          ackNo: i.ack_no || '',
+          ackDate: i.ack_date || '',
+          qrCode: i.qr_code || null,
         });
         const generated = (genRes?.data  || []).map((i: any, idx: number) => mapRow(i, idx, 'Generated'));
         const pending   = (pendRes?.data || []).map((i: any, idx: number) => mapRow(i, idx, 'Pending'));
@@ -123,6 +131,26 @@ export default function EInvoiceListScreen() {
     } finally {
       setGeneratingIds(prev => prev.filter(id => id !== item.id));
     }
+  };
+
+  const handleSharePdf = async (item: any) => {
+    setSharingId(item.id);
+    await shareCompliancePdfSafely('einvoice', {
+      irn: item.irn,
+      ackNo: item.ackNo,
+      ackDate: item.ackDate,
+      qrImage: item.qrCode,
+      voucherNumber: item.invoiceNo,
+      voucherType: item.voucherType,
+      date: item.date,
+      partyName: item.party,
+      amount: item.amountValue,
+    }, {
+      name: company?.name,
+      address: (company as any)?.address,
+      gstin: (company as any)?.gstin,
+    }, { onBeforeShare: () => setSharingId(null) });
+    setSharingId(null);
   };
 
   const handleShare = async () => {
@@ -212,6 +240,25 @@ export default function EInvoiceListScreen() {
                 <Text style={s.amount}>{'\u20b9'}{item.amount}</Text>
               </View>
 
+              {/* Acknowledgement sheet — only once an IRN exists */}
+              {item.status === 'Generated' && !!item.irn && (
+                <TouchableOpacity
+                  style={el.shareBtn}
+                  onPress={() => handleSharePdf(item)}
+                  activeOpacity={0.85}
+                  disabled={sharingId === item.id}
+                >
+                  {sharingId === item.id ? (
+                    <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+                  ) : (
+                    <>
+                      <Ionicons name="share-outline" size={14} color={COLORS.brandPrimary} />
+                      <Text style={el.shareBtnTxt}>Share PDF</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+
               {/* Generate IRN button — only for Pending rows */}
               {item.status === 'Pending' && (
                 <TouchableOpacity
@@ -283,6 +330,25 @@ const el = StyleSheet.create({
     fontSize: TYPOGRAPHY.xs,
     fontWeight: '700',
     color: COLORS.white,
+  },
+  shareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: COLORS.brandPrimary,
+    borderRadius: RADIUS.md,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    minWidth: 44,
+    justifyContent: 'center',
+  },
+  shareBtnTxt: {
+    fontSize: TYPOGRAPHY.xs,
+    fontWeight: '700',
+    color: COLORS.brandPrimary,
   },
 });
 

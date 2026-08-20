@@ -26,6 +26,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { getOrderPreview } from '../../src/services/api';
 import DocumentPreviewPage from '../../src/components/document/DocumentPreviewPage';
 import { VoucherDocument } from '../../src/types/document';
+import { toVoucherDocument } from '../../src/utils/voucherDocumentAdapter';
 import { getSocket } from '../../src/services/socketService';
 
 /** Format ISO YYYY-MM-DD → DD/MM/YY (matches create-order.tsx's date fields) */
@@ -35,61 +36,6 @@ function isoToDMY(iso: string): string {
   if (parts.length < 3) return '';
   const [y, m, d] = parts;
   return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y.slice(-2)}`;
-}
-
-// Map backend response to VoucherDocument — forced to sales_order regardless of
-// what the backend labels it (the shared preview endpoint currently defaults
-// unrecognised voucher types to sales_invoice shape).
-function mapToVoucherDocument(data: any): VoucherDocument {
-  return {
-    id: data.tdkRef || data.invoiceUuid || String(Date.now()),
-    documentType: 'sales_order',
-    documentTitle: `Sales Order - ${data.documentNumber || data.tdkRef || ''}`,
-    documentNumber: data.documentNumber || 'Pending from TallyPrime',
-    date: data.documentDate || '',
-    company: {
-      name: data.company?.name || '',
-      address: data.company?.address || '',
-      gstin: data.company?.gstin || '',
-      pan: data.company?.pan || '',
-      phone: data.company?.phone || '',
-      email: data.company?.email || '',
-      state: data.company?.state || '',
-    },
-    party: {
-      name: data.party?.name || '',
-      address: data.party?.address || '',
-      gstin: data.party?.gstin || '',
-      pan: data.party?.pan || '',
-      phone: data.party?.phone || '',
-    },
-    items: (data.items || []).map((item: any, idx: number) => ({
-      id: item.id || String(idx),
-      name: item.name || '',
-      qty: parseFloat(item.qty) || 0,
-      unit: item.unit || 'Nos',
-      rate: parseFloat(item.rate) || 0,
-      discount: parseFloat(item.discount) || 0,
-      taxAmount: parseFloat(item.taxAmount) || 0,
-      amount: parseFloat(item.amount) || 0,
-    })),
-    taxes: (data.taxLines || []).map((t: any) => ({
-      description: t.description || 'Tax',
-      rate: parseFloat(t.rate) || 0,
-      taxableAmount: parseFloat(t.taxableAmount) || 0,
-      total: parseFloat(t.total) || 0,
-    })),
-    totals: {
-      subtotal: parseFloat(data.totals?.subtotal) || 0,
-      taxTotal: parseFloat(data.totals?.taxTotal) || 0,
-      total: parseFloat(data.totals?.grandTotal || data.totals?.total) || 0,
-      roundOff: parseFloat(data.totals?.roundOff) || 0,
-    },
-    narration: data.narration || '',
-    // rawPayload isn't returned by the shared preview endpoint today — Convert to
-    // Invoice below falls back to the normalised fields captured here.
-    reference: data.reference || data.rawPayload?.reference || undefined,
-  };
 }
 
 export default function OrderPreviewScreen() {
@@ -111,7 +57,9 @@ export default function OrderPreviewScreen() {
       setError(null);
       const res = await getOrderPreview(tdkRef, company.guid);
       if (res?.status && res?.data) {
-        setDoc(mapToVoucherDocument(res.data));
+        // documentType is forced: a stray voucher_type would otherwise fall
+        // through to the sales_invoice default and print the wrong title block.
+        setDoc(toVoucherDocument(res.data, { documentType: 'sales_order' }));
         setRawData(res.data);
         setIsProvisional(res.data.isProvisional ?? false);
       } else {

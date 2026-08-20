@@ -212,21 +212,9 @@ export default function PayablesScreen() {
           {activeTab === 'recent' && (
             <View style={s.listWrap}>
               {RECENT_PAYABLES.map((item, idx) => (
-                <TouchableOpacity
+                <View
                   key={item.id}
                   style={[s.listRow, idx < RECENT_PAYABLES.length - 1 && s.listRowBorder]}
-                  activeOpacity={0.7}
-                  onPress={() => router.push({
-                    pathname: '/voucher/preview' as any,
-                    params: {
-                      type: 'payable_invoice',
-                      voucherNumber: item.ref,
-                      date: item.date,
-                      party: item.party,
-                      amount: item.amount,
-                      status: 'Outstanding',
-                    },
-                  })}
                 >
                   <View style={s.partyIconBox}>
                     <Ionicons name="business-outline" size={18} color={COLORS.textSecondary} />
@@ -239,7 +227,7 @@ export default function PayablesScreen() {
                     <Text style={s.listDate}>{item.date}</Text>
                   </View>
                   <Text style={s.listAmount}>{item.amount}</Text>
-                </TouchableOpacity>
+                </View>
               ))}
             </View>
           )}

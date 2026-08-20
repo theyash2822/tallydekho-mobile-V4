@@ -19,9 +19,8 @@ import {
   getChargeLedgers, getStockGodowns, getBankLedgers,
   invoiceSharePdf,
 } from '../../src/services/api';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
-import { generateDocumentHTML } from '../../src/utils/documentHelpers';
+import { toVoucherDocument } from '../../src/utils/voucherDocumentAdapter';
+import { shareVoucherPdf } from '../../src/utils/voucherPdf';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import PartyForm, { PartyFormRef } from '../../src/components/forms/PartyForm';
@@ -1230,36 +1229,15 @@ export default function CreatePurchaseInvoiceScreen() {
                   const docData = res?.data;
                   if (!docData) throw new Error('No invoice data returned');
 
-                  const pdfDoc = {
-                    documentTitle: `Purchase Invoice - ${docData.documentNumber}`,
-                    documentType: docData.documentType || 'purchase_invoice',
-                    documentNumber: docData.documentNumber || docData.invoiceNumberLabel || 'Pending from TallyPrime',
-                    documentDate: docData.documentDate || '',
-                    company: docData.company || {},
-                    party: docData.party || {},
-                    items: docData.items || [],
-                    taxes: docData.taxLines || [],
-                    totals: {
-                      ...(docData.totals || {}),
-                      total: docData.totals?.total ?? docData.totals?.grandTotal ?? 0,
+                  const pdfDoc = toVoucherDocument(docData, { documentType: 'purchase_invoice' });
+                  await shareVoucherPdf(pdfDoc, {
+                    companyGuid: company.guid,
+                    fileName: docData.fileName || `PurchaseInvoice-${submitResult.tdkRef}.pdf`,
+                    onBeforeShare: () => setSharePdfLoading(false),
+                    fallback: async () => {
+                      Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
                     },
-                    narration: docData.narration || '',
-                    additionalCharges: docData.additionalCharges || [],
-                    paymentInfo: docData.paymentInfo || null,
-                    dispatchDetails: docData.dispatchDetails || null,
-                    isProvisional: docData.isProvisional ?? false,
-                  };
-
-                  const html = generateDocumentHTML(pdfDoc as any, null, 1, [], null, null);
-                  const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
-
-                  const canShare = await Sharing.isAvailableAsync();
-                  const fileName = docData.fileName || `PurchaseInvoice-${submitResult.tdkRef}.pdf`;
-                  if (canShare) {
-                    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: fileName, UTI: 'com.adobe.pdf' });
-                  } else {
-                    Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
-                  }
+                  });
                 } catch (err: any) {
                   Toast.show({ type: 'error', text1: 'PDF Error', text2: err?.message || 'Could not generate PDF' });
                 } finally {

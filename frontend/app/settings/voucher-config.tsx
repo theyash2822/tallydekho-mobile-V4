@@ -14,7 +14,8 @@ import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getUserSettings, updateUserSettings, getBankLedgers, getCompanyLogo, getComplianceConfig, saveComplianceConfig } from '../../src/services/api';
-import { generateDocumentHTML, PDFBankInfo } from '../../src/utils/documentHelpers';
+import { generateDocumentHTML, PDFBankInfo, DocumentFormat, resolveDocumentFormat } from '../../src/utils/documentHelpers';
+import { clearVoucherConfigCache } from '../../src/utils/voucherPdf';
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 // Bank options are fetched from Tally (see useEffect in component)
@@ -43,7 +44,7 @@ const DEFAULT_TERMS: Record<string, string[]> = {
 };
 
 interface VConfig {
-  format:    1 | 2 | 3;
+  format:    DocumentFormat;
   bank:      string;
   qrEnabled: boolean;
   qrImage:   string | null;
@@ -56,15 +57,21 @@ interface VConfig {
 }
 
 const makeDefault = (id: string): VConfig => ({
-  format: 1, bank: 'Cash', qrEnabled: false, qrImage: null,
+  format: 'tally', bank: 'Cash', qrEnabled: false, qrImage: null,
   terms: DEFAULT_TERMS[id] ?? [],
   qrType: 'upi', qrUpiId: '', qrUrl: '', qrIfsc: '', qrAccount: '',
 });
 
 const VOUCHER_CONFIG_KEY = 'voucherConfig';
 
+const FORMAT_OPTIONS: Array<{ id: DocumentFormat; label: string }> = [
+  { id: 'tally',    label: 'Tally' },
+  { id: 'modern_a', label: 'Modern A' },
+  { id: 'modern_b', label: 'Modern B' },
+];
+
 // ── Format Thumbnail (mini PDF preview) ───────────────────────────────────────
-function FormatThumb({ type }: { type: 1 | 2 | 3 }) {
+function FormatThumb({ type }: { type: DocumentFormat }) {
   const L = StyleSheet.create({
     doc:   { width: '100%', aspectRatio: 0.75, backgroundColor: '#FAFAFA', padding: 6, borderRadius: 2 },
     ln:    { height: 2, backgroundColor: '#D4D4D4', borderRadius: 1 },
@@ -75,9 +82,9 @@ function FormatThumb({ type }: { type: 1 | 2 | 3 }) {
     circ:  { width: 16, height: 16, borderRadius: 8, borderWidth: 1, borderColor: '#D4D4D4' },
   });
 
-  if (type === 1) return (
+  if (type === 'tally') return (
     <View style={L.doc}>
-      {/* Classic: logo left + company lines right */}
+      {/* Tally replica: ruled grid, no colour */}
       <View style={L.row}><View style={L.sq} /><View style={{ flex: 1, marginLeft: 4, gap: 2 }}><View style={[L.ln, { width: '90%' }]} /><View style={[L.ln, { width: '65%' }]} /></View></View>
       <View style={L.div} />
       <View style={L.row}><View style={[L.ln, { width: '38%' }]} /><View style={[L.ln, { width: '30%' }]} /></View>
@@ -88,7 +95,7 @@ function FormatThumb({ type }: { type: 1 | 2 | 3 }) {
     </View>
   );
 
-  if (type === 2) return (
+  if (type === 'modern_a') return (
     <View style={L.doc}>
       {/* Modern: full-width dark header */}
       <View style={{ height: 14, backgroundColor: '#1A1A1A', borderRadius: 1, marginBottom: 4 }} />
@@ -245,7 +252,12 @@ export default function VoucherConfigScreen() {
       setConfigs(prev => {
         const merged: Record<string, VConfig> = { ...prev };
         Object.keys(parsed).forEach(k => {
-          if (merged[k]) merged[k] = { ...merged[k], ...parsed[k] };
+          if (!merged[k]) return;
+          merged[k] = {
+            ...merged[k],
+            ...parsed[k],
+            format: resolveDocumentFormat(parsed[k]?.format),
+          };
         });
         return merged;
       });
@@ -334,15 +346,17 @@ export default function VoucherConfigScreen() {
     }
   };
 
-  const handleUseFormat = async (id: string, label: string, format: number) => {
+  const handleUseFormat = async (id: string, label: string, format: DocumentFormat) => {
     setSaving(id);
     try {
-      const updated = { ...configs, [id]: { ...configs[id], format: format as 1 | 2 | 3 } };
+      const updated = { ...configs, [id]: { ...configs[id], format } };
       setConfigs(updated);
       await AsyncStorage.setItem(VOUCHER_CONFIG_KEY, JSON.stringify(updated));
       // Sync to backend
       await updateUserSettings({ voucher_config: updated }).catch(() => {});
-      Toast.show({ type: 'success', text1: `${label} Updated`, text2: `Format ${format} applied and saved.` });
+      clearVoucherConfigCache();
+      const formatLabel = FORMAT_OPTIONS.find(f => f.id === format)?.label || format;
+      Toast.show({ type: 'success', text1: `${label} Updated`, text2: `${formatLabel} format applied and saved.` });
     } catch {
       Toast.show({ type: 'error', text1: 'Save Failed', text2: 'Could not save format selection.' });
     } finally {
@@ -354,6 +368,7 @@ export default function VoucherConfigScreen() {
     await AsyncStorage.setItem(VOUCHER_CONFIG_KEY, JSON.stringify(configs));
     // Sync to backend
     await updateUserSettings({ voucher_config: configs }).catch(() => {});
+    clearVoucherConfigCache();
     setIsDirty(false);
     Toast.show({ type: 'success', text1: 'All Configurations Saved', text2: 'Voucher settings updated for all types.' });
   };
@@ -379,16 +394,31 @@ export default function VoucherConfigScreen() {
           name: company?.name || 'Your Company',
           address: 'Mumbai, Maharashtra',
           gstin: company?.gstin || '27AAJCR0000E1Z2',
+          pan: 'AAJCR0000E',
           state: 'Maharashtra',
+          stateCode: '27',
+          email: 'accounts@example.com',
+          jurisdiction: 'Mumbai',
         },
-        party: { name: 'Sample Customer', address: 'Delhi, India', gstin: '07AABCD1234E1ZP' },
+        party: {
+          name: 'Sample Customer', address: 'Delhi, India',
+          gstin: '07AABCD1234E1ZP', state: 'Delhi', stateCode: '07',
+        },
         items: [
-          { name: 'Sample Product A', hsn: '8471', qty: 10, unit: 'PCS', rate: 500, discount: 0, amount: 5000 },
-          { name: 'Sample Product B', hsn: '8517', qty: 5,  unit: 'PCS', rate: 1200, discount: 0, amount: 6000 },
+          { name: 'Sample Product A', hsn: '8471', qty: 10, unit: 'PCS', rate: 500, discount: 0, amount: 5000, taxableAmount: 5000 },
+          { name: 'Sample Product B', hsn: '8517', qty: 5,  unit: 'PCS', rate: 1200, discount: 0, amount: 6000, taxableAmount: 6000 },
         ],
         ledgerEntries: [],
         totals: { subtotal: 11000, discount: 0, taxableAmount: 11000, cgstTotal: 990, sgstTotal: 990, igstTotal: 0, taxTotal: 1980, roundOff: 0, total: 12980, balanceDue: 12980 },
-        taxes: [{ name: 'GST 18%', taxableAmount: 11000, cgst: 990, sgst: 990, igst: 0, total: 1980 }],
+        taxes: [
+          { label: 'CGST', name: 'CGST', kind: 'cgst', rate: 9, amount: 990 },
+          { label: 'SGST', name: 'SGST', kind: 'sgst', rate: 9, amount: 990 },
+        ],
+        hsnSummary: [
+          { hsn: '8471', taxableValue: 5000, cgstRate: 9, cgstAmount: 450, sgstRate: 9, sgstAmount: 450, totalTax: 900 },
+          { hsn: '8517', taxableValue: 6000, cgstRate: 9, cgstAmount: 540, sgstRate: 9, sgstAmount: 540, totalTax: 1080 },
+        ],
+        tallyMeta: { paymentTerms: '30 Days', destination: 'Delhi', dispatchedThrough: 'Road' },
         narration: 'Sample preview document',
         terms: cfg.terms.join('\n'),
         bankDetails: null,
@@ -605,21 +635,21 @@ export default function VoucherConfigScreen() {
                   <View style={s.block}>
                     <Text style={s.blockLabel}>PDF FORMAT</Text>
                     <View style={s.formatRow}>
-                      {([1, 2, 3] as const).map(fmt => (
+                      {FORMAT_OPTIONS.map(opt => (
                         <TouchableOpacity
-                          key={fmt}
-                          style={[s.formatCard, cfg.format === fmt && s.formatCardActive]}
-                          onPress={() => update(vt.id, 'format', fmt)}
+                          key={opt.id}
+                          style={[s.formatCard, cfg.format === opt.id && s.formatCardActive]}
+                          onPress={() => update(vt.id, 'format', opt.id)}
                           activeOpacity={0.8}
                         >
-                          {cfg.format === fmt && (
+                          {cfg.format === opt.id && (
                             <View style={s.formatBadge}>
                               <Ionicons name="checkmark" size={10} color={COLORS.white} />
                             </View>
                           )}
-                          <FormatThumb type={fmt} />
-                          <Text style={[s.formatLbl, cfg.format === fmt && s.formatLblActive]}>
-                            Format {fmt}
+                          <FormatThumb type={opt.id} />
+                          <Text style={[s.formatLbl, cfg.format === opt.id && s.formatLblActive]}>
+                            {opt.label}{opt.id === 'tally' ? ' (Default)' : ''}
                           </Text>
                         </TouchableOpacity>
                       ))}

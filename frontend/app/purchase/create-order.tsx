@@ -16,9 +16,7 @@ import {
   getPurchaseLedgerAccounts, getTaxLedgers, getChargeLedgers, getStockGodowns,
   getCompanyProfile,
 } from '../../src/services/api';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
-import { generateDocumentHTML } from '../../src/utils/documentHelpers';
+import { shareVoucherPdf, shareVoucherPdfByRef } from '../../src/utils/voucherPdf';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
 import FormField from '../../src/components/forms/FormField';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
@@ -717,7 +715,7 @@ export default function CreatePurchaseOrderScreen() {
       documentTitle: `Purchase Order - ${submitResult?.voucherNumber || orderNo || 'Draft'}`,
       documentType: 'purchase_order',
       documentNumber: submitResult?.voucherNumber || 'Pending from TallyPrime',
-      documentDate: date ? dmyToISO(date) : '',
+      date: date ? dmyToISO(date) : '',
       company: {
         name: company?.name || '',
         address: companyProfile?.address || '',
@@ -883,7 +881,19 @@ export default function CreatePurchaseOrderScreen() {
               </View>
             )}
 
-            {/* Share PDF — built locally from the submitted form snapshot */}
+            {!!submitResult.tdkRef && (
+              <TouchableOpacity
+                style={ss.previewBtn}
+                activeOpacity={0.85}
+                onPress={() => router.push(`/purchase/order-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}` as any)}
+              >
+                <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
+                <Text style={ss.previewBtnTxt}>Preview</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Prefers the backend snapshot; falls back to the form data when the
+                order has no TDK reference (offline queue with a failed ref). */}
             <TouchableOpacity
               style={[ss.pdfBtn, sharePdfLoading && { opacity: 0.7 }]}
               activeOpacity={0.85}
@@ -891,22 +901,24 @@ export default function CreatePurchaseOrderScreen() {
               onPress={async () => {
                 setSharePdfLoading(true);
                 try {
-                  const pdfDoc = buildLocalDoc();
-                  const html = generateDocumentHTML(
-                    pdfDoc as any,
-                    null,
-                    1,
-                    termsText ? [termsText] : [],
-                    null,
-                    null
-                  );
-                  const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
-                  const canShare = await Sharing.isAvailableAsync();
                   const fileName = `PurchaseOrder-${submitResult.voucherNumber || submitResult.tdkRef || Date.now()}.pdf`;
-                  if (canShare) {
-                    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: fileName, UTI: 'com.adobe.pdf' });
-                  } else {
+                  const noSharing = async () => {
                     Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
+                  };
+                  if (submitResult.tdkRef && company?.guid) {
+                    await shareVoucherPdfByRef(submitResult.tdkRef, company.guid, {
+                      documentType: 'purchase_order',
+                      fileName,
+                      onBeforeShare: () => setSharePdfLoading(false),
+                      fallback: noSharing,
+                    });
+                  } else {
+                    await shareVoucherPdf(buildLocalDoc() as any, {
+                      companyGuid: company?.guid,
+                      fileName,
+                      onBeforeShare: () => setSharePdfLoading(false),
+                      fallback: noSharing,
+                    });
                   }
                 } catch (err: any) {
                   Toast.show({ type: 'error', text1: 'PDF Error', text2: err?.message || 'Could not generate PDF' });

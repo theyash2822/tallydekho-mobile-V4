@@ -332,19 +332,8 @@ export default function CashRegisterScreen() {
                           if (selected.size > 0) {
                             toggleSelect(item.id);
                           } else {
-                            router.push({
-                              pathname: '/voucher/preview' as any,
-                              params: {
-                                type: item.type,
-                                voucherNumber: item.voucher,
-                                date: `${item.date} 2025`,
-                                mode: 'Cash In Hand',
-                                paidTo: item.desc,
-                                receivedFrom: item.desc,
-                                amount: item.amount,
-                                narration: '\u2014',
-                              },
-                            });
+                            // item.id is the Tally voucher guid (mapCashItem).
+                            router.push(`/document/${item.id}` as any);
                           }
                         }}
                         onLongPress={() => toggleSelect(item.id)}

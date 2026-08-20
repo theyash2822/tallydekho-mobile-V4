@@ -21,9 +21,8 @@ import {
   proformaPrefillStorageKey,
   buildProformaToInvoicePrefillFromForm,
 } from '../../src/utils/proformaToInvoicePrefill';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
-import { generateDocumentHTML } from '../../src/utils/documentHelpers';
+import { toVoucherDocument } from '../../src/utils/voucherDocumentAdapter';
+import { shareVoucherPdf } from '../../src/utils/voucherPdf';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import PartyForm, { PartyFormRef } from '../../src/components/forms/PartyForm';
@@ -1626,50 +1625,17 @@ export default function CreateSalesInvoiceScreen() {
                   const docData = res?.data;
                   if (!docData) throw new Error('No invoice data returned');
 
-                  const docType = docData.documentType
-                    || (isProforma ? 'proforma_invoice' : 'sales_invoice');
-                  const titleKind = docType === 'proforma_invoice' ? 'Proforma Invoice' : 'Invoice';
-                  // Build minimal VoucherDocument for PDF generation
-                  // NOTE: backend returns grandTotal; generateDocumentHTML expects `total` — normalise here
-                  const pdfDoc = {
-                    documentTitle: `${titleKind} - ${docData.documentNumber}`,
-                    documentType: docType,
-                    documentNumber: docData.documentNumber || docData.invoiceNumberLabel || 'Pending from TallyPrime',
-                    documentDate: docData.documentDate || '',
-                    company: docData.company || {},
-                    party: docData.party || {},
-                    items: docData.items || [],
-                    taxes: docData.taxLines || [],
-                    totals: {
-                      ...(docData.totals || {}),
-                      total: docData.totals?.total ?? docData.totals?.grandTotal ?? 0,
+                  const pdfDoc = toVoucherDocument(docData);
+                  const fileName = docData.fileName
+                    || `${pdfDoc.documentTitle.split(' - ')[0].replace(/\s+/g, '-')}-${submitResult.tdkRef}.pdf`;
+                  await shareVoucherPdf(pdfDoc, {
+                    companyGuid: company.guid,
+                    fileName,
+                    onBeforeShare: () => setSharePdfLoading(false),
+                    fallback: async () => {
+                      Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
                     },
-                    narration: docData.narration || '',
-                    additionalCharges: docData.additionalCharges || [],
-                    paymentInfo: docData.paymentInfo || null,
-                    dispatchDetails: docData.dispatchDetails || null,
-                    isProvisional: docData.isProvisional ?? false,
-                  };
-
-                  // Generate PDF on-device from snapshot HTML
-                  const html = generateDocumentHTML(
-                    pdfDoc as any,
-                    null, // no logo URI in share flow
-                    1,    // default format
-                    [],   // no terms
-                    null, // no QR
-                    null  // no bank info
-                  );
-                  const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
-
-                  // Open native share sheet
-                  const canShare = await Sharing.isAvailableAsync();
-                  const fileName = docData.fileName || `${titleKind.replace(/\s+/g, '-')}-${submitResult.tdkRef}.pdf`;
-                  if (canShare) {
-                    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: fileName, UTI: 'com.adobe.pdf' });
-                  } else {
-                    Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
-                  }
+                  });
                 } catch (err: any) {
                   Toast.show({ type: 'error', text1: 'PDF Error', text2: err?.message || 'Could not generate PDF' });
                 } finally {

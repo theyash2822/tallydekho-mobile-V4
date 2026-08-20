@@ -278,24 +278,9 @@ export default function CashInHandScreen() {
             </TouchableOpacity>
           </View>
           {RECENT_TXN.map((txn, idx) => (
-            <TouchableOpacity
+            <View
               key={txn.id}
               style={[s.txRow, idx < RECENT_TXN.length - 1 && s.txBorder]}
-              activeOpacity={0.7}
-              onPress={() => router.push({
-                pathname: '/voucher/preview' as any,
-                params: {
-                  type: txn.type === 'in' ? 'receipt' : 'payment',
-                  voucherNumber: txn.ref,
-                  date: `${txn.date} 2025`,
-                  mode: 'Cash In Hand',
-                  ...(txn.type === 'in'
-                    ? { receivedFrom: txn.desc }
-                    : { paidTo: txn.desc }),
-                  amount: txn.amount,
-                  narration: '\u2014',
-                },
-              })}
             >
               <View style={[s.txIconBox, { backgroundColor: COLORS.pageBg }]}>
                 <Ionicons
@@ -311,7 +296,7 @@ export default function CashInHandScreen() {
               <Text style={[s.txAmt, { color: txn.type === 'in' ? COLORS.positive : COLORS.negative }]}>
                 {txn.type === 'in' ? '+' : '-'}{txn.amount}
               </Text>
-            </TouchableOpacity>
+            </View>
           ))}
         </View>
 

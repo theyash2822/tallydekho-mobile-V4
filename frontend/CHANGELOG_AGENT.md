@@ -1,5 +1,38 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-08-20 — Phase 7: compliance print layouts, Quotation and Receipt Note decided
+
+### Added
+- `src/utils/pdf/complianceSheet.ts`: `renderEInvoiceSheetHTML` (IRN, Ack No/Date,
+  signed QR, buyer, invoice value) and `renderEWayBillSheetHTML` (EWB no, validity,
+  transporter, vehicle, route, consignment value). Ruled monochrome sheets — neither
+  is a Tally voucher type, so there is no native print to copy.
+- `src/utils/voucherPdf.ts`: `shareCompliancePdf` / `shareCompliancePdfSafely`.
+- Share PDF actions on `reports/einvoice-list.tsx` (rows with an IRN),
+  `reports/ewb-list.tsx` and `sales/ewaybill.tsx` (rows with an EWB number).
+- Invoice-grid PDFs now print the IRN band (`IRN`, `Ack No.`, `Ack Date`) above the
+  item table when the invoice has been reported; omitted entirely otherwise.
+
+### Changed
+- `DocumentType` gains `quotation`, display-only. Tally companies do sync Quotation
+  vouchers; they used to fall through and print as `TAX INVOICE`. There is still no
+  Quotation create screen or write route — Proforma and Sales Order cover pre-sale.
+- `app/document/[id].tsx`: `Receipt Note` no longer matches the `receipt` test and
+  print as a Receipt Voucher; `Quotation` resolves to the new type.
+- `TallyMetadata` gains `ackNo`, `ackDate`, `ewayBillValidTill`; `fromTallyVoucher`
+  fills them from the new `e_invoice` / `e_way_bill` blocks on `GET /vouchers/:id`.
+
+### Fixed (found by QA before release)
+- `fromTallyVoucher` had `declaration: layout.showDeclaration ? undefined : undefined`, a
+  no-op ternary, so Tally-synced invoices printed with no declaration. Now falls back to
+  a shared `DEFAULT_DECLARATION`, de-duplicated out of `tallyLayout.ts`.
+- `voucherConfigCache` survived sign-out, so a second account inherited the first one's
+  PDF format choices. `signOut` clears it.
+- Removed the dead `handleWhatsApp` in `DocumentPreviewPage` (and its now-unused
+  `Linking` import) — unreachable, and the native share sheet already offers WhatsApp.
+
+---
+
 ## 2026-08-06 — Debit Note = Credit Note mirror (Purchase Return)
 
 ### Changed

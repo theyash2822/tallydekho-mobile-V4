@@ -1,10 +1,13 @@
 // ── Document Type Enum ────────────────────────────────────────────────────────
+// `quotation` and `receipt_note` are display-only: the app has no create screen
+// or write path for them, but Tally companies do sync them and they must print
+// with their own title rather than falling back to a Tax Invoice.
 export type DocumentType =
   | 'sales_invoice'  | 'proforma_invoice' | 'sales_order'
   | 'delivery_note'  | 'credit_note'  | 'debit_note'
   | 'purchase_invoice' | 'purchase_order' | 'receipt_note'
   | 'payment_voucher' | 'receipt_voucher' | 'contra_voucher'
-  | 'journal_voucher' | 'stock_journal';
+  | 'journal_voucher' | 'stock_journal' | 'quotation';
 
 // ── Sub-interfaces ────────────────────────────────────────────────────────────
 export interface CompanyInfo {
@@ -15,6 +18,12 @@ export interface CompanyInfo {
   phone?: string;
   email?: string;
   state?: string;
+  stateCode?: string;
+  pincode?: string;
+  /** Print-only, from the company print profile. */
+  jurisdiction?: string;
+  declarationText?: string;
+  bank?: BankInfo | null;
 }
 
 export interface PartyInfo {
@@ -24,7 +33,9 @@ export interface PartyInfo {
   pan?: string;
   phone?: string;
   email?: string;
+  state?: string;
   stateCode?: string;
+  pincode?: string;
 }
 
 export interface AddressInfo {
@@ -44,10 +55,17 @@ export interface ItemLine {
   unit: string;
   rate: number;
   discount?: number;
+  /** '%' or '' — Tally prints the discount column as a percentage. */
+  discountType?: string;
   discountAmount?: number;
   taxPct?: number;
   taxAmount?: number;
+  taxableAmount?: number;
   amount: number;
+  godown?: string;
+  batch?: string;
+  /** Stock Journal only: 'out' is Source (Consumption), 'in' is Destination. */
+  direction?: 'in' | 'out';
 }
 
 export interface LedgerEntry {
@@ -61,11 +79,14 @@ export interface LedgerEntry {
 
 export interface TaxLine {
   description: string;
+  /** 'cgst' | 'sgst' | 'igst' | 'cess' | 'other' */
+  kind?: string;
   rate: number;
   taxableAmount: number;
   cgst?: number;
   sgst?: number;
   igst?: number;
+  cess?: number;
   total: number;
 }
 
@@ -76,10 +97,14 @@ export interface Totals {
   cgstTotal?: number;
   sgstTotal?: number;
   igstTotal?: number;
+  cessTotal?: number;
+  chargeTotal?: number;
   taxTotal?: number;
   roundOff?: number;
   total: number;
+  totalQty?: number;
   totalInWords?: string;
+  taxAmountInWords?: string;
   balanceDue?: number;
   drTotal?: number;
   crTotal?: number;
@@ -114,6 +139,90 @@ export interface DocMetadata {
   costCentre?: string;
   placeOfSupply?: string;
   eway?: string;
+}
+
+/**
+ * The full right-hand metadata grid of the Tally invoice layout.
+ * Every label is always present because Tally prints the label even when blank
+ * (see tallydekho-brain/PDF_LAYOUT_SPEC.md section 2.5).
+ */
+export interface TallyMetadata {
+  referenceNo?: string;
+  referenceDate?: string;
+  buyersOrderNo?: string;
+  buyersOrderDate?: string;
+  otherReferences?: string;
+  supplierInvoiceNo?: string;
+  supplierInvoiceDate?: string;
+  originalInvoiceNo?: string;
+  originalInvoiceDate?: string;
+  deliveryNoteNo?: string;
+  deliveryNoteDate?: string;
+  dispatchDocNo?: string;
+  dispatchDocDate?: string;
+  dispatchedThrough?: string;
+  destination?: string;
+  billOfLadingNo?: string;
+  billOfLadingDate?: string;
+  motorVehicleNo?: string;
+  transportMode?: string;
+  termsOfDelivery?: string;
+  paymentTerms?: string;
+  dueDate?: string;
+  placeOfSupply?: string;
+  ewayBillNo?: string;
+  ewayBillDate?: string;
+  ewayBillValidTill?: string;
+  irn?: string;
+  ackNo?: string;
+  ackDate?: string;
+  // Stock family
+  sourceGodown?: string;
+  destinationGodown?: string;
+  warehouse?: string;
+  adjustmentReason?: string;
+}
+
+/** Presentation flags the backend derives per document type. */
+export interface DocumentLayout {
+  family: 'invoice' | 'voucher' | 'stock';
+  title: string;
+  /** Voucher family: which amount columns to print. */
+  columns?: ('amount' | 'debit' | 'credit')[];
+  showThrough?: boolean;
+  showGstin?: boolean;
+  partyRole?: 'buyer' | 'supplier';
+  partyLabel?: string;
+  showHsnSummary?: boolean;
+  showDeclaration?: boolean;
+  showReceivedInGoodCondition?: boolean;
+  showJurisdiction?: boolean;
+  computerGeneratedText?: string;
+  showSignatory?: boolean;
+}
+
+export interface HsnSummaryRow {
+  hsn: string;
+  taxableAmount: number;
+  taxPct?: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  cess: number;
+  totalTax: number;
+}
+
+export interface ChargeLine {
+  description: string;
+  amount: number;
+  taxes?: { description: string; kind?: string; rate: number; amount: number }[];
+}
+
+export interface BankInfo {
+  name: string;
+  accountNo?: string;
+  ifsc?: string;
+  branch?: string;
 }
 
 export interface FooterInfo {
@@ -169,4 +278,18 @@ export interface VoucherDocument {
   terms?: string;
   footerInfo?: FooterInfo;
   dispatchDetails?: DispatchDetails;
+
+  // ── Tally-layout extensions (populated by voucherDocumentAdapter) ───────────
+  /** Presentation flags per document type, derived by the backend. */
+  layout?: DocumentLayout;
+  /** Full Tally header grid; `metadata` stays for the existing card UI. */
+  tallyMeta?: TallyMetadata;
+  hsnSummary?: HsnSummaryRow[];
+  additionalCharges?: ChargeLine[];
+  /** The Tally voucher type name, e.g. 'Credit Note', 'Purchase Order'. */
+  tallyVoucherType?: string;
+  tdkRef?: string;
+  postingTag?: string;
+  isProvisional?: boolean;
+  watermarkText?: string | null;
 }

@@ -32,6 +32,7 @@ import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/compon
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import { taxFieldsFromLedgerSelect, resolveTaxLedgerRate } from '../../src/utils/taxLedgerHelpers';
+import { shareVoucherPdfByRef } from '../../src/utils/voucherPdf';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const todayStr = () => {
@@ -500,6 +501,22 @@ export default function CreateDeliveryNoteScreen() {
   const [submitResult, setSubmitResult] = useState<{
     tdkRef: string; isQueued: boolean; message: string; voucherNumber?: string;
   } | null>(null);
+  const [sharingPdf, setSharingPdf] = useState(false);
+
+  const shareSubmitted = async () => {
+    if (!submitResult?.tdkRef || !company?.guid) return;
+    setSharingPdf(true);
+    try {
+      await shareVoucherPdfByRef(submitResult.tdkRef, company.guid, {
+        documentType: 'delivery_note',
+        onBeforeShare: () => setSharingPdf(false),
+      });
+    } catch (e: any) {
+      Toast.show({ type: 'error', text1: 'PDF Error', text2: e?.message || 'Could not generate PDF' });
+    } finally {
+      setSharingPdf(false);
+    }
+  };
 
   // Universal numbering — Settings → Voucher Config only (no on-screen override)
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
@@ -1047,50 +1064,28 @@ export default function CreateDeliveryNoteScreen() {
               </View>
             )}
 
-            {/* Generic voucher preview — use the real submit values, never a fake DN number. */}
             {!!submitResult.tdkRef && (
-              <TouchableOpacity
-                style={ss.previewBtn}
-                activeOpacity={0.85}
-                onPress={() => {
-                  const filled = items.filter(i => i.product);
-                  const deliveryItems = filled.map((i, idx) => ({
-                    no: String(idx + 1),
-                    item: i.product,
-                    qty: i.unit ? `${i.qty} ${i.unit}` : i.qty,
-                  }));
-                  // Quantities are summed per unit — mixed-unit deliveries must not be
-                  // collapsed into a single meaningless number.
-                  const qtyByUnit = filled.reduce<Record<string, number>>((acc, i) => {
-                    const u = i.unit || 'Unit unspecified';
-                    acc[u] = (acc[u] || 0) + (parseFloat(i.qty) || 0);
-                    return acc;
-                  }, {});
-                  router.push({
-                    pathname: '/voucher/preview',
-                    params: {
-                      type: 'delivery_note',
-                      voucherNumber: submitResult.voucherNumber || submitResult.tdkRef,
-                      date,
-                      party,
-                      customer: party,
-                      amount: String(totals.grand),
-                      narration,
-                      totalQty: Object.entries(qtyByUnit).map(([u, q]) => `${q} ${u}`).join(' · '),
-                      ...(shipToDestination || dispatchedThrough || vehicleNumber || billOfLadingNo ? {
-                        shipTo: shipToDestination,
-                        dispatchMode: dispatchedThrough,
-                        vehicleLR: [vehicleNumber, billOfLadingNo || dispatchDocNo].filter(Boolean).join(' / '),
-                      } : {}),
-                      ...(linkedOrder ? { againstSO: linkedOrder.voucherNumber } : {}),
-                      deliveryItems: JSON.stringify(deliveryItems),
-                    },
-                  } as any);
-                }}
-              >
-                <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
-                <Text style={ss.previewBtnTxt}>Preview</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  style={[ss.previewBtn, { flex: 1 }]}
+                  activeOpacity={0.85}
+                  onPress={() => router.push(`/sales/delivery-note-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef!)}` as any)}
+                >
+                  <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
+                  <Text style={ss.previewBtnTxt}>Preview</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[ss.previewBtn, { flex: 1 }]}
+                  activeOpacity={0.85}
+                  disabled={sharingPdf}
+                  onPress={shareSubmitted}
+                >
+                  {sharingPdf
+                    ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+                    : <Ionicons name="share-outline" size={18} color={COLORS.brandPrimary} />}
+                  <Text style={ss.previewBtnTxt}>{sharingPdf ? 'Generating…' : 'Share PDF'}</Text>
+                </TouchableOpacity>
+              </View>
             )}
 
             <TouchableOpacity style={ss.doneBtn} activeOpacity={0.85} onPress={() => { setShowSuccess(false); router.back(); }}>

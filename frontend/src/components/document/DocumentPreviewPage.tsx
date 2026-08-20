@@ -1,37 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Share, Alert, Linking, ActivityIndicator,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useRouter } from 'expo-router';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
-import { VoucherDocument, DispatchDetails } from '../../types/document';
-import { formatCurrency, amountInWords, DOC_TYPE_CONFIG, generateDocumentHTML, PDFBankInfo } from '../../utils/documentHelpers';
-import { useSettings } from '../../context/SettingsContext';
+import { VoucherDocument } from '../../types/document';
+import { formatCurrency, amountInWords, DOC_TYPE_CONFIG } from '../../utils/documentHelpers';
+import { shareVoucherPdfSafely } from '../../utils/voucherPdf';
 import { useAuth } from '../../context/AuthContext';
-import { getUserSettings } from '../../services/api';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Voucher config constants (mirrors voucher-config.tsx)
-// ─────────────────────────────────────────────────────────────────────────────
-const VOUCHER_CONFIG_KEY = 'voucherConfig';
-
-const DOC_TYPE_TO_CONFIG_ID: Record<string, string> = {
-  'sales_invoice':    'sales_inv',
-  'proforma_invoice': 'sales_inv',
-  'purchase_invoice': 'purchase_inv',
-  'sales_order':      'sales_order',
-  'purchase_order':   'purchase_order',
-  'credit_note':      'credit_note',
-  'debit_note':       'debit_note',
-  'delivery_note':    'delivery_note',
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utility Components
@@ -141,8 +120,14 @@ function DocHeader({ doc }: { doc: VoucherDocument }) {
 // ─────────────────────────────────────────────────────────────────────────────
 function PartySection({ doc }: { doc: VoucherDocument }) {
   if (!doc.party && !doc.billing && !doc.shipping) return null;
+  // Stock docs have no counterparty — the godowns print in the movement table.
+  if (doc.layout?.family === 'stock') return null;
 
   const hasShipping = !!(doc.shipping?.line1 || doc.shipping?.city);
+  // Money vouchers have no bill-to; Tally labels the party ledger "Account".
+  const partyLabel = doc.layout?.family === 'voucher'
+    ? 'ACCOUNT'
+    : (doc.layout?.partyRole === 'supplier' ? 'BILL FROM' : 'BILL TO');
 
   return (
     <View style={ds.card}>
@@ -150,7 +135,7 @@ function PartySection({ doc }: { doc: VoucherDocument }) {
       <View style={ds.partyRow}>
         {/* Bill To */}
         <View style={{ flex: 1 }}>
-          <Text style={ds.partyColLabel}>BILL TO</Text>
+          <Text style={ds.partyColLabel}>{partyLabel}</Text>
           <Text style={ds.partyName}>
             {doc.party?.name || doc.billing?.name || '—'}
           </Text>
@@ -206,21 +191,45 @@ function PartySection({ doc }: { doc: VoucherDocument }) {
 // MetaGrid — reference numbers, supply details, payment terms
 // ─────────────────────────────────────────────────────────────────────────────
 function MetaGrid({ doc }: { doc: VoucherDocument }) {
-  if (!doc.metadata) return null;
   const m = doc.metadata;
+  const t = doc.tallyMeta;
+  if (!m && !t) return null;
 
-  const pairs: { label: string; value: string }[] = ([
-    m.placeOfSupply    ? { label: 'Place of Supply',  value: m.placeOfSupply }    : null,
-    m.orderRef         ? { label: 'Order / PO Ref',   value: m.orderRef }         : null,
-    m.invoiceRef       ? { label: 'Invoice Ref',      value: m.invoiceRef }       : null,
-    m.paymentTerms     ? { label: 'Payment Terms',    value: m.paymentTerms }     : null,
-    m.dueDate          ? { label: 'Due Date',          value: m.dueDate }          : null,
-    m.eway             ? { label: 'E-Way Bill No.',    value: m.eway }             : null,
-    m.vehicleNo        ? { label: 'Vehicle No.',       value: m.vehicleNo }        : null,
-    m.transportDetails ? { label: 'Transport',         value: m.transportDetails } : null,
-    m.warehouse        ? { label: 'Warehouse',         value: m.warehouse }        : null,
-    m.costCentre       ? { label: 'Cost Centre',       value: m.costCentre }       : null,
-  ] as (null | { label: string; value: string })[]).filter(Boolean) as { label: string; value: string }[];
+  // Label order follows Tally's header grid (PDF_LAYOUT_SPEC.md section 2.5), so
+  // the preview reads the same as the printed document. Blank fields are dropped
+  // on screen — only the PDF keeps empty labelled cells.
+  const candidates: (null | { label: string; value?: string })[] = [
+    { label: 'Reference No.',      value: t?.referenceNo },
+    { label: 'Reference Date',     value: t?.referenceDate },
+    { label: 'Place of Supply',    value: t?.placeOfSupply    ?? m?.placeOfSupply },
+    { label: "Buyer's Order No.",  value: t?.buyersOrderNo    ?? m?.orderRef },
+    { label: 'Supplier Invoice',   value: t?.supplierInvoiceNo },
+    { label: 'Supplier Inv. Date', value: t?.supplierInvoiceDate },
+    { label: 'Original Invoice',   value: t?.originalInvoiceNo ?? m?.invoiceRef },
+    { label: 'Orig. Invoice Date', value: t?.originalInvoiceDate },
+    { label: 'Delivery Note',      value: t?.deliveryNoteNo },
+    { label: 'Dispatch Doc No.',   value: t?.dispatchDocNo },
+    { label: 'Dispatched through', value: t?.dispatchedThrough },
+    { label: 'Destination',        value: t?.destination },
+    { label: 'Transport Mode',     value: t?.transportMode },
+    { label: 'Motor Vehicle No.',  value: t?.motorVehicleNo   ?? m?.vehicleNo },
+    { label: 'Bill of Lading',     value: t?.billOfLadingNo },
+    { label: 'Mode/Terms of Pmt.', value: t?.paymentTerms     ?? m?.paymentTerms },
+    { label: 'Terms of Delivery',  value: t?.termsOfDelivery  ?? m?.deliveryTerms },
+    { label: 'Due Date',           value: t?.dueDate          ?? m?.dueDate },
+    { label: 'e-Way Bill No.',     value: t?.ewayBillNo       ?? m?.eway },
+    { label: 'IRN',                value: t?.irn },
+    { label: 'Other References',   value: t?.otherReferences },
+    { label: 'Source Godown',      value: t?.sourceGodown },
+    { label: 'Destination Godown', value: t?.destinationGodown },
+    { label: 'Adjustment Reason',  value: t?.adjustmentReason },
+    { label: 'Warehouse',          value: m?.warehouse },
+    { label: 'Cost Centre',        value: m?.costCentre },
+  ];
+
+  const pairs = candidates
+    .filter((p): p is { label: string; value: string } => !!p && !!String(p.value || '').trim())
+    .map((p) => ({ label: p.label, value: String(p.value).trim() }));
 
   if (pairs.length === 0) return null;
 
@@ -327,6 +336,76 @@ function ItemsTable({ doc }: { doc: VoucherDocument }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// StockTable — Stock Journal (Source/Destination) and Physical Stock
+// ─────────────────────────────────────────────────────────────────────────────
+function StockTable({ doc }: { doc: VoucherDocument }) {
+  const items = doc.items || [];
+  if (items.length === 0) return null;
+
+  const source = items.filter(i => i.direction === 'out');
+  const destination = items.filter(i => i.direction === 'in');
+  // A Stock Journal moves goods between godowns; Physical Stock just records a
+  // counted quantity, so it prints one undirected table.
+  const isJournal = source.length > 0 || destination.length > 0;
+  const W = { name: 150, godown: 120, qty: 82, rate: 82, amt: 92 };
+
+  const Table = ({ label, rows }: { label?: string; rows: typeof items }) => (
+    <View style={{ marginBottom: label ? 14 : 0 }}>
+      {label && <Text style={ds.stockGroupLabel}>{label}</Text>}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled>
+        <View>
+          <View style={ds.tblHeader}>
+            <Text style={[ds.th, { width: W.name }]}>ITEM</Text>
+            <Text style={[ds.th, { width: W.godown }]}>GODOWN</Text>
+            <Text style={[ds.th, ds.thR, { width: W.qty }]}>QUANTITY</Text>
+            <Text style={[ds.th, ds.thR, { width: W.rate }]}>RATE</Text>
+            <Text style={[ds.th, ds.thR, { width: W.amt }]}>AMOUNT</Text>
+          </View>
+          {rows.map((item, idx) => (
+            <View
+              key={item.id}
+              style={[
+                ds.tblRow,
+                idx % 2 === 0 ? ds.tblRowEven : ds.tblRowOdd,
+                idx === rows.length - 1 && ds.tblRowLast,
+              ]}
+            >
+              <Text style={[ds.tdBold, { width: W.name }]} numberOfLines={2}>{item.name}</Text>
+              <Text style={[ds.td, { width: W.godown }]} numberOfLines={2}>{item.godown || '—'}</Text>
+              <Text style={[ds.td, ds.tdR, { width: W.qty }]}>{item.qty} {item.unit}</Text>
+              <Text style={[ds.td, ds.tdR, { width: W.rate }]}>
+                {item.rate ? formatCurrency(item.rate) : '—'}
+              </Text>
+              <Text style={[ds.td, ds.tdR, ds.tdBoldR, { width: W.amt }]}>
+                {item.amount ? formatCurrency(item.amount) : '—'}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </View>
+  );
+
+  return (
+    <View style={ds.card}>
+      <SectionLabel title={isJournal ? 'STOCK MOVEMENT' : 'PHYSICAL STOCK'} />
+      {isJournal ? (
+        <>
+          <Table label="Source (Consumption)" rows={source} />
+          <Table label="Destination (Production)" rows={destination} />
+        </>
+      ) : (
+        <Table rows={items} />
+      )}
+      <View style={ds.scrollHintRow}>
+        <Ionicons name="swap-horizontal-outline" size={11} color={COLORS.textTertiary} />
+        <Text style={ds.scrollHintText}>Swipe table to see all columns</Text>
+      </View>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // LedgerTable — Dr/Cr entries for voucher documents
 // ─────────────────────────────────────────────────────────────────────────────
 function LedgerTable({ doc }: { doc: VoucherDocument }) {
@@ -343,7 +422,8 @@ function LedgerTable({ doc }: { doc: VoucherDocument }) {
         <Text style={[ds.th, ds.thR, { width: 100 }]}>CREDIT (₹)</Text>
       </View>
 
-      {/* Entry rows */}
+      {/* Entry rows. Tally groups these under "Account :" and "Through :", with
+          bill allocations indented beneath the party ledger. */}
       {doc.ledgerEntries.map((entry, idx) => (
         <View
           key={entry.id}
@@ -354,7 +434,12 @@ function LedgerTable({ doc }: { doc: VoucherDocument }) {
           ]}
         >
           <View style={{ flex: 1, paddingRight: 8 }}>
-            <Text style={ds.tdBold}>{entry.particulars}</Text>
+            {(entry.reference === 'Account' || entry.reference === 'Through') && (
+              <Text style={ds.ledgerGroupLabel}>{entry.reference} :</Text>
+            )}
+            <Text style={[ds.tdBold, entry.reference === 'allocation' && ds.ledgerAllocation]}>
+              {entry.particulars}
+            </Text>
             {entry.narration && (
               <Text style={ds.tdSub}>{entry.narration}</Text>
             )}
@@ -476,6 +561,8 @@ function TotalsSummary({ doc }: { doc: VoucherDocument }) {
     rows.push({ label: 'Discount  (−)', value: formatCurrency(t.discount), style: 'subtracted' });
   if (t.taxableAmount !== undefined && t.discount)
     rows.push({ label: 'Taxable Amount', value: formatCurrency(t.taxableAmount), style: 'bold' });
+  for (const charge of doc.additionalCharges || [])
+    rows.push({ label: `${charge.description}  (+)`, value: formatCurrency(charge.amount), style: 'added' });
   if (t.cgstTotal)
     rows.push({ label: 'CGST  (+)', value: formatCurrency(t.cgstTotal), style: 'added' });
   if (t.sgstTotal)
@@ -531,10 +618,10 @@ function TotalsSummary({ doc }: { doc: VoucherDocument }) {
         </View>
       )}
 
-      {/* Amount in words */}
+      {/* Amount in words — server value wins so every client reads identically */}
       <View style={ds.amtWords}>
         <Text style={ds.amtWordsLabel}>Amount in Words</Text>
-        <Text style={ds.amtWordsText}>{amountInWords(t.total)}</Text>
+        <Text style={ds.amtWordsText}>{t.totalInWords || amountInWords(t.total)}</Text>
       </View>
     </View>
   );
@@ -701,82 +788,25 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
   const { company } = useAuth();
-  const logoUriRef = useRef<string | null>(null);
-  const voucherConfigRef = useRef<Record<string, any> | null>(null);
 
-  // Load company logo from AsyncStorage once
-  useEffect(() => {
-    if (company?.guid) {
-      AsyncStorage.getItem(`company_logo_${company.guid}`)
-        .then(uri => { logoUriRef.current = uri; })
-        .catch(() => {});
-    }
-  }, [company?.guid]);
-
-  // Load voucher config: backend first (cross-device), then AsyncStorage fallback
-  useEffect(() => {
-    getUserSettings().then((res: any) => {
-      const serverConfig = res?.data?.voucher_config;
-      if (serverConfig) {
-        const parsed = typeof serverConfig === 'string' ? JSON.parse(serverConfig) : serverConfig;
-        voucherConfigRef.current = parsed;
-        AsyncStorage.setItem(VOUCHER_CONFIG_KEY, JSON.stringify(parsed)).catch(() => {});
-      } else {
-        AsyncStorage.getItem(VOUCHER_CONFIG_KEY)
-          .then(json => { if (json) voucherConfigRef.current = JSON.parse(json); })
-          .catch(() => {});
-      }
-    }).catch(() => {
-      AsyncStorage.getItem(VOUCHER_CONFIG_KEY)
-        .then(json => { if (json) voucherConfigRef.current = JSON.parse(json); })
-        .catch(() => {});
-    });
-  }, []);
-
-  // Shared PDF helper — loading reset BEFORE shareAsync to prevent UI hang
+  // Loading is reset before the share sheet opens — shareAsync blocks until the
+  // sheet is dismissed and would otherwise leave the spinner running.
   const generateAndSharePDF = async (
     setLoading: (v: boolean) => void,
     dialogTitle: string,
     fallback?: () => Promise<void>
   ) => {
     setLoading(true);
-    try {
-      const configId = DOC_TYPE_TO_CONFIG_ID[doc.documentType];
-      const vCfg = voucherConfigRef.current?.[configId];
-      const format = ((vCfg?.format) ?? 1) as 1 | 2 | 3;
-      const terms = (vCfg?.terms ?? []) as string[];
-      const qrImage = (vCfg?.qrEnabled && vCfg?.qrImage) ? vCfg.qrImage : null;
-      const bankInfo = vCfg?.bank ? {
-        bankName:  vCfg.bank !== 'Cash' ? vCfg.bank : null,
-        accountNo: vCfg.qrEnabled && vCfg.qrType === 'bank' ? vCfg.qrAccount || null : null,
-        ifsc:      vCfg.qrEnabled && vCfg.qrType === 'bank' ? vCfg.qrIfsc  || null : null,
-        upiId:     vCfg.qrEnabled && vCfg.qrType === 'upi'  ? vCfg.qrUpiId || null : null,
-      } : null;
-      const html = generateDocumentHTML(doc, logoUriRef.current, format, terms, qrImage, bankInfo);
-      const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
-      setLoading(false); // Reset BEFORE shareAsync (shareAsync blocks until sheet dismissed)
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle, UTI: 'com.adobe.pdf' });
-      } else if (fallback) {
-        await fallback();
-      } else {
-        await Share.share({ url: uri, title: doc.documentNumber });
-      }
-    } catch (err: any) {
-      setLoading(false);
-      Alert.alert('PDF Error', 'Could not generate PDF. Please try again.');
-    }
+    await shareVoucherPdfSafely(doc, {
+      companyGuid: company?.guid,
+      dialogTitle,
+      onBeforeShare: () => setLoading(false),
+      fallback,
+    });
   };
 
-  const handleShare    = () => generateAndSharePDF(setShareLoading, `Share ${doc.documentNumber}`);
-  const handleWhatsApp = () => generateAndSharePDF(setPdfLoading, `${doc.documentNumber} via WhatsApp`,
-    async () => {
-      const msg = encodeURIComponent(`${doc.documentTitle}\n${doc.documentNumber}\n${formatCurrency(doc.totals.total)}`);
-      await Linking.openURL(`whatsapp://send?text=${msg}`);
-    }
-  );
-  const handlePDF = () => generateAndSharePDF(setPdfLoading, `${doc.documentNumber}.pdf`);
+  const handleShare = () => generateAndSharePDF(setShareLoading, `Share ${doc.documentNumber}`);
+  const handlePDF   = () => generateAndSharePDF(setPdfLoading, `${doc.documentNumber}.pdf`);
 
     return (
     <View style={[ds.actionBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
@@ -825,8 +855,10 @@ export default function DocumentPreviewPage({
         <PartySection doc={doc} />
         <MetaGrid doc={doc} />
 
-        {/* Conditional: ItemsTable for invoice types */}
-        {doc.items && doc.items.length > 0 && <ItemsTable doc={doc} />}
+        {/* Stock docs print godown in/out columns instead of rate/tax columns */}
+        {doc.items && doc.items.length > 0 && (
+          doc.layout?.family === 'stock' ? <StockTable doc={doc} /> : <ItemsTable doc={doc} />
+        )}
 
         {/* Tax breakdown only if items exist */}
         {doc.taxes && doc.taxes.length > 0 && <TaxBreakdown doc={doc} />}
@@ -972,6 +1004,10 @@ const ds = StyleSheet.create({
   tdR:     { textAlign: 'right' },
   tdBoldR: { fontWeight: '700', textAlign: 'right' },
 
+  stockGroupLabel: {
+    fontSize: TYPOGRAPHY.xs, fontWeight: '800', color: COLORS.textSecondary,
+    marginBottom: 6,
+  },
   scrollHintRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 8 },
   scrollHintText: { fontSize: 10, color: COLORS.textTertiary, fontStyle: 'italic' },
 
@@ -982,6 +1018,8 @@ const ds = StyleSheet.create({
     paddingVertical: 11, paddingHorizontal: 2, marginTop: 4,
     borderTopWidth: 1.5, borderTopColor: COLORS.borderStrong,
   },
+  ledgerGroupLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textTertiary, marginBottom: 2 },
+  ledgerAllocation: { fontWeight: '600', color: COLORS.textSecondary, paddingLeft: 12 },
   ledgerTotalLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '800', color: COLORS.textPrimary },
   ledgerTotalAmt:   { fontSize: TYPOGRAPHY.xs, fontWeight: '800', textAlign: 'right' },
 

@@ -1012,6 +1012,14 @@ export default function AuditTrailScreen() {
                                       route = `/stocks/adjustment-preview?tdkRef=${encodeURIComponent(ref)}`;
                                     } else if (/TDK-(?:OPT-)?STJ-/i.test(ref)) {
                                       route = `/stocks/transfer-preview?tdkRef=${encodeURIComponent(ref)}`;
+                                    } else if (/TDK-(?:OPT-)?CN-/i.test(ref)) {
+                                      route = `/sales/credit-note-preview?tdkRef=${encodeURIComponent(ref)}`;
+                                    } else if (/TDK-(?:OPT-)?DBN-/i.test(ref)) {
+                                      route = `/purchase/debit-note-preview?tdkRef=${encodeURIComponent(ref)}`;
+                                    } else if (/TDK-(?:OPT-)?DN-/i.test(ref)) {
+                                      route = `/sales/delivery-note-preview?tdkRef=${encodeURIComponent(ref)}`;
+                                    } else if (/TDK-(?:OPT-)?POR-/i.test(ref)) {
+                                      route = `/purchase/order-preview?tdkRef=${encodeURIComponent(ref)}`;
                                     }
                                     router.push(route as any);
                                   } else {

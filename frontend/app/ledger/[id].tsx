@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Modal,
-  Dimensions, Alert, Share,
+  Dimensions, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,8 +10,7 @@ import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 import { TX_TO_DOC_TYPE } from '../../src/utils/documentHelpers';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
+import { shareStatementPdf } from '../../src/utils/voucherPdf';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { getLedgerDetail, getLedgerStatement, sendPaymentReminder } from '../../src/services/api';
@@ -255,6 +254,7 @@ export default function LedgerDetailScreen() {
           amount: formatAmount(Math.abs(t.debit || t.credit || 0)),
           amount_raw: Math.abs(t.debit || t.credit || 0),
           isDebit: t.dr_cr === 'Dr',  // EXACT from Tally ledger entries, not guessed
+          particulars: t.party_name || t.voucher_type || '',
           balance: t.balance,
           balance_type: t.balance_type,
         })));
@@ -304,46 +304,35 @@ export default function LedgerDetailScreen() {
       ? txns.filter(t => selectedTxns.includes(t.id))
       : txns; // share all if none selected
     try {
-      // Generate ledger statement PDF in Tally format
-      const fromLabel = fromDate || 'All';
-      const toLabel = toDate || 'All';
-      const rows = shareTxns.map((t: any, i: number) => `
-        <tr style="background:${i%2===0?'#fff':'#f9f9f7'}">
-          <td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:11px">${t.date}</td>
-          <td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:11px">
-            <b>${t.voucher}</b><br>
-            <span style="color:#888;font-size:9px">${t.type}</span>
-          </td>
-          <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right;font-size:11px;color:#c0392b;font-weight:${t.isDebit?600:400}">${t.isDebit ? t.amount : '—'}</td>
-          <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right;font-size:11px;color:#2d7d46;font-weight:${!t.isDebit?600:400}">${!t.isDebit ? t.amount : '—'}</td>
-          <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right;font-size:11px">${t.balance != null ? t.balance + ' ' + (t.balance_type||'') : ''}</td>
-        </tr>`).join('');
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
-      <style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;font-size:12px;color:#000;padding:20px;background:#fff;}
-      table{width:100%;border-collapse:collapse;}.header-bar{background:#1a1a1a;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;border-radius:6px 6px 0 0;}</style>
-      </head><body>
-      <div class="header-bar"><span style="font-size:13px;font-weight:bold">Ledger</span><span style="font-size:13px;font-weight:bold">${ledger.name}</span><span style="font-size:11px">Date: ${fromLabel} - ${toLabel}</span></div>
-      <div style="padding:12px 0;"><div style="font-size:18px;font-weight:bold;color:#000">${ledger.name}</div></div>
-      <table><thead><tr style="background:#f0f0f0">
-        <th style="padding:8px 10px;text-align:left;font-size:11px;border-bottom:2px solid #ccc">Date</th>
-        <th style="padding:8px 10px;text-align:left;font-size:11px;border-bottom:2px solid #ccc">Particular</th>
-        <th style="padding:8px 10px;text-align:right;font-size:11px;border-bottom:2px solid #ccc;color:#c0392b">Dr</th>
-        <th style="padding:8px 10px;text-align:right;font-size:11px;border-bottom:2px solid #ccc;color:#2d7d46">Cr</th>
-        <th style="padding:8px 10px;text-align:right;font-size:11px;border-bottom:2px solid #ccc">Balance</th>
-      </tr></thead><tbody>
-      <tr style="background:#f9f9f7"><td style="padding:6px 10px;font-size:11px;font-style:italic" colspan="4">Opening Balance</td><td style="padding:6px 10px;text-align:right;font-size:11px;font-weight:600">${openingBal > 0 ? '₹'+Math.round(openingBal).toLocaleString('en-IN') : '₹0'} ${openingType}</td></tr>
-      ${rows}
-      <tr style="background:#f0f0f0"><td colspan="2" style="padding:8px 10px;font-size:12px;font-weight:bold">Closing Balance</td><td style="padding:8px 10px;text-align:right;font-size:12px;font-weight:bold;color:#c0392b">${closingType==='Dr'?'₹'+Math.round(closingBal).toLocaleString('en-IN'):'—'}</td><td style="padding:8px 10px;text-align:right;font-size:12px;font-weight:bold;color:#2d7d46">${closingType==='Cr'?'₹'+Math.round(closingBal).toLocaleString('en-IN'):'—'}</td><td style="padding:8px 10px;text-align:right;font-size:12px;font-weight:bold">₹${Math.round(closingBal).toLocaleString('en-IN')} ${closingType}</td></tr>
-      </tbody></table>
-      <div style="margin-top:20px;text-align:center;font-size:10px;color:#888">Powered by TallyDekho</div>
-      </body></html>`;
-      const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `${ledger.name} — Statement.pdf`, UTI: 'com.adobe.pdf' });
-      } else {
-        await Share.share({ url: uri, title: `${ledger.name} Statement` });
-      }
+      // Family C statement layout, shared with the rest of the PDF engine.
+      await shareStatementPdf({
+        company: {
+          name: company?.name,
+          address: (company as any)?.address,
+          gstin: (company as any)?.gstin,
+          state: (company as any)?.state,
+        },
+        title: 'Ledger Account',
+        partyName: ledger?.name,
+        partyAddress: ledger?.address,
+        period: fromDate && toDate ? `${fromDate} to ${toDate}` : undefined,
+        openingLabel: 'Opening Balance',
+        openingAmount: Math.round(openingBal),
+        openingSide: openingType === 'Cr' ? 'Cr' : 'Dr',
+        rows: shareTxns.map((t: any) => ({
+          date: t.date,
+          particulars: t.particulars || t.type || '',
+          vchType: t.type,
+          vchNo: t.voucher,
+          debit: t.isDebit ? t.amount_raw : null,
+          credit: t.isDebit ? null : t.amount_raw,
+        })),
+        closingLabel: 'Closing Balance',
+        closingAmount: Math.round(closingBal),
+        closingSide: closingType === 'Cr' ? 'Cr' : 'Dr',
+      }, {
+        fileName: `${ledger?.name || 'Ledger'} — Statement.pdf`,
+      });
     } catch (err) {
       Alert.alert('Error', 'Could not generate PDF. Please try again.');
     }

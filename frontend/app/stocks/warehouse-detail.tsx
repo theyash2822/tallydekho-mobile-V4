@@ -191,7 +191,8 @@ export default function WarehouseDetailScreen() {
                     <TouchableOpacity
                       style={s.actRow}
                       activeOpacity={0.7}
-                      onPress={() => a.ref ? router.push(`/voucher/preview?ref=${a.ref}` as any) : undefined}
+                      disabled={!a.guid}
+                      onPress={() => a.guid ? router.push(`/document/${a.guid}` as any) : undefined}
                     >
                       <View style={[s.actIcon, { backgroundColor: cfg.bg }]}>
                         <Ionicons name={cfg.icon as any} size={16} color={cfg.color} />

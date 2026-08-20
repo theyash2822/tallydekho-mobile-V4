@@ -1,4 +1,11 @@
 import { DocumentType, VoucherDocument } from '../types/document';
+import { renderTallyHTML } from './pdf/tallyLayout';
+
+import { amountInWords, tallyWords } from './pdf/words';
+
+export { amountInWords, tallyWords };
+export { renderTallyStatementHTML } from './pdf/tallyLayout';
+export type { StatementInput, StatementRow } from './pdf/tallyLayout';
 
 // ── Currency formatter ────────────────────────────────────────────────────────
 export function formatCurrency(amount: number): string {
@@ -6,42 +13,6 @@ export function formatCurrency(amount: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-}
-
-// ── Amount in words (Indian system) ──────────────────────────────────────────
-const ONES = [
-  '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
-  'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
-  'Seventeen', 'Eighteen', 'Nineteen',
-];
-const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-
-function twoDigit(n: number): string {
-  if (n < 20) return ONES[n];
-  return TENS[Math.floor(n / 10)] + (n % 10 ? ' ' + ONES[n % 10] : '');
-}
-
-function chunk(n: number): string {
-  if (n === 0) return '';
-  if (n < 100) return twoDigit(n);
-  return ONES[Math.floor(n / 100)] + ' Hundred' + (n % 100 ? ' ' + twoDigit(n % 100) : '');
-}
-
-export function amountInWords(amount: number): string {
-  if (!amount) return 'Zero Rupees Only';
-  const n = Math.floor(Math.abs(amount));
-  const paisa = Math.round((Math.abs(amount) - n) * 100);
-  const parts: string[] = [];
-  let rem = n;
-
-  if (rem >= 10000000) { parts.push(chunk(Math.floor(rem / 10000000)) + ' Crore'); rem %= 10000000; }
-  if (rem >= 100000)   { parts.push(chunk(Math.floor(rem / 100000)) + ' Lakh');  rem %= 100000;   }
-  if (rem >= 1000)     { parts.push(chunk(Math.floor(rem / 1000)) + ' Thousand'); rem %= 1000;    }
-  if (rem > 0)         { parts.push(chunk(rem)); }
-
-  let result = parts.join(' ') + ' Rupees';
-  if (paisa > 0) result += ' and ' + twoDigit(paisa) + ' Paise';
-  return result + ' Only';
 }
 
 
@@ -70,6 +41,7 @@ export const DOC_TYPE_CONFIG: Record<DocumentType, { label: string; color: strin
   purchase_invoice: { label: 'Purchase Invoice',  color: '#4527A0', bg: '#EDE7F6' },
   purchase_order:   { label: 'Purchase Order',    color: '#1B5E20', bg: '#E8F5E9' },
   receipt_note:     { label: 'Receipt Note',      color: '#004D40', bg: '#E0F2F1' },
+  quotation:        { label: 'Quotation',         color: '#1565C0', bg: '#E3F2FD' },
   payment_voucher:  { label: 'Payment Voucher',   color: '#E65100', bg: '#FFF3E0' },
   receipt_voucher:  { label: 'Receipt Voucher',   color: '#2D7D46', bg: '#E8F5E9' },
   contra_voucher:   { label: 'Contra Voucher',    color: '#37474F', bg: '#ECEFF1' },
@@ -79,239 +51,27 @@ export const DOC_TYPE_CONFIG: Record<DocumentType, { label: string; color: strin
 
 // ── PDF HTML Template Generator ──────────────────────────────────────────────
 export interface PDFBankInfo { bankName?: string | null; accountNo?: string | null; ifsc?: string | null; upiId?: string | null; }
-export function generateDocumentHTML(doc: VoucherDocument, logoUri?: string | null, format: 1 | 2 | 3 = 1, terms?: string[], qrImage?: string | null, bankInfo?: PDFBankInfo | null): string {
-  if (format === 2) return _generateFormat2HTML(doc, logoUri, terms, qrImage, bankInfo);
-  if (format === 3) return _generateFormat3HTML(doc, logoUri, terms, qrImage, bankInfo);
-  const cfg = DOC_TYPE_CONFIG[doc.documentType] || DOC_TYPE_CONFIG.sales_invoice;
-  const hasItems = !!(doc.items && doc.items.length > 0);
-  const hasEntries = !!(doc.ledgerEntries && doc.ledgerEntries.length > 0);
-  const t = doc.totals;
-  const isVoucher = ['payment_voucher','receipt_voucher','contra_voucher','journal_voucher'].includes(doc.documentType);
-  const isOrder = ['sales_order','purchase_order'].includes(doc.documentType);
-  const isDelivery = doc.documentType === 'delivery_note';
-  const isProforma = doc.documentType === 'proforma_invoice';
-  const numberLabel = isProforma ? 'Proforma No.' : 'Invoice No.';
-  const footerKind = isVoucher ? 'Voucher' : (isProforma ? 'Proforma Invoice' : 'Invoice');
 
-  const fmt = (n: number) => '₹' + Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const cell = (label: string, value: string, colspan = 1) =>
-    `<td colspan="${colspan}" style="border:1px solid #999;padding:4px 6px;vertical-align:top;font-size:10px"><span style="color:#666;font-size:8px;display:block">${label}</span><b>${value || ''}</b></td>`;
+/**
+ * `tally` replicates the Tally Prime print layout and is the default.
+ * `modern_a` / `modern_b` are the two house styles, selectable in Settings.
+ */
+export type DocumentFormat = 'tally' | 'modern_a' | 'modern_b';
 
-  // Meta fields grid
-  const metaRows = isVoucher ? `
-    <tr>${cell('Voucher No.', doc.documentNumber)}${cell('Date', doc.date)}</tr>
-    <tr>${cell('Mode of Payment', '')}${cell('Reference', doc.reference || '')}</tr>` :
-  isOrder ? `
-    <tr>${cell('Order No.', doc.documentNumber)}${cell('Dated', doc.date)}</tr>
-    <tr>${cell('Reference No.', doc.reference || '')}${cell('Other References', '')}</tr>
-    <tr>${cell("Buyer's Order No.", '')}${cell('Dated', '')}</tr>
-    <tr>${cell('Terms of Delivery', '', 2)}</tr>` : `
-    <tr>${cell(numberLabel, doc.documentNumber)}${cell('Dated', doc.date)}</tr>
-    <tr>${cell('Delivery Note', '')}${cell('Mode/Terms of Payment', '')}</tr>
-    <tr>${cell('Reference No. & Date.', doc.reference || '')}${cell('Other References', '')}</tr>
-    <tr>${cell("Buyer's Order No.", '')}${cell('Dated', '')}</tr>
-    <tr>${cell('Dispatch Doc No.', '')}${cell('Delivery Note Date', '')}</tr>
-    <tr>${cell('Dispatched through', '')}${cell('Destination', '')}</tr>
-    <tr>${cell('Terms of Delivery', '', 2)}</tr>`;
+/** Older saved configs stored the format as 1/2/3. */
+const LEGACY_FORMAT_MAP: Record<number, DocumentFormat> = { 1: 'tally', 2: 'modern_a', 3: 'modern_b' };
 
-  // Items rows for invoice/order
-  const itemRows = hasItems ? doc.items!.map((item, i) => `
-    <tr>
-      <td style="border:1px solid #999;padding:5px 6px;text-align:center;font-size:10px">${i+1}</td>
-      <td style="border:1px solid #999;padding:5px 6px;font-size:10px"><b>${item.name}</b></td>
-      <td style="border:1px solid #999;padding:5px 6px;text-align:center;font-size:10px">${item.hsn||''}</td>
-      <td style="border:1px solid #999;padding:5px 6px;text-align:right;font-size:10px">${item.qty} ${item.unit}</td>
-      <td style="border:1px solid #999;padding:5px 6px;text-align:right;font-size:10px">${item.rate.toFixed(2)}</td>
-      <td style="border:1px solid #999;padding:5px 6px;text-align:center;font-size:10px">${item.unit}</td>
-      <td style="border:1px solid #999;padding:5px 6px;text-align:right;font-size:10px">${item.discount ? item.discount.toFixed(2)+'%' : ''}</td>
-      <td style="border:1px solid #999;padding:5px 6px;text-align:right;font-size:10px;font-weight:600">${item.amount.toFixed(2)}</td>
-    </tr>`).join('') :
-    `<tr><td colspan="8" style="border:1px solid #999;padding:60px;text-align:center;color:#ccc"></td></tr>`;
-
-  // Ledger entries for vouchers
-  const entryRows = hasEntries ? doc.ledgerEntries!.map((e, i) => `
-    <tr>
-      <td style="border:1px solid #999;padding:5px 6px;font-size:10px"><b>${e.particulars}</b>${e.narration ? `<br><span style="color:#888;font-size:9px">${e.narration}</span>` : ''}</td>
-      <td style="border:1px solid #999;padding:5px 6px;text-align:right;font-size:10px;color:#c0392b;font-weight:${e.debit?600:400}">${e.debit ? fmt(e.debit) : '—'}</td>
-      <td style="border:1px solid #999;padding:5px 6px;text-align:right;font-size:10px;color:#2d7d46;font-weight:${e.credit?600:400}">${e.credit ? fmt(e.credit) : '—'}</td>
-    </tr>`).join('') :
-    `<tr><td colspan="3" style="border:1px solid #999;padding:60px;text-align:center;color:#ccc"></td></tr>`;
-
-  const totalQty = hasItems ? doc.items!.reduce((s,i) => s + i.qty, 0) : 0;
-  const unit0 = hasItems && doc.items![0] ? doc.items![0].unit : '';
-
-  // HSN/SAC tax summary (for invoices with items)
-  const hsnMap: Record<string, number> = {};
-  if (hasItems) {
-    doc.items!.forEach(item => {
-      const hsn = item.hsn || 'N/A';
-      hsnMap[hsn] = (hsnMap[hsn] || 0) + item.amount;
-    });
-  }
-  const hsnRows = Object.entries(hsnMap).map(([hsn, amt]) =>
-    `<tr><td style="border:1px solid #999;padding:4px 6px;font-size:10px">${hsn}</td><td style="border:1px solid #999;padding:4px 6px;text-align:right;font-size:10px">${amt.toFixed(2)}</td></tr>`
-  ).join('');
-
-  const mainTable = isVoucher ? `
-  <table>
-    <thead><tr style="background:#f0f0f0">
-      <th style="border:1px solid #999;padding:6px;text-align:left;font-size:10px">Particulars</th>
-      <th style="border:1px solid #999;padding:6px;text-align:right;font-size:10px;width:110px">Debit (Dr)</th>
-      <th style="border:1px solid #999;padding:6px;text-align:right;font-size:10px;width:110px">Credit (Cr)</th>
-    </tr></thead>
-    <tbody>${entryRows}${!hasEntries && doc.narration ? `<tr><td style="border:1px solid #999;padding:8px;font-size:10px">${doc.narration}</td><td style="border:1px solid #999"></td><td style="border:1px solid #999"></td></tr>` : ''}</tbody>
-    <tfoot><tr>
-      <td style="border:1px solid #999;padding:6px;text-align:right;font-size:11px;font-weight:bold">Total</td>
-      <td style="border:1px solid #999;padding:6px;text-align:right;font-size:13px;font-weight:bold;color:#c0392b">${t.drTotal ? fmt(t.drTotal) : fmt(t.total)}</td>
-      <td style="border:1px solid #999;padding:6px;text-align:right;font-size:13px;font-weight:bold;color:#2d7d46">${t.crTotal ? fmt(t.crTotal) : fmt(t.total)}</td>
-    </tr></tfoot>
-  </table>` : `
-  <table>
-    <thead><tr style="background:#f0f0f0">
-      <th style="border:1px solid #999;padding:6px;text-align:center;font-size:10px;width:28px">Sl<br>No</th>
-      <th style="border:1px solid #999;padding:6px;text-align:center;font-size:10px">Description of Goods</th>
-      <th style="border:1px solid #999;padding:6px;text-align:center;font-size:10px;width:55px">HSN/SAC</th>
-      <th style="border:1px solid #999;padding:6px;text-align:center;font-size:10px;width:65px">Quantity</th>
-      <th style="border:1px solid #999;padding:6px;text-align:center;font-size:10px;width:60px">Rate</th>
-      <th style="border:1px solid #999;padding:6px;text-align:center;font-size:10px;width:30px">per</th>
-      <th style="border:1px solid #999;padding:6px;text-align:center;font-size:10px;width:45px">Disc.<br>%</th>
-      <th style="border:1px solid #999;padding:6px;text-align:center;font-size:10px;width:85px">Amount</th>
-    </tr></thead>
-    <tbody>${itemRows}${!hasItems && doc.narration ? `<tr><td colspan="7" style="border:1px solid #999;padding:8px;font-size:10px">${doc.narration}</td><td style="border:1px solid #999;padding:8px;text-align:right;font-size:13px;font-weight:bold">${fmt(t.total)}</td></tr>` : ''}</tbody>
-    <tfoot>
-      <tr>
-        <td colspan="3" style="border:1px solid #999;padding:6px;text-align:right;font-size:10px;font-weight:bold">Total</td>
-        <td style="border:1px solid #999;padding:6px;text-align:right;font-size:10px;font-weight:bold">${hasItems ? totalQty + ' ' + unit0 : ''}</td>
-        <td style="border:1px solid #999;padding:6px"></td><td style="border:1px solid #999;padding:6px"></td><td style="border:1px solid #999;padding:6px"></td>
-        <td style="border:1px solid #999;padding:6px;text-align:right;font-size:13px;font-weight:bold">₹ ${t.total.toFixed(2)}</td>
-      </tr>
-    </tfoot>
-  </table>`;
-
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
-<style>
-  *{margin:0;padding:0;box-sizing:border-box;}
-  body{font-family:Arial,sans-serif;font-size:11px;color:#000;padding:14mm 14mm 14mm 14mm;background:#fff;}
-  .page{width:100%;border:2px solid #000;}
-  table{width:100%;border-collapse:collapse;}
-</style>
-</head><body>
-<div class="page">
-
-<!-- HEADER: Company + Doc Type + Meta -->
-<table>
-  <tr>
-    <td style="width:50%;border:1px solid #999;padding:8px 10px;vertical-align:top">
-      ${logoUri
-        ? `<img src="${logoUri}" style="max-height:70px;max-width:140px;object-fit:contain;display:block;margin-bottom:6px" />`
-        : `<div style="display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:8px;background:#F0F0F0;font-size:18px;font-weight:800;color:#555;margin-bottom:6px">${(doc.company?.name||'CO').replace(/[^A-Za-z]/g,'').slice(0,2).toUpperCase()}</div>`
-      }
-      <div style="font-size:14px;font-weight:bold">${doc.company?.name || ''}</div>
-      <div style="font-size:9px;color:#444;margin-top:3px">${(doc.company?.address || '').replace(/,/g,',\n')}</div>
-      ${doc.company?.gstin ? `<div style="font-size:9px;margin-top:3px"><b>GSTIN/UIN:</b> ${doc.company.gstin}</div>` : ''}
-      ${(doc.company as any)?.state ? `<div style="font-size:9px;color:#444">State Name: <b>${(doc.company as any).state}</b></div>` : ''}
-      ${doc.company?.email ? `<div style="font-size:9px;color:#444">E-Mail: ${doc.company.email}</div>` : ''}
-    </td>
-    <td style="width:50%;border:1px solid #999;padding:8px;vertical-align:top">
-      <div style="text-align:center;margin-bottom:8px">
-        <span style="font-size:15px;font-weight:bold;border:2px solid #C62828;padding:3px 16px;display:inline-block">${cfg.label}</span>
-      </div>
-      <table style="width:100%">${metaRows}</table>
-    </td>
-  </tr>
-</table>
-
-<!-- PARTIES -->
-<table>
-  <tr>
-    <td style="width:50%;border:1px solid #999;padding:6px 10px;vertical-align:top">
-      ${isVoucher ? `
-        <div style="font-size:8px;color:#777;text-transform:uppercase;margin-bottom:2px">Account</div>
-        <div style="font-size:12px;font-weight:bold">${doc.party?.name||'—'}</div>
-        ${doc.party?.phone ? `<div style="font-size:9px">Ph: ${doc.party.phone}</div>` : ''}
-      ` : `
-        <div style="font-size:8px;color:#777;text-transform:uppercase;margin-bottom:2px">Consignee (Ship to)</div>
-        <div style="font-size:12px;font-weight:bold">${doc.party?.name||'—'}</div>
-        ${doc.party?.address ? `<div style="font-size:9px;color:#444">${doc.party.address}</div>` : ''}
-        ${doc.party?.gstin ? `<div style="font-size:9px"><b>GSTIN:</b> ${doc.party.gstin}</div>` : ''}
-      `}
-      <br/>
-    </td>
-    <td style="width:50%;border:1px solid #999;padding:6px 10px;vertical-align:top">
-      ${isVoucher ? `
-        <div style="font-size:8px;color:#777;text-transform:uppercase;margin-bottom:2px">Narration</div>
-        <div style="font-size:10px;font-style:italic">${doc.narration||'—'}</div>
-      ` : `
-        <div style="font-size:8px;color:#777;text-transform:uppercase;margin-bottom:2px">Buyer (Bill to)</div>
-        <div style="font-size:12px;font-weight:bold">${doc.party?.name||'—'}</div>
-        ${doc.party?.address ? `<div style="font-size:9px;color:#444">${doc.party.address}</div>` : ''}
-        ${doc.party?.phone ? `<div style="font-size:9px">Ph: ${doc.party.phone}</div>` : ''}
-        ${doc.party?.gstin ? `<div style="font-size:9px"><b>GSTIN:</b> ${doc.party.gstin}</div>` : ''}
-      `}
-      <br/>
-    </td>
-  </tr>
-</table>
-
-<!-- MAIN TABLE -->
-${mainTable}
-
-<!-- AMOUNT IN WORDS + SIGNATURE -->
-<table>
-  <tr>
-    <td style="width:60%;border:1px solid #999;padding:6px 10px;vertical-align:top">
-      <div style="font-size:9px;color:#777;text-transform:uppercase;margin-bottom:3px">Amount Chargeable (in words)</div>
-      <div style="font-size:11px;font-weight:bold">Indian Rupees ${amountInWords(t.total)}</div>
-      <br/>
-      ${hasItems && Object.keys(hsnMap).length > 0 ? `
-      <div style="font-size:9px;color:#777;text-transform:uppercase;margin-top:8px;margin-bottom:4px">HSN/SAC Tax Summary</div>
-      <table style="width:auto">
-        <thead><tr style="background:#f0f0f0">
-          <th style="border:1px solid #999;padding:4px 8px;font-size:9px">HSN/SAC</th>
-          <th style="border:1px solid #999;padding:4px 8px;font-size:9px;text-align:right">Taxable Value</th>
-        </tr></thead>
-        <tbody>${hsnRows}</tbody>
-        <tfoot><tr>
-          <td style="border:1px solid #999;padding:4px 8px;font-size:9px;font-weight:bold">Total</td>
-          <td style="border:1px solid #999;padding:4px 8px;font-size:9px;font-weight:bold;text-align:right">${t.total.toFixed(2)}</td>
-        </tr></tfoot>
-      </table>
-      <div style="font-size:9px;margin-top:6px">Tax Amount (in words): <b>NIL</b></div>
-      ` : ''}
-    </td>
-    <td style="width:40%;border:1px solid #999;padding:6px 10px;vertical-align:top">
-      <div style="font-size:9px;text-align:right;color:#777">E. &amp; O.E</div>
-      <br/>
-      ${qrImage ? `<div style="text-align:right;margin-bottom:6px"><img src="${qrImage}" style="width:70px;height:70px;object-fit:contain" /></div>` : ''}
-      ${_bankBlock(bankInfo, 'right')}
-      <div style="text-align:right">
-        <div style="font-size:11px">for <b>${doc.company?.name||''}</b></div>
-        <br/><br/>
-        <div style="border-top:1px solid #000;padding-top:4px;font-size:10px;display:inline-block;min-width:140px;text-align:center">Authorised Signatory</div>
-      </div>
-    </td>
-  </tr>
-</table>
-
-<!-- DECLARATION + TERMS + FOOTER -->
-<table>
-  <tr>
-    <td style="border:1px solid #999;padding:6px 10px;vertical-align:top">
-      <b style="font-size:10px">Company's PAN${doc.company?.gstin ? ' : ' + doc.company.gstin.slice(2,12) : ''}</b>
-      <div style="font-size:9px;color:#777;text-transform:uppercase;margin-top:6px;margin-bottom:2px">Declaration</div>
-      <div style="font-size:9px;color:#444;line-height:1.5">We declare that this ${isVoucher ? 'voucher' : (isProforma ? 'proforma invoice' : 'invoice')} shows the actual ${isVoucher ? 'transaction' : 'price of the goods described'} and that all particulars are true and correct.</div>
-      ${terms && terms.length > 0 ? `<div style="font-size:9px;color:#777;text-transform:uppercase;margin-top:8px;margin-bottom:3px;font-weight:bold">Terms &amp; Conditions</div><ol style="font-size:9px;color:#444;padding-left:16px;margin:0;line-height:1.6">${terms.map(term => `<li>${term}</li>`).join('')}</ol>` : ''}
-    </td>
-  </tr>
-</table>
-
-<div style="text-align:center;font-size:9px;color:#555;padding:6px;border-top:1px solid #999">This is a Computer Generated ${footerKind}</div>
-</div>
-</body></html>`;
+export function resolveDocumentFormat(format?: DocumentFormat | number | null): DocumentFormat {
+  if (typeof format === 'number') return LEGACY_FORMAT_MAP[format] ?? 'tally';
+  return format === 'modern_a' || format === 'modern_b' ? format : 'tally';
 }
 
-
-
+export function generateDocumentHTML(doc: VoucherDocument, logoUri?: string | null, format: DocumentFormat | 1 | 2 | 3 = 'tally', terms?: string[], qrImage?: string | null, bankInfo?: PDFBankInfo | null): string {
+  const resolved = resolveDocumentFormat(format);
+  if (resolved === 'modern_a') return _generateFormat2HTML(doc, logoUri, terms, qrImage, bankInfo);
+  if (resolved === 'modern_b') return _generateFormat3HTML(doc, logoUri, terms, qrImage, bankInfo);
+  return renderTallyHTML(doc, { logoUri, terms, qrImage, bankInfo });
+}
 
 // ── Format 2 — Modern layout ─────────────────────────────────────────────────
 function _generateFormat2HTML(doc: VoucherDocument, logoUri?: string | null, terms?: string[], qrImage?: string | null, bankInfo?: PDFBankInfo | null): string {
@@ -674,6 +434,7 @@ export const TX_TO_DOC_TYPE: Record<string, DocumentType> = {
   'Purchase Invoice': 'purchase_invoice',
   'Purchase Order':   'purchase_order',
   'Receipt Note':     'receipt_note',
+  'Quotation':        'quotation',
   'Payment':          'payment_voucher',
   'Payment Voucher':  'payment_voucher',
   'Receipt':          'receipt_voucher',

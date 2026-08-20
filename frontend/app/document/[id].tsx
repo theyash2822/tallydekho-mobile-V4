@@ -8,6 +8,7 @@ import DocumentPreviewPage from '../../src/components/document/DocumentPreviewPa
 import { getVoucherById } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { TX_TO_DOC_TYPE, DOC_TYPE_CONFIG, amountInWords } from '../../src/utils/documentHelpers';
+import { fromTallyVoucher } from '../../src/utils/voucherDocumentAdapter';
 import { COLORS } from '../../src/constants/colors';
 
 // Convert ISO '2025-04-04' → '04 Apr 2025'
@@ -18,106 +19,41 @@ function isoToDocDate(iso: string): string {
   return `${d.padStart(2,'0')} ${months[parseInt(m)-1] || ''} ${y}`;
 }
 
+/** Tally's voucher type string → our DocumentType. */
+function resolveTallyDocType(rawType: string): DocumentType {
+  const exact = TX_TO_DOC_TYPE[rawType] as DocumentType | undefined;
+  if (exact) return exact;
+  const lower = rawType.toLowerCase();
+  if (lower.includes('debit')) return 'debit_note';
+  if (lower.includes('credit')) return 'credit_note';
+  if (lower.includes('delivery')) return 'delivery_note';
+  if (lower.includes('quotation')) return 'quotation';
+  if (lower.includes('sales order')) return 'sales_order';
+  if (lower.includes('purchase order')) return 'purchase_order';
+  if (lower.includes('sales')) return 'sales_invoice';
+  if (lower.includes('purchase')) return 'purchase_invoice';
+  // "Receipt Note" is an inventory voucher, not money in — it has to be matched
+  // before the plain "receipt" test or it prints as a Receipt Voucher.
+  if (lower.includes('receipt note')) return 'receipt_note';
+  if (lower.includes('receipt')) return 'receipt_voucher';
+  if (lower.includes('payment')) return 'payment_voucher';
+  if (lower.includes('journal')) return 'journal_voucher';
+  if (lower.includes('contra')) return 'contra_voucher';
+  if (lower.includes('stock')) return 'stock_journal';
+  return 'sales_invoice';
+}
+
 function apiVoucherToDoc(data: any, companyName: string): VoucherDocument {
-  const v = data.voucher;
-  const apiItems = data.items || [];
-  const gst = data.gst || null;
-  const partyLedger = data.party || null;
-  const co = data.company || null;
-  const dispatchDetails = data.dispatch_details || null;
-  const collectPayment = data.collect_payment || null;
-
-  // Map voucher type to document type
-  const rawType = v.voucher_type || 'Sales GST';
-  // Try exact match first, then partial
-  let docType: DocumentType = (TX_TO_DOC_TYPE[rawType] as DocumentType);
-  if (!docType) {
-    const lower = rawType.toLowerCase();
-    if (lower.includes('sales')) docType = 'sales_invoice';
-    else if (lower.includes('purchase')) docType = 'purchase_invoice';
-    else if (lower.includes('receipt')) docType = 'receipt_voucher';
-    else if (lower.includes('payment')) docType = 'payment_voucher';
-    else if (lower.includes('journal')) docType = 'journal_voucher';
-    else if (lower.includes('contra')) docType = 'contra_voucher';
-    else if (lower.includes('debit')) docType = 'debit_note';
-    else if (lower.includes('credit')) docType = 'credit_note';
-    else docType = 'sales_invoice';
-  }
-
-  const documentTitle = DOC_TYPE_CONFIG[docType]?.label || rawType;
-  // Use party_amount (per-party ledger entry) when available — v.amount can be wrong when Tally has multiple parties
-  const totalAmount = parseFloat((v.party_amount ?? v.amount) || '0');
-
-  // Map inventory items
-  const items = apiItems.length > 0 ? apiItems.map((item: any, i: number) => ({
-    id: String(item.id || i),
-    name: item.stock_item_name || '—',
-    hsn: item.hsn || undefined,
-    qty: parseFloat(item.actual_qty || item.billed_qty || '0'),
-    unit: item.unit || 'Nos',
-    rate: parseFloat(item.rate || '0'),
-    discount: parseFloat(item.discount || '0') || undefined,
-    taxPct: undefined,
-    amount: parseFloat(item.amount || '0'),
-  })) : undefined;
-
-  // GST tax lines — show whenever a gst_voucher_details record exists for this voucher
-  // (even if amounts are 0 — GST-exempt goods still need the section to show reg type/place of supply)
-  const hasTax = !!gst;
-  const taxes = hasTax ? [{
-    description: gst.gst_reg_type ? `GST (${gst.gst_reg_type})` : 'GST',
-    rate: 0,
-    taxableAmount: parseFloat(gst.taxable_amount || '0'),
-    cgst: parseFloat(gst.cgst_amount) > 0 ? parseFloat(gst.cgst_amount) : undefined,
-    sgst: parseFloat(gst.sgst_amount) > 0 ? parseFloat(gst.sgst_amount) : undefined,
-    igst: parseFloat(gst.igst_amount) > 0 ? parseFloat(gst.igst_amount) : undefined,
-    total: parseFloat(gst.cgst_amount||'0') + parseFloat(gst.sgst_amount||'0') + parseFloat(gst.igst_amount||'0'),
-  }] : undefined;
-
-  // Totals
-  const taxTotal = taxes ? taxes.reduce((s: number, t: any) => s + t.total, 0) : 0;
-  const subtotal = parseFloat(gst?.taxable_amount || '0') || (totalAmount - taxTotal);
-
-  return {
-    id: v.guid || String(v.id),
-    documentType: docType,
-    documentTitle,
-    documentNumber: String(v.voucher_number || '—'),
-    date: isoToDocDate(v.date || ''),
-    company: {
-      name: companyName || co?.name || 'Company',
-      address: [co?.address, co?.state, co?.country].filter(Boolean).join(', ') || '',
-      gstin: co?.gstin || undefined,
-      state: co?.state || undefined,
-      email: co?.email || undefined,
-    },
-    party: v.party_name ? {
-      name: v.party_name,
-      gstin: partyLedger?.gstin || gst?.party_name || undefined,
-      address: partyLedger?.address || undefined,
-      phone: partyLedger?.phone || undefined,
-    } : undefined,
-    narration: v.narration || data.app_narration || undefined,
-    reference: v.reference || undefined,
-    dispatchDetails: dispatchDetails || undefined,
-    paymentDetails: collectPayment ? {
-      mode: collectPayment.mode || '',
-      ledgerName: collectPayment.ledgerName || '',
-      amount: parseFloat(collectPayment.amount || 0),
-      reference: collectPayment.reference || '',
-    } : undefined,
-    items,
-    taxes,
-    totals: {
-      subtotal: subtotal > 0 ? subtotal : totalAmount,
-      taxTotal: taxTotal > 0 ? taxTotal : undefined,
-      cgstTotal: taxes?.[0]?.cgst,
-      sgstTotal: taxes?.[0]?.sgst,
-      igstTotal: taxes?.[0]?.igst,
-      total: totalAmount,
-      totalInWords: amountInWords(totalAmount),
-    },
-  };
+  const rawType = data.voucher?.voucher_type || 'Sales GST';
+  const docType = resolveTallyDocType(rawType);
+  return fromTallyVoucher(
+    data,
+    companyName,
+    docType,
+    DOC_TYPE_CONFIG[docType]?.label || rawType,
+    isoToDocDate,
+    amountInWords
+  );
 }
 
 export default function DocumentPage() {

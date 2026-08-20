@@ -6,7 +6,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -35,6 +34,7 @@ import {
   getSalesLedgerAccounts,
   getWarehouses,
 } from '../../src/services/api';
+import { shareVoucherPdfByRef } from '../../src/utils/voucherPdf';
 
 type InvoiceChoice = {
   id: string;
@@ -527,6 +527,8 @@ export default function CreateCreditNoteScreen() {
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
   const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
+  const [sharingPdf, setSharingPdf] = useState(false);
+  const companyGuid = company?.guid;
 
   useEffect(() => {
     if (entryType === 'regular') setDate(todayDMY());
@@ -868,28 +870,19 @@ export default function CreateCreditNoteScreen() {
     }
   };
 
-  const previewItems = useMemo(() => selectedItems.map((item, index) => ({
-    no: String(index + 1),
-    item: item.itemName,
-    qty: `${formatQty(num(item.returnQty))}${item.unit ? ` ${item.unit}` : ''} × ${formatMoney(unitNet(item))}`,
-    price: formatMoney(lineReturnAmount(item)),
-  })), [selectedItems]);
-
   const shareSubmitted = async () => {
-    if (!submitResult || !selectedInvoice) return;
-    await Share.share({
-      title: 'Credit Note',
-      message: [
-        'Credit Note — Sales Return',
-        `Voucher: ${submitResult.voucherNumber || 'Pending from TallyPrime'}`,
-        submitResult.tdkRef ? `TDK Ref: ${submitResult.tdkRef}` : '',
-        `Party: ${party}`,
-        `Against: ${selectedInvoice.voucherNumber}`,
-        `Date: ${date}`,
-        `Amount: ${formatMoney(totalAmount)}`,
-        `Reason: ${narration.trim()}`,
-      ].filter(Boolean).join('\n'),
-    });
+    if (!submitResult?.tdkRef || !companyGuid) return;
+    setSharingPdf(true);
+    try {
+      await shareVoucherPdfByRef(submitResult.tdkRef, companyGuid, {
+        documentType: 'credit_note',
+        onBeforeShare: () => setSharingPdf(false),
+      });
+    } catch (e: any) {
+      Toast.show({ type: 'error', text1: 'PDF Error', text2: e?.message || 'Could not generate PDF' });
+    } finally {
+      setSharingPdf(false);
+    }
   };
 
   const renderStepOne = () => (
@@ -1284,30 +1277,24 @@ export default function CreateCreditNoteScreen() {
             <View style={ss.actionRow}>
               <TouchableOpacity
                 style={ss.actionBtn}
+                disabled={!submitResult.tdkRef}
                 onPress={() => {
                   Keyboard.dismiss();
-                  router.push({
-                    pathname: '/voucher/preview',
-                    params: {
-                      type: 'credit_note',
-                      voucherNumber: submitResult.voucherNumber || submitResult.tdkRef || 'Credit Note',
-                      date,
-                      customer: party,
-                      against: selectedInvoice?.voucherNumber || '',
-                      amount: formatMoney(totalAmount),
-                      narration: narration.trim(),
-                      items: JSON.stringify(previewItems),
-                      tdkRef: submitResult.tdkRef,
-                    },
-                  } as any);
+                  router.push(`/sales/credit-note-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef!)}` as any);
                 }}
               >
                 <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
                 <Text style={ss.actionText}>Preview</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={ss.actionBtn} onPress={() => { Keyboard.dismiss(); shareSubmitted(); }}>
-                <Ionicons name="share-outline" size={18} color={COLORS.brandPrimary} />
-                <Text style={ss.actionText}>Share</Text>
+              <TouchableOpacity
+                style={ss.actionBtn}
+                disabled={sharingPdf || !submitResult.tdkRef}
+                onPress={() => { Keyboard.dismiss(); shareSubmitted(); }}
+              >
+                {sharingPdf
+                  ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+                  : <Ionicons name="share-outline" size={18} color={COLORS.brandPrimary} />}
+                <Text style={ss.actionText}>{sharingPdf ? 'Generating…' : 'Share PDF'}</Text>
               </TouchableOpacity>
             </View>
             <TouchableOpacity style={ss.closeBtn} onPress={() => { Keyboard.dismiss(); router.back(); }}>

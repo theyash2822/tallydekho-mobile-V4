@@ -4,7 +4,7 @@
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getMasterPreview } from '../../src/services/api';
+import { shareMasterPdf } from '../../src/utils/voucherPdf';
 
 type PreviewData = {
   typeLabel?: string;
@@ -45,6 +46,7 @@ export default function MasterPreviewScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<PreviewData | null>(null);
+  const [sharing, setSharing] = useState(false);
 
   const fetchPreview = useCallback(async () => {
     if (!queueId || !company?.guid) return;
@@ -66,6 +68,32 @@ export default function MasterPreviewScreen() {
   const p = data?.payload || {};
   const posted = data?.booksImpactStatus === 'posted' || data?.syncConfirmed;
   const awaiting = !posted && (data?.queueStatus === 'success' || data?.postingTag === 'Awaiting Sync');
+
+  const handleSharePdf = async () => {
+    if (!data) return;
+    setSharing(true);
+    try {
+      await shareMasterPdf(
+        {
+          typeLabel: data.typeLabel,
+          name: data.name,
+          parent: data.parent,
+          postingTag: posted ? 'Posted' : awaiting ? 'Awaiting Sync' : data.postingTag,
+          tallyGuid: data.tallyGuid,
+          payload: data.payload,
+        },
+        {
+          name: company?.name,
+          address: (company as any)?.address,
+          gstin: (company as any)?.gstin,
+        },
+        { onBeforeShare: () => setSharing(false) },
+      );
+    } catch {
+      setSharing(false);
+      Alert.alert('PDF Error', 'Could not generate PDF. Please try again.');
+    }
+  };
 
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
@@ -169,6 +197,18 @@ export default function MasterPreviewScreen() {
               <Text style={s.errorBody}>{data.errorMessage}</Text>
             </View>
           )}
+
+          <TouchableOpacity
+            style={s.shareBtn}
+            onPress={handleSharePdf}
+            activeOpacity={0.8}
+            disabled={sharing}
+          >
+            {sharing
+              ? <ActivityIndicator size="small" color={COLORS.white} />
+              : <Ionicons name="share-outline" size={18} color={COLORS.white} />}
+            <Text style={s.shareTxt}>{sharing ? 'Generating…' : 'Share PDF'}</Text>
+          </TouchableOpacity>
         </ScrollView>
       )}
     </SafeAreaView>
@@ -217,4 +257,9 @@ const s = StyleSheet.create({
   rowLabel: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, flex: 1 },
   rowValue: { fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '600', flex: 1.4, textAlign: 'right' },
   errorBody: { fontSize: TYPOGRAPHY.sm, color: COLORS.negative, lineHeight: 20 },
+  shareBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 14,
+  },
+  shareTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
 });
