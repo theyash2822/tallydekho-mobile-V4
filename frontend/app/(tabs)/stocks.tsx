@@ -73,21 +73,22 @@ export default function StocksDashboard() {
   const router = useRouter();
   const d = MOCK_STOCK_DASHBOARD;
 
-  const HEADER_ACTIONS = [
-    { id: 'report',   icon: 'bar-chart-outline', route: '/stocks/reports'  },
-    { id: 'settings', icon: 'options-outline',   route: '/stocks/settings' },
-    { id: 'barcode',  icon: 'barcode-outline',   route: '/stocks/barcodes' },
+  const SECONDARY_ACTIONS = [
+    { id: 'settings', icon: 'options-outline', route: '/stocks/settings' },
+    { id: 'barcode',  icon: 'barcode-outline', route: '/stocks/barcodes' },
   ];
 
+  // Neutral palette — matches older stock look; red reserved for alerts only
+  const NEUTRAL = COLORS.textSecondary;
+  const NEUTRAL_BG = COLORS.pageBg;
   const STAT_TILES = [
-    { id: 'warehouses', label: 'Warehouses',  value: String(d.warehouses.total),     sub: 'Active locations',                           icon: 'business-outline',      accent: COLORS.info,     tint: COLORS.infoBg,     route: '/stocks/warehouses' },
-    { id: 'low',        label: 'Low-Stock',   value: String(d.lowStockCount),        sub: 'Items below reorder',                        icon: 'alert-circle-outline', accent: COLORS.negative, tint: COLORS.negativeBg, route: '/stocks/reorder-queue' },
-    { id: 'fast',       label: 'Fast-Moving', value: String(d.fastMovingCount),      sub: 'Active SKUs',                                icon: 'flash-outline',        accent: COLORS.positive, tint: COLORS.positiveBg, route: '/stocks/movement-analytics' },
-    { id: 'aged',       label: 'Aged Stock',  value: d.agedInventory.value,          sub: `${d.agedInventory.days} days old`,           icon: 'time-outline',         accent: COLORS.warning,  tint: COLORS.warningBg,  route: '/stocks/aged-items' },
+    { id: 'warehouses', label: 'Warehouses',  value: String(d.warehouses.total), sub: 'Active locations',          icon: 'business-outline',     accent: NEUTRAL,         tint: NEUTRAL_BG,        route: '/stocks/warehouses' },
+    { id: 'low',        label: 'Low-Stock',   value: String(d.lowStockCount),    sub: 'Items below reorder',       icon: 'alert-circle-outline', accent: COLORS.negative, tint: COLORS.negativeBg, route: '/stocks/reorder-queue' },
+    { id: 'fast',       label: 'Fast-Moving', value: String(d.fastMovingCount),  sub: 'Active SKUs',               icon: 'flash-outline',        accent: NEUTRAL,         tint: NEUTRAL_BG,        route: '/stocks/movement-analytics' },
+    { id: 'aged',       label: 'Aged Stock',  value: d.agedInventory.value,      sub: `${d.agedInventory.days} days old`, icon: 'time-outline',  accent: NEUTRAL,         tint: NEUTRAL_BG,        route: '/stocks/aged-items' },
   ];
 
   const maxCat = Math.max(...d.categories.map(c => c.value), 1);
-  const CAT_COLORS = [COLORS.info, COLORS.positive, COLORS.warning, COLORS.textSecondary];
 
   return (
     <SafeAreaView style={s.safe}>
@@ -98,7 +99,15 @@ export default function StocksDashboard() {
           <Text style={s.headerSub}>Inventory overview</Text>
         </View>
         <View style={s.headerActions}>
-          {HEADER_ACTIONS.map(a => (
+          <TouchableOpacity
+            style={s.reportsBtn}
+            activeOpacity={0.85}
+            onPress={() => router.push('/stocks/reports' as any)}
+          >
+            <Ionicons name="bar-chart" size={15} color={COLORS.white} />
+            <Text style={s.reportsBtnTxt}>Reports</Text>
+          </TouchableOpacity>
+          {SECONDARY_ACTIONS.map(a => (
             <TouchableOpacity
               key={a.id}
               style={s.actionBtn}
@@ -151,7 +160,6 @@ export default function StocksDashboard() {
               activeOpacity={0.8}
               onPress={() => router.push(t.route as any)}
             >
-              <View style={[s.tileAccent, { backgroundColor: t.accent }]} />
               <View style={[s.tileIcon, { backgroundColor: t.tint }]}>
                 <Ionicons name={t.icon as any} size={16} color={t.accent} />
               </View>
@@ -162,12 +170,8 @@ export default function StocksDashboard() {
           ))}
         </View>
 
-        {/* ── Warehouse Utilisation ── */}
-        <TouchableOpacity
-          style={s.card}
-          activeOpacity={0.85}
-          onPress={() => router.push('/stocks/warehouses' as any)}
-        >
+        {/* ── Warehouse Utilisation (display only — not tappable) ── */}
+        <View style={s.card}>
           <View style={s.cardHead}>
             <Text style={s.cardTitle}>Warehouse Utilisation</Text>
             <Text style={s.cardHint}>{d.warehouses.total} warehouses</Text>
@@ -177,7 +181,7 @@ export default function StocksDashboard() {
             <Text style={s.utilPct}>{d.warehouses.utilization}% used</Text>
             <Text style={s.utilFree}>{100 - d.warehouses.utilization}% free capacity</Text>
           </View>
-        </TouchableOpacity>
+        </View>
 
         {/* ── Reorder Action Strip ── */}
         <TouchableOpacity
@@ -195,6 +199,37 @@ export default function StocksDashboard() {
           <Ionicons name="chevron-forward" size={18} color={COLORS.negative} />
         </TouchableOpacity>
 
+        {/* ── Reports & Analytics quick links ── */}
+        <TouchableOpacity
+          style={s.linkRow}
+          activeOpacity={0.85}
+          onPress={() => router.push('/stocks/reports' as any)}
+        >
+          <View style={s.linkIcon}>
+            <Ionicons name="bar-chart-outline" size={17} color={COLORS.textSecondary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.linkTitle}>Stock Reports</Text>
+            <Text style={s.linkSub}>Valuation, ageing & summaries</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={17} color={COLORS.textTertiary} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={s.linkRow}
+          activeOpacity={0.85}
+          onPress={() => router.push('/stocks/fast-slow' as any)}
+        >
+          <View style={s.linkIcon}>
+            <Ionicons name="swap-vertical-outline" size={17} color={COLORS.textSecondary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.linkTitle}>Movement Analytics</Text>
+            <Text style={s.linkSub}>Fast & slow moving items</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={17} color={COLORS.textTertiary} />
+        </TouchableOpacity>
+
         {/* ── Stock Value by Category ── */}
         <View style={s.card}>
           <View style={s.cardHead}>
@@ -206,7 +241,7 @@ export default function StocksDashboard() {
           {d.categories.map((c, i) => (
             <View key={c.label} style={s.catRow}>
               <Text style={s.catLabel} numberOfLines={1}>{c.label}</Text>
-              <CategoryBar value={c.value} maxVal={maxCat} color={CAT_COLORS[i % CAT_COLORS.length]} delay={i * 90} />
+              <CategoryBar value={c.value} maxVal={maxCat} color={COLORS.brandPrimary} delay={i * 90} />
               <Text style={s.catValue}>{fmt(c.value)}</Text>
             </View>
           ))}
@@ -233,7 +268,13 @@ const s = StyleSheet.create({
   },
   headerTitle: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.3 },
   headerSub:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2, fontWeight: '500' },
-  headerActions: { flexDirection: 'row', gap: 8 },
+  headerActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  reportsBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    height: 36, paddingHorizontal: 12, borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.brandPrimary,
+  },
+  reportsBtnTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white },
   actionBtn: {
     width: 36, height: 36, borderRadius: RADIUS.sm,
     alignItems: 'center', justifyContent: 'center',
@@ -271,7 +312,6 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: COLORS.borderDefault,
     paddingHorizontal: 14, paddingVertical: 14, gap: 6, overflow: 'hidden',
   },
-  tileAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
   tileIcon: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
   tileLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600' },
   tileValue: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.4 },
@@ -305,6 +345,20 @@ const s = StyleSheet.create({
   },
   reorderTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   reorderSub:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2, fontWeight: '500' },
+
+  // Quick link rows
+  linkRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
+    paddingHorizontal: 14, paddingVertical: 12,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  linkIcon: {
+    width: 34, height: 34, borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center',
+  },
+  linkTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  linkSub:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2, fontWeight: '500' },
 
   // Category bars
   catRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
