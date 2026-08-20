@@ -162,23 +162,20 @@ export default function StocksDashboard() {
           ))}
         </View>
 
-        {/* ── Warehouse Utilisation (tap → warehouses) ── */}
+        {/* ── Stock Health (tap → on-hand stock) ── */}
         <TouchableOpacity
           style={s.card}
           activeOpacity={0.85}
-          onPress={() => router.push('/stocks/warehouses' as any)}
+          onPress={() => router.push('/stocks/on-hand-stock' as any)}
         >
           <View style={s.cardHead}>
-            <Text style={s.cardTitle}>Warehouse Utilisation</Text>
-            <View style={s.utilHint}>
-              <Text style={s.cardHint}>{d.warehouses.total} warehouses</Text>
-              <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
-            </View>
+            <Text style={s.cardTitle}>Stock Health</Text>
+            <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
           </View>
-          <SegmentedBar pct={d.warehouses.utilization} color={COLORS.brandPrimary} />
+          <SegmentedBar pct={d.stockHealthPct} color={COLORS.positive} />
           <View style={s.utilRow}>
-            <Text style={s.utilPct}>{d.warehouses.utilization}% used</Text>
-            <Text style={s.utilFree}>{100 - d.warehouses.utilization}% free capacity</Text>
+            <Text style={s.utilPct}>{d.stockHealthPct}% healthy</Text>
+            <Text style={s.utilFree}>{d.lowStockCount} low · {d.outOfStockCount} out</Text>
           </View>
         </TouchableOpacity>
 
@@ -303,7 +300,6 @@ const s = StyleSheet.create({
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.sm + 4 },
   cardTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, letterSpacing: 0.1 },
   cardHint:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500' },
-  utilHint:  { flexDirection: 'row', alignItems: 'center', gap: 2 },
   cardLink:  { fontSize: TYPOGRAPHY.xs, color: COLORS.brandPrimary, fontWeight: '700' },
 
   // Utilisation

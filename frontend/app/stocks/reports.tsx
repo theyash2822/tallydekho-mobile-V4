@@ -8,7 +8,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { MOCK_STOCK_REPORTS } from '../../src/data/mockData';
 
 const SW = Dimensions.get('window').width;
-const ACCENT = COLORS.info; // minimalist blue accent for the trend
+const ACCENT = '#A89060'; // system brand accent used across app charts
 const fmtL = (v: number) => `₹${(v / 1_00_000).toFixed(2)}L`;
 
 // ── Report links ──────────────────────────────────────────────────────────────
@@ -48,7 +48,7 @@ function TrendAreaChart({ data }: { data: { label: string; value: number }[] }) 
         <Line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke={COLORS.borderDefault} strokeWidth={1} />
         {/* selected vertical guide */}
         <Line x1={sp.x} y1={PAD} x2={sp.x} y2={H - PAD} stroke={ACCENT} strokeWidth={1} strokeDasharray="3 3" opacity={0.5} />
-        <Path d={area} fill="rgba(37,99,235,0.08)" />
+        <Path d={area} fill="rgba(168,144,96,0.12)" />
         <Path d={line} stroke={ACCENT} strokeWidth={2} fill="none" />
         {pts.map((p, i) => (
           <Circle
