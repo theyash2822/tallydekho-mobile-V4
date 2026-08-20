@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import ShimmerPlaceholder, { KPICardSkeleton, MetricCardSkeleton, ActivityRowSkeleton, CardSkeleton } from '../../src/components/ShimmerPlaceholder';
@@ -26,6 +26,7 @@ import {
 
 const TIME_FILTERS = ['7D', '1M', '3M', '6M'] as const;
 type TimeFilter = typeof TIME_FILTERS[number];
+const PERIOD_KEY = 'cashflow_period';
 
 const MOCK_VOICE_SEARCHES = ['Sales Invoice', 'Mehta Enterprises', 'Payment Received', 'Kumar Trading'];
 
@@ -94,6 +95,24 @@ export default function HomeScreen() {
     });
     return () => sub.remove();
   }, [checkPaired]);
+
+  // Persist + share the selected time filter with the Cashflow Report screen
+  const handleFilterChange = useCallback((f: TimeFilter) => {
+    setActiveFilter(f);
+    AsyncStorage.setItem(PERIOD_KEY, f).catch(() => {});
+  }, []);
+
+  // Re-read the shared filter whenever Home regains focus (e.g. back from report)
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        const saved = await AsyncStorage.getItem(PERIOD_KEY);
+        if (saved && (TIME_FILTERS as readonly string[]).includes(saved)) {
+          setActiveFilter(saved as TimeFilter);
+        }
+      })();
+    }, [])
+  );
 
   // ── Data loading ─────────────────────────────────────────────────────────
   const [isLoading, setIsLoading] = useState(true);
@@ -321,7 +340,7 @@ export default function HomeScreen() {
                 key={f}
                 testID={`filter-${f}`}
                 style={[styles.filterTab, activeFilter === f && styles.filterTabActive]}
-                onPress={() => setActiveFilter(f)}
+                onPress={() => handleFilterChange(f)}
                 activeOpacity={0.7}
               >
                 <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>

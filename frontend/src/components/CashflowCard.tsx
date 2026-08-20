@@ -124,6 +124,7 @@ export default function CashflowCard({
         </View>
         {/* Icon-only expand button — navigates to full report */}
         <TouchableOpacity
+          testID="cashflow-expand-btn"
           style={s.expandBtn}
           activeOpacity={0.7}
           onPress={() => router.push('/cashflow-report' as any)}

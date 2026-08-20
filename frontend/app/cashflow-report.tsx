@@ -1,14 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../src/constants/colors';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const GOLD       = COLORS.brandPrimary;
 const SEG_COUNT  = 24;
 const SEG_GAP    = 3;
 const BAR_H      = 14;
@@ -61,6 +61,7 @@ const PERIOD_DATA: Record<string, {
 
 const PERIODS = ['7D', '1M', '3M'] as const;
 type Period = typeof PERIODS[number];
+const PERIOD_KEY = 'cashflow_period';
 
 // ── Format ────────────────────────────────────────────────────────────────────
 const fmt = (v: number): string => {
@@ -107,6 +108,24 @@ const b = StyleSheet.create({
 });
 
 // ── Mini Day/Period Chart ─────────────────────────────────────────────────────
+function AnimatedBar({ target, color, delay = 0 }: {
+  target: number; color: string; delay?: number;
+}) {
+  const h = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    h.setValue(0);
+    const anim = Animated.timing(h, {
+      toValue: target,
+      duration: 550,
+      delay,
+      useNativeDriver: false, // height cannot use native driver
+    });
+    anim.start();
+    return () => anim.stop();
+  }, [target, delay]);
+  return <Animated.View style={[ch.bar, { height: h, backgroundColor: color }]} />;
+}
+
 function TrendChart({ days, maxVal }: {
   days: { label: string; income: number; expense: number }[];
   maxVal: number;
@@ -120,8 +139,8 @@ function TrendChart({ days, maxVal }: {
         return (
           <View key={i} style={ch.col}>
             <View style={[ch.bars, { height: CHART_H }]}>
-              <View style={[ch.bar, { height: inH, backgroundColor: COLORS.positive }]} />
-              <View style={[ch.bar, { height: exH, backgroundColor: COLORS.negative }]} />
+              <AnimatedBar target={inH} color={COLORS.positive} delay={i * 60} />
+              <AnimatedBar target={exH} color={COLORS.negative} delay={i * 60 + 40} />
             </View>
             <Text style={ch.label}>{d.label}</Text>
           </View>
@@ -164,7 +183,23 @@ const mc = StyleSheet.create({
 export default function CashflowReportScreen() {
   const router = useRouter();
   const [period, setPeriod] = useState<Period>('7D');
-  const d = PERIOD_DATA[period];
+
+  // Load the shared filter on mount (persisted across Home & this screen)
+  useEffect(() => {
+    (async () => {
+      const saved = await AsyncStorage.getItem(PERIOD_KEY);
+      if (saved && (PERIODS as readonly string[]).includes(saved)) {
+        setPeriod(saved as Period);
+      }
+    })();
+  }, []);
+
+  const changePeriod = (p: Period) => {
+    setPeriod(p);
+    AsyncStorage.setItem(PERIOD_KEY, p).catch(() => {});
+  };
+
+  const d = PERIOD_DATA[period] || PERIOD_DATA['7D'];
   const maxVal    = Math.max(d.income, d.expense, 1);
   const isHealthy = d.netCash >= 0;
   const maxDayVal = Math.max(...d.days.map(x => Math.max(x.income, x.expense)), 1);
@@ -183,7 +218,7 @@ export default function CashflowReportScreen() {
             <TouchableOpacity
               key={p}
               style={[s.periodChip, period === p && s.periodChipActive]}
-              onPress={() => setPeriod(p)}
+              onPress={() => changePeriod(p)}
               activeOpacity={0.7}
             >
               <Text style={[s.periodTxt, period === p && s.periodTxtActive]}>{p}</Text>
@@ -264,7 +299,7 @@ export default function CashflowReportScreen() {
               <Text style={s.legendTxt}>Expense</Text>
             </View>
           </View>
-          <TrendChart days={d.days} maxVal={maxDayVal} />
+          <TrendChart key={period} days={d.days} maxVal={maxDayVal} />
         </View>
 
         {/* ── Metrics Grid ── */}
@@ -324,9 +359,9 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.pageBg,
     borderWidth: 1, borderColor: COLORS.borderDefault,
   },
-  periodChipActive: { backgroundColor: COLORS.brandPrimary + '18', borderColor: GOLD },
+  periodChipActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
   periodTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
-  periodTxtActive: { color: GOLD, fontWeight: '700' },
+  periodTxtActive: { color: COLORS.white, fontWeight: '700' },
 
   // Scroll
   scroll: { padding: SPACING.md, gap: SPACING.sm },
