@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Platform,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 
@@ -103,6 +104,7 @@ export default function CashflowCard({
   totalIncome,
   totalExpense,
 }: CashflowCardProps) {
+  const router     = useRouter();
   const incomeVal  = totalIncome  ?? Math.round(netCash * 1.8);
   const expenseVal = totalExpense ?? Math.round(netCash * 0.8);
   const maxVal     = Math.max(incomeVal, expenseVal, 1);
@@ -120,8 +122,12 @@ export default function CashflowCard({
           <Text style={s.title}>Cashflow</Text>
           <Text style={s.updated}>· {updatedAt}</Text>
         </View>
-        {/* Icon-only — no label text */}
-        <TouchableOpacity style={s.expandBtn} activeOpacity={0.7}>
+        {/* Icon-only expand button — navigates to full report */}
+        <TouchableOpacity
+          style={s.expandBtn}
+          activeOpacity={0.7}
+          onPress={() => router.push('/cashflow-report' as any)}
+        >
           <Ionicons name="expand-outline" size={16} color={COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
