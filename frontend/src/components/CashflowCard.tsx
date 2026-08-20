@@ -1,165 +1,262 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, LayoutChangeEvent } from 'react-native';
+import Animated, {
+  useSharedValue, useAnimatedStyle, withTiming, withDelay, Easing,
+} from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 
-// ── Theme-matched ring colors ─────────────────────────────────────────────────
-const RING_INCOME  = '#1A1A1A';  // Brand primary — income arc
-const RING_OUTCOME = '#E0DEDA';  // Warm light gray — outcome track
-
-interface CashflowCardProps {
-  netCash?: number;
-  grossCash?: number;
-  netRealisableBalance?: number;
-  grossProfit?: number;
-  netProfit?: number;
-  incomePercentage?: number;
-  updatedAt?: string;
-  totalIncome?: number;
-  totalExpense?: number;
-}
-
-const RADIUS_SIZE = 80;
-const STROKE_W = 18;
-const SIZE = (RADIUS_SIZE + STROKE_W) * 2 + 4;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS_SIZE;
-const CENTER = SIZE / 2;
-
-const formatAmount = (val: number): string => {
-  if (val >= 1_00_000) return `₹${(val / 1_00_000).toFixed(2)}L`;
-  if (val >= 1000) return `₹${val.toLocaleString('en-IN')}`;
-  return `₹${val.toFixed(2)}`;
+// ── Helpers ────────────────────────────────────────────────────────────────────
+const fmt = (val: number): string => {
+  if (val >= 10_00_000) return `₹${(val / 10_00_000).toFixed(2)}Cr`;
+  if (val >= 1_00_000)  return `₹${(val / 1_00_000).toFixed(2)}L`;
+  if (val >= 1_000)     return `₹${(val / 1_000).toFixed(1)}K`;
+  return `₹${val.toLocaleString('en-IN')}`;
 };
 
-const CashflowCard: React.FC<CashflowCardProps> = ({
-  netCash = 20830,
-  grossCash = 606.21,
-  netRealisableBalance = 20021,
-  grossProfit = 470999,
-  netProfit = 130999,
-  incomePercentage = 68,
-  updatedAt = '5 mins. ago',
-  totalIncome,
-  totalExpense,
-}) => {
-  const incomeArc = (incomePercentage / 100) * CIRCUMFERENCE;
-  const [showTooltip, setShowTooltip] = useState(false);
-  const incomeDisplay  = totalIncome  ? formatAmount(totalIncome)  : formatAmount(Math.round(netCash * 1.8));
-  const expenseDisplay = totalExpense ? formatAmount(totalExpense)  : formatAmount(Math.round(netCash * 0.8));
+// ── Bar Track Constants ────────────────────────────────────────────────────────
+const BAR_H    = 9;
+const GLOW_R   = 7;   // outer glow radius
+const DOT_R    = 4;   // inner dot radius
+
+// ── Animated Progress Bar ─────────────────────────────────────────────────────
+interface BarProps {
+  value: number;
+  maxValue: number;
+  color: string;
+  glowColor: string;
+  delay?: number;
+}
+
+function AnimatedBar({ value, maxValue, color, glowColor, delay = 0 }: BarProps) {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const progress = useSharedValue(0);
+  const pct = maxValue > 0 ? Math.min(value / maxValue, 1) : 0;
+
+  useEffect(() => {
+    if (trackWidth === 0) return;
+    progress.value = 0;
+    progress.value = withDelay(
+      delay,
+      withTiming(pct, { duration: 950, easing: Easing.out(Easing.cubic) }),
+    );
+  }, [pct, trackWidth]);
+
+  // Use direct width in Reanimated — most reliable on web + native
+  const fillStyle = useAnimatedStyle(() => ({
+    width: progress.value * trackWidth,
+  }));
+
+  // Glow dot rides the right edge of the fill
+  const glowStyle = useAnimatedStyle(() => {
+    const pos = progress.value * trackWidth;
+    return {
+      transform: [{ translateX: pos - GLOW_R }],
+      opacity: progress.value > 0.02 ? 0.85 : 0,
+    };
+  });
+
+  const onLayout = (e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width;
+    if (w > 0) setTrackWidth(w);
+  };
 
   return (
-    <View testID="cashflow-card" style={styles.card}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.iconWrap}>
-          <Ionicons name="eye-outline" size={16} color={COLORS.textSecondary} />
-        </View>
-        <Text style={styles.title}>Cashflow</Text>
-        <Text style={styles.tapHint}>Tap ring to see breakdown</Text>
+    <View style={bar.wrapper} onLayout={onLayout}>
+      {/* Background track */}
+      <View style={bar.track} />
+
+      {/* Animated fill — scaleX from center, so shift left by (1-scale)/2 * width */}
+      <View style={[bar.clipper, { width: trackWidth }]}>
+        <Animated.View
+          style={[bar.fill, { backgroundColor: color, width: trackWidth }, fillStyle]}
+        />
       </View>
 
-      {/* Ring Chart — tap to toggle income/expense tooltip */}
-      <View style={styles.chartWrap}>
-        <TouchableOpacity
-          activeOpacity={0.85}
-          onPress={() => setShowTooltip(p => !p)}
-          style={styles.svgContainer}
-        >
-          <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
-            {/* Outcome background track */}
-            <Circle
-              cx={CENTER}
-              cy={CENTER}
-              r={RADIUS_SIZE}
-              fill="none"
-              stroke={RING_OUTCOME}
-              strokeWidth={STROKE_W}
-            />
-            {/* Income arc */}
-            <Circle
-              cx={CENTER}
-              cy={CENTER}
-              r={RADIUS_SIZE}
-              fill="none"
-              stroke={RING_INCOME}
-              strokeWidth={STROKE_W}
-              strokeDasharray={`${incomeArc} ${CIRCUMFERENCE}`}
-              strokeLinecap="round"
-              transform={`rotate(-90 ${CENTER} ${CENTER})`}
-            />
-          </Svg>
+      {/* Glow dot at bar tip */}
+      <Animated.View
+        pointerEvents="none"
+        style={[bar.glowOuter, { backgroundColor: glowColor }, glowStyle]}
+      >
+        <View style={[bar.glowInner, { backgroundColor: color }]} />
+      </Animated.View>
+    </View>
+  );
+}
 
-          {/* Center Label */}
-          <View style={styles.centerLabel}>
-            {showTooltip ? (
-              <>
-                <View style={styles.tooltipRow}>
-                  <View style={[styles.tooltipDot, { backgroundColor: RING_INCOME }]} />
-                  <View>
-                    <Text style={styles.tooltipLabel}>Income</Text>
-                    <Text style={styles.tooltipValue}>{incomeDisplay}</Text>
-                  </View>
-                </View>
-                <View style={styles.tooltipDivider} />
-                <View style={styles.tooltipRow}>
-                  <View style={[styles.tooltipDot, { backgroundColor: '#A0A0A0' }]} />
-                  <View>
-                    <Text style={styles.tooltipLabel}>Expense</Text>
-                    <Text style={styles.tooltipValue}>{expenseDisplay}</Text>
-                  </View>
-                </View>
-              </>
-            ) : (
-              <>
-                <Text style={styles.netCashLabel}>Net Cash</Text>
-                <Text style={styles.netCashValue}>₹{netCash.toLocaleString('en-IN')}</Text>
-                <Text style={styles.updatedText}>Updated {updatedAt}</Text>
-              </>
-            )}
+const bar = StyleSheet.create({
+  wrapper: {
+    flex: 1,
+    height: GLOW_R * 2,
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  track: {
+    position: 'absolute',
+    left: 0, right: 0,
+    height: BAR_H,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.borderDefault,
+  },
+  clipper: {
+    position: 'absolute',
+    left: 0,
+    top: (GLOW_R * 2 - BAR_H) / 2,
+    height: BAR_H,
+    overflow: 'hidden',
+    borderRadius: RADIUS.full,
+  },
+  fill: {
+    height: BAR_H,
+    borderRadius: RADIUS.full,
+  },
+  glowOuter: {
+    position: 'absolute',
+    top: 0,
+    width:  GLOW_R * 2,
+    height: GLOW_R * 2,
+    borderRadius: GLOW_R,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  glowInner: {
+    width:  DOT_R * 2,
+    height: DOT_R * 2,
+    borderRadius: DOT_R,
+  },
+});
+
+// ── Main CashflowCard ─────────────────────────────────────────────────────────
+interface CashflowCardProps {
+  netCash?:              number;
+  grossCash?:            number;
+  netRealisableBalance?: number;
+  grossProfit?:          number;
+  netProfit?:            number;
+  incomePercentage?:     number;
+  updatedAt?:            string;
+  totalIncome?:          number;
+  totalExpense?:         number;
+}
+
+export default function CashflowCard({
+  netCash           = 20830,
+  grossProfit       = 470999,
+  netProfit         = 130999,
+  incomePercentage  = 68,
+  updatedAt         = '5 mins ago',
+  totalIncome,
+  totalExpense,
+}: CashflowCardProps) {
+  const incomeVal  = totalIncome  ?? Math.round(netCash * 1.8);
+  const expenseVal = totalExpense ?? Math.round(netCash * 0.8);
+  const maxVal     = Math.max(incomeVal, expenseVal, 1);
+  const isHealthy  = netCash >= 0;
+
+  return (
+    <View testID="cashflow-card" style={s.card}>
+
+      {/* ── Header ── */}
+      <View style={s.header}>
+        <View style={s.headerLeft}>
+          <View style={s.iconCircle}>
+            <Ionicons name="analytics-outline" size={14} color={COLORS.textSecondary} />
           </View>
+          <Text style={s.title}>Cashflow</Text>
+          <Text style={s.updated}>· {updatedAt}</Text>
+        </View>
+        <TouchableOpacity style={s.fullBtn} activeOpacity={0.7}>
+          <Text style={s.fullBtnTxt}>Full Report</Text>
+          <Ionicons name="arrow-forward" size={11} color={COLORS.brandPrimary} />
         </TouchableOpacity>
       </View>
 
-      {/* Legend */}
-      <View style={styles.legend}>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendLine, { backgroundColor: RING_OUTCOME, borderWidth: 1, borderColor: COLORS.borderDefault }]} />
-          <Text style={styles.legendText}>Outcome</Text>
+      {/* ── Net Cash Row ── */}
+      <View style={s.netRow}>
+        <View>
+          <Text style={s.netLabel}>Net Cash</Text>
+          <Text style={s.netValue}>
+            ₹{netCash.toLocaleString('en-IN')}
+          </Text>
         </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendLine, { backgroundColor: RING_INCOME }]} />
-          <Text style={styles.legendText}>Income</Text>
+        <View style={[
+          s.statusPill,
+          { backgroundColor: isHealthy ? COLORS.positiveBg : COLORS.negativeBg },
+        ]}>
+          <Ionicons
+            name={isHealthy ? 'trending-up-outline' : 'trending-down-outline'}
+            size={13}
+            color={isHealthy ? COLORS.positive : COLORS.negative}
+          />
+          <Text style={[s.statusTxt, { color: isHealthy ? COLORS.positive : COLORS.negative }]}>
+            {isHealthy ? '+' : ''}{incomePercentage}%{'  '}
+            {isHealthy ? 'Healthy' : 'Watch'}
+          </Text>
         </View>
       </View>
 
-      {/* Divider */}
-      <View style={styles.divider} />
+      <View style={s.divider} />
 
-      {/* 2x2 Metrics */}
-      <View style={styles.metricsGrid}>
-        <View style={[styles.metricCell, styles.metricBorderRight]}>
-          <Text style={styles.metricLabel}>Gross Cash</Text>
-          <Text style={styles.metricValue}>₹{grossCash.toFixed(2)}</Text>
+      {/* ── Income Bar ── */}
+      <View style={s.barRow}>
+        <View style={s.barMeta}>
+          <Ionicons name="arrow-up-circle-outline" size={15} color={COLORS.positive} />
+          <Text style={s.barLabel}>Income</Text>
         </View>
-        <View style={styles.metricCell}>
-          <Text style={styles.metricLabel}>Net Realisable Balance</Text>
-          <Text style={styles.metricValue}>₹{netRealisableBalance.toLocaleString('en-IN')}</Text>
-        </View>
-        <View style={[styles.metricCell, styles.metricBorderTop, styles.metricBorderRight]}>
-          <Text style={styles.metricLabel}>Gross Profit</Text>
-          <Text style={styles.metricValue}>{formatAmount(grossProfit)}</Text>
-        </View>
-        <View style={[styles.metricCell, styles.metricBorderTop]}>
-          <Text style={styles.metricLabel}>Net Profit</Text>
-          <Text style={styles.metricValue}>{formatAmount(netProfit)}</Text>
+        <AnimatedBar
+          value={incomeVal}
+          maxValue={maxVal}
+          color={COLORS.positive}
+          glowColor={COLORS.positive + '35'}
+          delay={100}
+        />
+        <View style={s.barRight}>
+          <Text style={s.barAmt}>{fmt(incomeVal)}</Text>
+          <View style={s.pctChip}>
+            <Text style={s.pctTxt}>{incomePercentage}%</Text>
+          </View>
         </View>
       </View>
+
+      {/* ── Expense Bar ── */}
+      <View style={[s.barRow, { marginTop: 12 }]}>
+        <View style={s.barMeta}>
+          <Ionicons name="arrow-down-circle-outline" size={15} color={COLORS.negative} />
+          <Text style={s.barLabel}>Expense</Text>
+        </View>
+        <AnimatedBar
+          value={expenseVal}
+          maxValue={maxVal}
+          color={COLORS.negative}
+          glowColor={COLORS.negative + '35'}
+          delay={350}
+        />
+        <View style={s.barRight}>
+          <Text style={s.barAmt}>{fmt(expenseVal)}</Text>
+        </View>
+      </View>
+
+      <View style={s.divider} />
+
+      {/* ── Bottom Metrics ── */}
+      <View style={s.bottomRow}>
+        <View style={s.bottomCell}>
+          <Text style={s.bottomLabel}>Gross Profit</Text>
+          <Text style={s.bottomVal}>{fmt(grossProfit)}</Text>
+        </View>
+        <View style={s.bottomSep} />
+        <View style={[s.bottomCell, s.bottomCellRight]}>
+          <Text style={s.bottomLabel}>Net Profit</Text>
+          <Text style={[s.bottomVal, { color: COLORS.positive }]}>{fmt(netProfit)}</Text>
+        </View>
+      </View>
+
     </View>
   );
-};
+}
 
-const styles = StyleSheet.create({
+// ── Styles ─────────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
   card: {
     backgroundColor: COLORS.cardBg,
     borderRadius: RADIUS.lg,
@@ -169,121 +266,160 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.borderDefault,
   },
+
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm + 4,
   },
-  iconWrap: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: COLORS.pageBg,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  title: { fontSize: TYPOGRAPHY.md, fontWeight: '600', color: COLORS.textPrimary },
-  tapHint: { flex: 1, textAlign: 'right', fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
-  chartWrap: {
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  svgContainer: {
-    width: SIZE,
-    height: SIZE,
-    position: 'relative',
-  },
-  centerLabel: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  netCashLabel: {
-    fontSize: TYPOGRAPHY.sm,
-    color: COLORS.textSecondary,
-    fontWeight: '400',
-  },
-  netCashValue: {
-    fontSize: TYPOGRAPHY.xxl,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    letterSpacing: -0.5,
-  },
-  updatedText: {
-    fontSize: TYPOGRAPHY.xs,
-    color: COLORS.textTertiary,
-    marginTop: 2,
-  },
-  legend: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 24,
-    marginBottom: 12,
-  },
-  legendItem: {
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  legendLine: {
-    width: 20,
-    height: 3,
-    borderRadius: 2,
+  iconCircle: {
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: COLORS.pageBg,
+    alignItems: 'center', justifyContent: 'center',
   },
-  legendText: {
+  title: {
     fontSize: TYPOGRAPHY.sm,
-    color: COLORS.textSecondary,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    letterSpacing: 0.1,
   },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.borderDefault,
-    marginBottom: 12,
-  },
-  metricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  metricCell: {
-    width: '50%',
-    padding: 10,
-  },
-  metricBorderRight: {
-    borderRightWidth: 1,
-    borderRightColor: COLORS.borderDefault,
-  },
-  metricBorderTop: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.borderDefault,
-  },
-  metricLabel: {
+  updated: {
     fontSize: TYPOGRAPHY.xs,
     color: COLORS.textTertiary,
-    marginBottom: 4,
   },
-  metricValue: {
-    fontSize: TYPOGRAPHY.base,
+  fullBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.borderDefault,
+    backgroundColor: COLORS.pageBg,
+  },
+  fullBtnTxt: {
+    fontSize: TYPOGRAPHY.xs,
     fontWeight: '600',
     color: COLORS.textPrimary,
   },
-  // ── Tooltip (tap to reveal) ─────────────────────────────────────────────────
-  tooltipRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 4,
+
+  // Net Cash
+  netRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm + 2,
   },
-  tooltipDot: {
-    width: 10, height: 10, borderRadius: 5,
+  netLabel: {
+    fontSize: TYPOGRAPHY.xs,
+    color: COLORS.textTertiary,
+    marginBottom: 3,
+    fontWeight: '500',
   },
-  tooltipLabel: {
-    fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary,
+  netValue: {
+    fontSize: TYPOGRAPHY.xl,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    letterSpacing: -0.8,
   },
-  tooltipValue: {
-    fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary,
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
   },
-  tooltipDivider: {
-    height: 1, backgroundColor: COLORS.borderDefault, marginVertical: 4,
+  statusTxt: {
+    fontSize: TYPOGRAPHY.xs,
+    fontWeight: '700',
+    letterSpacing: 0.1,
+  },
+
+  // Divider
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.borderDefault,
+    marginVertical: SPACING.sm + 2,
+  },
+
+  // Bars
+  barRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  barMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    width: 74,
+  },
+  barLabel: {
+    fontSize: TYPOGRAPHY.xs,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  barRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minWidth: 82,
+    justifyContent: 'flex-end',
+  },
+  barAmt: {
+    fontSize: TYPOGRAPHY.xs,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  pctChip: {
+    backgroundColor: COLORS.positiveBg,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.positive + '30',
+  },
+  pctTxt: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.positive,
+  },
+
+  // Bottom
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  bottomCell: {
+    flex: 1,
+  },
+  bottomCellRight: {
+    alignItems: 'flex-end',
+  },
+  bottomSep: {
+    width: 1,
+    height: 30,
+    backgroundColor: COLORS.borderDefault,
+    marginHorizontal: SPACING.sm,
+  },
+  bottomLabel: {
+    fontSize: TYPOGRAPHY.xs,
+    color: COLORS.textTertiary,
+    marginBottom: 3,
+    fontWeight: '500',
+  },
+  bottomVal: {
+    fontSize: TYPOGRAPHY.sm,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
   },
 });
-
-export default CashflowCard;
