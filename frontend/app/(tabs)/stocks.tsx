@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,170 +8,306 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_STOCK_DASHBOARD } from '../../src/data/mockData';
 
-const DARK = '#1A1A1A';
+// ── Format helper ───────────────────────────────────────────────────────────
+const fmt = (v: number): string => {
+  if (v >= 1_00_00_000) return `₹${(v / 1_00_00_000).toFixed(2)}Cr`;
+  if (v >= 1_00_000)    return `₹${(v / 1_00_000).toFixed(2)}L`;
+  if (v >= 1_000)       return `₹${(v / 1_000).toFixed(1)}K`;
+  return `₹${v.toLocaleString('en-IN')}`;
+};
 
-const ICON_COLOR = COLORS.textSecondary;  // #787774 — matches Home & Reports
-const ICON_BG    = COLORS.pageBg;         // #F5F4EF — matches Home & Reports
+// ── Segmented utilisation bar (matches Cashflow bar language) ─────────────────
+const SEG_COUNT = 20;
+function SegmentedBar({ pct, color }: { pct: number; color: string }) {
+  const target = Math.round((Math.min(pct, 100) / 100) * SEG_COUNT);
+  const [filled, setFilled] = useState(0);
+  useEffect(() => {
+    if (Platform.OS === 'web') { setFilled(target); return; }
+    setFilled(0);
+    if (target === 0) return;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    for (let i = 0; i < target; i++) {
+      timers.push(setTimeout(() => setFilled(i + 1), Math.round((i / target) * 800)));
+    }
+    return () => timers.forEach(clearTimeout);
+  }, [target]);
+  return (
+    <View style={bar.row}>
+      {Array.from({ length: SEG_COUNT }, (_, i) => (
+        <View key={i} style={[bar.seg, { backgroundColor: i < filled ? color : COLORS.borderDefault }]} />
+      ))}
+    </View>
+  );
+}
+const bar = StyleSheet.create({
+  row: { flexDirection: 'row', gap: 3, height: 12, alignItems: 'stretch' },
+  seg: { flex: 1, height: 12, borderRadius: 0 },
+});
 
-const SHORTCUTS = [
-  { id: 'report',   label: 'Report',         icon: 'bar-chart-outline', color: ICON_COLOR, bg: ICON_BG, route: '/stocks/reports'  },
-  { id: 'settings', label: 'Stock Settings', icon: 'options-outline',   color: ICON_COLOR, bg: ICON_BG, route: '/stocks/settings' },
-  { id: 'barcode',  label: 'Barcode',         icon: 'barcode-outline',   color: ICON_COLOR, bg: ICON_BG, route: '/stocks/barcodes' },
-];
-
-const WIDGET_TILES = [
-  {
-    id: 'total_stock', title: 'Total Stock',
-    icon: 'cube-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
-    route: '/stocks/total-stock',
-    getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
-      { label: 'QTY',   value: d.totalQty   },
-      { label: 'Value', value: d.totalValue },
-    ],
-  },
-  {
-    id: 'warehouses', title: 'Warehouses',
-    icon: 'business-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
-    route: '/stocks/warehouses',
-    getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
-      { label: 'Total',       value: String(d.warehouses.total)       },
-      { label: 'Utilisation', value: `${d.warehouses.utilization}%`   },
-    ],
-  },
-  {
-    id: 'low_stock', title: 'Low-Stock Items',
-    icon: 'alert-circle-outline', iconColor: '#DC2626', iconBg: '#FEF2F2',
-    route: '/stocks/reorder-queue',
-    getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
-      { label: 'Items', value: String(d.lowStockCount) },
-    ],
-  },
-  {
-    id: 'aged', title: 'Aged Inventory',
-    icon: 'time-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
-    route: '/stocks/aged-items',
-    getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
-      { label: 'Value', value: d.agedInventory.value              },
-      { label: 'Age',   value: `${d.agedInventory.days} days`     },
-    ],
-  },
-  {
-    id: 'fast_moving', title: 'Fast-Moving Items',
-    icon: 'flash-outline', iconColor: ICON_COLOR, iconBg: ICON_BG,
-    route: '/stocks/movement-analytics',
-    getValue: (d: typeof MOCK_STOCK_DASHBOARD) => [
-      { label: 'Items', value: String(d.fastMovingCount) },
-    ],
-  },
-];
+// ── Animated horizontal category bar ──────────────────────────────────────────
+function CategoryBar({ value, maxVal, color, delay = 0 }: {
+  value: number; maxVal: number; color: string; delay?: number;
+}) {
+  const w = useRef(new Animated.Value(0)).current;
+  const pct = maxVal > 0 ? Math.min(value / maxVal, 1) : 0;
+  useEffect(() => {
+    w.setValue(0);
+    const anim = Animated.timing(w, {
+      toValue: pct * 100,
+      duration: 600,
+      delay,
+      useNativeDriver: false,
+    });
+    anim.start();
+    return () => anim.stop();
+  }, [pct, delay]);
+  const width = w.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] });
+  return (
+    <View style={cat.track}>
+      <Animated.View style={[cat.fill, { width, backgroundColor: color }]} />
+    </View>
+  );
+}
 
 export default function StocksDashboard() {
   const router = useRouter();
-  const data = MOCK_STOCK_DASHBOARD;
+  const d = MOCK_STOCK_DASHBOARD;
+
+  const HEADER_ACTIONS = [
+    { id: 'report',   icon: 'bar-chart-outline', route: '/stocks/reports'  },
+    { id: 'settings', icon: 'options-outline',   route: '/stocks/settings' },
+    { id: 'barcode',  icon: 'barcode-outline',   route: '/stocks/barcodes' },
+  ];
+
+  const STAT_TILES = [
+    { id: 'warehouses', label: 'Warehouses',  value: `${d.warehouses.utilization}%`, sub: `Utilisation · ${d.warehouses.total} total`, icon: 'business-outline',      accent: COLORS.info,     tint: COLORS.infoBg,     route: '/stocks/warehouses' },
+    { id: 'low',        label: 'Low-Stock',   value: String(d.lowStockCount),        sub: 'Items below reorder',                        icon: 'alert-circle-outline', accent: COLORS.negative, tint: COLORS.negativeBg, route: '/stocks/reorder-queue' },
+    { id: 'fast',       label: 'Fast-Moving', value: String(d.fastMovingCount),      sub: 'Active SKUs',                                icon: 'flash-outline',        accent: COLORS.positive, tint: COLORS.positiveBg, route: '/stocks/movement-analytics' },
+    { id: 'aged',       label: 'Aged Stock',  value: d.agedInventory.value,          sub: `${d.agedInventory.days} days old`,           icon: 'time-outline',         accent: COLORS.warning,  tint: COLORS.warningBg,  route: '/stocks/aged-items' },
+  ];
+
+  const maxCat = Math.max(...d.categories.map(c => c.value), 1);
+  const CAT_COLORS = [COLORS.info, COLORS.positive, COLORS.warning, COLORS.textSecondary];
 
   return (
-    <SafeAreaView style={styles.safe}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Stock Dashboard</Text>
+    <SafeAreaView style={s.safe}>
+      {/* Header with title + action icons */}
+      <View style={s.header}>
+        <View>
+          <Text style={s.headerTitle}>Stock</Text>
+          <Text style={s.headerSub}>Inventory overview</Text>
+        </View>
+        <View style={s.headerActions}>
+          {HEADER_ACTIONS.map(a => (
+            <TouchableOpacity
+              key={a.id}
+              style={s.actionBtn}
+              activeOpacity={0.7}
+              onPress={() => router.push(a.route as any)}
+            >
+              <Ionicons name={a.icon as any} size={18} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
-      >
-        {/* Shortcut Icons Row */}
-        <View style={styles.shortcutRow}>
-          {SHORTCUTS.map(s => (
+      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
+
+        {/* ── Hero: Total Stock Value ── */}
+        <TouchableOpacity
+          style={s.hero}
+          activeOpacity={0.85}
+          onPress={() => router.push('/stocks/total-stock' as any)}
+        >
+          <View style={s.heroTopRow}>
+            <View style={s.heroIcon}>
+              <Ionicons name="cube-outline" size={18} color={COLORS.white} />
+            </View>
+            <View style={[s.trendPill, { backgroundColor: d.valueTrendPositive ? COLORS.positiveBg : COLORS.negativeBg }]}>
+              <Ionicons
+                name={d.valueTrendPositive ? 'trending-up' : 'trending-down'}
+                size={13}
+                color={d.valueTrendPositive ? COLORS.positive : COLORS.negative}
+              />
+              <Text style={[s.trendTxt, { color: d.valueTrendPositive ? COLORS.positive : COLORS.negative }]}>
+                {d.valueTrendPositive ? '+' : ''}{d.valueTrend}%
+              </Text>
+            </View>
+          </View>
+          <Text style={s.heroLabel}>Total Stock Value</Text>
+          <Text style={s.heroValue}>{d.totalValue}</Text>
+          <View style={s.heroMetaRow}>
+            <Ionicons name="layers-outline" size={13} color={COLORS.textTertiary} />
+            <Text style={s.heroMeta}>{d.totalQty} units · {d.warehouses.total} warehouses</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* ── 2×2 Stat Tiles ── */}
+        <View style={s.grid}>
+          {STAT_TILES.map(t => (
             <TouchableOpacity
-              key={s.id}
-              style={styles.shortcutBtn}
-              onPress={() => router.push(s.route as any)}
-              activeOpacity={0.75}
+              key={t.id}
+              style={s.tile}
+              activeOpacity={0.8}
+              onPress={() => router.push(t.route as any)}
             >
-              <View style={[styles.shortcutIcon, { backgroundColor: s.bg }]}>
-                <Ionicons name={s.icon as any} size={22} color={s.color} />
+              <View style={[s.tileAccent, { backgroundColor: t.accent }]} />
+              <View style={[s.tileIcon, { backgroundColor: t.tint }]}>
+                <Ionicons name={t.icon as any} size={16} color={t.accent} />
               </View>
-              <Text style={styles.shortcutLabel}>{s.label}</Text>
+              <Text style={s.tileLabel}>{t.label}</Text>
+              <Text style={s.tileValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{t.value}</Text>
+              <Text style={s.tileSub} numberOfLines={1}>{t.sub}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* Widget Tiles */}
-        {WIDGET_TILES.map(tile => {
-          const metrics = tile.getValue(data);
-          return (
-            <TouchableOpacity
-              key={tile.id}
-              style={styles.widgetTile}
-              onPress={() => router.push(tile.route as any)}
-              activeOpacity={0.8}
-            >
-              {/* Left: icon */}
-              <View style={[styles.widgetIcon, { backgroundColor: tile.iconBg }]}>
-                <Ionicons name={tile.icon as any} size={26} color={tile.iconColor} />
-              </View>
+        {/* ── Warehouse Utilisation ── */}
+        <TouchableOpacity
+          style={s.card}
+          activeOpacity={0.85}
+          onPress={() => router.push('/stocks/warehouses' as any)}
+        >
+          <View style={s.cardHead}>
+            <Text style={s.cardTitle}>Warehouse Utilisation</Text>
+            <Text style={s.cardHint}>{d.warehouses.total} warehouses</Text>
+          </View>
+          <SegmentedBar pct={d.warehouses.utilization} color={COLORS.brandPrimary} />
+          <View style={s.utilRow}>
+            <Text style={s.utilPct}>{d.warehouses.utilization}% used</Text>
+            <Text style={s.utilFree}>{100 - d.warehouses.utilization}% free capacity</Text>
+          </View>
+        </TouchableOpacity>
 
-              {/* Centre: title + metrics */}
-              <View style={styles.widgetBody}>
-                <Text style={styles.widgetTitle}>{tile.title}</Text>
-                <View style={styles.metricsRow}>
-                  {metrics.map((m, i) => (
-                    <View key={i} style={styles.metricItem}>
-                      <Text style={styles.metricLabel}>{m.label}:</Text>
-                      <Text style={styles.metricValue}>{m.value}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
+        {/* ── Reorder Action Strip ── */}
+        <TouchableOpacity
+          style={s.reorder}
+          activeOpacity={0.85}
+          onPress={() => router.push('/stocks/reorder-queue' as any)}
+        >
+          <View style={s.reorderIcon}>
+            <Ionicons name="repeat" size={18} color={COLORS.negative} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.reorderTitle}>Reorder Queue</Text>
+            <Text style={s.reorderSub}>{d.reorderQueueCount} items need restocking · {d.reorderValue}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={COLORS.negative} />
+        </TouchableOpacity>
 
-              {/* Right: chevron */}
-              <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
+        {/* ── Stock Value by Category ── */}
+        <View style={s.card}>
+          <View style={s.cardHead}>
+            <Text style={s.cardTitle}>Stock Value by Category</Text>
+            <TouchableOpacity onPress={() => router.push('/stocks/valuation-summary' as any)} activeOpacity={0.7}>
+              <Text style={s.cardLink}>Report</Text>
             </TouchableOpacity>
-          );
-        })}
+          </View>
+          {d.categories.map((c, i) => (
+            <View key={c.label} style={s.catRow}>
+              <Text style={s.catLabel} numberOfLines={1}>{c.label}</Text>
+              <CategoryBar value={c.value} maxVal={maxCat} color={CAT_COLORS[i % CAT_COLORS.length]} delay={i * 90} />
+              <Text style={s.catValue}>{fmt(c.value)}</Text>
+            </View>
+          ))}
+        </View>
 
-        <View style={{ height: 20 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: COLORS.pageBg },
-  header:  {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: SPACING.md, paddingVertical: 14,
+const cat = StyleSheet.create({
+  track: { flex: 1, height: 10, backgroundColor: COLORS.borderDefault, borderRadius: 0, overflow: 'hidden' },
+  fill:  { height: 10, borderRadius: 0 },
+});
+
+const s = StyleSheet.create({
+  safe:   { flex: 1, backgroundColor: COLORS.pageBg },
+
+  // Header
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md, paddingVertical: 12,
     backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
-  headerTitle: { fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary },
-  scroll:   { flex: 1 },
-  content:  { padding: SPACING.md, gap: 10, paddingBottom: 110 },
+  headerTitle: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.3 },
+  headerSub:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2, fontWeight: '500' },
+  headerActions: { flexDirection: 'row', gap: 8 },
+  actionBtn: {
+    width: 36, height: 36, borderRadius: RADIUS.sm,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
 
-  // Shortcut icons
-  shortcutRow: {
-    flexDirection: 'row', justifyContent: 'space-around',
+  scroll:  { flex: 1 },
+  content: { padding: SPACING.md, gap: SPACING.md, paddingBottom: 110 },
+
+  // Hero
+  hero: {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
-    paddingVertical: 16, paddingHorizontal: SPACING.md,
+    padding: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  heroTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  heroIcon: {
+    width: 36, height: 36, borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center',
+  },
+  trendPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: RADIUS.full,
+  },
+  trendTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
+  heroLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500' },
+  heroValue: { fontSize: 32, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -1, marginTop: 3 },
+  heroMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8 },
+  heroMeta: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500' },
+
+  // Grid tiles
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm + 2 },
+  tile: {
+    width: '48%', flexGrow: 1,
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
     borderWidth: 1, borderColor: COLORS.borderDefault,
-    marginBottom: 4,
+    paddingHorizontal: 14, paddingVertical: 14, gap: 6, overflow: 'hidden',
   },
-  shortcutBtn:   { alignItems: 'center', gap: 6 },
-  shortcutIcon:  { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
-  shortcutLabel: { fontSize: 11, fontWeight: '600', color: COLORS.textSecondary },
+  tileAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
+  tileIcon: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+  tileLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600' },
+  tileValue: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.4 },
+  tileSub:   { fontSize: 10, color: COLORS.textTertiary, fontWeight: '500' },
 
-  // Widget tile
-  widgetTile: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
+  // Generic card
+  card: {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
-    padding: 16, borderWidth: 1, borderColor: COLORS.borderDefault,
+    padding: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault,
   },
-  widgetIcon:  { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
-  widgetBody:  { flex: 1 },
-  widgetTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 6 },
-  metricsRow:  { flexDirection: 'row', gap: 16 },
-  metricItem:  { flexDirection: 'row', gap: 4, alignItems: 'center' },
-  metricLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500' },
-  metricValue: { fontSize: TYPOGRAPHY.sm, color: DARK, fontWeight: '700' },
+  cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.sm + 4 },
+  cardTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, letterSpacing: 0.1 },
+  cardHint:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500' },
+  cardLink:  { fontSize: TYPOGRAPHY.xs, color: COLORS.brandPrimary, fontWeight: '700' },
+
+  // Utilisation
+  utilRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
+  utilPct:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  utilFree: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500' },
+
+  // Reorder strip
+  reorder: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: COLORS.negativeBg, borderRadius: RADIUS.lg,
+    padding: 14, borderWidth: 1, borderColor: COLORS.negative + '30',
+  },
+  reorderIcon: {
+    width: 38, height: 38, borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.cardBg, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: COLORS.negative + '30',
+  },
+  reorderTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  reorderSub:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2, fontWeight: '500' },
+
+  // Category bars
+  catRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  catLabel: { width: 78, fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600' },
+  catValue: { width: 62, textAlign: 'right', fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary },
 });

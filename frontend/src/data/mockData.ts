@@ -21,11 +21,21 @@ export const MOCK_COMPANIES = [
 export const MOCK_STOCK_DASHBOARD = {
   totalQty: '3,24,666',
   totalValue: '₹13,00,000',
+  totalValueNum: 1300000,
+  valueTrend: 6.4,
+  valueTrendPositive: true,
   warehouses: { total: 5, utilization: 76 },
   lowStockCount: 12,
   agedInventory: { value: '₹12,500', days: 90 },
   fastMovingCount: 130,
   reorderQueueCount: 8,
+  reorderValue: '₹2,45,000',
+  categories: [
+    { label: 'Electronics', value: 520000 },
+    { label: 'Apparel',     value: 340000 },
+    { label: 'Grocery',     value: 260000 },
+    { label: 'Hardware',    value: 180000 },
+  ],
 };
 
 export const MOCK_KPI_STRIP = [
