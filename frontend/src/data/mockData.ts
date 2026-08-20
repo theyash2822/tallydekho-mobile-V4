@@ -30,6 +30,7 @@ export const MOCK_STOCK_DASHBOARD = {
   fastMovingCount: 130,
   reorderQueueCount: 8,
   reorderValue: '₹2,45,000',
+  recentMovements: 48,
   categories: [
     { label: 'Electronics', value: 520000 },
     { label: 'Apparel',     value: 340000 },
@@ -56,10 +57,10 @@ export const MOCK_STOCK_REPORTS = {
   ],
   // value by category (monochrome ramp)
   composition: [
-    { label: 'Electronics', value: 520000, color: '#1A1A1A' },
-    { label: 'Apparel',     value: 340000, color: '#6B6A66' },
-    { label: 'Grocery',     value: 260000, color: '#A6A49F' },
-    { label: 'Hardware',    value: 180000, color: '#D4D3CE' },
+    { label: 'Electronics', value: 520000, color: '#2563EB' },
+    { label: 'Apparel',     value: 340000, color: '#2D7D46' },
+    { label: 'Grocery',     value: 260000, color: '#D97706' },
+    { label: 'Hardware',    value: 180000, color: '#787774' },
   ],
 };
 

@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
+import { View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { useFonts } from 'expo-font';
@@ -10,6 +11,7 @@ import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import * as SplashScreen from 'expo-splash-screen';
 import Toast from 'react-native-toast-message';
 import { toastConfig } from '../src/utils/toastConfig';
+import { COLORS } from '../src/constants/colors';
 
 // Prevent splash screen from auto-hiding while fonts load
 SplashScreen.preventAutoHideAsync();
@@ -17,6 +19,27 @@ SplashScreen.preventAutoHideAsync();
 // Module-level flag — lives in JS memory only.
 // Resets to false on every Metro reload / cold app start automatically.
 let _onboardingShownThisSession = false;
+
+// Paints the phone status-bar inset with the app header colour so the OS
+// status bar merges seamlessly with the app header on every screen.
+function StatusBarCover() {
+  const insets = useSafeAreaInsets();
+  if (!insets.top) return null;
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: insets.top,
+        backgroundColor: COLORS.cardBg,
+        zIndex: 1000,
+      }}
+    />
+  );
+}
 
 function RootNavigation() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -70,6 +93,7 @@ export default function RootLayout() {
         <AuthProvider>
           <StatusBar style="dark" />
           <RootNavigation />
+          <StatusBarCover />
         </AuthProvider>
       </SafeAreaProvider>
       {/* Toast must be LAST so it renders above everything */}

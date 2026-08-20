@@ -1,0 +1,24 @@
+{
+  "summary": "Frontend-only regression + feature verification for TallyDekho Stock dashboard, Stock Reports interactive charts, and root layout. All 4 requested feature groups PASS: (#1) Reports minimalist colors — summary dots (blue/amber/green) and donut colors (Electronics #2563EB, Apparel #2D7D46, Grocery #D97706, Hardware #787774) render correctly with the trend line/area in blue. (#2a) Trend chart is interactive — tapping trend-point-0..5 updates the tooltip pill (verified 9.8L/11.1L/12.2L/13.0L). (#2b) Donut legend rows toggle center value+label — Apparel→₹3.40L, Electronics→₹5.20L, Grocery→₹2.60L, Hardware→₹1.80L, and re-tapping the same legend toggles back to Total ₹13.00L. (#3) Dashboard: 'Movements' tile (48 · Last 7 days) present & navigates to /stocks/fast-slow, 'Warehouse Utilisation' card is tappable (chevron visible) & navigates to /stocks/warehouses, and the old 'Movement Analytics' quick-link row has been removed (no 'Fast & slow moving items' text). Regression: Hero→/stocks/total-stock, Low-Stock→/stocks/reorder-queue, Fast-Moving→/stocks/movement-analytics, Aged→/stocks/aged-items, Reorder strip→/stocks/reorder-queue (verified via subtitle tap), category Report→/stocks/valuation-summary, and Stock Reports→/stocks/reports all work.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_15.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "reports.tsx TrendAreaChart width uses SW - SPACING.md*2 - SPACING.md*2 (double subtraction). Works but reads confusingly; consider a single explicit inner-padding constant.",
+    "Donut Circle onPress on react-native-svg maps to onClick on web but does not extend the touchable area to the segment thickness by default; legend taps remain the reliable interaction path (as noted by main agent). This is acceptable per feedback.",
+    "In stocks.tsx the plain get_by_text('Reorder Queue') click did not always propagate to the parent TouchableOpacity in Playwright — functionally the strip works (clicking subtitle navigates correctly), so no user-facing bug, but worth adding a testID='reorder-strip' on the strip TouchableOpacity for future stable testing."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100%"},
+  "seed_data_creation": "None — mock data (MOCK_STOCK_DASHBOARD / MOCK_STOCK_REPORTS) used as-is.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Onboarding auto-shows on every fresh page load (module-level _onboardingShownThisSession flag resets per Metro reload). To bypass: set localStorage auth_token=mock_token_123, reload, then click 'Skip' (may need up to 2 clicks — onboarding sometimes has an intermediate Skip target). Use in-app tab navigation instead of page.goto for sub-routes to avoid the onboarding guard re-firing. Reports page test IDs: trend-point-0..5 for chart points, legend-0..3 for donut legends. Category dot colors verified via rgb(37,99,235), rgb(45,125,70), rgb(217,119,6), rgb(120,119,116).",
+  "rca_of_issue": "N/A — no bugs found."
+}

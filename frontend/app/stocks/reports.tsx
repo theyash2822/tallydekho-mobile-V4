@@ -1,30 +1,32 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import Svg, { Path, Circle, G, Line, Text as SvgText } from 'react-native-svg';
+import Svg, { Path, Circle, G, Line } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { MOCK_STOCK_REPORTS } from '../../src/data/mockData';
 
 const SW = Dimensions.get('window').width;
+const ACCENT = COLORS.info; // minimalist blue accent for the trend
 const fmtL = (v: number) => `₹${(v / 1_00_000).toFixed(2)}L`;
 
 // ── Report links ──────────────────────────────────────────────────────────────
 interface ReportItem { id: string; label: string; desc: string; icon: string; route: string; }
 const REPORTS: ReportItem[] = [
-  { id: 'stock-ledger', label: 'Stock Ledger',                desc: 'Item-wise inward & outward log',   icon: 'book-outline',            route: '/stocks/stock-ledger' },
-  { id: 'valuation',    label: 'Valuation Summary',           desc: 'Total stock value by category',    icon: 'document-text-outline',   route: '/stocks/valuation-summary' },
-  { id: 'expiry',       label: 'Expiry Schedule',             desc: 'Items expiring by date',           icon: 'timer-outline',           route: '/stocks/expiry-schedule' },
-  { id: 'fast-slow',    label: 'Fast vs Slow Moving',         desc: 'Velocity analysis of all SKUs',    icon: 'swap-horizontal-outline', route: '/stocks/fast-slow' },
-  { id: 'transfer',     label: 'Transfer History',            desc: 'Inter-warehouse stock transfers',  icon: 'repeat-outline',          route: '/stocks/transfer-history' },
-  { id: 'snapshot',     label: 'Stock Snapshot',              desc: 'Point-in-time stock position',     icon: 'camera-outline',          route: '/stocks/stock-snapshot' },
-  { id: 'negative',     label: 'Negative Stock Exceptions',   desc: 'Items with below-zero quantities', icon: 'alert-circle-outline',    route: '/stocks/negative-stock' },
+  { id: 'stock-ledger', label: 'Stock Ledger',              desc: 'Item-wise inward & outward log',   icon: 'book-outline',            route: '/stocks/stock-ledger' },
+  { id: 'valuation',    label: 'Valuation Summary',         desc: 'Total stock value by category',    icon: 'document-text-outline',   route: '/stocks/valuation-summary' },
+  { id: 'expiry',       label: 'Expiry Schedule',           desc: 'Items expiring by date',           icon: 'timer-outline',           route: '/stocks/expiry-schedule' },
+  { id: 'fast-slow',    label: 'Fast vs Slow Moving',       desc: 'Velocity analysis of all SKUs',    icon: 'swap-horizontal-outline', route: '/stocks/fast-slow' },
+  { id: 'transfer',     label: 'Transfer History',          desc: 'Inter-warehouse stock transfers',  icon: 'repeat-outline',          route: '/stocks/transfer-history' },
+  { id: 'snapshot',     label: 'Stock Snapshot',            desc: 'Point-in-time stock position',     icon: 'camera-outline',          route: '/stocks/stock-snapshot' },
+  { id: 'negative',     label: 'Negative Stock Exceptions', desc: 'Items with below-zero quantities', icon: 'alert-circle-outline',    route: '/stocks/negative-stock' },
 ];
 
-// ── Stock Value Trend — lightweight SVG area chart ─────────────────────────────
+// ── Interactive Stock Value Trend (tap a point to see its value) ───────────────
 function TrendAreaChart({ data }: { data: { label: string; value: number }[] }) {
-  const W = SW - SPACING.md * 2 - SPACING.md * 2; // page + card padding
+  const [sel, setSel] = useState(data.length - 1);
+  const W = SW - SPACING.md * 2 - SPACING.md * 2;
   const H = 120;
   const PAD = 10;
   const vals = data.map(d => d.value);
@@ -38,36 +40,78 @@ function TrendAreaChart({ data }: { data: { label: string; value: number }[] }) 
   }));
   const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
   const area = `${line} L ${pts[pts.length - 1].x} ${H - PAD} L ${pts[0].x} ${H - PAD} Z`;
+  const sp = pts[sel];
 
   return (
-    <Svg width={W} height={H + 22}>
-      {/* baseline */}
-      <Line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke={COLORS.borderDefault} strokeWidth={1} />
-      <Path d={area} fill="rgba(26,26,26,0.06)" />
-      <Path d={line} stroke={COLORS.brandPrimary} strokeWidth={2} fill="none" />
-      {pts.map((p, i) => (
-        <Circle
-          key={i}
-          cx={p.x}
-          cy={p.y}
-          r={i === pts.length - 1 ? 4 : 2.5}
-          fill={i === pts.length - 1 ? COLORS.brandPrimary : COLORS.cardBg}
-          stroke={COLORS.brandPrimary}
-          strokeWidth={1.5}
-        />
-      ))}
-      {data.map((d, i) => (
-        <SvgText key={i} x={pts[i].x} y={H + 14} fontSize="9" fill={COLORS.textTertiary} textAnchor="middle">
-          {d.label}
-        </SvgText>
-      ))}
-    </Svg>
+    <View style={{ width: W, height: H + 22 }}>
+      <Svg width={W} height={H + 22}>
+        <Line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke={COLORS.borderDefault} strokeWidth={1} />
+        {/* selected vertical guide */}
+        <Line x1={sp.x} y1={PAD} x2={sp.x} y2={H - PAD} stroke={ACCENT} strokeWidth={1} strokeDasharray="3 3" opacity={0.5} />
+        <Path d={area} fill="rgba(37,99,235,0.08)" />
+        <Path d={line} stroke={ACCENT} strokeWidth={2} fill="none" />
+        {pts.map((p, i) => (
+          <Circle
+            key={i}
+            cx={p.x}
+            cy={p.y}
+            r={i === sel ? 5 : 2.5}
+            fill={i === sel ? ACCENT : COLORS.cardBg}
+            stroke={ACCENT}
+            strokeWidth={1.5}
+          />
+        ))}
+      </Svg>
+
+      {/* value tooltip pill above the selected point */}
+      <View style={[t.tip, { left: Math.min(Math.max(sp.x - 26, 0), W - 52), top: Math.max(sp.y - 30, 0) }]} pointerEvents="none">
+        <Text style={t.tipTxt}>₹{data[sel].value.toFixed(1)}L</Text>
+      </View>
+
+      {/* touch targets + x labels */}
+      <View style={StyleSheet.absoluteFill}>
+        {pts.map((p, i) => (
+          <TouchableOpacity
+            key={i}
+            testID={`trend-point-${i}`}
+            activeOpacity={0.6}
+            onPress={() => setSel(i)}
+            style={{ position: 'absolute', left: p.x - 18, top: 0, width: 36, height: H }}
+          />
+        ))}
+        {data.map((d, i) => (
+          <Text
+            key={i}
+            style={[t.xlabel, { left: pts[i].x - 18, width: 36, color: i === sel ? COLORS.textPrimary : COLORS.textTertiary }]}
+          >
+            {d.label}
+          </Text>
+        ))}
+      </View>
+    </View>
   );
 }
 
-// ── Category Donut — SVG ───────────────────────────────────────────────────────
-function Donut({ data, size = 128, stroke = 20 }: {
-  data: { label: string; value: number; color: string }[]; size?: number; stroke?: number;
+const t = StyleSheet.create({
+  tip: {
+    position: 'absolute',
+    backgroundColor: COLORS.brandPrimary,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
+    minWidth: 52,
+    alignItems: 'center',
+  },
+  tipTxt: { color: COLORS.white, fontSize: 10, fontWeight: '800' },
+  xlabel: { position: 'absolute', bottom: 0, fontSize: 9, fontWeight: '600', textAlign: 'center' },
+});
+
+// ── Interactive Category Donut ─────────────────────────────────────────────────
+function Donut({ data, selected, onSelect, size = 128, stroke = 20 }: {
+  data: { label: string; value: number; color: string }[];
+  selected: number | null;
+  onSelect: (i: number) => void;
+  size?: number; stroke?: number;
 }) {
   const total = data.reduce((s, d) => s + d.value, 0) || 1;
   const r = (size - stroke) / 2;
@@ -79,6 +123,7 @@ function Donut({ data, size = 128, stroke = 20 }: {
         <Circle cx={size / 2} cy={size / 2} r={r} stroke={COLORS.borderDefault} strokeWidth={stroke} fill="none" />
         {data.map((d, i) => {
           const len = (d.value / total) * C;
+          const active = selected === null || selected === i;
           const el = (
             <Circle
               key={i}
@@ -86,11 +131,13 @@ function Donut({ data, size = 128, stroke = 20 }: {
               cy={size / 2}
               r={r}
               stroke={d.color}
-              strokeWidth={stroke}
+              strokeWidth={selected === i ? stroke + 4 : stroke}
+              strokeOpacity={active ? 1 : 0.25}
               fill="none"
               strokeDasharray={`${len} ${C - len}`}
               strokeDashoffset={-offset}
               strokeLinecap="butt"
+              onPress={() => onSelect(i)}
             />
           );
           offset += len;
@@ -105,6 +152,11 @@ export default function StockReportsScreen() {
   const router = useRouter();
   const d = MOCK_STOCK_REPORTS;
   const compTotal = d.composition.reduce((s, c) => s + c.value, 0);
+  const [selCat, setSelCat] = useState<number | null>(null);
+  const toggleCat = (i: number) => setSelCat(prev => (prev === i ? null : i));
+
+  const centerVal = selCat === null ? fmtL(compTotal) : fmtL(d.composition[selCat].value);
+  const centerLbl = selCat === null ? 'Total' : d.composition[selCat].label;
 
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
@@ -122,16 +174,19 @@ export default function StockReportsScreen() {
         {/* ── Summary strip ── */}
         <View style={s.summary}>
           <View style={s.sumCell}>
+            <View style={[s.sumDot, { backgroundColor: ACCENT }]} />
             <Text style={s.sumValue}>{d.totalValue}</Text>
             <Text style={s.sumLabel}>Total Value</Text>
           </View>
           <View style={s.sumSep} />
           <View style={s.sumCell}>
+            <View style={[s.sumDot, { backgroundColor: COLORS.warning }]} />
             <Text style={s.sumValue}>{d.totalSkus}</Text>
             <Text style={s.sumLabel}>SKUs</Text>
           </View>
           <View style={s.sumSep} />
           <View style={s.sumCell}>
+            <View style={[s.sumDot, { backgroundColor: COLORS.positive }]} />
             <Text style={s.sumValue}>{d.turnover}</Text>
             <Text style={s.sumLabel}>Turnover</Text>
           </View>
@@ -142,7 +197,7 @@ export default function StockReportsScreen() {
           <View style={s.cardHead}>
             <View>
               <Text style={s.cardTitle}>Stock Value Trend</Text>
-              <Text style={s.cardSub}>Last 6 months</Text>
+              <Text style={s.cardSub}>Tap a point to see its value</Text>
             </View>
             <View style={[s.trendPill, { backgroundColor: d.valueTrendPositive ? COLORS.positiveBg : COLORS.negativeBg }]}>
               <Ionicons
@@ -158,26 +213,33 @@ export default function StockReportsScreen() {
           <TrendAreaChart data={d.trend} />
         </View>
 
-        {/* ── Value by Category (Donut) ── */}
+        {/* ── Value by Category (interactive donut) ── */}
         <View style={s.card}>
           <Text style={s.cardTitle}>Value by Category</Text>
           <View style={s.donutRow}>
             <View style={s.donutWrap}>
-              <Donut data={d.composition} />
+              <Donut data={d.composition} selected={selCat} onSelect={toggleCat} />
               <View style={s.donutCenter}>
-                <Text style={s.donutCenterVal}>{fmtL(compTotal)}</Text>
-                <Text style={s.donutCenterLbl}>Total</Text>
+                <Text style={s.donutCenterVal}>{centerVal}</Text>
+                <Text style={s.donutCenterLbl} numberOfLines={1}>{centerLbl}</Text>
               </View>
             </View>
             <View style={s.legend}>
-              {d.composition.map(c => {
+              {d.composition.map((c, i) => {
                 const pct = Math.round((c.value / compTotal) * 100);
+                const active = selCat === i;
                 return (
-                  <View key={c.label} style={s.legendRow}>
+                  <TouchableOpacity
+                    key={c.label}
+                    testID={`legend-${i}`}
+                    style={[s.legendRow, active && s.legendRowActive]}
+                    activeOpacity={0.7}
+                    onPress={() => toggleCat(i)}
+                  >
                     <View style={[s.legendDot, { backgroundColor: c.color }]} />
-                    <Text style={s.legendLabel} numberOfLines={1}>{c.label}</Text>
+                    <Text style={[s.legendLabel, active && { color: COLORS.textPrimary }]} numberOfLines={1}>{c.label}</Text>
                     <Text style={s.legendPct}>{pct}%</Text>
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </View>
@@ -232,9 +294,10 @@ const s = StyleSheet.create({
     paddingVertical: 14,
   },
   sumCell: { flex: 1, alignItems: 'center', gap: 3 },
+  sumDot: { width: 6, height: 6, borderRadius: 3, marginBottom: 2 },
   sumValue: { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.4 },
   sumLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500' },
-  sumSep: { width: 1, height: 30, backgroundColor: COLORS.borderDefault },
+  sumSep: { width: 1, height: 34, backgroundColor: COLORS.borderDefault },
 
   // Card
   card: {
@@ -252,9 +315,10 @@ const s = StyleSheet.create({
   donutWrap: { width: 128, height: 128, alignItems: 'center', justifyContent: 'center' },
   donutCenter: { position: 'absolute', alignItems: 'center', pointerEvents: 'none' },
   donutCenterVal: { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.4 },
-  donutCenterLbl: { fontSize: 10, color: COLORS.textTertiary, fontWeight: '500', marginTop: 1 },
-  legend: { flex: 1, gap: 10 },
-  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  donutCenterLbl: { fontSize: 10, color: COLORS.textTertiary, fontWeight: '600', marginTop: 1, maxWidth: 90, textAlign: 'center' },
+  legend: { flex: 1, gap: 6 },
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 5, paddingHorizontal: 6, borderRadius: RADIUS.sm },
+  legendRowActive: { backgroundColor: COLORS.pageBg },
   legendDot: { width: 10, height: 10, borderRadius: 2 },
   legendLabel: { flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600' },
   legendPct: { fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary, fontWeight: '700' },

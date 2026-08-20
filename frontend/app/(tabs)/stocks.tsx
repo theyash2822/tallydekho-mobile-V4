@@ -82,7 +82,7 @@ export default function StocksDashboard() {
   const NEUTRAL = COLORS.textSecondary;
   const NEUTRAL_BG = COLORS.pageBg;
   const STAT_TILES = [
-    { id: 'warehouses', label: 'Warehouses',  value: String(d.warehouses.total), sub: 'Active locations',          icon: 'business-outline',     accent: NEUTRAL,         tint: NEUTRAL_BG,        route: '/stocks/warehouses' },
+    { id: 'movement',   label: 'Movements',   value: String(d.recentMovements), sub: 'Last 7 days',       icon: 'swap-vertical-outline', accent: NEUTRAL,         tint: NEUTRAL_BG,        route: '/stocks/fast-slow' },
     { id: 'low',        label: 'Low-Stock',   value: String(d.lowStockCount),    sub: 'Items below reorder',       icon: 'alert-circle-outline', accent: COLORS.negative, tint: COLORS.negativeBg, route: '/stocks/reorder-queue' },
     { id: 'fast',       label: 'Fast-Moving', value: String(d.fastMovingCount),  sub: 'Active SKUs',               icon: 'flash-outline',        accent: NEUTRAL,         tint: NEUTRAL_BG,        route: '/stocks/movement-analytics' },
     { id: 'aged',       label: 'Aged Stock',  value: d.agedInventory.value,      sub: `${d.agedInventory.days} days old`, icon: 'time-outline',  accent: NEUTRAL,         tint: NEUTRAL_BG,        route: '/stocks/aged-items' },
@@ -162,18 +162,25 @@ export default function StocksDashboard() {
           ))}
         </View>
 
-        {/* ── Warehouse Utilisation (display only — not tappable) ── */}
-        <View style={s.card}>
+        {/* ── Warehouse Utilisation (tap → warehouses) ── */}
+        <TouchableOpacity
+          style={s.card}
+          activeOpacity={0.85}
+          onPress={() => router.push('/stocks/warehouses' as any)}
+        >
           <View style={s.cardHead}>
             <Text style={s.cardTitle}>Warehouse Utilisation</Text>
-            <Text style={s.cardHint}>{d.warehouses.total} warehouses</Text>
+            <View style={s.utilHint}>
+              <Text style={s.cardHint}>{d.warehouses.total} warehouses</Text>
+              <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
+            </View>
           </View>
           <SegmentedBar pct={d.warehouses.utilization} color={COLORS.brandPrimary} />
           <View style={s.utilRow}>
             <Text style={s.utilPct}>{d.warehouses.utilization}% used</Text>
             <Text style={s.utilFree}>{100 - d.warehouses.utilization}% free capacity</Text>
           </View>
-        </View>
+        </TouchableOpacity>
 
         {/* ── Reorder Action Strip ── */}
         <TouchableOpacity
@@ -203,21 +210,6 @@ export default function StocksDashboard() {
           <View style={{ flex: 1 }}>
             <Text style={s.linkTitle}>Stock Reports</Text>
             <Text style={s.linkSub}>Valuation, ageing & summaries</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={17} color={COLORS.textTertiary} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={s.linkRow}
-          activeOpacity={0.85}
-          onPress={() => router.push('/stocks/fast-slow' as any)}
-        >
-          <View style={s.linkIcon}>
-            <Ionicons name="swap-vertical-outline" size={17} color={COLORS.textSecondary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.linkTitle}>Movement Analytics</Text>
-            <Text style={s.linkSub}>Fast & slow moving items</Text>
           </View>
           <Ionicons name="chevron-forward" size={17} color={COLORS.textTertiary} />
         </TouchableOpacity>
@@ -311,6 +303,7 @@ const s = StyleSheet.create({
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.sm + 4 },
   cardTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, letterSpacing: 0.1 },
   cardHint:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500' },
+  utilHint:  { flexDirection: 'row', alignItems: 'center', gap: 2 },
   cardLink:  { fontSize: TYPOGRAPHY.xs, color: COLORS.brandPrimary, fontWeight: '700' },
 
   // Utilisation
