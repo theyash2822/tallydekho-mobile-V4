@@ -14,7 +14,8 @@
         "NSCameraUsageDescription": "Scan vendor bills to auto-fill purchase invoices",
         "NSPhotoLibraryUsageDescription": "Upload your company logo from photo library",
         "NSDocumentsFolderUsageDescription": "Attach documents to Help Center support chat"
-      }
+      },
+      "bundleIdentifier": "com.emergent.dekhofrontendbuild.rwf5nn"
     },
     "android": {
       "adaptiveIcon": {
@@ -24,7 +25,8 @@
       "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.CAMERA"
-      ]
+      ],
+      "package": "com.emergent.dekhofrontendbuild.rwf5nn"
     },
     "web": {
       "bundler": "metro",
