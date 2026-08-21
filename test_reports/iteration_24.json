@@ -1,0 +1,24 @@
+{
+  "summary": "Frontend-only tests for Header + Notifications changes on TallyDekho Expo web preview passed. Verified (1) Home header no longer shows the stats-chart/logo icon on the LEFT; company name 'YK Industries Pvt. Ltd.' with dropdown chevron is shown with more room, sync line renders, tapping opens Switch Company modal; FY selector, bell (badge 1), avatar all still present on the right. (2) Tapping the bell navigates to /notifications. (3) Notifications screen renders 'Notifications' title + red unread badge (7), 'Mark all read', horizontal filter chip row (All 7 / Stock 2 / Receivables 2 / Compliance 2 / Invoices 1) with correct unread counts, and cards grouped under TODAY (N1/N2/N3) and EARLIER (N4/N5/N6/N7) with type-colored icon boxes, title, time, message, action button (Reorder / View party / View GST / Generate IRN / View EWB), and unread dot. (4) Filters correctly narrow the list: Compliance shows only GSTR-3B (Today) + E-Way Bill (Earlier); Stock shows 2 Low Stock Alerts; Receivables shows 2 Outstanding Receivable; Invoices shows only the E-Invoice IRN Pending card. (5) All 5 deep-link routes navigate to real screens with real content: N1 -> /stocks/reorder-queue (Reorder Queue screen), N2 -> /ledger/L001 (Alliance Trading Co. ledger), N3 -> /reports/gst (GST report), N4 -> /reports/einvoice-list (E-Invoices), N5 -> /reports/ewb-list (E-Way Bills). (6) 'Mark all read' clears the unread badge on the header and on the All chip. No red-screen errors; only benign RN web deprecation warnings (shadow*, pointerEvents, useNativeDriver).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Header.tsx still defines an unused `logoBox` style (lines ~204-207) after removing the logo. Safe to delete to keep the stylesheet clean.",
+    "notifications.tsx uses `router.push(n.route as any)` — acceptable for a mock app, but consider typing routes so the Expo Router type-check catches typos in future.",
+    "Console shows RN Web deprecation warnings: 'shadow*' style props deprecated (use boxShadow), 'props.pointerEvents' deprecated. Not caused by this change (pre-existing across the app), but worth cleaning up eventually."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100%"},
+  "seed_data_creation": "None; used existing MOCK_NOTIFICATIONS from /app/frontend/src/data/mockData.ts",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Auth bypass: set localStorage.auth_token='mock_token_123' then reload. Onboarding still shows on fresh load — the 'Skip' text is not a testID'd element; the reliable way to skip in Playwright is to find the element whose innerText === 'Skip' with no children and click its bounding-box centre (may need 2-3 attempts because the first click is sometimes swallowed by the horizontal ScrollView). Once past onboarding, home has data-testid='app-header' and data-testid='company-selector' / 'fy-selector'. Bell button in Header has NO testID — locate it by finding the '1' badge under [data-testid='app-header'] and walking up to the ancestor with cursor:pointer. Notifications screen exposes filter-{All|Stock|Receivables|Compliance|Invoices} and notif-{N1..N7} testIDs.",
+  "rca_of_issue": "N/A - features working as specified."
+}

@@ -150,9 +150,13 @@ export const MOCK_MONTHLY_REVENUE = [
 ];
 
 export const MOCK_NOTIFICATIONS = [
-  { id: 'N001', type: 'warning', title: 'Budget Overspend Warning', message: "Budget Alert: You've exceeded your monthly marketing budget by ₹2,000. Tap to adjust your plan!", time: '5 mins.', actionLabel: 'Adjust plan' },
-  { id: 'N002', type: 'urgent', title: 'Daily Summary Alert', message: "Your daily financial summary is ready! Tap to review today's income, expenses, and cash flow insights.", time: '12:02 PM' },
-  { id: 'N003', type: 'info', title: 'Goal Progress Update', message: "Great news! You're 75% closer to your savings goal for this month. Keep up the momentum!", time: 'Jan 20, 2025' },
+  { id: 'N1', type: 'stock',      category: 'Stock',       group: 'today',   title: 'Low Stock Alert',        message: 'Electronic Component A has only 5 units left (reorder level 20).', time: '10 min',   actionLabel: 'Reorder',      route: '/stocks/reorder-queue' },
+  { id: 'N2', type: 'receivable', category: 'Receivables', group: 'today',   title: 'Outstanding Receivable', message: 'ABC Traders owes ₹1,25,000 — overdue by 8 days.',                time: '1 hr',     actionLabel: 'View party',   route: '/ledger/L001' },
+  { id: 'N3', type: 'gst',        category: 'Compliance',  group: 'today',   title: 'GSTR-3B Filing Reminder',message: 'GSTR-3B for May is due on 20th. 3 returns pending.',             time: '8:00 AM',  actionLabel: 'View GST',     route: '/reports/gst' },
+  { id: 'N4', type: 'invoice',    category: 'Invoices',    group: 'earlier', title: 'E-Invoice IRN Pending',  message: '6 invoices are pending IRN generation.',                          time: 'Yesterday',actionLabel: 'Generate IRN', route: '/reports/einvoice-list' },
+  { id: 'N5', type: 'gst',        category: 'Compliance',  group: 'earlier', title: 'E-Way Bill Pending',     message: '2 invoices need an E-Way Bill before dispatch.',                  time: 'Yesterday',actionLabel: 'View EWB',     route: '/reports/ewb-list' },
+  { id: 'N6', type: 'stock',      category: 'Stock',       group: 'earlier', title: 'Low Stock Alert',        message: 'Cotton Fabric Roll dropped below reorder level (12 left).',       time: '2 days',   actionLabel: 'Reorder',      route: '/stocks/reorder-queue' },
+  { id: 'N7', type: 'receivable', category: 'Receivables', group: 'earlier', title: 'Outstanding Receivable', message: 'Kumar & Sons owes ₹78,500 — due in 3 days.',                      time: '2 days',   actionLabel: 'View party',   route: '/ledger/L001' },
 ];
 
 // ── Sales Register ──────────────────────────────────────────────────────────
