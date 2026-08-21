@@ -1,0 +1,40 @@
+{
+  "summary": "Retest of iteration_21 action items #1 (bottom spacer bump 96->130) and #2 (May month now has 7 records to exercise >5 nested in-card scroll). Both fixes VERIFIED on Ledger Detail (ABC Traders). (1) On initial render Apr open (5 rows), May 25 header is still off-screen at y=782 (viewport 667), but after a normal outer scroll the header sits at y=492 with the Share footer top at y=591 — a clear ~98px gap above the footer, and tapping 'May 25' (no force) reliably expands May (and collapses Apr) instead of triggering Share. (2) With May now containing 7 records, the inner ScrollView clientHeight=280 (5*56) and scrollHeight=393 → 113px of nested scroll = 2 extra rows exactly. Scrolling INSIDE the card reveals 22 May PV-2110 and 28 May JV-0051 while the 'Apr 25' sibling header stays pinned at y=173.5 (before and after inner scroll = STABLE, no shift). MIN 5 rows for Apr still holds (01 SI-30865, 05 PV-2045 visible on entry; 12/18/25 reachable by inner card scroll). Single-open accordion regression clean (Apr collapses when May opens: hasApr01=false, hasApr25=false). Single fixed bottom Share button rendered. RN Web console warnings unchanged from iter_21 (shadow*, pointerEvents, TouchableMixin, useNativeDriver, onStartShouldSetResponder etc.) — non-blocking.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "LedgerDetail",
+        "issues": [
+          "Still missing testID on interactive elements (month header, txn rows, Share btn, search input, Dr/Cr pills, Date Range pill). Non-blocking, but adding them would make e2e regression more stable."
+        ]
+      }
+    ],
+    "react_native_issues": [
+      {"component": "react-native-web deprecated style", "issue": "Console: '\"shadow*\" style props are deprecated. Use \"boxShadow\"'. Comes from txnShareBar shadow* props. Reference: /app/frontend/app/ledger/[id].tsx:831-832"},
+      {"component": "react-native-web deprecated prop", "issue": "Console: 'props.pointerEvents is deprecated. Use style.pointerEvents'."},
+      {"component": "TouchableMixin", "issue": "Console: 'TouchableMixin is deprecated. Please use Pressable' — informational only."},
+      {"component": "Animated useNativeDriver", "issue": "Console: 'Animated: useNativeDriver is not supported ...' on web — expected on web preview, non-blocking."},
+      {"component": "Unknown responder event handlers", "issue": "Console errors: 'Unknown event handler property onStartShouldSetResponder / onResponderGrant / onResponderMove / onResponderRelease / onResponderTerminate / onResponderTerminationRequest. It will be ignored.' — bleed-through from RN-web when rendering some parent view (likely FlatList/ScrollView). Non-blocking, cosmetic only."}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_22.json"],
+  "action_items": [
+    "Optional polish only — no blocking issues remain: (a) add testID attributes to month-header TouchableOpacity, inner txn ScrollView, txn rows, Share button, search input, Dr/Cr pills and Date Range pill for future e2e; (b) migrate txnShareBar shadow* props to boxShadow to silence RN-web warning."
+  ],
+  "critical_code_review_comments": [
+    "/app/frontend/app/ledger/[id].tsx is still ~920 lines — consider extracting DrCrDonutChart, LedgerInfoModal and StyleSheets into separate files.",
+    "Dead style keys (dateRangeRow, dateRangeClearBtn, expandedScroll, txnContainerExpanded, monthGroupOpen, filterRow, searchBox, searchInput, txnContainerExpanded) can be pruned.",
+    "ROW_H (56) is a magic number hardcoded to compute inner ScrollView height — will break if RN font-scale or accessibility text-size changes. Consider onLayout / getItemLayout with FlatList.",
+    "Two spacer/footer heights (100 / 130) chosen empirically — centralise into a BOTTOM_INSET constant used by both the spacer and any absolute bottom bar (footer + txnShareBar)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% (all 4 requested checks passed)"},
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Both requested fixes are verified working. Layout numbers measured on 375x667 mobile viewport: Apr open initial state y=463 header, first row 01 Apr, last visible row is 25 Apr (via inner-scroll within card). May 25 header initial y=782 (below viewport) — reachable via outer scroll to y=492, footer top y=591 → 98px safe gap = enough for tap. Inner May card clientHeight=280, scrollHeight=393, allows PV-2110 (22 May) and JV-0051 (28 May) to be scrolled into view while Apr 25 sibling header stays pinned at y=173.5 (unchanged before/after inner scroll). Single-open accordion + single fixed Share button both still work.",
+  "rca_of_issue": "Previous iter_21 root cause (spacer 96 insufficient) resolved by bumping outer txnScroll bottom spacer to 130 (100 in select mode). After user drags the accordion area, the last month header now clears the ~62px absolute Share footer by ~98px, making it comfortably tappable. The added May records (7 total) also let the inner-card nested scroll (Math.min(count,5)*ROW_H=280) be exercised: 113px of nested overflow = exactly 2 hidden rows, and siblings do not shift because the inner ScrollView is fixed-height."
+}

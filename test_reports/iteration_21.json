@@ -1,0 +1,49 @@
+{
+  "summary": "Frontend-only test of Ledger Detail (ABC Traders) after MIN-5-rows enhancement. VERIFIED: all 5 Apr rows (01 SI-30865, 05 PV-2045, 12 SI-30901, 18 RV-1023, 25 JV-0034) are visible in the expanded date card (rows at y=504,560,616,672,728 — spacing 56px, inner height 280px). SHORT-list case verified — May 25 with 2 records renders exactly 2 rows with no empty gap. Single-open accordion works (tapping May 25 collapses Apr and expands May). Search filter works (typing 'SI' shows only Sales-Invoice vouchers). Fixed bottom Share button is rendered. NESTED-SCROLL-inside-card (records >5) could NOT be exercised because MOCK_TRANSACTIONS has no month with >5 records — the largest is Apr with exactly 5. Code path (Math.min(len,5)*ROW_H + inner ScrollView with nestedScrollEnabled) is present and correct in /app/frontend/app/ledger/[id].tsx L217-218,472-541. Minor UX regression: when Apr is initially open with 5 rows the May 25 header sits at y≈782 which is behind the absolute-positioned Share footer (footer top ≈ 770-780), so a first-tap on 'May 25' hits the Share button instead of the accordion header — user must scroll the outer ScrollView ~80px first before the header becomes tappable. Deprecated RN Web warnings detected in console: shadow* props, props.pointerEvents, TouchableMixin.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "LedgerDetailScreen / bottom Share footer overlap",
+        "issue": "When Apr 25 is expanded by default (5 rows = 280px), the May 25 accordion header renders at y≈782.5 while the absolute-positioned Share footer covers y≈770-844. The header is visually clipped/behind the Share button and taps on 'May 25' land on Share. Outer txnScroll has only ~79px of overflow (spacer=96, footer≈62) so user CAN scroll to reveal it, but on first render the last month header is unclickable. Reference: /app/frontend/app/ledger/[id].tsx:549 (spacer height 96) and :763-768 (footer position:absolute).",
+        "testID": "n/a (no testIDs on month headers or Share footer)",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "LedgerDetail",
+        "issues": [
+          "Missing testID on: month accordion header ('Apr 25'/'May 25'), inner ScrollView, transaction rows, Share button, search TextInput, Dr/Cr pills, Date Range pill. All interactive elements should expose testID for stable e2e testing.",
+          "MOCK_TRANSACTIONS has no month with >5 records, so the >5 nested-scroll case cannot be visually validated. Recommend adding at least one month with 6-8 rows in mock data to exercise the new min(len,5)*ROW_H clamp and inner scroll behavior."
+        ]
+      }
+    ],
+    "react_native_issues": [
+      {"component": "react-native-web deprecated style", "issue": "Console: '\"shadow*\" style props are deprecated. Use \"boxShadow\"'. Comes from txnShareBar shadow* props. Reference: /app/frontend/app/ledger/[id].tsx:826-827"},
+      {"component": "react-native-web deprecated prop", "issue": "Console: 'props.pointerEvents is deprecated. Use style.pointerEvents'. Reference: appears globally, likely from RN internals but check any pointerEvents usage."},
+      {"component": "TouchableMixin", "issue": "Console: 'TouchableMixin is deprecated. Please use Pressable'. Non-blocking but should migrate remaining TouchableOpacity/TouchableHighlight to Pressable over time."}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_21.json"],
+  "action_items": [
+    "Fix Share-footer overlap on last month header: either (a) increase txnScroll bottom spacer height from 96 to ~140 so May 25 always sits above the footer, OR (b) apply paddingBottom to txnScroll contentContainerStyle equal to footer height + a safe margin (≈80px), OR (c) render footer as a non-absolute sibling so it does not overlap. Recommended: option (b).",
+    "Add testID to key interactive elements in /app/frontend/app/ledger/[id].tsx: month header TouchableOpacity ('month-header-Apr'), inner txn ScrollView, txn rows ('txn-row-<voucher>'), Share button ('share-btn'), search input ('search-input'), Dr/Cr pills, Date Range pill.",
+    "Add at least one month in MOCK_TRANSACTIONS with 6-8 rows so the >5 nested-scroll UX can be QA-tested (e.g., add extra Jun records).",
+    "Optional: replace shadow* style with boxShadow in txnShareBar to silence RN-Web deprecation warning."
+  ],
+  "critical_code_review_comments": [
+    "/app/frontend/app/ledger/[id].tsx is 915 lines — over the 700-line guideline. Consider extracting DrCrDonutChart, LedgerInfoModal and styles into separate files.",
+    "Duplicated styles: `filterRow`/`controlRow`, `dateRangeRow`/`dateRangePill` — some are unused (dateRangeRow, dateRangeClearBtn, expandedScroll, txnContainerExpanded, monthGroupOpen). Prune dead style keys.",
+    "Layout uses fixed ROW_H=56 to compute inner ScrollView height — fragile if font scale changes. Consider onLayout measurement or FlatList with a fixed getItemLayout instead.",
+    "The current spacer of 96 is smaller than the effective absolute footer footprint at the edge of the last accordion header (see UI bug above); centralise 'bottomInset' constant and reuse for both spacer and footer."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "85%"},
+  "seed_data_creation": "None",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "MIN-5-rows enhancement WORKS: all 5 Apr rows render at 56px spacing inside the expanded card. Short-list case (2 rows) also renders correctly. The primary regression is that on initial render with Apr open, the May 25 accordion header (last date-card header) is covered by the fixed bottom Share button — user has to scroll the outer txnScroll before the last header is tappable. Nested-scroll for months >5 rows could not be tested because mock data has no such month. Recommend main agent (a) increase txnScroll bottom padding/spacer to sit above the footer, and (b) add one month with 6-8 records to mock data so the new inner-scroll can be visually validated.",
+  "rca_of_issue": "Root cause of last-header overlap: styles.footer uses position:absolute with paddingTop:10 + shareBtn paddingVertical:14 + text ~18 + paddingBottom:20 ≈ 62px tall. Outer txnScroll has a trailing spacer view of height 96 (line 549). When Apr is expanded (5*56=280 rows + 40 header) and no other overflow exists, the ScrollView contentSize barely exceeds its viewport (measured overflow=79px), which is essentially the spacer minus a bit — so at rest the last month header falls inside the footer's absolute Y band (~770-844). Reproduction: open ABC Traders, do NOT scroll, tap 'May 25' → Share sheet triggers or nothing happens (tap absorbed by footer). Mitigation: bump spacer / contentContainerStyle.paddingBottom to ≥ footerHeight + 24 (≈ 90-100px effective margin above footer) or absolute-position the Share footer above (elevate ScrollView bottom inset)."
+}

@@ -110,6 +110,11 @@ const MOCK_TRANSACTIONS = [
   { id: 't5', date: '25 Apr', voucher: 'JV-0034',  type: 'Journal',       amount: '₹5,400',  isDebit: false, balance: '-₹16,900' },
   { id: 't6', date: '03 May', voucher: 'SI-30977', type: 'Sales Invoice', amount: '₹18,700', isDebit: false, balance: '-₹35,600' },
   { id: 't7', date: '10 May', voucher: 'PV-2089',  type: 'Payment',       amount: '₹20,000', isDebit: true,  balance: '-₹15,600' },
+  { id: 't8',  date: '12 May', voucher: 'SI-31002', type: 'Sales Invoice', amount: '₹9,800',  isDebit: false, balance: '-₹25,400' },
+  { id: 't9',  date: '15 May', voucher: 'RV-1044',  type: 'Receipt',       amount: '₹12,000', isDebit: true,  balance: '-₹13,400' },
+  { id: 't10', date: '18 May', voucher: 'SI-31025', type: 'Sales Invoice', amount: '₹31,200', isDebit: false, balance: '-₹44,600' },
+  { id: 't11', date: '22 May', voucher: 'PV-2110',  type: 'Payment',       amount: '₹16,500', isDebit: true,  balance: '-₹28,100' },
+  { id: 't12', date: '28 May', voucher: 'JV-0051',  type: 'Journal',       amount: '₹4,300',  isDebit: false, balance: '-₹32,400' },
 ];
 
 const KPI_CHIPS = [
@@ -214,6 +219,8 @@ function LedgerInfoModal({ visible, onClose }: { visible: boolean; onClose: () =
 export default function LedgerDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const ROW_H = 56; // approx height of one transaction row
+  const VISIBLE_ROWS = 5;
   const [showDrOnly, setShowDrOnly] = useState(false);
   const [showCrOnly, setShowCrOnly] = useState(false);
   const [showInfo,   setShowInfo]   = useState(false);
@@ -309,7 +316,6 @@ export default function LedgerDetailScreen() {
   const effectiveExpanded = searchQuery.trim()
     ? new Set(sortedMonths)   // all months visible while searching
     : expandedMonths;
-  const anyOpen = effectiveExpanded.size > 0;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -435,8 +441,13 @@ export default function LedgerDetailScreen() {
       </Pressable>{/* end stickyTop */}
 
       {/* ── Scrollable transaction list only ── */}
-      <View style={styles.txnScroll}>
-        <View style={[styles.txnContainer, anyOpen && styles.txnContainerExpanded]}>
+      <ScrollView
+        style={styles.txnScroll}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        onScrollBeginDrag={() => Keyboard.dismiss()}
+      >
+        <View style={styles.txnContainer}>
           {sortedMonths.length === 0 ? (
             <View style={styles.emptySearch}>
               <Ionicons name="search-outline" size={28} color={COLORS.textTertiary} />
@@ -447,7 +458,7 @@ export default function LedgerDetailScreen() {
               const isOpen  = effectiveExpanded.has(mon);
               const monTxns = monthGroups[mon];
               return (
-                <View key={mon} style={[styles.monthGroup, isOpen && styles.monthGroupOpen]}>
+                <View key={mon} style={styles.monthGroup}>
                   {/* Month header — tappable accordion toggle */}
                   <TouchableOpacity
                     style={styles.monthHeader}
@@ -465,8 +476,8 @@ export default function LedgerDetailScreen() {
                   {/* Rows — scroll WITHIN the expanded date group */}
                   {isOpen && (
                     <ScrollView
-                      style={styles.expandedScroll}
-                      contentContainerStyle={{ paddingBottom: 4 }}
+                      style={{ height: Math.min(monTxns.length, VISIBLE_ROWS) * ROW_H }}
+                      contentContainerStyle={{ paddingBottom: 2 }}
                       nestedScrollEnabled
                       showsVerticalScrollIndicator
                       keyboardShouldPersistTaps="handled"
@@ -540,8 +551,8 @@ export default function LedgerDetailScreen() {
           )}
         </View>
 
-        <View style={{ height: txnSelectMode ? 90 : 96 }} />
-      </View>
+        <View style={{ height: txnSelectMode ? 100 : 130 }} />
+      </ScrollView>
 
       {/* ── Fixed bottom Share button (device share sheet) ── */}
       {!txnSelectMode && (
@@ -708,10 +719,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBg,
     marginBottom: SPACING.md,
   },
-  txnContainerExpanded: { flex: 1 },
+  txnContainerExpanded: {},
   monthGroup: {},
-  monthGroupOpen: { flex: 1 },
-  expandedScroll: { flex: 1 },
+  monthGroupOpen: {},
+  expandedScroll: {},
   monthHeader: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between',
