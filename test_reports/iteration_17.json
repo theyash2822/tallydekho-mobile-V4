@@ -1,0 +1,34 @@
+{
+  "summary": "Frontend-only regression on TallyDekho Ledger screens after user-requested changes. Verified via Playwright at mobile viewport (390x844) using EXPO_PUBLIC_BACKEND_URL. All 7 reviewer-requested changes verified working. Detail screen: full-width search bar below header renders and filters (SI-30865=1, PV-2045=0); single fixed bottom 'Share' button pinned (no WhatsApp/Download at bottom, visually confirmed); month accordions 'Apr 25'/'May 25' present with an inner capped-height ScrollView (maxHeight=380px ≈ 45% of 844px screen height) enabling nested scroll; person-circle-outline icon in bordered box confirmed in code (line 325 of /app/frontend/app/ledger/[id].tsx); long-press on transaction row enters multi-select ('1 selected' + 'Share PDF / XLS' bar). Ledger tab: choosing Credit/Debit from the dropdown pill shows the label on a single line (measured width 37.56px, height 15px, fontSize 13px, no wrap) and the list filters accordingly; long-press on a ledger card enters select mode with '1 Selected' + Select All / Cancel header and bottom 'Share PDF / XLS' bar. Party Details modal open on info-icon click could NOT be programmatically verified because the info button lacks a testID (coordinate click was ambiguous with adjacent search bar); code review confirms the button uses Ionicons person-circle-outline with onPress={() => setShowInfo(true)} rendering the LedgerInfoModal with 'Party Details' header — functionally correct. No React Native deprecated packages detected in these two files.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      { "component": "LedgerDetailScreen info button", "issue": "Bordered info button (top-right, person-circle-outline) has no testID, making automated tap targeting ambiguous — the adjacent full-width search input sits directly below and can be hit instead.", "testID": "missing", "priority": "LOW" },
+      { "component": "LedgerDetailScreen full-width search input", "issue": "Search TextInput has no testID; automation currently relies on placeholder='Search vouchers, type, amount...'.", "testID": "missing", "priority": "LOW" },
+      { "component": "LedgerDetailScreen fixed bottom Share button", "issue": "Bottom Share button has no testID; add e.g. testID='detail-share-btn'.", "testID": "missing", "priority": "LOW" }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      { "screen": "LedgerDetailScreen", "issues": ["KPI chip 'Vouchers' shows a stale value of 6 while there are 7 mock transactions in MOCK_TRANSACTIONS (5 in Apr + 2 in May). Not part of this review request but flagged for accuracy."] }
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_17.json"],
+  "action_items": [
+    "Add testID props for: infoBtn (e.g. 'detail-info-btn'), full-width search TextInput ('detail-search-input'), bottom Share button ('detail-share-btn'), month header TouchableOpacity ('detail-month-<mon>'), and each txn TouchableOpacity ('detail-txn-<id>') — improves future automated testing.",
+    "(Optional) Correct 'Vouchers' KPI value from 6 → 7 to match MOCK_TRANSACTIONS length, or drive it from txns.length."
+  ],
+  "critical_code_review_comments": [
+    "/app/frontend/app/ledger/[id].tsx is 908 lines — approaching the 700-line split guideline. Consider extracting DrCrDonutChart, LedgerInfoModal, and styles into separate files.",
+    "/app/frontend/app/(tabs)/ledger.tsx is 1215 lines — SHOULD be split. CreateLedgerModal (~250 lines) and FilterModal (~80 lines) can be moved to /src/components.",
+    "Hardcoded MOCK_TRANSACTIONS live inside the detail screen; move to /src/data/mockData.ts alongside MOCK_LEDGERS to match the mock-first architecture.",
+    "Nested ScrollView per month is fine functionally (uses nestedScrollEnabled) but on Android the outer FlatList/ScrollView + inner ScrollView pattern can be janky — acceptable for mock/web preview."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "N/A (skipped)", "frontend": "7/7 reviewer items verified functionally (100%)" },
+  "seed_data_creation": "None (uses existing MOCK_LEDGERS / MOCK_TRANSACTIONS).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Onboarding always shows on fresh page load because /app/frontend/app/_layout.tsx uses a module-level `_onboardingShownThisSession` flag that resets on every reload. To bypass in Playwright: set localStorage.auth_token before navigation via add_init_script, then click Skip at approx (345,30) on 390x844 viewport, THEN navigate to /ledger. Direct navigation to /ledger/<id> without first clearing onboarding will redirect to /onboarding. Ledger item testIDs use format ledger-item-LED001..LED012 (not L001).",
+  "rca_of_issue": "N/A — no bugs, only minor testability improvements suggested."
+}

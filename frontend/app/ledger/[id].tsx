@@ -152,8 +152,8 @@ function LedgerInfoModal({ visible, onClose }: { visible: boolean; onClose: () =
           {/* Header row */}
           <View style={im.header}>
             <View style={im.headerLeft}>
-              <Ionicons name="information-circle-outline" size={20} color={COLORS.brandPrimary} />
-              <Text style={im.title}>Information</Text>
+              <Ionicons name="person-circle-outline" size={20} color={COLORS.brandPrimary} />
+              <Text style={im.title}>Party Details</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={im.closeX} activeOpacity={0.7}>
               <Ionicons name="close" size={20} color={COLORS.textSecondary} />
@@ -214,6 +214,7 @@ function LedgerInfoModal({ visible, onClose }: { visible: boolean; onClose: () =
 export default function LedgerDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const EXP_MAX_H = Math.round(Dimensions.get('window').height * 0.45);
   const [showDrOnly, setShowDrOnly] = useState(false);
   const [showCrOnly, setShowCrOnly] = useState(false);
   const [showInfo,   setShowInfo]   = useState(false);
@@ -321,8 +322,37 @@ export default function LedgerDetailScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>{ledger.name}</Text>
         <TouchableOpacity style={styles.infoBtn} activeOpacity={0.7} onPress={() => setShowInfo(true)}>
-          <Ionicons name="information-circle-outline" size={22} color={COLORS.brandPrimary} />
+          <Ionicons name="person-circle-outline" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
+      </View>
+
+      {/* ── Full-width search bar (below header) ── */}
+      <View style={styles.searchBarWrap}>
+        <View style={[styles.searchBarFull, searchFocused && styles.searchBoxFocused]}>
+          <Ionicons
+            name="search-outline"
+            size={16}
+            color={searchFocused ? COLORS.brandPrimary : COLORS.textTertiary}
+          />
+          <TextInput
+            style={styles.searchInputFull}
+            placeholder="Search vouchers, type, amount..."
+            placeholderTextColor={COLORS.textTertiary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            selectionColor={COLORS.brandPrimary}
+            returnKeyType="search"
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
+              <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* ── Fixed top section (chart + controls) — does NOT scroll ── */}
@@ -386,34 +416,8 @@ export default function LedgerDetailScreen() {
             )}
           </TouchableOpacity>
 
-          {/* Search input */}
-          <View style={[styles.searchBox, searchFocused && styles.searchBoxFocused]}>
-            <Ionicons
-              name="search-outline"
-              size={13}
-              color={searchFocused ? COLORS.brandPrimary : COLORS.textTertiary}
-            />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search"
-              placeholderTextColor={COLORS.textTertiary}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setSearchFocused(false)}
-              selectionColor={COLORS.brandPrimary}
-              returnKeyType="search"
-              autoCorrect={false}
-              autoCapitalize="none"
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
-                <Ionicons name="close-circle" size={13} color={COLORS.textTertiary} />
-              </TouchableOpacity>
-            )}
-          </View>
-
           {/* Dr / Cr filter pills */}
+          <View style={{ flex: 1 }} />
           <TouchableOpacity
             style={[styles.filterPill, showDrOnly && styles.filterPillActive]}
             onPress={() => { setShowDrOnly(!showDrOnly); setShowCrOnly(false); }}
@@ -460,8 +464,15 @@ export default function LedgerDetailScreen() {
                     />
                   </TouchableOpacity>
 
-                  {/* Rows — only rendered when expanded */}
-                  {isOpen && monTxns.map((txn, idx) => {
+                  {/* Rows — scroll WITHIN the expanded date group */}
+                  {isOpen && (
+                    <ScrollView
+                      style={{ maxHeight: EXP_MAX_H }}
+                      nestedScrollEnabled
+                      showsVerticalScrollIndicator
+                      keyboardShouldPersistTaps="handled"
+                    >
+                      {monTxns.map((txn, idx) => {
                     const isTxnSelected = selectedTxns.includes(txn.id);
                     return (
                     <TouchableOpacity
@@ -521,20 +532,26 @@ export default function LedgerDetailScreen() {
                     </TouchableOpacity>
                     );
                   })}
+                    </ScrollView>
+                  )}
                 </View>
               );
             })
           )}
         </View>
 
-        {/* ── Share button ── */}
-        <TouchableOpacity style={styles.shareBtn} activeOpacity={0.8} onPress={handleTxnShare}>
-          <Ionicons name="share-outline" size={16} color={COLORS.white} />
-          <Text style={styles.shareBtnText}>Share PDF / XLSX</Text>
-        </TouchableOpacity>
-
-        <View style={{ height: txnSelectMode ? 90 : 30 }} />
+        <View style={{ height: txnSelectMode ? 90 : 96 }} />
       </ScrollView>
+
+      {/* ── Fixed bottom Share button (device share sheet) ── */}
+      {!txnSelectMode && (
+        <View style={styles.footer}>
+          <TouchableOpacity style={styles.shareBtn} activeOpacity={0.85} onPress={handleTxnShare}>
+            <Ionicons name="share-outline" size={16} color={COLORS.white} />
+            <Text style={styles.shareBtnText}>Share</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── Info modal ── */}
       <LedgerInfoModal visible={showInfo} onClose={() => setShowInfo(false)} />
@@ -593,8 +610,29 @@ const styles = StyleSheet.create({
     flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '700',
     color: COLORS.textPrimary, textAlign: 'center',
   },
-  infoBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  infoBtn: {
+    width: 38, height: 38, borderRadius: RADIUS.sm,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.pageBg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
   scroll:  { flex: 1 },
+
+  // Full-width search bar under header
+  searchBarWrap: {
+    backgroundColor: COLORS.cardBg,
+    paddingHorizontal: SPACING.md, paddingBottom: 10,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  searchBarFull: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md,
+    paddingHorizontal: 12, paddingVertical: 11,
+    borderWidth: 1.5, borderColor: COLORS.borderDefault,
+  },
+  searchInputFull: {
+    flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, paddingVertical: 0,
+  },
 
   // ── Fixed top (chart + controls) — does NOT scroll ──
   stickyTop: { backgroundColor: COLORS.pageBg },
@@ -714,10 +752,16 @@ const styles = StyleSheet.create({
     textAlign: 'center', paddingHorizontal: 24,
   },
 
-  // Share
-  shareBtn: {    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'center', gap: 8,
-    margin: SPACING.md, backgroundColor: COLORS.brandPrimary,
+  // Share — fixed bottom footer
+  footer: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    paddingHorizontal: SPACING.md, paddingTop: 10, paddingBottom: 20,
+    backgroundColor: COLORS.cardBg,
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
+  },
+  shareBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: COLORS.brandPrimary,
     borderRadius: RADIUS.lg, paddingVertical: 14,
   },
   shareBtnText: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },

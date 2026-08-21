@@ -581,7 +581,10 @@ export default function LedgerScreen() {
           activeOpacity={0.8}
         >
           <Ionicons name="list" size={15} color={filter !== 'All' ? COLORS.brandPrimary : COLORS.textSecondary} />
-          <Text style={[styles.filterDropBtnTxt, filter !== 'All' && styles.filterDropBtnTxtActive]}>
+          <Text
+            style={[styles.filterDropBtnTxt, filter !== 'All' && styles.filterDropBtnTxtActive]}
+            numberOfLines={1}
+          >
             {filter}
           </Text>
           <Ionicons
@@ -916,13 +919,13 @@ const styles = StyleSheet.create({
   // ≡ All ▾ dropdown button
   filterDropBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 12, paddingVertical: 8,
+    paddingHorizontal: 14, paddingVertical: 8,
     borderRadius: RADIUS.full,
     borderWidth: 1, borderColor: COLORS.borderDefault,
-    backgroundColor: COLORS.cardBg, minWidth: 90,
+    backgroundColor: COLORS.cardBg, alignSelf: 'flex-start',
   },
   filterDropBtnActive: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary + '12' },
-  filterDropBtnTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+  filterDropBtnTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
   filterDropBtnTxtActive: { color: COLORS.brandPrimary },
   // Floating dropdown card (from the ≡ All button)
   floatDropCard: {
