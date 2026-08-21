@@ -766,11 +766,14 @@ const ap = StyleSheet.create({
 interface SectionCardProps {
   iconName: keyof typeof Ionicons.glyphMap;
   title: string;
+  metric?: string;
+  trend?: string;
+  trendPositive?: boolean;
   children: React.ReactNode;
   onPress?: () => void;
 }
 
-function SectionCard({ iconName, title, children, onPress }: SectionCardProps) {
+function SectionCard({ iconName, title, metric, trend, trendPositive, children, onPress }: SectionCardProps) {
   return (
     <View style={sc.card}>
       {/* Header */}
@@ -779,10 +782,33 @@ function SectionCard({ iconName, title, children, onPress }: SectionCardProps) {
           <Ionicons name={iconName} size={14} color={COLORS.textSecondary} />
         </View>
         <Text style={sc.title}>{title}</Text>
-        <Ionicons name="chevron-forward" size={18} color={onPress ? COLORS.brandPrimary : COLORS.textTertiary} />
+        {metric ? (
+          <View style={sc.metricWrap}>
+            <Text style={sc.metric}>{metric}</Text>
+            {trend ? (
+              <View style={[sc.trendPill, { backgroundColor: trendPositive ? COLORS.positiveBg : COLORS.negativeBg }]}>
+                <Ionicons
+                  name={trendPositive ? 'trending-up' : 'trending-down'}
+                  size={11}
+                  color={trendPositive ? COLORS.positive : COLORS.negative}
+                />
+                <Text style={[sc.trendTxt, { color: trendPositive ? COLORS.positive : COLORS.negative }]}>{trend}</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : (
+          <Ionicons name="chevron-forward" size={18} color={onPress ? COLORS.brandPrimary : COLORS.textTertiary} />
+        )}
       </TouchableOpacity>
       {/* Content */}
       <View style={sc.body}>{children}</View>
+      {/* Footer link */}
+      {onPress ? (
+        <TouchableOpacity style={sc.footer} onPress={onPress} activeOpacity={0.7}>
+          <Text style={sc.footerTxt}>View details</Text>
+          <Ionicons name="chevron-forward" size={14} color={COLORS.brandPrimary} />
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
@@ -820,9 +846,19 @@ const sc = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textPrimary,
   },
+  metricWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  metric: { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.2 },
+  trendPill: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: RADIUS.full },
+  trendTxt: { fontSize: 11, fontWeight: '700' },
   body: {
     padding: SPACING.md,
   },
+  footer: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 3,
+    paddingHorizontal: SPACING.md, paddingVertical: 11,
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
+  },
+  footerTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.brandPrimary },
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -859,8 +895,34 @@ export default function ReportsScreen() {
         contentContainerStyle={styles.content}
       >
 
+        {/* ── KPI summary strip ── */}
+        <View style={styles.kpiStrip}>
+          {[
+            { label: 'Revenue', value: '₹18.4L', dot: '#2D7D46' },
+            { label: 'Expenses', value: '₹14.2L', dot: '#A89060' },
+            { label: 'Net Profit', value: '₹4.2L', dot: COLORS.brandPrimary },
+            { label: 'GST', value: '9/12', dot: '#D97706' },
+          ].map((k, i) => (
+            <React.Fragment key={k.label}>
+              {i > 0 && <View style={styles.kpiSep} />}
+              <View style={styles.kpiCell}>
+                <View style={[styles.kpiDot, { backgroundColor: k.dot }]} />
+                <Text style={styles.kpiValue} numberOfLines={1} adjustsFontSizeToFit>{k.value}</Text>
+                <Text style={styles.kpiLabel}>{k.label}</Text>
+              </View>
+            </React.Fragment>
+          ))}
+        </View>
+
         {/* ── 1. Financial ───────────────────────────────────────────────── */}
-        <SectionCard iconName="stats-chart-outline" title="Financial" onPress={() => router.push('/reports/financial' as any)}>
+        <SectionCard
+          iconName="stats-chart-outline"
+          title="Financial"
+          metric="Net ₹4.2L"
+          trend="+12%"
+          trendPositive
+          onPress={() => router.push('/reports/financial' as any)}
+        >
           <InteractiveLineChart
             isLoading={finLoading}
             lines={finData ? [
@@ -872,13 +934,23 @@ export default function ReportsScreen() {
         </SectionCard>
 
         {/* ── 2. Compliance ─────────────────────────────────────────────── */}
-        <SectionCard iconName="shield-checkmark-outline" title="Compliance" onPress={() => router.push('/reports/compliance' as any)}>
+        <SectionCard
+          iconName="shield-checkmark-outline"
+          title="Compliance"
+          metric="9/12 · 3 pending"
+          onPress={() => router.push('/reports/compliance' as any)}
+        >
           {/* GST gauge: 9 filed (Apr-Dec), needle between Dec & Jan */}
           <GSTGauge filedCount={9} needleIndex={8} />
         </SectionCard>
 
         {/* ── 3. Audit Trail ────────────────────────────────────────────── */}
-        <SectionCard iconName="git-branch-outline" title="Audit Trail" onPress={() => router.push('/reports/audit-trail' as any)}>
+        <SectionCard
+          iconName="git-branch-outline"
+          title="Audit Trail"
+          metric="14 unreconciled"
+          onPress={() => router.push('/reports/audit-trail' as any)}
+        >
           <AuditProgressBar
             label="Unreconciled vouchers"
             count={14}
@@ -887,7 +959,14 @@ export default function ReportsScreen() {
         </SectionCard>
 
         {/* ── 4. AI Insights ────────────────────────────────────────────── */}
-        <SectionCard iconName="sparkles-outline" title="AI Insights" onPress={() => router.push('/reports/ai-insights' as any)}>
+        <SectionCard
+          iconName="sparkles-outline"
+          title="AI Insights"
+          metric="Next ₹4.6L"
+          trend="+8%"
+          trendPositive
+          onPress={() => router.push('/reports/ai-insights' as any)}
+        >
           <LogLineChart
             lines={[
               { values: AI_FORECAST, color: COLORS.brandPrimary, label: 'Sales forecast', latestLabel: '₹460' },
@@ -898,6 +977,31 @@ export default function ReportsScreen() {
             interactive
           />
         </SectionCard>
+
+        {/* ── More Reports quick grid ── */}
+        <Text style={styles.moreLabel}>More Reports</Text>
+        <View style={styles.moreGrid}>
+          {[
+            { label: 'GST Returns',   icon: 'receipt-outline',        route: '/reports/gst' },
+            { label: 'E-Invoices',    icon: 'document-text-outline',  route: '/reports/einvoice-list' },
+            { label: 'E-Way Bills',   icon: 'navigate-outline',       route: '/reports/ewb-list' },
+            { label: 'Cash Register', icon: 'cash-outline',           route: '/kpi/cash-register' },
+            { label: 'Day Book',      icon: 'book-outline',           route: '/daybook' },
+          ].map(m => (
+            <TouchableOpacity
+              key={m.label}
+              style={[styles.moreTile, m.label === 'Day Book' && styles.moreTileWide]}
+              activeOpacity={0.75}
+              onPress={() => router.push(m.route as any)}
+            >
+              <View style={styles.moreIcon}>
+                <Ionicons name={m.icon as any} size={18} color={COLORS.textSecondary} />
+              </View>
+              <Text style={styles.moreTileTxt} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>{m.label}</Text>
+              <Ionicons name="chevron-forward" size={15} color={COLORS.textTertiary} />
+            </TouchableOpacity>
+          ))}
+        </View>
 
         <View style={{ height: 80 }} />
       </ScrollView>
@@ -926,4 +1030,42 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textPrimary,
   },
+
+  // KPI summary strip
+  kpiStrip: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    marginHorizontal: SPACING.md, marginBottom: SPACING.md,
+    paddingVertical: 14,
+  },
+  kpiCell: { flex: 1, alignItems: 'center', gap: 3 },
+  kpiDot: { width: 6, height: 6, borderRadius: 3, marginBottom: 2 },
+  kpiValue: { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.4 },
+  kpiLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500' },
+  kpiSep: { width: 1, height: 34, backgroundColor: COLORS.borderDefault },
+
+  // More Reports grid
+  moreLabel: {
+    fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textTertiary,
+    textTransform: 'uppercase', letterSpacing: 0.8,
+    marginHorizontal: SPACING.md, marginTop: 4, marginBottom: 10,
+  },
+  moreGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 10,
+    marginHorizontal: SPACING.md,
+  },
+  moreTile: {
+    width: '100%',
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    paddingHorizontal: 12, paddingVertical: 12,
+  },
+  moreIcon: {
+    width: 32, height: 32, borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center',
+  },
+  moreTileTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  moreTileWide: { width: '100%' },
 });
