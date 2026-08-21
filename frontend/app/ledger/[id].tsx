@@ -214,7 +214,6 @@ function LedgerInfoModal({ visible, onClose }: { visible: boolean; onClose: () =
 export default function LedgerDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const EXP_MAX_H = Math.round(Dimensions.get('window').height * 0.45);
   const [showDrOnly, setShowDrOnly] = useState(false);
   const [showCrOnly, setShowCrOnly] = useState(false);
   const [showInfo,   setShowInfo]   = useState(false);
@@ -322,7 +321,7 @@ export default function LedgerDetailScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>{ledger.name}</Text>
         <TouchableOpacity style={styles.infoBtn} activeOpacity={0.7} onPress={() => setShowInfo(true)}>
-          <Ionicons name="person-circle-outline" size={22} color={COLORS.textPrimary} />
+          <Ionicons name="reader-outline" size={20} color={COLORS.textPrimary} />
         </TouchableOpacity>
       </View>
 
@@ -437,7 +436,7 @@ export default function LedgerDetailScreen() {
       </View>{/* end stickyTop */}
 
       {/* ── Scrollable transaction list only ── */}
-      <ScrollView style={styles.txnScroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <View style={styles.txnScroll}>
         <View style={styles.txnContainer}>
           {sortedMonths.length === 0 ? (
             <View style={styles.emptySearch}>
@@ -449,7 +448,7 @@ export default function LedgerDetailScreen() {
               const isOpen  = effectiveExpanded.has(mon);
               const monTxns = monthGroups[mon];
               return (
-                <View key={mon} style={styles.monthGroup}>
+                <View key={mon} style={[styles.monthGroup, isOpen && styles.monthGroupOpen]}>
                   {/* Month header — tappable accordion toggle */}
                   <TouchableOpacity
                     style={styles.monthHeader}
@@ -467,7 +466,8 @@ export default function LedgerDetailScreen() {
                   {/* Rows — scroll WITHIN the expanded date group */}
                   {isOpen && (
                     <ScrollView
-                      style={{ maxHeight: EXP_MAX_H }}
+                      style={styles.expandedScroll}
+                      contentContainerStyle={{ paddingBottom: 4 }}
                       nestedScrollEnabled
                       showsVerticalScrollIndicator
                       keyboardShouldPersistTaps="handled"
@@ -541,7 +541,7 @@ export default function LedgerDetailScreen() {
         </View>
 
         <View style={{ height: txnSelectMode ? 90 : 96 }} />
-      </ScrollView>
+      </View>
 
       {/* ── Fixed bottom Share button (device share sheet) ── */}
       {!txnSelectMode && (
@@ -601,9 +601,8 @@ const styles = StyleSheet.create({
   // Header
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: SPACING.sm, paddingVertical: 10,
+    paddingHorizontal: SPACING.md, paddingVertical: 10,
     backgroundColor: COLORS.cardBg,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
   backBtn:     { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: {
@@ -621,7 +620,7 @@ const styles = StyleSheet.create({
   // Full-width search bar under header
   searchBarWrap: {
     backgroundColor: COLORS.cardBg,
-    paddingHorizontal: SPACING.md, paddingBottom: 10,
+    paddingHorizontal: SPACING.md, paddingTop: 2, paddingBottom: 12,
     borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
   searchBarFull: {
@@ -645,7 +644,6 @@ const styles = StyleSheet.create({
 
   // ── Scrollable transactions area ─────────────────────────────────────────
   txnScroll: { flex: 1 },
-
   // Donut + legend card
   chartSection: {
     flexDirection: 'row', alignItems: 'center',
@@ -704,6 +702,7 @@ const styles = StyleSheet.create({
 
   // Month accordion
   txnContainer: {
+    flex: 1,
     marginHorizontal: SPACING.md, borderRadius: RADIUS.lg,
     overflow: 'hidden', borderWidth: 1,
     borderColor: COLORS.borderDefault,
@@ -711,6 +710,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   monthGroup: {},
+  monthGroupOpen: { flex: 1 },
+  expandedScroll: { flex: 1 },
   monthHeader: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between',

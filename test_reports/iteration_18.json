@@ -1,0 +1,29 @@
+{
+  "summary": "Frontend-only regression on /app/frontend/app/ledger/[id].tsx after user-requested follow-up fixes. Tested via Playwright at 390x844 (mobile) on EXPO_PUBLIC_BACKEND_URL. All 4 requested items PASS. (1) SEARCH ALIGNMENT: Header ends at y=60; searchBarWrap starts at y=60 (height 56px) sitting cleanly below header with its own bottom border only — no double border. Search filter works: typing 'SI-30865' filtered voucher list to exactly ['SI-30865']. (2) SCROLL WITHIN DATE CARD: Screen-level document height equals window height (844=844, non-scrollable at page level); wheel over chart region did not move window (scrollY stayed 0). The inner ScrollView inside expanded 'Apr 25' card was detected at y=491-692 (clientHeight=201, scrollHeight=283). After wheel scrolling over the rows, its scrollTop advanced 0 → 82 while both month headers stayed pinned (Apr 25 at y=463.5, May 25 at y=703.5); rows visible shifted from {01,05,12,18} to {05,12,18,25}, confirming ONLY the inner card scrolled. (3) INFO ICON: Header top-right button rendered at x=336..374 y=11..49 (38x38), i.e. exactly 16px from the right edge (390-374); code uses Ionicons name='reader-outline' inside a bordered box (borderWidth:1). Tapping opens Party Details modal (title 'Party Details' + GSTIN section visible). Not an 'i' character. (4) REGRESSION: Fixed bottom 'Share' button rendered at y=793 and is present when not in select mode; long-press on the SI-30865 row entered multi-select mode showing '1 selected' + 'Share PDF / XLS' bottom bar. No React Native deprecated packages introduced in this file.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      { "screen": "LedgerDetailScreen", "issues": ["KPI 'Vouchers' still hardcoded to 6 while MOCK_TRANSACTIONS has 7 rows (unchanged from iter17). Drive from txns.length."] }
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_18.json"],
+  "action_items": [
+    "(Optional / carry-over) Add testIDs for infoBtn, search TextInput, bottom Share button, month headers and txn rows to improve future automated testing.",
+    "(Optional) Correct hardcoded 'Vouchers' KPI value 6 → txns.length (currently 7)."
+  ],
+  "critical_code_review_comments": [
+    "File /app/frontend/app/ledger/[id].tsx is ~908 lines — exceeds 700-line guideline. Extract DrCrDonutChart, LedgerInfoModal, and styles into separate modules.",
+    "Nested inner ScrollView per expanded month uses nestedScrollEnabled — works on web preview; verify on Android device build if released natively (occasional jank possible).",
+    "Unused legacy styles remain in StyleSheet (searchBox, searchInput, filterRow, dateRangeRow, dateRangeClearBtn, scroll). Can be pruned."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "N/A (skipped)", "frontend": "4/4 review items PASS (100%)" },
+  "seed_data_creation": "None — used inline MOCK_TRANSACTIONS.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "To reach the detail screen in Playwright: (1) add_init_script sets localStorage.auth_token='mock_token_123'; (2) navigate to root; (3) click 'Skip' if onboarding shows; (4) tap 'Ledger' bottom tab; (5) tap 'ABC Traders' — resolves to /ledger/LED004?id=LED004. Info button has no testID — click at approx (355, 30) works. Inner ScrollView per month is at ~y=491-692 with scrollHeight>clientHeight, mouse.wheel over that rect scrolls the card without moving window.scrollY.",
+  "rca_of_issue": "N/A — no bugs found; all requested follow-up fixes confirmed working."
+}
