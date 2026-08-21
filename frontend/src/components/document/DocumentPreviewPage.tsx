@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Share, Linking, ActivityIndicator,
+  Share, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useRouter } from 'expo-router';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -642,13 +641,31 @@ function FooterBlock({ doc }: { doc: VoucherDocument }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ActionBar — fixed bottom bar: Share | WhatsApp | Download PDF
+// ActionBar — fixed bottom bar: single Share (device share sheet)
 // ─────────────────────────────────────────────────────────────────────────────
 function ActionBar({ doc }: { doc: VoucherDocument }) {
   const insets = useSafeAreaInsets();
   const [pdfLoading, setPdfLoading] = useState(false);
 
   const handleShare = async () => {
+    // Try to generate a PDF and open the native share sheet (covers WhatsApp,
+    // email, drive, download, etc.). Fall back to a plain text share.
+    try {
+      setPdfLoading(true);
+      const html = generateDocumentHTML(doc);
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      setPdfLoading(false);
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: `${doc.documentNumber}.pdf`,
+          UTI: 'com.adobe.pdf',
+        });
+        return;
+      }
+    } catch (_) {
+      setPdfLoading(false);
+    }
     try {
       await Share.share({
         message:
@@ -660,60 +677,14 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
     } catch (_) {}
   };
 
-  const handleWhatsApp = async () => {
-    const msg = encodeURIComponent(
-      `📄 *${doc.documentTitle}*\n` +
-      `📋 No: ${doc.documentNumber}\n` +
-      `📅 Date: ${doc.date}\n` +
-      `💰 Total: ${formatCurrency(doc.totals.total)}`
-    );
-    try {
-      await Linking.openURL(`whatsapp://send?text=${msg}`);
-    } catch (_) {}
-  };
-
-  const handlePDF = async () => {
-    try {
-      setPdfLoading(true);
-      const html = generateDocumentHTML(doc);
-      const { uri } = await Print.printToFileAsync({ html, base64: false });
-      setPdfLoading(false);
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(uri, {
-          mimeType: 'application/pdf',
-          dialogTitle: `${doc.documentNumber}.pdf`,
-          UTI: 'com.adobe.pdf',
-        });
-      }
-    } catch (err) {
-      setPdfLoading(false);
-      console.error('[DocumentPreview] PDF error:', err);
-    }
-  };
-
   return (
     <View style={[ds.actionBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
-      <TouchableOpacity style={ds.actionBtn} onPress={handleShare} activeOpacity={0.75}>
-        <Ionicons name="share-outline" size={21} color={COLORS.white} />
-        <Text style={ds.actionBtnText}>Share</Text>
-      </TouchableOpacity>
-
-      <View style={ds.actionSep} />
-
-      <TouchableOpacity style={ds.actionBtn} onPress={handleWhatsApp} activeOpacity={0.75}>
-        <FontAwesome5 name="whatsapp" size={21} color="#25D366" />
-        <Text style={ds.actionBtnText}>WhatsApp</Text>
-      </TouchableOpacity>
-
-      <View style={ds.actionSep} />
-
-      <TouchableOpacity style={ds.actionBtn} onPress={handlePDF} activeOpacity={0.75} disabled={pdfLoading}>
+      <TouchableOpacity style={ds.shareBtn} onPress={handleShare} activeOpacity={0.85} disabled={pdfLoading}>
         {pdfLoading
           ? <ActivityIndicator size="small" color={COLORS.white} />
-          : <Ionicons name="document-outline" size={21} color={COLORS.white} />
+          : <Ionicons name="share-outline" size={20} color={COLORS.white} />
         }
-        <Text style={ds.actionBtnText}>{pdfLoading ? 'Generating…' : 'Download PDF'}</Text>
+        <Text style={ds.shareBtnText}>{pdfLoading ? 'Preparing…' : 'Share'}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -984,6 +955,11 @@ const ds = StyleSheet.create({
     backgroundColor: COLORS.brandPrimary,
     paddingTop: 12, paddingHorizontal: SPACING.md,
   },
+  shareBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, paddingVertical: 10,
+  },
+  shareBtnText: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white, letterSpacing: 0.3 },
   actionBtn: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
     gap: 5, paddingVertical: 6,

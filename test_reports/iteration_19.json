@@ -1,0 +1,29 @@
+{
+  "summary": "Frontend-only verification of three follow-up fixes on TallyDekho (mock-first Expo web preview). All three pass: (1) Keyboard/search-blur on tapping top Pressable area — verified via document.activeElement transitioning INPUT->DIV; (2) Accordion single-open on Ledger Detail — tapping May 25 while Apr 25 was open leaves only May's rows visible (1 Sales Invoice), and re-tapping May collapses all (0 rows); (3) Voucher bottom action bar contains ONLY 'Share' — bottom-viewport scan shows 1 'Share', 0 'WhatsApp', 0 'Download PDF' (full-body text scan also 0/0). Regression: full-width search input rendered, fixed bottom Share button present, month accordion + inner ScrollView (rows scroll within expanded card) intact in code, info-pad icon still wired to LedgerInfoModal (setShowInfo/render present).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "console warnings", "issue": "Non-blocking web-only warnings observed: 'shadow*' style props deprecated (use boxShadow), props.pointerEvents deprecated (use style.pointerEvents), TouchableMixin deprecated. Also 'Unknown event handler property onStartShouldSetResponder / onResponder*' errors in web console — RN gesture responder props leaking to DOM (likely from a Pressable/PanResponder path in accordion/date-range). No functional impact on mobile, but noisy on web. Reference: /app/frontend/app/ledger/[id].tsx and shared components."}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_19.json"],
+  "action_items": [
+    "Optional cleanup: replace deprecated 'shadow*' style props with boxShadow and props.pointerEvents with style.pointerEvents to silence web warnings.",
+    "Optional: audit responder props (onStartShouldSetResponder etc.) that surface as web console errors."
+  ],
+  "critical_code_review_comments": [
+    "toggleMonth correctly implements single-open accordion: prev.has(mon) ? new Set() : new Set([mon]).",
+    "Keyboard.dismiss wired on top Pressable (stickyTop) and onScrollBeginDrag of expanded ScrollView — both paths correct.",
+    "ActionBar in DocumentPreviewPage now renders only a single Share TouchableOpacity; no WhatsApp/Download PDF buttons remain (verified in DOM at bottom of viewport)."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "N/A (skipped)", "frontend": "100% (3/3 features + regression)" },
+  "seed_data_creation": "None — used inline MOCK_TRANSACTIONS and getDocument mocks.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Mock auth: localStorage.setItem('auth_token','mock_token_123') then reload; skip onboarding; Ledger tab -> ABC Traders. Verified: Apr 25 has t1 SI-30865 + t3 SI-30901 + t2/t4/t5; May 25 has t6 SI-30977 + t7. Counting 'Sales Invoice' text is a reliable proxy for row visibility per month.",
+  "rca_of_issue": "N/A — all three fixes validated as correctly implemented."
+}

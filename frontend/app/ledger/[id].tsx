@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Modal,
-  Dimensions, Alert, Share,
+  Dimensions, Alert, Share, Keyboard, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -300,11 +300,9 @@ export default function LedgerDetailScreen() {
   );
 
   const toggleMonth = (mon: string) => {
-    setExpandedMonths(prev => {
-      const next = new Set(prev);
-      next.has(mon) ? next.delete(mon) : next.add(mon);
-      return next;
-    });
+    Keyboard.dismiss();
+    // Accordion: only one date card open at a time
+    setExpandedMonths(prev => (prev.has(mon) ? new Set() : new Set([mon])));
   };
 
   // When searching, auto-expand all months that have results
@@ -355,7 +353,7 @@ export default function LedgerDetailScreen() {
       </View>
 
       {/* ── Fixed top section (chart + controls) — does NOT scroll ── */}
-      <View style={styles.stickyTop}>
+      <Pressable style={styles.stickyTop} onPress={() => Keyboard.dismiss()}>
 
         {/* ── Donut + Legend ── */}
         <View style={styles.chartSection}>
@@ -433,7 +431,7 @@ export default function LedgerDetailScreen() {
           </TouchableOpacity>
         </View>
 
-      </View>{/* end stickyTop */}
+      </Pressable>{/* end stickyTop */}
 
       {/* ── Scrollable transaction list only ── */}
       <View style={styles.txnScroll}>
@@ -471,6 +469,7 @@ export default function LedgerDetailScreen() {
                       nestedScrollEnabled
                       showsVerticalScrollIndicator
                       keyboardShouldPersistTaps="handled"
+                      onScrollBeginDrag={() => Keyboard.dismiss()}
                     >
                       {monTxns.map((txn, idx) => {
                     const isTxnSelected = selectedTxns.includes(txn.id);
