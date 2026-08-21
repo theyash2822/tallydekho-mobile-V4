@@ -309,6 +309,7 @@ export default function LedgerDetailScreen() {
   const effectiveExpanded = searchQuery.trim()
     ? new Set(sortedMonths)   // all months visible while searching
     : expandedMonths;
+  const anyOpen = effectiveExpanded.size > 0;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -435,7 +436,7 @@ export default function LedgerDetailScreen() {
 
       {/* ── Scrollable transaction list only ── */}
       <View style={styles.txnScroll}>
-        <View style={styles.txnContainer}>
+        <View style={[styles.txnContainer, anyOpen && styles.txnContainerExpanded]}>
           {sortedMonths.length === 0 ? (
             <View style={styles.emptySearch}>
               <Ionicons name="search-outline" size={28} color={COLORS.textTertiary} />
@@ -701,13 +702,13 @@ const styles = StyleSheet.create({
 
   // Month accordion
   txnContainer: {
-    flex: 1,
     marginHorizontal: SPACING.md, borderRadius: RADIUS.lg,
     overflow: 'hidden', borderWidth: 1,
     borderColor: COLORS.borderDefault,
     backgroundColor: COLORS.cardBg,
     marginBottom: SPACING.md,
   },
+  txnContainerExpanded: { flex: 1 },
   monthGroup: {},
   monthGroupOpen: { flex: 1 },
   expandedScroll: { flex: 1 },

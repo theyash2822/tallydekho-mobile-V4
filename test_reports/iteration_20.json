@@ -1,0 +1,30 @@
+{
+  "summary": "Frontend-only verification of the ledger accordion collapse bug fix on /ledger/[id].tsx (ABC Traders). All three requested scenarios pass: (1) collapsing the default-expanded 'Apr 25' card leaves ONLY the two compact header rows with NO large empty white panel — measured container hugs headers at height=80px (from y=451 to y=531) for the two ~40px header rows in a 667px-tall viewport, confirming the conditional txnContainerExpanded {flex:1} style is correctly applied only when anyOpen is true. (2) Single-open accordion works: opening 'Apr 25' shows SI-30865 (Apr txn), then tapping 'May 25' auto-collapses Apr (SI-30865 hidden) and reveals SI-30977 (May txn). (3) Regressions intact: full-width search input (width 293px in 375px viewport with proper 16px side padding), fixed bottom 'Share' button present, and the stickyTop Pressable wired to Keyboard.dismiss(). No React Native red screens. Only benign RN-Web deprecation warnings (shadow*, pointerEvents, TouchableMixin) that are pre-existing and unrelated.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "TouchableMixin (RN-Web internal)", "issue": "Console warning: 'TouchableMixin is deprecated. Please use Pressable.' Triggered by legacy Touchable* usage in RN-Web internals or older Touchable components in tree. Not a blocker but consider migrating remaining TouchableOpacity usage to Pressable long-term. Not caused by the current bug fix."},
+      {"component": "Styles (shadow*, pointerEvents)", "issue": "Console warnings: '\"shadow*\" style props are deprecated. Use \"boxShadow\"' and 'props.pointerEvents is deprecated. Use style.pointerEvents'. Pre-existing across app, not introduced by this fix."}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_20.json"],
+  "action_items": [
+    "No action required for the ledger collapse bug fix — verified fixed and shipping-ready.",
+    "(Optional, non-blocking) Migrate remaining shadow* style props to boxShadow and pointerEvents prop to style.pointerEvents to silence RN-Web deprecation warnings."
+  ],
+  "critical_code_review_comments": [
+    "Fix implementation is correct: `styles.txnContainer` (no flex) + `anyOpen && styles.txnContainerExpanded` (flex:1) applies expansion only when a date card is open. `anyOpen` correctly considers both search-driven auto-expansion and manual expandedMonths state.",
+    "`toggleMonth` correctly resets to `new Set()` (all collapsed) or `new Set([mon])` (only one open), enforcing single-open accordion behavior.",
+    "File is 909 lines — beyond the 700-line guideline. Consider splitting DrCrDonutChart, LedgerInfoModal, and MOCK_TRANSACTIONS/KPI_CHIPS into separate modules for maintainability (not blocking this bug fix)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100% (3/3 scenarios pass)"},
+  "seed_data_creation": "None. Used inline MOCK_TRANSACTIONS as-is.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The ledger accordion container height in collapsed state was measured at 80px (only headers) versus previously large empty area. Use the JS bounding-box measurement approach: find wrapper containing both 'Apr 25' and 'May 25' text and read getBoundingClientRect().height. Anything < ~120px in a 667px viewport confirms the fix.",
+  "rca_of_issue": "Root cause was `txnContainer` having a permanent `flex:1` which caused the card to stretch to fill remaining vertical space even when all inner date cards were collapsed — producing a large empty white panel below the two compact header rows. Fix splits the style into a base `txnContainer` (no flex, hugs content) and a conditional `txnContainerExpanded {flex:1}` applied only when `anyOpen === true` (i.e., at least one date card open OR search is active). Verified via bounding-box measurement of the container (80px collapsed vs. header-only content = correct hug behavior)."
+}
