@@ -1,3 +1,10 @@
+## [2026-08-22] Purchase + Expenses: remove mock data, wire real APIs
+
+### Fixed
+- **Purchase** (`app/purchase/index.tsx`) — removed hardcoded demo invoices/vendors; loads `GET /api/purchase/invoices` + debit notes
+- **Expenses** (`app/expenses/index.tsx`) — removed mock RECENT_EXPENSES, METRIC_CARDS, TOP_CATEGORIES; real API only
+- **Expense Register** — switched from `getVouchers` (Payment/Receipt/Contra) to `getExpenses` with correct ledger mapping
+
 ## [2026-08-22] Home voice search + dashboard search
 
 ### Added

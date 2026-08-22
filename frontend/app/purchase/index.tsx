@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Dimensions, FlatList, NativeSyntheticEvent, NativeScrollEvent,
@@ -7,10 +7,12 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import DateRangePickerModal, { isoToDMY } from '../../src/components/DateRangePickerModal';
-import { KPICardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
+import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
+import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
+import { getPurchaseInvoices, getDebitNotes } from '../../src/services/api';
 
 const AMBER      = '#A89060';
 const AMBER_BG   = '#FDF9F4';
@@ -19,37 +21,26 @@ const { width: SW } = Dimensions.get('window');
 const CARD_W   = SW - SPACING.md * 2;
 const BANNER_W = SW - SPACING.md * 2;
 
-// ─── Data ────────────────────────────────────────────────────────────────────
-const METRIC_CARDS = [
-  { id: 'today',       label: 'Today',        icon: 'calendar-outline',        amount: '₹92,000',     pct: '+12%', pos: true  },
-  { id: 'mtd',         label: 'MTD',          icon: 'calendar-number-outline', amount: '₹2,45,500',   pct: '+8%',  pos: true  },
-  { id: 'ytd',         label: 'YTD',          icon: 'ribbon-outline',          amount: '₹8,92,750',   pct: '+15%', pos: true  },
-  { id: 'outstanding', label: 'Outstanding',  icon: 'wallet-outline',          amount: '₹12,01,950',  pct: '+11%', pos: true  },
-  { id: 'debit',       label: 'Debit Notes',  icon: 'return-up-forward-outline', amount: '₹18,500',   pct: '+5%',  pos: true  },
-  { id: 'avg',         label: 'Avg Ticket',   icon: 'ticket-outline',          amount: '₹45,200',     pct: '-3%',  pos: false },
-];
+const VENDOR_COLORS = ['#2563EB', '#D97706', '#059669', '#7C3AED', '#0891B2'];
 
-const RECENT_INVOICES = [
-  { id: 'CN-00712',  vendor: 'ABC Traders',    date: '01/01/26', time: '09:00 AM', amount: '₹3,200',  status: 'unpaid' },
-  { id: 'INV-30974', vendor: 'PQR Exports',    date: '31/12/25', time: '08:30 AM', amount: '₹42,500', status: 'paid'   },
-  { id: 'INV-30973', vendor: 'Kumar & Sons',   date: '28/12/25', time: '02:00 PM', amount: '₹28,000', status: 'paid'   },
-  { id: 'INV-30972', vendor: 'XYZ Retail',     date: '25/12/25', time: '11:00 AM', amount: '₹15,500', status: 'unpaid' },
-  { id: 'INV-30971', vendor: 'Machinery Corp.',date: '20/12/25', time: '09:30 AM', amount: '₹67,000', status: 'paid'   },
-];
+type PurchaseRow = {
+  id: string;
+  guid?: string;
+  vendor: string;
+  date: string;
+  time: string;
+  amount: string;
+  status: string;
+};
 
-const TOP_VENDORS = [
-  { id: 'TV1', name: 'ABC Traders',     transactions: 15, amount: '₹1,25,000', color: '#2563EB' },
-  { id: 'TV2', name: 'PQR Exports',     transactions: 8,  amount: '₹89,500',   color: '#D97706' },
-  { id: 'TV3', name: 'XYZ Retail',      transactions: 12, amount: '₹67,200',   color: '#059669' },
-  { id: 'TV4', name: 'Kumar & Sons',    transactions: 6,  amount: '₹55,400',   color: '#7C3AED' },
-  { id: 'TV5', name: 'Delhi Suppliers', transactions: 9,  amount: '₹48,200',   color: '#0891B2' },
-];
-
-const BANNERS = [
-  { id: 'b1', bold: '8 invoices', sub: 'pending payment to vendors', action: 'Pay Now' },
-  { id: 'b2', bold: '3 debit notes', sub: 'awaiting settlement', action: 'Settle Now' },
-  { id: 'b3', bold: 'GST ITC pending', sub: 'purchase reconciliation due', action: 'Reconcile' },
-];
+type MetricCard = {
+  id: string;
+  label: string;
+  icon: string;
+  amount: string;
+  pct: string;
+  pos: boolean;
+};
 
 const STATUS_COLOR: Record<string, string> = {
   paid:   '#2D7D46',
@@ -62,15 +53,49 @@ const STATUS_LABEL: Record<string, string> = {
   irm:    'IRM',
 };
 
+function buildMetrics(rows: any[], formatAmountCompact: (n: number) => string): MetricCard[] {
+  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+
+  let todaySum = 0;
+  let mtdSum = 0;
+  let ytdSum = 0;
+  rows.forEach((r) => {
+    const amt = Math.abs(parseFloat(r.amount) || 0);
+    const d = String(r.date || '').slice(0, 10);
+    ytdSum += amt;
+    if (d >= monthStart) mtdSum += amt;
+    if (d === today) todaySum += amt;
+  });
+  const avg = rows.length ? ytdSum / rows.length : 0;
+  const fmt = (n: number) => formatAmountCompact(Math.round(n));
+
+  return [
+    { id: 'today',       label: 'Today',       icon: 'calendar-outline',        amount: fmt(todaySum), pct: '', pos: true  },
+    { id: 'mtd',         label: 'MTD',         icon: 'calendar-number-outline', amount: fmt(mtdSum),   pct: '', pos: true  },
+    { id: 'ytd',         label: 'YTD',         icon: 'ribbon-outline',          amount: fmt(ytdSum),   pct: '', pos: true  },
+    { id: 'avg',         label: 'Avg Ticket',  icon: 'ticket-outline',          amount: fmt(avg),      pct: '', pos: true  },
+  ];
+}
+
 // ─── Screen ──────────────────────────────────────────────────────────────────
 export default function PurchaseScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { selectedFY } = useAuth();
+  const { company, selectedFY, lastSyncAt } = useAuth();
+  const { formatAmount, formatAmountCompact } = useSettings();
+  const companyGuid = company?.guid;
   const fyFrom = selectedFY?.startDate ?? '';
   const fyTo   = selectedFY?.endDate   ?? '';
 
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [liveRecent, setLiveRecent] = useState<PurchaseRow[]>([]);
+  const [liveTopVendors, setLiveTopVendors] = useState<any[]>([]);
+  const [liveBanners, setLiveBanners] = useState<any[]>([]);
+  const [metricCards, setMetricCards] = useState<MetricCard[]>([]);
+
   const [tab,      setTab]      = useState<'recent' | 'vendors'>('recent');
   const [filter,   setFilter]   = useState('All');
   const [dropdown, setDropdown] = useState(false);
@@ -79,44 +104,138 @@ export default function PurchaseScreen() {
   const [fromDate, setFromDate] = useState(() => fyFrom ? isoToDMY(fyFrom) : '01/04/24');
   const [toDate,   setToDate]   = useState(() => fyTo   ? isoToDMY(fyTo)   : '31/03/25');
 
+  const loadData = useCallback(() => {
+    if (!companyGuid) {
+      setLiveRecent([]);
+      setLiveTopVendors([]);
+      setLiveBanners([]);
+      setMetricCards([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const from = dmyToISO(fromDate) || fyFrom;
+    const to   = dmyToISO(toDate)   || fyTo;
+    const rangeParams = from && to ? { from, to } : {};
+
+    setIsLoading(true);
+    setApiError(null);
+
+    Promise.all([
+      getPurchaseInvoices(companyGuid, { ...rangeParams, limit: '100', page: '1' } as any),
+      getDebitNotes(companyGuid, { ...rangeParams, limit: '50', page: '1' } as any),
+    ])
+      .then(([invRes, dnRes]: any[]) => {
+        const rows = invRes?.data ?? [];
+        const debitNotes = dnRes?.data ?? [];
+
+        setMetricCards(buildMetrics(rows, formatAmountCompact));
+
+        setLiveRecent(rows.slice(0, 20).map((r: any): PurchaseRow => ({
+          id: r.voucher_number || String(r.id),
+          guid: r.guid,
+          vendor: r.party_name || '',
+          date: r.date || '',
+          time: '',
+          amount: formatAmount(Math.abs(parseFloat(r.amount) || 0)),
+          status: r.is_cancelled ? 'unpaid' : 'paid',
+        })));
+
+        const vendorMap: Record<string, { total: number; count: number }> = {};
+        rows.forEach((r: any) => {
+          const name = r.party_name;
+          if (!name) return;
+          const amt = Math.abs(parseFloat(r.amount) || 0);
+          if (!vendorMap[name]) vendorMap[name] = { total: 0, count: 0 };
+          vendorMap[name].total += amt;
+          vendorMap[name].count += 1;
+        });
+        const top = Object.entries(vendorMap)
+          .sort((a, b) => b[1].total - a[1].total)
+          .slice(0, 5)
+          .map(([name, info], i) => ({
+            id: `tv${i}`,
+            name,
+            transactions: info.count,
+            amount: formatAmount(Math.round(info.total)),
+            color: VENDOR_COLORS[i % VENDOR_COLORS.length],
+          }));
+        setLiveTopVendors(top);
+
+        const banners: any[] = [];
+        const unpaid = rows.filter((r: any) => r.is_cancelled).length;
+        if (unpaid > 0) {
+          banners.push({ id: 'b1', bold: `${unpaid} invoices`, sub: 'cancelled or pending review', action: 'View All' });
+        }
+        if (debitNotes.length > 0) {
+          banners.push({ id: 'b2', bold: `${debitNotes.length} debit notes`, sub: 'in selected period', action: 'View All' });
+        }
+        setLiveBanners(banners);
+      })
+      .catch((err: any) => {
+        setApiError(err?.message || 'Failed to load purchase data');
+        setLiveRecent([]);
+        setLiveTopVendors([]);
+        setLiveBanners([]);
+        setMetricCards([]);
+      })
+      .finally(() => setIsLoading(false));
+  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, formatAmount, formatAmountCompact]);
+
+  useEffect(() => {
+    if (fyFrom && fyTo) {
+      setFromDate(isoToDMY(fyFrom));
+      setToDate(isoToDMY(fyTo));
+    }
+  }, [fyFrom, fyTo]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData, lastSyncAt]);
+
   const metricRef = useRef<FlatList>(null);
   const bannerRef = useRef<FlatList>(null);
   const [metricIdx, setMetricIdx] = useState(0);
   const [bannerIdx, setBannerIdx] = useState(0);
 
+  const displayMetrics = metricCards.length > 0 ? metricCards : buildMetrics([], formatAmountCompact);
+
   // Auto-scroll metric cards every 3s
   useEffect(() => {
+    if (displayMetrics.length <= 1) return;
     const t = setInterval(() => {
       setMetricIdx(prev => {
-        const next = (prev + 1) % METRIC_CARDS.length;
+        const next = (prev + 1) % displayMetrics.length;
         metricRef.current?.scrollToOffset({ offset: next * SW, animated: true });
         return next;
       });
     }, 3000);
     return () => clearInterval(t);
-  }, []);
+  }, [displayMetrics.length]);
 
   // Auto-scroll banners every 3.5s
   useEffect(() => {
+    if (liveBanners.length <= 1) return;
     const t = setInterval(() => {
       setBannerIdx(prev => {
-        const next = (prev + 1) % BANNERS.length;
+        const next = (prev + 1) % liveBanners.length;
         bannerRef.current?.scrollToIndex({ index: next, animated: true, viewPosition: 0 });
         return next;
       });
     }, 3500);
     return () => clearInterval(t);
-  }, []);
+  }, [liveBanners.length]);
 
   // Filtered recent list
-  const recent = RECENT_INVOICES.filter(inv => {
+  const recent = useMemo(() => liveRecent.filter(inv => {
     if (filter === 'Paid')   return inv.status === 'paid';
     if (filter === 'Unpaid') return inv.status === 'unpaid';
     return true;
-  }).slice(0, 5);
+  }).slice(0, 5), [liveRecent, filter]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
+      {apiError && <ErrorBanner message={apiError} onRetry={loadData} />}
 
       {/* ── Header ─────────────────────────────────────────────────── */}
       <View style={s.header}>
@@ -175,7 +294,7 @@ export default function PurchaseScreen() {
         <View style={s.carouselWrap}>
           <FlatList
             ref={metricRef}
-            data={METRIC_CARDS}
+            data={displayMetrics}
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
@@ -195,8 +314,12 @@ export default function PurchaseScreen() {
                   <Text style={s.mLabel}>{c.label}</Text>
                   <Text style={s.mAmount}>{c.amount}</Text>
                   <View style={[s.pctBadge, { backgroundColor: c.pos ? COLORS.positiveBg : COLORS.negativeBg }]}>
-                    <Ionicons name={c.pos ? 'trending-up' : 'trending-down'} size={11} color={c.pos ? COLORS.positive : COLORS.negative} />
-                    <Text style={[s.pctTxt, { color: c.pos ? COLORS.positive : COLORS.negative }]}>{c.pct}</Text>
+                    {c.pct ? (
+                      <>
+                        <Ionicons name={c.pos ? 'trending-up' : 'trending-down'} size={11} color={c.pos ? COLORS.positive : COLORS.negative} />
+                        <Text style={[s.pctTxt, { color: c.pos ? COLORS.positive : COLORS.negative }]}>{c.pct}</Text>
+                      </>
+                    ) : null}
                   </View>
                 </View>
               </View>
@@ -204,20 +327,11 @@ export default function PurchaseScreen() {
           />
           {/* Carousel Dots */}
           <View style={s.dotsRow}>
-            {METRIC_CARDS.map((_, i) => (
+            {displayMetrics.map((_, i) => (
               <View key={i} style={[s.dot, i === metricIdx && s.dotActive]} />
             ))}
           </View>
         </View>
-
-        {isLoading && (
-          <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
-            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
-              <KPICardSkeleton /><KPICardSkeleton />
-            </View>
-            {[...Array(4)].map((_, i) => <LedgerRowSkeleton key={i} />)}
-          </View>
-        )}
 
         {/* ── Tabs ─────────────────────────────────────────────────── */}
         <View style={s.tabRow}>
@@ -238,10 +352,12 @@ export default function PurchaseScreen() {
         {/* ── Recent Purchases ──────────────────────────────────────── */}
         {tab === 'recent' && (
           <View style={s.listSection}>
-            {recent.length === 0 ? (
+            {isLoading ? (
+              [...Array(4)].map((_, i) => <LedgerRowSkeleton key={i} />)
+            ) : recent.length === 0 ? (
               <View style={s.emptyBox}>
                 <Ionicons name="cart-outline" size={28} color={COLORS.textTertiary} />
-                <Text style={s.emptyTxt}>No {filter.toLowerCase()} invoices</Text>
+                <Text style={s.emptyTxt}>No purchase invoices in this period</Text>
               </View>
             ) : (
               recent.map(inv => (
@@ -249,7 +365,7 @@ export default function PurchaseScreen() {
                   key={inv.id}
                   style={s.itemCard}
                   activeOpacity={0.7}
-                  onPress={() => router.push(`/document/${inv.id}?type=purchase_invoice` as any)}
+                  onPress={() => router.push(`/document/${inv.guid || inv.id}?type=purchase_invoice` as any)}
                 >
                   {/* Status Row */}
                   <View style={s.itemStatusRow}>
@@ -288,7 +404,15 @@ export default function PurchaseScreen() {
         {/* ── Top Vendors ──────────────────────────────────────────── */}
         {tab === 'vendors' && (
           <View style={s.listSection}>
-            {TOP_VENDORS.map(vendor => (
+            {isLoading ? (
+              [...Array(4)].map((_, i) => <LedgerRowSkeleton key={i} />)
+            ) : liveTopVendors.length === 0 ? (
+              <View style={s.emptyBox}>
+                <Ionicons name="people-outline" size={28} color={COLORS.textTertiary} />
+                <Text style={s.emptyTxt}>No vendor data in this period</Text>
+              </View>
+            ) : (
+              liveTopVendors.map(vendor => (
               <TouchableOpacity
                 key={vendor.id}
                 style={s.vendorCard}
@@ -304,7 +428,8 @@ export default function PurchaseScreen() {
                 </View>
                 <Text style={s.itemAmt}>{vendor.amount}</Text>
               </TouchableOpacity>
-            ))}
+            ))
+            )}
             <TouchableOpacity
               style={s.viewAllBtn}
               onPress={() => router.push('/ledger' as any)}
@@ -318,11 +443,12 @@ export default function PurchaseScreen() {
 
       </ScrollView>
 
-      {/* ── Sticky Banner Carousel ─────────────────────────────────── */}
+      {/* ── Sticky Banner Carousel (only when real alerts exist) ───── */}
+      {liveBanners.length > 0 && (
       <View style={[s.bannerWrap, { paddingBottom: insets.bottom > 0 ? insets.bottom : 8 }]}>
         <FlatList
           ref={bannerRef}
-          data={BANNERS}
+          data={liveBanners}
           horizontal
           showsHorizontalScrollIndicator={false}
           keyExtractor={b => b.id}
@@ -343,7 +469,11 @@ export default function PurchaseScreen() {
                   <Text style={s.bannerSub} numberOfLines={1}>{b.sub}</Text>
                 </View>
               </View>
-              <TouchableOpacity style={s.bannerBtn} activeOpacity={0.85}>
+              <TouchableOpacity
+                style={s.bannerBtn}
+                activeOpacity={0.85}
+                onPress={() => router.push('/purchase/register' as any)}
+              >
                 <Text style={s.bannerBtnTxt}>{b.action}</Text>
                 <Ionicons name="chevron-forward" size={11} color={BANNER_RED} />
               </TouchableOpacity>
@@ -352,11 +482,12 @@ export default function PurchaseScreen() {
         />
         {/* Banner Dots */}
         <View style={s.bannerDots}>
-          {BANNERS.map((_, i) => (
+          {liveBanners.map((_, i) => (
             <View key={i} style={[s.bannerDot, i === bannerIdx && s.bannerDotActive]} />
           ))}
         </View>
       </View>
+      )}
 
       {/* ── Date Range Picker ──────────────────────────────────────── */}
       <DateRangePickerModal

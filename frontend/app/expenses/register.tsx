@@ -7,9 +7,9 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import DateRangePickerModal, { isoToDMY } from '../../src/components/DateRangePickerModal';
+import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
-import { getVouchers } from '../../src/services/api';
+import { getExpenses } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useSettings } from '../../src/context/SettingsContext';
 
@@ -57,49 +57,6 @@ export default function ExpenseRegisterScreen() {
   const [hasMore,       setHasMore]       = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const mapExpenseItem = (r: any) => ({
-    id: r.guid || String(r.id),
-    voucher: r.voucher_number || '',
-    desc: r.narration || r.party_name || r.voucher_type || '',
-    date: r.date || '',
-    amount: formatAmount(Math.abs(+r.amount||0)),
-    positive: (r.voucher_type||'').toLowerCase().includes('receipt'),
-    type: (r.voucher_type||'').toLowerCase().includes('payment') ? 'payment' :
-          (r.voucher_type||'').toLowerCase().includes('receipt') ? 'receipt' : 'contra',
-  });
-
-  useEffect(() => {
-    if (!companyGuid) return;
-    setIsLoading(true);
-    setApiError(null);
-    setPage(1);
-    setHasMore(false);
-    const fyParams = selectedFY ? { from: selectedFY.startDate, to: selectedFY.endDate } : {};
-    // Expenses = payment + receipt + contra vouchers
-    getVouchers(companyGuid, undefined, { ...fyParams, limit: PAGE_SIZE, page: 1 }).then((res: any) => {
-      const rows = (res?.data ?? []).filter((r: any) =>
-        ['Payment','Receipt','Contra'].some(t => (r.voucher_type||'').toLowerCase().includes(t.toLowerCase()))
-      );
-      setLiveItems(rows.map(mapExpenseItem));
-      setHasMore(rows.length === PAGE_SIZE);
-    }).catch((err: any) => setApiError(err?.message || 'Failed to load'))
-      .finally(() => setIsLoading(false));
-  }, [companyGuid, selectedFY?.startDate]);
-
-  const loadMore = () => {
-    if (!companyGuid || isLoadingMore || !hasMore) return;
-    const nextPage = page + 1;
-    setIsLoadingMore(true);
-    const fyParams = selectedFY ? { from: selectedFY.startDate, to: selectedFY.endDate } : {};
-    getVouchers(companyGuid, undefined, { ...fyParams, limit: PAGE_SIZE, page: nextPage }).then((res: any) => {
-      const rows = (res?.data ?? []).filter((r: any) =>
-        ['Payment','Receipt','Contra'].some(t => (r.voucher_type||'').toLowerCase().includes(t.toLowerCase()))
-      );
-      setLiveItems(prev => [...prev, ...rows.map(mapExpenseItem)]);
-      setHasMore(rows.length === PAGE_SIZE);
-      setPage(nextPage);
-    }).finally(() => setIsLoadingMore(false));
-  };
   const fyFrom = selectedFY?.startDate ?? '';
   const fyTo   = selectedFY?.endDate   ?? '';
 
@@ -112,6 +69,51 @@ export default function ExpenseRegisterScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [fromDate, setFromDate] = useState(() => fyFrom ? isoToDMY(fyFrom) : '01/04/24');
   const [toDate,   setToDate]   = useState(() => fyTo   ? isoToDMY(fyTo)   : '31/03/25');
+
+  const mapExpenseItem = (r: any): ExpenseItem => {
+    const group = (r.expense_group || '').toLowerCase();
+    return {
+      id: r.guid || String(r.id),
+      party: r.expense_ledger || r.party_name || r.narration || 'Expense',
+      date: r.date || '',
+      time: '',
+      amount: formatAmount(Math.abs(parseFloat(r.expense_amount ?? r.amount) || 0)),
+      status: 'paid',
+      type: group.includes('direct') ? 'direct' : 'indirect',
+    };
+  };
+
+  const loadPage = (pageNum: number, append = false) => {
+    if (!companyGuid) return Promise.resolve();
+    const from = dmyToISO(fromDate) || fyFrom;
+    const to   = dmyToISO(toDate)   || fyTo;
+    const rangeParams = from && to ? { from, to } : {};
+    const typeParam = typeFilter === 'Direct' ? { type: 'Direct' } : typeFilter === 'Indirect' ? { type: 'Indirect' } : {};
+    return getExpenses(companyGuid, { ...rangeParams, ...typeParam, limit: PAGE_SIZE, page: pageNum } as any).then((res: any) => {
+      const rows = res?.data ?? [];
+      const mapped = rows.map(mapExpenseItem);
+      setLiveItems(prev => append ? [...prev, ...mapped] : mapped);
+      setHasMore(rows.length === PAGE_SIZE);
+      setPage(pageNum);
+    });
+  };
+
+  useEffect(() => {
+    if (!companyGuid) return;
+    setIsLoading(true);
+    setApiError(null);
+    setPage(1);
+    setHasMore(false);
+    loadPage(1)
+      .catch((err: any) => setApiError(err?.message || 'Failed to load'))
+      .finally(() => setIsLoading(false));
+  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, typeFilter]);
+
+  const loadMore = () => {
+    if (!companyGuid || isLoadingMore || !hasMore) return;
+    setIsLoadingMore(true);
+    loadPage(page + 1, true).finally(() => setIsLoadingMore(false));
+  };
 
   // Collapsible months — all open by default
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
