@@ -6,7 +6,7 @@ import {
 import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
@@ -287,6 +287,7 @@ const dd = StyleSheet.create({
 export default function AuditTrailScreen() {
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router  = useRouter();
+  const { tab } = useLocalSearchParams<{ tab?: string }>();
   const insets  = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
@@ -298,7 +299,7 @@ export default function AuditTrailScreen() {
   };
   const defaultTo = () => selectedFY?.endDate || new Date().toISOString().split('T')[0];
 
-  const [activeTab,      setActiveTab]      = useState<TabType>('myentries');
+  const [activeTab,      setActiveTab]      = useState<TabType>(tab === 'daybook' ? 'daybook' : 'myentries');
   const [fromDate,       setFromDate]       = useState(defaultFrom);
   const [toDate,         setToDate]         = useState(defaultTo);
 
@@ -311,6 +312,9 @@ export default function AuditTrailScreen() {
       setToDate(selectedFY.endDate || new Date().toISOString().split('T')[0]);
     }
   }, [selectedFY?.startDate]);
+  useEffect(() => {
+    if (tab === 'daybook') setActiveTab('daybook');
+  }, [tab]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [voucherType,    setVoucherType]    = useState<VoucherType>('ALL');
   const [showVTypeModal, setShowVTypeModal] = useState(false);

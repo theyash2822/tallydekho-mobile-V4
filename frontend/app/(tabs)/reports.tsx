@@ -772,21 +772,35 @@ interface SectionCardProps {
   title: string;
   children: React.ReactNode;
   onPress?: () => void;
+  metric?: string;
+  trend?: string;
+  trendPositive?: boolean;
 }
 
-function SectionCard({ iconName, title, children, onPress }: SectionCardProps) {
+function SectionCard({ iconName, title, children, onPress, metric, trend, trendPositive }: SectionCardProps) {
   return (
     <View style={sc.card}>
-      {/* Header */}
       <TouchableOpacity style={sc.header} onPress={onPress} activeOpacity={onPress ? 0.7 : 1}>
         <View style={sc.iconBox}>
           <Ionicons name={iconName} size={14} color={COLORS.textSecondary} />
         </View>
-        <Text style={sc.title}>{title}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={sc.title}>{title}</Text>
+          {metric ? <Text style={sc.metric}>{metric}</Text> : null}
+        </View>
+        {trend ? (
+          <View style={[sc.trendPill, { backgroundColor: trendPositive ? COLORS.positiveBg : COLORS.negativeBg }]}>
+            <Text style={[sc.trendTxt, { color: trendPositive ? COLORS.positive : COLORS.negative }]}>{trend}</Text>
+          </View>
+        ) : null}
         <Ionicons name="chevron-forward" size={18} color={onPress ? COLORS.brandPrimary : COLORS.textTertiary} />
       </TouchableOpacity>
-      {/* Content */}
       <View style={sc.body}>{children}</View>
+      {onPress ? (
+        <TouchableOpacity style={sc.footer} onPress={onPress} activeOpacity={0.7}>
+          <Text style={sc.footerTxt}>View details</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
@@ -824,6 +838,11 @@ const sc = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textPrimary,
   },
+  metric: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2, fontWeight: '500' },
+  trendPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: RADIUS.full, marginRight: 6 },
+  trendTxt: { fontSize: 10, fontWeight: '700' },
+  footer: { paddingVertical: 10, alignItems: 'center', borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
+  footerTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.brandPrimary },
   body: {
     padding: SPACING.md,
   },
@@ -904,6 +923,11 @@ export default function ReportsScreen() {
     }).catch(() => {});
   }, [companyGuid, selectedFY?.startDate]));
 
+  const revenueTotal = finData?.revenue?.reduce((a, b) => a + b, 0) ?? 0;
+  const expenseTotal = finData?.expenses?.reduce((a, b) => a + b, 0) ?? 0;
+  const netProfit = revenueTotal - expenseTotal;
+  const gstPending = Math.max(0, 12 - gstFiledCount);
+
   return (
     <SafeAreaView testID="reports-screen" style={styles.safe}>
       {apiError && <ErrorBanner message={apiError} onRetry={() => { setFinLoading(true); setApiError(null); }} />}
@@ -918,8 +942,31 @@ export default function ReportsScreen() {
         contentContainerStyle={styles.content}
       >
 
+        <View style={styles.kpiStrip}>
+          {[
+            { label: 'Revenue', value: formatAmountCompact(Math.round(revenueTotal)), dot: '#2D7D46' },
+            { label: 'Expenses', value: formatAmountCompact(Math.round(expenseTotal)), dot: '#A89060' },
+            { label: 'Net Profit', value: formatAmountCompact(Math.round(netProfit)), dot: COLORS.brandPrimary },
+            { label: 'GST', value: `${gstFiledCount}/12`, dot: '#D97706' },
+          ].map((k, i) => (
+            <React.Fragment key={k.label}>
+              {i > 0 && <View style={styles.kpiSep} />}
+              <View style={styles.kpiCell}>
+                <View style={[styles.kpiDot, { backgroundColor: k.dot }]} />
+                <Text style={styles.kpiValue} numberOfLines={1} adjustsFontSizeToFit>{k.value}</Text>
+                <Text style={styles.kpiLabel}>{k.label}</Text>
+              </View>
+            </React.Fragment>
+          ))}
+        </View>
+
         {/* ── 1. Financial ───────────────────────────────────────────────── */}
-        <SectionCard iconName="stats-chart-outline" title="Financial" onPress={() => router.push('/reports/financial' as any)}>
+        <SectionCard
+          iconName="stats-chart-outline"
+          title="Financial"
+          metric={finData ? `Net ${formatAmountCompact(Math.round(netProfit))}` : undefined}
+          onPress={() => router.push('/reports/financial' as any)}
+        >
           <InteractiveLineChart
             isLoading={finLoading}
             lines={finData ? [
@@ -931,12 +978,22 @@ export default function ReportsScreen() {
         </SectionCard>
 
         {/* ── 2. Compliance ─────────────────────────────────────────────── */}
-        <SectionCard iconName="shield-checkmark-outline" title="Compliance" onPress={() => router.push('/reports/compliance' as any)}>
+        <SectionCard
+          iconName="shield-checkmark-outline"
+          title="Compliance"
+          metric={`${gstFiledCount}/12 · ${gstPending} pending`}
+          onPress={() => router.push('/reports/compliance' as any)}
+        >
           <GSTGauge filedCount={gstFiledCount} needleIndex={Math.max(gstFiledCount - 1, 0)} />
         </SectionCard>
 
         {/* ── 3. Audit Trail ────────────────────────────────────────────── */}
-        <SectionCard iconName="git-branch-outline" title="Audit Trail" onPress={() => router.push('/reports/audit-trail' as any)}>
+        <SectionCard
+          iconName="git-branch-outline"
+          title="Audit Trail"
+          metric={`${auditCount} unreconciled`}
+          onPress={() => router.push('/reports/audit-trail' as any)}
+        >
           <AuditProgressBar
             label="Pending / failed entries"
             count={auditCount}
@@ -957,7 +1014,29 @@ export default function ReportsScreen() {
           />
         </SectionCard>
 
-        <View style={{ height: 80 }} />
+        <Text style={styles.moreLabel}>More Reports</Text>
+        <View style={styles.moreGrid}>
+          {[
+            { label: 'GST Returns',   icon: 'receipt-outline',        route: '/reports/gst' },
+            { label: 'E-Invoices',    icon: 'document-text-outline',  route: '/reports/einvoice-list' },
+            { label: 'E-Way Bills',   icon: 'navigate-outline',       route: '/reports/ewb-list' },
+            { label: 'Cash Register', icon: 'cash-outline',           route: '/kpi/cash-register' },
+            { label: 'Day Book',      icon: 'book-outline',           route: '/reports/audit-trail?tab=daybook' },
+          ].map(m => (
+            <TouchableOpacity
+              key={m.label}
+              style={[styles.moreTile, m.label === 'Day Book' && styles.moreTileWide]}
+              activeOpacity={0.75}
+              onPress={() => router.push(m.route as any)}
+            >
+              <View style={styles.moreIcon}>
+                <Ionicons name={m.icon as any} size={18} color={COLORS.textSecondary} />
+              </View>
+              <Text style={styles.moreTileTxt} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>{m.label}</Text>
+              <Ionicons name="chevron-forward" size={15} color={COLORS.textTertiary} />
+            </TouchableOpacity>
+          ))}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -984,4 +1063,33 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textPrimary,
   },
+  kpiStrip: {
+    flexDirection: 'row', alignItems: 'center',
+    marginHorizontal: SPACING.md, marginBottom: SPACING.md,
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderDefault, paddingVertical: 12,
+  },
+  kpiCell: { flex: 1, alignItems: 'center', gap: 3 },
+  kpiDot: { width: 6, height: 6, borderRadius: 3 },
+  kpiValue: { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
+  kpiLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500' },
+  kpiSep: { width: 1, height: 32, backgroundColor: COLORS.borderDefault },
+  moreLabel: {
+    fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textTertiary,
+    textTransform: 'uppercase', letterSpacing: 0.8,
+    marginHorizontal: SPACING.md, marginBottom: SPACING.sm,
+  },
+  moreGrid: { marginHorizontal: SPACING.md, gap: SPACING.sm },
+  moreTile: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    paddingHorizontal: 14, paddingVertical: 12,
+  },
+  moreTileWide: { width: '100%' },
+  moreIcon: {
+    width: 34, height: 34, borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center',
+  },
+  moreTileTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
 });

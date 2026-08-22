@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { pairWithTally } from '../../src/services/api';
+import { navigateAfterAuth } from '../../src/utils/onboardingNav';
 
 type SyncStep = 'prompt' | 'input' | 'syncing' | 'done';
 
@@ -49,7 +50,7 @@ export default function TallySyncScreen() {
         if (token) await signIn(token);
         setProgress(100);
         await new Promise(r => setTimeout(r, 400));
-        router.replace('/(tabs)');
+        await navigateAfterAuth(router);
       } else {
         setStep('input');
         setError('Pairing failed. Please check the code and try again.');
@@ -64,7 +65,7 @@ export default function TallySyncScreen() {
     const token = await AsyncStorage.getItem('auth_token');
     if (token) await signIn(token);
     setIsPaired(false); // explicit: skipped pairing → unpaired state
-    router.replace('/(tabs)');
+    await navigateAfterAuth(router);
   };
 
   return (

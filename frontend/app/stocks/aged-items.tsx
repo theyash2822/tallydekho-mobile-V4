@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth } from '../../src/context/AuthContext';
@@ -112,12 +112,17 @@ function ItemCard({
 // ── Screen ────────────────────────────────────────────────────────────────────
 export default function AgedItemsScreen() {
   const router   = useRouter();
+  const params   = useLocalSearchParams<{ days?: string }>();
   const insets   = useSafeAreaInsets();
   const { company } = useAuth();
   const { formatAmount, formatAmountCompact } = useSettings();
   const companyGuid = company?.guid;
 
-  const [bucket,    setBucket]    = useState<Bucket>('30');
+  const initialBucket = (['30', '60', '90', '120'].includes(String(params.days))
+    ? String(params.days)
+    : '90') as Bucket;
+
+  const [bucket,    setBucket]    = useState<Bucket>(initialBucket);
   const [mode,      setMode]      = useState<Mode>('sold');
   const [items,     setItems]     = useState<AgedItem[]>([]);
   const [summary,   setSummary]   = useState<{ total_skus: number; total_value: number } | null>(null);
@@ -222,7 +227,9 @@ export default function AgedItemsScreen() {
               </View>
               <Text style={s.emptyTitle}>No Aged Items</Text>
               <Text style={s.emptyDesc}>
-                No items match the selected age bucket and mode.
+                {bucket === '30'
+                  ? 'No items in the 30-day bucket. Try 90 Day or 120+ Day tabs.'
+                  : 'No items match the selected age bucket and mode.'}
               </Text>
             </View>
           }

@@ -1,3 +1,16 @@
+## [2026-08-22] UI Phase 1 + Phase 2 integration
+
+### Added
+- Phase 1: ModuleTiles, cashflow report, stock dashboard wiring, ledger UX, daybook → audit-trail
+- Phase 2: onboarding tour (first-time), App Guide in Settings, notifications inbox (filters + deep links)
+- StatusBarCover + onboarding gate in root layout; auth nav defers to tour when not completed
+
+### Changed
+- Header: logo removed, longer company name truncation
+- Notifications screen: real API with category chips, Today/Earlier groups, mark read
+
+---
+
 ## [2026-08-17] Proforma XML + My Entries after convert
 
 ### Fixed

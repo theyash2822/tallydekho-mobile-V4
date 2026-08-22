@@ -80,6 +80,7 @@ const SECTIONS: Section[] = [
     icon: 'information-circle-outline', iconColor: '#6B7280', iconBg: '#F3F4F6',
     subItems: [
       { id: 'about', label: 'About & Version', icon: 'phone-portrait-outline', route: '/settings/about' },
+      { id: 'guide', label: 'App Guide', icon: 'compass-outline', route: '/onboarding?replay=true' },
       { id: 'security', label: 'Data Security', icon: 'lock-closed-outline', route: '/settings/security' },
       { id: 'help', label: 'Help Center', icon: 'help-circle-outline', route: '/settings/help' },
     ],
@@ -104,6 +105,7 @@ const SUBITEM_KEY: Record<string, string> = {
   ewaybill:     'settings.ewayBill',
   einvoice:     'settings.eInvoice',
   about:        'settings.about',
+  guide:        'settings.appGuide',
   security:     'settings.security',
   help:         'settings.help',
 };

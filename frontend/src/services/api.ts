@@ -301,7 +301,7 @@ export const getGSTReport        = (companyGuid?: string, from?: string, to?: st
 
 export const getNotifications       = (companyGuid?: string) => get<any>(withCompany('/notifications', companyGuid));
 export const markNotificationRead   = (id: string) => patch<any>(`/notifications/${id}/read`, {});
-export const markAllNotificationsRead = () => patch<any>('/notifications/read-all', {});
+export const markAllNotificationsRead = (companyGuid?: string) => patch<any>(withCompany('/notifications/read-all', companyGuid), {});
 
 // ══════════════════════════════════════════════════════════════
 // COMPLIANCE ALERTS

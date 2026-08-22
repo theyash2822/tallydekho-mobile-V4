@@ -12,6 +12,7 @@ import * as SecureStore from 'expo-secure-store';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { verifyPin, sendOTP } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
+import { navigateAfterAuth } from '../../src/utils/onboardingNav';
 
 const BIOMETRIC_PIN_KEY = 'td_biometric_pin';
 
@@ -148,7 +149,7 @@ export default function VerifyPinScreen() {
         await signIn(access_token, user ? { id: user.id, name: user.name ?? undefined, phone: user.phone } : undefined);
         setIsPaired(is_paired === true);
         if (company) await setCompany({ guid: company.guid, name: company.name, gstin: company.gstin ?? undefined });
-        router.replace('/(tabs)');
+        await navigateAfterAuth(router);
       } else {
         setPin(Array(PIN_LENGTH).fill(''));
         setFocused(0);

@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { verifyOTP, resetPin, sendOTP } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
+import { navigateAfterAuth } from '../../src/utils/onboardingNav';
 
 const BOX_LENGTH = 4;
 
@@ -134,7 +135,7 @@ export default function ResetPinScreen() {
           await signIn(access_token, user ? { id: user.id, name: user.name ?? undefined, phone: user.phone } : undefined);
           setIsPaired(is_paired === true);
           if (company) await setCompany({ guid: company.guid, name: company.name, gstin: company.gstin ?? undefined });
-          router.replace('/(tabs)');
+          await navigateAfterAuth(router);
         } else {
           throw new Error(res?.error?.message || 'Reset failed');
         }

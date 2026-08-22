@@ -10,6 +10,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { verifyOTP, sendOTP } from '../../src/services/api';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../src/context/AuthContext';
+import { navigateAfterAuth } from '../../src/utils/onboardingNav';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const OTP_LENGTH = 4;
@@ -149,7 +150,7 @@ export default function OTPScreen() {
           await signIn(access_token || '', user ? { id: user.id, name: user.name ?? undefined, phone: user.phone } : undefined);
           setIsPaired(is_paired === true);
           if (company) await setCompany({ guid: company.guid, name: company.name, gstin: company.gstin ?? undefined });
-          router.replace('/(tabs)');
+          await navigateAfterAuth(router);
         }
       } else {
         setError('Invalid OTP. Please try again.');

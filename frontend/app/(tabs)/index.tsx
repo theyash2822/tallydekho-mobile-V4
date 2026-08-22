@@ -6,9 +6,10 @@ import {
   NativeSyntheticEvent, NativeScrollEvent, Vibration,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import ShimmerPlaceholder, { KPICardSkeleton, MetricCardSkeleton, ActivityRowSkeleton, CardSkeleton } from '../../src/components/ShimmerPlaceholder';
@@ -16,6 +17,7 @@ import ShimmerPlaceholder, { KPICardSkeleton, MetricCardSkeleton, ActivityRowSke
 const { width: SW } = Dimensions.get('window');
 import Header from '../../src/components/Header';
 import CashflowCard from '../../src/components/CashflowCard';
+import ModuleTiles from '../../src/components/ModuleTiles';
 import RecentActivity from '../../src/components/RecentActivity';
 import PairingBanner from '../../src/components/PairingBanner';
 import {
@@ -24,6 +26,12 @@ import {
 import Toast from 'react-native-toast-message';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useTranslation } from 'react-i18next';
+import {
+  CASHFLOW_PERIOD_KEY,
+  isSyncPeriod,
+  resolvePeriodDates,
+  type DashboardPeriod,
+} from '../../src/utils/periodDates';
 // No mock data imports — real data only (V2 rule)
 
 const TIME_FILTERS = ['7D', '1M', '3M', '6M'] as const;
@@ -132,11 +140,7 @@ export default function HomeScreen() {
     setIsLoading(true);
     setApiError(null);
     try {
-      // Prefer context selectedFY (has real startDate/endDate from API),
-      // fall back to parseFYDates for label-based parsing
-      const from = selectedFY?.startDate ?? parseFYDates(activeFY)?.from;
-      const to   = selectedFY?.endDate   ?? parseFYDates(activeFY)?.to;
-      const fy   = fyInfoToParam(selectedFY);  // e.g. '2025-2026' for backend fy= param
+      const { from, to } = resolvePeriodDates(activeFilter as DashboardPeriod);
 
       const [kpi, met, cf, act] = await Promise.all([
         getKPIStrip(companyGuid, activeFilter, from, to),
@@ -147,26 +151,44 @@ export default function HomeScreen() {
 
       const kpiArr = Array.isArray(kpi) ? kpi : (kpi as any)?.data ?? [];
       const metArr = Array.isArray(met) ? met : (met as any)?.data ?? [];
-      if (kpiArr.length > 0) setKpiData(kpiArr as any);
-      if (metArr.length > 0) setMetrics(metArr as any);
+      setKpiData(kpiArr as any);
+      setMetrics(metArr as any);
 
-      // Cashflow: extract inner data object
-      if (cf) {
-        const cfData = (cf as any)?.data ?? cf;
-        if (cfData && typeof cfData === 'object' && !('success' in cfData)) setCashflow(cfData as any);
-        else if ((cf as any)?.data) setCashflow((cf as any).data as any);
+      const cfData = cf ? ((cf as any)?.data ?? cf) : null;
+      if (cfData && typeof cfData === 'object' && !('success' in cfData)) {
+        setCashflow(cfData as any);
+      } else {
+        setCashflow(null);
       }
 
       const actArr = Array.isArray(act) ? act : (act as any)?.data ?? [];
-      if (actArr.length > 0) setActivity(actArr as any);
+      setActivity(actArr as any);
     } catch (err: any) {
       setApiError(err?.message || 'Failed to load dashboard data');
     } finally {
       setIsLoading(false);
     }
-  }, [isPaired, activeFilter, activeFY, companyGuid, parseFYDates, selectedFY, lastSyncAt]);
+  }, [isPaired, activeFilter, companyGuid, lastSyncAt]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  const readStoredPeriod = useCallback(async () => {
+    try {
+      const saved = await AsyncStorage.getItem(CASHFLOW_PERIOD_KEY);
+      if (isSyncPeriod(saved)) setActiveFilter(saved);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { readStoredPeriod(); }, [readStoredPeriod]);
+
+  useFocusEffect(useCallback(() => {
+    readStoredPeriod();
+  }, [readStoredPeriod]));
+
+  const handleFilterChange = useCallback((f: TimeFilter) => {
+    setActiveFilter(f);
+    AsyncStorage.setItem(CASHFLOW_PERIOD_KEY, f).catch(() => {});
+  }, []);
 
   // ── Detect pairing state change ─────────────────────────────
   // When device is paired: show toast + fetch last sync time + refresh notifications
@@ -403,7 +425,7 @@ export default function HomeScreen() {
                 key={f}
                 testID={`filter-${f}`}
                 style={[styles.filterTab, activeFilter === f && styles.filterTabActive]}
-                onPress={() => setActiveFilter(f)}
+                onPress={() => handleFilterChange(f)}
                 activeOpacity={0.7}
               >
                 <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>
@@ -414,66 +436,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Metrics Card */}
-        <View style={styles.metricsCard}>
-          {isLoading ? (
-            <>
-              {[0, 1, 2, 3].map(i => (
-                <View key={i}>
-                  <View style={[styles.metricRow, { gap: 12 }]}>
-                    <ShimmerPlaceholder width={32} height={32} borderRadius={8} />
-                    <View style={{ flex: 1, gap: 6 }}>
-                      <ShimmerPlaceholder width="55%" height={11} borderRadius={5} />
-                      <ShimmerPlaceholder width="75%" height={14} borderRadius={6} />
-                    </View>
-                    <ShimmerPlaceholder width={64} height={20} borderRadius={8} />
-                  </View>
-                  {i < 3 && <View style={styles.metricSep} />}
-                </View>
-              ))}
-            </>
-          ) : (
-            (Array.isArray(metrics) ? metrics : []).map((item: any, idx: number) => (
-              <View key={item.id}>
-                <TouchableOpacity
-                  testID={`metric-row-${item.id}`}
-                  style={styles.metricRow}
-                  activeOpacity={0.7}
-                  onPress={() => (item as any).route && router.push((item as any).route)}
-                >
-                  <View style={styles.metricLeft}>
-                    <View style={styles.metricIconBox}>
-                      <Ionicons name={item.icon as any} size={18} color={COLORS.textSecondary} />
-                    </View>
-                    <Text style={styles.metricLabel}>{item.label}</Text>
-                  </View>
-                  <View style={styles.metricRight}>
-                    <Text style={styles.metricAmount}>
-                      {item.amount_raw != null ? formatAmountCompact(item.amount_raw) : (item.amount || '—')}
-                    </Text>
-                    <View style={[
-                      styles.changeBadge,
-                      { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg }
-                    ]}>
-                      <Ionicons
-                        name={item.positive ? 'trending-up' : 'trending-down'}
-                        size={11}
-                        color={item.positive ? COLORS.positive : COLORS.negative}
-                      />
-                      <Text style={[
-                        styles.changeText,
-                        { color: item.positive ? COLORS.positive : COLORS.negative }
-                      ]}>
-                        {item.change}%
-                      </Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-                {idx < metrics.length - 1 && <View style={styles.metricSep} />}
-              </View>
-            ))
-          )}
-        </View>
+        <ModuleTiles metrics={Array.isArray(metrics) ? metrics : []} isLoading={isLoading} />
 
         {/* Cashflow Card */}
         {isLoading

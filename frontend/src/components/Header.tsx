@@ -143,23 +143,20 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   // Abbreviate long company names
-  const shortCompany = selectedCompany.length > 18
-    ? selectedCompany.substring(0, 16) + '\u2026'
+  const shortCompany = selectedCompany.length > 24
+    ? selectedCompany.substring(0, 22) + '\u2026'
     : selectedCompany;
 
   return (
     <>
       <View testID="app-header" style={styles.container}>
-        {/* Left: Logo + Company Dropdown + Sync time */}
+        {/* Left: Company Dropdown */}
         <TouchableOpacity
           testID="company-selector"
           style={styles.leftSection}
           onPress={() => setShowCompanyModal(true)}
           activeOpacity={0.7}
         >
-          <View style={styles.logoBox}>
-            <Ionicons name="stats-chart" size={14} color={COLORS.brandPrimary} />
-          </View>
           <View style={styles.companyBlock}>
             <View style={styles.companyRow}>
               <Text style={styles.companyName} numberOfLines={1}>{shortCompany}</Text>
@@ -277,10 +274,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
   leftSection:  { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 },
-  logoBox: {
-    width: 30, height: 30, borderRadius: 8,
-    backgroundColor: COLORS.activeBg, alignItems: 'center', justifyContent: 'center',
-  },
   companyBlock: { flex: 1 },
   companyRow:   { flexDirection: 'row', alignItems: 'center', gap: 3 },
   companyName:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, flex: 1 },

@@ -1,13 +1,48 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
+import React, { useEffect, useState } from 'react';
+import {
+  View, Text, StyleSheet, TouchableOpacity, Platform,
+} from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 import { useSettings } from '../context/SettingsContext';
 
-// ── Theme-matched ring colors ─────────────────────────────────────────────────
-const RING_INCOME  = '#1A1A1A';  // Brand primary — income arc
-const RING_OUTCOME = '#E0DEDA';  // Warm light gray — outcome track
+const SEG_COUNT = 20;
+const SEG_GAP = 3;
+const BAR_H = 11;
+const ANIM_MS = 950;
+
+function SegmentedBar({ value, maxValue, color, delay = 0 }: {
+  value: number; maxValue: number; color: string; delay?: number;
+}) {
+  const pct = maxValue > 0 ? Math.min(value / maxValue, 1) : 0;
+  const target = Math.round(pct * SEG_COUNT);
+  const [filled, setFilled] = useState(0);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') { setFilled(target); return; }
+    setFilled(0);
+    if (target === 0) return;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    for (let i = 0; i < target; i++) {
+      timers.push(setTimeout(() => setFilled(i + 1), delay + Math.round((i / target) * ANIM_MS)));
+    }
+    return () => timers.forEach(clearTimeout);
+  }, [target, delay]);
+
+  return (
+    <View style={b.row}>
+      {Array.from({ length: SEG_COUNT }, (_, i) => (
+        <View key={i} style={[b.seg, { backgroundColor: i < filled ? color : COLORS.borderDefault }]} />
+      ))}
+    </View>
+  );
+}
+
+const b = StyleSheet.create({
+  row: { flex: 1, flexDirection: 'row', gap: SEG_GAP, height: BAR_H, alignItems: 'stretch' },
+  seg: { flex: 1, height: BAR_H, borderRadius: 0 },
+});
 
 interface CashflowCardProps {
   netCash?: number;
@@ -21,142 +56,106 @@ interface CashflowCardProps {
   totalExpense?: number;
 }
 
-const RADIUS_SIZE = 62;
-const STROKE_W = 12;
-const SIZE = (RADIUS_SIZE + STROKE_W) * 2 + 4;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS_SIZE;
-const CENTER = SIZE / 2;
-
-const CashflowCard: React.FC<CashflowCardProps> = ({
-  netCash = 20830,
-  grossCash = 606.21,
-  netRealisableBalance = 20021,
-  grossProfit = 470999,
-  netProfit = 130999,
-  incomePercentage = 68,
-  updatedAt = '5 mins. ago',
+export default function CashflowCard({
+  netCash = 0,
+  grossProfit = 0,
+  netProfit = 0,
+  incomePercentage = 0,
+  updatedAt = 'just now',
   totalIncome,
   totalExpense,
-}) => {
+}: CashflowCardProps) {
+  const router = useRouter();
   const { formatAmountCompact } = useSettings();
-  const formatAmount = (v: number) => formatAmountCompact(Math.round(v));
-  const incomeArc = (incomePercentage / 100) * CIRCUMFERENCE;
-  const [showTooltip, setShowTooltip] = useState(false);
-  const incomeDisplay  = totalIncome  ? formatAmount(totalIncome)  : formatAmount(Math.round(netCash * 1.8));
-  const expenseDisplay = totalExpense ? formatAmount(totalExpense)  : formatAmount(Math.round(netCash * 0.8));
+  const fmt = (val: number) => formatAmountCompact(Math.round(val));
+  const incomeVal = totalIncome ?? 0;
+  const expenseVal = totalExpense ?? 0;
+  const maxVal = Math.max(incomeVal, expenseVal, 1);
+  const isHealthy = netCash >= 0;
 
   return (
-    <View testID="cashflow-card" style={styles.card}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.iconWrap}>
-          <Ionicons name="eye-outline" size={16} color={COLORS.textSecondary} />
-        </View>
-        <Text style={styles.title}>Cashflow</Text>
-        <Text style={styles.tapHint}>Tap ring to see breakdown</Text>
-      </View>
-
-      {/* Compact split layout: ring left, information right */}
-      <View style={styles.contentRow}>
-        <View style={styles.chartWrap}>
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => setShowTooltip(p => !p)}
-            style={styles.svgContainer}
-          >
-            <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
-              {/* Outcome background track */}
-              <Circle
-                cx={CENTER}
-                cy={CENTER}
-                r={RADIUS_SIZE}
-                fill="none"
-                stroke={RING_OUTCOME}
-                strokeWidth={STROKE_W}
-              />
-              {/* Income arc */}
-              <Circle
-                cx={CENTER}
-                cy={CENTER}
-                r={RADIUS_SIZE}
-                fill="none"
-                stroke={RING_INCOME}
-                strokeWidth={STROKE_W}
-                strokeDasharray={`${incomeArc} ${CIRCUMFERENCE}`}
-                strokeLinecap="round"
-                transform={`rotate(-90 ${CENTER} ${CENTER})`}
-              />
-            </Svg>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.infoWrap}>
-          <Text style={styles.netCashLabel}>Net Cash</Text>
-          <Text style={styles.netCashValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>₹{netCash.toLocaleString('en-IN')}</Text>
-          <Text style={styles.updatedText}>Updated {updatedAt}</Text>
-
-          {/* Legend */}
-          <View style={styles.legend}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendLine, { backgroundColor: RING_OUTCOME, borderWidth: 1, borderColor: COLORS.borderDefault }]} />
-              <Text style={styles.legendText}>Outcome</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendLine, { backgroundColor: RING_INCOME }]} />
-              <Text style={styles.legendText}>Income</Text>
-            </View>
+    <View testID="cashflow-card" style={s.card}>
+      <View style={s.header}>
+        <View style={s.headerLeft}>
+          <View style={s.iconCircle}>
+            <Ionicons name="analytics-outline" size={14} color={COLORS.textSecondary} />
           </View>
+          <Text style={s.title}>Cashflow</Text>
+          <Text style={s.updated}>· {updatedAt || 'just now'}</Text>
+        </View>
+        <TouchableOpacity
+          testID="cashflow-expand-btn"
+          style={s.expandBtn}
+          activeOpacity={0.7}
+          onPress={() => router.push('/cashflow-report' as any)}
+        >
+          <Ionicons name="expand-outline" size={16} color={COLORS.textSecondary} />
+        </TouchableOpacity>
+      </View>
 
-          {/* Breakdown appears on tap; information remains same */}
-          {showTooltip && (
-            <View style={styles.tooltipCard}>
-              <View style={styles.tooltipRow}>
-                <View style={[styles.tooltipDot, { backgroundColor: RING_INCOME }]} />
-                <View>
-                  <Text style={styles.tooltipLabel}>Income</Text>
-                  <Text style={styles.tooltipValue}>{incomeDisplay}</Text>
-                </View>
-              </View>
-              <View style={styles.tooltipDivider} />
-              <View style={styles.tooltipRow}>
-                <View style={[styles.tooltipDot, { backgroundColor: '#A0A0A0' }]} />
-                <View>
-                  <Text style={styles.tooltipLabel}>Expense</Text>
-                  <Text style={styles.tooltipValue}>{expenseDisplay}</Text>
-                </View>
-              </View>
-            </View>
-          )}
+      <View style={s.netRow}>
+        <View>
+          <Text style={s.netLabel}>Net Cash</Text>
+          <Text style={s.netValue}>₹{Number(netCash || 0).toLocaleString('en-IN')}</Text>
+        </View>
+        <View style={[s.statusPill, { backgroundColor: isHealthy ? COLORS.positiveBg : COLORS.negativeBg }]}>
+          <Ionicons
+            name={isHealthy ? 'trending-up-outline' : 'trending-down-outline'}
+            size={13}
+            color={isHealthy ? COLORS.positive : COLORS.negative}
+          />
+          <Text style={[s.statusTxt, { color: isHealthy ? COLORS.positive : COLORS.negative }]}>
+            {isHealthy ? '+' : ''}{incomePercentage}%{'  '}
+            {isHealthy ? 'Healthy' : 'Watch'}
+          </Text>
         </View>
       </View>
 
-      {/* Divider */}
-      <View style={styles.divider} />
+      <View style={s.divider} />
 
-      {/* 2x2 Metrics */}
-      <View style={styles.metricsGrid}>
-        <View style={[styles.metricCell, styles.metricBorderRight]}>
-          <Text style={styles.metricLabel}>Gross Cash</Text>
-          <Text style={styles.metricValue}>₹{grossCash.toFixed(2)}</Text>
+      <View style={s.barRow}>
+        <View style={s.barMeta}>
+          <Ionicons name="arrow-up-circle-outline" size={15} color={COLORS.positive} />
+          <Text style={s.barLabel}>Income</Text>
         </View>
-        <View style={styles.metricCell}>
-          <Text style={styles.metricLabel}>Net Realisable Balance</Text>
-          <Text style={styles.metricValue}>₹{netRealisableBalance.toLocaleString('en-IN')}</Text>
+        <SegmentedBar value={incomeVal} maxValue={maxVal} color={COLORS.positive} delay={80} />
+        <View style={s.barRight}>
+          <Text style={s.barAmt}>{fmt(incomeVal)}</Text>
+          <View style={s.pctChip}>
+            <Text style={s.pctTxt}>{incomePercentage}%</Text>
+          </View>
         </View>
-        <View style={[styles.metricCell, styles.metricBorderTop, styles.metricBorderRight]}>
-          <Text style={styles.metricLabel}>Gross Profit</Text>
-          <Text style={styles.metricValue}>{formatAmount(grossProfit)}</Text>
+      </View>
+
+      <View style={[s.barRow, { marginTop: 12 }]}>
+        <View style={s.barMeta}>
+          <Ionicons name="arrow-down-circle-outline" size={15} color={COLORS.negative} />
+          <Text style={s.barLabel}>Expense</Text>
         </View>
-        <View style={[styles.metricCell, styles.metricBorderTop]}>
-          <Text style={styles.metricLabel}>Net Profit</Text>
-          <Text style={styles.metricValue}>{formatAmount(netProfit)}</Text>
+        <SegmentedBar value={expenseVal} maxValue={maxVal} color={COLORS.negative} delay={360} />
+        <View style={s.barRight}>
+          <Text style={s.barAmt}>{fmt(expenseVal)}</Text>
+        </View>
+      </View>
+
+      <View style={s.divider} />
+
+      <View style={s.bottomRow}>
+        <View style={s.bottomCell}>
+          <Text style={s.bottomLabel}>Gross Profit</Text>
+          <Text style={s.bottomVal}>{fmt(grossProfit)}</Text>
+        </View>
+        <View style={s.bottomSep} />
+        <View style={[s.bottomCell, s.bottomCellRight]}>
+          <Text style={s.bottomLabel}>Net Profit</Text>
+          <Text style={[s.bottomVal, { color: COLORS.positive }]}>{fmt(netProfit)}</Text>
         </View>
       </View>
     </View>
   );
-};
+}
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   card: {
     backgroundColor: COLORS.cardBg,
     borderRadius: RADIUS.lg,
@@ -166,129 +165,29 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.borderDefault,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  iconWrap: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: COLORS.pageBg,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  title: { fontSize: TYPOGRAPHY.md, fontWeight: '600', color: COLORS.textPrimary },
-  tapHint: { flex: 1, textAlign: 'right', fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
-  contentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  chartWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  svgContainer: {
-    width: SIZE,
-    height: SIZE,
-    position: 'relative',
-  },
-  infoWrap: {
-    flex: 1,
-    paddingLeft: 10,
-  },
-  netCashLabel: {
-    fontSize: TYPOGRAPHY.sm,
-    color: COLORS.textSecondary,
-    fontWeight: '400'
-  },
-  netCashValue: {
-    fontSize: TYPOGRAPHY.xl,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    letterSpacing: -0.5,
-  },
-  updatedText: {
-    fontSize: TYPOGRAPHY.xs,
-    color: COLORS.textTertiary,
-    marginTop: 2,
-  },
-  legend: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    gap: 16,
-    marginTop: 8,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  legendLine: {
-    width: 20,
-    height: 3,
-    borderRadius: 2,
-  },
-  legendText: {
-    fontSize: TYPOGRAPHY.sm,
-    color: COLORS.textSecondary,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.borderDefault,
-    marginVertical: 10,
-  },
-  metricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  metricCell: {
-    width: '50%',
-    padding: 8,
-  },
-  metricBorderRight: {
-    borderRightWidth: 1,
-    borderRightColor: COLORS.borderDefault,
-  },
-  metricBorderTop: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.borderDefault,
-  },
-  metricLabel: {
-    fontSize: TYPOGRAPHY.xs,
-    color: COLORS.textTertiary,
-    marginBottom: 4,
-  },
-  metricValue: {
-    fontSize: TYPOGRAPHY.base,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-  },
-  // ── Tooltip (tap to reveal) ─────────────────────────────────────────────────
-  tooltipRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 3,
-  },
-  tooltipDot: {
-    width: 10, height: 10, borderRadius: 5,
-  },
-  tooltipLabel: {
-    fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary,
-  },
-  tooltipValue: {
-    fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary,
-  },
-  tooltipDivider: {
-    height: 1, backgroundColor: COLORS.borderDefault, marginVertical: 4,
-  },
-  tooltipCard: {
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: COLORS.borderDefault,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    backgroundColor: COLORS.pageBg,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.sm + 4 },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  iconCircle: { width: 26, height: 26, borderRadius: 13, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, letterSpacing: 0.1 },
+  updated: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  expandBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.sm, backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault },
+  netRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.sm + 2 },
+  netLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginBottom: 3, fontWeight: '500' },
+  netValue: { fontSize: TYPOGRAPHY.xl, fontWeight: '700', color: COLORS.textPrimary, letterSpacing: -0.8 },
+  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: RADIUS.full },
+  statusTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', letterSpacing: 0.1 },
+  divider: { height: 1, backgroundColor: COLORS.borderDefault, marginVertical: SPACING.sm + 2 },
+  barRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  barMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, width: 74 },
+  barLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
+  barRight: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 82, justifyContent: 'flex-end' },
+  barAmt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary },
+  pctChip: { backgroundColor: COLORS.positiveBg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.positive + '30' },
+  pctTxt: { fontSize: 10, fontWeight: '800', color: COLORS.positive },
+  bottomRow: { flexDirection: 'row', alignItems: 'center' },
+  bottomCell: { flex: 1 },
+  bottomCellRight: { alignItems: 'flex-end' },
+  bottomSep: { width: 1, height: 30, backgroundColor: COLORS.borderDefault, marginHorizontal: SPACING.sm },
+  bottomLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginBottom: 3, fontWeight: '500' },
+  bottomVal: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
 });
-
-export default CashflowCard;

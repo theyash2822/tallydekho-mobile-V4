@@ -1,8 +1,10 @@
 import React, { useEffect } from 'react';
+import { View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { SettingsProvider } from '../src/context/SettingsContext';
 import { getMe } from '../src/services/api';
@@ -14,14 +16,35 @@ import Toast from 'react-native-toast-message';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { toastConfig } from '../src/utils/toastConfig';
 import { registerForPushNotifications, setupNotificationHandlers } from '../src/services/pushNotifications';
+import { ONBOARDING_COMPLETED_KEY } from '../src/utils/onboardingNav';
+import { COLORS } from '../src/constants/colors';
 // Initialize i18n before anything renders
 import '../src/i18n';
 
 // Prevent splash screen from auto-hiding while fonts load
 SplashScreen.preventAutoHideAsync();
 
+function StatusBarCover() {
+  const insets = useSafeAreaInsets();
+  if (!insets.top) return null;
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: insets.top,
+        backgroundColor: COLORS.cardBg,
+        zIndex: 1000,
+      }}
+    />
+  );
+}
+
 function RootNavigation() {
-  const { isAuthenticated, isLoading, company, setCompany, setIsPaired, setUser, user, signIn } = useAuth();
+  const { isAuthenticated, isLoading, company, setCompany, setIsPaired, setUser } = useAuth();
   const router = useRouter();
   const segments = useSegments();
 
@@ -45,26 +68,33 @@ function RootNavigation() {
 
   useEffect(() => {
     if (isLoading) return;
-    // Wait for router to fully resolve before acting
     if ((segments as string[]).length === 0) return;
 
     const inAuth = segments[0] === '(auth)';
+    const inOnboarding = segments[0] === 'onboarding';
 
-    if (!isAuthenticated && !inAuth) {
-      // Not logged in — send to auth screen
-      router.replace('/(auth)');
-    } else if (isAuthenticated && inAuth) {
-      // Logged in but on auth screen — send to app
-      router.replace('/(tabs)');
-    }
-    // Every other case: let Expo Router handle navigation naturally (no redirect)
+    if (inOnboarding) return;
+
+    (async () => {
+      const onboardingDone = (await AsyncStorage.getItem(ONBOARDING_COMPLETED_KEY)) === 'true';
+
+      if (!onboardingDone) {
+        router.replace('/onboarding');
+        return;
+      }
+
+      if (!isAuthenticated && !inAuth) {
+        router.replace('/(auth)');
+      } else if (isAuthenticated && inAuth) {
+        router.replace('/(tabs)');
+      }
+    })();
   }, [isAuthenticated, isLoading, segments]);
 
   return <Stack screenOptions={{ headerShown: false }} />;
 }
 
 export default function RootLayout() {
-  // Load Ionicons + FontAwesome5 Brands (for WhatsApp icon) — without this, all icons show as □ rectangles on device
   const [fontsLoaded, fontError] = useFonts({
     ...Ionicons.font,
     ...FontAwesome5.font,
@@ -76,7 +106,6 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
-  // Block rendering until fonts are ready
   if (!fontsLoaded && !fontError) {
     return null;
   }
@@ -89,11 +118,11 @@ export default function RootLayout() {
             <AuthProvider>
               <StatusBar style="dark" />
               <RootNavigation />
+              <StatusBarCover />
             </AuthProvider>
           </SettingsProvider>
         </BottomSheetModalProvider>
       </SafeAreaProvider>
-      {/* Toast must be LAST so it renders above everything */}
       <Toast config={toastConfig} topOffset={56} />
     </GestureHandlerRootView>
   );

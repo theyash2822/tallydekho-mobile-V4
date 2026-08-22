@@ -1,23 +1,65 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
-import { ErrorBanner } from '../src/components/ApiStateViews';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../src/constants/colors';
-
-import { useAuth } from '../src/context/AuthContext';
-import { getNotifications } from '../src/services/api';
+import { ErrorBanner } from '../src/components/ApiStateViews';
 import { LedgerRowSkeleton } from '../src/components/ShimmerPlaceholder';
 
+import { useAuth } from '../src/context/AuthContext';
+import {
+  getNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+} from '../src/services/api';
+
 const TYPE_CONFIG: Record<string, { icon: any; color: string; bg: string }> = {
-  warning: { icon: 'warning-outline',          color: COLORS.warning,  bg: COLORS.warningBg },
-  urgent:  { icon: 'notifications-outline',    color: COLORS.negative, bg: COLORS.negativeBg },
-  info:    { icon: 'information-circle-outline',color: COLORS.info,    bg: COLORS.infoBg },
-  invoice: { icon: 'document-text-outline',    color: COLORS.positive, bg: COLORS.positiveBg },
-  gst:     { icon: 'receipt-outline',           color: '#7C3AED',       bg: '#F5F3FF' },
-  stock:   { icon: 'cube-outline',              color: COLORS.warning,  bg: COLORS.warningBg },
+  stock:      { icon: 'cube-outline',    color: COLORS.warning,  bg: COLORS.warningBg },
+  receivable: { icon: 'cash-outline',    color: COLORS.negative, bg: COLORS.negativeBg },
+  gst:        { icon: 'receipt-outline', color: COLORS.info,     bg: COLORS.infoBg },
+  invoice:    { icon: 'document-text-outline', color: COLORS.positive, bg: COLORS.positiveBg },
+  warning:    { icon: 'warning-outline', color: COLORS.warning,  bg: COLORS.warningBg },
+  info:       { icon: 'information-circle-outline', color: COLORS.info, bg: COLORS.infoBg },
 };
+
+const FILTERS = ['All', 'Stock', 'Receivables', 'Compliance', 'Invoices'] as const;
+type Filter = typeof FILTERS[number];
+
+interface AppNotification {
+  id: string;
+  type: string;
+  category?: string;
+  title: string;
+  message?: string;
+  body?: string;
+  time?: string;
+  group?: string;
+  route?: string;
+  actionLabel?: string;
+  read: boolean;
+  created_at?: string;
+}
+
+function normalizeNotification(n: any): AppNotification {
+  const message = n.message || n.body || '';
+  const createdAt = n.created_at ? new Date(n.created_at) : new Date();
+  const isToday = createdAt.toDateString() === new Date().toDateString();
+  return {
+    id: n.id,
+    type: n.type || 'info',
+    category: n.category,
+    title: n.title,
+    message,
+    body: message,
+    time: n.time || createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+    group: n.group || (isToday ? 'today' : 'earlier'),
+    route: n.route,
+    actionLabel: n.actionLabel,
+    read: n.read ?? false,
+    created_at: n.created_at,
+  };
+}
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -25,15 +67,17 @@ export default function NotificationsScreen() {
   const companyGuid = company?.guid;
   const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [filter, setFilter] = useState<Filter>('All');
 
   useEffect(() => {
     setIsLoading(true);
+    setApiError(null);
     getNotifications(companyGuid)
       .then((res: any) => {
         const data = res?.data ?? res;
         if (Array.isArray(data)) {
-          setNotifications(data.map((n: any) => ({ ...n, read: n.read ?? false })));
+          setNotifications(data.map(normalizeNotification));
         }
       })
       .catch((err: any) => {
@@ -43,66 +87,131 @@ export default function NotificationsScreen() {
       .finally(() => setIsLoading(false));
   }, [companyGuid]);
 
-  const markAllRead = () => setNotifications(ns => ns.map(n => ({ ...n, read: true })));
-  const markRead = (id: string) => setNotifications(ns => ns.map(n => n.id === id ? { ...n, read: true } : n));
+  const markRead = useCallback((id: string) => {
+    setNotifications(ns => ns.map(n => n.id === id ? { ...n, read: true } : n));
+    markNotificationRead(id).catch(() => {});
+  }, []);
+
+  const markAllRead = useCallback(() => {
+    setNotifications(ns => ns.map(n => ({ ...n, read: true })));
+    markAllNotificationsRead(companyGuid).catch(() => {});
+  }, [companyGuid]);
+
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  const visible = useMemo(
+    () => filter === 'All' ? notifications : notifications.filter(n => n.category === filter),
+    [notifications, filter]
+  );
+  const today = visible.filter(n => n.group === 'today');
+  const earlier = visible.filter(n => n.group === 'earlier');
+
+  const handlePress = (n: AppNotification) => {
+    markRead(n.id);
+    if (n.route) router.push(n.route as any);
+  };
+
+  const renderCard = (notif: AppNotification) => {
+    const cfg = TYPE_CONFIG[notif.type] || TYPE_CONFIG.info;
+    return (
+      <TouchableOpacity
+        key={notif.id}
+        testID={`notif-${notif.id}`}
+        style={[s.card, !notif.read && s.unreadCard]}
+        onPress={() => handlePress(notif)}
+        activeOpacity={0.75}
+      >
+        <View style={[s.iconBox, { backgroundColor: cfg.bg }]}>
+          <Ionicons name={cfg.icon} size={19} color={cfg.color} />
+        </View>
+        <View style={s.content}>
+          <View style={s.titleRow}>
+            <Text style={s.title} numberOfLines={1}>{notif.title}</Text>
+            <Text style={s.time}>{notif.time}</Text>
+          </View>
+          <Text style={s.message} numberOfLines={2}>{notif.message}</Text>
+          {notif.actionLabel && (
+            <View style={s.actionBtn}>
+              <Text style={s.actionTxt}>{notif.actionLabel}</Text>
+              <Ionicons name="chevron-forward" size={12} color={COLORS.brandPrimary} />
+            </View>
+          )}
+        </View>
+        {!notif.read && <View style={s.unreadDot} />}
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={s.safe}>
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top:8,bottom:8,left:8,right:8 }}>
+        <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <View style={s.headerMid}>
           <Text style={s.headerTitle}>Notifications</Text>
           {unreadCount > 0 && <View style={s.badge}><Text style={s.badgeTxt}>{unreadCount}</Text></View>}
         </View>
-        <TouchableOpacity onPress={markAllRead}>
-          <Text style={s.markAll}>Mark all read</Text>
+        <TouchableOpacity onPress={markAllRead} disabled={unreadCount === 0}>
+          <Text style={[s.markAll, unreadCount === 0 && { color: COLORS.textTertiary }]}>Mark all read</Text>
         </TouchableOpacity>
       </View>
 
+      <View style={s.filterWrap}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterRow}>
+          {FILTERS.map(f => {
+            const active = filter === f;
+            const count = f === 'All'
+              ? notifications.filter(n => !n.read).length
+              : notifications.filter(n => n.category === f && !n.read).length;
+            return (
+              <TouchableOpacity
+                key={f}
+                testID={`filter-${f}`}
+                style={[s.chip, active && s.chipActive]}
+                onPress={() => setFilter(f)}
+                activeOpacity={0.75}
+              >
+                <Text style={[s.chipTxt, active && s.chipTxtActive]}>{f}</Text>
+                {count > 0 && (
+                  <View style={[s.chipCount, active && s.chipCountActive]}>
+                    <Text style={[s.chipCountTxt, active && { color: COLORS.brandPrimary }]}>{count}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
       {apiError && <ErrorBanner message={apiError} />}
+
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32, paddingTop: SPACING.sm }}>
         {isLoading ? (
           <View style={{ paddingTop: 8 }}>
             {[...Array(5)].map((_, i) => <LedgerRowSkeleton key={i} />)}
           </View>
-        ) : notifications.length === 0 ? (
+        ) : visible.length === 0 ? (
           <View style={s.empty}>
             <Ionicons name="notifications-off-outline" size={48} color={COLORS.textTertiary} />
-            <Text style={s.emptyTitle}>All caught up</Text>
-            <Text style={s.emptySub}>No new notifications</Text>
+            <Text style={s.emptyTitle}>All caught up!</Text>
+            <Text style={s.emptySub}>No {filter === 'All' ? '' : filter.toLowerCase() + ' '}notifications right now.</Text>
           </View>
         ) : (
-          notifications.map(notif => {
-            const cfg = TYPE_CONFIG[notif.type] || TYPE_CONFIG.info;
-            return (
-              <TouchableOpacity
-                key={notif.id}
-                style={[s.card, !notif.read && s.unreadCard]}
-                onPress={() => markRead(notif.id)}
-                activeOpacity={0.75}
-              >
-                <View style={[s.iconBox, { backgroundColor: cfg.bg }]}>
-                  <Ionicons name={cfg.icon} size={20} color={cfg.color} />
-                </View>
-                <View style={s.content}>
-                  <View style={s.titleRow}>
-                    <Text style={s.title} numberOfLines={1}>{notif.title}</Text>
-                    <Text style={s.time}>{notif.time}</Text>
-                  </View>
-                  <Text style={s.message} numberOfLines={2}>{notif.message}</Text>
-                  {(notif as any).actionLabel && (
-                    <TouchableOpacity style={s.actionBtn}>
-                      <Text style={s.actionTxt}>{(notif as any).actionLabel}</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-                {!notif.read && <View style={s.unreadDot} />}
-              </TouchableOpacity>
-            );
-          })
+          <>
+            {today.length > 0 && (
+              <>
+                <Text style={s.groupLabel}>Today</Text>
+                {today.map(renderCard)}
+              </>
+            )}
+            {earlier.length > 0 && (
+              <>
+                <Text style={s.groupLabel}>Earlier</Text>
+                {earlier.map(renderCard)}
+              </>
+            )}
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -118,15 +227,29 @@ const s = StyleSheet.create({
   badge: { backgroundColor: '#E53935', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 },
   badgeTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white },
   markAll: { fontSize: TYPOGRAPHY.sm, color: COLORS.brandPrimary, fontWeight: '600' },
+  filterWrap: { backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  filterRow: { paddingHorizontal: SPACING.md, paddingVertical: 10, gap: 8 },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 7, borderRadius: RADIUS.full,
+    borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg,
+  },
+  chipActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
+  chipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
+  chipTxtActive: { color: COLORS.white },
+  chipCount: { minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.borderDefault },
+  chipCountActive: { backgroundColor: COLORS.white },
+  chipCountTxt: { fontSize: 10, fontWeight: '800', color: COLORS.textSecondary },
+  groupLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, marginHorizontal: SPACING.md, marginTop: 12, marginBottom: 8 },
   card: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: COLORS.cardBg, marginHorizontal: SPACING.md, marginBottom: 8, borderRadius: RADIUS.lg, padding: SPACING.md, gap: 12, borderWidth: 1, borderColor: COLORS.borderDefault },
-  unreadCard: { borderLeftWidth: 3, borderLeftColor: COLORS.brandPrimary, backgroundColor: COLORS.pageBg },
-  iconBox: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  unreadCard: { borderLeftWidth: 3, borderLeftColor: COLORS.brandPrimary },
+  iconBox: { width: 40, height: 40, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   content: { flex: 1, gap: 4 },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   title: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, flex: 1 },
   time: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
   message: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, lineHeight: 18 },
-  actionBtn: { alignSelf: 'flex-start', marginTop: 4, backgroundColor: COLORS.brandPrimary + '18', paddingHorizontal: 12, paddingVertical: 6, borderRadius: RADIUS.md },
+  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start', marginTop: 6, backgroundColor: COLORS.brandPrimary + '14', paddingHorizontal: 10, paddingVertical: 5, borderRadius: RADIUS.md },
   actionTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.brandPrimary },
   unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.brandPrimary, marginTop: 4 },
   empty: { alignItems: 'center', paddingVertical: 80, gap: 12 },
