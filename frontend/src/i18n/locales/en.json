@@ -98,6 +98,8 @@
     "filter6M": "6 Months",
     "listening": "Listening...",
     "speakNow": "Speak now to search",
+    "stopListening": "Done",
+    "searchResults": "Search Results",
     "noResults": "No results for \"{{query}}\""
   },
   "settings": {

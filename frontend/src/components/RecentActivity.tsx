@@ -11,6 +11,7 @@ interface Activity {
   type: string;
   // API shape
   guid?: string | null;
+  route?: string | null;
   label?: string;
   amount?: string;
   date?: string;
@@ -24,6 +25,7 @@ interface Activity {
 
 interface RecentActivityProps {
   activities: Activity[];
+  title?: string;
   onSeeAll?: () => void;
 }
 
@@ -48,7 +50,7 @@ const ActivityItem: React.FC<{ item: Activity; onPress: () => void }> = ({ item,
       testID={`activity-item-${item.id}`}
       style={styles.item}
       onPress={onPress}
-      disabled={!item.guid}
+      disabled={!(item.guid || item.route)}
       activeOpacity={0.7}
     >
       {/* Icon / Avatar */}
@@ -89,12 +91,16 @@ const ActivityItem: React.FC<{ item: Activity; onPress: () => void }> = ({ item,
   );
 };
 
-const RecentActivity: React.FC<RecentActivityProps> = ({ activities }) => {
+const RecentActivity: React.FC<RecentActivityProps> = ({ activities, title = 'Recent Activity' }) => {
   const router = useRouter();
   const safeActivities = Array.isArray(activities) ? activities : [];
   const displayed = safeActivities.slice(0, 6);
 
   const handlePress = (item: Activity) => {
+    if (item.route) {
+      router.push(item.route as any);
+      return;
+    }
     if (!item.guid) return;
     router.push(`/document/${item.guid}` as any);
   };
@@ -102,7 +108,7 @@ const RecentActivity: React.FC<RecentActivityProps> = ({ activities }) => {
   return (
     <View testID="recent-activity" style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.sectionTitle}>Recent Activity</Text>
+        <Text style={styles.sectionTitle}>{title}</Text>
       </View>
       <View style={styles.card}>
         {displayed.length === 0 ? (

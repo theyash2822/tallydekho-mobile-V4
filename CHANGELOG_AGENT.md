@@ -1,3 +1,16 @@
+## [2026-08-22] Home voice search + dashboard search
+
+### Added
+- Real speech-to-text on home search mic via `expo-speech-recognition` (`useVoiceSearch` hook)
+- Debounced dashboard search wired to `GET /api/dashboard/search` (vouchers, ledgers, stock)
+- iOS mic/speech permission strings; live transcript + Done button in mic modal
+
+### Changed
+- `RecentActivity` supports custom title and `route` for search result navigation
+
+### Note
+- Voice mic requires a **development build** (not Expo Go)
+
 ## [2026-08-22] UI Phase 1 + Phase 2 integration
 
 ### Added
