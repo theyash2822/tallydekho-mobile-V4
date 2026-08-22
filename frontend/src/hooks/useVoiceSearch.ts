@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { requireOptionalNativeModule } from 'expo-modules-core';
 
 type SpeechRecognitionModule = {
   isRecognitionAvailable: () => boolean;
@@ -14,27 +15,11 @@ type SpeechRecognitionModule = {
   addListener: (eventName: string, listener: (event: any) => void) => { remove: () => void };
 };
 
-type SpeechPackage = {
-  ExpoSpeechRecognitionModule: SpeechRecognitionModule;
-};
-
 const DEV_BUILD_MSG =
   'Voice search needs a development build (not Expo Go). Run: npx expo run:ios';
 
-let cachedSpeechPackage: SpeechPackage | null | undefined;
-
-/** Lazy-load so Expo Go without the native module does not crash on import. */
-function loadSpeechPackage(): SpeechPackage | null {
-  if (cachedSpeechPackage !== undefined) return cachedSpeechPackage;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    cachedSpeechPackage = require('expo-speech-recognition') as SpeechPackage;
-    return cachedSpeechPackage;
-  } catch {
-    cachedSpeechPackage = null;
-    return null;
-  }
-}
+/** Null in Expo Go — does not throw unlike require('expo-speech-recognition'). */
+const speechModule = requireOptionalNativeModule<SpeechRecognitionModule>('ExpoSpeechRecognition');
 
 export function useVoiceSearch() {
   const [isListening, setIsListening] = useState(false);
@@ -44,25 +29,23 @@ export function useVoiceSearch() {
   const subsRef = useRef<Array<{ remove: () => void }>>([]);
 
   useEffect(() => {
-    const pkg = loadSpeechPackage();
-    if (!pkg) return;
+    if (!speechModule) return;
 
-    const M = pkg.ExpoSpeechRecognitionModule;
     subsRef.current = [
-      M.addListener('start', () => {
+      speechModule.addListener('start', () => {
         setIsListening(true);
         setError(null);
       }),
-      M.addListener('end', () => {
+      speechModule.addListener('end', () => {
         setIsListening(false);
       }),
-      M.addListener('result', (event) => {
+      speechModule.addListener('result', (event) => {
         const text = (event.results[0]?.transcript || '').trim();
         if (!text) return;
         setTranscript(text);
         if (event.isFinal) finalTextRef.current = text;
       }),
-      M.addListener('error', (event) => {
+      speechModule.addListener('error', (event) => {
         setIsListening(false);
         if (event.error === 'aborted') return;
         setError(event.message || 'Could not recognize speech. Try again.');
@@ -80,16 +63,13 @@ export function useVoiceSearch() {
     setError(null);
     finalTextRef.current = '';
 
-    const pkg = loadSpeechPackage();
-    if (!pkg) {
+    if (!speechModule) {
       setError(DEV_BUILD_MSG);
       return { ok: false, error: DEV_BUILD_MSG };
     }
 
-    const M = pkg.ExpoSpeechRecognitionModule;
-
     try {
-      if (!M.isRecognitionAvailable()) {
+      if (!speechModule.isRecognitionAvailable()) {
         setError(DEV_BUILD_MSG);
         return { ok: false, error: DEV_BUILD_MSG };
       }
@@ -98,14 +78,14 @@ export function useVoiceSearch() {
       return { ok: false, error: DEV_BUILD_MSG };
     }
 
-    const perm = await M.requestPermissionsAsync();
+    const perm = await speechModule.requestPermissionsAsync();
     if (!perm.granted) {
       const msg = 'Microphone permission is required for voice search.';
       setError(msg);
       return { ok: false, error: msg };
     }
 
-    M.start({
+    speechModule.start({
       lang: 'en-IN',
       interimResults: true,
       continuous: false,
@@ -116,7 +96,7 @@ export function useVoiceSearch() {
 
   const stop = useCallback(() => {
     try {
-      loadSpeechPackage()?.ExpoSpeechRecognitionModule.stop();
+      speechModule?.stop();
     } catch {
       /* already stopped */
     }
@@ -124,7 +104,7 @@ export function useVoiceSearch() {
 
   const abort = useCallback(() => {
     try {
-      loadSpeechPackage()?.ExpoSpeechRecognitionModule.abort();
+      speechModule?.abort();
     } catch {
       /* noop */
     }
