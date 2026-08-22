@@ -10,6 +10,7 @@
 
 ### Note
 - Voice mic requires a **development build** (not Expo Go)
+- Lazy-load speech module so Expo Go does not crash on home screen load
 
 ## [2026-08-22] UI Phase 1 + Phase 2 integration
 
