@@ -261,9 +261,9 @@ export default function ExpenseScreen() {
                     <Text style={s.emptyTxt}>No expenses in this period</Text>
                   </View>
                 ) : (
-                  recent.map(exp => (
+                  recent.map((exp, index) => (
                     <TouchableOpacity
-                      key={exp.guid || exp.id}
+                      key={exp.guid || `expense-${index}`}
                       style={s.itemCard}
                       activeOpacity={0.7}
                       onPress={() => router.push(`/document/${exp.guid || exp.id}?type=expense` as any)}
@@ -302,9 +302,9 @@ export default function ExpenseScreen() {
                     <Text style={s.emptyTxt}>No expense categories in this period</Text>
                   </View>
                 ) : (
-                  liveCategories.map(cat => (
+                  liveCategories.map((cat, index) => (
                     <TouchableOpacity
-                      key={cat.id}
+                      key={`${cat.id}-${index}`}
                       style={s.catCard}
                       activeOpacity={0.7}
                       onPress={() => router.push('/ledger' as any)}

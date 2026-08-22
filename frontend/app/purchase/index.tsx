@@ -360,9 +360,9 @@ export default function PurchaseScreen() {
                 <Text style={s.emptyTxt}>No purchase invoices in this period</Text>
               </View>
             ) : (
-              recent.map(inv => (
+              recent.map((inv, index) => (
                 <TouchableOpacity
-                  key={inv.id}
+                  key={inv.guid || `purchase-${index}`}
                   style={s.itemCard}
                   activeOpacity={0.7}
                   onPress={() => router.push(`/document/${inv.guid || inv.id}?type=purchase_invoice` as any)}

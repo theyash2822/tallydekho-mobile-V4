@@ -1,3 +1,10 @@
+## [2026-08-22] AI Insights crash + duplicate list keys
+
+### Fixed
+- **AI Insights** (`app/reports/ai-insights.tsx`) — guard donut/line/bar charts against NaN when receivable buckets sum to 0%; default segment colors
+- **Purchase / Expenses / Recent Activity** — list keys use `guid` instead of voucher number (fixes duplicate key `5` warning)
+- **Purchase Register** — navigation uses `guid` for document preview
+
 ## [2026-08-22] Purchase + Expenses: remove mock data, wire real APIs
 
 ### Fixed

@@ -39,7 +39,9 @@ const STATUS_LABEL: Record<string, string> = {
 
 // ─── Month-grouped mock data ─────────────────────────────────────────────────
 type PurchaseInvoice = {
-  id: string; vendor: string; date: string;
+  id: string;
+  guid?: string;
+  vendor: string; date: string;
   time: string; amount: string; status: string;
 };
 type MonthGroup = { id: string; label: string; invoices: PurchaseInvoice[] };
@@ -102,6 +104,7 @@ export default function PurchaseRegisterScreen() {
 
   const mapPurchaseInv = (r: any): PurchaseInvoice => ({
     id: r.voucher_number || String(r.id),
+    guid: r.guid,
     vendor: r.party_name || '',
     date: r.date || '',
     time: '',
@@ -353,13 +356,13 @@ export default function PurchaseRegisterScreen() {
                   {groupInvoices.map((inv, idx) => {
                     const isSelected = selected.includes(inv.id);
                     return (
-                      <View key={inv.id}>
+                      <View key={inv.guid || `${group.id}-${idx}`}>
                         <TouchableOpacity
                           style={[s.invRow, isSelected && s.invRowSelected]}
                           activeOpacity={0.7}
                           onPress={() => {
                             if (isSelecting) { toggleSelect(inv.id); }
-                            else { router.push(`/document/${inv.id}?type=purchase_invoice` as any); }
+                            else { router.push(`/document/${inv.guid || inv.id}?type=purchase_invoice` as any); }
                           }}
                           onLongPress={() => toggleSelect(inv.id)}
                           delayLongPress={500}

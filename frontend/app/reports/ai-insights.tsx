@@ -18,6 +18,11 @@ import { useSettings } from '../../src/context/SettingsContext';
 const AMBER       = '#A89060';
 const AMBER_LIGHT = '#D4BC94';
 const AMBER_DARK  = '#6B5830';
+const RECEIVABLE_COLORS = ['#2D7D46', '#D97706', '#DC2626'];
+
+function safeNum(n: number, fallback = 0) {
+  return Number.isFinite(n) ? n : fallback;
+}
 
 // ─── Donut Helpers ────────────────────────────────────────────────────────────
 function polarToCart(cx: number, cy: number, r: number, deg: number) {
@@ -25,6 +30,9 @@ function polarToCart(cx: number, cy: number, r: number, deg: number) {
   return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
 }
 function donutArc(cx: number, cy: number, outerR: number, innerR: number, startDeg: number, endDeg: number) {
+  if (!Number.isFinite(startDeg) || !Number.isFinite(endDeg) || endDeg <= startDeg + 0.1) {
+    return '';
+  }
   const os  = polarToCart(cx, cy, outerR, startDeg);
   const oe  = polarToCart(cx, cy, outerR, endDeg);
   const ie  = polarToCart(cx, cy, innerR, endDeg);
@@ -45,14 +53,17 @@ function donutArc(cx: number, cy: number, outerR: number, innerR: number, startD
 type ForecastPoint = { month: string; actual: number | null; forecast: number | null };
 function ForecastLineChart({ data }: { data: ForecastPoint[] }) {
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
+  if (!data.length) return null;
+
   const MONTH_W = 70; const YAXIS_W = 40;
   const H = 155; const PAD_B = 26; const PAD_T = 38;
   const chartH = H - PAD_B - PAD_T;
-  const niceMax = Math.ceil(Math.max(...data.map(d => d.forecast ?? 0)) / 5) * 5 || 20;
+  const maxVal = Math.max(...data.map(d => safeNum(d.forecast ?? d.actual ?? 0)), 0);
+  const niceMax = Math.max(Math.ceil(maxVal / 5) * 5, 1);
   const yTicks  = [0, Math.round(niceMax * 0.5), niceMax];
   const chartW  = data.length * MONTH_W;
   const xAt = (i: number) => i * MONTH_W + MONTH_W / 2;
-  const yAt = (v: number) => PAD_T + chartH - (v / niceMax) * chartH;
+  const yAt = (v: number) => PAD_T + chartH - (safeNum(v) / niceMax) * chartH;
 
   // Actual path segments (skip null values)
   const actualPath = data.reduce<string[]>((acc, d, i) => {
@@ -171,10 +182,13 @@ function ForecastLineChart({ data }: { data: ForecastPoint[] }) {
 type ExpensePoint = { month: string; amount: number; isSpike: boolean };
 function ExpenseSpikeChart({ data }: { data: ExpensePoint[] }) {
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
+  if (!data.length) return null;
+
   const YAXIS_W = 40; const BAR_W = 36; const GAP = 16;
   const H = 130; const PAD_B = 24; const PAD_T = 30;
   const chartH   = H - PAD_B - PAD_T;
-  const niceMax  = Math.ceil(Math.max(...data.map(d => d.amount)) / 2) * 2 || 10;
+  const maxVal   = Math.max(...data.map(d => safeNum(d.amount)), 0);
+  const niceMax  = Math.max(Math.ceil(maxVal / 2) * 2, 1);
   const yTicks   = [0, niceMax / 2, niceMax];
   const barAreaW = (BAR_W + GAP) * data.length;
   const yAt      = (v: number) => PAD_T + chartH - (v / niceMax) * chartH;
@@ -252,19 +266,24 @@ function ReceivablesDonut({ segments }: { segments: DonutSegment[] }) {
   const SIZE = 130; const cx = SIZE / 2; const cy = SIZE / 2;
   const outerR = 52; const innerR = 30;
 
-  const total = segments.reduce((s, seg) => s + seg.pct, 0);
+  const visible = segments.filter(seg => safeNum(seg.pct) > 0);
+  const total = visible.reduce((s, seg) => s + safeNum(seg.pct), 0);
+  if (!visible.length || total <= 0) {
+    return <Text style={{ fontSize: 13, color: COLORS.textSecondary, paddingVertical: 8 }}>No receivables breakdown available</Text>;
+  }
+
   let angle   = -90;
-  const arcs  = segments.map((seg, i) => {
-    const sweep = (seg.pct / total) * 360;
+  const arcs  = visible.map((seg, i) => {
+    const sweep = Math.max((safeNum(seg.pct) / total) * 360, 1);
     const start = angle;
-    const end   = angle + sweep - 1.5; // gap between segments
+    const end   = angle + sweep - (visible.length > 1 ? 1.5 : 0);
     angle += sweep;
     const r    = activeIdx === i ? outerR + 5 : outerR;
     const path = donutArc(cx, cy, r, innerR, start, end);
     return { ...seg, path, idx: i };
-  });
+  }).filter(arc => arc.path);
 
-  const activeSeg = activeIdx !== null ? segments[activeIdx] : null;
+  const activeSeg = activeIdx !== null ? visible[activeIdx] : null;
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
@@ -302,9 +321,9 @@ function ReceivablesDonut({ segments }: { segments: DonutSegment[] }) {
 
       {/* Legend */}
       <View style={{ flex: 1, gap: 14 }}>
-        {segments.map((seg, i) => (
+        {visible.map((seg, i) => (
           <TouchableOpacity
-            key={i}
+            key={`${seg.label}-${i}`}
             style={dn.legendRow}
             onPress={() => setActiveIdx(activeIdx === i ? null : i)}
             activeOpacity={0.8}
@@ -378,8 +397,18 @@ export default function AIInsightsScreen() {
   [revenueForecast]);
 
   const expenseDataForChart = useMemo(() =>
-    expenseDataRaw.map((d: any) => ({ ...d, amount: (d.amount || 0) / 100000 })),
+    expenseDataRaw.map((d: any) => ({ ...d, amount: safeNum(d.amount) / 100000 })),
   [expenseDataRaw]);
+
+  const receivablesForChart = useMemo(() =>
+    receivablesAging
+      .filter((s: any) => safeNum(s.pct) > 0)
+      .map((s: any, i: number) => ({
+        label: s.label || `Bucket ${i + 1}`,
+        pct: safeNum(s.pct),
+        color: s.color || RECEIVABLE_COLORS[i % RECEIVABLE_COLORS.length],
+      })),
+  [receivablesAging]);
 
   // ── Revenue KPI badge from real summary data ─────────────────────────────────
   const revenueKPI = useMemo(() => {
@@ -642,10 +671,10 @@ export default function AIInsightsScreen() {
         {/* ──────────────────────────────────────────────────────────────── */}
         <View style={s.card}>
           <Text style={s.cardTitle}>Receivables Risk</Text>
-          {receivablesAging.length === 0 ? (
+          {receivablesForChart.length === 0 ? (
             <Text style={{ fontSize: 13, color: COLORS.textSecondary, paddingVertical: 8 }}>No outstanding receivables</Text>
           ) : (
-            <ReceivablesDonut segments={receivablesAging} />
+            <ReceivablesDonut segments={receivablesForChart} />
           )}
         </View>
 
