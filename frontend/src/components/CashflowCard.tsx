@@ -66,8 +66,9 @@ export default function CashflowCard({
   totalExpense,
 }: CashflowCardProps) {
   const router = useRouter();
-  const { formatAmountCompact } = useSettings();
+  const { formatAmountCompact, formatAmount } = useSettings();
   const fmt = (val: number) => formatAmountCompact(Math.round(val));
+  const fmtFull = (val: number) => formatAmount(Math.round(val));
   const incomeVal = totalIncome ?? 0;
   const expenseVal = totalExpense ?? 0;
   const maxVal = Math.max(incomeVal, expenseVal, 1);
@@ -143,12 +144,16 @@ export default function CashflowCard({
       <View style={s.bottomRow}>
         <View style={s.bottomCell}>
           <Text style={s.bottomLabel}>Gross Profit</Text>
-          <Text style={[s.bottomVal, { color: grossProfit >= 0 ? COLORS.positive : COLORS.negative }]}>{fmt(grossProfit)}</Text>
+          <Text style={[s.bottomVal, { color: grossProfit >= 0 ? COLORS.positive : COLORS.negative }]} numberOfLines={1} adjustsFontSizeToFit>
+            {fmtFull(grossProfit)}
+          </Text>
         </View>
         <View style={s.bottomSep} />
         <View style={[s.bottomCell, s.bottomCellRight]}>
           <Text style={s.bottomLabel}>Net Profit</Text>
-          <Text style={[s.bottomVal, { color: netProfit >= 0 ? COLORS.positive : COLORS.negative }]}>{fmt(netProfit)}</Text>
+          <Text style={[s.bottomVal, { color: netProfit >= 0 ? COLORS.positive : COLORS.negative }]} numberOfLines={1} adjustsFontSizeToFit>
+            {fmtFull(netProfit)}
+          </Text>
         </View>
       </View>
     </View>

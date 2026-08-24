@@ -139,8 +139,9 @@ export default function CashflowReportScreen() {
   const router = useRouter();
   const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
-  const { formatAmountCompact } = useSettings();
+  const { formatAmountCompact, formatAmount } = useSettings();
   const fmt = (v: number) => formatAmountCompact(Math.round(v));
+  const fmtFull = (v: number) => formatAmount(Math.round(v));
 
   const [period, setPeriod] = useState<Period>('7D');
   const [periodReady, setPeriodReady] = useState(false);
@@ -323,12 +324,12 @@ export default function CashflowReportScreen() {
           <View style={[s.metricsGrid, { marginTop: SPACING.sm }]}>
             <MetricCard
               label="Gross Profit"
-              value={fmt(Number(cf?.grossProfit ?? 0))}
+              value={fmtFull(Number(cf?.grossProfit ?? 0))}
               valueColor={Number(cf?.grossProfit ?? 0) >= 0 ? COLORS.positive : COLORS.negative}
             />
             <MetricCard
               label="Net Profit"
-              value={fmt(Number(cf?.netProfit ?? 0))}
+              value={fmtFull(Number(cf?.netProfit ?? 0))}
               valueColor={Number(cf?.netProfit ?? 0) >= 0 ? COLORS.positive : COLORS.negative}
             />
           </View>
