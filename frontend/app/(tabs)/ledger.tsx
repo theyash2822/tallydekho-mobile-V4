@@ -1278,14 +1278,14 @@ const fm = StyleSheet.create({
   tsOptionDesc: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
 });
 
-// ── Position hero: animated split bar + card ──────────────────────────────────
+// ── Position hero: sleek animated split bar + card ───────────────────────────
 function PositionBar({ recvPct, payPct }: { recvPct: number; payPct: number }) {
   const r = useRef(new Animated.Value(0)).current;
   const p = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.parallel([
       Animated.timing(r, { toValue: recvPct * 100, duration: 700, useNativeDriver: false }),
-      Animated.timing(p, { toValue: payPct * 100, duration: 700, delay: 120, useNativeDriver: false }),
+      Animated.timing(p, { toValue: payPct * 100, duration: 700, delay: 100, useNativeDriver: false }),
     ]).start();
   }, [recvPct, payPct]);
   const rw = r.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] });
@@ -1300,15 +1300,15 @@ function PositionBar({ recvPct, payPct }: { recvPct: number; payPct: number }) {
 
 const lp = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.cardBg, marginHorizontal: SPACING.md, marginTop: 10,
+    backgroundColor: COLORS.cardBg, marginHorizontal: SPACING.md, marginTop: 8, marginBottom: 8,
     borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault,
-    paddingHorizontal: SPACING.md, paddingVertical: 12, gap: 9,
+    paddingHorizontal: SPACING.md, paddingVertical: 9, gap: 7,
   },
   headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   label: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8 },
   net: { fontSize: TYPOGRAPHY.base, fontWeight: '800', letterSpacing: -0.3 },
-  barTrack: { flexDirection: 'row', height: 7, borderRadius: 3, overflow: 'hidden', backgroundColor: COLORS.borderDefault, gap: 2 },
-  barSeg: { height: 7, borderRadius: 2 },
+  barTrack: { flexDirection: 'row', height: 5, borderRadius: 3, overflow: 'hidden', backgroundColor: COLORS.borderDefault, gap: 2 },
+  barSeg: { height: 5, borderRadius: 3 },
   legendRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1 },
   dot: { width: 7, height: 7, borderRadius: 2 },
