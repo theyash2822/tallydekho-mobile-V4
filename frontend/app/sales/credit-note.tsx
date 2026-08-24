@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useApiData } from '../../src/hooks/useApiData';
 import { getCreditNotes } from '../../src/services/api';
+import SearchBar from '../../src/components/SearchBar';
 
 type CreditNoteRow = {
   id: string;
@@ -99,16 +100,7 @@ export default function CreditNotesScreen() {
         <EmptyState title="No credit notes" subtitle="No Sales Returns were found in the selected financial year." icon="return-up-back-outline" />
       ) : (
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-          <View style={s.search}>
-            <Ionicons name="search" size={17} color={COLORS.textTertiary} />
-            <TextInput
-              style={s.searchInput}
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Search voucher, party or reference..."
-              placeholderTextColor={COLORS.textTertiary}
-            />
-          </View>
+          <SearchBar value={search} onChangeText={setSearch} placeholder="Search voucher, party or reference..." />
 
           <View style={s.stats}>
             <View style={s.stat}><Text style={s.statValue}>{notesState.data?.length || 0}</Text><Text style={s.statLabel}>Documents</Text></View>
@@ -160,8 +152,6 @@ const s = StyleSheet.create({
   back: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.pageBg },
   title: { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
   scroll: { padding: SPACING.md, paddingBottom: 32, gap: 12 },
-  search: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 13, minHeight: 48, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
-  searchInput: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
   stats: { flexDirection: 'row', gap: 10 },
   stat: { flex: 1, padding: 14, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg },
   statValue: { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },

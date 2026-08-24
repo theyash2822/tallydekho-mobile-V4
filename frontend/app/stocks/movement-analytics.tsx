@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  ScrollView, TextInput,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import Svg, {
 } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+import SearchBar from '../../src/components/SearchBar';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
@@ -409,22 +410,12 @@ export default function MovementAnalyticsScreen() {
             </View>
 
             {/* ── Search bar ── */}
-            <View style={s.searchWrap}>
-              <Ionicons name="search-outline" size={16} color={COLORS.textTertiary} />
-              <TextInput
-                style={s.searchInput}
-                placeholder="Search stock by name or SKU…"
-                placeholderTextColor={COLORS.textTertiary}
-                value={search}
-                onChangeText={setSearch}
-                returnKeyType="search"
-              />
-              {search.length > 0 && (
-                <TouchableOpacity onPress={() => setSearch('')} activeOpacity={0.7}>
-                  <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-                </TouchableOpacity>
-              )}
-            </View>
+            <SearchBar
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search stock by name or SKU…"
+              inputProps={{ returnKeyType: 'search' }}
+            />
 
             {/* Section header */}
             <View style={s.sectionHdr}>
@@ -501,18 +492,6 @@ const s = StyleSheet.create({
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendDot:  { width: 8, height: 8, borderRadius: 4 },
   legendTxt:  { fontSize: 9, color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5 },
-
-  // Search
-  searchWrap: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    marginHorizontal: SPACING.md, marginBottom: SPACING.sm,
-    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-    paddingHorizontal: SPACING.sm, paddingVertical: 10,
-  },
-  searchInput: {
-    flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, paddingVertical: 0,
-  },
 
   // Section header
   sectionHdr: {

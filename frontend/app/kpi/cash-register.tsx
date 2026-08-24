@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, StyleSheet, TextInput, ActivityIndicator,
+  View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import { getVouchers } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import SearchBar from '../../src/components/SearchBar';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 type TxType = 'payment' | 'receipt' | 'contra';
@@ -203,21 +204,11 @@ export default function CashRegisterScreen() {
       </View>
 
       {/* Search Bar */}
-      <View style={s.searchRow}>
-        <Ionicons name="search-outline" size={16} color={COLORS.textTertiary} />
-        <TextInput
-          style={s.searchInput}
-          placeholder="Search transactions..."
-          placeholderTextColor={COLORS.textTertiary}
-          value={search}
-          onChangeText={setSearch}
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch('')} activeOpacity={0.7}>
-            <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-          </TouchableOpacity>
-        )}
-      </View>
+      <SearchBar
+        value={search}
+        onChangeText={setSearch}
+        placeholder="Search transactions..."
+      />
 
       {/* Inflow / Outflow Summary */}
       <View style={s.summaryRow}>
@@ -401,9 +392,6 @@ const s = StyleSheet.create({
   monthChipActive:  { backgroundColor: COLORS.textPrimary, borderColor: COLORS.textPrimary },
   monthChipTxt:     { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
   monthChipTxtActive: { color: '#fff' },
-
-  searchRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: SPACING.md, paddingVertical: 12, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  searchInput: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, padding: 0 },
 
   summaryRow:     { flexDirection: 'row', backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   summaryItem:    { flex: 1, paddingHorizontal: SPACING.md, paddingVertical: 14, alignItems: 'center' },

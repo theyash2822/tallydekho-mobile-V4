@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Modal,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal,
   Dimensions, Alert, Keyboard, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,6 +16,7 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { getLedgerDetail, getLedgerStatement, sendPaymentReminder } from '../../src/services/api';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import DateRangePickerModal, { parseDMY } from '../../src/components/DateRangePickerModal';
+import SearchBar from '../../src/components/SearchBar';
 
 const SCREEN_W = Dimensions.get('window').width;
 
@@ -283,7 +284,6 @@ export default function LedgerDetailScreen() {
   const [showCrOnly, setShowCrOnly] = useState(false);
   const [showInfo,   setShowInfo]   = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchFocused, setSearchFocused] = useState(false);
   const [fromDate,     setFromDate]     = useState('');
   const [toDate,       setToDate]       = useState('');
   const [showDateRange, setShowDateRange] = useState(false);
@@ -473,33 +473,13 @@ export default function LedgerDetailScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.searchBarWrap}>
-        <View style={[styles.searchBarFull, searchFocused && styles.searchBoxFocused]}>
-          <Ionicons
-            name="search-outline"
-            size={16}
-            color={searchFocused ? COLORS.brandPrimary : COLORS.textTertiary}
-          />
-          <TextInput
-            style={styles.searchInputFull}
-            placeholder="Search vouchers, type, amount..."
-            placeholderTextColor={COLORS.textTertiary}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-            selectionColor={COLORS.brandPrimary}
-            returnKeyType="search"
-            autoCorrect={false}
-            autoCapitalize="none"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
-              <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+      <SearchBar
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        placeholder="Search vouchers, type, amount..."
+        style={{ marginTop: 8, marginBottom: 8 }}
+        inputProps={{ selectionColor: COLORS.brandPrimary, autoCorrect: false, autoCapitalize: 'none' }}
+      />
 
       {/* ── Fixed top section (chart + controls) — does NOT scroll ── */}
       <Pressable style={styles.stickyTop} onPress={() => Keyboard.dismiss()}>
@@ -772,20 +752,6 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary, textAlign: 'center',
   },
   infoBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  searchBarWrap: {
-    backgroundColor: COLORS.cardBg,
-    paddingHorizontal: SPACING.md, paddingTop: 2, paddingBottom: 12,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-  },
-  searchBarFull: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md,
-    paddingHorizontal: 12, paddingVertical: 11,
-    borderWidth: 1.5, borderColor: COLORS.borderDefault,
-  },
-  searchInputFull: {
-    flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, paddingVertical: 0,
-  },
   scroll:  { flex: 1 },
 
   // ── Fixed top (chart + controls) — does NOT scroll ──
@@ -829,23 +795,6 @@ const styles = StyleSheet.create({
   filterRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingHorizontal: SPACING.md, paddingBottom: SPACING.sm,
-  },
-  searchBox: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md,
-    paddingHorizontal: 12, paddingVertical: 8,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  searchBoxFocused: {
-    borderColor: COLORS.brandPrimary,
-    borderWidth: 1.5,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: TYPOGRAPHY.xs,
-    color: COLORS.textPrimary,
-    paddingVertical: 0,      // remove extra android padding
-    minHeight: 20,
   },
   filterPill: {
     paddingHorizontal: 14, paddingVertical: 7,

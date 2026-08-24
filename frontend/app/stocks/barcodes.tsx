@@ -16,6 +16,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import SearchBar from '../../src/components/SearchBar';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useAuth } from '../../src/context/AuthContext';
 import {
@@ -713,22 +714,12 @@ export default function BarcodesScreen() {
       )}
 
       {/* ── Search bar */}
-      <View style={s.searchWrap}>
-        <Ionicons name="search-outline" size={16} color={COLORS.textTertiary} />
-        <TextInput
-          style={s.searchInput}
-          placeholder="Search by name, SKU or barcode..."
-          placeholderTextColor={COLORS.textTertiary}
-          value={search}
-          onChangeText={setSearch}
-          returnKeyType="search"
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch('')} activeOpacity={0.7}>
-            <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-          </TouchableOpacity>
-        )}
-      </View>
+      <SearchBar
+        value={search}
+        onChangeText={setSearch}
+        placeholder="Search by name, SKU or barcode..."
+        inputProps={{ returnKeyType: 'search' }}
+      />
 
       {/* ── Item list */}
       <FlatList

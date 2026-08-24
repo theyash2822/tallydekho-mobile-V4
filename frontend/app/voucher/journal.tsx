@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
   ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
@@ -11,6 +11,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { getVouchers } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
+import SearchBar from '../../src/components/SearchBar';
 
 export default function JournalVouchersScreen() {
   const { formatAmount, formatDate } = useSettings();
@@ -93,21 +94,7 @@ export default function JournalVouchersScreen() {
         contentContainerStyle={{ paddingBottom: 32 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
       >
-        <View style={s.search}>
-          <Ionicons name="search" size={16} color={COLORS.textTertiary} />
-          <TextInput
-            style={s.searchIn}
-            placeholder="Search ledger, voucher, ref..."
-            placeholderTextColor={COLORS.textTertiary}
-            value={search}
-            onChangeText={setSearch}
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-            </TouchableOpacity>
-          )}
-        </View>
+        <SearchBar value={search} onChangeText={setSearch} placeholder="Search ledger, voucher, ref..." />
 
         <View style={s.statsRow}>
           {[
@@ -186,12 +173,6 @@ const s = StyleSheet.create({
   back: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
   hdrTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
   hdrAct: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  search: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md,
-    marginHorizontal: SPACING.md, marginTop: SPACING.md, paddingHorizontal: 14, paddingVertical: 12,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  searchIn: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
   statsRow: { flexDirection: 'row', gap: 8, marginHorizontal: SPACING.md, marginTop: SPACING.md },
   stat: {
     flex: 1, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, padding: 12, alignItems: 'center',

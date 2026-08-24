@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { getVouchers } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
+import SearchBar from '../../src/components/SearchBar';
 
 const METHOD_COLORS: Record<string, string> = {
   NEFT: '#2563EB', RTGS: '#7C3AED', Cash: COLORS.positive, Cheque: COLORS.warning,
@@ -103,21 +104,7 @@ export default function PaymentVouchersScreen() {
         contentContainerStyle={{ paddingBottom: 32 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
       >
-        <View style={s.search}>
-          <Ionicons name="search" size={16} color={COLORS.textTertiary} />
-          <TextInput
-            style={s.searchIn}
-            placeholder="Search party, voucher no..."
-            placeholderTextColor={COLORS.textTertiary}
-            value={search}
-            onChangeText={setSearch}
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-            </TouchableOpacity>
-          )}
-        </View>
+        <SearchBar value={search} onChangeText={setSearch} placeholder="Search party, voucher no..." />
 
         <View style={s.statsRow}>
           <View style={s.stat}>
@@ -216,8 +203,6 @@ const s = StyleSheet.create({
   back: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
   hdrTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
   hdrAct: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  search: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, marginHorizontal: SPACING.md, marginTop: SPACING.md, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: COLORS.borderDefault },
-  searchIn: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
   statsRow: { flexDirection: 'row', gap: 8, marginHorizontal: SPACING.md, marginTop: SPACING.md },
   stat: { flex: 1, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: COLORS.borderDefault },
   statV: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },

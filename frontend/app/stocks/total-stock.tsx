@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  View, Text, ScrollView, FlatList, TouchableOpacity, StyleSheet, TextInput,
+  View, Text, ScrollView, FlatList, TouchableOpacity, StyleSheet,
   Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,6 +19,7 @@ import { StockTransferModal } from '../../src/components/forms/StockTransferModa
 import { StockAdjustmentModal } from '../../src/components/forms/StockAdjustmentModal';
 import { BulkTransferModal } from '../../src/components/forms/BulkTransferModal';
 import FilterBottomSheet, { FilterChipGroup } from '../../src/components/FilterBottomSheet';
+import SearchBar from '../../src/components/SearchBar';
 import { StockItem } from '../../src/data/stockData';
 import { useSettings } from '../../src/context/SettingsContext';
 
@@ -477,15 +478,7 @@ export default function TotalStockScreen() {
       </View>
 
       {/* ── Search bar ── */}
-      <View style={styles.searchWrap}>
-        <Ionicons name="search-outline" size={16} color={COLORS.textTertiary} />
-        <TextInput style={styles.searchInput} placeholder="Search items..." placeholderTextColor={COLORS.textTertiary} value={query} onChangeText={setQuery} />
-        {query.length > 0 && (
-          <TouchableOpacity onPress={() => setQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-          </TouchableOpacity>
-        )}
-      </View>
+      <SearchBar value={query} onChangeText={setQuery} placeholder="Search items..." />
 
       {/* ── Item list ── */}
       <FlatList
@@ -648,10 +641,6 @@ const styles = StyleSheet.create({
   summaryItem:  { flex: 1, alignItems: 'center' },
   summaryVal:   { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
   summaryLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
-
-  // Search
-  searchWrap:  { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: SPACING.md, marginTop: 12, marginBottom: 4, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.borderDefault },
-  searchInput: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, padding: 0 },
 
   // List
   scroll:       { flex: 1 },

@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  TextInput, ActivityIndicator,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,7 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
+import SearchBar from '../../src/components/SearchBar';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface TransferItem {
@@ -245,22 +246,12 @@ export default function TransferHistoryScreen() {
       </View>
 
       {/* Search bar */}
-      <View style={s.searchWrap}>
-        <Ionicons name="search-outline" size={18} color={COLORS.textTertiary} style={{ marginRight: 8 }} />
-        <TextInput
-          style={s.searchInput}
-          placeholder="Search by item or voucher no..."
-          placeholderTextColor={COLORS.textTertiary}
-          value={search}
-          onChangeText={setSearch}
-          returnKeyType="search"
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch('')} activeOpacity={0.7}>
-            <Ionicons name="close-circle" size={18} color={COLORS.textTertiary} />
-          </TouchableOpacity>
-        )}
-      </View>
+      <SearchBar
+        value={search}
+        onChangeText={setSearch}
+        placeholder="Search by item or voucher no..."
+        inputProps={{ returnKeyType: 'search' }}
+      />
 
       {/* Summary strip */}
       {!isLoading && total > 0 && (
@@ -329,18 +320,6 @@ const s = StyleSheet.create({
   headerTitle: {
     flex: 1, textAlign: 'center',
     fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary,
-  },
-
-  searchWrap: {
-    flexDirection: 'row', alignItems: 'center',
-    marginHorizontal: SPACING.md, marginVertical: SPACING.sm,
-    backgroundColor: COLORS.cardBg,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-    borderRadius: RADIUS.md, paddingHorizontal: SPACING.sm, paddingVertical: 10,
-  },
-  searchInput: {
-    flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary,
-    paddingVertical: 0,
   },
 
   summaryStrip: {

@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +10,7 @@ import { getNegativeStock } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
+import SearchBar from '../../src/components/SearchBar';
 
 const AMBER = '#A89060';
 
@@ -130,21 +130,7 @@ export default function NegativeStockScreen() {
 
       {/* ── Search */}
       {!isSelMode && (
-        <View style={s.searchBox}>
-          <Ionicons name="search-outline" size={16} color={COLORS.textTertiary} />
-          <TextInput
-            style={s.searchInput}
-            placeholder="Search products, group..."
-            placeholderTextColor={COLORS.textTertiary}
-            value={search}
-            onChangeText={setSearch}
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')} activeOpacity={0.7}>
-              <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-            </TouchableOpacity>
-          )}
-        </View>
+        <SearchBar value={search} onChangeText={setSearch} placeholder="Search products, group..." />
       )}
 
       {/* ── Loading */}
@@ -274,9 +260,6 @@ const s = StyleSheet.create({
   selBannerCancel: { fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
   selBannerCount:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   selBannerAll:    { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.brandPrimary },
-
-  searchBox:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: SPACING.md, marginTop: SPACING.md, marginBottom: SPACING.xs, backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md, paddingVertical: 12, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault },
-  searchInput: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
 
   hintRow: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: SPACING.md, paddingTop: 4, paddingBottom: 6 },
   hintTxt: { fontSize: 11, color: COLORS.textTertiary },

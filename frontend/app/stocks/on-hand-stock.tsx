@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import SearchBar from '../../src/components/SearchBar';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
@@ -155,21 +156,7 @@ export default function OnHandStockScreen() {
         ))}
       </View>
 
-      <View style={styles.searchWrap}>
-        <Ionicons name="search-outline" size={16} color={COLORS.textTertiary} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search items..."
-          placeholderTextColor={COLORS.textTertiary}
-          value={query}
-          onChangeText={setQuery}
-        />
-        {query.length > 0 && (
-          <TouchableOpacity onPress={() => setQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-          </TouchableOpacity>
-        )}
-      </View>
+      <SearchBar value={query} onChangeText={setQuery} placeholder="Search items..." />
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <Text style={styles.sectionLabel}>{filtered.length} items</Text>
@@ -233,14 +220,6 @@ const styles = StyleSheet.create({
   summaryItem: { flex: 1, alignItems: 'center' },
   summaryVal:  { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
   summaryLabel:{ fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
-  searchWrap: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    marginHorizontal: SPACING.md, marginTop: 12, marginBottom: 4,
-    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.md, paddingVertical: 10,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  searchInput: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, padding: 0 },
   scroll:  { flex: 1 },
   content: { padding: SPACING.md, gap: 8 },
   sectionLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textTertiary, marginBottom: 4 },

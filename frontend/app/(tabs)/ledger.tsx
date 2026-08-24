@@ -18,6 +18,7 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { useTranslation } from 'react-i18next';
 
 import FilterBottomSheet, { FilterRadioRow } from '../../src/components/FilterBottomSheet';
+import SearchBar from '../../src/components/SearchBar';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 
 type FilterType = 'All' | 'Debit' | 'Credit';
@@ -673,24 +674,7 @@ export default function LedgerScreen() {
       </View>
 
       {/* Search */}
-      <View style={styles.searchWrap}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={16} color={COLORS.textTertiary} />
-          <TextInput
-            testID="ledger-search"
-            style={styles.searchInput}
-            placeholder={t('ledger.searchPlaceholder')}
-            placeholderTextColor={COLORS.textTertiary}
-            value={search}
-            onChangeText={setSearch}
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')} activeOpacity={0.7}>
-              <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+      <SearchBar testID="ledger-search" value={search} onChangeText={setSearch} placeholder={t('ledger.searchPlaceholder')} />
 
       {/* Filter Bar: ≡ All ▾ dropdown  |  Hide Zero  |  Sort */}
       <View style={styles.tabRow}>
@@ -1044,18 +1028,6 @@ const styles = StyleSheet.create({
     width: 38, height: 38, borderRadius: RADIUS.sm,
     alignItems: 'center', justifyContent: 'center',
   },
-  searchWrap: {
-    paddingHorizontal: SPACING.md, paddingVertical: 10,
-    backgroundColor: COLORS.cardBg,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-  },
-  searchBar: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md,
-    paddingHorizontal: 12, paddingVertical: 9,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  searchInput: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary },
   tabRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: SPACING.md, paddingVertical: 8,

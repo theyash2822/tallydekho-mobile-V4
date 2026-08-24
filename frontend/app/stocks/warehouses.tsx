@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getWarehouses } from '../../src/services/api';
+import SearchBar from '../../src/components/SearchBar';
 import { useAuth } from '../../src/context/AuthContext';
 import { CardSkeleton } from '../../src/components/ShimmerPlaceholder';
 
@@ -142,21 +143,7 @@ export default function WarehousesScreen() {
       </View>
 
       {/* Search */}
-      <View style={styles.searchWrap}>
-        <Ionicons name="search-outline" size={16} color={COLORS.textTertiary} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search warehouses..."
-          placeholderTextColor={COLORS.textTertiary}
-          value={query}
-          onChangeText={setQuery}
-        />
-        {query.length > 0 && (
-          <TouchableOpacity onPress={() => setQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-          </TouchableOpacity>
-        )}
-      </View>
+      <SearchBar value={query} onChangeText={setQuery} placeholder="Search warehouses..." />
 
       <ScrollView
         style={styles.scroll}
@@ -269,17 +256,6 @@ const styles = StyleSheet.create({
   summaryItem: { flex: 1, alignItems: 'center' },
   summaryVal:  { fontSize: TYPOGRAPHY.xl, fontWeight: '800' },
   summaryLabel:{ fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
-
-  searchWrap: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    marginHorizontal: SPACING.md, marginTop: 12, marginBottom: 4,
-    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.md, paddingVertical: 10,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  searchInput: {
-    flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, padding: 0,
-  },
 
   scroll:  { flex: 1 },
   content: { padding: SPACING.md, gap: 10 },

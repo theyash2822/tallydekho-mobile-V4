@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Dimensions, Share, Alert, ActivityIndicator,
+  Dimensions, Share, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
@@ -12,6 +12,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { getPurchaseInvoices } from '../../src/services/api';
 import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
+import SearchBar from '../../src/components/SearchBar';
 import { useSettings } from '../../src/context/SettingsContext';
 
 const AMBER    = '#A89060';
@@ -250,21 +251,7 @@ export default function PurchaseRegisterScreen() {
       )}
 
       {/* ── Search ─────────────────────────────────────────────── */}
-      <View style={s.searchBar}>
-        <Ionicons name="search" size={16} color={COLORS.textTertiary} />
-        <TextInput
-          style={s.searchInput}
-          placeholder="Search invoices, vendors..."
-          placeholderTextColor={COLORS.textTertiary}
-          value={search}
-          onChangeText={setSearch}
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-          </TouchableOpacity>
-        )}
-      </View>
+      <SearchBar value={search} onChangeText={setSearch} placeholder="Search invoices, vendors..." />
 
       {apiError && <ErrorBanner message={apiError} onRetry={() => { setApiError(null); }} />}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: isSelecting ? 120 : 40 }}>
@@ -449,9 +436,6 @@ const s = StyleSheet.create({
   dropTxt:       { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
   dropTxtActive: { color: COLORS.textPrimary, fontWeight: '700' },
   dropOverlay:   { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50 },
-
-  searchBar:   { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.cardBg, marginHorizontal: SPACING.md, marginTop: SPACING.md, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: COLORS.borderDefault },
-  searchInput: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
 
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: SPACING.md, marginTop: SPACING.md, gap: 10 },
   statCell:  { width: (SW - SPACING.md * 2 - 10) / 2, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, padding: 14, borderWidth: 1, borderColor: COLORS.borderDefault },

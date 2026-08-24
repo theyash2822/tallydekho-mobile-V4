@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,6 +13,7 @@ import Toast from 'react-native-toast-message';
 import { useAuth } from '../../src/context/AuthContext';
 import { getEWBList, getEWBPending, generateEWayBill } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
+import SearchBar from '../../src/components/SearchBar';
 import { shareCompliancePdfSafely } from '../../src/utils/voucherPdf';
 
 const EWB_COLORS: Record<string, string> = {
@@ -201,21 +202,7 @@ export default function EWayBillScreen() {
         </View>
 
         {/* Search */}
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={16} color={COLORS.textTertiary} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by company or EWB number..."
-            placeholderTextColor={COLORS.textTertiary}
-            value={search}
-            onChangeText={setSearch}
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-            </TouchableOpacity>
-          )}
-        </View>
+        <SearchBar value={search} onChangeText={setSearch} placeholder="Search by company or EWB number..." />
 
         {/* Status Summary Cards */}
         <View style={styles.summaryRow}>
@@ -403,15 +390,6 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: COLORS.borderDefault, flex: 1,
   },
   dropdownText: { flex: 1, fontSize: 12, color: COLORS.textSecondary },
-
-  searchBar: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md,
-    marginHorizontal: SPACING.md, marginTop: SPACING.sm,
-    paddingHorizontal: 14, paddingVertical: 12,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  searchInput: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
 
   summaryRow:   { flexDirection: 'row', gap: 8, marginHorizontal: SPACING.md, marginTop: SPACING.md },
   summaryCard: {

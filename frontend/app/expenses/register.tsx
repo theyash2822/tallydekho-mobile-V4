@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Dimensions, Share, Alert, ActivityIndicator,
+  Dimensions, Share, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
+import SearchBar from '../../src/components/SearchBar';
 import { useAuth } from '../../src/context/AuthContext';
 import { getExpenses } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
@@ -256,21 +257,7 @@ export default function ExpenseRegisterScreen() {
       )}
 
       {/* ── Search ─────────────────────────────────────────────── */}
-      <View style={s.searchBar}>
-        <Ionicons name="search" size={16} color={COLORS.textTertiary} />
-        <TextInput
-          style={s.searchInput}
-          placeholder="Search expenses, parties..."
-          placeholderTextColor={COLORS.textTertiary}
-          value={search}
-          onChangeText={setSearch}
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-          </TouchableOpacity>
-        )}
-      </View>
+      <SearchBar value={search} onChangeText={setSearch} placeholder="Search expenses, parties..." />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: isSelecting ? 120 : 40 }}>
 
@@ -459,9 +446,6 @@ const s = StyleSheet.create({
   dropTxt:     { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
   dropTxtActive: { color: COLORS.textPrimary, fontWeight: '700' },
   dropOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50 },
-
-  searchBar:   { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.cardBg, marginHorizontal: SPACING.md, marginTop: SPACING.md, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: COLORS.borderDefault },
-  searchInput: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
 
   // Stats row (2-col horizontal)
   statsRow:    { flexDirection: 'row', marginHorizontal: SPACING.md, marginTop: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },

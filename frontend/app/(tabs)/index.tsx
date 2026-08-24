@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  RefreshControl, FlatList, AppState, TextInput,
-  Modal, Animated, KeyboardAvoidingView, Platform, Dimensions,
-  NativeSyntheticEvent, NativeScrollEvent, Vibration,
+  RefreshControl, FlatList, AppState,
+  KeyboardAvoidingView, Platform, Dimensions,
+  NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -16,6 +16,7 @@ import ShimmerPlaceholder, { KPICardSkeleton, MetricCardSkeleton, ActivityRowSke
 
 const { width: SW } = Dimensions.get('window');
 import Header from '../../src/components/Header';
+import SearchBar from '../../src/components/SearchBar';
 import CashflowCard from '../../src/components/CashflowCard';
 import ModuleTiles from '../../src/components/ModuleTiles';
 import RecentActivity from '../../src/components/RecentActivity';
@@ -24,7 +25,6 @@ import {
   getKPIStrip, getMetrics, getCashflow, getRecentActivity, getTallySyncStatus, getNotifications,
   searchDashboard,
 } from '../../src/services/api';
-import { useVoiceSearch } from '../../src/hooks/useVoiceSearch';
 import Toast from 'react-native-toast-message';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useTranslation } from 'react-i18next';
@@ -68,24 +68,8 @@ export default function HomeScreen() {
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchFocused, setSearchFocused] = useState(false);
-  const [showMicModal, setShowMicModal] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const micScale = useRef(new Animated.Value(1)).current;
-  const micOpacity = useRef(new Animated.Value(0.7)).current;
-  const micAnimRef = useRef<Animated.CompositeAnimation | null>(null);
-  const voiceStartedRef = useRef(false);
-  const wasListeningRef = useRef(false);
-  const {
-    isListening: voiceListening,
-    transcript: voiceTranscript,
-    error: voiceError,
-    start: startVoice,
-    stop: stopVoice,
-    abort: abortVoice,
-    getResultText,
-  } = useVoiceSearch();
 
   // KPI Carousel — driven by SettingsContext (no AsyncStorage race condition)
   const { settings, formatAmount, formatAmountCompact } = useSettings();
@@ -295,96 +279,6 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  // ── Mic / Voice search ───────────────────────────────────────────────────
-  const stopMicAnimation = () => {
-    micAnimRef.current?.stop();
-    micAnimRef.current = null;
-    micScale.stopAnimation();
-    micScale.setValue(1);
-    micOpacity.stopAnimation();
-    micOpacity.setValue(0.7);
-  };
-
-  const startMicAnimation = () => {
-    stopMicAnimation();
-    micAnimRef.current = Animated.loop(
-      Animated.sequence([
-        Animated.parallel([
-          Animated.timing(micScale, { toValue: 1.4, duration: 700, useNativeDriver: true }),
-          Animated.timing(micOpacity, { toValue: 0.15, duration: 700, useNativeDriver: true }),
-        ]),
-        Animated.parallel([
-          Animated.timing(micScale, { toValue: 1, duration: 700, useNativeDriver: true }),
-          Animated.timing(micOpacity, { toValue: 0.7, duration: 700, useNativeDriver: true }),
-        ]),
-      ])
-    );
-    micAnimRef.current.start();
-  };
-
-  const finishVoiceSession = useCallback(() => {
-    voiceStartedRef.current = false;
-    wasListeningRef.current = false;
-    stopMicAnimation();
-    setShowMicModal(false);
-    const text = getResultText();
-    if (text) {
-      setSearchQuery(text);
-      setSearchFocused(true);
-    } else if (voiceError) {
-      Toast.show({ type: 'error', text1: voiceError });
-    }
-  }, [getResultText, voiceError]);
-
-  const cancelVoiceModal = useCallback(() => {
-    voiceStartedRef.current = false;
-    wasListeningRef.current = false;
-    abortVoice();
-    stopMicAnimation();
-    setShowMicModal(false);
-  }, [abortVoice]);
-
-  useEffect(() => {
-    if (voiceListening) wasListeningRef.current = true;
-  }, [voiceListening]);
-
-  useEffect(() => {
-    if (!showMicModal || voiceListening || !voiceStartedRef.current || !wasListeningRef.current) return;
-    finishVoiceSession();
-  }, [voiceListening, showMicModal, finishVoiceSession]);
-
-  useEffect(() => () => {
-    abortVoice();
-    stopMicAnimation();
-  }, [abortVoice]);
-
-  const handleMicPress = () => {
-    Vibration.vibrate(80);
-    setSearchFocused(false);
-    setTimeout(async () => {
-      wasListeningRef.current = false;
-      setShowMicModal(true);
-      startMicAnimation();
-      voiceStartedRef.current = true;
-      const result = await startVoice();
-      if (!result.ok) {
-        voiceStartedRef.current = false;
-        stopMicAnimation();
-        setShowMicModal(false);
-        if (result.error) {
-          Toast.show({ type: 'error', text1: result.error });
-        }
-      }
-    }, 100);
-  };
-
-  const clearSearch = () => {
-    setSearchQuery('');
-    setSearchFocused(false);
-    setSearchResults([]);
-    cancelVoiceModal();
-  };
-
   // ── KPI row render ────────────────────────────────────────────────────────
   const renderKPI = ({ item }: any) => (
     <View style={styles.kpiItem}>
@@ -439,31 +333,13 @@ export default function HomeScreen() {
 
       {/* ── Real Search Bar ── */}
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={styles.searchWrap}>
-          <View style={[styles.searchBar, searchFocused && styles.searchBarFocused]}>
-            <Ionicons name="search" size={16} color={searchFocused ? COLORS.brandPrimary : COLORS.textTertiary} />
-            <TextInput
-              testID="search-bar"
-              style={styles.searchInput}
-              placeholder={t('dashboard.searchPlaceholder')}
-              placeholderTextColor={COLORS.textTertiary}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => { if (!searchQuery) setSearchFocused(false); }}
-              returnKeyType="search"
-            />
-            {searchQuery ? (
-              <TouchableOpacity onPress={clearSearch} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close-circle" size={16} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity onPress={handleMicPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="mic-outline" size={16} color={COLORS.textTertiary} />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
+        <SearchBar
+          testID="search-bar"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder={t('dashboard.searchPlaceholder')}
+          style={{ marginTop: 8, marginBottom: 8 }}
+        />
       </KeyboardAvoidingView>
 
       <ScrollView
@@ -565,49 +441,12 @@ export default function HomeScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
-
-      {/* ── Mic "Speak Now" Modal ── */}
-      <Modal visible={showMicModal} transparent animationType="fade" onRequestClose={finishVoiceSession}>
-        <TouchableOpacity style={styles.micBackdrop} activeOpacity={1} onPress={cancelVoiceModal}>
-          <TouchableOpacity style={styles.micCard} activeOpacity={1} onPress={() => {}}>
-            <View style={styles.micRingOuter}>
-              <Animated.View style={[styles.micRingPulse, { transform: [{ scale: micScale }], opacity: micOpacity }]} />
-              <View style={styles.micCircle}>
-                <Ionicons name="mic" size={32} color={COLORS.white} />
-              </View>
-            </View>
-            <Text style={styles.micListeningText}>
-              {voiceError ? voiceError : voiceListening ? t('dashboard.listening') : t('dashboard.speakNow')}
-            </Text>
-            <Text style={styles.micHint} numberOfLines={2}>
-              {voiceTranscript || (voiceListening ? t('dashboard.speakNow') : '')}
-            </Text>
-            {voiceListening && (
-              <TouchableOpacity style={styles.micStopBtn} onPress={() => stopVoice()} activeOpacity={0.7}>
-                <Text style={styles.micStopText}>{t('dashboard.stopListening')}</Text>
-              </TouchableOpacity>
-            )}
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.pageBg },
-  searchWrap: { backgroundColor: COLORS.cardBg, paddingHorizontal: SPACING.md, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  searchBar: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full,
-    paddingHorizontal: 14, paddingVertical: 10,
-    borderWidth: 1.5, borderColor: COLORS.borderDefault,
-  },
-  searchBarFocused: { borderColor: COLORS.brandPrimary },
-  searchInput: {
-    flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary,
-    paddingVertical: 0,
-  },
   scroll: { flex: 1 },
   syncBanner: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -699,38 +538,4 @@ const styles = StyleSheet.create({
   // ── Empty search state ────────────────────────────────────────────────────
   emptySearch: { alignItems: 'center' as const, paddingVertical: 40, gap: 10 },
   emptySearchText: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
-
-  // ── Mic Modal ─────────────────────────────────────────────────────────────
-  micBackdrop: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center' as const, justifyContent: 'flex-end' as const, paddingBottom: 80,
-  },
-  micCard: {
-    backgroundColor: COLORS.cardBg,
-    borderRadius: RADIUS.xl, padding: 36,
-    alignItems: 'center' as const, gap: 12, width: 220,
-  },
-  micRingOuter: {
-    alignItems: 'center' as const, justifyContent: 'center' as const, width: 100, height: 100,
-  },
-  micRingPulse: {
-    position: 'absolute' as const,
-    width: 100, height: 100, borderRadius: 50,
-    backgroundColor: COLORS.brandPrimary,
-  },
-  micCircle: {
-    width: 64, height: 64, borderRadius: 32,
-    backgroundColor: COLORS.brandPrimary,
-    alignItems: 'center' as const, justifyContent: 'center' as const,
-  },
-  micListeningText: { fontSize: TYPOGRAPHY.md, fontWeight: '700' as const, color: COLORS.textPrimary },
-  micHint: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, textAlign: 'center' as const, marginTop: 4 },
-  micStopBtn: {
-    marginTop: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: 8,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.brandPrimary,
-  },
-  micStopText: { color: COLORS.white, fontSize: TYPOGRAPHY.sm, fontWeight: '600' as const },
 });
