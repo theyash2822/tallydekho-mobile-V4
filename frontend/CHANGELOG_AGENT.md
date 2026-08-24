@@ -8,6 +8,7 @@
 ### Changed
 - 24 list screens now use `SearchBar` (Home, Ledger, registers, vouchers, stock lists, cash register, etc.).
 - Mic on all list search bars; data-entry modals (`BottomSheetSearch`, create forms, picker sheets) unchanged (no mic).
+- Ledger tab: Position hero (net receivable/payable, top debtor/creditor) from existing `getLedgers` data — ported from `Thursday-Friday-21Aug2026` without branch merge (branch used mocks).
 
 ### QA
 - GREEN FLAG — mobile-only UI; `tsc` clean. Test on `cursor` branch (`14b5eae9`).
