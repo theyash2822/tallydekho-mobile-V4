@@ -427,7 +427,7 @@ export default function LedgerScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { company, selectedFY, lastSyncAt } = useAuth();
-  const { formatAmount } = useSettings();
+  const { formatAmount, formatAmountCompact } = useSettings();
   const companyGuid = company?.guid;
   const filterBtnRef = useRef<View>(null);
   const [data, setData] = useState<LedgerItem[]>([]);
@@ -697,19 +697,19 @@ export default function LedgerScreen() {
             <Text style={lp.label}>Position</Text>
             <Text style={[lp.net, { color: position.net >= 0 ? COLORS.positive : COLORS.negative }]}>
               {position.net >= 0 ? 'Net Receivable ' : 'Net Payable '}
-              {formatAmount(Math.abs(position.net))}
+              {formatAmountCompact(Math.abs(position.net))}
             </Text>
           </View>
           <PositionBar recvPct={position.recvPct} payPct={position.payPct} />
           <View style={lp.legendRow}>
             <View style={lp.legendItem}>
               <View style={[lp.dot, { backgroundColor: COLORS.positive }]} />
-              <Text style={lp.legTxt}>Receivable {formatAmount(position.recv)}</Text>
+              <Text style={lp.legTxt}>Receivable {formatAmountCompact(position.recv)}</Text>
               <Text style={lp.legCount}>· {position.dCount}</Text>
             </View>
             <View style={lp.legendItem}>
               <View style={[lp.dot, { backgroundColor: COLORS.negative }]} />
-              <Text style={lp.legTxt}>Payable {formatAmount(position.pay)}</Text>
+              <Text style={lp.legTxt}>Payable {formatAmountCompact(position.pay)}</Text>
               <Text style={lp.legCount}>· {position.cCount}</Text>
             </View>
           </View>
@@ -724,7 +724,7 @@ export default function LedgerScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={lp.chipLbl}>Top Debtor</Text>
                   <Text style={lp.chipName} numberOfLines={1}>{position.topDebtor.name}</Text>
-                  <Text style={lp.chipAmt}>{position.topDebtor.balance}</Text>
+                  <Text style={lp.chipAmt}>{formatAmountCompact(parseBalance(position.topDebtor.balance))}</Text>
                 </View>
               </TouchableOpacity>
             )}
@@ -738,7 +738,7 @@ export default function LedgerScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={lp.chipLbl}>Top Creditor</Text>
                   <Text style={lp.chipName} numberOfLines={1}>{position.topCreditor.name}</Text>
-                  <Text style={lp.chipAmt}>{position.topCreditor.balance}</Text>
+                  <Text style={lp.chipAmt}>{formatAmountCompact(parseBalance(position.topCreditor.balance))}</Text>
                 </View>
               </TouchableOpacity>
             )}
