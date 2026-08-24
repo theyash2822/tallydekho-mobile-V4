@@ -1,3 +1,9 @@
+## [2026-08-24] Cashflow Income/Expense → Receipts/Payments
+
+### Changed
+- Home Cashflow + cashflow report bars now reflect **Receipts** (inflow) and **Payments** (outflow), not Sales/Purchase
+- Labels updated on `CashflowCard` and cashflow report
+
 ## [2026-08-24] Payments + Receipts KPI screens: real API data
 
 ### Fixed
