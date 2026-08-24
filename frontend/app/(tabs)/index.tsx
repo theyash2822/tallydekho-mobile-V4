@@ -152,27 +152,23 @@ export default function HomeScreen() {
   // ── Data loading ─────────────────────────────────────────────────────────
   const [isLoading, setIsLoading] = useState(true);
 
-  // Parse 'FY YYYY-YY' label into ISO date range for API calls
-  const parseFYDates = useCallback((fyLabel: string) => {
-    const match = fyLabel?.match(/FY (\d{4})-(\d{2})/);
-    if (!match) return null;
-    const startYear = parseInt(match[1]);
-    const endYear = startYear + 1;
-    return { from: `${startYear}-04-01`, to: `${endYear}-03-31` };
-  }, []);
+  // Keep header FY label in sync with AuthContext (Header owns the picker)
+  useEffect(() => {
+    if (selectedFY?.label) setActiveFY(selectedFY.label);
+  }, [selectedFY?.label]);
 
   const handleFYChange = useCallback((fy: string) => {
     setActiveFY(fy);
-    // FY change triggers loadData via useEffect (activeFY dep), no manual mock needed
+    // selectedFY in AuthContext is updated by Header; loadData deps pick it up
   }, []);
 
   const loadData = useCallback(async () => {
     // ── DATA GATE ──────────────────────────────────────────────
-    // Unpaired: show demo data immediately, no API calls.
-    // Paired: fetch real data and show skeletons while loading.
+    // Unpaired: show empty state, no API calls.
+    // Paired but no companyGuid yet: wait (Auth poll adopts company).
+    // Paired + company: fetch real data.
     // ─────────────────────────────────────────────────
     if (!isPaired) {
-      // Not paired: show empty state, no mock data
       setKpiData([]);
       setMetrics([]);
       setCashflow(null);
@@ -180,11 +176,19 @@ export default function HomeScreen() {
       setIsLoading(false);
       return;
     }
+    if (!companyGuid) {
+      // Paired but company not hydrated yet — keep loading, avoid MISSING_COMPANY spam
+      setIsLoading(true);
+      return;
+    }
 
     setIsLoading(true);
     setApiError(null);
     try {
-      const { from, to } = resolvePeriodDates(activeFilter as DashboardPeriod);
+      const { from, to } = resolvePeriodDates(activeFilter as DashboardPeriod, {
+        from: selectedFY?.startDate,
+        to: selectedFY?.endDate,
+      });
 
       const [kpi, met, cf, act] = await Promise.all([
         getKPIStrip(companyGuid, activeFilter, from, to),
@@ -212,7 +216,7 @@ export default function HomeScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [isPaired, activeFilter, companyGuid, lastSyncAt]);
+  }, [isPaired, activeFilter, companyGuid, lastSyncAt, selectedFY?.startDate, selectedFY?.endDate]);
 
   useEffect(() => { loadData(); }, [loadData]);
 

@@ -137,7 +137,7 @@ const mc = StyleSheet.create({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function CashflowReportScreen() {
   const router = useRouter();
-  const { company } = useAuth();
+  const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
   const { formatAmountCompact } = useSettings();
   const fmt = (v: number) => formatAmountCompact(Math.round(v));
@@ -172,7 +172,10 @@ export default function CashflowReportScreen() {
     setLoading(true);
     setApiError(null);
     try {
-      const { from, to } = resolvePeriodDates(period as DashboardPeriod);
+      const { from, to } = resolvePeriodDates(period as DashboardPeriod, {
+        from: selectedFY?.startDate,
+        to: selectedFY?.endDate,
+      });
       const data = await getCashflow(companyGuid, period, from, to);
       setCf(data);
     } catch (err: any) {
@@ -180,7 +183,7 @@ export default function CashflowReportScreen() {
     } finally {
       setLoading(false);
     }
-  }, [companyGuid, period, periodReady]);
+  }, [companyGuid, period, periodReady, selectedFY?.startDate, selectedFY?.endDate]);
 
   useEffect(() => { load(); }, [load]);
 

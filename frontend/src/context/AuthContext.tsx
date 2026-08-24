@@ -102,7 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [company, setCompanyState] = useState<Company | null>(null);
   const [user, setUserState] = useState<UserInfo | null>(null);
 
-  const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.240:3001';
+  const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.241:3001';
 
   // Restore persisted state on mount
   useEffect(() => {
@@ -211,10 +211,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { is_paired, desktop_online, company: statusCompany } = json.data ?? {};
         if (typeof is_paired === 'boolean') {
           setIsPairedState(prev => {
-            const wasUnpaired = !prev && is_paired;
             AsyncStorage.setItem('is_paired', is_paired ? 'true' : 'false').catch(() => {});
-            // Pairing transition with no cached company → adopt status company
-            if (wasUnpaired && is_paired && statusCompany?.guid) {
+            // Already paired with no company → adopt status company
+            if (is_paired && statusCompany?.guid) {
               setCompanyState(cur => {
                 if (cur?.guid) return cur;
                 const c = { guid: statusCompany.guid, name: statusCompany.name, gstin: statusCompany.gstin || null };
@@ -252,10 +251,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } catch { /* keep cached */ }
         }
 
-        // Track last_seen changes — when desktop syncs, last_seen advances
-        const deviceLastSeen = json.data?.device?.last_seen;
-        if (deviceLastSeen && typeof deviceLastSeen === 'number') {
-          setLastSyncAt(prev => (deviceLastSeen * 1000) > prev ? (deviceLastSeen * 1000) : prev);
+        // Track last_seen changes — when desktop syncs, last_seen advances.
+        // pg bigint / JSON may arrive as string — coerce with Number().
+        const deviceLastSeen = Number(json.data?.device?.last_seen);
+        if (Number.isFinite(deviceLastSeen) && deviceLastSeen > 0) {
+          const ms = deviceLastSeen * 1000;
+          setLastSyncAt(prev => (ms > prev ? ms : prev));
         }
       } catch {
         // Network error — don't change state, keep showing cached

@@ -1,3 +1,12 @@
+## [2026-08-24] Home dashboard refresh + FY period clamp
+
+### Fixed
+- **AuthContext** — coerce `last_seen` with `Number()` so `lastSyncAt` advances after desktop sync (pg bigint was a string; `typeof === 'number'` never matched)
+- Adopt company when paired with empty company cache (avoids MISSING_COMPANY)
+- **Home** — gate dashboard fetch on `companyGuid`; clamp 7D/1M/3M/6M windows inside selected FY
+- **Cashflow report** — same FY clamp for period dates
+- **periodDates.ts** — past FY anchors to last N days of that FY
+
 ## [2026-08-22] AI Insights crash + duplicate list keys
 
 ### Fixed
