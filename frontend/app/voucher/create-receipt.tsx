@@ -9,7 +9,7 @@
  *   • On submit → success overlay with [Preview] button → routes to /voucher/receipt-preview
  *
  * Receipt-specific behaviors (per user 2026-07-09 / 2026-07-13):
- *   • Party picker = existing Sundry Debtors default + "Show all parties" toggle.
+ *   • Party = Sundry Debtors → Incomes → All ledgers (tap filter to cycle)
  *     NO "+ Add Customer" button (per user rule: only Sales/Purchase Invoice get inline add).
  *   • Party balance chip shown after party selected.
  *   • Payment method: Cash → Cash ledger dropdown | others → Bank ledger dropdown.
@@ -107,22 +107,41 @@ export default function CreateReceiptVoucher() {
     if (entryType === 'regular') setDate(todayStr());
   }, [entryType]);
 
-  // ── Party picker ──────────────────────────────────────────────────────────
-  const [showAllParties, setShowAllParties] = useState(false);
+  // ── Party picker (Debtors → Incomes → All) ────────────────────────────────
+  type PartyFilter = 'customer' | 'income' | 'all';
+  const [partyFilter, setPartyFilter] = useState<PartyFilter>('customer');
   const [parties, setParties] = useState<BSSOption[]>([]);
   const [party, setParty] = useState('');
   const [partyData, setPartyData] = useState<any>(null);
 
+  const partyFilterLabel =
+    partyFilter === 'customer' ? 'Sundry Debtors ▾'
+      : partyFilter === 'income' ? '★ Incomes ▾'
+        : '★ All ledgers ▾';
+
+  const cyclePartyFilter = () => {
+    setPartyFilter(prev => (prev === 'customer' ? 'income' : prev === 'income' ? 'all' : 'customer'));
+    setParty('');
+    setPartyData(null);
+  };
+
   const loadParties = useCallback(async () => {
     if (!company?.guid) return;
     try {
-      const res: any = await getParties(company.guid, showAllParties ? undefined : 'customer');
+      const params =
+        partyFilter === 'customer' ? { type: 'customer' }
+          : partyFilter === 'income' ? { type: 'income' }
+            : undefined;
+      const res: any = await getParties(company.guid, params);
       const list = (res?.data || []).map((p: any) => ({
-        label: p.name, value: p.name, data: p,
+        label: p.name,
+        value: p.name,
+        subtitle: p.parent || undefined,
+        data: p,
       }));
       setParties(list);
     } catch (e) { /* silent */ }
-  }, [company?.guid, showAllParties]);
+  }, [company?.guid, partyFilter]);
   useEffect(() => { loadParties(); }, [loadParties]);
 
   // ── Outstanding bills for selected party ──────────────────────────────────
@@ -376,21 +395,34 @@ export default function CreateReceiptVoucher() {
           {/* ── Party ────────────────────────────────────────────────── */}
           <View style={s.section}>
             <View style={s.sectionHead}>
-              <Text style={s.sectionTitle}>Party</Text>
-              <TouchableOpacity onPress={() => setShowAllParties(v => !v)} activeOpacity={0.8}>
-                <Text style={s.linkTxt}>{showAllParties ? '★ All parties' : 'Sundry Debtors ▾'}</Text>
+              <Text style={s.sectionTitle}>Party / Ledger</Text>
+              <TouchableOpacity onPress={cyclePartyFilter} activeOpacity={0.8}>
+                <Text style={s.linkTxt}>{partyFilterLabel}</Text>
               </TouchableOpacity>
             </View>
             <BottomSheetSearch
-              label="Party Ledger" required
-              placeholder="Search party..."
+              label={partyFilter === 'income' ? 'Income Ledger' : 'Party Ledger'}
+              required
+              placeholder={
+                partyFilter === 'income' ? 'Search income ledger…'
+                  : partyFilter === 'all' ? 'Search any ledger…'
+                    : 'Search party...'
+              }
               options={parties}
               value={party}
               onSelect={(opt) => { setParty(opt.value); setPartyData(opt.data || null); }}
               onClear={() => { setParty(''); setPartyData(null); }}
             />
+            {partyFilter === 'income' && !party && (
+              <Text style={s.hintTxt}>
+                Showing Direct / Indirect Incomes — tap the filter to switch back to Debtors.
+              </Text>
+            )}
             {!!party && (
               <View style={s.chipRow}>
+                {!!partyData?.parent && (
+                  <View style={s.chip}><Text style={s.chipTxt}>{partyData.parent}</Text></View>
+                )}
                 {!!partyData?.gstin && <View style={s.chip}><Text style={s.chipTxt}>GSTIN: {partyData.gstin}</Text></View>}
                 {totalPending > 0 && (
                   <View style={[s.chip, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B44' }]}>
@@ -758,6 +790,7 @@ const s = StyleSheet.create({
   emptyBlock: { padding: 16, gap: 6, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg, alignItems: 'flex-start' },
   emptyTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   emptySub: { fontSize: 12, color: COLORS.textTertiary, lineHeight: 17 },
+  hintTxt: { fontSize: 12, color: COLORS.textTertiary, marginTop: 8, lineHeight: 17 },
   allocFooter: { padding: 14, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg, gap: 6, marginTop: 2 },
   allocRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   allocLbl: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
