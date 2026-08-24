@@ -746,8 +746,16 @@ export default function LedgerScreen() {
         </View>
       )}
 
-      {/* Search */}
-      <SearchBar testID="ledger-search" value={search} onChangeText={setSearch} placeholder={t('ledger.searchPlaceholder')} />
+      {/* Search — inset bar aligned with Position card width */}
+      <View style={styles.searchSection}>
+        <SearchBar
+          testID="ledger-search"
+          value={search}
+          onChangeText={setSearch}
+          placeholder={t('ledger.searchPlaceholder')}
+          style={styles.searchBarInset}
+        />
+      </View>
 
       {/* Filter Bar: ≡ All ▾ dropdown  |  Hide Zero  |  Sort */}
       <View style={styles.tabRow}>
@@ -1101,6 +1109,18 @@ const styles = StyleSheet.create({
     width: 38, height: 38, borderRadius: RADIUS.sm,
     alignItems: 'center', justifyContent: 'center',
   },
+  searchSection: {
+    paddingTop: 8,
+    paddingBottom: 10,
+    backgroundColor: COLORS.cardBg,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderDefault,
+  },
+  searchBarInset: {
+    marginTop: 0,
+    marginBottom: 0,
+    marginHorizontal: SPACING.md,
+  },
   tabRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: SPACING.md, paddingVertical: 8,
@@ -1430,7 +1450,7 @@ function PositionBar({ recvPct, payPct }: { recvPct: number; payPct: number }) {
 
 const lp = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.cardBg, marginHorizontal: SPACING.md, marginTop: 8, marginBottom: 8,
+    backgroundColor: COLORS.cardBg, marginHorizontal: SPACING.md, marginTop: 8, marginBottom: 4,
     borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault,
     paddingHorizontal: SPACING.md, paddingVertical: 9, gap: 7,
   },
