@@ -13,7 +13,7 @@ import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeabl
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { createBankLedger } from '../../src/services/api';
+import { createBankLedger, getBankLedgers } from '../../src/services/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types & Constants
@@ -53,12 +53,6 @@ const ACCOUNT_TYPES: AccountType[] = ['SAVING', 'CURRENT', 'OD', 'CC'];
 const EMPTY_FORM: BankFormData = {
   accountNumber: '', ifsc: '', bankName: '', branch: '', accountType: 'SAVING',
 };
-
-const MOCK_ACCOUNTS: BankAccount[] = [
-  { id: '1', accountNumber: '1234767680002253', ifsc: 'HDFC0090923', bankName: 'HDFC Bank', branch: 'Mumbai Branch', accountType: 'SAVING',  isPrimary: true,  gradient: CARD_GRADIENTS[0] },
-  { id: '2', accountNumber: '9876543210001234', ifsc: 'HDFC0090924', bankName: 'HDFC Bank', branch: 'Delhi Branch',  accountType: 'CURRENT', isPrimary: false, gradient: CARD_GRADIENTS[1] },
-  { id: '3', accountNumber: '5678901234567890', ifsc: 'SBIN0001234', bankName: 'SBI',        branch: 'Pune Branch',  accountType: 'SAVING',  isPrimary: false, gradient: CARD_GRADIENTS[2] },
-];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -478,12 +472,29 @@ export default function BankFeedsScreen() {
   const router = useRouter();
   const { company } = useAuth();
 
-  const [accounts,     setAccounts]     = useState<BankAccount[]>(MOCK_ACCOUNTS);
+  const [accounts,     setAccounts]     = useState<BankAccount[]>([]);
   const [isSelecting,  setIsSelecting]  = useState(false);
   const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set());
   const [showAdd,      setShowAdd]      = useState(false);
   const [editTarget,   setEditTarget]   = useState<BankAccount | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<'single' | 'multi' | null>(null);
+
+  useEffect(() => {
+    if (!company?.guid) return;
+    getBankLedgers(company.guid, 'bank').then((res: any) => {
+      const rows = res?.data ?? [];
+      setAccounts(rows.map((r: any, i: number) => ({
+        id: r.name || String(i),
+        accountNumber: '',
+        ifsc: '',
+        bankName: r.name || 'Bank',
+        branch: '',
+        accountType: 'CURRENT' as AccountType,
+        isPrimary: i === 0,
+        gradient: CARD_GRADIENTS[i % CARD_GRADIENTS.length],
+      })));
+    }).catch(() => setAccounts([]));
+  }, [company?.guid]);
 
   // ── Selection handlers ─────────────────────────────────────────────────────
   const handleLongPress = (id: string) => {

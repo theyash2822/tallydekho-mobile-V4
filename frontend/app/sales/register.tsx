@@ -37,43 +37,12 @@ const STATUS_LABEL: Record<string, string> = {
   credit_note: 'Credit Note',
 };
 
-// ─── Month-grouped mock data ─────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 type Invoice = {
   id: string; party: string; date: string;
   time: string; amount: string; status: string;
 };
 type MonthGroup = { id: string; label: string; invoices: Invoice[] };
-
-const MONTH_GROUPS: MonthGroup[] = [
-  {
-    id: 'apr25', label: 'Apr 25',
-    invoices: [
-      { id: 'INV-30985', party: 'Raj Enterprises',   date: '28/04/25', time: '11:00 AM', amount: '₹54,000', status: 'paid'   },
-      { id: 'INV-30984', party: 'Metro Systems',      date: '22/04/25', time: '10:30 AM', amount: '₹31,500', status: 'unpaid' },
-      { id: 'INV-30983', party: 'ABC Traders',        date: '15/04/25', time: '09:00 AM', amount: '₹42,500', status: 'paid'   },
-      { id: 'CN-00716',  party: 'Kumar & Sons',       date: '10/04/25', time: '02:00 PM', amount: '₹4,800', status: 'credit_note' },
-    ],
-  },
-  {
-    id: 'mar25', label: 'Mar 25',
-    invoices: [
-      { id: 'INV-30982', party: 'Delhi Distributors', date: '29/03/25', time: '03:00 PM', amount: '₹67,200', status: 'paid'   },
-      { id: 'INV-30981', party: 'Sharma Electronics', date: '20/03/25', time: '11:00 AM', amount: '₹28,800', status: 'unpaid' },
-      { id: 'INV-30980', party: 'PQR Exports',        date: '12/03/25', time: '09:30 AM', amount: '₹19,500', status: 'paid'   },
-    ],
-  },
-  {
-    id: 'feb25', label: 'Feb 25',
-    invoices: [
-      { id: 'INV-30979', party: 'Mumbai Wholesale',   date: '25/02/25', time: '10:00 AM', amount: '₹55,000', status: 'paid'   },
-      { id: 'INV-30978', party: 'Tech Corp',          date: '14/02/25', time: '11:30 AM', amount: '₹32,000', status: 'unpaid' },
-    ],
-  },
-  {
-    id: 'jan25', label: 'Jan 25',
-    invoices: [],
-  },
-];
 
 export default function SalesRegisterScreen() {
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
@@ -149,7 +118,14 @@ export default function SalesRegisterScreen() {
   };
 
   // Collapsible months — all open by default
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(MONTH_GROUPS.map(g => g.id)));
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      displayGroups.forEach(g => next.add(g.id));
+      return next;
+    });
+  }, [liveInvoices.length]);
   const toggleMonth = (id: string) =>
     setExpanded(prev => {
       const next = new Set(prev);
@@ -193,33 +169,28 @@ export default function SalesRegisterScreen() {
       return matchSearch && matchStatus;
     });
 
-  // Use live data if available, group by month dynamically; else fall back to mock MONTH_GROUPS
-  const displayGroups: MonthGroup[] = liveInvoices.length > 0
-    ? (() => {
-        const map: Record<string, MonthGroup> = {};
-        liveInvoices.forEach(inv => {
-          // Parse date in format 'YYYY-MM-DD' or 'DD/MM/YY'
-          let monthKey = 'Other';
-          let monthLabel = 'Other';
-          const d = inv.date;
-          if (d && d.includes('-') && d.length === 10) {
-            // YYYY-MM-DD
-            const parts = d.split('-');
-            const mo = new Date(+parts[0], +parts[1]-1, 1);
-            monthKey  = `${parts[0]}-${parts[1]}`;
-            monthLabel = mo.toLocaleString('en-IN', { month: 'short', year: '2-digit' });
-          } else if (d && d.includes('/')) {
-            // DD/MM/YY
-            const parts = d.split('/');
-            monthKey  = `${parts[2]}-${parts[1]}`;
-            monthLabel = `${new Date(2000 + +parts[2], +parts[1]-1, 1).toLocaleString('en-IN', { month: 'short' })} ${parts[2]}`;
-          }
-          if (!map[monthKey]) map[monthKey] = { id: monthKey, label: monthLabel, invoices: [] };
-          map[monthKey].invoices.push(inv);
-        });
-        return Object.values(map).sort((a, b) => b.id.localeCompare(a.id));
-      })()
-    : [];
+  // Group live invoices by month; empty list shows empty-state (no mock fallback)
+  const displayGroups: MonthGroup[] = (() => {
+    const map: Record<string, MonthGroup> = {};
+    liveInvoices.forEach(inv => {
+      let monthKey = 'Other';
+      let monthLabel = 'Other';
+      const d = inv.date;
+      if (d && d.includes('-') && d.length === 10) {
+        const parts = d.split('-');
+        const mo = new Date(+parts[0], +parts[1]-1, 1);
+        monthKey  = `${parts[0]}-${parts[1]}`;
+        monthLabel = mo.toLocaleString('en-IN', { month: 'short', year: '2-digit' });
+      } else if (d && d.includes('/')) {
+        const parts = d.split('/');
+        monthKey  = `${parts[2]}-${parts[1]}`;
+        monthLabel = `${new Date(2000 + +parts[2], +parts[1]-1, 1).toLocaleString('en-IN', { month: 'short' })} ${parts[2]}`;
+      }
+      if (!map[monthKey]) map[monthKey] = { id: monthKey, label: monthLabel, invoices: [] };
+      map[monthKey].invoices.push(inv);
+    });
+    return Object.values(map).sort((a, b) => b.id.localeCompare(a.id));
+  })();
 
   // Summary stats across all months
   const allFiltered = displayGroups.flatMap(g => filterInvoices(g.invoices));

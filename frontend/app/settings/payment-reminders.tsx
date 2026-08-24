@@ -9,17 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { getAlertSettings, updateAlertSettings } from '../../src/services/api';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Mock party ledger data
-// ─────────────────────────────────────────────────────────────────────────────
-const MOCK_PARTIES = [
-  'Ashok Traders', 'Royal Furnish Co.', 'Sharma Enterprises', 'Gupta & Sons',
-  'National Suppliers', 'Prime Distributors', 'ABC Corp', 'Mehta Industries',
-  'Singh Electronics', 'Patel Wholesale', 'Jain Brothers', 'Kapoor Agencies',
-  'Verma Stores', 'Kumar Exports', 'Desai Holdings',
-];
+import { getAlertSettings, updateAlertSettings, getLedgers } from '../../src/services/api';
+import { useAuth } from '../../src/context/AuthContext';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -221,12 +212,23 @@ function PartySelectorSheet({ visible, currentSelection, onClose, onConfirm }: {
   visible: boolean; currentSelection: string[];
   onClose: () => void; onConfirm: (sel: string[]) => void;
 }) {
+  const { company } = useAuth();
   const [search,  setSearch]  = useState('');
   const [checked, setChecked] = useState<Set<string>>(new Set(currentSelection));
+  const [parties, setParties] = useState<string[]>([]);
   useEffect(() => {
     if (visible) { setSearch(''); setChecked(new Set(currentSelection)); }
   }, [visible]);
-  const filtered = MOCK_PARTIES.filter(p => p.toLowerCase().includes(search.toLowerCase()));
+  useEffect(() => {
+    if (!visible || !company?.guid) return;
+    getLedgers(company.guid, { parent: 'Sundry Debtors', limit: 200 } as any)
+      .then((res: any) => {
+        const rows = res?.data ?? [];
+        setParties(rows.map((r: any) => r.name).filter(Boolean));
+      })
+      .catch(() => setParties([]));
+  }, [visible, company?.guid]);
+  const filtered = parties.filter(p => p.toLowerCase().includes(search.toLowerCase()));
   const toggle = (name: string) =>
     setChecked(prev => { const n = new Set(prev); n.has(name) ? n.delete(name) : n.add(name); return n; });
   return (

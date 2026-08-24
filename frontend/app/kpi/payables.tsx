@@ -1,109 +1,95 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, FlatList,
-  Dimensions, NativeSyntheticEvent, NativeScrollEvent,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, FlatList, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
+import { useSettings } from '../../src/context/SettingsContext';
 import { getKPIPayables } from '../../src/services/api';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
 
 const { width: SW } = Dimensions.get('window');
 
-// ── Mock Data ─────────────────────────────────────────────────────────────────
-const AGING_CARDS = [
-  { id: 'total',  icon: 'documents-outline', label: 'Total Due', amount: '\u20b91,25,000', trend: '+18%', positive: true  },
-  { id: 'b1_30',  icon: 'calendar-outline',  label: '1\u201330d',  amount: '\u20b945,000',   trend: '+12%', positive: true  },
-  { id: 'b31_60', icon: 'calendar-outline',  label: '31\u201360d', amount: '\u20b965,000',   trend: '+25%', positive: true  },
-  { id: 'b61_90', icon: 'calendar-outline',  label: '61\u201390d', amount: '\u20b955,000',   trend: '-8%',  positive: false },
-  { id: 'b90p',   icon: 'calendar-outline',  label: '90+d',      amount: '\u20b91,85,000', trend: '+28%', positive: true  },
-];
+type PartyRow = { id: string; name: string; amount: number; days: number };
+type BillRow = { id: string; party: string; ref: string; date: string; amount: number };
 
-const RECENT_PAYABLES = [
-  { id: 'rc1578', party: 'ABC Traders',   ref: 'RC-1578', date: '10 Nov', amount: '\u20b954,000' },
-  { id: 'rc1579', party: 'XYZ Retail',    ref: 'RC-1579', date: '12 Dec', amount: '\u20b954,000' },
-  { id: 'rc1580', party: 'ABC Traders',   ref: 'RC-1580', date: '15 Nov', amount: '\u20b954,000' },
-  { id: 'rc1581', party: 'XYZ Retail',    ref: 'RC-1581', date: '18 Dec', amount: '\u20b954,000' },
-  { id: 'rc1582', party: 'Metro Steel',   ref: 'RC-1582', date: '20 Nov', amount: '\u20b962,000' },
-  { id: 'rc1583', party: 'City Hardware', ref: 'RC-1583', date: '22 Dec', amount: '\u20b938,500' },
-];
+function fmtDate(iso?: string) {
+  if (!iso) return '';
+  const d = new Date(`${String(iso).slice(0, 10)}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return String(iso).slice(0, 10);
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+}
 
-const OVERDUE_PARTIES = [
-  { id: 'p1', party: 'Tech Solutions Ltd', days: '28d', amount: '\u20b91,25 K' },
-  { id: 'p2', party: 'Global Suppliers',   days: '35d', amount: '\u20b995 K'   },
-  { id: 'p3', party: 'Innovation Corp',    days: '42d', amount: '\u20b91,85 K' },
-  { id: 'p4', party: 'Quality Imports',    days: '31d', amount: '\u20b975 K'   },
-  { id: 'p5', party: 'Smart Systems',      days: '38d', amount: '\u20b965 K'   },
-  { id: 'p6', party: 'Elite Trading',      days: '45d', amount: '\u20b955 K'   },
-];
-
-// ── Component ─────────────────────────────────────────────────────────────────
 export default function PayablesScreen() {
-  const { company, selectedFY} = useAuth();
-  const companyGuid = company?.guid;
-  const [apiData, setApiData] = React.useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  React.useEffect(() => {
-    if (!companyGuid) return;
-    getKPIPayables(companyGuid).then((res: any) => { if (res?.data) setApiData(res.data); }).catch(() => {}).finally(() => setIsLoading(false));
-  }, [companyGuid]);
-
   const router = useRouter();
-  const agingRef = useRef<FlatList>(null);
+  const { company, lastSyncAt } = useAuth();
+  const { formatAmountCompact, formatAmount } = useSettings();
+  const companyGuid = company?.guid;
 
-  const [agingIdx,     setAgingIdx]     = useState(0);
-  const [activeTab,    setActiveTab]    = useState<'recent' | 'overdue'>('recent');
-  const [showDatePick, setShowDatePick] = useState(false);
-  const [dateFrom,     setDateFrom]     = useState('30/09/24');
-  const [dateTo,       setDateTo]       = useState('23/04/25');
-  const [activeChips,  setActiveChips]  = useState<Set<string>>(new Set());
+  const [apiData, setApiData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [kpiIdx, setKpiIdx] = useState(0);
+  const [tab, setTab] = useState<'parties' | 'bills'>('parties');
 
-  // Auto-scroll aging carousel every 3s
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setAgingIdx(prev => {
-        const next = (prev + 1) % AGING_CARDS.length;
-        agingRef.current?.scrollToOffset({ offset: next * SW, animated: true });
-        return next;
-      });
-    }, 3000);
-    return () => clearInterval(timer);
-  }, []);
+  const load = useCallback(async () => {
+    if (!companyGuid) return;
+    setIsLoading(true);
+    setApiError(null);
+    try {
+      const res: any = await getKPIPayables(companyGuid);
+      setApiData(res?.data ?? res);
+    } catch (err: any) {
+      setApiError(err?.message || 'Failed to load payables');
+      setApiData(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [companyGuid, lastSyncAt]);
 
-  const toggleChip = (chip: 'overdue' | 'payments') => {
-    setActiveChips(prev => {
-      const next = new Set(prev);
-      if (next.has(chip)) {
-        next.delete(chip);
-        if (chip === 'overdue') setActiveTab('recent');
-      } else {
-        next.add(chip);
-        if (chip === 'overdue') setActiveTab('overdue');
-      }
-      return next;
-    });
-  };
+  useEffect(() => { load(); }, [load]);
 
-  const fmtRange = () => {
-    const fmt = (s: string) => {
-      const parts = s.split('/');
-      if (parts.length < 3) return s;
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      return `${parseInt(parts[0])} ${months[parseInt(parts[1]) - 1]}`;
-    };
-    if (!dateFrom && !dateTo) return 'Select Range';
-    if (dateFrom && !dateTo) return fmt(dateFrom);
-    return `${fmt(dateFrom)} \u2013 ${fmt(dateTo)}`;
-  };
+  const aging = useMemo(() => {
+    const rows = Array.isArray(apiData?.aging) ? apiData.aging : [];
+    const total = Number(apiData?.total) || 0;
+    return [
+      { id: 'total', icon: 'documents-outline', label: 'Total Due', amount: formatAmountCompact(Math.round(total)) },
+      ...rows.map((a: any) => ({
+        id: a.bucket,
+        icon: 'calendar-outline',
+        label: a.bucket,
+        amount: formatAmountCompact(Math.round(Number(a.amount) || 0)),
+      })),
+    ];
+  }, [apiData, formatAmountCompact]);
+
+  const parties = useMemo<PartyRow[]>(() => {
+    const rows = Array.isArray(apiData?.parties) ? apiData.parties : [];
+    return rows.map((p: any, i: number) => ({
+      id: `${p.name}-${i}`,
+      name: p.name,
+      amount: Math.abs(Number(p.amount) || 0),
+      days: Number(p.days_overdue) || 0,
+    }));
+  }, [apiData]);
+
+  const bills = useMemo<BillRow[]>(() => {
+    const rows = Array.isArray(apiData?.bills) ? apiData.bills : [];
+    return rows.map((b: any, i: number) => ({
+      id: `${b.ref}-${i}`,
+      party: b.party,
+      ref: b.ref,
+      date: b.date,
+      amount: Math.abs(Number(b.amount) || 0),
+    }));
+  }, [apiData]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
       <View style={s.header}>
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
@@ -112,211 +98,137 @@ export default function PayablesScreen() {
         <View style={s.headerBtn} />
       </View>
 
-      {/* ── Filter Row ──────────────────────────────────────────────────────── */}
-      <View style={s.filterRow}>
-        <TouchableOpacity style={s.dateChip} onPress={() => setShowDatePick(true)} activeOpacity={0.7}>
-          <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
-          <Text style={s.dateChipTxt}>{fmtRange()}</Text>
-          <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.filterChip, activeChips.has('overdue') && s.filterChipActive]}
-          onPress={() => toggleChip('overdue')}
-          activeOpacity={0.7}
-        >
-          <Text style={[s.filterChipTxt, activeChips.has('overdue') && s.filterChipActiveTxt]}>Overdue</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.filterChip, activeChips.has('payments') && s.filterChipActive]}
-          onPress={() => toggleChip('payments')}
-          activeOpacity={0.7}
-        >
-          <Text style={[s.filterChipTxt, activeChips.has('payments') && s.filterChipActiveTxt]}>Payments</Text>
-        </TouchableOpacity>
-      </View>
-
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+        {apiError && <ErrorBanner message={apiError} onRetry={load} />}
+
         {isLoading ? (
           <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
             <CardSkeleton height={100} />
-            {[...Array(4)].map((_, i) => <LedgerRowSkeleton key={i} />)}
+            {[0, 1, 2, 3].map(i => <LedgerRowSkeleton key={i} />)}
           </View>
-        ) : <>
-
-        {/* ── Aging Bucket Carousel ───────────────────────────────────────── */}
-        <View style={s.agingSection}>
-          <FlatList
-            ref={agingRef}
-            horizontal pagingEnabled
-            data={AGING_CARDS}
-            keyExtractor={i => i.id}
-            showsHorizontalScrollIndicator={false}
-            getItemLayout={(_, index) => ({ length: SW, offset: SW * index, index })}
-            onScrollToIndexFailed={() => {}}
-            onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
-              setAgingIdx(Math.round(e.nativeEvent.contentOffset.x / SW));
-            }}
-            renderItem={({ item }) => (
-              <View style={s.agingItem}>
-                <View style={s.agingCard}>
-                  <View style={s.agingIconBox}>
-                    <Ionicons name={item.icon as any} size={24} color={COLORS.textSecondary} />
-                  </View>
-                  <View style={s.agingTextWrap}>
-                    <Text style={s.agingLabel}>{item.label}</Text>
-                    <Text style={s.agingAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount}</Text>
-                  </View>
-                  <View style={[
-                    s.trendBadge,
-                    { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg },
-                  ]}>
-                    <Ionicons
-                      name={item.positive ? 'trending-up' : 'trending-down'}
-                      size={11}
-                      color={item.positive ? COLORS.positive : COLORS.negative}
-                    />
-                    <Text style={[s.trendTxt, { color: item.positive ? COLORS.positive : COLORS.negative }]}>
-                      {item.trend}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            )}
-          />
-          {/* Dot indicators */}
-          <View style={s.dots}>
-            {AGING_CARDS.map((_, i) => (
-              <View key={i} style={[s.dot, i === agingIdx && s.dotActive]} />
-            ))}
-          </View>
-        </View>
-
-        {/* ── Tab Card ────────────────────────────────────────────────────── */}
-        <View style={s.tabCard}>
-          <View style={s.tabRow}>
-            {(['recent', 'overdue'] as const).map(tab => (
-              <TouchableOpacity
-                key={tab}
-                style={[s.tabBtn, activeTab === tab && s.tabBtnActive]}
-                onPress={() => setActiveTab(tab)}
-                activeOpacity={0.7}
-              >
-                <Text style={[s.tabBtnTxt, activeTab === tab && s.tabBtnTxtActive]}>
-                  {tab === 'recent' ? 'Recent Payables' : 'Overdue Parties'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Recent Payables */}
-          {activeTab === 'recent' && (
-            <View style={s.listWrap}>
-              {RECENT_PAYABLES.map((item, idx) => (
-                <View
-                  key={item.id}
-                  style={[s.listRow, idx < RECENT_PAYABLES.length - 1 && s.listRowBorder]}
-                >
-                  <View style={s.partyIconBox}>
-                    <Ionicons name="business-outline" size={18} color={COLORS.textSecondary} />
-                  </View>
-                  <View style={s.listInfo}>
-                    <View style={s.listTopRow}>
-                      <Text style={s.listParty}>{item.party}</Text>
-                      <Text style={s.listRef}>{` · ${item.ref}`}</Text>
+        ) : (
+          <>
+            <View style={s.kpiSection}>
+              <FlatList
+                horizontal
+                pagingEnabled
+                data={aging}
+                keyExtractor={(i) => i.id}
+                showsHorizontalScrollIndicator={false}
+                getItemLayout={(_, index) => ({ length: SW, offset: SW * index, index })}
+                onMomentumScrollEnd={(e) => setKpiIdx(Math.round(e.nativeEvent.contentOffset.x / SW))}
+                renderItem={({ item }) => (
+                  <View style={s.kpiItem}>
+                    <View style={s.kpiCard}>
+                      <View style={s.kpiIconBox}>
+                        <Ionicons name={item.icon as any} size={20} color={COLORS.textSecondary} />
+                      </View>
+                      <View style={s.kpiTextWrap}>
+                        <Text style={s.kpiLabel}>{item.label}</Text>
+                        <Text style={s.kpiAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount}</Text>
+                      </View>
                     </View>
-                    <Text style={s.listDate}>{item.date}</Text>
                   </View>
-                  <Text style={s.listAmount}>{item.amount}</Text>
-                </View>
-              ))}
+                )}
+              />
+              <View style={s.dots}>
+                {aging.map((_, i) => <View key={i} style={[s.dot, i === kpiIdx && s.dotActive]} />)}
+              </View>
             </View>
-          )}
 
-          {/* Overdue Parties */}
-          {activeTab === 'overdue' && (
-            <View style={s.listWrap}>
-              {OVERDUE_PARTIES.map((item, idx) => (
-                <View
-                  key={item.id}
-                  style={[s.listRow, idx < OVERDUE_PARTIES.length - 1 && s.listRowBorder]}
-                >
-                  <View style={s.partyIconBox}>
-                    <Ionicons name="business-outline" size={18} color={COLORS.textSecondary} />
+            <View style={s.recentCard}>
+              <View style={s.tabRow}>
+                {(['parties', 'bills'] as const).map(t => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[s.tabBtn, tab === t && s.tabBtnActive]}
+                    onPress={() => setTab(t)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[s.tabTxt, tab === t && s.tabTxtActive]}>
+                      {t === 'parties' ? 'Parties' : 'Bills'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {tab === 'parties' ? (
+                parties.length === 0 ? (
+                  <View style={s.empty}><Text style={s.emptyTxt}>No payables</Text></View>
+                ) : parties.map((p: PartyRow, idx: number) => (
+                  <View key={p.id} style={[s.txRow, idx < parties.length - 1 && s.txBorder]}>
+                    <View style={s.txIconBox}>
+                      <Ionicons name="person-outline" size={17} color={COLORS.textSecondary} />
+                    </View>
+                    <View style={s.txInfo}>
+                      <Text style={s.txMode} numberOfLines={1}>{p.name}</Text>
+                      <Text style={s.txSub}>{p.days > 0 ? `${p.days}d overdue` : 'Current'}</Text>
+                    </View>
+                    <Text style={s.txAmt}>{formatAmount(Math.round(p.amount))}</Text>
                   </View>
-                  <View style={s.listInfo}>
-                    <Text style={s.listParty}>{item.party}</Text>
-                    <Text style={[s.listDate, { color: COLORS.negative }]}>{item.days} overdue</Text>
+                ))
+              ) : (
+                bills.length === 0 ? (
+                  <View style={s.empty}><Text style={s.emptyTxt}>No outstanding bills</Text></View>
+                ) : bills.map((b: BillRow, idx: number) => (
+                  <View key={b.id} style={[s.txRow, idx < bills.length - 1 && s.txBorder]}>
+                    <View style={s.txIconBox}>
+                      <Ionicons name="document-text-outline" size={17} color={COLORS.textSecondary} />
+                    </View>
+                    <View style={s.txInfo}>
+                      <View style={s.txTopRow}>
+                        <Text style={s.txMode} numberOfLines={1}>{b.party}</Text>
+                        <Text style={s.txRef}> · {b.ref || '—'}</Text>
+                      </View>
+                      <Text style={s.txSub}>{fmtDate(b.date)}</Text>
+                    </View>
+                    <Text style={s.txAmt}>{formatAmount(Math.round(b.amount))}</Text>
                   </View>
-                  <Text style={[s.listAmount, { color: COLORS.negative }]}>{item.amount}</Text>
-                </View>
-              ))}
+                ))
+              )}
             </View>
-          )}
-        </View>
-
-        </>
-        }
-        <View style={{ height: 100 }} />
+          </>
+        )}
+        <View style={{ height: 110 }} />
       </ScrollView>
-
-      <DateRangePickerModal
-        visible={showDatePick}
-        fromDate={dateFrom}
-        toDate={dateTo}
-        onApply={(f, t) => { setDateFrom(f); setDateTo(t); }}
-        onClose={() => setShowDatePick(false)}
-        minDate={selectedFY?.startDate}
-        maxDate={selectedFY?.endDate}
-      />
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: COLORS.pageBg },
-  scroll: { paddingTop: SPACING.sm },
-
-  header:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 14, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  headerBtn:   { width: 40 },
+  safe: { flex: 1, backgroundColor: COLORS.pageBg },
+  scroll: { paddingTop: SPACING.md },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 14, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  headerBtn: { width: 40 },
   headerTitle: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
 
-  filterRow:     { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  dateChip:      { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault },
-  dateChipTxt:   { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  filterChip:        { paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg },
-  filterChipTxt:     { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
-  filterChipActive:  { backgroundColor: '#1A1A1A', borderColor: '#1A1A1A' },
-  filterChipActiveTxt: { color: '#FFFFFF' },
+  kpiSection: { marginBottom: SPACING.md },
+  kpiItem: { width: SW },
+  kpiCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, paddingHorizontal: 14, paddingVertical: 12, marginHorizontal: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
+  kpiIconBox: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
+  kpiTextWrap: { flex: 1, gap: 2 },
+  kpiLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600' },
+  kpiAmount: { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
 
-  agingSection:  { marginTop: SPACING.md, marginBottom: SPACING.sm },
-  agingItem:     { width: SW },
-  agingCard:     { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, paddingHorizontal: 16, paddingVertical: 16, marginHorizontal: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
-  agingIconBox:  { width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  agingTextWrap: { flex: 1, gap: 4 },
-  agingLabel:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-  agingAmount:   { fontSize: TYPOGRAPHY.xl, fontWeight: '800', color: COLORS.textPrimary },
-  trendBadge:    { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: RADIUS.full, flexShrink: 0 },
-  trendTxt:      { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
-
-  dots:      { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: 10 },
-  dot:       { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
+  dots: { flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: 10 },
+  dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
   dotActive: { width: 16, height: 5, borderRadius: 3, backgroundColor: COLORS.textPrimary },
 
-  tabCard:         { marginHorizontal: SPACING.md, marginTop: SPACING.sm, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
-  tabRow:          { flexDirection: 'row', backgroundColor: COLORS.pageBg, margin: 4, borderRadius: RADIUS.md, padding: 3 },
-  tabBtn:          { flex: 1, paddingVertical: 9, borderRadius: RADIUS.sm, alignItems: 'center' },
-  tabBtnActive:    { backgroundColor: COLORS.cardBg },
-  tabBtnTxt:       { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
-  tabBtnTxtActive: { color: COLORS.textPrimary, fontWeight: '700' },
-
-  listWrap:      { paddingHorizontal: SPACING.md, paddingBottom: 8 },
-  listRow:       { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 10 },
-  listRowBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  partyIconBox:  { width: 42, height: 42, borderRadius: 8, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  listInfo:      { flex: 1 },
-  listTopRow:    { flexDirection: 'row', alignItems: 'center' },
-  listParty:     { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  listRef:       { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
-  listDate:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
-  listAmount:    { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, flexShrink: 0 },
+  recentCard: { marginHorizontal: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
+  tabRow: { flexDirection: 'row', gap: 6, paddingHorizontal: SPACING.md, paddingTop: 14, paddingBottom: 10 },
+  tabBtn: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: RADIUS.full, backgroundColor: COLORS.pageBg },
+  tabBtnActive: { backgroundColor: COLORS.textPrimary },
+  tabTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
+  tabTxtActive: { color: '#fff' },
+  txRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: SPACING.md, gap: 10 },
+  txBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  txIconBox: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  txInfo: { flex: 1 },
+  txTopRow: { flexDirection: 'row', alignItems: 'center' },
+  txMode: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, flexShrink: 1 },
+  txRef: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
+  txSub: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+  txAmt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  empty: { padding: 24, alignItems: 'center' },
+  emptyTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
 });

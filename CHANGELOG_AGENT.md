@@ -1,3 +1,15 @@
+## [2026-08-24] Mock cleanup Phases 1–5 — live KPI / Sales / registers
+
+### Fixed
+- **KPI siblings** (cash / bank / AR / AP / loans) — Payments-pattern live UI; no mock lists
+- **Sales home** — metrics from `GET /sales/home-metrics` (no `METRIC_CARDS`)
+- **Sales / Purchase registers** — removed `MONTH_GROUPS` mock fallbacks; empty-state only
+- **Bank feeds / payment reminders / license** — no fake accounts/parties/purchase history
+- Deleted orphan `src/data/mockData.ts` + `mockDocuments.ts`
+
+### Added
+- `getSalesHomeMetrics`; KPI cash/bank accept period `from`/`to`
+
 ## [2026-08-24] Cashflow Income/Expense → Receipts/Payments
 
 ### Changed

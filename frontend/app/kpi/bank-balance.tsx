@@ -1,362 +1,288 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  FlatList, Dimensions, NativeSyntheticEvent, NativeScrollEvent,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, FlatList, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
+import { useSettings } from '../../src/context/SettingsContext';
 import { getKPIBankBalance } from '../../src/services/api';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
-import { useSettings } from '../../src/context/SettingsContext';
+import { ErrorBanner } from '../../src/components/ApiStateViews';
+import {
+  resolvePeriodDates,
+  type DashboardPeriod,
+} from '../../src/utils/periodDates';
 
 const { width: SW } = Dimensions.get('window');
+const PERIOD_TABS = ['7D', '1M', '3M', '6M'] as const;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Mock Data
-// ─────────────────────────────────────────────────────────────────────────────
-const KPI_DATA = [
-  { id: 'total',   icon: 'wallet-outline',              label: 'Total Balance',  amount: '₹23,25,000', trend: '+12%',  positive: true  },
-  { id: 'inflow',  icon: 'arrow-down-circle-outline',   label: 'Inflow Today',   amount: '₹1,25,000',  trend: '+6.8%', positive: true  },
-  { id: 'outflow', icon: 'arrow-up-circle-outline',     label: 'Outflow Today',  amount: '₹74,000',    trend: '+9.1%', positive: false },
-];
+type BankTx = {
+  guid?: string;
+  voucher_number?: string;
+  party_name?: string;
+  date?: string;
+  amount: number;
+  type?: string;
+};
 
-const BANKS = [
-  {
-    id: 'hdfc',
-    name: 'HDFC Bank',
-    account: 'CA-1234',
-    balance: '₹11,25,000',
-    lastFeed: '10 Jun 2025',
-    gradient: ['#1B5E40', '#0D3B2E'] as const,
-    transactions: [
-      { id: 'HDFC-CH-778',   date: 'Jun 10', amount: '75,000', type: 'Dr' },
-      { id: 'HDFC-DEP-009',  date: '9 Jun',  amount: '30,000', type: 'Cr' },
-      { id: 'HDFC-RTGS-778', date: '08 Jun', amount: '75,000', type: 'Cr' },
-      { id: 'HDFC-UPI-779',  date: '08 Jun', amount: '45,000', type: 'Cr' },
-      { id: 'HDFC-NEFT-780', date: '07 Jun', amount: '25,000', type: 'Dr' },
-    ],
-  },
-  {
-    id: 'sbi',
-    name: 'SBI Bank',
-    account: 'SB-5678',
-    balance: '₹7,50,000',
-    lastFeed: '09 Jun 2025',
-    gradient: ['#1B3A5E', '#0D2040'] as const,
-    transactions: [
-      { id: 'SBI-CH-456',   date: 'Jun 10', amount: '50,000', type: 'Dr' },
-      { id: 'SBI-DEP-123',  date: '9 Jun',  amount: '20,000', type: 'Cr' },
-      { id: 'SBI-RTGS-456', date: '08 Jun', amount: '60,000', type: 'Cr' },
-      { id: 'SBI-IMPS-789', date: '08 Jun', amount: '35,000', type: 'Cr' },
-      { id: 'SBI-NEFT-012', date: '07 Jun', amount: '15,000', type: 'Dr' },
-    ],
-  },
-  {
-    id: 'icici',
-    name: 'ICICI Bank',
-    account: 'IC-9012',
-    balance: '₹4,50,000',
-    lastFeed: '08 Jun 2025',
-    gradient: ['#3D1A5E', '#200D40'] as const,
-    transactions: [
-      { id: 'ICICI-CH-234',   date: 'Jun 10', amount: '40,000', type: 'Dr' },
-      { id: 'ICICI-DEP-567',  date: '9 Jun',  amount: '25,000', type: 'Cr' },
-      { id: 'ICICI-RTGS-890', date: '08 Jun', amount: '55,000', type: 'Cr' },
-      { id: 'ICICI-UPI-123',  date: '08 Jun', amount: '30,000', type: 'Cr' },
-      { id: 'ICICI-NEFT-456', date: '07 Jun', amount: '20,000', type: 'Dr' },
-    ],
-  },
-];
+type Bank = {
+  name: string;
+  balance: number;
+  transactions: BankTx[];
+};
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Screen
-// ─────────────────────────────────────────────────────────────────────────────
+function fmtDate(iso?: string) {
+  if (!iso) return '';
+  const d = new Date(`${String(iso).slice(0, 10)}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return String(iso).slice(0, 10);
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+}
+
 export default function BankBalanceScreen() {
-  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
-  const { company } = useAuth();
+  const router = useRouter();
+  const { company, selectedFY, lastSyncAt } = useAuth();
+  const { formatAmountCompact, formatAmount } = useSettings();
   const companyGuid = company?.guid;
-  const [apiData, setApiData] = React.useState<any>(null);
+
+  const [period, setPeriod] = useState<(typeof PERIOD_TABS)[number]>('7D');
+  const [apiData, setApiData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  React.useEffect(() => {
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [kpiIdx, setKpiIdx] = useState(0);
+  const [selectedBank, setSelectedBank] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
     if (!companyGuid) return;
-    getKPIBankBalance(companyGuid).then((res: any) => { if (res?.data) setApiData(res.data); }).catch(() => {}).finally(() => setIsLoading(false));
-  }, [companyGuid]);
-
-  const router  = useRouter();
-  const kpiRef  = useRef<FlatList>(null);
-  const [kpiIdx,  setKpiIdx]  = useState(0);
-  const [bankIdx, setBankIdx] = useState(0);
-
-  // Auto-scroll KPI every 4 s
-  useEffect(() => {
-    const t = setInterval(() => {
-      setKpiIdx(prev => {
-        const next = (prev + 1) % KPI_DATA.length;
-        kpiRef.current?.scrollToOffset({ offset: next * SW, animated: true });
-        return next;
+    setIsLoading(true);
+    setApiError(null);
+    try {
+      const { from, to } = resolvePeriodDates(period as DashboardPeriod, {
+        from: selectedFY?.startDate,
+        to: selectedFY?.endDate,
       });
-    }, 4000);
-    return () => clearInterval(t);
-  }, []);
+      const res: any = await getKPIBankBalance(companyGuid, { from, to, period });
+      setApiData(res?.data ?? res);
+    } catch (err: any) {
+      setApiError(err?.message || 'Failed to load bank balance');
+      setApiData(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [companyGuid, period, selectedFY?.startDate, selectedFY?.endDate, lastSyncAt]);
 
-  const activeBank = BANKS[bankIdx];
+  useEffect(() => { load(); }, [load]);
+
+  const banks: Bank[] = useMemo(() => {
+    const rows = Array.isArray(apiData?.banks) ? apiData.banks : [];
+    return rows.map((b: any) => ({
+      name: b.name,
+      balance: Math.abs(Number(b.balance) || 0),
+      transactions: Array.isArray(b.transactions) ? b.transactions.map((t: any) => ({
+        guid: t.guid,
+        voucher_number: t.voucher_number,
+        party_name: t.party_name,
+        date: t.date,
+        amount: Math.abs(Number(t.amount) || 0),
+        type: t.type || 'Cr',
+      })) : [],
+    }));
+  }, [apiData]);
+
+  useEffect(() => {
+    if (!selectedBank && banks.length) setSelectedBank(banks[0].name);
+  }, [banks, selectedBank]);
+
+  const activeBank = banks.find(b => b.name === selectedBank) || banks[0];
+  const txs = activeBank?.transactions || [];
+
+  const kpiCards = useMemo(() => {
+    const total = Number(apiData?.total_balance) || banks.reduce((s, b) => s + b.balance, 0);
+    const inflow = Number(apiData?.today_inflow) || 0;
+    const outflow = Number(apiData?.today_outflow) || 0;
+    return [
+      { id: 'total', icon: 'wallet-outline', label: 'Total Balance', amount: formatAmountCompact(Math.round(total)) },
+      { id: 'in', icon: 'arrow-down-circle-outline', label: 'Inflow Today', amount: formatAmountCompact(Math.round(inflow)) },
+      { id: 'out', icon: 'arrow-up-circle-outline', label: 'Outflow Today', amount: formatAmountCompact(Math.round(outflow)) },
+      { id: 'count', icon: 'business-outline', label: 'Bank Accounts', amount: String(banks.length) },
+    ];
+  }, [apiData, banks, formatAmountCompact]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      {/* ── Header ─────────────────────────────────────────────────────── */}
       <View style={s.header}>
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Bank Balances</Text>
+        <Text style={s.headerTitle}>Bank Balance</Text>
         <View style={s.headerBtn} />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+        {apiError && <ErrorBanner message={apiError} onRetry={load} />}
+
         {isLoading ? (
           <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
             <CardSkeleton height={100} />
-            {[...Array(4)].map((_, i) => <LedgerRowSkeleton key={i} />)}
+            {[0, 1, 2, 3].map(i => <LedgerRowSkeleton key={i} />)}
           </View>
-        ) : <>
-
-        {/* ── KPI Carousel ───────────────────────────────────────────────── */}
-        <View style={s.kpiSection}>
-          <FlatList
-            ref={kpiRef}
-            horizontal
-            pagingEnabled
-            data={KPI_DATA}
-            keyExtractor={i => i.id}
-            showsHorizontalScrollIndicator={false}
-            getItemLayout={(_, index) => ({ length: SW, offset: SW * index, index })}
-            onScrollToIndexFailed={() => {}}
-            onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
-              setKpiIdx(Math.round(e.nativeEvent.contentOffset.x / SW));
-            }}
-            renderItem={({ item }) => (
-              <View style={s.kpiItem}>
-                <View style={s.kpiCard}>
-                  <View style={s.kpiIconBox}>
-                    <Ionicons name={item.icon as any} size={20} color={COLORS.textSecondary} />
-                  </View>
-                  <View style={s.kpiTextWrap}>
-                    <Text style={s.kpiLabel}>{item.label}</Text>
-                    <Text style={s.kpiAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount}</Text>
-                  </View>
-                  <View style={[s.kpiTrendBadge, {
-                    backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg,
-                  }]}>
-                    <Ionicons
-                      name={item.positive ? 'trending-up' : 'trending-down'}
-                      size={11}
-                      color={item.positive ? COLORS.positive : COLORS.negative}
-                    />
-                    <Text style={[s.kpiTrendTxt, {
-                      color: item.positive ? COLORS.positive : COLORS.negative,
-                    }]}>{item.trend}</Text>
-                  </View>
-                </View>
-              </View>
-            )}
-          />
-          {/* KPI dots */}
-          <View style={s.dots}>
-            {KPI_DATA.map((_, i) => (
-              <View key={i} style={[s.dot, i === kpiIdx && s.dotActive]} />
-            ))}
-          </View>
-        </View>
-
-        {/* ── Bank Cards Carousel ─────────────────────────────────────────── */}
-        <View style={s.bankSection}>
-          <FlatList
-            horizontal
-            pagingEnabled
-            data={BANKS}
-            keyExtractor={b => b.id}
-            showsHorizontalScrollIndicator={false}
-            getItemLayout={(_, index) => ({ length: SW, offset: SW * index, index })}
-            onScrollToIndexFailed={() => {}}
-            onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
-              setBankIdx(Math.round(e.nativeEvent.contentOffset.x / SW));
-            }}
-            renderItem={({ item: bank }) => (
-              <View style={s.bankItem}>
-                <LinearGradient
-                  colors={bank.gradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={s.bankCard}
-                >
-                  {/* Bank name row */}
-                  <View style={s.bankTopRow}>
-                    <Text style={s.bankName}>{bank.name}</Text>
-                    <View style={s.bankDotSep} />
-                    <Text style={s.bankAcct}>{bank.account}</Text>
-                  </View>
-
-                  {/* Balance row */}
-                  <View style={s.bankBottomRow}>
-                    <View>
-                      <Text style={s.bankBalLabel}>Balance</Text>
-                      <Text style={s.bankBal}>{bank.balance}</Text>
+        ) : (
+          <>
+            <View style={s.kpiSection}>
+              <FlatList
+                horizontal
+                pagingEnabled
+                data={kpiCards}
+                keyExtractor={(i) => i.id}
+                showsHorizontalScrollIndicator={false}
+                getItemLayout={(_, index) => ({ length: SW, offset: SW * index, index })}
+                onMomentumScrollEnd={(e) => setKpiIdx(Math.round(e.nativeEvent.contentOffset.x / SW))}
+                renderItem={({ item }) => (
+                  <View style={s.kpiItem}>
+                    <View style={s.kpiCard}>
+                      <View style={s.kpiIconBox}>
+                        <Ionicons name={item.icon as any} size={20} color={COLORS.textSecondary} />
+                      </View>
+                      <View style={s.kpiTextWrap}>
+                        <Text style={s.kpiLabel}>{item.label}</Text>
+                        <Text style={s.kpiAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount}</Text>
+                      </View>
                     </View>
-                    <Text style={s.bankFeed}>Last feed {bank.lastFeed}</Text>
                   </View>
-                </LinearGradient>
+                )}
+              />
+              <View style={s.dots}>
+                {kpiCards.map((_, i) => <View key={i} style={[s.dot, i === kpiIdx && s.dotActive]} />)}
               </View>
+            </View>
+
+            {banks.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.bankChips}>
+                {banks.map(b => (
+                  <TouchableOpacity
+                    key={b.name}
+                    style={[s.bankChip, selectedBank === b.name && s.bankChipActive]}
+                    onPress={() => setSelectedBank(b.name)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[s.bankChipTxt, selectedBank === b.name && s.bankChipTxtActive]} numberOfLines={1}>
+                      {b.name}
+                    </Text>
+                    <Text style={[s.bankChipAmt, selectedBank === b.name && s.bankChipTxtActive]}>
+                      {formatAmountCompact(Math.round(b.balance))}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             )}
-          />
-          {/* Bank card dots */}
-          <View style={s.dots}>
-            {BANKS.map((_, i) => (
-              <View key={i} style={[s.dot, i === bankIdx && s.dotActive]} />
-            ))}
-          </View>
-        </View>
 
-        {/* ── Recent Transactions ─────────────────────────────────────────── */}
-        <View style={s.txSection}>
-          <Text style={s.txHeading}>Recent Transactions</Text>
-
-          {activeBank.transactions.map((tx, idx) => {
-            const isCr = tx.type === 'Cr';
-            return (
-              <View
-                key={tx.id}
-                style={[s.txRow, idx < activeBank.transactions.length - 1 && s.txBorder]}
-              >
-                {/* Icon — neutral for all, only amount carries Dr/Cr color */}
-                <View style={s.txIconBox}>
-                  <Ionicons name="card-outline" size={18} color={COLORS.textSecondary} />
-                </View>
-
-                {/* ID + date */}
-                <View style={s.txInfo}>
-                  <Text style={s.txId}>{tx.id}</Text>
-                  <Text style={s.txDate}>{tx.date}</Text>
-                </View>
-
-                {/* Amount Dr/Cr */}
-                <Text style={[s.txAmt, { color: isCr ? COLORS.positive : COLORS.negative }]}>
-                  ₹{tx.amount} {tx.type}
+            <View style={s.recentCard}>
+              <View style={s.recentHeader}>
+                <Text style={s.recentTitle} numberOfLines={1}>
+                  {activeBank ? activeBank.name : 'Transactions'}
                 </Text>
+                <View style={s.periodRow}>
+                  {PERIOD_TABS.map(p => (
+                    <TouchableOpacity
+                      key={p}
+                      style={[s.periodBtn, period === p && s.periodBtnActive]}
+                      onPress={() => setPeriod(p)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[s.periodTxt, period === p && s.periodTxtActive]}>{p}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
-            );
-          })}
-        </View>
 
-        </>
-        }
-        <View style={{ height: 40 }} />
+              {banks.length === 0 ? (
+                <View style={s.empty}>
+                  <Text style={s.emptyTxt}>No bank ledgers found</Text>
+                </View>
+              ) : txs.length === 0 ? (
+                <View style={s.empty}>
+                  <Text style={s.emptyTxt}>No transactions in this period</Text>
+                </View>
+              ) : txs.map((t, idx) => (
+                <TouchableOpacity
+                  key={t.guid || `${t.voucher_number}-${idx}`}
+                  style={[s.txRow, idx < txs.length - 1 && s.txBorder]}
+                  activeOpacity={0.7}
+                  onPress={() => t.guid && router.push(`/document/${t.guid}` as any)}
+                >
+                  <View style={s.txIconBox}>
+                    <Ionicons
+                      name={t.type === 'Dr' ? 'arrow-down-outline' : 'arrow-up-outline'}
+                      size={17}
+                      color={COLORS.textSecondary}
+                    />
+                  </View>
+                  <View style={s.txInfo}>
+                    <View style={s.txTopRow}>
+                      <Text style={s.txMode}>{t.type === 'Dr' ? 'Credit' : 'Debit'}</Text>
+                      <Text style={s.txRef}> · {t.voucher_number || '—'}</Text>
+                    </View>
+                    <Text style={s.txSub} numberOfLines={1}>
+                      {t.party_name || '—'} · {fmtDate(t.date)}
+                    </Text>
+                  </View>
+                  <Text style={s.txAmt}>{formatAmount(Math.round(t.amount))}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
+        <View style={{ height: 110 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Styles
-// ─────────────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.pageBg },
-
-  // Header
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: SPACING.md, paddingVertical: 14,
-    backgroundColor: COLORS.cardBg,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-  },
-  headerBtn:   { width: 40 },
+  scroll: { paddingTop: SPACING.md },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 14, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  headerBtn: { width: 40 },
   headerTitle: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
 
-  scroll: { paddingTop: SPACING.md },
-
-  // ── KPI Carousel
   kpiSection: { marginBottom: SPACING.md },
-  kpiItem:    { width: SW },
-  kpiCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: COLORS.cardBg,
-    borderRadius: RADIUS.lg,
-    paddingHorizontal: 14, paddingVertical: 12,
-    marginHorizontal: SPACING.md,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  kpiIconBox: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: COLORS.pageBg,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-  },
-  kpiTextWrap:  { flex: 1, gap: 2 },
-  kpiLabel:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600' },
-  kpiAmount:    { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
-  kpiTrendBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    paddingHorizontal: 7, paddingVertical: 3,
-    borderRadius: RADIUS.full, flexShrink: 0,
-  },
-  kpiTrendTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
+  kpiItem: { width: SW },
+  kpiCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, paddingHorizontal: 14, paddingVertical: 12, marginHorizontal: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
+  kpiIconBox: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
+  kpiTextWrap: { flex: 1, gap: 2 },
+  kpiLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600' },
+  kpiAmount: { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
 
-  // ── Dots
-  dots: {
-    flexDirection: 'row', justifyContent: 'center',
-    alignItems: 'center', gap: 5, marginTop: 10,
-  },
-  dot:       { width: 5,  height: 5, borderRadius: 3,   backgroundColor: COLORS.borderDefault },
-  dotActive: { width: 16, height: 5, borderRadius: 3,   backgroundColor: COLORS.textPrimary },
+  dots: { flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: 10 },
+  dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
+  dotActive: { width: 16, height: 5, borderRadius: 3, backgroundColor: COLORS.textPrimary },
 
-  // ── Bank Cards
-  bankSection: { marginBottom: SPACING.md },
-  bankItem:    { width: SW },
-  bankCard: {
-    marginHorizontal: SPACING.md,
-    borderRadius: RADIUS.xl,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 18,
-    gap: 24,
-  },
-  bankTopRow:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  bankName:    { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: '#FFFFFF' },
-  bankDotSep:  { width: 5, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.6)' },
-  bankAcct:    { fontSize: TYPOGRAPHY.base, color: 'rgba(255,255,255,0.8)' },
-  bankBottomRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
-  bankBalLabel:  { fontSize: TYPOGRAPHY.sm, color: 'rgba(255,255,255,0.7)', marginBottom: 4 },
-  bankBal:       { fontSize: TYPOGRAPHY.xxl, fontWeight: '800', color: '#FFFFFF' },
-  bankFeed:      { fontSize: TYPOGRAPHY.xs, color: 'rgba(255,255,255,0.65)', paddingBottom: 4 },
+  bankChips: { paddingHorizontal: SPACING.md, gap: 8, paddingBottom: 12 },
+  bankChip: { maxWidth: 180, paddingHorizontal: 12, paddingVertical: 8, borderRadius: RADIUS.md, backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault },
+  bankChipActive: { backgroundColor: COLORS.textPrimary, borderColor: COLORS.textPrimary },
+  bankChipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary },
+  bankChipAmt: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
+  bankChipTxtActive: { color: '#fff' },
 
-  // ── Recent Transactions
-  txSection: {
-    marginHorizontal: SPACING.md,
-    backgroundColor: COLORS.cardBg,
-    borderRadius: RADIUS.lg,
-    paddingHorizontal: SPACING.md,
-    paddingTop: 16,
-    paddingBottom: 4,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  txHeading: {
-    fontSize: TYPOGRAPHY.base, fontWeight: '700',
-    color: COLORS.textPrimary, marginBottom: 12,
-  },
-  txRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 12, gap: 12,
-  },
+  recentCard: { marginHorizontal: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
+  recentHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingTop: 14, paddingBottom: 10, gap: 8 },
+  recentTitle: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  periodRow: { flexDirection: 'row', gap: 4 },
+  periodBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault },
+  periodBtnActive: { backgroundColor: COLORS.textPrimary, borderColor: COLORS.textPrimary },
+  periodTxt: { fontSize: 11, fontWeight: '600', color: COLORS.textSecondary },
+  periodTxtActive: { color: '#fff' },
+  txRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: SPACING.md, gap: 10 },
   txBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  txIconBox: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: COLORS.pageBg,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-  },
-  txInfo:  { flex: 1 },
-  txId:    { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  txDate:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
-  txAmt:   { fontSize: TYPOGRAPHY.sm, fontWeight: '700', flexShrink: 0 },
+  txIconBox: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  txInfo: { flex: 1 },
+  txTopRow: { flexDirection: 'row', alignItems: 'center' },
+  txMode: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  txRef: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
+  txSub: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+  txAmt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  empty: { padding: 24, alignItems: 'center' },
+  emptyTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
 });

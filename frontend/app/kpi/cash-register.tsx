@@ -13,7 +13,7 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
-// ── Mock Data ────────────────────────────────────────────────────────────────
+// ── Types ───────────────────────────────────────────────────────────────────
 type TxType = 'payment' | 'receipt' | 'contra';
 
 interface TxItem {
@@ -21,46 +21,6 @@ interface TxItem {
   amount: string; positive: boolean; type: TxType;
 }
 interface MonthGroup { id: string; label: string; items: TxItem[] }
-
-const MONTH_GROUPS: MonthGroup[] = [
-  {
-    id: 'jul25', label: 'Jul 2025',
-    items: [
-      { id: 't1',  voucher: 'DEP-114',  desc: 'Payment to SBI',        date: '10 Jul', amount: '₹15,000', positive: false, type: 'payment'  },
-      { id: 't2',  voucher: 'DEP-113',  desc: 'Deposit to ICICI Bank',  date: '10 Jul', amount: '₹15,000', positive: false, type: 'contra'   },
-      { id: 't3',  voucher: 'DEP-112',  desc: 'Transfer to Axis Bank',  date: '10 Jul', amount: '₹15,000', positive: false, type: 'contra'   },
-      { id: 't4',  voucher: 'RC-1452',  desc: 'Cash Sales',             date: '10 Jul', amount: '₹8,000',  positive: true,  type: 'receipt'  },
-      { id: 't5',  voucher: 'PMT-3491', desc: 'Taxi Reimburse',         date: '10 Jul', amount: '₹1,200',  positive: false, type: 'payment'  },
-      { id: 't6',  voucher: 'RC-1453',  desc: 'Cash Sales',             date: '11 Jul', amount: '₹8,000',  positive: true,  type: 'receipt'  },
-      { id: 't7',  voucher: 'RC-1454',  desc: 'Cash Sales',             date: '12 Jul', amount: '₹12,500', positive: true,  type: 'receipt'  },
-      { id: 't8',  voucher: 'PMT-3493', desc: 'Office Expense',         date: '12 Jul', amount: '₹3,500',  positive: false, type: 'payment'  },
-      { id: 't9',  voucher: 'RC-1455',  desc: 'Cash Sales',             date: '13 Jul', amount: '₹18,000', positive: true,  type: 'receipt'  },
-      { id: 't10', voucher: 'PMT-3494', desc: 'Vendor Payment',         date: '13 Jul', amount: '₹5,400',  positive: false, type: 'payment'  },
-    ],
-  },
-  {
-    id: 'jun25', label: 'Jun 2025',
-    items: [
-      { id: 't11', voucher: 'RC-1448',  desc: 'Cash Sales',             date: '28 Jun', amount: '₹22,000', positive: true,  type: 'receipt'  },
-      { id: 't12', voucher: 'PMT-3485', desc: 'Electricity Bill',       date: '28 Jun', amount: '₹4,200',  positive: false, type: 'payment'  },
-      { id: 't13', voucher: 'DEP-108',  desc: 'Transfer to SBI',        date: '25 Jun', amount: '₹20,000', positive: false, type: 'contra'   },
-      { id: 't14', voucher: 'RC-1445',  desc: 'Cash Sales',             date: '20 Jun', amount: '₹15,500', positive: true,  type: 'receipt'  },
-    ],
-  },
-  {
-    id: 'may25', label: 'May 2025',
-    items: [
-      { id: 't15', voucher: 'RC-1440',  desc: 'Cash Sales',             date: '30 May', amount: '₹18,200', positive: true,  type: 'receipt'  },
-      { id: 't16', voucher: 'PMT-3478', desc: 'Staff Salary',           date: '31 May', amount: '₹35,000', positive: false, type: 'payment'  },
-      { id: 't17', voucher: 'DEP-102',  desc: 'Deposit to HDFC',        date: '15 May', amount: '₹25,000', positive: false, type: 'contra'   },
-    ],
-  },
-];
-
-const MONTH_TABS = ['All', ...MONTH_GROUPS.map(g => g.id)];
-const MONTH_LABELS: Record<string, string> = {
-  all: 'All', jul25: 'Jul', jun25: 'Jun', may25: 'May',
-};
 
 type FilterType = 'all' | 'inflow' | 'outflow';
 

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
@@ -10,7 +10,7 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 import { useAuth } from '../../src/context/AuthContext';
-import { getSalesInvoices, getKPIStrip } from '../../src/services/api';
+import { getSalesInvoices, getSalesHomeMetrics } from '../../src/services/api';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useSettings } from '../../src/context/SettingsContext';
 import { KPICardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
@@ -22,30 +22,6 @@ const { width: SW } = Dimensions.get('window');
 const CARD_W  = SW - SPACING.md * 2;
 const BANNER_W = SW - SPACING.md * 2;
 
-// ─── Data ───────────────────────────────────────────────────────────────────
-const METRIC_CARDS = [
-  { id: 'today',       label: 'Today',        icon: 'calendar-outline',        amount: '₹1,25,000',  pct: '+18%', pos: true  },
-  { id: 'mtd',         label: 'MTD',          icon: 'calendar-number-outline', amount: '₹3,45,500',  pct: '+12%', pos: true  },
-  { id: 'ytd',         label: 'YTD',          icon: 'ribbon-outline',          amount: '₹11,92,750', pct: '+22%', pos: true  },
-  { id: 'outstanding', label: 'Outstanding',  icon: 'wallet-outline',          amount: '₹17,56,950', pct: '+16%', pos: true  },
-  { id: 'credit',      label: 'Credit Notes', icon: 'receipt-outline',         amount: '₹28,500',    pct: '+8%',  pos: true  },
-  { id: 'avg',         label: 'Avg Ticket',   icon: 'ticket-outline',          amount: '₹1,38,200',  pct: '-2%',  pos: false },
-];
-
-const TOP_PARTIES = [
-  { id: 'TP1', name: 'Raj Enterprises',    amount: '₹4,82,000', color: '#2563EB' },
-  { id: 'TP2', name: 'Kumar & Sons',        amount: '₹3,61,500', color: '#D97706' },
-  { id: 'TP3', name: 'Sharma Traders',      amount: '₹2,88,000', color: '#7C3AED' },
-  { id: 'TP4', name: 'Delhi Distributors',  amount: '₹2,14,000', color: '#0891B2' },
-  { id: 'TP5', name: 'Mumbai Wholesale',    amount: '₹1,92,500', color: '#059669' },
-];
-
-const BANNERS = [
-  { id: 'b1', bold: '10 invoices', sub: 'due for E-Invoice generation', action: 'Generate Now' },
-  { id: 'b2', bold: 'Credits left: 28', sub: 'Buy more credits to continue', action: 'Buy Now' },
-  { id: 'b3', bold: '14 invoices', sub: 'due for IRN generation', action: 'Generate Now' },
-];
-
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function SalesScreen() {
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
@@ -56,35 +32,71 @@ export default function SalesScreen() {
   const [liveRecent, setLiveRecent] = useState<any[]>([]);
   const [liveTopParties, setLiveTopParties] = useState<any[]>([]);
   const [liveBanners, setLiveBanners] = useState<any[]>([]);
+  const [metrics, setMetrics] = useState<any>(null);
   const [apiError, setApiError]       = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!companyGuid) return;
     setApiError(null);
-    // Recent invoices
-    getSalesInvoices(companyGuid, { limit: '5' } as any).then((res: any) => {
-      const rows = res?.data ?? [];
-      if (rows.length) setLiveRecent(rows.slice(0,5).map((r: any) => ({
-        id: r.voucher_number || String(r.id),
-        party: r.party_name || '',
-        date: r.date || '',
-        amount: formatAmount(Math.abs(+r.amount||0)),
-        status: r.irn ? 'generated' : 'pending_irn',
-      })));
-      // Top parties from same data
-      const partyMap: Record<string,number> = {};
-      rows.forEach((r: any) => { if (r.party_name) partyMap[r.party_name] = (partyMap[r.party_name]||0) + (+r.amount||0); });
-      const top = Object.entries(partyMap).sort((a,b) => b[1]-a[1]).slice(0,5);
-      if (top.length) setLiveTopParties(top.map(([name, amt], i) => ({ id: `tp${i}`, name, amount: formatAmount(Math.round(+amt)), color: ['#2563EB','#D97706','#7C3AED','#0891B2','#059669'][i] })));
-      // Dynamic banners
-      const pendingIRN = rows.filter((r: any) => !r.irn).length;
-      if (pendingIRN > 0) setLiveBanners([{ id: 'b1', bold: `${pendingIRN} invoices`, sub: 'pending E-Invoice (IRN) generation', action: 'Generate Now' }, ...BANNERS.slice(1)]);
+    setIsLoading(true);
+    const fyParams = selectedFY?.startDate && selectedFY?.endDate
+      ? { from: selectedFY.startDate, to: selectedFY.endDate }
+      : {};
+    Promise.all([
+      getSalesInvoices(companyGuid, { limit: '50', ...fyParams } as any),
+      getSalesHomeMetrics(companyGuid, fyParams),
+    ]).then(([invRes, metricsRes]: any[]) => {
+      const rows = invRes?.data ?? [];
+      if (rows.length) {
+        setLiveRecent(rows.slice(0, 5).map((r: any) => ({
+          id: r.guid || r.voucher_number || String(r.id),
+          voucher: r.voucher_number || '',
+          party: r.party_name || '',
+          date: r.date || '',
+          amount: formatAmount(Math.abs(+r.amount || 0)),
+          status: r.irn ? 'generated' : 'pending_irn',
+        })));
+        const partyMap: Record<string, number> = {};
+        rows.forEach((r: any) => {
+          if (r.party_name) partyMap[r.party_name] = (partyMap[r.party_name] || 0) + (+r.amount || 0);
+        });
+        const top = Object.entries(partyMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
+        setLiveTopParties(top.map(([name, amt], i) => ({
+          id: `tp${i}`,
+          name,
+          amount: formatAmount(Math.round(+amt)),
+          color: ['#2563EB', '#D97706', '#7C3AED', '#0891B2', '#059669'][i],
+        })));
+        const pendingIRN = rows.filter((r: any) => !r.irn).length;
+        setLiveBanners(pendingIRN > 0
+          ? [{ id: 'b1', bold: `${pendingIRN} invoices`, sub: 'pending E-Invoice (IRN) generation', action: 'Generate Now' }]
+          : []);
+      } else {
+        setLiveRecent([]);
+        setLiveTopParties([]);
+        setLiveBanners([]);
+      }
+      setMetrics(metricsRes?.data ?? metricsRes ?? null);
     }).catch((err: any) => {
       setApiError(err?.message || 'Failed to load sales data');
       console.error('[Sales]', err?.message);
     }).finally(() => setIsLoading(false));
-  }, [companyGuid, lastSyncAt]);
+  }, [companyGuid, lastSyncAt, selectedFY?.startDate, selectedFY?.endDate, formatAmount]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const metricCards = useMemo(() => {
+    const m = metrics || {};
+    return [
+      { id: 'today', label: 'Today', icon: 'calendar-outline', amount: formatAmountCompact(Math.round(Number(m.today) || 0)) },
+      { id: 'mtd', label: 'MTD', icon: 'calendar-number-outline', amount: formatAmountCompact(Math.round(Number(m.mtd) || 0)) },
+      { id: 'ytd', label: 'YTD', icon: 'ribbon-outline', amount: formatAmountCompact(Math.round(Number(m.ytd) || 0)) },
+      { id: 'outstanding', label: 'Outstanding', icon: 'wallet-outline', amount: formatAmountCompact(Math.round(Number(m.outstanding) || 0)) },
+      { id: 'credit', label: 'Credit Notes', icon: 'receipt-outline', amount: formatAmountCompact(Math.round(Number(m.credit_notes) || 0)) },
+      { id: 'avg', label: 'Avg Ticket', icon: 'ticket-outline', amount: formatAmountCompact(Math.round(Number(m.avg_ticket) || 0)) },
+    ];
+  }, [metrics, formatAmountCompact]);
 
   // ─ Tab & filter state
   const [tab,      setTab]      = useState<'recent' | 'parties'>('recent');
@@ -103,41 +115,39 @@ export default function SalesScreen() {
   const [metricIdx, setMetricIdx] = useState(0);
   const [bannerIdx, setBannerIdx] = useState(0);
 
-  // ─ Auto-scroll metric cards every 3s
   useEffect(() => {
+    if (metricCards.length === 0) return;
     const t = setInterval(() => {
       setMetricIdx(prev => {
-        const next = (prev + 1) % METRIC_CARDS.length;
+        const next = (prev + 1) % metricCards.length;
         metricRef.current?.scrollToOffset({ offset: next * SW, animated: true });
         return next;
       });
     }, 3000);
     return () => clearInterval(t);
-  }, []);
+  }, [metricCards.length]);
 
-  // ─ Auto-scroll banners every 3.5s
   useEffect(() => {
+    if (liveBanners.length === 0) return;
     const t = setInterval(() => {
       setBannerIdx(prev => {
-        const next = (prev + 1) % BANNERS.length;
+        const next = (prev + 1) % liveBanners.length;
         bannerRef.current?.scrollToIndex({ index: next, animated: true, viewPosition: 0 });
         return next;
       });
     }, 3500);
     return () => clearInterval(t);
-  }, []);
+  }, [liveBanners.length]);
 
-  // ─ Filtered recent list
   const sourceRecent = liveRecent;
   const recent = sourceRecent.filter((inv: any) => {
     if (filter === 'Paid')   return inv.status === 'paid';
     if (filter === 'Unpaid') return inv.status === 'unpaid';
     return true;
   }).slice(0, 5);
-  const displayTopParties = liveTopParties.length > 0 ? liveTopParties : TOP_PARTIES;
-  const displayBanners = liveBanners.length > 0 ? liveBanners : BANNERS;
+  const displayTopParties = liveTopParties;
+  const displayBanners = liveBanners;
 
-  // ─ Date apply handler
   const handleDateApply = (from: string, to: string) => {
     setFromDate(from);
     setToDate(to);
@@ -146,7 +156,7 @@ export default function SalesScreen() {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      {apiError && <ErrorBanner message={apiError} onRetry={() => { setApiError(null); }} />}
+      {apiError && <ErrorBanner message={apiError} onRetry={load} />}
 
       {/* ── Header ─────────────────────────────────────────────────── */}
       <View style={s.header}>
@@ -212,7 +222,7 @@ export default function SalesScreen() {
         <View style={s.carouselWrap}>
           <FlatList
             ref={metricRef}
-            data={METRIC_CARDS}
+            data={metricCards}
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
@@ -231,17 +241,12 @@ export default function SalesScreen() {
                   </View>
                   <Text style={s.mLabel}>{c.label}</Text>
                   <Text style={s.mAmount}>{c.amount}</Text>
-                  <View style={[s.pctBadge, { backgroundColor: c.pos ? COLORS.positiveBg : COLORS.negativeBg }]}>
-                    <Ionicons name={c.pos ? 'trending-up' : 'trending-down'} size={11} color={c.pos ? COLORS.positive : COLORS.negative} />
-                    <Text style={[s.pctTxt, { color: c.pos ? COLORS.positive : COLORS.negative }]}>{c.pct}</Text>
-                  </View>
                 </View>
               </View>
             )}
           />
-          {/* Dots */}
           <View style={s.dotsRow}>
-            {METRIC_CARDS.map((_, i) => (
+            {metricCards.map((_, i) => (
               <View key={i} style={[s.dot, i === metricIdx && s.dotActive]} />
             ))}
           </View>
@@ -316,7 +321,12 @@ export default function SalesScreen() {
         {/* ── Top Parties ──────────────────────────────────────────── */}
         {tab === 'parties' && (
           <View style={s.listSection}>
-            {displayTopParties.map(p => (
+            {displayTopParties.length === 0 ? (
+              <View style={s.emptyBox}>
+                <Ionicons name="people-outline" size={28} color={COLORS.textTertiary} />
+                <Text style={s.emptyTxt}>No party sales yet</Text>
+              </View>
+            ) : displayTopParties.map(p => (
               <TouchableOpacity key={p.id} style={s.itemCard} activeOpacity={0.7}>
                 <View style={[s.avatar, { backgroundColor: p.color + '22' }]}>
                   <Text style={[s.avatarTxt, { color: p.color }]}>{p.name.charAt(0)}</Text>
@@ -338,6 +348,7 @@ export default function SalesScreen() {
       </ScrollView>
 
       {/* ── Sticky Banner Carousel ─────────────────────────────────── */}
+      {displayBanners.length > 0 && (
       <View style={[s.bannerWrap, { paddingBottom: insets.bottom > 0 ? insets.bottom : 8 }]}>
         <FlatList
           ref={bannerRef}
@@ -369,13 +380,13 @@ export default function SalesScreen() {
             </View>
           )}
         />
-        {/* Banner dots */}
         <View style={s.bannerDots}>
           {displayBanners.map((_, i) => (
             <View key={i} style={[s.bannerDot, i === bannerIdx && s.bannerDotActive]} />
           ))}
         </View>
       </View>
+      )}
 
       {/* ── Date Range Picker ──────────────────────────────────────── */}
       <DateRangePickerModal

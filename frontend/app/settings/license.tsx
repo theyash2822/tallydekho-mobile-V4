@@ -16,12 +16,7 @@ const CREDIT_PACKAGES = [
   { id: 'c1000', credits: 1000, price: 849,  label: '1000 Credits', priceLabel: '₹849' },
 ];
 
-const MOCK_HISTORY = [
-  { id: '1', inv: 'INV-2025-0710-001', date: '23 Jul 2025', amount: '₹00.00',    type: 'Single User',  icon: 'phone-portrait-outline' },
-  { id: '2', inv: 'INV-2025-0710-002', date: '23 Jul 2025', amount: '₹2,000.00', type: '100 Credits',   icon: 'document-text-outline' },
-  { id: '3', inv: 'INV-2025-0710-003', date: '15 Jun 2025', amount: '₹00.00',    type: 'Single User',  icon: 'phone-portrait-outline' },
-  { id: '4', inv: 'INV-2025-0710-004', date: '15 Jun 2025', amount: '₹2,000.00', type: '100 Credits',   icon: 'document-text-outline' },
-];
+const PURCHASE_HISTORY: Array<{ id: string; inv: string; date: string; amount: string; type: string; icon: string }> = [];
 
 const INDIAN_STATES = [
   'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh',
@@ -342,7 +337,11 @@ function BuyCreditSheet({ visible, onClose, onBuyNow }: {
           {/* Purchase History */}
           <Text style={bc.sectionLabel}>Purchase History</Text>
           <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
-            {MOCK_HISTORY.map(item => (
+            {PURCHASE_HISTORY.length === 0 ? (
+              <Text style={{ fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, paddingVertical: 12 }}>
+                No purchases yet
+              </Text>
+            ) : PURCHASE_HISTORY.map(item => (
               <View key={item.id} style={bc.historyRow}>
                 <View style={bc.historyIcon}>
                   <Ionicons name={item.icon as any} size={16} color={COLORS.textSecondary} />

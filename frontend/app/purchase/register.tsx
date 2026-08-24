@@ -37,7 +37,7 @@ const STATUS_LABEL: Record<string, string> = {
   debit_note: 'Debit Note',
 };
 
-// ─── Month-grouped mock data ─────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 type PurchaseInvoice = {
   id: string;
   guid?: string;
@@ -45,37 +45,6 @@ type PurchaseInvoice = {
   time: string; amount: string; status: string;
 };
 type MonthGroup = { id: string; label: string; invoices: PurchaseInvoice[] };
-
-const MONTH_GROUPS: MonthGroup[] = [
-  {
-    id: 'apr25', label: 'Apr 25',
-    invoices: [
-      { id: 'PINV-00985', vendor: 'Tech Supplies Ltd.',  date: '28/04/25', time: '11:00 AM', amount: '₹45,000', status: 'paid'       },
-      { id: 'PINV-00984', vendor: 'Raw Materials Co.',   date: '22/04/25', time: '10:30 AM', amount: '₹28,500', status: 'unpaid'     },
-      { id: 'DBN-00046',  vendor: 'PQR Exports',         date: '15/04/25', time: '09:00 AM', amount: '₹12,800', status: 'debit_note' },
-      { id: 'PINV-00983', vendor: 'Packaging Solutions', date: '10/04/25', time: '02:00 PM', amount: '₹8,900',  status: 'paid'       },
-    ],
-  },
-  {
-    id: 'mar25', label: 'Mar 25',
-    invoices: [
-      { id: 'PINV-00982', vendor: 'Machinery Corp.',     date: '29/03/25', time: '03:00 PM', amount: '₹67,300', status: 'paid'   },
-      { id: 'PINV-00981', vendor: 'Office Supplies Inc.',date: '20/03/25', time: '11:00 AM', amount: '₹18,500', status: 'unpaid' },
-      { id: 'PINV-00980', vendor: 'ABC Traders',         date: '12/03/25', time: '09:30 AM', amount: '₹42,000', status: 'paid'   },
-    ],
-  },
-  {
-    id: 'feb25', label: 'Feb 25',
-    invoices: [
-      { id: 'PINV-00979', vendor: 'Kumar & Sons',        date: '25/02/25', time: '10:00 AM', amount: '₹35,000', status: 'paid'   },
-      { id: 'PINV-00978', vendor: 'PQR Exports',         date: '14/02/25', time: '11:30 AM', amount: '₹28,000', status: 'irm'    },
-    ],
-  },
-  {
-    id: 'jan25', label: 'Jan 25',
-    invoices: [],
-  },
-];
 
 export default function PurchaseRegisterScreen() {
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
@@ -148,7 +117,14 @@ export default function PurchaseRegisterScreen() {
   const [dropdown,       setDropdown]       = useState(false);
 
   // Collapsible months — all open by default
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(MONTH_GROUPS.map(g => g.id)));
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      displayGroups.forEach(g => next.add(g.id));
+      return next;
+    });
+  }, [liveInvoices.length]);
   const toggleMonth = (id: string) =>
     setExpanded(prev => {
       const next = new Set(prev);
@@ -191,28 +167,26 @@ export default function PurchaseRegisterScreen() {
       return matchSearch && matchStatus;
     });
 
-  // Use live data if available, group by month; else fall back to mock MONTH_GROUPS
-  const displayGroups: MonthGroup[] = liveInvoices.length > 0
-    ? (() => {
-        const map: Record<string, MonthGroup> = {};
-        liveInvoices.forEach(inv => {
-          let monthKey = 'Other'; let monthLabel = 'Other';
-          const d = inv.date;
-          if (d && d.includes('-') && d.length === 10) {
-            const p = d.split('-');
-            monthKey = `${p[0]}-${p[1]}`;
-            monthLabel = new Date(+p[0], +p[1]-1, 1).toLocaleString('en-IN', { month: 'short', year: '2-digit' });
-          } else if (d && d.includes('/')) {
-            const p = d.split('/');
-            monthKey = `${p[2]}-${p[1]}`;
-            monthLabel = `${new Date(2000 + +p[2], +p[1]-1, 1).toLocaleString('en-IN', { month: 'short' })} ${p[2]}`;
-          }
-          if (!map[monthKey]) map[monthKey] = { id: monthKey, label: monthLabel, invoices: [] };
-          map[monthKey].invoices.push(inv);
-        });
-        return Object.values(map).sort((a, b) => b.id.localeCompare(a.id));
-      })()
-    : MONTH_GROUPS;
+  // Group live invoices by month; empty list shows empty-state (no mock fallback)
+  const displayGroups: MonthGroup[] = (() => {
+    const map: Record<string, MonthGroup> = {};
+    liveInvoices.forEach(inv => {
+      let monthKey = 'Other'; let monthLabel = 'Other';
+      const d = inv.date;
+      if (d && d.includes('-') && d.length === 10) {
+        const p = d.split('-');
+        monthKey = `${p[0]}-${p[1]}`;
+        monthLabel = new Date(+p[0], +p[1]-1, 1).toLocaleString('en-IN', { month: 'short', year: '2-digit' });
+      } else if (d && d.includes('/')) {
+        const p = d.split('/');
+        monthKey = `${p[2]}-${p[1]}`;
+        monthLabel = `${new Date(2000 + +p[2], +p[1]-1, 1).toLocaleString('en-IN', { month: 'short' })} ${p[2]}`;
+      }
+      if (!map[monthKey]) map[monthKey] = { id: monthKey, label: monthLabel, invoices: [] };
+      map[monthKey].invoices.push(inv);
+    });
+    return Object.values(map).sort((a, b) => b.id.localeCompare(a.id));
+  })();
 
   const allFiltered = displayGroups.flatMap(g => filterInvoices(g.invoices));
 
