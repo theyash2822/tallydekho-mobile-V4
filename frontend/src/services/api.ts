@@ -147,6 +147,10 @@ export const getCashflow = (companyGuid?: string, period = '7D', from?: string, 
         updatedAt:            d.updated_at            ?? d.updatedAt            ?? null,
         totalIncome:          d.total_income          ?? d.totalIncome          ?? 0,
         totalExpense:         d.total_expense         ?? d.totalExpense         ?? 0,
+        sales:                d.sales                 ?? 0,
+        purchase:             d.purchase              ?? 0,
+        grossProfitVsSalesPct: d.gross_profit_vs_sales_pct ?? d.grossProfitVsSalesPct
+          ?? d.income_percentage ?? d.incomePercentage ?? 0,
       };
     });
 

@@ -263,15 +263,15 @@ export default function CashflowReportScreen() {
           </View>
         </View>
 
-        {/* ── Receipts / Payments Bars ── */}
+        {/* ── Income / Expense Bars ── */}
         <View style={s.card}>
-          <Text style={s.sectionTitle}>Receipts vs Payments</Text>
+          <Text style={s.sectionTitle}>Income vs Expense</Text>
 
-          {/* Receipts */}
+          {/* Income */}
           <View style={s.barRow}>
             <View style={s.barMeta}>
               <Ionicons name="arrow-up-circle-outline" size={16} color={COLORS.positive} />
-              <Text style={s.barLabel}>Receipts</Text>
+              <Text style={s.barLabel}>Income</Text>
             </View>
             <SegmentedBar value={income} maxValue={maxVal} color={COLORS.positive} delay={80} />
             <View style={s.barRight}>
@@ -285,11 +285,11 @@ export default function CashflowReportScreen() {
 
           <View style={s.sep} />
 
-          {/* Payments */}
+          {/* Expense */}
           <View style={s.barRow}>
             <View style={s.barMeta}>
               <Ionicons name="arrow-down-circle-outline" size={16} color={COLORS.negative} />
-              <Text style={s.barLabel}>Payments</Text>
+              <Text style={s.barLabel}>Expense</Text>
             </View>
             <SegmentedBar value={expense} maxValue={maxVal} color={COLORS.negative} delay={360} />
             <View style={s.barRight}>
@@ -305,9 +305,9 @@ export default function CashflowReportScreen() {
             <Text style={s.sectionTitle}>Daily Trend</Text>
             <View style={s.legend}>
               <View style={[s.legendDot, { backgroundColor: COLORS.positive }]} />
-              <Text style={s.legendTxt}>Receipts</Text>
+              <Text style={s.legendTxt}>Income</Text>
               <View style={[s.legendDot, { backgroundColor: COLORS.negative, marginLeft: 10 }]} />
-              <Text style={s.legendTxt}>Payments</Text>
+              <Text style={s.legendTxt}>Expense</Text>
             </View>
           </View>
           <TrendChart key={period} days={days} maxVal={maxDayVal} />
@@ -317,16 +317,32 @@ export default function CashflowReportScreen() {
         <View style={s.card}>
           <Text style={s.sectionTitle}>Key Metrics</Text>
           <View style={s.metricsGrid}>
-            <MetricCard label="Receipts"    value={fmt(income)}        valueColor={COLORS.positive} />
-            <MetricCard label="Payments"   value={fmt(expense)}       valueColor={COLORS.negative} />
+            <MetricCard label="Total Income"  value={fmt(income)}  valueColor={COLORS.positive} />
+            <MetricCard label="Total Expense" value={fmt(expense)} valueColor={COLORS.negative} />
           </View>
           <View style={[s.metricsGrid, { marginTop: SPACING.sm }]}>
-            <MetricCard label="Net Flow"    value={fmt(Number(cf?.grossProfit ?? 0))}   valueColor={Number(cf?.grossProfit ?? 0) >= 0 ? COLORS.positive : COLORS.negative} />
-            <MetricCard label="Receipts − Payments"      value={fmt(Number(cf?.netProfit ?? 0))}     valueColor={Number(cf?.netProfit ?? 0) >= 0 ? COLORS.positive : COLORS.negative} />
+            <MetricCard
+              label="Gross Profit"
+              value={fmt(Number(cf?.grossProfit ?? 0))}
+              valueColor={Number(cf?.grossProfit ?? 0) >= 0 ? COLORS.positive : COLORS.negative}
+            />
+            <MetricCard
+              label="Net Profit"
+              value={fmt(Number(cf?.netProfit ?? 0))}
+              valueColor={Number(cf?.netProfit ?? 0) >= 0 ? COLORS.positive : COLORS.negative}
+            />
           </View>
           <View style={[s.metricsGrid, { marginTop: SPACING.sm }]}>
-            <MetricCard label="Gross Cash"      value={fmt(Number(cf?.grossCash ?? netCash))} />
-            <MetricCard label="Net Realisable"  value={fmt(Number(cf?.netRealisableBalance ?? netCash))} />
+            <MetricCard
+              label="Gross Profit vs Sales"
+              value={`${Number(cf?.grossProfitVsSalesPct ?? incomePct)}%`}
+              valueColor={Number(cf?.grossProfitVsSalesPct ?? incomePct) >= 0 ? COLORS.positive : COLORS.negative}
+            />
+            <MetricCard label="Sales" value={fmt(Number(cf?.sales ?? 0))} />
+          </View>
+          <View style={[s.metricsGrid, { marginTop: SPACING.sm }]}>
+            <MetricCard label="Gross Cash"     value={fmt(Number(cf?.grossCash ?? netCash))} />
+            <MetricCard label="Net Realisable" value={fmt(Number(cf?.netRealisableBalance ?? netCash))} />
           </View>
         </View>
 

@@ -116,7 +116,7 @@ export default function CashflowCard({
       <View style={s.barRow}>
         <View style={s.barMeta}>
           <Ionicons name="arrow-up-circle-outline" size={15} color={COLORS.positive} />
-          <Text style={s.barLabel}>Receipts</Text>
+          <Text style={s.barLabel}>Income</Text>
         </View>
         <SegmentedBar value={incomeVal} maxValue={maxVal} color={COLORS.positive} delay={80} />
         <View style={s.barRight}>
@@ -130,7 +130,7 @@ export default function CashflowCard({
       <View style={[s.barRow, { marginTop: 12 }]}>
         <View style={s.barMeta}>
           <Ionicons name="arrow-down-circle-outline" size={15} color={COLORS.negative} />
-          <Text style={s.barLabel}>Payments</Text>
+          <Text style={s.barLabel}>Expense</Text>
         </View>
         <SegmentedBar value={expenseVal} maxValue={maxVal} color={COLORS.negative} delay={360} />
         <View style={s.barRight}>
@@ -142,13 +142,13 @@ export default function CashflowCard({
 
       <View style={s.bottomRow}>
         <View style={s.bottomCell}>
-          <Text style={s.bottomLabel}>Net Flow</Text>
-          <Text style={[s.bottomVal, { color: netProfit >= 0 ? COLORS.positive : COLORS.negative }]}>{fmt(netProfit)}</Text>
+          <Text style={s.bottomLabel}>Gross Profit</Text>
+          <Text style={[s.bottomVal, { color: grossProfit >= 0 ? COLORS.positive : COLORS.negative }]}>{fmt(grossProfit)}</Text>
         </View>
         <View style={s.bottomSep} />
         <View style={[s.bottomCell, s.bottomCellRight]}>
-          <Text style={s.bottomLabel}>Receipts / Payments</Text>
-          <Text style={s.bottomVal}>{fmt(incomeVal)} / {fmt(expenseVal)}</Text>
+          <Text style={s.bottomLabel}>Net Profit</Text>
+          <Text style={[s.bottomVal, { color: netProfit >= 0 ? COLORS.positive : COLORS.negative }]}>{fmt(netProfit)}</Text>
         </View>
       </View>
     </View>
