@@ -598,8 +598,8 @@ export default function LedgerScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={lp.chipLbl}>Top Debtor</Text>
                   <Text style={lp.chipName} numberOfLines={1}>{position.topDebtor.name}</Text>
+                  <Text style={lp.chipAmt}>{position.topDebtor.balance}</Text>
                 </View>
-                <Text style={lp.chipAmt}>{position.topDebtor.balance}</Text>
               </TouchableOpacity>
             )}
             {position.topCreditor && (
@@ -608,8 +608,8 @@ export default function LedgerScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={lp.chipLbl}>Top Creditor</Text>
                   <Text style={lp.chipName} numberOfLines={1}>{position.topCreditor.name}</Text>
+                  <Text style={lp.chipAmt}>{position.topCreditor.balance}</Text>
                 </View>
-                <Text style={lp.chipAmt}>{position.topCreditor.balance}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -1300,27 +1300,27 @@ function PositionBar({ recvPct, payPct }: { recvPct: number; payPct: number }) {
 
 const lp = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.cardBg, marginHorizontal: SPACING.md, marginTop: SPACING.md,
+    backgroundColor: COLORS.cardBg, marginHorizontal: SPACING.md, marginTop: 10,
     borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault,
-    padding: SPACING.md, gap: 12,
+    paddingHorizontal: SPACING.md, paddingVertical: 12, gap: 9,
   },
   headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   label: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8 },
-  net: { fontSize: TYPOGRAPHY.md, fontWeight: '800', letterSpacing: -0.4 },
-  barTrack: { flexDirection: 'row', height: 12, borderRadius: 3, overflow: 'hidden', backgroundColor: COLORS.borderDefault, gap: 2 },
-  barSeg: { height: 12, borderRadius: 2 },
+  net: { fontSize: TYPOGRAPHY.base, fontWeight: '800', letterSpacing: -0.3 },
+  barTrack: { flexDirection: 'row', height: 7, borderRadius: 3, overflow: 'hidden', backgroundColor: COLORS.borderDefault, gap: 2 },
+  barSeg: { height: 7, borderRadius: 2 },
   legendRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1 },
-  dot: { width: 8, height: 8, borderRadius: 2 },
+  dot: { width: 7, height: 7, borderRadius: 2 },
   legTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600' },
   legCount: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500' },
   chipsRow: { flexDirection: 'row', gap: 10 },
   chip: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8,
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 7,
     backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md,
-    borderWidth: 1, borderColor: COLORS.borderDefault, paddingHorizontal: 10, paddingVertical: 9,
+    borderWidth: 1, borderColor: COLORS.borderDefault, paddingHorizontal: 9, paddingVertical: 7,
   },
-  chipLbl: { fontSize: 10, color: COLORS.textTertiary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
+  chipLbl: { fontSize: 9, color: COLORS.textTertiary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3 },
   chipName: { fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary, fontWeight: '700' },
-  chipAmt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary, fontWeight: '800' },
+  chipAmt: { fontSize: 10, color: COLORS.textSecondary, fontWeight: '700', marginTop: 1 },
 });

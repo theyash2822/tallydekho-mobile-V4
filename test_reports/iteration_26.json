@@ -1,0 +1,28 @@
+{
+  "summary": "Frontend-only regression on Ledger tab Position hero after compact-card + chip-restructure fixes. Verified: compact hero card renders with POSITION label + 'Net Payable ₹79,100' headline, split bar height measured at exactly 7px with animated green (~80px) + red (~244px) segments, legend shows Receivable ₹38,900 · 3 and Payable ₹1,18,000 · 4, and both chips display FULL party names ('Mehta Enterprises', 'Indian Export House') with amounts stacked below (no truncation). Tapping Top Debtor navigated to /ledger/LED010 and Top Creditor to /ledger/LED001. Regressions clean: select mode (long-press) hides the hero (Position label not visible), search 'Mehta' filters to 1 row, Credit filter reduces list to 6 rows, sort chips render. No blocking issues found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Ledger hero", "issues": ["chipAmt font is 10px which is on the small side — legible on 390x844 viewport but borderline for accessibility; consider bumping to TYPOGRAPHY.xs (11–12)."]}
+    ],
+    "react_native_issues": [
+      {"component": "Animated (PositionBar)", "issue": "Console warning: 'useNativeDriver is not supported' on RN web. This is an RN-web limitation (JS-based animation fallback works), no fix required. Reference: /app/frontend/app/(tabs)/ledger.tsx:1287-1288"},
+      {"component": "shadow* / pointerEvents style props", "issue": "Deprecation warnings emitted on load ('shadow* style props are deprecated. Use boxShadow', 'props.pointerEvents is deprecated. Use style.pointerEvents'). Likely from third-party libs (Swipeable / Modal shadows). Not blocking but should be tracked."}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/screenshots_iter26/ledger_hero.png", "/app/test_reports/screenshots_iter26/after_debtor_tap.png", "/app/test_reports/screenshots_iter26/select_mode.png", "/app/test_reports/screenshots_iter26/after_filter.png"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ledger.tsx is 1327 lines — exceeds 700-line guideline. Consider extracting CreateLedgerModal, FilterModal, and PositionHero into separate files.",
+    "PositionBar animation useEffect only depends on [recvPct, payPct] which is fine, but Animated values r/p are not reset when values change — bar will still animate from previous value to new value which is desired behavior."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% (5/5 scenarios verified: compact hero, chip name visibility, chip navigation Debtor+Creditor, select-mode hides hero, search + credit filter regressions)"},
+  "seed_data_creation": "None. Used MOCK_LEDGERS via getLedgers fallback as documented.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Ledger tab hero fixes are verified visually and via DOM measurements. Measured bar height=7px, chip party names render in full ('Mehta Enterprises' and 'Indian Export House' both visible). If further tweaks are made, retest chip navigation (LED010 for Top Debtor, LED001 for Top Creditor with current mock data) and use viewport 390x844.",
+  "rca_of_issue": "N/A — this iteration verified fixes, no bug found."
+}
