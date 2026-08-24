@@ -1,5 +1,17 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-08-24 — Unified list SearchBar (Total Stock style + mic)
+
+### Added
+- `src/components/SearchBar.tsx` — shared list search (Total Stock look, clear ×, voice mic + modal via `useVoiceSearch`).
+
+### Changed
+- 24 list screens now use `SearchBar` (Home, Ledger, registers, vouchers, stock lists, cash register, etc.).
+- Mic on all list search bars; data-entry modals (`BottomSheetSearch`, create forms, picker sheets) unchanged (no mic).
+
+### QA
+- GREEN FLAG — mobile-only UI; `tsc` clean. Test on `cursor` branch (`14b5eae9`).
+
 ## 2026-08-20 — Phase 7: compliance print layouts, Quotation and Receipt Note decided
 
 ### Added
