@@ -1,3 +1,10 @@
+## [2026-08-24] Payments + Receipts KPI screens: real API data
+
+### Fixed
+- **Payments / Receipts KPI** screens were fetching the API but still rendering hardcoded mock lists (AGL Traders etc.) — now show live vouchers including today's cash payment
+- Period pills (7D/1M/3M/6M) + Cash/Bank filters wired to real data
+- Summary cards: period total, today, cash, bank
+
 ## [2026-08-24] Home dashboard refresh + FY period clamp
 
 ### Fixed
