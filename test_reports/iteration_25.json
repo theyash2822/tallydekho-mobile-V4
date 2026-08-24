@@ -1,0 +1,27 @@
+{
+  "summary": "Frontend-only regression of the enhanced Ledger tab (Position hero). All four requested behaviors verified on mobile viewport (390x844). Position hero renders with correct headline (Net Payable ₹79,100 for MOCK_LEDGERS), animated split bar, legend counts (Receivable ₹38,900 · 3, Payable ₹1,18,000 · 4) and both chips (Top Debtor: Mehta Enterprises ₹18,400 → /ledger/LED010; Top Creditor: Indian Export House ₹34,000 → /ledger/LED001). Long-press enters select mode (header 'N Selected', Select All + Cancel), Position hero is hidden, and the bottom Share PDF bar appears. Cancel restores the hero. Regression: search ('HDFC' → 1 card), Credit/Debit dropdown works and pill stays single-line ('Credit'), row tap opens ledger detail. All checks PASS. No functional bugs found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Ledger — Position hero", "issues": ["Minor: 'Top Debtor' / 'Top Creditor' chip labels wrap to 2 lines on 390px viewport for longer names — visually acceptable but tightening chipLbl to numberOfLines={1} or reducing paddingHorizontal could improve density. Non-blocking."]}
+    ],
+    "react_native_issues": [
+      {"component": "PositionBar (Animated)", "issue": "Console warns 'Animated: useNativeDriver is not supported (RCTAnimation missing)'. This is expected on web preview since useNativeDriver:false is already set for width interpolation; warning originates from other native-driver animations in the app (not this hero). No action needed for the Ledger hero itself. Reference: /app/frontend/app/(tabs)/ledger.tsx:1287-1288"}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_25.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "position useMemo relies on `group.includes('Sundry Debtor'/'Sundry Creditor')` — string-based classification; a ledger with mis-typed group would silently drop out. Consider deriving from `nature` or `type` for robustness (non-blocking, mock-first).",
+    "PositionBar animation restarts on every recvPct/payPct change (dependency array). Fine for mock data; if real-time data comes in, throttle to avoid re-animating on every tick."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100% (6/6 scenarios pass)"},
+  "seed_data_creation": "None — uses MOCK_LEDGERS.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Ledger tab Position hero is production-ready against mock data. Chip nav uses router.push(`/ledger/<id>`). Select mode conditional (`!selectMode && !isLoading`) correctly hides hero. Regression checks (search, Credit/Debit filter dropdown pill, row tap, Cancel restore) all pass.",
+  "rca_of_issue": "N/A — no bugs found."
+}

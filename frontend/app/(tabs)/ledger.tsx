@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, RefreshControl, Modal, KeyboardAvoidingView,
@@ -503,6 +503,24 @@ export default function LedgerScreen() {
       }
     });
 
+  const amt = (sv: string) => parseInt(String(sv).replace(/[^0-9]/g, ''), 10) || 0;
+  const fmtRs = (n: number) => '₹' + n.toLocaleString('en-IN');
+  const position = useMemo(() => {
+    const debtors = data.filter(d => (d.group || '').includes('Sundry Debtor') && amt(d.balance) > 0);
+    const creditors = data.filter(d => (d.group || '').includes('Sundry Creditor') && amt(d.balance) > 0);
+    const recv = debtors.reduce((s, d) => s + amt(d.balance), 0);
+    const pay = creditors.reduce((s, d) => s + amt(d.balance), 0);
+    const total = recv + pay || 1;
+    const topDebtor = [...debtors].sort((a, b) => amt(b.balance) - amt(a.balance))[0];
+    const topCreditor = [...creditors].sort((a, b) => amt(b.balance) - amt(a.balance))[0];
+    return {
+      recv, pay, net: recv - pay,
+      recvPct: recv / total, payPct: pay / total,
+      dCount: debtors.length, cCount: creditors.length,
+      topDebtor, topCreditor,
+    };
+  }, [data]);
+
   return (
     <SafeAreaView testID="ledger-screen" style={styles.safe}>
       {/* Header */}
@@ -550,6 +568,53 @@ export default function LedgerScreen() {
           )}
         </View>
       </View>
+
+      {/* ── Position summary (hero) ── */}
+      {!selectMode && !isLoading && (
+        <View style={lp.card}>
+          <View style={lp.headRow}>
+            <Text style={lp.label}>Position</Text>
+            <Text style={[lp.net, { color: position.net >= 0 ? COLORS.positive : COLORS.negative }]}>
+              {position.net >= 0 ? 'Net Receivable ' : 'Net Payable '}{fmtRs(Math.abs(position.net))}
+            </Text>
+          </View>
+          <PositionBar recvPct={position.recvPct} payPct={position.payPct} />
+          <View style={lp.legendRow}>
+            <View style={lp.legendItem}>
+              <View style={[lp.dot, { backgroundColor: COLORS.positive }]} />
+              <Text style={lp.legTxt}>Receivable {fmtRs(position.recv)}</Text>
+              <Text style={lp.legCount}>· {position.dCount}</Text>
+            </View>
+            <View style={lp.legendItem}>
+              <View style={[lp.dot, { backgroundColor: COLORS.negative }]} />
+              <Text style={lp.legTxt}>Payable {fmtRs(position.pay)}</Text>
+              <Text style={lp.legCount}>· {position.cCount}</Text>
+            </View>
+          </View>
+          <View style={lp.chipsRow}>
+            {position.topDebtor && (
+              <TouchableOpacity style={lp.chip} activeOpacity={0.75} onPress={() => router.push(`/ledger/${position.topDebtor.id}` as any)}>
+                <Ionicons name="arrow-down-circle" size={16} color={COLORS.positive} />
+                <View style={{ flex: 1 }}>
+                  <Text style={lp.chipLbl}>Top Debtor</Text>
+                  <Text style={lp.chipName} numberOfLines={1}>{position.topDebtor.name}</Text>
+                </View>
+                <Text style={lp.chipAmt}>{position.topDebtor.balance}</Text>
+              </TouchableOpacity>
+            )}
+            {position.topCreditor && (
+              <TouchableOpacity style={lp.chip} activeOpacity={0.75} onPress={() => router.push(`/ledger/${position.topCreditor.id}` as any)}>
+                <Ionicons name="arrow-up-circle" size={16} color={COLORS.negative} />
+                <View style={{ flex: 1 }}>
+                  <Text style={lp.chipLbl}>Top Creditor</Text>
+                  <Text style={lp.chipName} numberOfLines={1}>{position.topCreditor.name}</Text>
+                </View>
+                <Text style={lp.chipAmt}>{position.topCreditor.balance}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      )}
 
       {/* Search */}
       <View style={styles.searchWrap}>
@@ -1211,4 +1276,51 @@ const fm = StyleSheet.create({
   tsIconWrap: { width: 44, height: 44, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center' },
   tsOptionLabel: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 2 },
   tsOptionDesc: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+});
+
+// ── Position hero: animated split bar + card ──────────────────────────────────
+function PositionBar({ recvPct, payPct }: { recvPct: number; payPct: number }) {
+  const r = useRef(new Animated.Value(0)).current;
+  const p = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(r, { toValue: recvPct * 100, duration: 700, useNativeDriver: false }),
+      Animated.timing(p, { toValue: payPct * 100, duration: 700, delay: 120, useNativeDriver: false }),
+    ]).start();
+  }, [recvPct, payPct]);
+  const rw = r.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] });
+  const pw = p.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] });
+  return (
+    <View style={lp.barTrack}>
+      <Animated.View style={[lp.barSeg, { width: rw, backgroundColor: COLORS.positive }]} />
+      <Animated.View style={[lp.barSeg, { width: pw, backgroundColor: COLORS.negative }]} />
+    </View>
+  );
+}
+
+const lp = StyleSheet.create({
+  card: {
+    backgroundColor: COLORS.cardBg, marginHorizontal: SPACING.md, marginTop: SPACING.md,
+    borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault,
+    padding: SPACING.md, gap: 12,
+  },
+  headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  label: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8 },
+  net: { fontSize: TYPOGRAPHY.md, fontWeight: '800', letterSpacing: -0.4 },
+  barTrack: { flexDirection: 'row', height: 12, borderRadius: 3, overflow: 'hidden', backgroundColor: COLORS.borderDefault, gap: 2 },
+  barSeg: { height: 12, borderRadius: 2 },
+  legendRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1 },
+  dot: { width: 8, height: 8, borderRadius: 2 },
+  legTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600' },
+  legCount: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500' },
+  chipsRow: { flexDirection: 'row', gap: 10 },
+  chip: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md,
+    borderWidth: 1, borderColor: COLORS.borderDefault, paddingHorizontal: 10, paddingVertical: 9,
+  },
+  chipLbl: { fontSize: 10, color: COLORS.textTertiary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
+  chipName: { fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary, fontWeight: '700' },
+  chipAmt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary, fontWeight: '800' },
 });
