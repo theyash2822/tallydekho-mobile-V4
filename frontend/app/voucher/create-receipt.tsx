@@ -476,7 +476,7 @@ export default function CreateReceiptVoucher() {
               ) : (
                 <View style={s.fieldBlock}>
                   {bills.map((b, i) => (
-                    <View key={b.bill_name + i} style={s.billRow}>
+                    <View key={`${i}-${b.bill_name || 'bill'}`} style={s.billRow}>
                       <TouchableOpacity onPress={() => toggleBill(i)} style={s.billCheck} activeOpacity={0.7}>
                         <Ionicons
                           name={b.selected ? 'checkbox' : 'square-outline'}

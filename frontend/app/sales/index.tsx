@@ -49,8 +49,8 @@ export default function SalesScreen() {
     ]).then(([invRes, metricsRes]: any[]) => {
       const rows = invRes?.data ?? [];
       if (rows.length) {
-        setLiveRecent(rows.slice(0, 5).map((r: any) => ({
-          id: r.guid || r.voucher_number || String(r.id),
+        setLiveRecent(rows.slice(0, 5).map((r: any, i: number) => ({
+          id: r.guid || `sale-${r.voucher_number || 'x'}-${r.id ?? i}`,
           voucher: r.voucher_number || '',
           party: r.party_name || '',
           date: r.date || '',

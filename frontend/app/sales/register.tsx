@@ -40,7 +40,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type Invoice = {
-  id: string; party: string; date: string;
+  id: string; number: string; party: string; date: string;
   time: string; amount: string; status: string;
 };
 type MonthGroup = { id: string; label: string; invoices: Invoice[] };
@@ -78,8 +78,10 @@ export default function SalesRegisterScreen() {
     }
   }, [fyFrom, fyTo]);
 
-  const mapSalesInv = (r: any): Invoice => ({
-    id: r.voucher_number || String(r.id),
+  const mapSalesInv = (r: any, i: number): Invoice => ({
+    // Prefer Tally guid — voucher_number can repeat across parties/FYs (e.g. TD1531-3-2026)
+    id: r.guid || `sale-${r.voucher_number || 'x'}-${r.id ?? i}`,
+    number: r.voucher_number || String(r.id || ''),
     party: r.party_name || '',
     date: r.date || '',
     time: '',
@@ -146,7 +148,7 @@ export default function SalesRegisterScreen() {
   const handleShare = async () => {
     const allInvoices = displayGroups.flatMap(g => g.invoices);
     const items = allInvoices.filter(inv => selected.includes(inv.id));
-    const lines = items.map(inv => `${inv.id}  ${inv.party}  ${inv.amount}  ${STATUS_LABEL[inv.status] ?? inv.status}`);
+    const lines = items.map(inv => `${inv.number || inv.id}  ${inv.party}  ${inv.amount}  ${STATUS_LABEL[inv.status] ?? inv.status}`);
     try {
       await Share.share({ message: `TallyDekho — Sales Register\n${lines.join('\n')}`, title: 'Share Invoices' });
     } catch {
@@ -165,6 +167,7 @@ export default function SalesRegisterScreen() {
     invoices.filter(inv => {
       const matchSearch = !search ||
         inv.party.toLowerCase().includes(search.toLowerCase()) ||
+        (inv.number || '').toLowerCase().includes(search.toLowerCase()) ||
         inv.id.toLowerCase().includes(search.toLowerCase());
       const matchStatus = statusFilter === 'All' || STATUS_LABEL[inv.status] === statusFilter;
       return matchSearch && matchStatus;
@@ -322,7 +325,7 @@ export default function SalesRegisterScreen() {
                   {groupInvoices.map((inv, idx) => {
                     const isSelected = selected.includes(inv.id);
                     return (
-                      <View key={inv.id}>
+                      <View key={inv.id || `inv-${idx}`}>
                         <TouchableOpacity
                           style={[s.invRow, isSelected && s.invRowSelected]}
                           activeOpacity={0.7}
@@ -347,7 +350,7 @@ export default function SalesRegisterScreen() {
                                     {STATUS_LABEL[inv.status] ?? inv.status}
                                   </Text>
                                 </View>
-                                <Text style={s.invId}>• {inv.id}</Text>
+                                <Text style={s.invId}>• {inv.number || inv.id}</Text>
                               </View>
                               <Text style={s.invParty}>{inv.party}</Text>
                               <Text style={s.invMeta}>{inv.date} | {inv.time}</Text>

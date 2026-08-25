@@ -131,8 +131,8 @@ export default function PurchaseScreen() {
 
         setMetricCards(buildMetrics(rows, formatAmountCompact));
 
-        setLiveRecent(rows.slice(0, 20).map((r: any): PurchaseRow => ({
-          id: r.voucher_number || String(r.id),
+        setLiveRecent(rows.slice(0, 20).map((r: any, i: number): PurchaseRow => ({
+          id: r.guid || `pur-${r.voucher_number || 'x'}-${r.id ?? i}`,
           guid: r.guid,
           vendor: r.party_name || '',
           date: r.date || '',

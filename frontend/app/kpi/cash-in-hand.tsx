@@ -574,7 +574,7 @@ export default function CashInHandScreen() {
                 <View style={s.empty}><Text style={s.emptyTxt}>No cash movements in this period</Text></View>
               ) : txs.map((txn: any, idx: number) => (
                 <TouchableOpacity
-                  key={txn.guid || `${txn.voucher_number}-${idx}`}
+                  key={`tx-${idx}-${txn.guid || txn.voucher_number || 'x'}`}
                   style={[s.txRow, idx < txs.length - 1 && s.txBorder]}
                   activeOpacity={0.7}
                   onPress={() => txn.guid && router.push(`/document/${txn.guid}` as any)}

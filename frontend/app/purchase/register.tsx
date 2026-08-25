@@ -42,6 +42,7 @@ const STATUS_LABEL: Record<string, string> = {
 type PurchaseInvoice = {
   id: string;
   guid?: string;
+  number: string;
   vendor: string; date: string;
   time: string; amount: string; status: string;
 };
@@ -72,9 +73,10 @@ export default function PurchaseRegisterScreen() {
     if (fyFrom && fyTo) { setFromDate(isoToDMY(fyFrom)); setToDate(isoToDMY(fyTo)); }
   }, [fyFrom, fyTo]);
 
-  const mapPurchaseInv = (r: any): PurchaseInvoice => ({
-    id: r.voucher_number || String(r.id),
+  const mapPurchaseInv = (r: any, i: number): PurchaseInvoice => ({
+    id: r.guid || `pur-${r.voucher_number || 'x'}-${r.id ?? i}`,
     guid: r.guid,
+    number: r.voucher_number || String(r.id || ''),
     vendor: r.party_name || '',
     date: r.date || '',
     time: '',
@@ -144,7 +146,7 @@ export default function PurchaseRegisterScreen() {
   const handleShare = async () => {
     const allInvoices = displayGroups.flatMap(g => g.invoices);
     const items = allInvoices.filter(inv => selected.includes(inv.id));
-    const lines = items.map(inv => `${inv.id}  ${inv.vendor}  ${inv.amount}  ${STATUS_LABEL[inv.status] ?? inv.status}`);
+    const lines = items.map(inv => `${inv.number || inv.id}  ${inv.vendor}  ${inv.amount}  ${STATUS_LABEL[inv.status] ?? inv.status}`);
     try {
       await Share.share({ message: `TallyDekho — Purchase Register\n${lines.join('\n')}`, title: 'Share Invoices' });
     } catch (err: any) { console.error('[API Error]', err?.message);
@@ -163,6 +165,7 @@ export default function PurchaseRegisterScreen() {
     invoices.filter(inv => {
       const matchSearch = !search ||
         inv.vendor.toLowerCase().includes(search.toLowerCase()) ||
+        (inv.number || '').toLowerCase().includes(search.toLowerCase()) ||
         inv.id.toLowerCase().includes(search.toLowerCase());
       const matchStatus = statusFilter === 'All' || STATUS_LABEL[inv.status] === statusFilter;
       return matchSearch && matchStatus;
@@ -342,7 +345,7 @@ export default function PurchaseRegisterScreen() {
                                     {STATUS_LABEL[inv.status] ?? inv.status}
                                   </Text>
                                 </View>
-                                <Text style={s.invId}>• {inv.id}</Text>
+                                <Text style={s.invId}>• {inv.number || inv.id}</Text>
                               </View>
                               <Text style={s.invVendor}>{inv.vendor}</Text>
                               <Text style={s.invMeta}>{inv.date} | {inv.time}</Text>

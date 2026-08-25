@@ -31,11 +31,20 @@ export default function ReceiptVouchersScreen() {
     setApiError(null);
     getVouchers(companyGuid, 'receipt', selectedFY?.startDate && selectedFY?.endDate ? { from: selectedFY.startDate, to: selectedFY.endDate } : {}).then((res: any) => {
       const rows = res?.data ?? [];
-      setLiveItems(rows.map((r: any) => ({ id: r.voucher_number||String(r.id), party: r.party_name||'', date: r.date||'', time: '', amount: formatAmount(Math.abs(+r.amount||0)), method: 'Cash', status: 'cleared' })));
+      setLiveItems(rows.map((r: any, i: number) => ({
+        id: r.guid || `rcpt-${r.id ?? i}`,
+        number: r.voucher_number || String(r.id || ''),
+        party: r.party_name || '',
+        date: r.date || '',
+        time: '',
+        amount: formatAmount(Math.abs(+r.amount||0)),
+        method: 'Cash',
+        status: 'cleared',
+      })));
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); }).finally(() => setIsLoading(false));
   }, [companyGuid, selectedFY?.startDate]);
 
-  const filtered = liveItems.filter((i: any) => !search || (i.party||'').toLowerCase().includes(search.toLowerCase()) || (i.id||'').toLowerCase().includes(search.toLowerCase()));
+  const filtered = liveItems.filter((i: any) => !search || (i.party||'').toLowerCase().includes(search.toLowerCase()) || (i.number||'').toLowerCase().includes(search.toLowerCase()) || (i.id||'').toLowerCase().includes(search.toLowerCase()));
 
   return (
     <SafeAreaView style={s.safe}>
@@ -65,7 +74,7 @@ export default function ReceiptVouchersScreen() {
         <View style={s.secHdr}><Text style={s.secT}>Receipt Vouchers</Text></View>
         <View style={s.card}>
           {filtered.map((item, idx) => (
-            <View key={item.id}>
+            <View key={`${item.id}-${idx}`}>
               <TouchableOpacity
                 style={s.row}
                 activeOpacity={0.7}
@@ -76,7 +85,7 @@ export default function ReceiptVouchersScreen() {
                   <View style={s.rInfo}>
                     <View style={s.topR}>
                       <Text style={[s.stLbl, { color: SC[item.status] }]}>{SL[item.status]}</Text>
-                      <Text style={s.docId}>{item.id}</Text>
+                      <Text style={s.docId}>{item.number || item.id}</Text>
                       <View style={[s.chip, { backgroundColor: (MC[item.method] || '#9CA3AF') + '18' }]}>
                         <Text style={[s.chipTxt, { color: MC[item.method] || '#9CA3AF' }]}>{item.method}</Text>
                       </View>

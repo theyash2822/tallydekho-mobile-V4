@@ -106,7 +106,7 @@ export default function PayablesScreen() {
   const bills = useMemo(() => {
     const rows = Array.isArray(apiData?.bills) ? apiData.bills : [];
     return rows.map((b: any, i: number) => ({
-      id: `${b.ref}-${i}`,
+      id: `bill-${i}-${b.ref || 'x'}`,
       party: b.party,
       ref: b.ref,
       date: b.date || b.dueDate || b.billDate,
@@ -119,7 +119,7 @@ export default function PayablesScreen() {
     return rows
       .filter((p: any) => (Number(p.overdueOutstanding) || Number(p.days_overdue) || 0) > 0)
       .map((p: any, i: number) => ({
-        id: `${p.name}-${i}`,
+        id: `party-${i}-${p.name || 'x'}`,
         party: p.name,
         days: Number(p.days_overdue) || Number(p.oldestOverdueDays) || 0,
         amount: Math.abs(Number(p.overdueOutstanding) || Number(p.amount) || 0),
@@ -130,7 +130,7 @@ export default function PayablesScreen() {
   const payments = useMemo(() => {
     const rows = Array.isArray(apiData?.payments) ? apiData.payments : [];
     return rows.map((r: any, i: number) => ({
-      id: r.guid || `pm-${i}`,
+      id: `pm-${i}-${r.guid || r.voucher_number || 'x'}`,
       guid: r.guid,
       party: r.party_name,
       ref: r.voucher_number,

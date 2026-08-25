@@ -118,7 +118,7 @@ const RecentActivity: React.FC<RecentActivityProps> = ({ activities, title = 'Re
           </View>
         ) : (
           displayed.map((item, idx) => (
-            <View key={item.guid || item.id || `activity-${idx}`}>
+            <View key={`act-${idx}-${item.guid || item.id || 'x'}`}>
               <ActivityItem item={item} onPress={() => handlePress(item)} />
               {idx < displayed.length - 1 && <View style={styles.sep} />}
             </View>

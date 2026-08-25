@@ -32,10 +32,10 @@ type ExpenseRow = {
   expenseGroup?: string;
 };
 
-function mapExpenseRow(r: any, formatAmount: (n: number) => string): ExpenseRow {
+function mapExpenseRow(r: any, formatAmount: (n: number) => string, i = 0): ExpenseRow {
   const amt = Math.abs(parseFloat(r.expense_amount ?? r.amount) || 0);
   return {
-    id: r.voucher_number || String(r.id),
+    id: r.guid || `exp-${r.voucher_number || 'x'}-${r.id ?? i}`,
     guid: r.guid,
     party: r.expense_ledger || r.party_name || r.narration || 'Expense',
     date: r.date || '',
@@ -91,7 +91,7 @@ export default function ExpenseScreen() {
     getExpenses(companyGuid, { ...rangeParams, limit: '100', page: '1' } as any)
       .then((res: any) => {
         const rows = res?.data ?? [];
-        setLiveExpenses(rows.map((r: any) => mapExpenseRow(r, formatAmount)));
+        setLiveExpenses(rows.map((r: any, i: number) => mapExpenseRow(r, formatAmount, i)));
         setExpenseSummary(res?.summary ?? null);
         setLiveCategories((res?.categories ?? []).map((c: any, i: number) => ({
           id: c.id || `cat${i}`,
