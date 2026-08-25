@@ -299,7 +299,7 @@ export default function SalesScreen() {
                   <View style={s.itemCenter}>
                     <Text style={s.itemParty} numberOfLines={1}>
                       {inv.party}{' '}
-                      <Text style={s.itemInvId}>• {inv.id}</Text>
+                      <Text style={s.itemInvId}>• {inv.voucher || inv.id}</Text>
                     </Text>
                     <Text style={s.itemMeta}>{inv.date} | {inv.time}</Text>
                   </View>

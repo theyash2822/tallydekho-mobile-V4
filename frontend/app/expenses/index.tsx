@@ -24,6 +24,7 @@ const CATEGORY_ICONS = ['receipt-outline', 'flash-outline', 'car-outline', 'home
 type ExpenseRow = {
   id: string;
   guid?: string;
+  voucher?: string;
   party: string;
   date: string;
   time: string;
@@ -37,6 +38,7 @@ function mapExpenseRow(r: any, formatAmount: (n: number) => string, i = 0): Expe
   return {
     id: r.guid || `exp-${r.voucher_number || 'x'}-${r.id ?? i}`,
     guid: r.guid,
+    voucher: r.voucher_number || '',
     party: r.expense_ledger || r.party_name || r.narration || 'Expense',
     date: r.date || '',
     time: '',
@@ -275,7 +277,7 @@ export default function ExpenseScreen() {
                         <View style={s.itemTopRow}>
                           <Text style={s.itemParty} numberOfLines={1}>{exp.party}</Text>
                           <Text style={s.itemBullet}> • </Text>
-                          <Text style={s.itemId}>{exp.id}</Text>
+                          <Text style={s.itemId}>{exp.voucher || exp.id}</Text>
                         </View>
                         <Text style={s.itemMeta}>{exp.date}{exp.expenseGroup ? ` | ${exp.expenseGroup}` : ''}</Text>
                       </View>

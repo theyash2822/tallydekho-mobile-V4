@@ -26,6 +26,7 @@ const VENDOR_COLORS = ['#2563EB', '#D97706', '#059669', '#7C3AED', '#0891B2'];
 type PurchaseRow = {
   id: string;
   guid?: string;
+  voucher?: string;
   vendor: string;
   date: string;
   time: string;
@@ -134,6 +135,7 @@ export default function PurchaseScreen() {
         setLiveRecent(rows.slice(0, 20).map((r: any, i: number): PurchaseRow => ({
           id: r.guid || `pur-${r.voucher_number || 'x'}-${r.id ?? i}`,
           guid: r.guid,
+          voucher: r.voucher_number || '',
           vendor: r.party_name || '',
           date: r.date || '',
           time: '',
@@ -374,7 +376,7 @@ export default function PurchaseScreen() {
                       {STATUS_LABEL[inv.status] ?? inv.status}
                     </Text>
                     <Text style={s.itemBullet}> • </Text>
-                    <Text style={s.itemInvId}>{inv.id}</Text>
+                    <Text style={s.itemInvId}>{inv.voucher || inv.id}</Text>
                   </View>
                   {/* Content Row */}
                   <View style={s.itemContentRow}>
