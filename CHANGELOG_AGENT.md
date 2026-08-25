@@ -1,3 +1,12 @@
+## [2026-08-25] Phase B–D — AR/AP/Cash UI restore with live data
+
+### Fixed
+- Receivables / Payables: filter chips (DateRangePicker + Overdue + Receipts/Payments), aging carousel with Not Due, tabs, Call/WhatsApp on overdue parties
+- Trend badges kept with "—" until MoM history exists (no fake %)
+- Cash in Hand: restored charts (Daily Cash Balance + Receipts vs Payments) from live 30d series
+- Bank Balance KPI label: Book Balance (Tally)
+
+
 ## [2026-08-25] Loans & ODs Phase A — rich cards + estimated EMI/rate
 
 ### Fixed

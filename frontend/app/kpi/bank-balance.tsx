@@ -158,7 +158,7 @@ export default function BankBalanceScreen() {
     const inflow = Number(apiData?.today_inflow) || 0;
     const outflow = Number(apiData?.today_outflow) || 0;
     return [
-      { id: 'total', icon: 'wallet-outline', label: 'Total Balance', amount: formatAmountCompact(Math.round(total)) },
+      { id: 'total', icon: 'wallet-outline', label: 'Book Balance (Tally)', amount: formatAmountCompact(Math.round(total)) },
       { id: 'in', icon: 'arrow-down-circle-outline', label: 'Inflow Today', amount: formatAmountCompact(Math.round(inflow)) },
       { id: 'out', icon: 'arrow-up-circle-outline', label: 'Outflow Today', amount: formatAmountCompact(Math.round(outflow)) },
       { id: 'count', icon: 'business-outline', label: 'Bank Accounts', amount: String(banks.length) },

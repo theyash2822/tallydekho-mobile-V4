@@ -335,8 +335,8 @@ export const getGSTSummary       = (companyGuid?: string, params?: any) => get<a
 
 export const getKPICashInHand = (companyGuid?: string, params?: any) => get<any>(withCompany('/kpi/cash-in-hand', companyGuid, params));
 export const getKPIBankBalance = (companyGuid?: string, params?: any) => get<any>(withCompany('/kpi/bank-balance', companyGuid, params));
-export const getKPIReceivables = (companyGuid?: string) => get<any>(withCompany('/kpi/receivables', companyGuid));
-export const getKPIPayables    = (companyGuid?: string) => get<any>(withCompany('/kpi/payables', companyGuid));
+export const getKPIReceivables = (companyGuid?: string, params?: any) => get<any>(withCompany('/kpi/receivables', companyGuid, params));
+export const getKPIPayables    = (companyGuid?: string, params?: any) => get<any>(withCompany('/kpi/payables', companyGuid, params));
 export const getKPILoansODs    = (companyGuid?: string) => get<any>(withCompany('/kpi/loans-ods', companyGuid));
 export const getKPIPayments    = (companyGuid?: string, params?: any) => get<any>(withCompany('/kpi/payments', companyGuid, params));
 export const getKPIReceipts    = (companyGuid?: string, params?: any) => get<any>(withCompany('/kpi/receipts', companyGuid, params));
