@@ -6,7 +6,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { LineChart, BarChart } from 'react-native-gifted-charts';
+import Svg, {
+  Path, Circle, Rect, Line, G, Text as SvgText, Defs, LinearGradient, Stop,
+} from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
@@ -16,8 +18,20 @@ import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPla
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 
 const { width: SW } = Dimensions.get('window');
-const LINE_CHART_W = 30 * 34;
-const BAR_CHART_W = 30 * 39;
+const YAXIS_W = 48;
+const DAY_W = 36;
+const CHART_H = 190;
+const PAD_T = 36;
+const PAD_B = 28;
+const GOLD = '#A89060';
+const BAR_DARK = '#3A3A3A';
+
+type DayPoint = {
+  day: string;
+  balance: number;
+  inflow: number;
+  outflow: number;
+};
 
 function fmtDate(iso?: string) {
   if (!iso) return '';
@@ -32,16 +46,328 @@ function niceMax(v: number) {
   return Math.ceil(v / exp) * exp;
 }
 
-function yLabels(max: number) {
-  const steps = 4;
-  const out: string[] = [];
-  for (let i = 0; i <= steps; i++) {
-    const n = (max / steps) * i;
-    if (n >= 100000) out.push(`₹${(n / 100000).toFixed(1)}L`);
-    else if (n >= 1000) out.push(`₹${Math.round(n / 1000)}K`);
-    else out.push(`₹${Math.round(n)}`);
-  }
-  return out;
+function compactTick(n: number) {
+  if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
+  if (n >= 1000) return `₹${Math.round(n / 1000)}K`;
+  return `₹${Math.round(n)}`;
+}
+
+function dayLabel(iso: string) {
+  const dd = String(iso || '').slice(8, 10);
+  return dd.replace(/^0/, '') || '';
+}
+
+/** Pinned Y-axis + scrollable X plot + tap tooltip for daily balance. */
+function DailyBalanceChart({
+  data,
+  formatAmountCompact,
+}: {
+  data: DayPoint[];
+  formatAmountCompact: (n: number) => string;
+}) {
+  const [activeIdx, setActiveIdx] = useState<number | null>(null);
+  if (!data.length) return null;
+
+  const plotH = CHART_H - PAD_T - PAD_B;
+  const maxVal = niceMax(Math.max(...data.map((d) => d.balance), 1));
+  const yTicks = [0, 1, 2, 3, 4].map((i) => (maxVal / 4) * i);
+  const chartW = data.length * DAY_W + 16;
+  const xAt = (i: number) => i * DAY_W + DAY_W / 2;
+  const yAt = (v: number) => PAD_T + plotH - (Math.max(0, v) / maxVal) * plotH;
+
+  const linePath = data
+    .map((d, i) => `${i === 0 ? 'M' : 'L'}${xAt(i).toFixed(1)},${yAt(d.balance).toFixed(1)}`)
+    .join(' ');
+  const areaPath = [
+    `M${xAt(0).toFixed(1)},${(PAD_T + plotH).toFixed(1)}`,
+    ...data.map((d, i) => `L${xAt(i).toFixed(1)},${yAt(d.balance).toFixed(1)}`),
+    `L${xAt(data.length - 1).toFixed(1)},${(PAD_T + plotH).toFixed(1)}`,
+    'Z',
+  ].join(' ');
+
+  const tip = activeIdx != null ? data[activeIdx] : null;
+
+  return (
+    <View style={{ flexDirection: 'row', height: CHART_H }}>
+      {/* Fixed Y-axis — does not scroll */}
+      <Svg width={YAXIS_W} height={CHART_H}>
+        <Line
+          x1={YAXIS_W - 1}
+          y1={PAD_T - 4}
+          x2={YAXIS_W - 1}
+          y2={PAD_T + plotH}
+          stroke={COLORS.borderDefault}
+          strokeWidth={1}
+        />
+        {yTicks.map((tick) => (
+          <SvgText
+            key={tick}
+            x={YAXIS_W - 6}
+            y={yAt(tick) + 3}
+            textAnchor="end"
+            fontSize={9}
+            fill={COLORS.textTertiary}
+          >
+            {compactTick(tick)}
+          </SvgText>
+        ))}
+      </Svg>
+
+      {/* Scrollable X plot */}
+      <ScrollView
+        horizontal
+        nestedScrollEnabled
+        directionalLockEnabled
+        showsHorizontalScrollIndicator
+        style={{ flex: 1 }}
+      >
+        <Svg width={chartW} height={CHART_H}>
+          <Defs>
+            <LinearGradient id="cashBalGrad" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor={GOLD} stopOpacity="0.35" />
+              <Stop offset="1" stopColor={GOLD} stopOpacity="0.02" />
+            </LinearGradient>
+          </Defs>
+
+          {yTicks.map((tick) => (
+            <Line
+              key={`g-${tick}`}
+              x1={0}
+              y1={yAt(tick)}
+              x2={chartW}
+              y2={yAt(tick)}
+              stroke={COLORS.borderDefault}
+              strokeWidth={1}
+              strokeDasharray="4,4"
+            />
+          ))}
+          <Line
+            x1={0}
+            y1={PAD_T + plotH}
+            x2={chartW}
+            y2={PAD_T + plotH}
+            stroke={COLORS.borderDefault}
+            strokeWidth={1}
+          />
+
+          <Path d={areaPath} fill="url(#cashBalGrad)" />
+          <Path d={linePath} stroke={GOLD} strokeWidth={2} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+
+          {data.map((d, i) => {
+            const x = xAt(i);
+            const y = yAt(d.balance);
+            const active = activeIdx === i;
+            const showLbl = i === 0 || i === data.length - 1 || (i + 1) % 7 === 0;
+            return (
+              <G key={d.day || i} onPress={() => setActiveIdx(active ? null : i)}>
+                <Rect x={i * DAY_W} y={0} width={DAY_W} height={CHART_H} fill="transparent" />
+                <Circle
+                  cx={x}
+                  cy={y}
+                  r={active ? 6 : 3.5}
+                  fill={GOLD}
+                  stroke={COLORS.cardBg}
+                  strokeWidth={2}
+                />
+                {showLbl ? (
+                  <SvgText x={x} y={CHART_H - 8} textAnchor="middle" fontSize={9} fill={COLORS.textTertiary}>
+                    {dayLabel(d.day)}
+                  </SvgText>
+                ) : null}
+              </G>
+            );
+          })}
+
+          {tip && activeIdx != null ? (
+            <G>
+              <Line
+                x1={xAt(activeIdx)}
+                y1={PAD_T}
+                x2={xAt(activeIdx)}
+                y2={PAD_T + plotH}
+                stroke={GOLD}
+                strokeWidth={1}
+                strokeDasharray="3,3"
+                opacity={0.7}
+              />
+              <Rect
+                x={Math.max(4, Math.min(chartW - 88, xAt(activeIdx) - 44))}
+                y={8}
+                width={88}
+                height={26}
+                rx={6}
+                fill={COLORS.textPrimary}
+              />
+              <SvgText
+                x={Math.max(48, Math.min(chartW - 44, xAt(activeIdx)))}
+                y={25}
+                textAnchor="middle"
+                fontSize={11}
+                fontWeight="700"
+                fill="#FFFFFF"
+              >
+                {formatAmountCompact(Math.round(tip.balance))}
+              </SvgText>
+            </G>
+          ) : null}
+        </Svg>
+      </ScrollView>
+    </View>
+  );
+}
+
+/** Pinned Y-axis + scrollable grouped bars + tap tooltip. */
+function ReceiptsPaymentsChart({
+  data,
+  formatAmountCompact,
+}: {
+  data: DayPoint[];
+  formatAmountCompact: (n: number) => string;
+}) {
+  const [activeIdx, setActiveIdx] = useState<number | null>(null);
+  if (!data.length) return null;
+
+  const plotH = CHART_H - PAD_T - PAD_B;
+  const maxVal = niceMax(Math.max(...data.flatMap((d) => [d.inflow, d.outflow]), 1));
+  const yTicks = [0, 1, 2, 3, 4].map((i) => (maxVal / 4) * i);
+  const groupW = 42;
+  const chartW = data.length * groupW + 8;
+  const yAt = (v: number) => PAD_T + plotH - (Math.max(0, v) / maxVal) * plotH;
+  const tip = activeIdx != null ? data[activeIdx] : null;
+
+  return (
+    <View style={{ flexDirection: 'row', height: CHART_H }}>
+      <Svg width={YAXIS_W} height={CHART_H}>
+        <Line
+          x1={YAXIS_W - 1}
+          y1={PAD_T - 4}
+          x2={YAXIS_W - 1}
+          y2={PAD_T + plotH}
+          stroke={COLORS.borderDefault}
+          strokeWidth={1}
+        />
+        {yTicks.map((tick) => (
+          <SvgText
+            key={tick}
+            x={YAXIS_W - 6}
+            y={yAt(tick) + 3}
+            textAnchor="end"
+            fontSize={9}
+            fill={COLORS.textTertiary}
+          >
+            {compactTick(tick)}
+          </SvgText>
+        ))}
+      </Svg>
+
+      <ScrollView
+        horizontal
+        nestedScrollEnabled
+        directionalLockEnabled
+        showsHorizontalScrollIndicator
+        style={{ flex: 1 }}
+      >
+        <Svg width={chartW} height={CHART_H}>
+          {yTicks.map((tick) => (
+            <Line
+              key={`g-${tick}`}
+              x1={0}
+              y1={yAt(tick)}
+              x2={chartW}
+              y2={yAt(tick)}
+              stroke={COLORS.borderDefault}
+              strokeWidth={1}
+              strokeDasharray="4,4"
+            />
+          ))}
+          <Line
+            x1={0}
+            y1={PAD_T + plotH}
+            x2={chartW}
+            y2={PAD_T + plotH}
+            stroke={COLORS.borderDefault}
+            strokeWidth={1}
+          />
+
+          {data.map((d, i) => {
+            const gx = i * groupW + 6;
+            const barW = 12;
+            const inH = Math.max(2, (d.inflow / maxVal) * plotH);
+            const outH = Math.max(2, (d.outflow / maxVal) * plotH);
+            const active = activeIdx === i;
+            const showLbl = i === 0 || i === data.length - 1 || (i + 1) % 7 === 0;
+            return (
+              <G key={d.day || i} onPress={() => setActiveIdx(active ? null : i)}>
+                <Rect x={i * groupW} y={0} width={groupW} height={CHART_H} fill="transparent" />
+                <Rect
+                  x={gx}
+                  y={yAt(d.inflow)}
+                  width={barW}
+                  height={inH}
+                  rx={2}
+                  fill={GOLD}
+                  opacity={active ? 1 : 0.9}
+                />
+                <Rect
+                  x={gx + barW + 3}
+                  y={yAt(d.outflow)}
+                  width={barW}
+                  height={outH}
+                  rx={2}
+                  fill={BAR_DARK}
+                  opacity={active ? 1 : 0.9}
+                />
+                {showLbl ? (
+                  <SvgText
+                    x={gx + barW + 1.5}
+                    y={CHART_H - 8}
+                    textAnchor="middle"
+                    fontSize={9}
+                    fill={COLORS.textTertiary}
+                  >
+                    {dayLabel(d.day)}
+                  </SvgText>
+                ) : null}
+              </G>
+            );
+          })}
+
+          {tip && activeIdx != null ? (
+            <G>
+              <Rect
+                x={Math.max(4, Math.min(chartW - 118, activeIdx * groupW + groupW / 2 - 59))}
+                y={6}
+                width={118}
+                height={40}
+                rx={6}
+                fill={COLORS.textPrimary}
+              />
+              <SvgText
+                x={Math.max(63, Math.min(chartW - 59, activeIdx * groupW + groupW / 2))}
+                y={22}
+                textAnchor="middle"
+                fontSize={10}
+                fontWeight="700"
+                fill="#FFFFFF"
+              >
+                {`In ${formatAmountCompact(Math.round(tip.inflow))}`}
+              </SvgText>
+              <SvgText
+                x={Math.max(63, Math.min(chartW - 59, activeIdx * groupW + groupW / 2))}
+                y={38}
+                textAnchor="middle"
+                fontSize={10}
+                fontWeight="700"
+                fill="#FFFFFF"
+              >
+                {`Out ${formatAmountCompact(Math.round(tip.outflow))}`}
+              </SvgText>
+            </G>
+          ) : null}
+        </Svg>
+      </ScrollView>
+    </View>
+  );
 }
 
 export default function CashInHandScreen() {
@@ -91,43 +417,15 @@ export default function CashInHandScreen() {
     ];
   }, [apiData, formatAmountCompact]);
 
-  // No auto-scroll — it fought paging and stopped cards mid-swipe.
-
-  const daily = useMemo(() => {
-    return Array.isArray(apiData?.daily_balance) ? apiData.daily_balance : [];
+  const daily: DayPoint[] = useMemo(() => {
+    const rows = Array.isArray(apiData?.daily_balance) ? apiData.daily_balance : [];
+    return rows.map((d: any) => ({
+      day: String(d.day || '').slice(0, 10),
+      balance: Math.max(0, Number(d.balance) || 0),
+      inflow: Math.max(0, Number(d.inflow) || 0),
+      outflow: Math.max(0, Number(d.outflow) || 0),
+    }));
   }, [apiData]);
-
-  const lineData = useMemo(() => daily.map((d: any, i: number) => ({
-    value: Math.max(0, Number(d.balance) || 0),
-    // Sparse calendar day labels (not 1..30 index) — only a few ticks
-    label: (i === 0 || i === daily.length - 1 || (i + 1) % 7 === 0)
-      ? String(d.day || '').slice(8, 10) // DD
-      : '',
-  })), [daily]);
-
-  const barData = useMemo(() => daily.flatMap((d: any, i: number) => [
-    {
-      value: Math.max(0, Number(d.inflow) || 0),
-      frontColor: '#A89060',
-      label: (i === 0 || i === daily.length - 1 || (i + 1) % 7 === 0)
-        ? String(d.day || '').slice(8, 10)
-        : '',
-      spacing: 3,
-      barWidth: 9,
-    },
-    { value: Math.max(0, Number(d.outflow) || 0), frontColor: '#3A3A3A', spacing: 18, barWidth: 9 },
-  ]), [daily]);
-
-  const chartMax = useMemo(() => {
-    const vals = [
-      ...daily.map((d: any) => Number(d.balance) || 0),
-      ...daily.map((d: any) => Number(d.inflow) || 0),
-      ...daily.map((d: any) => Number(d.outflow) || 0),
-    ];
-    return niceMax(Math.max(...vals, 1));
-  }, [daily]);
-
-  const labels = useMemo(() => yLabels(chartMax), [chartMax]);
 
   const curBal = Number(daily[daily.length - 1]?.balance ?? apiData?.current_balance) || 0;
   const balChange = Number(apiData?.balance_change) || 0;
@@ -239,46 +537,9 @@ export default function CashInHandScreen() {
                       </View>
                     </View>
                   </View>
-                  <Text style={s.chartDate}>30 days</Text>
+                  <Text style={s.chartDate}>30 days · tap point</Text>
                 </View>
-                <ScrollView
-                  horizontal
-                  nestedScrollEnabled
-                  directionalLockEnabled
-                  showsHorizontalScrollIndicator
-                  contentContainerStyle={s.chartScrollContent}
-                >
-                  <View style={{ width: LINE_CHART_W + 60 }} pointerEvents="box-none">
-                    <LineChart
-                      data={lineData}
-                      areaChart
-                      curved
-                      disableScroll
-                      color="#A89060"
-                      thickness={2}
-                      startFillColor="rgba(168,144,96,0.3)"
-                      endFillColor="rgba(168,144,96,0.05)"
-                      startOpacity={0.9}
-                      endOpacity={0.1}
-                      initialSpacing={16}
-                      spacing={34}
-                      maxValue={chartMax}
-                      noOfSections={4}
-                      yAxisLabelWidth={52}
-                      yAxisLabelTexts={labels}
-                      yAxisTextStyle={{ color: COLORS.textTertiary, fontSize: 10 }}
-                      xAxisLabelTextStyle={{ color: COLORS.textTertiary, fontSize: 9 }}
-                      rulesType="dashed"
-                      rulesColor={COLORS.borderDefault}
-                      dataPointsColor="#A89060"
-                      dataPointsRadius={3}
-                      hideDataPoints={false}
-                      isAnimated={false}
-                      height={180}
-                      width={LINE_CHART_W}
-                    />
-                  </View>
-                </ScrollView>
+                <DailyBalanceChart data={daily} formatAmountCompact={formatAmountCompact} />
               </View>
             )}
 
@@ -287,38 +548,13 @@ export default function CashInHandScreen() {
                 <View style={s.chartHeader}>
                   <Text style={s.chartTitle}>Receipts vs Payments</Text>
                   <View style={s.legend}>
-                    <View style={[s.legendDot, { backgroundColor: '#A89060' }]} />
+                    <View style={[s.legendDot, { backgroundColor: GOLD }]} />
                     <Text style={s.legendTxt}>Receipts</Text>
-                    <View style={[s.legendDot, { backgroundColor: '#3A3A3A' }]} />
+                    <View style={[s.legendDot, { backgroundColor: BAR_DARK }]} />
                     <Text style={s.legendTxt}>Payments</Text>
                   </View>
                 </View>
-                <ScrollView
-                  horizontal
-                  nestedScrollEnabled
-                  directionalLockEnabled
-                  showsHorizontalScrollIndicator
-                  contentContainerStyle={s.chartScrollContent}
-                >
-                  <View style={{ width: BAR_CHART_W + 60 }} pointerEvents="box-none">
-                    <BarChart
-                      data={barData}
-                      disableScroll
-                      width={BAR_CHART_W}
-                      height={160}
-                      maxValue={chartMax}
-                      noOfSections={4}
-                      yAxisLabelWidth={52}
-                      yAxisLabelTexts={labels}
-                      yAxisTextStyle={{ color: COLORS.textTertiary, fontSize: 10 }}
-                      xAxisLabelTextStyle={{ color: COLORS.textTertiary, fontSize: 9 }}
-                      rulesType="dashed"
-                      rulesColor={COLORS.borderDefault}
-                      isAnimated={false}
-                      barBorderRadius={2}
-                    />
-                  </View>
-                </ScrollView>
+                <ReceiptsPaymentsChart data={daily} formatAmountCompact={formatAmountCompact} />
               </View>
             )}
 
@@ -396,15 +632,12 @@ const s = StyleSheet.create({
   sumTextWrap: { flex: 1, gap: 4 },
   sumLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
   sumAmount: { fontSize: TYPOGRAPHY.xl, fontWeight: '800', color: COLORS.textPrimary },
-  trendBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: RADIUS.full, flexShrink: 0 },
-  trendTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
   dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: 10 },
   dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
   dotActive: { width: 16, height: 5, borderRadius: 3, backgroundColor: COLORS.textPrimary },
 
-  chartCard: { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, paddingTop: SPACING.md, overflow: 'hidden' },
-  chartScrollContent: { paddingRight: 16, paddingBottom: 8 },
-  chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: SPACING.md, marginBottom: 12 },
+  chartCard: { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, paddingTop: SPACING.md, paddingBottom: 8, overflow: 'hidden' },
+  chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: SPACING.md, marginBottom: 8 },
   chartTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   chartMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   chartAmt: { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
