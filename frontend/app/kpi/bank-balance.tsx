@@ -43,8 +43,9 @@ type BankTx = {
 type BankCardData = {
   id: string;
   name: string;
-  /** Secondary label — Tally parent group, or masked A/c if Bank Feeds linked later */
+  /** Secondary label — masked A/c from Tally when present, else parent/OD */
   accountLabel: string;
+  ifsc: string;
   balance: number;
   /** Latest txn date for this ledger in the selected period, else empty */
   lastFeed: string;
@@ -60,8 +61,22 @@ function fmtDate(iso?: string) {
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' });
 }
 
-function accountLabelFromTally(name: string, parent?: string) {
-  const p = String(parent || '').trim();
+function maskAccountNo(raw?: string) {
+  const digits = String(raw || '').replace(/\s+/g, '');
+  if (!digits) return '';
+  if (digits.length <= 4) return digits;
+  return `••••${digits.slice(-4)}`;
+}
+
+function accountLabelFromTally(b: {
+  name?: string;
+  parent?: string;
+  account_number?: string;
+}) {
+  const masked = maskAccountNo(b.account_number);
+  if (masked) return masked;
+  const p = String(b.parent || '').trim();
+  const name = String(b.name || '');
   if (/OD|Overdraft/i.test(p) || /OD|Overdraft/i.test(name)) return 'OD / Overdraft';
   if (/Bank Account/i.test(p)) return 'Bank A/c';
   if (p) return p.length > 18 ? `${p.slice(0, 16)}…` : p;
@@ -120,7 +135,8 @@ export default function BankBalanceScreen() {
       return {
         id: b.name || `bank-${i}`,
         name: b.name || 'Bank',
-        accountLabel: accountLabelFromTally(b.name, b.parent),
+        accountLabel: accountLabelFromTally(b),
+        ifsc: String(b.ifsc || '').trim(),
         balance: Math.abs(Number(b.balance) || 0),
         lastFeed: latest ? fmtDate(latest) : '',
         gradient: CARD_GRADIENTS[i % CARD_GRADIENTS.length],
@@ -241,9 +257,14 @@ export default function BankBalanceScreen() {
                               {formatAmount(Math.round(bank.balance))}
                             </Text>
                           </View>
-                          <Text style={s.bankFeed}>
-                            {bank.lastFeed ? `Last txn ${bank.lastFeed}` : 'No txns in period'}
-                          </Text>
+                          <View style={s.bankMetaCol}>
+                            {!!bank.ifsc && (
+                              <Text style={s.bankIfsc} numberOfLines={1}>{bank.ifsc}</Text>
+                            )}
+                            <Text style={s.bankFeed}>
+                              {bank.lastFeed ? `Last txn ${bank.lastFeed}` : 'No txns in period'}
+                            </Text>
+                          </View>
                         </View>
                       </LinearGradient>
                     </View>
@@ -376,7 +397,9 @@ const s = StyleSheet.create({
   bankBottomRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 },
   bankBalLabel: { fontSize: TYPOGRAPHY.sm, color: 'rgba(255,255,255,0.7)', marginBottom: 4 },
   bankBal: { fontSize: TYPOGRAPHY.xxl, fontWeight: '800', color: '#FFFFFF', maxWidth: SW - 160 },
-  bankFeed: { fontSize: TYPOGRAPHY.xs, color: 'rgba(255,255,255,0.65)', paddingBottom: 4, flexShrink: 1, textAlign: 'right' },
+  bankMetaCol: { flexShrink: 1, alignItems: 'flex-end', gap: 2, maxWidth: SW * 0.42 },
+  bankIfsc: { fontSize: TYPOGRAPHY.xs, color: 'rgba(255,255,255,0.8)', fontWeight: '600' },
+  bankFeed: { fontSize: TYPOGRAPHY.xs, color: 'rgba(255,255,255,0.65)', textAlign: 'right' },
 
   emptyCard: {
     marginHorizontal: SPACING.md, marginBottom: SPACING.md,

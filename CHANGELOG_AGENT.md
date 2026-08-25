@@ -1,3 +1,12 @@
+## [2026-08-25] Bank A/c + IFSC from Tally sync on Bank Balance / Feeds
+
+### Fixed
+- Bank Balance cards show **masked A/c** + **IFSC** from Tally ledger master (not Bank Feeds)
+- Bank Feeds maps live `account_number` / `ifsc` / `branch` / `bank_name` from `getBankLedgers`
+
+### Note
+- Requires desktop with updated LedgerFull/FullLedger XML + one ledger resync
+
 ## [2026-08-25] Bank Balance carousel restore + UI forensic audit
 
 ### Fixed

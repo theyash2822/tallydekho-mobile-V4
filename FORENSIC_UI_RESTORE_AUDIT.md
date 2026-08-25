@@ -29,9 +29,9 @@
 | **Designed UI (pre-cleanup)** | KPI carousel + **gradient bank cards** (swipe + dots): name, account mask, balance, “Last feed”, per-bank txn list |
 | **After cleanup** | KPI carousel kept; banks became **horizontal chips** (name + compact balance); no gradients |
 | **Tally provides today** | `name`, `parent`, `closing_balance`, recent voucher lines (`guid`, `voucher_number`, `party_name`, `date`, `amount`, `Dr/Cr`) via `GET /kpi/bank-balance` |
-| **Tally does NOT provide** | Real A/c number, IFSC, “bank feed” timestamp (not in ledger sync) |
-| **Restore mapping** | Card title = ledger **name**; secondary = **parent** (Bank A/c / OD) or Bank Feeds mask when linked; balance = closing; “Last txn” = latest voucher date in period |
-| **Optional later** | Join Settings → Bank Feeds (`accountNumber` / `ifsc`) when user linked that ledger |
+| **Tally does NOT provide** | “Bank feed” aggregator timestamp (use last voucher date instead) |
+| **Restore mapping** | Card title = ledger **name**; secondary = **masked A/c** from Tally when synced, else parent; IFSC when present; “Last txn” = latest voucher date |
+| **Optional later** | — (A/c+IFSC now from Tally ledger master sync, not Bank Feeds) |
 
 ---
 

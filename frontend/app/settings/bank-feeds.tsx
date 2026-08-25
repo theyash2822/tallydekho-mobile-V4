@@ -353,16 +353,22 @@ function BankCard({ account, isSelecting, isSelected }: {
         <View style={bc.bankPill}>
           <Text style={bc.bankPillTxt} numberOfLines={1}>{account.bankName}</Text>
         </View>
-        <View style={bc.dot} />
-        <Text style={bc.ifscTopTxt} numberOfLines={1}>{account.ifsc}</Text>
+        {!!account.ifsc && (
+          <>
+            <View style={bc.dot} />
+            <Text style={bc.ifscTopTxt} numberOfLines={1}>{account.ifsc}</Text>
+          </>
+        )}
       </View>
 
       {/* Center: Account Number in credit-card mask format */}
-      <Text style={bc.acNoTxt}>{formatCardNumber(account.accountNumber)}</Text>
+      <Text style={bc.acNoTxt}>
+        {account.accountNumber ? formatCardNumber(account.accountNumber) : 'A/c not in sync yet'}
+      </Text>
 
       {/* Bottom row: Branch + type */}
       <View style={bc.bottomRow}>
-        <Text style={bc.branchTxt}>{account.branch}</Text>
+        <Text style={bc.branchTxt}>{account.branch || '—'}</Text>
         <Text style={bc.typeBadge}>{account.accountType}</Text>
       </View>
 
@@ -485,10 +491,10 @@ export default function BankFeedsScreen() {
       const rows = res?.data ?? [];
       setAccounts(rows.map((r: any, i: number) => ({
         id: r.name || String(i),
-        accountNumber: '',
-        ifsc: '',
-        bankName: r.name || 'Bank',
-        branch: '',
+        accountNumber: r.account_number || '',
+        ifsc: r.ifsc || '',
+        bankName: r.bank_name || r.name || 'Bank',
+        branch: r.branch || '',
         accountType: 'CURRENT' as AccountType,
         isPrimary: i === 0,
         gradient: CARD_GRADIENTS[i % CARD_GRADIENTS.length],
