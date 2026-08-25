@@ -46,6 +46,163 @@ function srcLabel(f?: SrcField | null) {
   return null;
 }
 
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAY_LABELS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+type CalEvent = { dueDate: string; amount: number; tag: string; loan: string };
+
+/** App-style month grid calendar (same pattern as DateRangePickerModal / pre-cleanup Loans UI). */
+function LoanCalendarModal({
+  visible,
+  onClose,
+  mode,
+  events,
+  formatAmount,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  mode: 'emi' | 'od';
+  events: CalEvent[];
+  formatAmount: (n: number) => string;
+}) {
+  const today = new Date();
+  const firstEvent = events[0]?.dueDate ? new Date(`${events[0].dueDate.slice(0, 10)}T12:00:00`) : today;
+  const [viewYear, setViewYear] = useState(firstEvent.getFullYear());
+  const [viewMonth, setViewMonth] = useState(firstEvent.getMonth());
+  const [selDate, setSelDate] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    const ref = events[0]?.dueDate
+      ? new Date(`${events[0].dueDate.slice(0, 10)}T12:00:00`)
+      : new Date();
+    if (!Number.isNaN(ref.getTime())) {
+      setViewYear(ref.getFullYear());
+      setViewMonth(ref.getMonth());
+    }
+    setSelDate(null);
+  }, [visible, events]);
+
+  const calDays = useMemo(() => {
+    const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const days: (number | null)[] = [];
+    for (let i = 0; i < firstDay; i++) days.push(null);
+    for (let i = 1; i <= daysInMonth; i++) days.push(i);
+    return days;
+  }, [viewYear, viewMonth]);
+
+  const eventsForDay = (day: number) => {
+    const iso = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return events.filter((e) => String(e.dueDate).slice(0, 10) === iso);
+  };
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear((y) => y - 1); }
+    else setViewMonth((m) => m - 1);
+    setSelDate(null);
+  };
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear((y) => y + 1); }
+    else setViewMonth((m) => m + 1);
+    setSelDate(null);
+  };
+
+  const selectedEvents = selDate != null ? eventsForDay(selDate) : [];
+  const title = mode === 'emi' ? 'Expected EMI Calendar' : 'Expected OD Interest';
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={cs.overlay}>
+        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
+        <View style={cs.sheet}>
+          <View style={cs.handle} />
+          <View style={cs.sheetHeader}>
+            <Text style={cs.sheetTitle}>{title}</Text>
+            <TouchableOpacity onPress={onClose} style={cs.closeBtn}>
+              <Ionicons name="close" size={20} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          <Text style={cs.hint}>
+            Marked dates are expected from Tally history — not contractual bank due dates.
+          </Text>
+
+          <View style={cs.navRow}>
+            <TouchableOpacity style={cs.navBtn} onPress={prevMonth} activeOpacity={0.7}>
+              <Ionicons name="chevron-back" size={20} color={COLORS.textPrimary} />
+            </TouchableOpacity>
+            <Text style={cs.monthYear}>{MONTHS[viewMonth]} {viewYear}</Text>
+            <TouchableOpacity style={cs.navBtn} onPress={nextMonth} activeOpacity={0.7}>
+              <Ionicons name="chevron-forward" size={20} color={COLORS.textPrimary} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={cs.dayRow}>
+            {DAY_LABELS.map((d) => <Text key={d} style={cs.dayLabel}>{d}</Text>)}
+          </View>
+
+          <View style={cs.grid}>
+            {calDays.map((day, idx) => {
+              if (!day) return <View key={idx} style={cs.cell} />;
+              const marked = eventsForDay(day).length > 0;
+              const isSelected = selDate === day;
+              return (
+                <TouchableOpacity
+                  key={idx}
+                  style={cs.cell}
+                  onPress={() => setSelDate(isSelected ? null : day)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[cs.dayCircle, marked && cs.dayEmi, isSelected && cs.daySelected]}>
+                    <Text style={[cs.dayTxt, marked && cs.dayEmiTxt, isSelected && cs.daySelectedTxt]}>
+                      {day}
+                    </Text>
+                  </View>
+                  {marked && !isSelected && <View style={cs.emiDot} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <View style={cs.legend}>
+            <View style={cs.legendItem}>
+              <View style={[cs.legendDot, { backgroundColor: COLORS.brandPrimary }]} />
+              <Text style={cs.legendTxt}>
+                {mode === 'emi' ? 'Expected EMI' : 'Expected OD interest'}
+              </Text>
+            </View>
+          </View>
+
+          {selDate !== null && (
+            <View style={cs.emiList}>
+              <Text style={cs.emiListTitle}>
+                {selDate} {MONTHS[viewMonth]} — {mode === 'emi' ? 'Expected EMIs' : 'Expected interest'}
+              </Text>
+              {selectedEvents.length === 0 ? (
+                <Text style={cs.noEmi}>No expected payment on this date</Text>
+              ) : (
+                selectedEvents.map((e, i) => (
+                  <View key={`${e.dueDate}-${i}`} style={[cs.emiRow, i < selectedEvents.length - 1 && cs.emiRowBorder]}>
+                    <View style={cs.emiIcon}>
+                      <Ionicons name="business-outline" size={16} color={COLORS.brandPrimary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={cs.emiLoan}>{e.loan}</Text>
+                      <Text style={cs.emiTag}>{e.tag}</Text>
+                    </View>
+                    <Text style={cs.emiAmt}>{formatAmount(Math.round(e.amount))}</Text>
+                  </View>
+                ))
+              )}
+            </View>
+          )}
+          <View style={{ height: 20 }} />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 function BarProgress({ pct }: { pct: number }) {
   const p = Math.max(0, Math.min(100, pct || 0));
   return (
@@ -138,6 +295,26 @@ export default function LoansODsScreen() {
   const recentEmis = Array.isArray(active?.recentEvents) ? active.recentEvents : [];
   const txns = Array.isArray(active?.transactions) ? active.transactions : [];
   const rich = active?.mode === 'RICH';
+
+  const calendarEvents = useMemo<CalEvent[]>(() => {
+    if (!active) return [];
+    if (isOd) {
+      const d = active.nextInterestDate?.value;
+      if (!d) return [];
+      return [{
+        dueDate: String(d).slice(0, 10),
+        amount: 0,
+        tag: srcLabel(active.nextInterestDate) || 'Expected Interest',
+        loan: active.name,
+      }];
+    }
+    return upcoming.map((e: any) => ({
+      dueDate: String(e.dueDate || '').slice(0, 10),
+      amount: Number(e.scheduledAmount) || 0,
+      tag: e.label || 'Expected EMI',
+      loan: active.name,
+    })).filter((e: CalEvent) => !!e.dueDate);
+  }, [active, isOd, upcoming]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -411,32 +588,13 @@ export default function LoansODsScreen() {
         <View style={{ height: 110 }} />
       </ScrollView>
 
-      <Modal visible={showCalendar} animationType="slide" transparent onRequestClose={() => setShowCalendar(false)}>
-        <View style={s.modalBackdrop}>
-          <View style={s.modalSheet}>
-            <View style={s.modalHdr}>
-              <Text style={s.modalTitle}>Expected EMI calendar</Text>
-              <TouchableOpacity onPress={() => setShowCalendar(false)}>
-                <Ionicons name="close" size={22} color={COLORS.textPrimary} />
-              </TouchableOpacity>
-            </View>
-            <Text style={s.modalHint}>Dates estimated from Tally payment history — not contractual due dates.</Text>
-            <ScrollView>
-              {upcoming.length === 0 ? (
-                <View style={s.empty}><Text style={s.emptyTxt}>No predicted schedule</Text></View>
-              ) : upcoming.map((e: any, idx: number) => (
-                <View key={e.dueDate || idx} style={[s.emiRow, idx < upcoming.length - 1 && s.emiRowBorder]}>
-                  <View style={s.emiInfo}>
-                    <Text style={s.emiLoan}>#{e.installmentNo} · {fmtDate(e.dueDate)}</Text>
-                    <Text style={s.emiDate}>{e.label || e.source}</Text>
-                  </View>
-                  <Text style={s.emiAmt}>{formatAmount(Math.round(e.scheduledAmount || 0))}</Text>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      <LoanCalendarModal
+        visible={showCalendar}
+        onClose={() => setShowCalendar(false)}
+        mode={isOd ? 'od' : 'emi'}
+        events={calendarEvents}
+        formatAmount={formatAmount}
+      />
     </SafeAreaView>
   );
 }
@@ -549,13 +707,50 @@ const s = StyleSheet.create({
 
   empty: { padding: 24, alignItems: 'center' },
   emptyTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
+});
 
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  modalSheet: {
-    maxHeight: '70%', backgroundColor: COLORS.cardBg, borderTopLeftRadius: 18, borderTopRightRadius: 18,
-    paddingHorizontal: SPACING.md, paddingTop: 16, paddingBottom: 28,
+const cs = StyleSheet.create({
+  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.48)' },
+  sheet: {
+    backgroundColor: COLORS.cardBg, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: SPACING.md, paddingTop: 12, maxHeight: '90%',
   },
-  modalHdr: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  modalTitle: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-  modalHint: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginBottom: 12, lineHeight: 18 },
+  handle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  sheetTitle: { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
+  closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
+  hint: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginBottom: 12, lineHeight: 18 },
+  navRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  navBtn: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg,
+    alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  monthYear: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  dayRow: { flexDirection: 'row', marginBottom: 6 },
+  dayLabel: { flex: 1, textAlign: 'center', fontSize: 10, fontWeight: '700', color: COLORS.textTertiary },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 10 },
+  cell: { width: `${100 / 7}%` as any, alignItems: 'center', paddingVertical: 3 },
+  dayCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  dayEmi: { backgroundColor: COLORS.activeBg, borderWidth: 1.5, borderColor: COLORS.brandPrimary },
+  daySelected: { backgroundColor: COLORS.brandPrimary },
+  dayTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textPrimary },
+  dayEmiTxt: { color: COLORS.brandPrimary, fontWeight: '700' },
+  daySelectedTxt: { color: COLORS.white, fontWeight: '700' },
+  emiDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.brandPrimary, marginTop: 1 },
+  legend: { flexDirection: 'row', gap: 16, marginBottom: 12 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendDot: { width: 10, height: 10, borderRadius: 5 },
+  legendTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  emiList: { backgroundColor: COLORS.pageBg, borderRadius: RADIUS.lg, padding: SPACING.md, marginBottom: 6 },
+  emiListTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 10 },
+  emiRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 10 },
+  emiRowBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  emiIcon: {
+    width: 34, height: 34, borderRadius: 17, backgroundColor: COLORS.activeBg,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  emiLoan: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  emiTag: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 1 },
+  emiAmt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, flexShrink: 0 },
+  noEmi: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, textAlign: 'center', paddingVertical: 12 },
 });
