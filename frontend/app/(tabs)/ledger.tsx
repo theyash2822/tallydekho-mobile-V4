@@ -1113,7 +1113,7 @@ const styles = StyleSheet.create({
   },
   tabRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginHorizontal: SPACING.md, marginBottom: 8,
+    marginHorizontal: SPACING.md, marginBottom: 4,
     paddingHorizontal: 12, paddingVertical: 8,
     backgroundColor: COLORS.cardBg,
     borderRadius: RADIUS.md,
