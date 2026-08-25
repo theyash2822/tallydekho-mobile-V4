@@ -694,7 +694,6 @@ export default function LedgerScreen() {
       {!selectMode && !isLoading && data.length > 0 && (
         <View style={lp.card}>
           <View style={lp.headRow}>
-            <Text style={lp.label}>Position</Text>
             <Text style={[lp.net, { color: position.net >= 0 ? COLORS.positive : COLORS.negative }]}>
               {position.net >= 0 ? 'Net Receivable ' : 'Net Payable '}
               {formatAmountCompact(Math.abs(position.net))}
@@ -746,18 +745,16 @@ export default function LedgerScreen() {
         </View>
       )}
 
-      {/* Search — inset bar aligned with Position card width */}
-      <View style={styles.searchSection}>
-        <SearchBar
-          testID="ledger-search"
-          value={search}
-          onChangeText={setSearch}
-          placeholder={t('ledger.searchPlaceholder')}
-          style={styles.searchBarInset}
-        />
-      </View>
+      {/* Search — inset block (same side gutter as Position / list cards) */}
+      <SearchBar
+        testID="ledger-search"
+        value={search}
+        onChangeText={setSearch}
+        placeholder={t('ledger.searchPlaceholder')}
+        style={styles.searchBarInset}
+      />
 
-      {/* Filter Bar: ≡ All ▾ dropdown  |  Hide Zero  |  Sort */}
+      {/* Filter Bar — separate inset white strip */}
       <View style={styles.tabRow}>
         {/* ≡ All ▾ dropdown button */}
         <TouchableOpacity
@@ -1109,23 +1106,18 @@ const styles = StyleSheet.create({
     width: 38, height: 38, borderRadius: RADIUS.sm,
     alignItems: 'center', justifyContent: 'center',
   },
-  searchSection: {
-    paddingTop: 8,
-    paddingBottom: 10,
-    backgroundColor: COLORS.cardBg,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderDefault,
-  },
   searchBarInset: {
-    marginTop: 0,
-    marginBottom: 0,
+    marginTop: 4,
+    marginBottom: 8,
     marginHorizontal: SPACING.md,
   },
   tabRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md, paddingVertical: 8,
+    marginHorizontal: SPACING.md, marginBottom: 8,
+    paddingHorizontal: 12, paddingVertical: 8,
     backgroundColor: COLORS.cardBg,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+    borderRadius: RADIUS.md,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
   },
   // ≡ All ▾ dropdown button
   filterDropBtn: {
@@ -1454,8 +1446,7 @@ const lp = StyleSheet.create({
     borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault,
     paddingHorizontal: SPACING.md, paddingVertical: 9, gap: 7,
   },
-  headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  label: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8 },
+  headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
   net: { fontSize: TYPOGRAPHY.base, fontWeight: '800', letterSpacing: -0.3 },
   barTrack: { flexDirection: 'row', height: 5, borderRadius: 3, overflow: 'hidden', backgroundColor: COLORS.borderDefault, gap: 2 },
   barSeg: { height: 5, borderRadius: 3 },
