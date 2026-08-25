@@ -885,7 +885,10 @@ export default function LedgerScreen() {
           activeOpacity={0.8}
         >
           <Ionicons name="list" size={15} color={filter !== 'All' ? COLORS.brandPrimary : COLORS.textSecondary} />
-          <Text style={[styles.filterDropBtnTxt, filter !== 'All' && styles.filterDropBtnTxtActive]}>
+          <Text
+            style={[styles.filterDropBtnTxt, filter !== 'All' && styles.filterDropBtnTxtActive]}
+            numberOfLines={1}
+          >
             {filter}
           </Text>
           <Ionicons
@@ -1244,27 +1247,29 @@ const styles = StyleSheet.create({
   },
   searchBarInset: {
     marginTop: 4,
-    marginBottom: 8,
+    marginBottom: 4,
     marginHorizontal: SPACING.md,
   },
   tabRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginHorizontal: SPACING.md, marginBottom: 4,
-    paddingHorizontal: 12, paddingVertical: 8,
+    marginHorizontal: SPACING.md, marginBottom: 2,
+    paddingHorizontal: 10, paddingVertical: 6,
     backgroundColor: COLORS.cardBg,
     borderRadius: RADIUS.md,
     borderWidth: 1, borderColor: COLORS.borderDefault,
+    gap: 8,
   },
-  // ≡ All ▾ dropdown button
+  // ≡ All ▾ dropdown button — must not wrap "Credit"/"Debit"
   filterDropBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 12, paddingVertical: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 7,
     borderRadius: RADIUS.full,
     borderWidth: 1, borderColor: COLORS.borderDefault,
-    backgroundColor: COLORS.cardBg, minWidth: 90,
+    backgroundColor: COLORS.cardBg,
+    flexShrink: 0,
   },
   filterDropBtnActive: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary + '12' },
-  filterDropBtnTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+  filterDropBtnTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
   filterDropBtnTxtActive: { color: COLORS.brandPrimary },
   // Floating dropdown card (from the ≡ All button)
   floatDropCard: {
@@ -1287,7 +1292,7 @@ const styles = StyleSheet.create({
   // Active filter badges — inset, tight under filter strip
   activeBadgeRow: {
     flexDirection: 'row', flexWrap: 'wrap', gap: 6,
-    marginHorizontal: SPACING.md, marginBottom: 4, marginTop: 0,
+    marginHorizontal: SPACING.md, marginBottom: 2, marginTop: 2,
     paddingHorizontal: 0, paddingVertical: 0,
   },
   activeBadge: {
@@ -1297,14 +1302,15 @@ const styles = StyleSheet.create({
   },
   activeBadgeTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.brandPrimary, maxWidth: 180 },
   // Right controls
-  rightControls: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  rightControls: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, flexShrink: 1 },
   // Hide ₹0 chip — filled green when active, grey outline when off
   hideZeroChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 11, paddingVertical: 7,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 9, paddingVertical: 7,
     borderRadius: RADIUS.full,
     borderWidth: 1.5, borderColor: COLORS.borderDefault,
     backgroundColor: COLORS.cardBg,
+    flexShrink: 1,
   },
   hideZeroChipOn: {
     borderColor: COLORS.brandPrimary,
@@ -1325,8 +1331,12 @@ const styles = StyleSheet.create({
   sortBtnLabel: { fontSize: 12, fontWeight: '700', color: COLORS.textTertiary },
   sortBtnLabelActive: { color: COLORS.brandPrimary },
   scroll: { flex: 1 },
-  list: { padding: SPACING.md, gap: 8 },
-  listHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: SPACING.md, paddingTop: 10, paddingBottom: 2 },
+  // Top padding kept tight so list sits close under filters / badges
+  list: { paddingHorizontal: SPACING.md, paddingTop: 2, paddingBottom: SPACING.md, gap: 8 },
+  listHeader: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const,
+    paddingHorizontal: 0, paddingTop: 2, paddingBottom: 4,
+  },
   sectionLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500' as const },
   itemCard: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
