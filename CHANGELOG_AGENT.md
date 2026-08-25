@@ -1,3 +1,13 @@
+## [2026-08-25] Bank Balance carousel restore + UI forensic audit
+
+### Fixed
+- **Bank Balance KPI** — restored gradient swipe cards + dots (pre-mock-cleanup design) wired to live `getKPIBankBalance`
+- Card fields: ledger **name**, **parent**/OD label, **balance**, last txn date; Dr=inflow green / Cr=outflow red
+- Optional A/c+IFSC deferred to Bank Feeds link (not faked)
+
+### Added
+- `FORENSIC_UI_RESTORE_AUDIT.md` — screen-by-screen list of designed-UI losses from `31a3f402` mock cleanup
+
 ## [2026-08-24] Mock cleanup Phases 1–5 — live KPI / Sales / registers
 
 ### Fixed
