@@ -1,3 +1,11 @@
+## [2026-08-25] Loans & ODs Phase A — rich cards + estimated EMI/rate
+
+### Fixed
+- Restored gradient loan/OD carousel + tabs + expected EMI calendar
+- **RICH** mode (e.g. Hdfc Car Loan): Outstanding, Estimated Rate, Expected EMI/date, 6m history, calendar
+- **SIMPLE** mode (unsecured without EMI pattern): name + outstanding + transactions only
+- Labels follow TALLY_EXACT / Estimated / Expected rules from Loans OD spec
+
 ## [2026-08-25] Bank A/c + IFSC from Tally sync on Bank Balance / Feeds
 
 ### Fixed
