@@ -103,18 +103,6 @@ export default function PayablesScreen() {
     ];
   }, [apiData, formatAmountCompact]);
 
-  useEffect(() => {
-    if (agingCards.length <= 1) return;
-    const timer = setInterval(() => {
-      setAgingIdx((prev) => {
-        const next = (prev + 1) % agingCards.length;
-        agingRef.current?.scrollToOffset({ offset: next * SW, animated: true });
-        return next;
-      });
-    }, 3000);
-    return () => clearInterval(timer);
-  }, [agingCards.length]);
-
   const bills = useMemo(() => {
     const rows = Array.isArray(apiData?.bills) ? apiData.bills : [];
     return rows.map((b: any, i: number) => ({
@@ -225,6 +213,11 @@ export default function PayablesScreen() {
                 ref={agingRef}
                 horizontal
                 pagingEnabled
+                nestedScrollEnabled
+                decelerationRate="fast"
+                snapToInterval={SW}
+                snapToAlignment="start"
+                disableIntervalMomentum
                 data={agingCards}
                 keyExtractor={(i) => i.id}
                 showsHorizontalScrollIndicator={false}
@@ -243,22 +236,24 @@ export default function PayablesScreen() {
                         <Text style={s.agingLabel}>{item.label}</Text>
                         <Text style={s.agingAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount}</Text>
                       </View>
-                      <View style={[
-                        s.trendBadge,
-                        { backgroundColor: item.trend == null ? COLORS.pageBg : (item.positive ? COLORS.positiveBg : COLORS.negativeBg) },
-                      ]}>
-                        <Ionicons
-                          name={item.trend == null ? 'remove-outline' : (item.positive ? 'trending-up' : 'trending-down')}
-                          size={11}
-                          color={item.trend == null ? COLORS.textTertiary : (item.positive ? COLORS.positive : COLORS.negative)}
-                        />
-                        <Text style={[
-                          s.trendTxt,
-                          { color: item.trend == null ? COLORS.textTertiary : (item.positive ? COLORS.positive : COLORS.negative) },
+                      {item.trend != null ? (
+                        <View style={[
+                          s.trendBadge,
+                          { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg },
                         ]}>
-                          {item.trend ?? '—'}
-                        </Text>
-                      </View>
+                          <Ionicons
+                            name={item.positive ? 'trending-up' : 'trending-down'}
+                            size={11}
+                            color={item.positive ? COLORS.positive : COLORS.negative}
+                          />
+                          <Text style={[
+                            s.trendTxt,
+                            { color: item.positive ? COLORS.positive : COLORS.negative },
+                          ]}>
+                            {item.trend}
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
                   </View>
                 )}

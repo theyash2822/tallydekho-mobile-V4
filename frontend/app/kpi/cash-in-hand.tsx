@@ -82,27 +82,16 @@ export default function CashInHandScreen() {
     const bal = Number(apiData?.current_balance) || 0;
     const inflow = Number(apiData?.today_inflow) || 0;
     const outflow = Number(apiData?.today_outflow) || 0;
-    const ledgers = Array.isArray(apiData?.ledgers) ? apiData.ledgers : [];
-    const bankLike = ledgers.filter((l: any) => /bank/i.test(l.name || '')).reduce((s: number, l: any) => s + (Number(l.balance) || 0), 0);
+    const net = inflow - outflow;
     return [
-      { id: 'out', icon: 'arrow-up-circle-outline', label: 'Outflow Today', amount: formatAmountCompact(Math.round(outflow)), trend: null as string | null, positive: true },
-      { id: 'in', icon: 'arrow-down-circle-outline', label: 'Inflow Today', amount: formatAmountCompact(Math.round(inflow)), trend: null as string | null, positive: true },
-      { id: 'ledgers', icon: 'business-outline', label: 'Cash Ledgers', amount: String(ledgers.length || 0), trend: bankLike ? formatAmountCompact(Math.round(bankLike)) : null, positive: true },
-      { id: 'bal', icon: 'cash-outline', label: 'Cash on Hand', amount: formatAmountCompact(Math.round(bal)), trend: null as string | null, positive: true },
+      { id: 'bal', icon: 'cash-outline', label: 'Cash on Hand', amount: formatAmountCompact(Math.round(bal)) },
+      { id: 'in', icon: 'arrow-down-circle-outline', label: 'Inflow Today', amount: formatAmountCompact(Math.round(inflow)) },
+      { id: 'out', icon: 'arrow-up-circle-outline', label: 'Outflow Today', amount: formatAmountCompact(Math.round(outflow)) },
+      { id: 'net', icon: 'swap-vertical-outline', label: 'Net Today', amount: formatAmountCompact(Math.round(net)) },
     ];
   }, [apiData, formatAmountCompact]);
 
-  useEffect(() => {
-    if (summaryCards.length <= 1) return;
-    const t = setInterval(() => {
-      setSumIdx((prev) => {
-        const next = (prev + 1) % summaryCards.length;
-        sumRef.current?.scrollToOffset({ offset: next * SW, animated: true });
-        return next;
-      });
-    }, 3000);
-    return () => clearInterval(t);
-  }, [summaryCards.length]);
+  // No auto-scroll — it fought paging and stopped cards mid-swipe.
 
   const daily = useMemo(() => {
     return Array.isArray(apiData?.daily_balance) ? apiData.daily_balance : [];
@@ -110,14 +99,19 @@ export default function CashInHandScreen() {
 
   const lineData = useMemo(() => daily.map((d: any, i: number) => ({
     value: Math.max(0, Number(d.balance) || 0),
-    label: (i === 0 || (i + 1) % 5 === 0) ? String(i + 1) : '',
+    // Sparse calendar day labels (not 1..30 index) — only a few ticks
+    label: (i === 0 || i === daily.length - 1 || (i + 1) % 7 === 0)
+      ? String(d.day || '').slice(8, 10) // DD
+      : '',
   })), [daily]);
 
   const barData = useMemo(() => daily.flatMap((d: any, i: number) => [
     {
       value: Math.max(0, Number(d.inflow) || 0),
       frontColor: '#A89060',
-      label: (i === 0 || (i + 1) % 5 === 0) ? String(i + 1) : '',
+      label: (i === 0 || i === daily.length - 1 || (i + 1) % 7 === 0)
+        ? String(d.day || '').slice(8, 10)
+        : '',
       spacing: 3,
       barWidth: 9,
     },
@@ -198,6 +192,11 @@ export default function CashInHandScreen() {
                 ref={sumRef}
                 horizontal
                 pagingEnabled
+                nestedScrollEnabled
+                decelerationRate="fast"
+                snapToInterval={SW}
+                snapToAlignment="start"
+                disableIntervalMomentum
                 data={summaryCards}
                 keyExtractor={(i) => i.id}
                 showsHorizontalScrollIndicator={false}
@@ -214,10 +213,6 @@ export default function CashInHandScreen() {
                       <View style={s.sumTextWrap}>
                         <Text style={s.sumLabel}>{item.label}</Text>
                         <Text style={s.sumAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount}</Text>
-                      </View>
-                      <View style={[s.trendBadge, { backgroundColor: COLORS.pageBg }]}>
-                        <Ionicons name="remove-outline" size={11} color={COLORS.textTertiary} />
-                        <Text style={[s.trendTxt, { color: COLORS.textTertiary }]}>{item.trend ?? '—'}</Text>
                       </View>
                     </View>
                   </View>
@@ -246,33 +241,43 @@ export default function CashInHandScreen() {
                   </View>
                   <Text style={s.chartDate}>30 days</Text>
                 </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 16 }}>
-                  <LineChart
-                    data={lineData}
-                    areaChart
-                    curved
-                    color="#A89060"
-                    thickness={2}
-                    startFillColor="rgba(168,144,96,0.3)"
-                    endFillColor="rgba(168,144,96,0.05)"
-                    startOpacity={0.9}
-                    endOpacity={0.1}
-                    initialSpacing={16}
-                    spacing={34}
-                    maxValue={chartMax}
-                    noOfSections={4}
-                    yAxisLabelWidth={52}
-                    yAxisLabelTexts={labels}
-                    yAxisTextStyle={{ color: COLORS.textTertiary, fontSize: 10 }}
-                    xAxisLabelTextStyle={{ color: COLORS.textTertiary, fontSize: 9 }}
-                    rulesType="dashed"
-                    rulesColor={COLORS.borderDefault}
-                    dataPointsColor="#A89060"
-                    dataPointsRadius={3}
-                    isAnimated
-                    height={180}
-                    width={LINE_CHART_W}
-                  />
+                <ScrollView
+                  horizontal
+                  nestedScrollEnabled
+                  directionalLockEnabled
+                  showsHorizontalScrollIndicator
+                  contentContainerStyle={s.chartScrollContent}
+                >
+                  <View style={{ width: LINE_CHART_W + 60 }} pointerEvents="box-none">
+                    <LineChart
+                      data={lineData}
+                      areaChart
+                      curved
+                      disableScroll
+                      color="#A89060"
+                      thickness={2}
+                      startFillColor="rgba(168,144,96,0.3)"
+                      endFillColor="rgba(168,144,96,0.05)"
+                      startOpacity={0.9}
+                      endOpacity={0.1}
+                      initialSpacing={16}
+                      spacing={34}
+                      maxValue={chartMax}
+                      noOfSections={4}
+                      yAxisLabelWidth={52}
+                      yAxisLabelTexts={labels}
+                      yAxisTextStyle={{ color: COLORS.textTertiary, fontSize: 10 }}
+                      xAxisLabelTextStyle={{ color: COLORS.textTertiary, fontSize: 9 }}
+                      rulesType="dashed"
+                      rulesColor={COLORS.borderDefault}
+                      dataPointsColor="#A89060"
+                      dataPointsRadius={3}
+                      hideDataPoints={false}
+                      isAnimated={false}
+                      height={180}
+                      width={LINE_CHART_W}
+                    />
+                  </View>
                 </ScrollView>
               </View>
             )}
@@ -288,22 +293,31 @@ export default function CashInHandScreen() {
                     <Text style={s.legendTxt}>Payments</Text>
                   </View>
                 </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 16 }}>
-                  <BarChart
-                    data={barData}
-                    width={BAR_CHART_W}
-                    height={160}
-                    maxValue={chartMax}
-                    noOfSections={4}
-                    yAxisLabelWidth={52}
-                    yAxisLabelTexts={labels}
-                    yAxisTextStyle={{ color: COLORS.textTertiary, fontSize: 10 }}
-                    xAxisLabelTextStyle={{ color: COLORS.textTertiary, fontSize: 9 }}
-                    rulesType="dashed"
-                    rulesColor={COLORS.borderDefault}
-                    isAnimated
-                    barBorderRadius={2}
-                  />
+                <ScrollView
+                  horizontal
+                  nestedScrollEnabled
+                  directionalLockEnabled
+                  showsHorizontalScrollIndicator
+                  contentContainerStyle={s.chartScrollContent}
+                >
+                  <View style={{ width: BAR_CHART_W + 60 }} pointerEvents="box-none">
+                    <BarChart
+                      data={barData}
+                      disableScroll
+                      width={BAR_CHART_W}
+                      height={160}
+                      maxValue={chartMax}
+                      noOfSections={4}
+                      yAxisLabelWidth={52}
+                      yAxisLabelTexts={labels}
+                      yAxisTextStyle={{ color: COLORS.textTertiary, fontSize: 10 }}
+                      xAxisLabelTextStyle={{ color: COLORS.textTertiary, fontSize: 9 }}
+                      rulesType="dashed"
+                      rulesColor={COLORS.borderDefault}
+                      isAnimated={false}
+                      barBorderRadius={2}
+                    />
+                  </View>
                 </ScrollView>
               </View>
             )}
@@ -388,7 +402,8 @@ const s = StyleSheet.create({
   dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
   dotActive: { width: 16, height: 5, borderRadius: 3, backgroundColor: COLORS.textPrimary },
 
-  chartCard: { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, paddingTop: SPACING.md },
+  chartCard: { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, paddingTop: SPACING.md, overflow: 'hidden' },
+  chartScrollContent: { paddingRight: 16, paddingBottom: 8 },
   chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: SPACING.md, marginBottom: 12 },
   chartTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   chartMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
