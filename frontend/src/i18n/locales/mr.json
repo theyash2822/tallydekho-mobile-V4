@@ -50,7 +50,11 @@
     "purchase": "खरेदी",
     "stocks": "साठा",
     "reports": "अहवाल",
-    "settings": "सेटिंग्ज"
+    "settings": "सेटिंग्ज",
+    "home": "होम",
+    "expenses": "खर्च",
+    "vouchers": "व्हाउचर",
+    "quickActions": "त्वरित क्रिया"
   },
   "auth": {
     "login": "लॉग इन",

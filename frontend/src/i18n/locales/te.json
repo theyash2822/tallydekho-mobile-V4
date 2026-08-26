@@ -50,7 +50,11 @@
     "purchase": "కొనుగోళ్ళు",
     "stocks": "స్టాక్స్",
     "reports": "నివేదికలు",
-    "settings": "సెట్టింగ్స్"
+    "settings": "సెట్టింగ్స్",
+    "home": "హోమ్",
+    "expenses": "ఖర్చులు",
+    "vouchers": "వోచర్",
+    "quickActions": "త్వరిత చర్యలు"
   },
   "auth": {
     "login": "లాగిన్",

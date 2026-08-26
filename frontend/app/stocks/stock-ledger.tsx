@@ -12,6 +12,7 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { getStockLedger, getStocks } from '../../src/services/api';
 import { LoadingState, ErrorState } from '../../src/components/ApiStateViews';
+import { useTranslation } from 'react-i18next';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ViewMode = 'chronological' | 'byItem' | 'byDocument';
@@ -133,6 +134,7 @@ const TYPE_COLOR: Record<TxnType, string> = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function StockLedgerScreen() {
+  const { t } = useTranslation();
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router   = useRouter();
   const insets   = useSafeAreaInsets();
@@ -568,7 +570,7 @@ export default function StockLedgerScreen() {
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Stock Ledger</Text>
+        <Text style={s.headerTitle}>{t('stocks.stockLedger')}</Text>
         <TouchableOpacity style={s.headerBtn} onPress={openFilter} activeOpacity={0.7}>
           <Ionicons name="options-outline" size={22} color={COLORS.textPrimary} />
           {activeFilterCount > 0 && (

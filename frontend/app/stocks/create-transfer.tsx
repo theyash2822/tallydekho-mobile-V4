@@ -20,6 +20,7 @@ import { StockItem } from '../../src/data/stockData';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import { CompactQtyInput, SubmitButton } from '../../src/components/forms/StockFormHelpers';
 import { clearStockListCache } from '../../src/utils/stockCache';
+import { useTranslation } from 'react-i18next';
 
 type GodownRow = { name: string; qty: number };
 
@@ -166,6 +167,7 @@ function TransferItemTile({
 }
 
 export default function CreateStockTransferScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
@@ -328,7 +330,7 @@ export default function CreateStockTransferScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Stock Transfer</Text>
+        <Text style={s.headerTitle}>{t('stocks.createTransfer')}</Text>
         <View style={{ width: 36 }} />
       </View>
 

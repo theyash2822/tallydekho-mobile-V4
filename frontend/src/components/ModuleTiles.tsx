@@ -2,8 +2,10 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 import { useSettings } from '../context/SettingsContext';
+import { tMetricLabel } from '../i18n/labelMap';
 import ShimmerPlaceholder from './ShimmerPlaceholder';
 
 // ── Compact large amounts so they never clip in the narrow tile ──────────────
@@ -40,6 +42,7 @@ interface Props {
 
 export default function ModuleTiles({ metrics, isLoading }: Props) {
   const router = useRouter();
+  const { t } = useTranslation();
   const { formatAmountCompact } = useSettings();
 
   const displayAmount = (item: Metric): string => {
@@ -86,7 +89,7 @@ export default function ModuleTiles({ metrics, isLoading }: Props) {
               <Ionicons name={item.icon as any} size={16} color={id.accent} />
             </View>
 
-            <Text style={s.label} numberOfLines={1}>{item.label}</Text>
+            <Text style={s.label} numberOfLines={1}>{tMetricLabel(t, item.id, item.label)}</Text>
             <Text
               style={s.amount}
               numberOfLines={1}

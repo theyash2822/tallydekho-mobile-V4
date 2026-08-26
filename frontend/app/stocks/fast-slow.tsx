@@ -13,6 +13,7 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
+import { useTranslation } from 'react-i18next';
 
 const { width: SW } = Dimensions.get('window');
 const PAGE_SIZE = 20;
@@ -38,6 +39,7 @@ interface StockItem {
 
 // ── Screen ───────────────────────────────────────────────────────────────────
 export default function FastSlowMovingScreen() {
+  const { t } = useTranslation();
   const { formatAmount } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -195,7 +197,7 @@ export default function FastSlowMovingScreen() {
               <View style={s.summaryDivider} />
               <View style={s.summaryItem}>
                 <Text style={[s.summaryVal, { color: COLORS.positive }]}>{fastItems.length}</Text>
-                <Text style={s.summaryLbl}>Fast Moving</Text>
+                <Text style={s.summaryLbl}>{t('stocks.fastMoving')}</Text>
               </View>
               <View style={s.summaryDivider} />
               <View style={s.summaryItem}>

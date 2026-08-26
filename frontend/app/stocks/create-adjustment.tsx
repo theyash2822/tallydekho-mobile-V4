@@ -21,6 +21,7 @@ import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomS
 import FormDropdown from '../../src/components/forms/FormDropdown';
 import { CompactQtyInput, SubmitButton } from '../../src/components/forms/StockFormHelpers';
 import { clearStockListCache } from '../../src/utils/stockCache';
+import { useTranslation } from 'react-i18next';
 
 type GodownRow = { name: string; qty: number };
 
@@ -197,6 +198,7 @@ function AdjItemTile({
 }
 
 export default function CreateStockAdjustmentScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
@@ -366,7 +368,7 @@ export default function CreateStockAdjustmentScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Stock Adjustment</Text>
+        <Text style={s.headerTitle}>{t('stocks.createAdjustment')}</Text>
         <View style={{ width: 36 }} />
       </View>
 

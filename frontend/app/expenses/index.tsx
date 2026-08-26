@@ -13,6 +13,7 @@ import { getExpenses } from '../../src/services/api';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useSettings } from '../../src/context/SettingsContext';
+import { useTranslation } from 'react-i18next';
 
 const AMBER    = '#A89060';
 const AMBER_BG = '#FDF9F4';
@@ -50,6 +51,7 @@ function mapExpenseRow(r: any, formatAmount: (n: number) => string, i = 0): Expe
 
 // ─── Screen ─────────────────────────────────────────────────────────────────
 export default function ExpenseScreen() {
+  const { t } = useTranslation();
   const { formatAmount, formatAmountCompact } = useSettings();
   const router = useRouter();
   const { company, selectedFY, lastSyncAt } = useAuth();
@@ -104,7 +106,7 @@ export default function ExpenseScreen() {
         })));
       })
       .catch((err: any) => {
-        setApiError(err?.message || 'Failed to load expenses');
+        setApiError(err?.message || t('expenses.loadFailed'));
         setLiveExpenses([]);
         setLiveCategories([]);
         setExpenseSummary(null);
@@ -124,8 +126,8 @@ export default function ExpenseScreen() {
     const total = expenseSummary?.display || formatAmountCompact(0);
     const count = expenseSummary?.count ?? liveExpenses.length;
     return [
-      { id: 'total', label: 'Total Expenses', icon: 'ribbon-outline', amount: total, pct: '' },
-      { id: 'count', label: 'Transactions', icon: 'list-outline', amount: String(count), pct: '' },
+      { id: 'total', label: t('expenses.totalExpenses'), icon: 'ribbon-outline', amount: total, pct: '' },
+      { id: 'count', label: t('expenses.transactions'), icon: 'list-outline', amount: String(count), pct: '' },
     ];
   }, [expenseSummary, liveExpenses.length, formatAmountCompact]);
 
@@ -160,7 +162,7 @@ export default function ExpenseScreen() {
         >
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Expense</Text>
+        <Text style={s.headerTitle}>{t('expenses.title')}</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -241,15 +243,15 @@ export default function ExpenseScreen() {
             </View>
 
             <View style={s.tabRow}>
-              {(['recent', 'categories'] as const).map(t => (
+              {(['recent', 'categories'] as const).map(tabKey => (
                 <TouchableOpacity
-                  key={t}
-                  style={[s.tabBtn, tab === t && s.tabActive]}
-                  onPress={() => setTab(t)}
+                  key={tabKey}
+                  style={[s.tabBtn, tab === tabKey && s.tabActive]}
+                  onPress={() => setTab(tabKey)}
                   activeOpacity={0.7}
                 >
-                  <Text style={[s.tabTxt, tab === t && s.tabActiveTxt]}>
-                    {t === 'recent' ? 'Recent Expenses' : 'Top Categories'}
+                  <Text style={[s.tabTxt, tab === tabKey && s.tabActiveTxt]}>
+                    {tabKey === 'recent' ? t('expenses.recent') : t('expenses.categories')}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -260,7 +262,7 @@ export default function ExpenseScreen() {
                 {recent.length === 0 ? (
                   <View style={s.emptyBox}>
                     <Ionicons name="receipt-outline" size={28} color={COLORS.textTertiary} />
-                    <Text style={s.emptyTxt}>No expenses in this period</Text>
+                    <Text style={s.emptyTxt}>{t('expenses.noExpenses')}</Text>
                   </View>
                 ) : (
                   recent.map((exp, index) => (
@@ -290,7 +292,7 @@ export default function ExpenseScreen() {
                   onPress={() => router.push('/expenses/register' as any)}
                   activeOpacity={0.7}
                 >
-                  <Text style={s.viewAllTxt}>View All</Text>
+                  <Text style={s.viewAllTxt}>{t('expenses.viewAll')}</Text>
                   <Ionicons name="chevron-forward" size={14} color={COLORS.textPrimary} />
                 </TouchableOpacity>
               </View>
@@ -301,7 +303,7 @@ export default function ExpenseScreen() {
                 {liveCategories.length === 0 ? (
                   <View style={s.emptyBox}>
                     <Ionicons name="pie-chart-outline" size={28} color={COLORS.textTertiary} />
-                    <Text style={s.emptyTxt}>No expense categories in this period</Text>
+                    <Text style={s.emptyTxt}>{t('expenses.noExpenses')}</Text>
                   </View>
                 ) : (
                   liveCategories.map((cat, index) => (
@@ -324,7 +326,7 @@ export default function ExpenseScreen() {
                   onPress={() => router.push('/ledger' as any)}
                   activeOpacity={0.7}
                 >
-                  <Text style={s.viewAllTxt}>View All</Text>
+                  <Text style={s.viewAllTxt}>{t('expenses.viewAll')}</Text>
                   <Ionicons name="chevron-forward" size={14} color={COLORS.textPrimary} />
                 </TouchableOpacity>
               </View>

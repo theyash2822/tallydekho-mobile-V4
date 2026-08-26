@@ -23,6 +23,7 @@ import {
   createJournalVoucher, getLedgers,
 } from '../../src/services/api';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
+import { useTranslation } from 'react-i18next';
 import {
   indiaIncomeTaxDepreciationRates,
   IndiaDepreciationRate,
@@ -43,6 +44,7 @@ const dmyToISO = (dmy: string): string => {
 const fmtINR = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
 
 export default function CreateJournalVoucher() {
+  const { t } = useTranslation();
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
   const narrationY = useRef(0);
@@ -178,7 +180,7 @@ export default function CreateJournalVoucher() {
   }, [drLedger, crLedger, amount, deprOn, wdvBase, ratePercent]);
 
   const handleSubmit = async () => {
-    if (canSubmit) { Alert.alert('Required', canSubmit); return; }
+    if (canSubmit) { Alert.alert(t('voucher.required'), canSubmit); return; }
     if (!isPaired) {
       Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Pair with Tally Desktop first.' });
       return;
@@ -245,7 +247,7 @@ export default function CreateJournalVoucher() {
         <TouchableOpacity onPress={() => router.back()} style={s.back} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.hdrTitle}>Journal Voucher</Text>
+        <Text style={s.hdrTitle}>{t('voucher.journalTitle')}</Text>
         <RegularOptionalToggle value={entryType} onChange={setEntryType} />
       </View>
 
@@ -267,7 +269,7 @@ export default function CreateJournalVoucher() {
             <View style={[s.fieldBlock, { padding: SPACING.md }]}>
               <View style={s.row2}>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.fLabel}>Journal No.</Text>
+                  <Text style={s.fLabel}>{t('voucher.journalNo')}</Text>
                   <View style={s.autoBox}>
                     <Text style={s.autoTxt}>Auto</Text>
                     <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
@@ -517,7 +519,7 @@ export default function CreateJournalVoucher() {
             {submitting
               ? <ActivityIndicator size="small" color={COLORS.white} />
               : <Ionicons name="send" size={16} color={COLORS.white} />}
-            <Text style={s.btnPriTxt}>{submitting ? 'Submitting...' : 'Submit Journal'}</Text>
+            <Text style={s.btnPriTxt}>{submitting ? t('voucher.submitting') : t('voucher.submitJournal')}</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -580,11 +582,11 @@ export default function CreateJournalVoucher() {
                 color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
               />
             </View>
-            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : 'Journal Submitted!'}</Text>
+            <Text style={ss.title}>{submitResult.isQueued ? t('voucher.journalQueued') : t('voucher.journalSubmitted')}</Text>
             <Text style={ss.sub}>
               {submitResult.isQueued
                 ? 'Entry queued. Will push to Tally when desktop reconnects.'
-                : 'Journal pushed to Tally successfully.'}
+                : t('voucher.journalPushed')}
             </Text>
             {submitResult.numberingPolicy === 'tallydekho_series' && submitResult.voucherNumber && (
               <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>

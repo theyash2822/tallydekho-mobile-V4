@@ -8,6 +8,7 @@ import { ErrorBanner } from '../src/components/ApiStateViews';
 import { LedgerRowSkeleton } from '../src/components/ShimmerPlaceholder';
 
 import { useAuth } from '../src/context/AuthContext';
+import { useTranslation } from 'react-i18next';
 import {
   getNotifications,
   markNotificationRead,
@@ -62,6 +63,7 @@ function normalizeNotification(n: any): AppNotification {
 }
 
 export default function NotificationsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { company } = useAuth();
   const companyGuid = company?.guid;
@@ -149,17 +151,22 @@ export default function NotificationsScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <View style={s.headerMid}>
-          <Text style={s.headerTitle}>Notifications</Text>
+          <Text style={s.headerTitle}>{t('notifications.title')}</Text>
           {unreadCount > 0 && <View style={s.badge}><Text style={s.badgeTxt}>{unreadCount}</Text></View>}
         </View>
         <TouchableOpacity onPress={markAllRead} disabled={unreadCount === 0}>
-          <Text style={[s.markAll, unreadCount === 0 && { color: COLORS.textTertiary }]}>Mark all read</Text>
+          <Text style={[s.markAll, unreadCount === 0 && { color: COLORS.textTertiary }]}>{t('notifications.markAllRead')}</Text>
         </TouchableOpacity>
       </View>
 
       <View style={s.filterWrap}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterRow}>
           {FILTERS.map(f => {
+            const filterLabel = f === 'All' ? t('notifications.all')
+              : f === 'Stock' ? t('notifications.filterStock')
+              : f === 'Receivables' ? t('notifications.filterReceivables')
+              : f === 'Compliance' ? t('notifications.filterCompliance')
+              : t('notifications.filterInvoices');
             const active = filter === f;
             const count = f === 'All'
               ? notifications.filter(n => !n.read).length
@@ -172,7 +179,7 @@ export default function NotificationsScreen() {
                 onPress={() => setFilter(f)}
                 activeOpacity={0.75}
               >
-                <Text style={[s.chipTxt, active && s.chipTxtActive]}>{f}</Text>
+                <Text style={[s.chipTxt, active && s.chipTxtActive]}>{filterLabel}</Text>
                 {count > 0 && (
                   <View style={[s.chipCount, active && s.chipCountActive]}>
                     <Text style={[s.chipCountTxt, active && { color: COLORS.brandPrimary }]}>{count}</Text>
@@ -194,8 +201,8 @@ export default function NotificationsScreen() {
         ) : visible.length === 0 ? (
           <View style={s.empty}>
             <Ionicons name="notifications-off-outline" size={48} color={COLORS.textTertiary} />
-            <Text style={s.emptyTitle}>All caught up!</Text>
-            <Text style={s.emptySub}>No {filter === 'All' ? '' : filter.toLowerCase() + ' '}notifications right now.</Text>
+            <Text style={s.emptyTitle}>{t('notifications.allCaughtUp')}</Text>
+            <Text style={s.emptySub}>{t('notifications.emptySub')}</Text>
           </View>
         ) : (
           <>

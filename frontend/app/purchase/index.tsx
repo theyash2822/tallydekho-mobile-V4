@@ -13,6 +13,7 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { getPurchaseInvoices, getDebitNotes } from '../../src/services/api';
+import { useTranslation } from 'react-i18next';
 
 const AMBER      = '#A89060';
 const AMBER_BG   = '#FDF9F4';
@@ -73,7 +74,7 @@ function buildMetrics(rows: any[], formatAmountCompact: (n: number) => string): 
   const fmt = (n: number) => formatAmountCompact(Math.round(n));
 
   return [
-    { id: 'today',       label: 'Today',       icon: 'calendar-outline',        amount: fmt(todaySum), pct: '', pos: true  },
+    { id: 'today',       label: 'Today' /* i18n in screen */,       icon: 'calendar-outline',        amount: fmt(todaySum), pct: '', pos: true  },
     { id: 'mtd',         label: 'MTD',         icon: 'calendar-number-outline', amount: fmt(mtdSum),   pct: '', pos: true  },
     { id: 'ytd',         label: 'YTD',         icon: 'ribbon-outline',          amount: fmt(ytdSum),   pct: '', pos: true  },
     { id: 'avg',         label: 'Avg Ticket',  icon: 'ticket-outline',          amount: fmt(avg),      pct: '', pos: true  },
@@ -82,6 +83,7 @@ function buildMetrics(rows: any[], formatAmountCompact: (n: number) => string): 
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 export default function PurchaseScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company, selectedFY, lastSyncAt } = useAuth();
@@ -130,7 +132,14 @@ export default function PurchaseScreen() {
         const rows = invRes?.data ?? [];
         const debitNotes = dnRes?.data ?? [];
 
-        setMetricCards(buildMetrics(rows, formatAmountCompact));
+        setMetricCards(buildMetrics(rows, formatAmountCompact).map(c => ({
+          ...c,
+          label: c.id === 'today' ? t('purchase.today')
+            : c.id === 'mtd' ? t('purchase.mtd')
+            : c.id === 'ytd' ? t('purchase.ytd')
+            : c.id === 'avg' ? t('purchase.avgTicket')
+            : c.label,
+        })));
 
         setLiveRecent(rows.slice(0, 20).map((r: any, i: number): PurchaseRow => ({
           id: r.guid || `pur-${r.voucher_number || 'x'}-${r.id ?? i}`,
@@ -167,15 +176,15 @@ export default function PurchaseScreen() {
         const banners: any[] = [];
         const unpaid = rows.filter((r: any) => r.is_cancelled).length;
         if (unpaid > 0) {
-          banners.push({ id: 'b1', bold: `${unpaid} invoices`, sub: 'cancelled or pending review', action: 'View All' });
+          banners.push({ id: 'b1', bold: t('purchase.invoicesCount', { count: unpaid }), sub: t('purchase.cancelledOrPending'), action: t('purchase.viewAll') });
         }
         if (debitNotes.length > 0) {
-          banners.push({ id: 'b2', bold: `${debitNotes.length} debit notes`, sub: 'in selected period', action: 'View All' });
+          banners.push({ id: 'b2', bold: t('purchase.debitNotesCount', { count: debitNotes.length }), sub: t('purchase.inSelectedPeriod'), action: t('purchase.viewAll') });
         }
         setLiveBanners(banners);
       })
       .catch((err: any) => {
-        setApiError(err?.message || 'Failed to load purchase data');
+        setApiError(err?.message || t('purchase.loadFailed'));
         setLiveRecent([]);
         setLiveTopVendors([]);
         setLiveBanners([]);
@@ -248,7 +257,7 @@ export default function PurchaseScreen() {
         >
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Purchase</Text>
+        <Text style={s.headerTitle}>{t('purchase.title')}</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -337,15 +346,15 @@ export default function PurchaseScreen() {
 
         {/* ── Tabs ─────────────────────────────────────────────────── */}
         <View style={s.tabRow}>
-          {(['recent', 'vendors'] as const).map(t => (
+          {(['recent', 'vendors'] as const).map(tabKey => (
             <TouchableOpacity
-              key={t}
-              style={[s.tabBtn, tab === t && s.tabActive]}
-              onPress={() => setTab(t)}
+              key={tabKey}
+              style={[s.tabBtn, tab === tabKey && s.tabActive]}
+              onPress={() => setTab(tabKey)}
               activeOpacity={0.7}
             >
-              <Text style={[s.tabTxt, tab === t && s.tabActiveTxt]}>
-                {t === 'recent' ? 'Recent Purchases' : 'Top Vendors'}
+              <Text style={[s.tabTxt, tab === tabKey && s.tabActiveTxt]}>
+                {tabKey === 'recent' ? t('purchase.recent') : t('purchase.vendors')}
               </Text>
             </TouchableOpacity>
           ))}
@@ -397,7 +406,7 @@ export default function PurchaseScreen() {
               onPress={() => router.push('/purchase/register' as any)}
               activeOpacity={0.7}
             >
-              <Text style={s.viewAllTxt}>View All</Text>
+              <Text style={s.viewAllTxt}>{t('purchase.viewAll')}</Text>
               <Ionicons name="chevron-forward" size={14} color={COLORS.textPrimary} />
             </TouchableOpacity>
           </View>
@@ -437,7 +446,7 @@ export default function PurchaseScreen() {
               onPress={() => router.push('/ledger' as any)}
               activeOpacity={0.7}
             >
-              <Text style={s.viewAllTxt}>View All</Text>
+              <Text style={s.viewAllTxt}>{t('purchase.viewAll')}</Text>
               <Ionicons name="chevron-forward" size={14} color={COLORS.textPrimary} />
             </TouchableOpacity>
           </View>

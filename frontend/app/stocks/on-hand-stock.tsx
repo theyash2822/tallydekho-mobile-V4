@@ -13,6 +13,7 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { getStocks } from '../../src/services/api';
+import { useTranslation } from 'react-i18next';
 
 const ICON_PALETTE = [
   { icon: 'cube-outline', iconBg: COLORS.positiveBg, iconColor: COLORS.positive },
@@ -60,6 +61,7 @@ const sc = StyleSheet.create({
 });
 
 export default function OnHandStockScreen() {
+  const { t } = useTranslation();
   const { selectedFY, company, lastSyncAt } = useAuth();
   const companyGuid = company?.guid;
   const router = useRouter();
@@ -125,7 +127,7 @@ export default function OnHandStockScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>On Hand Stock</Text>
+        <Text style={styles.headerTitle}>{t('stocks.onHand')}</Text>
         <TouchableOpacity style={styles.calBtn} onPress={() => setCalOpen(true)} activeOpacity={0.7}>
           <Ionicons name="calendar-outline" size={20} color={COLORS.brandPrimary} />
         </TouchableOpacity>

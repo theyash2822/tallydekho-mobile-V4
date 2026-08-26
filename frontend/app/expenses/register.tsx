@@ -13,6 +13,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { getExpenses } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useSettings } from '../../src/context/SettingsContext';
+import { useTranslation } from 'react-i18next';
 
 type TxItem = { id: string; voucher: string; desc: string; date: string; amount: string; positive: boolean; type: 'payment' | 'receipt' | 'contra'; party?: string; time?: string; status?: string; };
 
@@ -44,6 +45,7 @@ type MonthGroup = { id: string; label: string; items: ExpenseItem[] };
 // Legacy MONTH_GROUPS removed — using live data
 
 export default function ExpenseRegisterScreen() {
+  const { t } = useTranslation();
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -191,7 +193,7 @@ export default function ExpenseRegisterScreen() {
           <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
-          <Text style={s.headerTitle}>Expense Register</Text>
+          <Text style={s.headerTitle}>{t('expenses.register')}</Text>
           <View style={{ width: 36 }} />
         </View>
       )}

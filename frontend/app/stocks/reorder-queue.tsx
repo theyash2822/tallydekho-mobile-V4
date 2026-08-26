@@ -7,6 +7,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { getStocks } from '../../src/services/api';
 import { LoadingState, ErrorState, EmptyState } from '../../src/components/ApiStateViews';
+import { useTranslation } from 'react-i18next';
 
 type Priority = 'critical' | 'high' | 'medium' | 'low';
 
@@ -46,6 +47,7 @@ const PRIORITY_CONFIG: Record<Priority, { label: string; color: string; bg: stri
 type FilterType = 'All' | 'Critical' | 'High' | 'Medium' | 'Low';
 
 export default function ReorderQueueScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { company } = useAuth();
   const companyGuid = company?.guid;
@@ -111,7 +113,7 @@ export default function ReorderQueueScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Reorder Queue</Text>
+        <Text style={styles.headerTitle}>{t('stocks.reorder')}</Text>
         {criticalCount > 0 && (
           <View style={styles.criticalBadge}>
             <Text style={styles.criticalText}>{criticalCount}</Text>

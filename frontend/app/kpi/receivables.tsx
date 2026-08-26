@@ -14,6 +14,7 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { getKPIReceivables } from '../../src/services/api';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { useTranslation } from 'react-i18next';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -38,6 +39,7 @@ function openWhatsApp(phone?: string) {
 }
 
 export default function ReceivablesScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { company, selectedFY, lastSyncAt } = useAuth();
   const { formatAmountCompact, formatAmount } = useSettings();
@@ -181,7 +183,7 @@ export default function ReceivablesScreen() {
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Receivables</Text>
+        <Text style={s.headerTitle}>{t('kpi.receivables')}</Text>
         <View style={s.headerBtn} />
       </View>
 
@@ -196,14 +198,14 @@ export default function ReceivablesScreen() {
           onPress={() => toggleChip('overdue')}
           activeOpacity={0.7}
         >
-          <Text style={[s.filterChipTxt, overdueOn && s.filterChipActiveTxt]}>Overdue</Text>
+          <Text style={[s.filterChipTxt, overdueOn && s.filterChipActiveTxt]}>{t('kpi.overdue')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[s.filterChip, receiptsOn && s.filterChipActive]}
           onPress={() => toggleChip('receipts')}
           activeOpacity={0.7}
         >
-          <Text style={[s.filterChipTxt, receiptsOn && s.filterChipActiveTxt]}>Receipts</Text>
+          <Text style={[s.filterChipTxt, receiptsOn && s.filterChipActiveTxt]}>{t('kpi.receiptsFilter')}</Text>
         </TouchableOpacity>
       </View>
 

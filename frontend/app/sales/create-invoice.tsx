@@ -42,6 +42,7 @@ import {
   BottomSheetBackdrop,
 } from '@gorhom/bottom-sheet';
 import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
+import { useTranslation } from 'react-i18next';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const todayStr = () => {
@@ -740,6 +741,7 @@ function ItemRow({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CreateSalesInvoiceScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const scrollRef = useRef<any>(null);
   // Notes & Terms: capture Y offsets via onLayout so we can scroll the focused field above the keyboard
@@ -1691,7 +1693,7 @@ export default function CreateSalesInvoiceScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={s.headerTitle}>{isProforma ? 'Proforma Invoice' : 'Sales Invoice'}</Text>
+          <Text style={s.headerTitle}>{isProforma ? t('sales.createProforma') : t('sales.createInvoice')}</Text>
           <Text style={s.headerSub}>
             {isProforma
               ? 'Always optional'

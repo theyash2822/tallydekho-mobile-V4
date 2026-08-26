@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 import { useSettings } from '../context/SettingsContext';
 
@@ -66,6 +67,7 @@ export default function CashflowCard({
   totalExpense,
 }: CashflowCardProps) {
   const router = useRouter();
+  const { t } = useTranslation();
   const { formatAmountCompact, formatAmount } = useSettings();
   const fmt = (val: number) => formatAmountCompact(Math.round(val));
   const fmtFull = (val: number) => formatAmount(Math.round(val));
@@ -81,8 +83,8 @@ export default function CashflowCard({
           <View style={s.iconCircle}>
             <Ionicons name="analytics-outline" size={14} color={COLORS.textSecondary} />
           </View>
-          <Text style={s.title}>Cashflow</Text>
-          <Text style={s.updated}>· {updatedAt || 'just now'}</Text>
+          <Text style={s.title}>{t('dashboard.cashflow')}</Text>
+          <Text style={s.updated}>· {updatedAt || t('dashboard.justNow')}</Text>
         </View>
         <TouchableOpacity
           testID="cashflow-expand-btn"
@@ -96,7 +98,7 @@ export default function CashflowCard({
 
       <View style={s.netRow}>
         <View>
-          <Text style={s.netLabel}>Net Cash</Text>
+          <Text style={s.netLabel}>{t('dashboard.netCash')}</Text>
           <Text style={s.netValue}>₹{Number(netCash || 0).toLocaleString('en-IN')}</Text>
         </View>
         <View style={[s.statusPill, { backgroundColor: isHealthy ? COLORS.positiveBg : COLORS.negativeBg }]}>
@@ -107,7 +109,7 @@ export default function CashflowCard({
           />
           <Text style={[s.statusTxt, { color: isHealthy ? COLORS.positive : COLORS.negative }]}>
             {isHealthy ? '+' : ''}{incomePercentage}%{'  '}
-            {isHealthy ? 'Healthy' : 'Watch'}
+            {isHealthy ? t('dashboard.healthy') : t('dashboard.watch')}
           </Text>
         </View>
       </View>
@@ -117,7 +119,7 @@ export default function CashflowCard({
       <View style={s.barRow}>
         <View style={s.barMeta}>
           <Ionicons name="arrow-up-circle-outline" size={15} color={COLORS.positive} />
-          <Text style={s.barLabel}>Income</Text>
+          <Text style={s.barLabel}>{t('dashboard.income')}</Text>
         </View>
         <SegmentedBar value={incomeVal} maxValue={maxVal} color={COLORS.positive} delay={80} />
         <View style={s.barRight}>
@@ -131,7 +133,7 @@ export default function CashflowCard({
       <View style={[s.barRow, { marginTop: 12 }]}>
         <View style={s.barMeta}>
           <Ionicons name="arrow-down-circle-outline" size={15} color={COLORS.negative} />
-          <Text style={s.barLabel}>Expense</Text>
+          <Text style={s.barLabel}>{t('dashboard.expense')}</Text>
         </View>
         <SegmentedBar value={expenseVal} maxValue={maxVal} color={COLORS.negative} delay={360} />
         <View style={s.barRight}>
@@ -143,14 +145,14 @@ export default function CashflowCard({
 
       <View style={s.bottomRow}>
         <View style={s.bottomCell}>
-          <Text style={s.bottomLabel}>Gross Profit</Text>
+          <Text style={s.bottomLabel}>{t('dashboard.grossProfit')}</Text>
           <Text style={[s.bottomVal, { color: grossProfit >= 0 ? COLORS.positive : COLORS.negative }]} numberOfLines={1} adjustsFontSizeToFit>
             {fmtFull(grossProfit)}
           </Text>
         </View>
         <View style={s.bottomSep} />
         <View style={[s.bottomCell, s.bottomCellRight]}>
-          <Text style={s.bottomLabel}>Net Profit</Text>
+          <Text style={s.bottomLabel}>{t('dashboard.netProfit')}</Text>
           <Text style={[s.bottomVal, { color: netProfit >= 0 ? COLORS.positive : COLORS.negative }]} numberOfLines={1} adjustsFontSizeToFit>
             {fmtFull(netProfit)}
           </Text>

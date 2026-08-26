@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
 import { markOnboardingCompleted } from '../src/utils/onboardingNav';
+import { useTranslation } from 'react-i18next';
 
 const { width: SW } = Dimensions.get('window');
 const PAGE_BG  = '#F5F4EF';
@@ -693,53 +694,27 @@ const qad = StyleSheet.create({
 // ─────────────────────────────────────────────────────────────────────────────
 // SLIDE DATA
 // ─────────────────────────────────────────────────────────────────────────────
-interface SlideInfo {
-  id:          string;
-  emoji?:      string;
-  title:       string;
-  description: string;
-  isHero?:     boolean;
-  Demo?:       React.FC;
-}
-
-const SLIDES: SlideInfo[] = [
-  { id: 'hero', title: 'TallyDekho', description: '', isHero: true },
-  {
-    id: 'swipe', emoji: '👈👉',
-    title: 'Swipe for Quick Actions',
-    description: 'Swipe right on a stock tile to Transfer, or swipe left to Edit Stock — instantly.',
-    Demo: SwipeDemo,
-  },
-  {
-    id: 'multiselect', emoji: '👆',
-    title: 'Long Press to Select',
-    description: 'Long press any stock item to enter multi-select. Bulk export as PDF or transfer in one tap.',
-    Demo: MultiSelectDemo,
-  },
-  {
-    id: 'cashflow', emoji: '📊',
-    title: 'Tap Ring for Breakdown',
-    description: 'Tap the cashflow ring on Home to instantly reveal your income vs expense split.',
-    Demo: CashflowDemo,
-  },
-  {
-    id: 'voice', emoji: '🎤',
-    title: 'Voice Search',
-    description: 'Tap the mic on home and speak — find any invoice, party or transaction in seconds.',
-    Demo: VoiceDemo,
-  },
-  {
-    id: 'quickadd', emoji: '➕',
-    title: 'One Tap to Create',
-    description: 'Tap + anywhere to open Quick Actions — create invoices, vouchers, stock entries and more.',
-    Demo: QuickAddDemo,
-  },
+const SLIDE_KEYS: Array<{
+  id: string;
+  isHero?: boolean;
+  emoji?: string;
+  titleKey?: string;
+  descKey?: string;
+  Demo?: React.FC;
+}> = [
+  { id: 'hero', isHero: true },
+  { id: 'swipe', emoji: '👈👉', titleKey: 'onboarding.swipeTitle', descKey: 'onboarding.swipeDesc', Demo: SwipeDemo },
+  { id: 'multiselect', emoji: '👆', titleKey: 'onboarding.multiselectTitle', descKey: 'onboarding.multiselectDesc', Demo: MultiSelectDemo },
+  { id: 'cashflow', emoji: '📊', titleKey: 'onboarding.cashflowTitle', descKey: 'onboarding.cashflowDesc', Demo: CashflowDemo },
+  { id: 'voice', emoji: '🎤', titleKey: 'onboarding.voiceTitle', descKey: 'onboarding.voiceDesc', Demo: VoiceDemo },
+  { id: 'quickadd', emoji: '➕', titleKey: 'onboarding.quickaddTitle', descKey: 'onboarding.quickaddDesc', Demo: QuickAddDemo },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 export default function OnboardingScreen() {
+  const { t } = useTranslation();
   const router         = useRouter();
   const params         = useLocalSearchParams<{ replay?: string }>();
   const isReplay       = params.replay === 'true';
@@ -754,14 +729,6 @@ export default function OnboardingScreen() {
     setCurrentIndex(idx);
   }, []);
 
-  const goNext = useCallback(() => {
-    if (currentIndex < SLIDES.length - 1) {
-      goToIndex(currentIndex + 1);
-    } else {
-      finishGuide();
-    }
-  }, [currentIndex, goToIndex]);
-
   const finishGuide = useCallback(async () => {
     if (isReplay) {
       router.back();
@@ -771,12 +738,20 @@ export default function OnboardingScreen() {
     router.replace(isAuthenticated ? '/(tabs)' : '/(auth)');
   }, [isReplay, router, isAuthenticated]);
 
+  const goNext = useCallback(() => {
+    if (currentIndex < SLIDE_KEYS.length - 1) {
+      goToIndex(currentIndex + 1);
+    } else {
+      finishGuide();
+    }
+  }, [currentIndex, goToIndex, finishGuide]);
+
   const onScroll = useCallback((e: any) => {
     const idx = Math.round(e.nativeEvent.contentOffset.x / SW);
     setCurrentIndex(idx);
   }, []);
 
-  const isLast = currentIndex === SLIDES.length - 1;
+  const isLast = currentIndex === SLIDE_KEYS.length - 1;
 
   return (
     <View style={s.container}>
@@ -784,7 +759,7 @@ export default function OnboardingScreen() {
       {!isLast && (
         <SafeAreaView edges={['top']} style={s.skipWrap}>
           <TouchableOpacity style={s.skipBtn} onPress={finishGuide} activeOpacity={0.7}>
-            <Text style={s.skipTxt}>Skip</Text>
+            <Text style={s.skipTxt}>{t('onboarding.skip')}</Text>
           </TouchableOpacity>
         </SafeAreaView>
       )}
@@ -799,7 +774,7 @@ export default function OnboardingScreen() {
         style={{ flex: 1 }}
         bounces={false}
       >
-        {SLIDES.map((slide) => {
+        {SLIDE_KEYS.map((slide) => {
           if (slide.isHero) {
             return (
               <View key={slide.id} style={{ width: SW, height: slideH }}>
@@ -819,8 +794,8 @@ export default function OnboardingScreen() {
               {/* Slide text */}
               <View style={s.textBlock}>
                 <Text style={s.slideEmoji}>{slide.emoji}</Text>
-                <Text style={s.slideTitle}>{slide.title}</Text>
-                <Text style={s.slideDesc}>{slide.description}</Text>
+                <Text style={s.slideTitle}>{t(slide.titleKey!)}</Text>
+                <Text style={s.slideDesc}>{t(slide.descKey!)}</Text>
               </View>
             </View>
           );
@@ -830,14 +805,14 @@ export default function OnboardingScreen() {
       {/* Bottom nav */}
       <SafeAreaView edges={['bottom']} style={s.bottomNav}>
         <View style={s.dotsRow}>
-          {SLIDES.map((_, i) => (
+          {SLIDE_KEYS.map((_, i) => (
             <TouchableOpacity key={i} onPress={() => goToIndex(i)} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
               <View style={[s.dot, i === currentIndex && s.dotActive]} />
             </TouchableOpacity>
           ))}
         </View>
         <TouchableOpacity style={[s.ctaBtn, isLast && s.ctaBtnGold]} onPress={goNext} activeOpacity={0.85}>
-          <Text style={s.ctaTxt}>{isLast ? 'Get Started  →' : 'Next  →'}</Text>
+          <Text style={s.ctaTxt}>{isLast ? `${t('onboarding.getStarted')}  →` : `${t('onboarding.next')}  →`}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     </View>

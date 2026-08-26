@@ -40,6 +40,7 @@ import {
   createReceiptVoucher, getParties, getBankLedgers, getPartyOutstandingBills,
 } from '../../src/services/api';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
+import { useTranslation } from 'react-i18next';
 
 // ── Helpers (mirrors create-invoice.tsx) ─────────────────────────────────────
 const todayStr = () => {
@@ -82,6 +83,7 @@ interface BillRow {
 }
 
 export default function CreateReceiptVoucher() {
+  const { t } = useTranslation();
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
   const narrationY = useRef(0);
@@ -250,7 +252,7 @@ export default function CreateReceiptVoucher() {
     setBills(prev => prev.map((b, i) => i === idx ? { ...b, payAmount: val, selected: parseFloat(val) > 0 ? true : b.selected } : b));
   };
   const fifoAutoAllocate = () => {
-    if (!receiptAmt) { Alert.alert('Enter amount first'); return; }
+    if (!receiptAmt) { Alert.alert(t('voucher.enterAmountFirst')); return; }
     let remain = receiptAmt;
     setBills(prev => prev.map(b => {
       if (remain <= 0) return { ...b, selected: false, payAmount: '' };
@@ -298,7 +300,7 @@ export default function CreateReceiptVoucher() {
   };
 
   const handleSubmit = async () => {
-    if (canSubmit) { Alert.alert('Required', canSubmit); return; }
+    if (canSubmit) { Alert.alert(t('voucher.required'), canSubmit); return; }
     if (!isPaired) { Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Pair with Tally Desktop first.' }); return; }
     setSubmitting(true);
     try {
@@ -344,7 +346,7 @@ export default function CreateReceiptVoucher() {
         <TouchableOpacity onPress={() => router.back()} style={s.back} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.hdrTitle}>Receipt Voucher</Text>
+        <Text style={s.hdrTitle}>{t('voucher.receiptTitle')}</Text>
         <RegularOptionalToggle value={entryType} onChange={setEntryType} />
       </View>
 

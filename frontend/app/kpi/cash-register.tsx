@@ -13,6 +13,7 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import SearchBar from '../../src/components/SearchBar';
+import { useTranslation } from 'react-i18next';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 type TxType = 'payment' | 'receipt' | 'contra';
@@ -27,6 +28,7 @@ type FilterType = 'all' | 'inflow' | 'outflow';
 
 // ── Component ────────────────────────────────────────────────────────────────
 export default function CashRegisterScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { company, selectedFY } = useAuth();
   const { formatAmount } = useSettings();
@@ -157,7 +159,7 @@ export default function CashRegisterScreen() {
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Cash Register</Text>
+        <Text style={s.headerTitle}>{t('kpi.cashRegister')}</Text>
         <View style={s.headerBtn} />
       </View>
 

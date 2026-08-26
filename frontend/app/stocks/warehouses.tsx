@@ -11,6 +11,7 @@ import { getWarehouses } from '../../src/services/api';
 import SearchBar from '../../src/components/SearchBar';
 import { useAuth } from '../../src/context/AuthContext';
 import { CardSkeleton } from '../../src/components/ShimmerPlaceholder';
+import { useTranslation } from 'react-i18next';
 
 // ─── RING CHART (outside screen component) ───────────────────────────────────────
 
@@ -64,6 +65,7 @@ function RingChart({ pct, label, size = 82 }: { pct: number; label: string; size
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 
 export default function WarehousesScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { company } = useAuth();
   const companyGuid = company?.guid;
@@ -118,7 +120,7 @@ export default function WarehousesScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Warehouses</Text>
+        <Text style={styles.headerTitle}>{t('stocks.warehouses')}</Text>
         <TouchableOpacity
           style={styles.addBtn}
           onPress={() => router.push('/stocks/create-warehouse' as any)}

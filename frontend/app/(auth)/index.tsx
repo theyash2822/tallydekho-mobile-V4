@@ -63,7 +63,7 @@ export default function LoginScreen() {
         selectedCountry.minDigits === selectedCountry.maxDigits
           ? `${selectedCountry.minDigits}-digit`
           : `${selectedCountry.minDigits}–${selectedCountry.maxDigits}-digit`;
-      setError(`Please enter a valid ${range} mobile number`);
+      setError(t('auth.validMobile', { range }));
       return;
     }
     setLoading(true);

@@ -33,6 +33,7 @@ import DatePickerModal from '../../src/components/forms/DatePickerModal';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import { taxFieldsFromLedgerSelect, resolveTaxLedgerRate } from '../../src/utils/taxLedgerHelpers';
 import { shareVoucherPdfByRef } from '../../src/utils/voucherPdf';
+import { useTranslation } from 'react-i18next';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const todayStr = () => {
@@ -428,6 +429,7 @@ function ItemRow({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CreateDeliveryNoteScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const scrollRef = useRef<any>(null);
   const notesCardY = useRef<number>(0);
@@ -1101,7 +1103,7 @@ export default function CreateDeliveryNoteScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={s.headerTitle}>Delivery Note</Text>
+          <Text style={s.headerTitle}>{t('sales.createDeliveryNote')}</Text>
           <Text style={s.headerSub}>{numberingDisplay}</Text>
         </View>
         <RegularOptionalToggle value={entryType} onChange={handleEntryTypeChange} />

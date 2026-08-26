@@ -11,6 +11,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { createWarehouse, getWarehouses } from '../../src/services/api';
 import FormDropdown from '../../src/components/forms/FormDropdown';
+import { useTranslation } from 'react-i18next';
 
 const WEB = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
 const TOP_LEVEL_VALUE = '';
@@ -31,6 +32,7 @@ function ThemedInput({
 }
 
 export default function CreateWarehouseScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company, isPaired } = useAuth();
@@ -100,7 +102,7 @@ export default function CreateWarehouseScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Add Warehouse</Text>
+        <Text style={s.headerTitle}>{t('stocks.createWarehouse')}</Text>
         <View style={{ width: 36 }} />
       </View>
 

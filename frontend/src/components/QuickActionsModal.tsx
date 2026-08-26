@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Modal,
   ScrollView, useWindowDimensions, Platform,
@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 
 const SECTION_COLORS: Record<string, { color: string; bg: string }> = {
@@ -22,69 +23,79 @@ interface QuickActionsModalProps {
   onItemPress?: (item: { id: string; label: string; route: string }) => void;
 }
 
-const SECTIONS = [
+const SECTION_DEFS = [
   {
     id: 'sales',
-    label: 'Sales',
+    labelKey: 'quickActions.sales',
     icon: 'receipt-outline' as const,
     items: [
-      { id: 'sale-invoice',  label: 'Create Invoice',      route: '/sales/create-invoice',       icon: 'document-text-outline' as const },
-      { id: 'sale-proforma', label: 'Proforma Invoice',    route: '/sales/create-proforma',      icon: 'document-outline' as const },
-      { id: 'sale-order',    label: 'Create Sales Orders',  route: '/sales/create-order',         icon: 'list-outline' as const },
-      { id: 'sale-delivery', label: 'Create Delivery Note', route: '/sales/create-delivery-note', icon: 'car-outline' as const },
-      { id: 'sale-credit',   label: 'Credit Note',          route: '/sales/create-credit-note',   icon: 'return-up-back-outline' as const },
+      { id: 'sale-invoice',  labelKey: 'quickActions.createInvoice',      route: '/sales/create-invoice',       icon: 'document-text-outline' as const },
+      { id: 'sale-proforma', labelKey: 'quickActions.proformaInvoice',    route: '/sales/create-proforma',      icon: 'document-outline' as const },
+      { id: 'sale-order',    labelKey: 'quickActions.createSalesOrders',  route: '/sales/create-order',         icon: 'list-outline' as const },
+      { id: 'sale-delivery', labelKey: 'quickActions.createDeliveryNote', route: '/sales/create-delivery-note', icon: 'car-outline' as const },
+      { id: 'sale-credit',   labelKey: 'quickActions.creditNote',          route: '/sales/create-credit-note',   icon: 'return-up-back-outline' as const },
     ],
   },
   {
     id: 'purchase',
-    label: 'Purchase',
+    labelKey: 'quickActions.purchase',
     icon: 'bag-handle-outline' as const,
     items: [
-      { id: 'pur-invoice', label: 'Purchase Invoice', route: '/purchase/create-invoice',   icon: 'document-text-outline' as const },
-      { id: 'pur-order',   label: 'Purchase Order',   route: '/purchase/create-order',     icon: 'bag-outline' as const },
-      { id: 'pur-debit',   label: 'Debit Note',       route: '/purchase/create-debit-note', icon: 'remove-circle-outline' as const },
+      { id: 'pur-invoice', labelKey: 'quickActions.purchaseInvoice', route: '/purchase/create-invoice',   icon: 'document-text-outline' as const },
+      { id: 'pur-order',   labelKey: 'quickActions.purchaseOrder',   route: '/purchase/create-order',     icon: 'bag-outline' as const },
+      { id: 'pur-debit',   labelKey: 'quickActions.debitNote',       route: '/purchase/create-debit-note', icon: 'remove-circle-outline' as const },
     ],
   },
   {
     id: 'voucher',
-    label: 'Voucher',
+    labelKey: 'quickActions.voucher',
     icon: 'wallet-outline' as const,
     items: [
-      { id: 'vou-receipt', label: 'Receipt Voucher', route: '/voucher/create-receipt', icon: 'cash-outline' as const },
-      { id: 'vou-payment', label: 'Payment Voucher', route: '/voucher/create-payment', icon: 'send-outline' as const },
-      { id: 'vou-journal', label: 'Journal Entry',   route: '/voucher/create-journal', icon: 'journal-outline' as const },
-      { id: 'vou-contra',  label: 'Contra Entry',    route: '/voucher/create-contra',  icon: 'swap-horizontal-outline' as const },
+      { id: 'vou-receipt', labelKey: 'quickActions.receiptVoucher', route: '/voucher/create-receipt', icon: 'cash-outline' as const },
+      { id: 'vou-payment', labelKey: 'quickActions.paymentVoucher', route: '/voucher/create-payment', icon: 'send-outline' as const },
+      { id: 'vou-journal', labelKey: 'quickActions.journalEntry',   route: '/voucher/create-journal', icon: 'journal-outline' as const },
+      { id: 'vou-contra',  labelKey: 'quickActions.contraEntry',    route: '/voucher/create-contra',  icon: 'swap-horizontal-outline' as const },
     ],
   },
   {
     id: 'inventory',
-    label: 'Inventory',
+    labelKey: 'quickActions.inventory',
     icon: 'layers-outline' as const,
     items: [
-      { id: 'inv-adjust',    label: 'Stock Adjustment', route: '/stocks/create-adjustment', icon: 'options-outline' as const },
-      { id: 'inv-transfer',  label: 'Stock Transfer',   route: '/stocks/create-transfer',   icon: 'arrow-forward-circle-outline' as const },
-      { id: 'inv-item',      label: 'Add Item',         route: '/stocks/create-item',       icon: 'add-circle-outline' as const },
-      { id: 'inv-warehouse', label: 'Add Warehouse',    route: '/stocks/create-warehouse',  icon: 'business-outline' as const },
+      { id: 'inv-adjust',    labelKey: 'quickActions.stockAdjustment', route: '/stocks/create-adjustment', icon: 'options-outline' as const },
+      { id: 'inv-transfer',  labelKey: 'quickActions.stockTransfer',   route: '/stocks/create-transfer',   icon: 'arrow-forward-circle-outline' as const },
+      { id: 'inv-item',      labelKey: 'quickActions.addItem',         route: '/stocks/create-item',       icon: 'add-circle-outline' as const },
+      { id: 'inv-warehouse', labelKey: 'quickActions.addWarehouse',    route: '/stocks/create-warehouse',  icon: 'business-outline' as const },
     ],
   },
   {
     id: 'ledgers',
-    label: 'Ledgers',
+    labelKey: 'quickActions.ledgers',
     icon: 'book-outline' as const,
     items: [
-      { id: 'led-creditors', label: 'Sundry Creditors', route: '/ledger/create?type=sundry_creditor', icon: 'person-add-outline' as const },
-      { id: 'led-debtors',   label: 'Sundry Debtors',   route: '/ledger/create?type=sundry_debtor',   icon: 'person-outline' as const },
-      { id: 'led-taxes',     label: 'Duties & Taxes',   route: '/ledger/create?type=duties_taxes',    icon: 'pricetag-outline' as const },
-      { id: 'led-custom',    label: 'Custom Groups',    route: '/ledger/create?type=custom',          icon: 'settings-outline' as const },
+      { id: 'led-creditors', labelKey: 'quickActions.sundryCreditors', route: '/ledger/create?type=sundry_creditor', icon: 'person-add-outline' as const },
+      { id: 'led-debtors',   labelKey: 'quickActions.sundryDebtors',   route: '/ledger/create?type=sundry_debtor',   icon: 'person-outline' as const },
+      { id: 'led-taxes',     labelKey: 'quickActions.dutiesTaxes',   route: '/ledger/create?type=duties_taxes',    icon: 'pricetag-outline' as const },
+      { id: 'led-custom',    labelKey: 'quickActions.customGroups',    route: '/ledger/create?type=custom',          icon: 'settings-outline' as const },
     ],
   },
 ];
 
 const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose, onItemPress }) => {
   const router = useRouter();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
+
+  const sections = useMemo(() => SECTION_DEFS.map(section => ({
+    ...section,
+    label: t(section.labelKey),
+    items: section.items.map(item => ({
+      ...item,
+      label: t(item.labelKey),
+    })),
+  })), [t]);
 
   useEffect(() => {
     if (visible) setExpandedSection(null);
@@ -120,7 +131,7 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose,
           <View style={s.handle} />
 
           <View style={s.header}>
-            <Text style={s.title}>Quick Actions</Text>
+            <Text style={s.title}>{t('quickActions.title')}</Text>
             <TouchableOpacity
               onPress={onClose}
               style={s.headerClose}
@@ -140,7 +151,7 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose,
             keyboardShouldPersistTaps="handled"
             nestedScrollEnabled
           >
-            {SECTIONS.map(section => {
+            {sections.map(section => {
               const isExpanded = expandedSection === section.id;
               const theme = SECTION_COLORS[section.id] || {
                 color: COLORS.brandPrimary,

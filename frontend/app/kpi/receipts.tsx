@@ -14,6 +14,7 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { getKPIReceipts } from '../../src/services/api';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { useTranslation } from 'react-i18next';
 import {
   resolvePeriodDates,
   type DashboardPeriod,
@@ -225,17 +226,18 @@ function CashBankDonut({
   bank: number;
   formatAmountCompact: (n: number) => string;
 }) {
+  const { t } = useTranslation();
   const [selIdx, setSelIdx] = useState<number | null>(null);
   const total = cash + bank;
   const segments = [
-    { value: Math.max(cash, 0.0001), color: DONUT_CASH, label: 'Cash', raw: cash },
-    { value: Math.max(bank, 0.0001), color: DONUT_BANK, label: 'Bank', raw: bank },
+    { value: Math.max(cash, 0.0001), color: DONUT_CASH, label: t('kpi.cashInHand'), raw: cash },
+    { value: Math.max(bank, 0.0001), color: DONUT_BANK, label: t('kpi.bankBalance'), raw: bank },
   ];
   const pct = (v: number) => (total > 0 ? `${((v / total) * 100).toFixed(1)}%` : '—');
 
   return (
     <View style={dc.card}>
-      <Text style={dc.title}>Cash vs Bank</Text>
+      <Text style={dc.title}>{t('kpi.cashVsBank')}</Text>
       <View style={dc.body}>
         <View style={dc.donutWrap}>
           <PieChart
@@ -292,6 +294,7 @@ function CashBankDonut({
 }
 
 export default function ReceiptsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { company, selectedFY, lastSyncAt } = useAuth();
   const { formatAmountCompact, formatAmount } = useSettings();
@@ -355,7 +358,7 @@ export default function ReceiptsScreen() {
         const trend = c.trend_pct;
         const hasTrend = trend != null && Number.isFinite(Number(trend));
         const positive = c.trend_positive != null ? !!c.trend_positive : Number(trend) >= 0;
-        const label = c.id === 'period' ? `Receipts (${period})` : (c.label || c.id);
+        const label = c.id === 'period' ? t('kpi.periodReceipts', { period }) : (c.label || c.id);
         return {
           id: String(c.id),
           icon: icons[c.id] || 'stats-chart-outline',
@@ -371,7 +374,7 @@ export default function ReceiptsScreen() {
     const cash = Number(apiData?.cash_total) || 0;
     const bank = Number(apiData?.bank_total) || 0;
     return [
-      { id: 'period', icon: 'download-outline', label: `Receipts (${period})`, amount: formatAmountCompact(Math.round(total)), trend: null, positive: true },
+      { id: 'period', icon: 'download-outline', label: t('kpi.periodReceipts', { period }), amount: formatAmountCompact(Math.round(total)), trend: null, positive: true },
       { id: 'today', icon: 'calendar-outline', label: 'Today', amount: formatAmountCompact(Math.round(today)), trend: null, positive: true },
       { id: 'cash', icon: 'cash-outline', label: 'Cash', amount: formatAmountCompact(Math.round(cash)), trend: null, positive: true },
       { id: 'bank', icon: 'business-outline', label: 'Bank', amount: formatAmountCompact(Math.round(bank)), trend: null, positive: true },
@@ -395,7 +398,7 @@ export default function ReceiptsScreen() {
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Receipts</Text>
+        <Text style={s.headerTitle}>{t('kpi.receipts')}</Text>
         <View style={s.headerBtn} />
       </View>
 
@@ -457,7 +460,7 @@ export default function ReceiptsScreen() {
 
             <View style={s.recentCard}>
               <View style={s.recentHeader}>
-                <Text style={s.recentTitle}>Recent Receipts</Text>
+                <Text style={s.recentTitle}>{t('kpi.recentReceipts')}</Text>
                 <View style={s.periodRow}>
                   {PERIOD_TABS.map((p) => (
                     <TouchableOpacity

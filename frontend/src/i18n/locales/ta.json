@@ -50,7 +50,11 @@
     "purchase": "கொள்முதல்",
     "stocks": "இருப்பு",
     "reports": "அறிக்கைகள்",
-    "settings": "அமைப்புகள்"
+    "settings": "அமைப்புகள்",
+    "home": "முகப்பு",
+    "expenses": "செலவுகள்",
+    "vouchers": "வவுச்சர்",
+    "quickActions": "விரைவு செயல்கள்"
   },
   "auth": {
     "login": "உள்நுழை",

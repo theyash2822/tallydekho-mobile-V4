@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getBarcodeList } from '../../src/services/api';
+import { useTranslation } from 'react-i18next';
 
 type QueueItem = {
   stockGuid:   string;
@@ -17,6 +18,7 @@ type QueueItem = {
 };
 
 export default function PrintBarcodesScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { company } = useAuth();
   const companyGuid = company?.guid ?? '';
@@ -66,7 +68,7 @@ export default function PrintBarcodesScreen() {
         <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Print Barcodes</Text>
+        <Text style={s.headerTitle}>{t('stocks.printBarcodes')}</Text>
         <View style={{ width: 40 }} />
       </View>
 

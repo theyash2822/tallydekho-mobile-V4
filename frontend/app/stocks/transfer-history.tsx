@@ -14,6 +14,7 @@ import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import SearchBar from '../../src/components/SearchBar';
+import { useTranslation } from 'react-i18next';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface TransferItem {
@@ -125,6 +126,7 @@ function TransferCard({
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 export default function TransferHistoryScreen() {
+  const { t } = useTranslation();
   const router   = useRouter();
   const insets   = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
@@ -223,7 +225,7 @@ export default function TransferHistoryScreen() {
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Transfer History</Text>
+        <Text style={s.headerTitle}>{t('stocks.transferHistory')}</Text>
         <View style={{ width: 44 }} />
       </View>
 

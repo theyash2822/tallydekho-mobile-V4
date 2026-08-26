@@ -68,7 +68,13 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     AsyncStorage.getItem('userSettings').then(s => {
       if (s) {
-        try { setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(s) }); } catch {}
+        try {
+          const merged = { ...DEFAULT_SETTINGS, ...JSON.parse(s) };
+          setSettings(merged);
+          // Apply cached language immediately (before API returns)
+          const code = LANGUAGE_CODE_MAP[merged.language] || 'en';
+          i18n.changeLanguage(code);
+        } catch {}
       }
     });
     getUserSettings().then((res: any) => {

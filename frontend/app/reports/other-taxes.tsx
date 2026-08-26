@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
+import { useTranslation } from 'react-i18next';
 import {
   getOtherTaxesSummary,
   getOtherTaxesTransactions,
@@ -105,6 +106,7 @@ function groupByMonth(txns: TaxTxn[]): Array<{ month: string; items: TaxTxn[] }>
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function OtherTaxesScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { company: selectedCompany, selectedFY } = useAuth();
 
@@ -237,7 +239,7 @@ export default function OtherTaxesScreen() {
         <TouchableOpacity style={s.iconBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Other Taxes</Text>
+        <Text style={s.headerTitle}>{t('reports.otherTaxes')}</Text>
         <View style={s.iconBtn} />
       </View>
 

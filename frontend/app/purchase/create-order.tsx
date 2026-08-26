@@ -24,6 +24,7 @@ import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/compon
 import DatePickerModal, { parseDMY } from '../../src/components/forms/DatePickerModal';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import { taxFieldsFromLedgerSelect, resolveTaxLedgerRate } from '../../src/utils/taxLedgerHelpers';
+import { useTranslation } from 'react-i18next';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const todayStr = () => {
@@ -453,6 +454,7 @@ function ItemRow({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CreatePurchaseOrderScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const scrollRef = useRef<any>(null);
   const insets = useSafeAreaInsets();
@@ -961,7 +963,7 @@ export default function CreatePurchaseOrderScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={s.headerTitle}>Purchase Order</Text>
+          <Text style={s.headerTitle}>{t('purchase.createOrder')}</Text>
           <Text style={s.headerSub}>{orderNo || 'PO-Auto'}</Text>
         </View>
         <RegularOptionalToggle value={entryType} onChange={setEntryType} />

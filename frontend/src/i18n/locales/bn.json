@@ -50,7 +50,11 @@
     "purchase": "ক্রয়",
     "stocks": "স্টক",
     "reports": "প্রতিবেদন",
-    "settings": "সেটিংস"
+    "settings": "সেটিংস",
+    "home": "হোম",
+    "expenses": "খরচ",
+    "vouchers": "ভাউচার",
+    "quickActions": "দ্রুত কাজ"
   },
   "auth": {
     "login": "লগইন",

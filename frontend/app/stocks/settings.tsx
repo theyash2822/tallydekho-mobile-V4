@@ -12,6 +12,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import { useAuth } from '../../src/context/AuthContext';
 import { getInventorySettings, saveInventorySettings } from '../../src/services/api';
+import { useTranslation } from 'react-i18next';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -104,6 +105,7 @@ function RadioRow({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function StockSettingsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company } = useAuth();
@@ -341,7 +343,7 @@ export default function StockSettingsScreen() {
           <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
             <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
           </TouchableOpacity>
-          <Text style={s.headerTitle}>Stock Settings</Text>
+          <Text style={s.headerTitle}>{t('stocks.settings')}</Text>
           <View style={{ width: 44 }} />
         </View>
         <View style={s.loadingWrap}>
@@ -375,7 +377,7 @@ export default function StockSettingsScreen() {
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Stock Settings</Text>
+        <Text style={s.headerTitle}>{t('stocks.settings')}</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -607,7 +609,7 @@ export default function StockSettingsScreen() {
             <View style={s.sectionIconWrap}>
               <Ionicons name="business-outline" size={18} color={COLORS.textSecondary} />
             </View>
-            <Text style={s.sectionTitle}>Warehouses</Text>
+            <Text style={s.sectionTitle}>{t('stocks.warehouses')}</Text>
             <Ionicons name={openSections.warehouse ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.textTertiary} />
           </TouchableOpacity>
 

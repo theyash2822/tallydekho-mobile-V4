@@ -17,6 +17,7 @@ import { getFinancialData, getGSTReport, getAuditTrail } from '../../src/service
 import { useAuth } from '../../src/context/AuthContext';
 import { FinancialChartSkeleton } from '../../src/components/Skeleton';
 import { useSettings } from '../../src/context/SettingsContext';
+import { useTranslation } from 'react-i18next';
 
 const SCREEN_W = Dimensions.get('window').width;
 // Card width (screen - outer margins). Content area inside card (card - card padding).
@@ -525,6 +526,7 @@ interface GSTGaugeProps {
 const GAUGE_GAP = 0.04;
 
 function GSTGauge({ filedCount, needleIndex }: GSTGaugeProps) {
+  const { t } = useTranslation();
   const [activeMonth, setActiveMonth] = useState<number | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -575,7 +577,7 @@ function GSTGauge({ filedCount, needleIndex }: GSTGaugeProps) {
 
   return (
     <View style={{ alignItems: 'center' }}>
-      <Text style={gauge.title}>GST filed</Text>
+      <Text style={gauge.title}>{t('reports.gstFiled')}</Text>
 
       {/* Tooltip chip — visible only while touching */}
       {activeMonth !== null ? (
@@ -852,6 +854,7 @@ const sc = StyleSheet.create({
 // Main Reports Screen
 // ══════════════════════════════════════════════════════════════════════════════
 export default function ReportsScreen() {
+  const { t } = useTranslation();
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const { company, selectedFY, lastSyncAt } = useAuth();
@@ -933,7 +936,7 @@ export default function ReportsScreen() {
       {apiError && <ErrorBanner message={apiError} onRetry={() => { setFinLoading(true); setApiError(null); }} />}
       {/* Page Header — mirrors Ledger screen style */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Reports</Text>
+        <Text style={styles.headerTitle}>{t('reports.title')}</Text>
       </View>
 
       <ScrollView
@@ -944,10 +947,10 @@ export default function ReportsScreen() {
 
         <View style={styles.kpiStrip}>
           {[
-            { label: 'Revenue', value: formatAmountCompact(Math.round(revenueTotal)), dot: '#2D7D46' },
-            { label: 'Expenses', value: formatAmountCompact(Math.round(expenseTotal)), dot: '#A89060' },
-            { label: 'Net Profit', value: formatAmountCompact(Math.round(netProfit)), dot: COLORS.brandPrimary },
-            { label: 'GST', value: `${gstFiledCount}/12`, dot: '#D97706' },
+            { label: t('reports.revenue'), value: formatAmountCompact(Math.round(revenueTotal)), dot: '#2D7D46' },
+            { label: t('reports.expenses'), value: formatAmountCompact(Math.round(expenseTotal)), dot: '#A89060' },
+            { label: t('reports.netProfit'), value: formatAmountCompact(Math.round(netProfit)), dot: COLORS.brandPrimary },
+            { label: t('reports.gst'), value: `${gstFiledCount}/12`, dot: '#D97706' },
           ].map((k, i) => (
             <React.Fragment key={k.label}>
               {i > 0 && <View style={styles.kpiSep} />}
@@ -963,15 +966,15 @@ export default function ReportsScreen() {
         {/* ── 1. Financial ───────────────────────────────────────────────── */}
         <SectionCard
           iconName="stats-chart-outline"
-          title="Financial"
-          metric={finData ? `Net ${formatAmountCompact(Math.round(netProfit))}` : undefined}
+          title={t('reports.financial')}
+          metric={finData ? t('reports.netMetric', { amount: formatAmountCompact(Math.round(netProfit)) }) : undefined}
           onPress={() => router.push('/reports/financial' as any)}
         >
           <InteractiveLineChart
             isLoading={finLoading}
             lines={finData ? [
-              { values: finData.revenue,  color: C_GREEN,    label: 'Revenue'  },
-              { values: finData.expenses, color: '#A89060',  label: 'Expenses' },
+              { values: finData.revenue,  color: C_GREEN,    label: t('reports.revenue')  },
+              { values: finData.expenses, color: '#A89060',  label: t('reports.expenses') },
             ] : []}
             xLabels={finData?.months ?? []}
           />
@@ -980,8 +983,8 @@ export default function ReportsScreen() {
         {/* ── 2. Compliance ─────────────────────────────────────────────── */}
         <SectionCard
           iconName="shield-checkmark-outline"
-          title="Compliance"
-          metric={`${gstFiledCount}/12 · ${gstPending} pending`}
+          title={t('reports.compliance')}
+          metric={t('reports.pendingMonths', { filed: gstFiledCount, pending: gstPending })}
           onPress={() => router.push('/reports/compliance' as any)}
         >
           <GSTGauge filedCount={gstFiledCount} needleIndex={Math.max(gstFiledCount - 1, 0)} />
@@ -990,23 +993,23 @@ export default function ReportsScreen() {
         {/* ── 3. Audit Trail ────────────────────────────────────────────── */}
         <SectionCard
           iconName="git-branch-outline"
-          title="Audit Trail"
-          metric={`${auditCount} unreconciled`}
+          title={t('reports.auditTrail')}
+          metric={t('reports.unreconciled', { count: auditCount })}
           onPress={() => router.push('/reports/audit-trail' as any)}
         >
           <AuditProgressBar
-            label="Pending / failed entries"
+            label={t('reports.pendingFailed')}
             count={auditCount}
             total={Math.max(auditTotal, 1)}
           />
         </SectionCard>
 
         {/* ── 4. AI Insights ────────────────────────────────────────────── */}
-        <SectionCard iconName="sparkles-outline" title="AI Insights" onPress={() => router.push('/reports/ai-insights' as any)}>
+        <SectionCard iconName="sparkles-outline" title={t('reports.aiInsights')} onPress={() => router.push('/reports/ai-insights' as any)}>
           <LogLineChart
             lines={[
-              { values: AI_FORECAST, color: COLORS.brandPrimary, label: 'Sales forecast', latestLabel: '₹460' },
-              { values: AI_ACTUAL,   color: '#A89060',           label: 'Actual',          latestLabel: '₹990' },
+              { values: AI_FORECAST, color: COLORS.brandPrimary, label: t('reports.salesForecast'), latestLabel: '₹460' },
+              { values: AI_ACTUAL,   color: '#A89060',           label: t('reports.actual'),          latestLabel: '₹990' },
             ]}
             xLabels={AI_X}
             legendPosition="bottom"
@@ -1014,18 +1017,18 @@ export default function ReportsScreen() {
           />
         </SectionCard>
 
-        <Text style={styles.moreLabel}>More Reports</Text>
+        <Text style={styles.moreLabel}>{t('reports.moreReports')}</Text>
         <View style={styles.moreGrid}>
           {[
-            { label: 'GST Returns',   icon: 'receipt-outline',        route: '/reports/gst' },
-            { label: 'E-Invoices',    icon: 'document-text-outline',  route: '/reports/einvoice-list' },
-            { label: 'E-Way Bills',   icon: 'navigate-outline',       route: '/reports/ewb-list' },
-            { label: 'Cash Register', icon: 'cash-outline',           route: '/kpi/cash-register' },
-            { label: 'Day Book',      icon: 'book-outline',           route: '/reports/audit-trail?tab=daybook' },
+            { label: t('reports.gstReturns'),   icon: 'receipt-outline',        route: '/reports/gst' },
+            { label: t('reports.einvoices'),    icon: 'document-text-outline',  route: '/reports/einvoice-list' },
+            { label: t('reports.ewayBills'),   icon: 'navigate-outline',       route: '/reports/ewb-list' },
+            { label: t('reports.cashRegister'), icon: 'cash-outline',           route: '/kpi/cash-register' },
+            { label: t('reports.dayBook'),      icon: 'book-outline',           route: '/reports/audit-trail?tab=daybook' },
           ].map(m => (
             <TouchableOpacity
               key={m.label}
-              style={[styles.moreTile, m.label === 'Day Book' && styles.moreTileWide]}
+              style={[styles.moreTile, m.route.includes('daybook') && styles.moreTileWide]}
               activeOpacity={0.75}
               onPress={() => router.push(m.route as any)}
             >

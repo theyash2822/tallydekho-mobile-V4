@@ -14,6 +14,7 @@ import { getSalesInvoices, getSalesHomeMetrics } from '../../src/services/api';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useSettings } from '../../src/context/SettingsContext';
 import { KPICardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
+import { useTranslation } from 'react-i18next';
 
 const AMBER      = '#A89060';
 const AMBER_BG   = '#FDF9F4';
@@ -24,6 +25,7 @@ const BANNER_W = SW - SPACING.md * 2;
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function SalesScreen() {
+  const { t } = useTranslation();
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
@@ -70,7 +72,7 @@ export default function SalesScreen() {
         })));
         const pendingIRN = rows.filter((r: any) => !r.irn).length;
         setLiveBanners(pendingIRN > 0
-          ? [{ id: 'b1', bold: `${pendingIRN} invoices`, sub: 'pending E-Invoice (IRN) generation', action: 'Generate Now' }]
+          ? [{ id: 'b1', bold: t('sales.invoicesCount', { count: pendingIRN }), sub: t('sales.pendingIrn'), action: t('sales.generateNow') }]
           : []);
       } else {
         setLiveRecent([]);
@@ -79,7 +81,7 @@ export default function SalesScreen() {
       }
       setMetrics(metricsRes?.data ?? metricsRes ?? null);
     }).catch((err: any) => {
-      setApiError(err?.message || 'Failed to load sales data');
+      setApiError(err?.message || t('sales.loadFailed'));
       console.error('[Sales]', err?.message);
     }).finally(() => setIsLoading(false));
   }, [companyGuid, lastSyncAt, selectedFY?.startDate, selectedFY?.endDate, formatAmount]);
@@ -89,12 +91,12 @@ export default function SalesScreen() {
   const metricCards = useMemo(() => {
     const m = metrics || {};
     return [
-      { id: 'today', label: 'Today', icon: 'calendar-outline', amount: formatAmountCompact(Math.round(Number(m.today) || 0)) },
-      { id: 'mtd', label: 'MTD', icon: 'calendar-number-outline', amount: formatAmountCompact(Math.round(Number(m.mtd) || 0)) },
-      { id: 'ytd', label: 'YTD', icon: 'ribbon-outline', amount: formatAmountCompact(Math.round(Number(m.ytd) || 0)) },
-      { id: 'outstanding', label: 'Outstanding', icon: 'wallet-outline', amount: formatAmountCompact(Math.round(Number(m.outstanding) || 0)) },
-      { id: 'credit', label: 'Credit Notes', icon: 'receipt-outline', amount: formatAmountCompact(Math.round(Number(m.credit_notes) || 0)) },
-      { id: 'avg', label: 'Avg Ticket', icon: 'ticket-outline', amount: formatAmountCompact(Math.round(Number(m.avg_ticket) || 0)) },
+      { id: 'today', label: t('sales.today'), icon: 'calendar-outline', amount: formatAmountCompact(Math.round(Number(m.today) || 0)) },
+      { id: 'mtd', label: t('sales.mtd'), icon: 'calendar-number-outline', amount: formatAmountCompact(Math.round(Number(m.mtd) || 0)) },
+      { id: 'ytd', label: t('sales.ytd'), icon: 'ribbon-outline', amount: formatAmountCompact(Math.round(Number(m.ytd) || 0)) },
+      { id: 'outstanding', label: t('sales.outstanding'), icon: 'wallet-outline', amount: formatAmountCompact(Math.round(Number(m.outstanding) || 0)) },
+      { id: 'credit', label: t('sales.creditNotes'), icon: 'receipt-outline', amount: formatAmountCompact(Math.round(Number(m.credit_notes) || 0)) },
+      { id: 'avg', label: t('sales.avgTicket'), icon: 'ticket-outline', amount: formatAmountCompact(Math.round(Number(m.avg_ticket) || 0)) },
     ];
   }, [metrics, formatAmountCompact]);
 
@@ -167,13 +169,13 @@ export default function SalesScreen() {
         >
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Sales</Text>
+        <Text style={s.headerTitle}>{t('sales.title')}</Text>
         <TouchableOpacity
           style={s.ewbBtn}
           onPress={() => router.push('/reports/ewb-list' as any)}
           activeOpacity={0.7}
         >
-          <Text style={s.ewbTxt}>E-way Bill</Text>
+          <Text style={s.ewbTxt}>{t('sales.ewayBill')}</Text>
           <Ionicons name="document-text-outline" size={15} color={COLORS.textPrimary} />
         </TouchableOpacity>
       </View>
@@ -192,19 +194,21 @@ export default function SalesScreen() {
             onPress={() => setDropdown(v => !v)}
             activeOpacity={0.7}
           >
-            <Text style={s.statusTxt}>{filter}</Text>
+            <Text style={s.statusTxt}>{
+              filter === 'Paid' ? t('sales.paid') : filter === 'Unpaid' ? t('sales.unpaid') : t('sales.all')
+            }</Text>
             <Ionicons name={dropdown ? 'chevron-up' : 'chevron-down'} size={13} color={COLORS.textSecondary} />
           </TouchableOpacity>
           {dropdown && (
             <View style={s.dropMenu}>
-              {['All', 'Paid', 'Unpaid'].map(opt => (
+              {([{id:'All',key:'sales.all'},{id:'Paid',key:'sales.paid'},{id:'Unpaid',key:'sales.unpaid'}]).map(({id:opt,key}) => (
                 <TouchableOpacity
                   key={opt}
                   style={s.dropItem}
                   activeOpacity={0.7}
                   onPress={() => { setFilter(opt); setDropdown(false); }}
                 >
-                  <Text style={[s.dropTxt, filter === opt && s.dropTxtActive]}>{opt}</Text>
+                  <Text style={[s.dropTxt, filter === opt && s.dropTxtActive]}>{t(key)}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -263,15 +267,15 @@ export default function SalesScreen() {
 
                 {/* ── Tabs ─────────────────────────────────────────────────── */}
         <View style={s.tabRow}>
-          {(['recent', 'parties'] as const).map(t => (
+          {(['recent', 'parties'] as const).map(tabKey => (
             <TouchableOpacity
-              key={t}
-              style={[s.tabBtn, tab === t && s.tabActive]}
-              onPress={() => setTab(t)}
+              key={tabKey}
+              style={[s.tabBtn, tab === tabKey && s.tabActive]}
+              onPress={() => setTab(tabKey)}
               activeOpacity={0.7}
             >
-              <Text style={[s.tabTxt, tab === t && s.tabActiveTxt]}>
-                {t === 'recent' ? 'Recent Sales' : 'Top Parties'}
+              <Text style={[s.tabTxt, tab === tabKey && s.tabActiveTxt]}>
+                {tabKey === 'recent' ? t('sales.recent') : t('sales.parties')}
               </Text>
             </TouchableOpacity>
           ))}
@@ -283,7 +287,7 @@ export default function SalesScreen() {
             {recent.length === 0 ? (
               <View style={s.emptyBox}>
                 <Ionicons name="receipt-outline" size={28} color={COLORS.textTertiary} />
-                <Text style={s.emptyTxt}>No {filter.toLowerCase()} invoices</Text>
+                <Text style={s.emptyTxt}>{t('sales.noInvoices')}</Text>
               </View>
             ) : (
               recent.map(inv => (
@@ -312,7 +316,7 @@ export default function SalesScreen() {
               onPress={() => router.push('/sales/register' as any)}
               activeOpacity={0.7}
             >
-              <Text style={s.viewAllTxt}>View All</Text>
+              <Text style={s.viewAllTxt}>{t('sales.viewAll')}</Text>
               <Ionicons name="chevron-forward" size={14} color={COLORS.textPrimary} />
             </TouchableOpacity>
           </View>
@@ -340,7 +344,7 @@ export default function SalesScreen() {
               onPress={() => router.push('/ledger' as any)}
               activeOpacity={0.7}
             >
-              <Text style={s.viewAllTxt}>View All</Text>
+              <Text style={s.viewAllTxt}>{t('sales.viewAll')}</Text>
               <Ionicons name="chevron-forward" size={14} color={COLORS.textPrimary} />
             </TouchableOpacity>
           </View>

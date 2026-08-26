@@ -17,6 +17,7 @@ import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { getMovementAnalytics, getMovementChart } from '../../src/services/api';
+import { useTranslation } from 'react-i18next';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const CHART_H   = 200;
@@ -252,6 +253,7 @@ function ItemRow({
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 export default function MovementAnalyticsScreen() {
+  const { t } = useTranslation();
   const router   = useRouter();
   const insets   = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
@@ -328,7 +330,7 @@ export default function MovementAnalyticsScreen() {
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Movement Analytics</Text>
+        <Text style={s.headerTitle}>{t('stocks.movementAnalytics')}</Text>
         <View style={{ width: 44 }} />
       </View>
 

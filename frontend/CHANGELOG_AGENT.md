@@ -1,5 +1,28 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-08-26 — Full-app language coverage (i18n Phases 1–4)
+
+### Added
+- Expanded `en.json` namespaces: `home`, `quickActions`, `stocks`, `reports`, `expenses`, `kpi`, `onboarding`, `notifications`, plus richer `nav` / `pdf` / `voucher` / `auth` / `dashboard` / `common`.
+- Hindi (`hi.json`) real translations for high-traffic chrome (nav, home, quick actions, stocks, reports hubs, KPI, onboarding, PDF action bar).
+- Critical `nav.home` / expenses / vouchers / quickActions keys synced into gu/mr/ta/te/kn/pa/bn/ml/or (other new keys fall back to English).
+- `src/i18n/labelMap.ts` — maps KPI/metric API ids → `t()` keys (UI chrome only; Tally master data stays as-is).
+
+### Changed
+- **Phase 1:** AsyncStorage hydrate in `SettingsContext` calls `i18n.changeLanguage`; CustomTabBar titles via `useTranslation` (`nav.home` etc.).
+- **Phase 2:** Home KPI/metric labels, CashflowCard, RecentActivity, ModuleTiles, QuickActionsModal, Stocks/Reports tabs, Sales/Purchase/Expenses hubs, all KPI screens, Notifications filters.
+- **Phase 3:** Settings chrome, voucher create titles/alerts, auth validation messages, many stocks/sales/purchase/reports sub-screen headers.
+- **Phase 4:** Onboarding slides + Skip/Next/Get Started; DocumentPreviewPage Share/Download PDF action bar via `t()`.
+
+### Product rules (locked)
+- 10 languages in picker; missing keys → `fallbackLng: 'en'`.
+- Tally party/item/voucher-number/API voucher_type strings shown AS-IS.
+- PDF/share chrome localized.
+
+### QA
+- `npx tsc --noEmit` clean after import fixes.
+- Smoke: locale JSON valid; key samples present in en + hi.
+
 ## 2026-08-24 — Unified list SearchBar (Total Stock style + mic)
 
 ### Added

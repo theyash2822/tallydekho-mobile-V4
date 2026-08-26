@@ -12,6 +12,7 @@ import { getAlerts } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
+import { useTranslation } from 'react-i18next';
 
 const W = Dimensions.get('window').width;
 
@@ -181,6 +182,7 @@ function Divider() { return <View style={s.divider} />; }
 // MAIN SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ComplianceHubScreen() {
+  const { t } = useTranslation();
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const { company, selectedFY } = useAuth();
@@ -262,7 +264,7 @@ export default function ComplianceHubScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <View style={{ alignItems: 'center' }}>
-          <Text style={s.headerTitle}>Compliance</Text>
+          <Text style={s.headerTitle}>{t('reports.compliance')}</Text>
           {selectedFY && (
             <Text style={s.headerFY}>{selectedFY.finYear || (selectedFY.startDate ? `FY ${selectedFY.startDate.slice(0,4)}-${(parseInt(selectedFY.startDate.slice(0,4))+1).toString().slice(2)}` : '')}</Text>
           )}

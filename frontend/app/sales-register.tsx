@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../src/constants/colors';
 import { getSalesInvoices } from '../src/services/api';
 import { SalesRegisterSkeleton } from '../src/components/Skeleton';
+import { useTranslation } from 'react-i18next';
 
 type InvoiceStatus = 'all' | 'pending_irn' | 'generated';
 
@@ -28,6 +29,7 @@ const STATUS_FILTERS: { key: InvoiceStatus; label: string }[] = [
 ];
 
 export default function SalesRegisterScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
@@ -104,7 +106,7 @@ export default function SalesRegisterScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Sales Register</Text>
+        <Text style={styles.headerTitle}>{t('sales.register')}</Text>
         <TouchableOpacity style={styles.addBtn} activeOpacity={0.7}>
           <Ionicons name="add" size={22} color={COLORS.white} />
         </TouchableOpacity>

@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 import { useSettings } from '../context/SettingsContext';
 
@@ -91,8 +92,10 @@ const ActivityItem: React.FC<{ item: Activity; onPress: () => void }> = ({ item,
   );
 };
 
-const RecentActivity: React.FC<RecentActivityProps> = ({ activities, title = 'Recent Activity' }) => {
+const RecentActivity: React.FC<RecentActivityProps> = ({ activities, title }) => {
   const router = useRouter();
+  const { t } = useTranslation();
+  const sectionTitle = title ?? t('dashboard.recentActivity');
   const safeActivities = Array.isArray(activities) ? activities : [];
   const displayed = safeActivities.slice(0, 6);
 
@@ -108,13 +111,13 @@ const RecentActivity: React.FC<RecentActivityProps> = ({ activities, title = 'Re
   return (
     <View testID="recent-activity" style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.sectionTitle}>{title}</Text>
+        <Text style={styles.sectionTitle}>{sectionTitle}</Text>
       </View>
       <View style={styles.card}>
         {displayed.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="receipt-outline" size={28} color={COLORS.textTertiary} />
-            <Text style={styles.emptyText}>No recent activity</Text>
+            <Text style={styles.emptyText}>{t('dashboard.noActivity')}</Text>
           </View>
         ) : (
           displayed.map((item, idx) => (

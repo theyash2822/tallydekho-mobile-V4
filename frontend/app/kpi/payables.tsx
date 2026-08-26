@@ -14,6 +14,7 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { getKPIPayables } from '../../src/services/api';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { useTranslation } from 'react-i18next';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -38,6 +39,7 @@ function openWhatsApp(phone?: string) {
 }
 
 export default function PayablesScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { company, selectedFY, lastSyncAt } = useAuth();
   const { formatAmountCompact, formatAmount } = useSettings();
@@ -179,7 +181,7 @@ export default function PayablesScreen() {
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Payables</Text>
+        <Text style={s.headerTitle}>{t('kpi.payables')}</Text>
         <View style={s.headerBtn} />
       </View>
 
@@ -194,14 +196,14 @@ export default function PayablesScreen() {
           onPress={() => toggleChip('overdue')}
           activeOpacity={0.7}
         >
-          <Text style={[s.filterChipTxt, overdueOn && s.filterChipActiveTxt]}>Overdue</Text>
+          <Text style={[s.filterChipTxt, overdueOn && s.filterChipActiveTxt]}>{t('kpi.overdue')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[s.filterChip, paymentsOn && s.filterChipActive]}
           onPress={() => toggleChip('payments')}
           activeOpacity={0.7}
         >
-          <Text style={[s.filterChipTxt, paymentsOn && s.filterChipActiveTxt]}>Payments</Text>
+          <Text style={[s.filterChipTxt, paymentsOn && s.filterChipActiveTxt]}>{t('kpi.paymentsFilter')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -310,7 +312,7 @@ export default function PayablesScreen() {
                         activeOpacity={0.7}
                       >
                         <Text style={[s.tabBtnTxt, activeTab === tab && s.tabBtnTxtActive]}>
-                          {tab === 'recent' ? 'Recent Payables' : 'Overdue Parties'}
+                          {tab === 'recent' ? t('kpi.recentPayables') : t('kpi.overdueParties')}
                         </Text>
                       </TouchableOpacity>
                     ))}

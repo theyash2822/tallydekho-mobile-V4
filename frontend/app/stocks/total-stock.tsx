@@ -24,6 +24,7 @@ import { StockItem } from '../../src/data/stockData';
 import { useSettings } from '../../src/context/SettingsContext';
 
 import { getStockListCache, clearStockListCache } from '../../src/utils/stockCache';
+import { useTranslation } from 'react-i18next';
 export { clearStockListCache };
 
 // ─── SWIPEABLE STOCK CARD ─────────────────────────────────────────────────────
@@ -178,6 +179,7 @@ function FilterModal({ visible, onClose, onApply, initWh, initGrp, whOptions, gr
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 
 export default function TotalStockScreen() {
+  const { t } = useTranslation();
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const { company, lastSyncAt } = useAuth();
@@ -382,7 +384,7 @@ export default function TotalStockScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Total Stock</Text>
+        <Text style={styles.headerTitle}>{t('stocks.totalStock')}</Text>
         <View style={styles.headerRight}>
           {/* Filter / Sort icon */}
           <TouchableOpacity style={styles.iconBtn} onPress={() => setFilterOpen(true)} activeOpacity={0.7}>

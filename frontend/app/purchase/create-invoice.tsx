@@ -38,6 +38,7 @@ import {
   BottomSheetBackdrop,
 } from '@gorhom/bottom-sheet';
 import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
+import { useTranslation } from 'react-i18next';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const todayStr = () => {
@@ -630,6 +631,7 @@ function ItemRow({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CreatePurchaseInvoiceScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const scrollRef = useRef<any>(null);
   // Scroll focused fields (e.g. narration) above the keyboard — same pattern as sales invoice.
@@ -1268,7 +1270,7 @@ export default function CreatePurchaseInvoiceScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={s.headerTitle}>Purchase Invoice</Text>
+          <Text style={s.headerTitle}>{t('purchase.createInvoice')}</Text>
           <Text style={s.headerSub}>PINV-Auto</Text>
         </View>
         <RegularOptionalToggle value={entryType} onChange={setEntryType} />

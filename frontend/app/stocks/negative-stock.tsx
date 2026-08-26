@@ -11,6 +11,7 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import SearchBar from '../../src/components/SearchBar';
+import { useTranslation } from 'react-i18next';
 
 const AMBER = '#A89060';
 
@@ -32,6 +33,7 @@ interface NegStockItem {
 }
 
 export default function NegativeStockScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
@@ -108,7 +110,7 @@ export default function NegativeStockScreen() {
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Negative Stock</Text>
+        <Text style={s.headerTitle}>{t('stocks.negativeStock')}</Text>
         <View style={{ width: 44 }} />
       </View>
 

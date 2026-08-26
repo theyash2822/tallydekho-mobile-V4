@@ -50,7 +50,11 @@
     "purchase": "ಖರೀದಿ",
     "stocks": "ಸ್ಟಾಕ್",
     "reports": "ವರದಿಗಳು",
-    "settings": "ಸೆಟ್ಟಿಂಗ್‌ಗಳು"
+    "settings": "ಸೆಟ್ಟಿಂಗ್‌ಗಳು",
+    "home": "ಹೋಮ್",
+    "expenses": "ವೆಚ್ಚಗಳು",
+    "vouchers": "ವೋಚರ್",
+    "quickActions": "ತ್ವರಿತ ಕ್ರಿಯೆಗಳು"
   },
   "auth": {
     "login": "ಲಾಗಿನ್",

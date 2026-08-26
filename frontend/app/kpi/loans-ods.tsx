@@ -13,6 +13,7 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { getKPILoansODs } from '../../src/services/api';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { useTranslation } from 'react-i18next';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -213,6 +214,7 @@ function BarProgress({ pct }: { pct: number }) {
 }
 
 export default function LoansODsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { company, lastSyncAt } = useAuth();
   const { formatAmountCompact, formatAmount } = useSettings();
@@ -295,7 +297,7 @@ export default function LoansODsScreen() {
     const odTotal = Number(apiData?.od_total) || 0;
     return [
       { id: 'total', icon: 'cash-outline', label: 'Total Outstanding', amount: formatAmountCompact(Math.round(total)), trend: null, positive: true },
-      { id: 'term', icon: 'business-outline', label: 'Loans', amount: formatAmountCompact(Math.round(loanTotal)), trend: null, positive: true },
+      { id: 'term', icon: 'business-outline', label: t('kpi.loans'), amount: formatAmountCompact(Math.round(loanTotal)), trend: null, positive: true },
       { id: 'od', icon: 'swap-horizontal-outline', label: 'ODs / Overdraft', amount: formatAmountCompact(Math.round(odTotal)), trend: null, positive: true },
       { id: 'count', icon: 'list-outline', label: 'Accounts', amount: String(cards.length), trend: null, positive: true },
     ];
@@ -347,7 +349,7 @@ export default function LoansODsScreen() {
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Loans & ODs</Text>
+        <Text style={s.headerTitle}>{t('kpi.loansOds')}</Text>
         <View style={s.headerBtn} />
       </View>
 

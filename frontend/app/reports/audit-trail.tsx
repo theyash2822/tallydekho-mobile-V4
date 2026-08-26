@@ -14,6 +14,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { getVouchers, getMyEntries, retryMyEntry, getInvoicePreview } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 import { socketService } from '../../src/services/socketService';
+import { useTranslation } from 'react-i18next';
 import {
   buildProformaToInvoicePrefillFromPreview,
   proformaPrefillStorageKey,
@@ -285,6 +286,7 @@ const dd = StyleSheet.create({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function AuditTrailScreen() {
+  const { t } = useTranslation();
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router  = useRouter();
   const { tab } = useLocalSearchParams<{ tab?: string }>();
@@ -758,7 +760,7 @@ export default function AuditTrailScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          <Text style={s.headerTitle}>Audit Trail</Text>
+          <Text style={s.headerTitle}>{t('reports.auditTrail')}</Text>
         )}
 
         {multiSelect ? (

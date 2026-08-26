@@ -12,6 +12,7 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import ShimmerPlaceholder, { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
+import { useTranslation } from 'react-i18next';
 
 const SLICE_COLORS = ['#A89060', '#3A3A3A', '#7C5C3A', '#1A1A1A', '#5A7A5A', '#5A5A9A', '#9A5A5A', '#5A8A9A'];
 
@@ -24,6 +25,7 @@ interface GroupSummary {
 }
 
 export default function ValuationSummaryScreen() {
+  const { t } = useTranslation();
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
@@ -109,7 +111,7 @@ export default function ValuationSummaryScreen() {
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Valuation Summary</Text>
+        <Text style={s.headerTitle}>{t('stocks.valuation')}</Text>
         <View style={{ width: 44 }} />
       </View>
 

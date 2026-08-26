@@ -34,17 +34,18 @@ import {
   resolvePeriodDates,
   type DashboardPeriod,
 } from '../../src/utils/periodDates';
+import { tKpiLabel } from '../../src/i18n/labelMap';
 // No mock data imports — real data only (V2 rule)
 
 const TIME_FILTERS = ['7D', '1M', '3M', '6M'] as const;
 type TimeFilter = typeof TIME_FILTERS[number];
 
 const MODULE_CARDS = [
-  { id: 'sales',    label: 'Sales',    icon: 'trending-up',   route: '/sales',    color: '#2D7D46', bg: '#F0FBF4' },
-  { id: 'purchase', label: 'Purchase', icon: 'cart',          route: '/purchase', color: '#2563EB', bg: '#EFF6FF' },
-  { id: 'voucher',  label: 'Vouchers', icon: 'card',          route: '/voucher',  color: '#7C3AED', bg: '#F5F3FF' },
-  { id: 'expenses', label: 'Expenses', icon: 'receipt-outline', route: '/expenses', color: '#DC2626', bg: '#FDECEA' },
-  { id: 'settings', label: 'Settings', icon: 'settings-outline', route: '/settings', color: '#D97706', bg: '#FFFBEB' },
+  { id: 'sales',    labelKey: 'home.moduleSales',    icon: 'trending-up',   route: '/sales',    color: '#2D7D46', bg: '#F0FBF4' },
+  { id: 'purchase', labelKey: 'home.modulePurchase', icon: 'cart',          route: '/purchase', color: '#2563EB', bg: '#EFF6FF' },
+  { id: 'voucher',  labelKey: 'home.moduleVouchers', icon: 'card',          route: '/voucher',  color: '#7C3AED', bg: '#F5F3FF' },
+  { id: 'expenses', labelKey: 'home.moduleExpenses', icon: 'receipt-outline', route: '/expenses', color: '#DC2626', bg: '#FDECEA' },
+  { id: 'settings', labelKey: 'home.moduleSettings', icon: 'settings-outline', route: '/settings', color: '#D97706', bg: '#FFFBEB' },
 ] as const;
 
 export default function HomeScreen() {
@@ -196,7 +197,7 @@ export default function HomeScreen() {
       const actArr = Array.isArray(act) ? act : (act as any)?.data ?? [];
       setActivity(actArr as any);
     } catch (err: any) {
-      setApiError(err?.message || 'Failed to load dashboard data');
+      setApiError(err?.message || t('home.loadFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -228,8 +229,8 @@ export default function HomeScreen() {
     if (isPaired && !wasPaired.current) {
       Toast.show({
         type: 'success',
-        text1: 'Tally Connected ✅',
-        text2: 'Your desktop is now paired. Loading real data...',
+        text1: t('home.tallyConnected'),
+        text2: t('home.tallyConnectedSub'),
         visibilityTime: 3000,
       });
       // Fetch last sync time from status API
@@ -244,7 +245,7 @@ export default function HomeScreen() {
       }).catch(() => {});
     }
     if (!isPaired && wasPaired.current) {
-      Toast.show({ type: 'info', text1: 'Tally Disconnected', text2: 'Device was unpaired.', visibilityTime: 3000 });
+      Toast.show({ type: 'info', text1: t('home.tallyDisconnected'), text2: t('home.tallyDisconnectedSub'), visibilityTime: 3000 });
       setLastSyncTime(null);
     }
     wasPaired.current = isPaired;
@@ -295,7 +296,7 @@ export default function HomeScreen() {
 
         {/* Middle: Label + Amount stacked — flex:1 so never clips */}
         <View style={styles.kpiTextWrap}>
-          <Text style={styles.kpiLabel} numberOfLines={1}>{item.label}</Text>
+          <Text style={styles.kpiLabel} numberOfLines={1}>{tKpiLabel(t, item.id, item.label)}</Text>
           <Text style={styles.kpiAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount_raw != null ? formatAmountCompact(item.amount_raw) : item.amount}</Text>
         </View>
 
@@ -322,10 +323,10 @@ export default function HomeScreen() {
     <SafeAreaView testID="home-screen" style={styles.safe}>
       {/* Header */}
       <Header
-        companyName={company?.name ?? 'My Company'}
+        companyName={company?.name ?? t('home.myCompany')}
         fyYear={activeFY}
         notificationCount={notifCount}
-        userName={user?.name || 'User'}
+        userName={user?.name || t('home.user')}
         lastSyncTime={lastSyncTime ?? undefined}
         onFYChange={handleFYChange}
         onSettingsPress={() => router.push('/settings' as any)}

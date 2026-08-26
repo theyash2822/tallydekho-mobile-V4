@@ -13,6 +13,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { verifyPin, sendOTP } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { navigateAfterAuth } from '../../src/utils/onboardingNav';
+import { useTranslation } from 'react-i18next';
 
 const BIOMETRIC_PIN_KEY = 'td_biometric_pin';
 
@@ -54,6 +55,7 @@ function PinBox({
 }
 
 export default function VerifyPinScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { phone, biometric } = useLocalSearchParams<{ phone: string; biometric: string }>();
   const { signIn, setCompany, setIsPaired } = useAuth();
@@ -105,7 +107,7 @@ export default function VerifyPinScreen() {
           await doVerify(storedPin);
         } else if (!storedPin) {
           // No stored PIN — biometric enabled but no PIN stored yet
-          setError('Biometric not fully set up. Please enter PIN manually.');
+          setError(t('auth.biometricFallback'));
           setTimeout(() => inputRefs.current[0]?.focus(), 100);
         }
       } else if (result.error !== 'user_cancel' && result.error !== 'system_cancel') {
@@ -179,7 +181,7 @@ export default function VerifyPinScreen() {
               await sendOTP(phone || '');
               router.replace({ pathname: '/(auth)/reset-pin' as any, params: { phone } });
             } catch {
-              Alert.alert('Error', 'Could not send OTP. Please try again.');
+              Alert.alert(t('common.error'), t('auth.otpSendFailed'));
             }
           },
         },

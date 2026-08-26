@@ -11,6 +11,7 @@ import { KPICardSkeleton, CardSkeleton } from '../../src/components/ShimmerPlace
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { getStockDashboard } from '../../src/services/api';
+import { useTranslation } from 'react-i18next';
 
 const SEG_COUNT = 20;
 
@@ -71,6 +72,7 @@ const cat = StyleSheet.create({
 });
 
 export default function StocksDashboard() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { company, lastSyncAt } = useAuth();
   const companyGuid = company?.guid;
@@ -89,7 +91,7 @@ export default function StocksDashboard() {
       const d = res?.data ?? res;
       if (d && typeof d === 'object') setData(d);
     } catch (err: any) {
-      setApiError(err?.message || 'Failed to load stock data');
+      setApiError(err?.message || t('stocks.loadFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -111,30 +113,30 @@ export default function StocksDashboard() {
 
   const STAT_TILES = [
     {
-      id: 'movement', label: 'Movements',
+      id: 'movement', label: t('stocks.movements'),
       value: String(d.recentMovements ?? 0),
-      sub: 'Last 7 days',
+      sub: t('stocks.last7Days'),
       icon: 'swap-vertical-outline', accent: NEUTRAL, tint: NEUTRAL_BG,
       route: '/stocks/fast-slow',
     },
     {
-      id: 'low', label: 'Low-Stock',
+      id: 'low', label: t('stocks.lowStock'),
       value: String(d.lowStock ?? 0),
-      sub: 'Items below reorder',
+      sub: t('stocks.itemsBelowReorder'),
       icon: 'alert-circle-outline', accent: COLORS.negative, tint: COLORS.negativeBg,
       route: '/stocks/reorder-queue',
     },
     {
-      id: 'fast', label: 'Fast-Moving',
+      id: 'fast', label: t('stocks.fastMoving'),
       value: String(d.fastMovingCount ?? 0),
-      sub: 'Active SKUs',
+      sub: t('stocks.activeSkus'),
       icon: 'flash-outline', accent: NEUTRAL, tint: NEUTRAL_BG,
       route: '/stocks/movement-analytics',
     },
     {
-      id: 'aged', label: 'Aged Stock',
+      id: 'aged', label: t('stocks.agedStock'),
       value: formatAmountCompact(Math.round(Number(d.agedInventoryValue) || 0)),
-      sub: `${d.agedInventoryDays ?? 90} days old`,
+      sub: t('stocks.daysOld', { days: d.agedInventoryDays ?? 90 }),
       icon: 'time-outline', accent: NEUTRAL, tint: NEUTRAL_BG,
       route: '/stocks/aged-items?days=90',
     },
@@ -147,8 +149,8 @@ export default function StocksDashboard() {
       {apiError && <ErrorBanner message={apiError} onRetry={loadStock} />}
       <View style={s.header}>
         <View>
-          <Text style={s.headerTitle}>Stock</Text>
-          <Text style={s.headerSub}>Inventory overview</Text>
+          <Text style={s.headerTitle}>{t('stocks.title')}</Text>
+          <Text style={s.headerSub}>{t('stocks.subtitle')}</Text>
         </View>
         <View style={s.headerActions}>
           {SECONDARY_ACTIONS.map(a => (
@@ -203,7 +205,7 @@ export default function StocksDashboard() {
                   </Text>
                 </View>
               </View>
-              <Text style={s.heroLabel}>Total Stock Value</Text>
+              <Text style={s.heroLabel}>{t('stocks.totalStockValue')}</Text>
               <Text style={s.heroValue}>{formatAmount(Math.round(Number(d.totalValue) || 0))}</Text>
               <View style={s.heroMetaRow}>
                 <Ionicons name="layers-outline" size={13} color={COLORS.textTertiary} />
@@ -214,19 +216,19 @@ export default function StocksDashboard() {
             </TouchableOpacity>
 
             <View style={s.grid}>
-              {STAT_TILES.map(t => (
+              {STAT_TILES.map(tile => (
                 <TouchableOpacity
-                  key={t.id}
+                  key={tile.id}
                   style={s.tile}
                   activeOpacity={0.8}
-                  onPress={() => router.push(t.route as any)}
+                  onPress={() => router.push(tile.route as any)}
                 >
-                  <View style={[s.tileIcon, { backgroundColor: t.tint }]}>
-                    <Ionicons name={t.icon as any} size={16} color={t.accent} />
+                  <View style={[s.tileIcon, { backgroundColor: tile.tint }]}>
+                    <Ionicons name={tile.icon as any} size={16} color={tile.accent} />
                   </View>
-                  <Text style={s.tileLabel}>{t.label}</Text>
-                  <Text style={s.tileValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{t.value}</Text>
-                  <Text style={s.tileSub} numberOfLines={1}>{t.sub}</Text>
+                  <Text style={s.tileLabel}>{tile.label}</Text>
+                  <Text style={s.tileValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{tile.value}</Text>
+                  <Text style={s.tileSub} numberOfLines={1}>{tile.sub}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -237,7 +239,7 @@ export default function StocksDashboard() {
               onPress={() => router.push('/stocks/on-hand-stock' as any)}
             >
               <View style={s.cardHead}>
-                <Text style={s.cardTitle}>Stock Health</Text>
+                <Text style={s.cardTitle}>{t('stocks.stockHealth', { defaultValue: 'Stock Health' })}</Text>
                 <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
               </View>
               <SegmentedBar pct={d.stockHealthPct ?? 0} color={COLORS.positive} />
@@ -256,11 +258,11 @@ export default function StocksDashboard() {
                 <Ionicons name="repeat" size={18} color={(d.reorderQueueCount ?? 0) > 0 ? COLORS.negative : COLORS.textSecondary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.reorderTitle}>Reorder Queue</Text>
+                <Text style={s.reorderTitle}>{t('stocks.reorderQueue')}</Text>
                 <Text style={s.reorderSub}>
                   {(d.reorderQueueCount ?? 0) > 0
-                    ? `${d.reorderQueueCount} items need restocking · ${formatAmount(Math.round(Number(d.reorderValue) || 0))}`
-                    : 'All stocked up — no items need reorder'}
+                    ? t('stocks.itemsNeedRestock', { count: d.reorderQueueCount, amount: formatAmount(Math.round(Number(d.reorderValue) || 0)) })
+                    : t('stocks.allStockedUp')}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
@@ -275,8 +277,8 @@ export default function StocksDashboard() {
                 <Ionicons name="bar-chart-outline" size={17} color={COLORS.textSecondary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.linkTitle}>Stock Reports</Text>
-                <Text style={s.linkSub}>Valuation, ageing & summaries</Text>
+                <Text style={s.linkTitle}>{t('stocks.stockReports')}</Text>
+                <Text style={s.linkSub}>{t('stocks.stockReportsSub')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={17} color={COLORS.textTertiary} />
             </TouchableOpacity>
@@ -290,21 +292,21 @@ export default function StocksDashboard() {
                 <Ionicons name="business-outline" size={17} color={COLORS.textSecondary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.linkTitle}>Warehouses</Text>
-                <Text style={s.linkSub}>{d.warehouseCount ?? 0} storage locations</Text>
+                <Text style={s.linkTitle}>{t('stocks.warehouses')}</Text>
+                <Text style={s.linkSub}>{t('stocks.storageLocations', { count: d.warehouseCount ?? 0 })}</Text>
               </View>
               <Ionicons name="chevron-forward" size={17} color={COLORS.textTertiary} />
             </TouchableOpacity>
 
             <View style={s.card}>
               <View style={s.cardHead}>
-                <Text style={s.cardTitle}>Stock Value by Category</Text>
+                <Text style={s.cardTitle}>{t('stocks.valueByCategory')}</Text>
                 <TouchableOpacity onPress={() => router.push('/stocks/valuation-summary' as any)} activeOpacity={0.7}>
-                  <Text style={s.cardLink}>Report</Text>
+                  <Text style={s.cardLink}>{t('stocks.report')}</Text>
                 </TouchableOpacity>
               </View>
               {categories.length === 0 ? (
-                <Text style={s.emptyHint}>No category breakdown yet — sync stock data from Tally.</Text>
+                <Text style={s.emptyHint}>{t('stocks.noCategoryBreakdown')}</Text>
               ) : (
                 categories.map((c: any, i: number) => (
                   <View key={c.label} style={s.catRow}>

@@ -11,6 +11,7 @@ import { getWarehouseDetail, getStocks } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useSettings } from '../../src/context/SettingsContext';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
+import { useTranslation } from 'react-i18next';
 
 // ─── Voucher icon map ─────────────────────────────────────────────────────────
 const TYPE_CONFIG: Record<string, { icon: string; color: string; bg: string; dir: string }> = {
@@ -28,6 +29,7 @@ function getTypeConfig(type: string) {
 }
 
 export default function WarehouseDetailScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string; name?: string }>();
   const { company } = useAuth();
@@ -128,7 +130,7 @@ export default function WarehouseDetailScreen() {
                 <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
               </View>
               <Text style={s.tileBigNum}>{fmtQty(totalQty)}</Text>
-              <Text style={s.tileName}>Total Stock</Text>
+              <Text style={s.tileName}>{t('stocks.totalStock')}</Text>
               <View style={s.tileStats}>
                 <View style={s.tileStat}>
                   <Text style={s.tileStatVal}>{totalSkus}</Text>
@@ -155,7 +157,7 @@ export default function WarehouseDetailScreen() {
                 <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} />
               </View>
               <Text style={[s.tileBigNum, { color: COLORS.positive }]}>{fmtQty(onHandQty)}</Text>
-              <Text style={s.tileName}>On Hand Stock</Text>
+              <Text style={s.tileName}>{t('stocks.onHand')}</Text>
               <View style={s.tileStats}>
                 <View style={s.tileStat}>
                   <Text style={s.tileStatVal}>{onHandSkus}</Text>

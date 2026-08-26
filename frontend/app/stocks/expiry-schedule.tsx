@@ -11,6 +11,7 @@ import { getExpirySchedule } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
+import { useTranslation } from 'react-i18next';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type DayTab = '0-30' | '31-60' | '>60' | 'expired';
@@ -30,6 +31,7 @@ const DAY_TABS: { key: DayTab; label: string }[] = [
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function ExpiryScheduleScreen() {
+  const { t } = useTranslation();
   const router   = useRouter();
   const insets   = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
@@ -165,7 +167,7 @@ export default function ExpiryScheduleScreen() {
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Expiry Schedule</Text>
+        <Text style={s.headerTitle}>{t('stocks.expirySchedule')}</Text>
         <TouchableOpacity style={s.headerBtn} onPress={openFilter} activeOpacity={0.7}>
           <Ionicons name="options-outline" size={22} color={COLORS.textPrimary} />
           {activeFilterCount > 0 && (

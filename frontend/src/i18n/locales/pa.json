@@ -50,7 +50,11 @@
     "purchase": "ਖਰੀਦ",
     "stocks": "ਸਟਾਕ",
     "reports": "ਰਿਪੋਰਟਾਂ",
-    "settings": "ਸੈਟਿੰਗਾਂ"
+    "settings": "ਸੈਟਿੰਗਾਂ",
+    "home": "ਹੋਮ",
+    "expenses": "ਖਰਚੇ",
+    "vouchers": "ਵਾਊਚਰ",
+    "quickActions": "ਤੇਜ਼ ਕਾਰਵਾਈਆਂ"
   },
   "auth": {
     "login": "ਲੌਗਿਨ",

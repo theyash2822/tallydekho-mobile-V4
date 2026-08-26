@@ -16,6 +16,7 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { getKPICashInHand } from '../../src/services/api';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { useTranslation } from 'react-i18next';
 
 const { width: SW } = Dimensions.get('window');
 const YAXIS_W = 48;
@@ -385,6 +386,7 @@ function ReceiptsPaymentsChart({
 }
 
 export default function CashInHandScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { company, selectedFY, lastSyncAt } = useAuth();
   const { formatAmountCompact, formatAmount } = useSettings();
@@ -509,7 +511,7 @@ export default function CashInHandScreen() {
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Cash in Hand</Text>
+        <Text style={s.headerTitle}>{t('kpi.cashInHand')}</Text>
         <View style={s.headerBtn} />
       </View>
 
@@ -589,7 +591,7 @@ export default function CashInHandScreen() {
               <View style={s.chartCard}>
                 <View style={s.chartHeader}>
                   <View>
-                    <Text style={s.chartTitle}>Daily Cash Balance</Text>
+                    <Text style={s.chartTitle}>{t('kpi.dailyCashBalance')}</Text>
                     <View style={s.chartMeta}>
                       <Text style={s.chartAmt}>{formatAmountCompact(Math.round(curBal))}</Text>
                       {balChangePct != null ? (
@@ -619,12 +621,12 @@ export default function CashInHandScreen() {
             {daily.length > 0 && (
               <View style={s.chartCard}>
                 <View style={s.chartHeader}>
-                  <Text style={s.chartTitle}>Receipts vs Payments</Text>
+                  <Text style={s.chartTitle}>{t('kpi.receiptsVsPayments')}</Text>
                   <View style={s.legend}>
                     <View style={[s.legendDot, { backgroundColor: GOLD }]} />
-                    <Text style={s.legendTxt}>Receipts</Text>
+                    <Text style={s.legendTxt}>{t('kpi.receipts')}</Text>
                     <View style={[s.legendDot, { backgroundColor: BAR_DARK }]} />
-                    <Text style={s.legendTxt}>Payments</Text>
+                    <Text style={s.legendTxt}>{t('kpi.payments')}</Text>
                   </View>
                 </View>
                 <ReceiptsPaymentsChart data={daily} formatAmountCompact={formatAmountCompact} />
@@ -633,7 +635,7 @@ export default function CashInHandScreen() {
 
             <View style={s.recentCard}>
               <View style={s.recentHeader}>
-                <Text style={s.chartTitle}>Recent Transactions</Text>
+                <Text style={s.chartTitle}>{t('kpi.recentTransactions')}</Text>
                 <TouchableOpacity
                   style={s.viewAllBtn}
                   onPress={() => router.push('/kpi/cash-register' as any)}
@@ -644,7 +646,7 @@ export default function CashInHandScreen() {
                 </TouchableOpacity>
               </View>
               {txs.length === 0 ? (
-                <View style={s.empty}><Text style={s.emptyTxt}>No cash movements in this period</Text></View>
+                <View style={s.empty}><Text style={s.emptyTxt}>{t('kpi.noCashMovements')}</Text></View>
               ) : txs.map((txn: any, idx: number) => (
                 <TouchableOpacity
                   key={`tx-${idx}-${txn.guid || txn.voucher_number || 'x'}`}

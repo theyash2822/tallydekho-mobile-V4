@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { COLORS } from '../../src/constants/colors';
 import QuickActionsModal from '../../src/components/QuickActionsModal';
 
@@ -10,16 +11,16 @@ type IoniconName = keyof typeof Ionicons.glyphMap;
 
 interface TabDef {
   name: string;
-  title: string;
+  titleKey: string;
   icon: IoniconName;
   iconOutline: IoniconName;
 }
 
 const TAB_DEFS: TabDef[] = [
-  { name: 'index',   title: 'Home',    icon: 'home',      iconOutline: 'home-outline'      },
-  { name: 'ledger',  title: 'Ledger',  icon: 'journal',   iconOutline: 'journal-outline'   },
-  { name: 'stocks',  title: 'Stocks',  icon: 'cube',      iconOutline: 'cube-outline'      },
-  { name: 'reports', title: 'Reports', icon: 'bar-chart', iconOutline: 'bar-chart-outline' },
+  { name: 'index',   titleKey: 'nav.home',    icon: 'home',      iconOutline: 'home-outline'      },
+  { name: 'ledger',  titleKey: 'nav.ledger',  icon: 'journal',   iconOutline: 'journal-outline'   },
+  { name: 'stocks',  titleKey: 'nav.stocks',  icon: 'cube',      iconOutline: 'cube-outline'      },
+  { name: 'reports', titleKey: 'nav.reports', icon: 'bar-chart', iconOutline: 'bar-chart-outline' },
 ];
 
 interface Route {
@@ -36,6 +37,7 @@ interface CustomTabBarProps {
 
 function CustomTabBar({ state, navigation, onFabPress }: CustomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const bottomPad = Math.max(insets.bottom, 4);
 
   const routes = state.routes;
@@ -55,7 +57,7 @@ function CustomTabBar({ state, navigation, onFabPress }: CustomTabBarProps) {
   };
 
   const renderTab = (route: Route, idx: number) => {
-    const def = TAB_DEFS.find(t => t.name === route.name);
+    const def = TAB_DEFS.find(tab => tab.name === route.name);
     if (!def) return null;
     const isFocused = state.index === idx;
     return (
@@ -73,7 +75,7 @@ function CustomTabBar({ state, navigation, onFabPress }: CustomTabBarProps) {
           color={isFocused ? COLORS.navText : COLORS.inactiveNavText}
         />
         <Text style={[styles.tabLabel, { color: isFocused ? COLORS.navText : COLORS.inactiveNavText }]}>
-          {def.title}
+          {t(def.titleKey)}
         </Text>
       </TouchableOpacity>
     );
@@ -94,7 +96,7 @@ function CustomTabBar({ state, navigation, onFabPress }: CustomTabBarProps) {
             style={styles.fab}
             onPress={onFabPress}
             activeOpacity={0.85}
-            accessibilityLabel="Quick actions"
+            accessibilityLabel={t('nav.quickActions')}
           >
             <Ionicons name="add" size={30} color={COLORS.white} />
           </TouchableOpacity>

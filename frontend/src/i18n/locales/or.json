@@ -50,7 +50,11 @@
     "purchase": "କ୍ରୟ",
     "stocks": "ଷ୍ଟକ",
     "reports": "ରିପୋର୍ଟ",
-    "settings": "ସେଟିଂ"
+    "settings": "ସେଟିଂ",
+    "home": "ହୋମ୍",
+    "expenses": "ଖର୍ଚ୍ଚ",
+    "vouchers": "ଭାଉଚର୍",
+    "quickActions": "ଶୀଘ୍ର କାର୍ଯ୍ୟ"
   },
   "auth": {
     "login": "ଲଗ୍‌ଇନ",

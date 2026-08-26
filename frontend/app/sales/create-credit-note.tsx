@@ -35,6 +35,7 @@ import {
   getWarehouses,
 } from '../../src/services/api';
 import { shareVoucherPdfByRef } from '../../src/utils/voucherPdf';
+import { useTranslation } from 'react-i18next';
 
 type InvoiceChoice = {
   id: string;
@@ -493,6 +494,7 @@ function normalizeContext(raw: any, selected: InvoiceChoice): CreditNoteContext 
 }
 
 export default function CreateCreditNoteScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
@@ -1175,7 +1177,7 @@ export default function CreateCreditNoteScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={s.headerTitle}>Credit Note</Text>
+          <Text style={s.headerTitle}>{t('sales.createCreditNote')}</Text>
           <Text style={s.headerSub}>Step {step} of 2</Text>
         </View>
         <RegularOptionalToggle value={entryType} onChange={setEntryType} />

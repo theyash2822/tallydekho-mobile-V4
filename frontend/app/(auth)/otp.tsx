@@ -122,7 +122,7 @@ export default function OTPScreen() {
   const handleVerify = async () => {
     const code = otp.join('');
     if (code.length < OTP_LENGTH) {
-      setError('Please enter the complete OTP');
+      setError(t('auth.enterCompleteOtp'));
       return;
     }
     setLoading(true);
@@ -153,7 +153,7 @@ export default function OTPScreen() {
           await navigateAfterAuth(router);
         }
       } else {
-        setError('Invalid OTP. Please try again.');
+        setError(t('auth.invalidOtpRetry'));
       }
     } catch (err: any) {
       setError(err?.message || 'Verification failed. Please retry.');

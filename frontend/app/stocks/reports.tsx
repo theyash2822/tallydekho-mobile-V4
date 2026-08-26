@@ -9,6 +9,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { getStockDashboard } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { useTranslation } from 'react-i18next';
 
 const SW = Dimensions.get('window').width;
 const ACCENT = '#A89060';
@@ -149,6 +150,7 @@ function Donut({ data, selected, onSelect, size = 128, stroke = 20 }: {
 }
 
 export default function StockReportsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { company } = useAuth();
   const companyGuid = company?.guid;
@@ -191,7 +193,7 @@ export default function StockReportsScreen() {
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Stock Reports</Text>
+        <Text style={s.headerTitle}>{t('stocks.stockReports')}</Text>
         <View style={s.headerBtn} />
       </View>
 

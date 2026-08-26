@@ -11,6 +11,7 @@ import { VoucherDocument } from '../../types/document';
 import { formatCurrency, amountInWords, DOC_TYPE_CONFIG } from '../../utils/documentHelpers';
 import { shareVoucherPdfSafely } from '../../utils/voucherPdf';
 import { useAuth } from '../../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utility Components
@@ -785,6 +786,7 @@ function FooterBlock({ doc }: { doc: VoucherDocument }) {
 // ─────────────────────────────────────────────────────────────────────────────
 function ActionBar({ doc }: { doc: VoucherDocument }) {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const [pdfLoading, setPdfLoading] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
   const { company } = useAuth();
@@ -805,7 +807,7 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
     });
   };
 
-  const handleShare = () => generateAndSharePDF(setShareLoading, `Share ${doc.documentNumber}`);
+  const handleShare = () => generateAndSharePDF(setShareLoading, t('pdf.shareDoc', { number: doc.documentNumber }));
   const handlePDF   = () => generateAndSharePDF(setPdfLoading, `${doc.documentNumber}.pdf`);
 
     return (
@@ -814,7 +816,7 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
         {shareLoading
           ? <ActivityIndicator size="small" color={COLORS.white} />
           : <Ionicons name="share-outline" size={21} color={COLORS.white} />}
-        <Text style={ds.actionBtnText}>{shareLoading ? 'Generating…' : 'Share PDF'}</Text>
+        <Text style={ds.actionBtnText}>{shareLoading ? t('pdf.generating') : t('pdf.sharePdf')}</Text>
       </TouchableOpacity>
 
       <View style={ds.actionSep} />
@@ -824,7 +826,7 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
           ? <ActivityIndicator size="small" color={COLORS.white} />
           : <Ionicons name="document-outline" size={21} color={COLORS.white} />
         }
-        <Text style={ds.actionBtnText}>{pdfLoading ? 'Generating…' : 'Download PDF'}</Text>
+        <Text style={ds.actionBtnText}>{pdfLoading ? t('pdf.generating') : t('pdf.downloadPdf')}</Text>
       </TouchableOpacity>
     </View>
   );

@@ -13,6 +13,7 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { getKPIBankBalance } from '../../src/services/api';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { useTranslation } from 'react-i18next';
 import {
   resolvePeriodDates,
   type DashboardPeriod,
@@ -84,6 +85,7 @@ function accountLabelFromTally(b: {
 }
 
 export default function BankBalanceScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { company, selectedFY, lastSyncAt } = useAuth();
   const { formatAmountCompact, formatAmount } = useSettings();
@@ -196,7 +198,7 @@ export default function BankBalanceScreen() {
         <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Bank Balance</Text>
+        <Text style={s.headerTitle}>{t('kpi.bankBalance')}</Text>
         <View style={s.headerBtn} />
       </View>
 

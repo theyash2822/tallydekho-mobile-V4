@@ -24,6 +24,7 @@ import {
 } from '../../src/services/api';
 import { sumDenomCounts } from '../../src/constants/cashDenominations';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
+import { useTranslation } from 'react-i18next';
 
 const todayStr = () => {
   const d = new Date();
@@ -57,6 +58,7 @@ function txnTypeForKind(kind: ContraKind): string {
 }
 
 export default function CreateContraVoucher() {
+  const { t } = useTranslation();
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
   const { company, isPaired } = useAuth();
@@ -167,7 +169,7 @@ export default function CreateContraVoucher() {
   };
 
   const handleSubmit = async () => {
-    if (canSubmit) { Alert.alert('Required', canSubmit); return; }
+    if (canSubmit) { Alert.alert(t('voucher.required'), canSubmit); return; }
     if (!isPaired) {
       Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Pair with Tally Desktop first.' });
       return;
@@ -229,7 +231,7 @@ export default function CreateContraVoucher() {
         <TouchableOpacity onPress={() => router.back()} style={s.back} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.hdrTitle}>Contra Voucher</Text>
+        <Text style={s.hdrTitle}>{t('voucher.contraTitle')}</Text>
         <RegularOptionalToggle value={entryType} onChange={setEntryType} />
       </View>
 
@@ -251,7 +253,7 @@ export default function CreateContraVoucher() {
             <View style={[s.fieldBlock, { padding: SPACING.md }]}>
               <View style={s.row2}>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.fLabel}>Contra No.</Text>
+                  <Text style={s.fLabel}>{t('voucher.contraNo')}</Text>
                   <View style={s.autoBox}>
                     <Text style={s.autoTxt}>Auto</Text>
                     <Ionicons name="lock-closed-outline" size={13} color={COLORS.textTertiary} />
@@ -464,7 +466,7 @@ export default function CreateContraVoucher() {
             {submitting
               ? <ActivityIndicator size="small" color={COLORS.white} />
               : <Ionicons name="send" size={16} color={COLORS.white} />}
-            <Text style={s.btnPriTxt}>{submitting ? 'Submitting...' : 'Submit Contra Voucher'}</Text>
+            <Text style={s.btnPriTxt}>{submitting ? t('voucher.submitting') : t('voucher.submitContra')}</Text>
           </TouchableOpacity>
           <View style={{ height: 32 }} />
         </ScrollView>
@@ -491,7 +493,7 @@ export default function CreateContraVoucher() {
         <View style={s.successOverlay}>
           <View style={s.successCard}>
             <Ionicons name="checkmark-circle" size={48} color={COLORS.positive} />
-            <Text style={s.successTitle}>Contra Saved</Text>
+            <Text style={s.successTitle}>{t('voucher.contraSaved')}</Text>
             <Text style={s.successSub}>
               {submitResult.isQueued ? 'Queued for Tally sync' : 'Posted to Tally'}
             </Text>

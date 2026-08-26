@@ -267,7 +267,7 @@ export default function SettingsScreen() {
             <Text style={styles.avatarLargeText}>{(user?.name || 'U')[0]}</Text>
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{user?.name || 'Your Name'}</Text>
+            <Text style={styles.profileName}>{user?.name || t('common.yourName')}</Text>
             <Text style={styles.profilePhone}>{user?.phone || ''}</Text>
           </View>
         </View>

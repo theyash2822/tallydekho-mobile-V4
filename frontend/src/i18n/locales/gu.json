@@ -50,7 +50,11 @@
     "purchase": "ખરીદી",
     "stocks": "સ્ટોક",
     "reports": "અહેવાલ",
-    "settings": "સેટિંગ્સ"
+    "settings": "સેટિંગ્સ",
+    "home": "હોમ",
+    "expenses": "ખર્ચ",
+    "vouchers": "વાઉચર",
+    "quickActions": "ઝડપી ક્રિયાઓ"
   },
   "auth": {
     "login": "લૉગ ઇન",

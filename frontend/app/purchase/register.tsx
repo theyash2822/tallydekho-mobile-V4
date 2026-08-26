@@ -14,6 +14,7 @@ import { getPurchaseInvoices } from '../../src/services/api';
 import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
 import SearchBar from '../../src/components/SearchBar';
 import { useSettings } from '../../src/context/SettingsContext';
+import { useTranslation } from 'react-i18next';
 
 const AMBER    = '#A89060';
 const AMBER_BG = '#FDF9F4';
@@ -49,6 +50,7 @@ type PurchaseInvoice = {
 type MonthGroup = { id: string; label: string; invoices: PurchaseInvoice[] };
 
 export default function PurchaseRegisterScreen() {
+  const { t } = useTranslation();
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -213,7 +215,7 @@ export default function PurchaseRegisterScreen() {
           <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
-          <Text style={s.headerTitle}>Purchase Register</Text>
+          <Text style={s.headerTitle}>{t('purchase.register')}</Text>
           <View style={{ width: 36 }} />
         </View>
       )}
