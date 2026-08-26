@@ -22,9 +22,10 @@ const YAXIS_W = 48;
 const DAY_W = 36;
 const CHART_H = 190;
 const PAD_T = 36;
-const PAD_B = 28;
+const PAD_B = 12;
 const GOLD = '#A89060';
 const BAR_DARK = '#3A3A3A';
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 type DayPoint = {
   day: string;
@@ -32,6 +33,12 @@ type DayPoint = {
   inflow: number;
   outflow: number;
 };
+
+function weekdayLabel(iso: string) {
+  const d = new Date(`${String(iso).slice(0, 10)}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return '';
+  return WEEKDAYS[d.getDay()] || '';
+}
 
 function fmtDate(iso?: string) {
   if (!iso) return '';
@@ -52,20 +59,25 @@ function compactTick(n: number) {
   return `₹${Math.round(n)}`;
 }
 
-function dayLabel(iso: string) {
-  const dd = String(iso || '').slice(8, 10);
-  return dd.replace(/^0/, '') || '';
+function tipDate(iso: string) {
+  const p = String(iso || '').slice(0, 10).split('-');
+  if (p.length < 3) return '';
+  const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${parseInt(p[2], 10)} ${m[parseInt(p[1], 10) - 1] || ''}`;
 }
 
 /** Pinned Y-axis + scrollable X plot + tap tooltip for daily balance. */
 function DailyBalanceChart({
   data,
   formatAmountCompact,
+  activeIdx,
+  onActiveChange,
 }: {
   data: DayPoint[];
   formatAmountCompact: (n: number) => string;
+  activeIdx: number | null;
+  onActiveChange: (idx: number | null) => void;
 }) {
-  const [activeIdx, setActiveIdx] = useState<number | null>(null);
   if (!data.length) return null;
 
   const plotH = CHART_H - PAD_T - PAD_B;
@@ -157,9 +169,8 @@ function DailyBalanceChart({
             const x = xAt(i);
             const y = yAt(d.balance);
             const active = activeIdx === i;
-            const showLbl = i === 0 || i === data.length - 1 || (i + 1) % 7 === 0;
             return (
-              <G key={d.day || i} onPress={() => setActiveIdx(active ? null : i)}>
+              <G key={d.day || i} onPress={() => onActiveChange(active ? (data.length - 1) : i)}>
                 <Rect x={i * DAY_W} y={0} width={DAY_W} height={CHART_H} fill="transparent" />
                 <Circle
                   cx={x}
@@ -169,11 +180,6 @@ function DailyBalanceChart({
                   stroke={COLORS.cardBg}
                   strokeWidth={2}
                 />
-                {showLbl ? (
-                  <SvgText x={x} y={CHART_H - 8} textAnchor="middle" fontSize={9} fill={COLORS.textTertiary}>
-                    {dayLabel(d.day)}
-                  </SvgText>
-                ) : null}
               </G>
             );
           })}
@@ -191,16 +197,26 @@ function DailyBalanceChart({
                 opacity={0.7}
               />
               <Rect
-                x={Math.max(4, Math.min(chartW - 88, xAt(activeIdx) - 44))}
+                x={Math.max(4, Math.min(chartW - 100, xAt(activeIdx) - 50))}
                 y={8}
-                width={88}
-                height={26}
+                width={100}
+                height={38}
                 rx={6}
                 fill={COLORS.textPrimary}
               />
               <SvgText
-                x={Math.max(48, Math.min(chartW - 44, xAt(activeIdx)))}
-                y={25}
+                x={Math.max(54, Math.min(chartW - 50, xAt(activeIdx)))}
+                y={24}
+                textAnchor="middle"
+                fontSize={10}
+                fontWeight="700"
+                fill="#FFFFFF"
+              >
+                {tipDate(tip.day)}
+              </SvgText>
+              <SvgText
+                x={Math.max(54, Math.min(chartW - 50, xAt(activeIdx)))}
+                y={38}
                 textAnchor="middle"
                 fontSize={11}
                 fontWeight="700"
@@ -295,7 +311,6 @@ function ReceiptsPaymentsChart({
             const inH = Math.max(2, (d.inflow / maxVal) * plotH);
             const outH = Math.max(2, (d.outflow / maxVal) * plotH);
             const active = activeIdx === i;
-            const showLbl = i === 0 || i === data.length - 1 || (i + 1) % 7 === 0;
             return (
               <G key={d.day || i} onPress={() => setActiveIdx(active ? null : i)}>
                 <Rect x={i * groupW} y={0} width={groupW} height={CHART_H} fill="transparent" />
@@ -317,17 +332,6 @@ function ReceiptsPaymentsChart({
                   fill={BAR_DARK}
                   opacity={active ? 1 : 0.9}
                 />
-                {showLbl ? (
-                  <SvgText
-                    x={gx + barW + 1.5}
-                    y={CHART_H - 8}
-                    textAnchor="middle"
-                    fontSize={9}
-                    fill={COLORS.textTertiary}
-                  >
-                    {dayLabel(d.day)}
-                  </SvgText>
-                ) : null}
               </G>
             );
           })}
@@ -338,13 +342,23 @@ function ReceiptsPaymentsChart({
                 x={Math.max(4, Math.min(chartW - 118, activeIdx * groupW + groupW / 2 - 59))}
                 y={6}
                 width={118}
-                height={40}
+                height={52}
                 rx={6}
                 fill={COLORS.textPrimary}
               />
               <SvgText
                 x={Math.max(63, Math.min(chartW - 59, activeIdx * groupW + groupW / 2))}
-                y={22}
+                y={20}
+                textAnchor="middle"
+                fontSize={9}
+                fontWeight="600"
+                fill="#FFFFFF"
+              >
+                {tipDate(tip.day)}
+              </SvgText>
+              <SvgText
+                x={Math.max(63, Math.min(chartW - 59, activeIdx * groupW + groupW / 2))}
+                y={36}
                 textAnchor="middle"
                 fontSize={10}
                 fontWeight="700"
@@ -354,7 +368,7 @@ function ReceiptsPaymentsChart({
               </SvgText>
               <SvgText
                 x={Math.max(63, Math.min(chartW - 59, activeIdx * groupW + groupW / 2))}
-                y={38}
+                y={50}
                 textAnchor="middle"
                 fontSize={10}
                 fontWeight="700"
@@ -378,6 +392,7 @@ export default function CashInHandScreen() {
 
   const sumRef = useRef<FlatList>(null);
   const [sumIdx, setSumIdx] = useState(0);
+  const [chartDayIdx, setChartDayIdx] = useState<number | null>(null);
   const [showDatePick, setShowDatePick] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -405,15 +420,37 @@ export default function CashInHandScreen() {
   useEffect(() => { load(); }, [load]);
 
   const summaryCards = useMemo(() => {
+    const cards = Array.isArray(apiData?.kpi_cards) ? apiData.kpi_cards : null;
+    const icons: Record<string, string> = {
+      bal: 'cash-outline',
+      in: 'arrow-down-circle-outline',
+      out: 'arrow-up-circle-outline',
+      net: 'swap-vertical-outline',
+    };
+    if (cards?.length) {
+      return cards.map((c: any) => {
+        const trend = c.trend_pct;
+        const hasTrend = trend != null && Number.isFinite(Number(trend));
+        const positive = c.trend_positive != null ? !!c.trend_positive : Number(trend) >= 0;
+        return {
+          id: String(c.id),
+          icon: icons[c.id] || 'stats-chart-outline',
+          label: c.label || c.id,
+          amount: formatAmountCompact(Math.round(Number(c.amount) || 0)),
+          trend: hasTrend ? `${Number(trend) >= 0 ? '+' : ''}${Number(trend)}%` : null,
+          positive,
+        };
+      });
+    }
     const bal = Number(apiData?.current_balance) || 0;
     const inflow = Number(apiData?.today_inflow) || 0;
     const outflow = Number(apiData?.today_outflow) || 0;
     const net = inflow - outflow;
     return [
-      { id: 'bal', icon: 'cash-outline', label: 'Cash on Hand', amount: formatAmountCompact(Math.round(bal)) },
-      { id: 'in', icon: 'arrow-down-circle-outline', label: 'Inflow Today', amount: formatAmountCompact(Math.round(inflow)) },
-      { id: 'out', icon: 'arrow-up-circle-outline', label: 'Outflow Today', amount: formatAmountCompact(Math.round(outflow)) },
-      { id: 'net', icon: 'swap-vertical-outline', label: 'Net Today', amount: formatAmountCompact(Math.round(net)) },
+      { id: 'bal', icon: 'cash-outline', label: 'Cash on Hand', amount: formatAmountCompact(Math.round(bal)), trend: null, positive: true },
+      { id: 'in', icon: 'arrow-down-circle-outline', label: 'Inflow Today', amount: formatAmountCompact(Math.round(inflow)), trend: null, positive: true },
+      { id: 'out', icon: 'arrow-up-circle-outline', label: 'Outflow Today', amount: formatAmountCompact(Math.round(outflow)), trend: null, positive: true },
+      { id: 'net', icon: 'swap-vertical-outline', label: 'Net Today', amount: formatAmountCompact(Math.round(net)), trend: null, positive: true },
     ];
   }, [apiData, formatAmountCompact]);
 
@@ -427,9 +464,18 @@ export default function CashInHandScreen() {
     }));
   }, [apiData]);
 
-  const curBal = Number(daily[daily.length - 1]?.balance ?? apiData?.current_balance) || 0;
+  useEffect(() => {
+    if (daily.length) setChartDayIdx(daily.length - 1);
+    else setChartDayIdx(null);
+  }, [daily]);
+
+  const activeChartDay = chartDayIdx != null ? daily[chartDayIdx] : daily[daily.length - 1];
+  const curBal = Number(activeChartDay?.balance ?? apiData?.current_balance) || 0;
   const balChange = Number(apiData?.balance_change) || 0;
-  const balChangePct = Number(apiData?.balance_change_pct) || 0;
+  const balChangePctRaw = apiData?.balance_change_pct;
+  const balChangePct = balChangePctRaw != null && Number.isFinite(Number(balChangePctRaw))
+    ? Number(balChangePctRaw)
+    : null;
 
   const txs = useMemo(() => {
     const rows = Array.isArray(apiData?.transactions) ? apiData.transactions : [];
@@ -492,8 +538,6 @@ export default function CashInHandScreen() {
                 pagingEnabled
                 nestedScrollEnabled
                 decelerationRate="fast"
-                snapToInterval={SW}
-                snapToAlignment="start"
                 disableIntervalMomentum
                 data={summaryCards}
                 keyExtractor={(i) => i.id}
@@ -512,12 +556,30 @@ export default function CashInHandScreen() {
                         <Text style={s.sumLabel}>{item.label}</Text>
                         <Text style={s.sumAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount}</Text>
                       </View>
+                      {item.trend != null ? (
+                        <View style={[
+                          s.trendBadge,
+                          { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg },
+                        ]}>
+                          <Ionicons
+                            name={item.positive ? 'trending-up' : 'trending-down'}
+                            size={11}
+                            color={item.positive ? COLORS.positive : COLORS.negative}
+                          />
+                          <Text style={[
+                            s.trendTxt,
+                            { color: item.positive ? COLORS.positive : COLORS.negative },
+                          ]}>
+                            {item.trend}
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
                   </View>
                 )}
               />
               <View style={s.dots}>
-                {summaryCards.map((_, i) => (
+                {summaryCards.map((_: any, i: number) => (
                   <View key={i} style={[s.dot, i === sumIdx && s.dotActive]} />
                 ))}
               </View>
@@ -530,16 +592,27 @@ export default function CashInHandScreen() {
                     <Text style={s.chartTitle}>Daily Cash Balance</Text>
                     <View style={s.chartMeta}>
                       <Text style={s.chartAmt}>{formatAmountCompact(Math.round(curBal))}</Text>
-                      <View style={[s.changeBadge, { backgroundColor: balChange >= 0 ? COLORS.positiveBg : COLORS.negativeBg }]}>
-                        <Text style={[s.changeTxt, { color: balChange >= 0 ? COLORS.positive : COLORS.negative }]}>
-                          {balChange >= 0 ? '+' : ''}{formatAmountCompact(Math.round(balChange))} ({balChangePct}%)
-                        </Text>
-                      </View>
+                      {balChangePct != null ? (
+                        <View style={[s.changeBadge, { backgroundColor: balChange >= 0 ? COLORS.positiveBg : COLORS.negativeBg }]}>
+                          <Text style={[s.changeTxt, { color: balChange >= 0 ? COLORS.positive : COLORS.negative }]}>
+                            {balChange >= 0 ? '+' : ''}{formatAmountCompact(Math.round(balChange))} ({balChangePct}%)
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
                   </View>
-                  <Text style={s.chartDate}>30 days · tap point</Text>
+                  <View style={s.dayTag}>
+                    <Text style={s.dayTxt}>
+                      {activeChartDay?.day ? weekdayLabel(activeChartDay.day) : '—'}
+                    </Text>
+                  </View>
                 </View>
-                <DailyBalanceChart data={daily} formatAmountCompact={formatAmountCompact} />
+                <DailyBalanceChart
+                  data={daily}
+                  formatAmountCompact={formatAmountCompact}
+                  activeIdx={chartDayIdx}
+                  onActiveChange={setChartDayIdx}
+                />
               </View>
             )}
 
@@ -632,6 +705,8 @@ const s = StyleSheet.create({
   sumTextWrap: { flex: 1, gap: 4 },
   sumLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
   sumAmount: { fontSize: TYPOGRAPHY.xl, fontWeight: '800', color: COLORS.textPrimary },
+  trendBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: RADIUS.full, flexShrink: 0 },
+  trendTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
   dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: 10 },
   dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
   dotActive: { width: 16, height: 5, borderRadius: 3, backgroundColor: COLORS.textPrimary },
@@ -643,7 +718,8 @@ const s = StyleSheet.create({
   chartAmt: { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
   changeBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: RADIUS.full },
   changeTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
-  chartDate: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500', marginTop: 2 },
+  dayTag: { paddingHorizontal: 10, paddingVertical: 4, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault },
+  dayTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
   legend: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
   legendTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginRight: 4 },

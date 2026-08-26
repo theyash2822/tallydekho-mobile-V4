@@ -1,3 +1,22 @@
+## [2026-08-26] Phases 2–4 — Cash/Bank/AR/AP/Loans live trend pills
+
+### Phase 2
+- `cash-in-hand.tsx`: summary carousel trend pills from `kpi_cards`; grey weekday day pill on Daily Cash Balance header (tap still shows tooltip); hide day-over-day % when null
+- `bank-balance.tsx`: KPI carousel trend pills from API (pills-only; no new chart)
+
+### Phase 3
+- `receivables.tsx` / `payables.tsx`: Total Due uses `trend_pct`; aging cards map `aging[].trend` (pills only when non-null)
+
+### Phase 4
+- `loans-ods.tsx`: KPI carousel trend pills from `kpi_cards`
+
+### How to test
+1. Pull `cursor` + restart backend `:3001` + Expo reload
+2. Home → Cash / Bank / Receivables / Payables / Loans
+3. Pills appear only when API sends real `trend_pct` (AR/AP may need 1+ day of snapshots)
+
+---
+
 ## [2026-08-26] Phase 1 — Payments + Receipts live trend pills + charts
 
 ### Roadmap (document)

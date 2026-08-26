@@ -83,23 +83,29 @@ export default function ReceivablesScreen() {
   const agingCards = useMemo(() => {
     const total = Number(apiData?.total ?? apiData?.accountingBalance) || 0;
     const rows = Array.isArray(apiData?.aging) ? apiData.aging : [];
+    const totalTrend = apiData?.trend_pct;
+    const hasTotalTrend = totalTrend != null && Number.isFinite(Number(totalTrend));
     const cards = [
       {
         id: 'total',
         icon: 'documents-outline',
         label: 'Total Due',
         amount: formatAmountCompact(Math.round(total)),
-        trend: null as string | null,
-        positive: true,
+        trend: hasTotalTrend ? `${Number(totalTrend) >= 0 ? '+' : ''}${Number(totalTrend)}%` : null,
+        positive: hasTotalTrend ? Number(totalTrend) >= 0 : true,
       },
-      ...rows.map((a: any) => ({
-        id: a.bucket,
-        icon: 'calendar-outline',
-        label: a.label || a.bucket,
-        amount: formatAmountCompact(Math.round(Number(a.amount) || 0)),
-        trend: a.trend != null ? `${Number(a.trend) > 0 ? '+' : ''}${a.trend}%` : null,
-        positive: a.trend == null ? true : Number(a.trend) >= 0,
-      })),
+      ...rows.map((a: any) => {
+        const trend = a.trend;
+        const hasTrend = trend != null && Number.isFinite(Number(trend));
+        return {
+          id: a.bucket,
+          icon: 'calendar-outline',
+          label: a.label || a.bucket,
+          amount: formatAmountCompact(Math.round(Number(a.amount) || 0)),
+          trend: hasTrend ? `${Number(trend) >= 0 ? '+' : ''}${Number(trend)}%` : null,
+          positive: hasTrend ? Number(trend) >= 0 : true,
+        };
+      }),
     ];
     return cards;
   }, [apiData, formatAmountCompact]);
@@ -113,6 +119,7 @@ export default function ReceivablesScreen() {
       date: b.date || b.dueDate || b.billDate,
       amount: Math.abs(Number(b.amount) || 0),
       status: b.status,
+      voucherGuid: b.voucherGuid || b.voucher_guid || null,
     }));
   }, [apiData]);
 
@@ -217,8 +224,6 @@ export default function ReceivablesScreen() {
                 pagingEnabled
                 nestedScrollEnabled
                 decelerationRate="fast"
-                snapToInterval={SW}
-                snapToAlignment="start"
                 disableIntervalMomentum
                 data={agingCards}
                 keyExtractor={(i) => i.id}
@@ -318,12 +323,18 @@ export default function ReceivablesScreen() {
                       {bills.length === 0 ? (
                         <View style={s.empty}><Text style={s.emptyTxt}>No outstanding bills</Text></View>
                       ) : bills.map((item: any, idx: number) => (
-                        <View
+                        <TouchableOpacity
                           key={item.id}
                           style={[s.listRow, idx < bills.length - 1 && s.listRowBorder]}
+                          activeOpacity={item.voucherGuid ? 0.7 : 1}
+                          disabled={!item.voucherGuid}
+                          onPress={() => {
+                            if (!item.voucherGuid) return;
+                            router.push(`/document/${item.voucherGuid}?type=sales_invoice` as any);
+                          }}
                         >
                           <View style={s.partyIconBox}>
-                            <Ionicons name="business-outline" size={18} color={COLORS.textSecondary} />
+                            <Ionicons name="document-text-outline" size={18} color={COLORS.textSecondary} />
                           </View>
                           <View style={s.listInfo}>
                             <View style={s.listTopRow}>
@@ -333,7 +344,10 @@ export default function ReceivablesScreen() {
                             <Text style={s.listDate}>{fmtDate(item.date)}</Text>
                           </View>
                           <Text style={s.listAmount}>{formatAmount(Math.round(item.amount))}</Text>
-                        </View>
+                          {!!item.voucherGuid && (
+                            <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
+                          )}
+                        </TouchableOpacity>
                       ))}
                     </View>
                   ) : (

@@ -265,14 +265,39 @@ export default function LoansODsScreen() {
   }, [active?._key, isOd]);
 
   const kpiCards = useMemo(() => {
+    const cards = Array.isArray(apiData?.kpi_cards) ? apiData.kpi_cards : null;
+    const icons: Record<string, string> = {
+      total: 'cash-outline',
+      term: 'business-outline',
+      od: 'swap-horizontal-outline',
+      count: 'list-outline',
+    };
+    if (cards?.length) {
+      return cards.map((c: any) => {
+        const trend = c.trend_pct;
+        const hasTrend = trend != null && Number.isFinite(Number(trend));
+        const positive = c.trend_positive != null ? !!c.trend_positive : Number(trend) >= 0;
+        const amount = c.id === 'count'
+          ? String(Math.round(Number(c.amount) || 0))
+          : formatAmountCompact(Math.round(Number(c.amount) || 0));
+        return {
+          id: String(c.id),
+          icon: icons[c.id] || 'stats-chart-outline',
+          label: c.label || c.id,
+          amount,
+          trend: hasTrend ? `${Number(trend) >= 0 ? '+' : ''}${Number(trend)}%` : null,
+          positive,
+        };
+      });
+    }
     const total = Number(apiData?.total) || 0;
     const loanTotal = Number(apiData?.loan_total) || 0;
     const odTotal = Number(apiData?.od_total) || 0;
     return [
-      { id: 'total', icon: 'cash-outline', label: 'Total Outstanding', amount: formatAmountCompact(Math.round(total)) },
-      { id: 'term', icon: 'business-outline', label: 'Loans', amount: formatAmountCompact(Math.round(loanTotal)) },
-      { id: 'od', icon: 'swap-horizontal-outline', label: 'ODs / Overdraft', amount: formatAmountCompact(Math.round(odTotal)) },
-      { id: 'count', icon: 'list-outline', label: 'Accounts', amount: String(cards.length) },
+      { id: 'total', icon: 'cash-outline', label: 'Total Outstanding', amount: formatAmountCompact(Math.round(total)), trend: null, positive: true },
+      { id: 'term', icon: 'business-outline', label: 'Loans', amount: formatAmountCompact(Math.round(loanTotal)), trend: null, positive: true },
+      { id: 'od', icon: 'swap-horizontal-outline', label: 'ODs / Overdraft', amount: formatAmountCompact(Math.round(odTotal)), trend: null, positive: true },
+      { id: 'count', icon: 'list-outline', label: 'Accounts', amount: String(cards.length), trend: null, positive: true },
     ];
   }, [apiData, cards.length, formatAmountCompact]);
 
@@ -358,12 +383,24 @@ export default function LoansODsScreen() {
                         <Text style={s.kpiLabel}>{item.label}</Text>
                         <Text style={s.kpiAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount}</Text>
                       </View>
+                      {item.trend != null ? (
+                        <View style={[s.kpiTrendBadge, { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg }]}>
+                          <Ionicons
+                            name={item.positive ? 'trending-up' : 'trending-down'}
+                            size={11}
+                            color={item.positive ? COLORS.positive : COLORS.negative}
+                          />
+                          <Text style={[s.kpiTrendTxt, { color: item.positive ? COLORS.positive : COLORS.negative }]}>
+                            {item.trend}
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
                   </View>
                 )}
               />
               <View style={s.dots}>
-                {kpiCards.map((_, i) => <View key={i} style={[s.dot, i === kpiIdx && s.dotActive]} />)}
+                {kpiCards.map((_: any, i: number) => <View key={i} style={[s.dot, i === kpiIdx && s.dotActive]} />)}
               </View>
             </View>
 
@@ -625,6 +662,8 @@ const s = StyleSheet.create({
   kpiTextWrap: { flex: 1, gap: 2 },
   kpiLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600' },
   kpiAmount: { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
+  kpiTrendBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: RADIUS.full, flexShrink: 0 },
+  kpiTrendTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
 
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: 10 },
   dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },

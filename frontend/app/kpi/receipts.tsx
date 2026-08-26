@@ -445,7 +445,7 @@ export default function ReceiptsScreen() {
                 )}
               />
               <View style={s.dots}>
-                {kpiCards.map((_, i) => <View key={i} style={[s.dot, i === kpiIdx && s.dotActive]} />)}
+                {kpiCards.map((_: any, i: number) => <View key={i} style={[s.dot, i === kpiIdx && s.dotActive]} />)}
               </View>
             </View>
 
