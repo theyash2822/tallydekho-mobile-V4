@@ -1,3 +1,22 @@
+## [2026-08-26] Phase 1 — Payments + Receipts live trend pills + charts
+
+### Roadmap (document)
+- **Phase 1 (this):** Payments + Receipts — `daily_series`, `kpi_cards.trend_pct`, Daily In/Outflow chart, Cash vs Bank donut
+- **Phase 2:** Cash + Bank balance trend pills + day pill on cash charts
+- **Phase 3:** Receivables + Payables — aging snapshots + MoM when history exists
+- **Phase 4:** Loans & ODs — outstanding trend pills on carousel
+
+### Added / Restored
+- `payments.tsx` / `receipts.tsx`: KPI carousel trend pills (omit when `trend_pct` null), Daily Outflow/Inflow line chart with weekday day pill, Cash vs Bank donut with horizontal flex legend (no vertical letter stacking)
+- Wired to live `GET /kpi/payments` + `/kpi/receipts` (`daily_series`, `kpi_cards`, cash/bank totals)
+
+### How to test
+1. Backend on `:3001` with Phase 1 API
+2. Expo reload → Home → Payments / Receipts
+3. Confirm carousel pills, chart touch + day tag, Cash vs Bank legend readable
+
+---
+
 ## [2026-08-25] Phase B–D — AR/AP/Cash UI restore with live data
 
 ### Fixed

@@ -1,8 +1,11 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, FlatList, Dimensions,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, FlatList,
+  Dimensions, PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Path, Line, Circle, Defs, LinearGradient as SvgGrad, Stop, Text as SvgText } from 'react-native-svg';
+import { PieChart } from 'react-native-gifted-charts';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
@@ -20,6 +23,18 @@ const { width: SW } = Dimensions.get('window');
 const PERIOD_TABS = ['7D', '1M', '3M', '6M'] as const;
 const TYPE_TABS = ['All', 'Cash', 'Bank'] as const;
 
+const CHART_COLOR = '#2D7D46';
+const DONUT_CASH = '#A89060';
+const DONUT_BANK = '#3A3A3A';
+const PAD_L = 46;
+const PAD_T = 14;
+const PAD_B = 24;
+const CHART_W_FULL = SW - 32;
+const CHART_H_SVG = 160;
+const CHART_W = CHART_W_FULL - PAD_L - 8;
+const CHART_H = CHART_H_SVG - PAD_T - PAD_B;
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 type Tx = {
   guid?: string;
   voucher_number?: string;
@@ -29,11 +44,251 @@ type Tx = {
   mode?: string;
 };
 
+type DayPoint = { day: string; amount: number; label: string };
+
 function fmtDate(iso?: string) {
   if (!iso) return '';
   const d = new Date(`${String(iso).slice(0, 10)}T12:00:00`);
   if (Number.isNaN(d.getTime())) return String(iso).slice(0, 10);
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+}
+
+function weekdayLabel(iso: string) {
+  const d = new Date(`${String(iso).slice(0, 10)}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return '';
+  return WEEKDAYS[d.getDay()] || '';
+}
+
+function fmtK(v: number) {
+  if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`;
+  if (v >= 1000) return `₹${(v / 1000).toFixed(1)}K`;
+  return `₹${Math.round(v)}`;
+}
+
+function niceMax(v: number) {
+  if (v <= 0) return 1000;
+  const exp = Math.pow(10, Math.floor(Math.log10(v)));
+  return Math.ceil(v / exp) * exp;
+}
+
+function DailyInflowChart({
+  data,
+  formatAmountCompact,
+}: {
+  data: DayPoint[];
+  formatAmountCompact: (n: number) => string;
+}) {
+  const defaultIdx = Math.max(0, data.length - 1);
+  const [activeIdx, setActiveIdx] = useState<number | null>(defaultIdx);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dataRef = useRef(data);
+  dataRef.current = data;
+
+  useEffect(() => {
+    setActiveIdx(Math.max(0, data.length - 1));
+  }, [data]);
+
+  const vals = data.map((d) => d.amount);
+  const maxV = niceMax(Math.max(...vals, 1));
+  const minV = 0;
+  const range = maxV - minV || 1;
+  const n = Math.max(data.length, 2);
+
+  const getX = (i: number) => PAD_L + (i / (n - 1)) * CHART_W;
+  const getY = (v: number) => PAD_T + (1 - (Math.max(0, v) - minV) / range) * CHART_H;
+
+  const linePath = data
+    .map((d, i) => `${i === 0 ? 'M' : 'L'}${getX(i).toFixed(1)},${getY(d.amount).toFixed(1)}`)
+    .join(' ');
+  const areaPath = data.length
+    ? `${linePath} L${getX(data.length - 1).toFixed(1)},${(PAD_T + CHART_H).toFixed(1)} L${PAD_L.toFixed(1)},${(PAD_T + CHART_H).toFixed(1)} Z`
+    : '';
+  const yLabels = Array.from({ length: 5 }, (_, i) => maxV - (i / 4) * (maxV - minV));
+
+  const pan = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderGrant: (e) => {
+          const rows = dataRef.current;
+          if (!rows.length) return;
+          if (hideTimer.current) clearTimeout(hideTimer.current);
+          const lx = e.nativeEvent.locationX;
+          const idx = Math.round(((lx - PAD_L) / CHART_W) * (rows.length - 1));
+          setActiveIdx(Math.max(0, Math.min(rows.length - 1, idx)));
+        },
+        onPanResponderMove: (e) => {
+          const rows = dataRef.current;
+          if (!rows.length) return;
+          if (hideTimer.current) clearTimeout(hideTimer.current);
+          const lx = e.nativeEvent.locationX;
+          const idx = Math.round(((lx - PAD_L) / CHART_W) * (rows.length - 1));
+          setActiveIdx(Math.max(0, Math.min(rows.length - 1, idx)));
+        },
+        onPanResponderRelease: () => {
+          hideTimer.current = setTimeout(() => {
+            setActiveIdx(Math.max(0, dataRef.current.length - 1));
+          }, 3000);
+        },
+      }),
+    []
+  );
+
+  if (!data.length) return null;
+
+  const idx = activeIdx != null ? activeIdx : defaultIdx;
+  const activeDay = data[idx] || data[defaultIdx];
+  const prevVal = idx > 0 ? data[idx - 1].amount : activeDay.amount;
+  const change = activeDay.amount - prevVal;
+  const changePct = prevVal ? ((change / prevVal) * 100).toFixed(1) : null;
+  const changePos = change >= 0;
+
+  return (
+    <View style={ch.card}>
+      <View style={ch.topRow}>
+        <View>
+          <Text style={ch.mainVal}>{formatAmountCompact(Math.round(activeDay.amount))}</Text>
+          {changePct != null && idx > 0 ? (
+            <Text style={[ch.changeVal, { color: changePos ? COLORS.positive : COLORS.negative }]}>
+              {changePos ? '+' : ''}{formatAmountCompact(Math.round(change))} ({changePct}%)
+            </Text>
+          ) : (
+            <Text style={[ch.changeVal, { color: COLORS.textTertiary }]}>vs prior day</Text>
+          )}
+        </View>
+        <View style={ch.dayTag}>
+          <Text style={ch.dayTxt}>{activeDay.label || weekdayLabel(activeDay.day)}</Text>
+        </View>
+      </View>
+
+      <View {...pan.panHandlers}>
+        <Svg width={CHART_W_FULL} height={CHART_H_SVG}>
+          <Defs>
+            <SvgGrad id="rcpAreaGrad" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor={CHART_COLOR} stopOpacity="0.35" />
+              <Stop offset="1" stopColor={CHART_COLOR} stopOpacity="0.02" />
+            </SvgGrad>
+          </Defs>
+
+          {yLabels.map((v, i) => {
+            const y = PAD_T + (i / (yLabels.length - 1)) * CHART_H;
+            return (
+              <SvgText key={i} x={PAD_L - 4} y={y + 3} textAnchor="end" fontSize={8} fill={COLORS.textTertiary}>
+                {fmtK(v)}
+              </SvgText>
+            );
+          })}
+
+          {data.map((d, i) => (
+            <SvgText key={d.day} x={getX(i)} y={CHART_H_SVG - 4} textAnchor="middle" fontSize={9} fill={COLORS.textTertiary}>
+              {d.label || weekdayLabel(d.day)}
+            </SvgText>
+          ))}
+
+          {yLabels.map((_, i) => {
+            const y = PAD_T + (i / (yLabels.length - 1)) * CHART_H;
+            return <Line key={i} x1={PAD_L} y1={y} x2={PAD_L + CHART_W} y2={y} stroke={COLORS.borderDefault} strokeWidth={1} />;
+          })}
+
+          {areaPath ? <Path d={areaPath} fill="url(#rcpAreaGrad)" /> : null}
+          {linePath ? (
+            <Path d={linePath} stroke={CHART_COLOR} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          ) : null}
+
+          {activeIdx !== null && data[activeIdx] ? (
+            <>
+              <Line
+                x1={getX(activeIdx)} y1={PAD_T}
+                x2={getX(activeIdx)} y2={PAD_T + CHART_H}
+                stroke={CHART_COLOR} strokeWidth={1} strokeDasharray="3,3"
+              />
+              <Circle cx={getX(activeIdx)} cy={getY(data[activeIdx].amount)} r={6} fill={CHART_COLOR} />
+              <Circle cx={getX(activeIdx)} cy={getY(data[activeIdx].amount)} r={3} fill="#fff" />
+            </>
+          ) : null}
+        </Svg>
+      </View>
+
+      <Text style={ch.chartLabel}>Daily Inflow — touch to explore</Text>
+    </View>
+  );
+}
+
+function CashBankDonut({
+  cash,
+  bank,
+  formatAmountCompact,
+}: {
+  cash: number;
+  bank: number;
+  formatAmountCompact: (n: number) => string;
+}) {
+  const [selIdx, setSelIdx] = useState<number | null>(null);
+  const total = cash + bank;
+  const segments = [
+    { value: Math.max(cash, 0.0001), color: DONUT_CASH, label: 'Cash', raw: cash },
+    { value: Math.max(bank, 0.0001), color: DONUT_BANK, label: 'Bank', raw: bank },
+  ];
+  const pct = (v: number) => (total > 0 ? `${((v / total) * 100).toFixed(1)}%` : '—');
+
+  return (
+    <View style={dc.card}>
+      <Text style={dc.title}>Cash vs Bank</Text>
+      <View style={dc.body}>
+        <View style={dc.donutWrap}>
+          <PieChart
+            data={segments.map((s) => ({ value: s.value, color: s.color }))}
+            donut
+            radius={72}
+            innerRadius={48}
+            innerCircleColor={COLORS.cardBg}
+            strokeColor={COLORS.cardBg}
+            strokeWidth={2}
+            onPress={(_item: any, index: number) => setSelIdx((prev) => (prev === index ? null : index))}
+            centerLabelComponent={() => (
+              <View style={dc.center}>
+                <Text style={dc.centerAmt} numberOfLines={1}>
+                  {formatAmountCompact(Math.round(total))}
+                </Text>
+                <Text style={dc.centerLbl}>Total</Text>
+              </View>
+            )}
+          />
+        </View>
+
+        <View style={dc.legend}>
+          {segments.map((item, i) => (
+            <TouchableOpacity
+              key={item.label}
+              style={[dc.legendRow, selIdx === i && dc.legendRowActive]}
+              onPress={() => setSelIdx((prev) => (prev === i ? null : i))}
+              activeOpacity={0.75}
+            >
+              <View style={[dc.legendDot, { backgroundColor: item.color }]} />
+              <View style={dc.legendTxtWrap}>
+                <Text style={dc.legendLabel} numberOfLines={1}>{item.label}</Text>
+                <Text style={dc.legendPct} numberOfLines={1}>{pct(item.raw)}</Text>
+              </View>
+              <Text style={dc.legendAmt} numberOfLines={1}>
+                {formatAmountCompact(Math.round(item.raw))}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {selIdx !== null && (
+        <View style={[dc.detail, { borderColor: segments[selIdx].color }]}>
+          <View style={[dc.detailDot, { backgroundColor: segments[selIdx].color }]} />
+          <Text style={dc.detailTxt} numberOfLines={2}>
+            {segments[selIdx].label}: {formatAmountCompact(Math.round(segments[selIdx].raw))} ({pct(segments[selIdx].raw)})
+          </Text>
+        </View>
+      )}
+    </View>
+  );
 }
 
 export default function ReceiptsScreen() {
@@ -84,21 +339,55 @@ export default function ReceiptsScreen() {
 
   const filtered = useMemo(() => {
     if (typeTab === 'All') return txs;
-    return txs.filter(t => t.mode === typeTab);
+    return txs.filter((t) => t.mode === typeTab);
   }, [txs, typeTab]);
 
   const kpiCards = useMemo(() => {
-    const total = Number(apiData?.total) || txs.reduce((s, t) => s + t.amount, 0);
+    const cards = Array.isArray(apiData?.kpi_cards) ? apiData.kpi_cards : null;
+    const icons: Record<string, string> = {
+      period: 'download-outline',
+      today: 'calendar-outline',
+      cash: 'cash-outline',
+      bank: 'business-outline',
+    };
+    if (cards?.length) {
+      return cards.map((c: any) => {
+        const trend = c.trend_pct;
+        const hasTrend = trend != null && Number.isFinite(Number(trend));
+        const positive = c.trend_positive != null ? !!c.trend_positive : Number(trend) >= 0;
+        const label = c.id === 'period' ? `Receipts (${period})` : (c.label || c.id);
+        return {
+          id: String(c.id),
+          icon: icons[c.id] || 'stats-chart-outline',
+          label,
+          amount: formatAmountCompact(Math.round(Number(c.amount) || 0)),
+          trend: hasTrend ? `${Number(trend) >= 0 ? '+' : ''}${Number(trend)}%` : null,
+          positive,
+        };
+      });
+    }
+    const total = Number(apiData?.total) || 0;
     const today = Number(apiData?.today_total) || 0;
-    const cash = Number(apiData?.cash_total) || txs.filter(t => t.mode === 'Cash').reduce((s, t) => s + t.amount, 0);
-    const bank = Number(apiData?.bank_total) || txs.filter(t => t.mode === 'Bank').reduce((s, t) => s + t.amount, 0);
+    const cash = Number(apiData?.cash_total) || 0;
+    const bank = Number(apiData?.bank_total) || 0;
     return [
-      { id: 'period', icon: 'download-outline', label: `Receipts (${period})`, amount: formatAmountCompact(Math.round(total)) },
-      { id: 'today', icon: 'calendar-outline', label: 'Today', amount: formatAmountCompact(Math.round(today)) },
-      { id: 'cash', icon: 'cash-outline', label: 'Cash', amount: formatAmountCompact(Math.round(cash)) },
-      { id: 'bank', icon: 'business-outline', label: 'Bank', amount: formatAmountCompact(Math.round(bank)) },
+      { id: 'period', icon: 'download-outline', label: `Receipts (${period})`, amount: formatAmountCompact(Math.round(total)), trend: null, positive: true },
+      { id: 'today', icon: 'calendar-outline', label: 'Today', amount: formatAmountCompact(Math.round(today)), trend: null, positive: true },
+      { id: 'cash', icon: 'cash-outline', label: 'Cash', amount: formatAmountCompact(Math.round(cash)), trend: null, positive: true },
+      { id: 'bank', icon: 'business-outline', label: 'Bank', amount: formatAmountCompact(Math.round(bank)), trend: null, positive: true },
     ];
-  }, [apiData, txs, period, formatAmountCompact]);
+  }, [apiData, period, formatAmountCompact]);
+
+  const daily: DayPoint[] = useMemo(() => {
+    const rows = Array.isArray(apiData?.daily_series) ? apiData.daily_series : [];
+    return rows.map((d: any) => {
+      const day = String(d.day || '').slice(0, 10);
+      return { day, amount: Math.max(0, Number(d.amount) || 0), label: weekdayLabel(day) };
+    });
+  }, [apiData]);
+
+  const cashTotal = Number(apiData?.cash_total) || 0;
+  const bankTotal = Number(apiData?.bank_total) || 0;
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -116,7 +405,7 @@ export default function ReceiptsScreen() {
         {isLoading ? (
           <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
             <CardSkeleton height={100} />
-            {[0, 1, 2, 3].map(i => <LedgerRowSkeleton key={i} />)}
+            {[0, 1, 2, 3].map((i) => <LedgerRowSkeleton key={i} />)}
           </View>
         ) : (
           <>
@@ -139,6 +428,18 @@ export default function ReceiptsScreen() {
                         <Text style={s.kpiLabel}>{item.label}</Text>
                         <Text style={s.kpiAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount}</Text>
                       </View>
+                      {item.trend != null ? (
+                        <View style={[s.kpiTrendBadge, { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg }]}>
+                          <Ionicons
+                            name={item.positive ? 'trending-up' : 'trending-down'}
+                            size={11}
+                            color={item.positive ? COLORS.positive : COLORS.negative}
+                          />
+                          <Text style={[s.kpiTrendTxt, { color: item.positive ? COLORS.positive : COLORS.negative }]}>
+                            {item.trend}
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
                   </View>
                 )}
@@ -148,11 +449,17 @@ export default function ReceiptsScreen() {
               </View>
             </View>
 
+            {daily.length > 0 && (
+              <DailyInflowChart data={daily} formatAmountCompact={formatAmountCompact} />
+            )}
+
+            <CashBankDonut cash={cashTotal} bank={bankTotal} formatAmountCompact={formatAmountCompact} />
+
             <View style={s.recentCard}>
               <View style={s.recentHeader}>
                 <Text style={s.recentTitle}>Recent Receipts</Text>
                 <View style={s.periodRow}>
-                  {PERIOD_TABS.map(p => (
+                  {PERIOD_TABS.map((p) => (
                     <TouchableOpacity
                       key={p}
                       style={[s.periodBtn, period === p && s.periodBtnActive]}
@@ -166,7 +473,7 @@ export default function ReceiptsScreen() {
               </View>
 
               <View style={s.typeRow}>
-                {TYPE_TABS.map(t => (
+                {TYPE_TABS.map((t) => (
                   <TouchableOpacity
                     key={t}
                     style={[s.typeBtn, typeTab === t && s.typeBtnActive]}
@@ -230,9 +537,11 @@ const s = StyleSheet.create({
   kpiItem: { width: SW },
   kpiCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, paddingHorizontal: 14, paddingVertical: 12, marginHorizontal: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
   kpiIconBox: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
-  kpiTextWrap: { flex: 1, gap: 2 },
+  kpiTextWrap: { flex: 1, gap: 2, minWidth: 0 },
   kpiLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600' },
   kpiAmount: { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
+  kpiTrendBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: RADIUS.full, flexShrink: 0 },
+  kpiTrendTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
 
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: 10 },
   dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
@@ -263,4 +572,35 @@ const s = StyleSheet.create({
   txAmt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   empty: { padding: 24, alignItems: 'center' },
   emptyTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
+});
+
+const ch = StyleSheet.create({
+  card: { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, paddingTop: 14, overflow: 'hidden' },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: SPACING.md, marginBottom: 8 },
+  mainVal: { fontSize: TYPOGRAPHY.xl, fontWeight: '800', color: COLORS.textPrimary },
+  changeVal: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', marginTop: 2 },
+  dayTag: { paddingHorizontal: 10, paddingVertical: 4, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault },
+  dayTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary },
+  chartLabel: { fontSize: 10, color: COLORS.textTertiary, textAlign: 'center', paddingBottom: 8, marginTop: 2 },
+});
+
+const dc = StyleSheet.create({
+  card: { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, padding: SPACING.md },
+  title: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 14 },
+  body: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  donutWrap: { width: 148, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  center: { alignItems: 'center', justifyContent: 'center', maxWidth: 90 },
+  centerAmt: { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
+  centerLbl: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+  legend: { flex: 1, gap: 8, minWidth: 0 },
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 10, borderRadius: RADIUS.md, backgroundColor: COLORS.pageBg },
+  legendRowActive: { borderWidth: 1.5, borderColor: DONUT_CASH },
+  legendDot: { width: 12, height: 12, borderRadius: 6, flexShrink: 0 },
+  legendTxtWrap: { flex: 1, minWidth: 0, justifyContent: 'flex-start' },
+  legendLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  legendPct: { fontSize: 10, color: COLORS.textSecondary, marginTop: 1 },
+  legendAmt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, flexShrink: 0 },
+  detail: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, padding: 10, borderWidth: 1.5 },
+  detailDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
+  detailTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
 });
