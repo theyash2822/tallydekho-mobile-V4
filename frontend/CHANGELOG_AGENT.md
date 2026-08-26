@@ -1,5 +1,21 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-08-26 — Fix Ledger "No token provided" on mount
+
+### Root cause
+- Ledger tab called `getLedgers` on mount without waiting for AuthContext hydrate / `companyGuid` (Home/Stocks already gated).
+- Unauthenticated requests hit backend `authMiddleware` → `No token provided`, surfaced via ErrorBanner.
+- API `getToken` on web only read AsyncStorage while AuthContext also uses `localStorage` — possible Bearer miss on web.
+
+### Fixed
+- `app/(tabs)/ledger.tsx`: wait for `!authLoading && isAuthenticated && companyGuid` before fetch; no ErrorBanner for auth-missing races.
+- `src/services/api.ts`: align token read with AuthContext (web localStorage first); throw `Not authenticated` client-side when auth required and no token (do not send bare request).
+
+### How to test
+1. Cold start logged-in app → open Ledger tab → list loads, no "No token provided".
+2. Switch language in Settings → return to Ledger → still loads, no error spam.
+3. Log out → should not show Ledger auth error banner (redirect to auth).
+
 ## 2026-08-26 — Full-app language coverage (i18n Phases 1–4)
 
 ### Added

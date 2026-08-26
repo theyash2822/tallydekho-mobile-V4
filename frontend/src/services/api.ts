@@ -6,12 +6,24 @@
 // ============================================================
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.241:3001';
 
-// ── Token helpers ────────────────────────────────────────────
+// ── Token helpers (must match AuthContext storage keys) ──────
 const getToken = async (): Promise<string | null> => {
-  try { return await AsyncStorage.getItem('auth_token'); } catch { return null; }
+  try {
+    // Web: AuthContext also writes window.localStorage — prefer that first
+    if (Platform.OS === 'web') {
+      try {
+        const t = window.localStorage.getItem('auth_token');
+        if (t) return t;
+      } catch { /* fall through to AsyncStorage */ }
+    }
+    return await AsyncStorage.getItem('auth_token');
+  } catch {
+    return null;
+  }
 };
 
 // ── Core HTTP ────────────────────────────────────────────────
@@ -23,6 +35,10 @@ async function request<T>(
   basePrefix: 'api' | 'tally' | 'app' = 'api'
 ): Promise<T> {
   const token = requiresAuth ? await getToken() : null;
+  // Fail client-side before hitting backend (avoids "No token provided" spam)
+  if (requiresAuth && !token) {
+    throw new Error('Not authenticated');
+  }
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 

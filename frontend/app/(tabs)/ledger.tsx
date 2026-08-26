@@ -477,7 +477,7 @@ function FilterModal({ visible, onClose, activeNature, activeGroup, groups, onAp
 export default function LedgerScreen() {
   const router = useRouter();
   const { t } = useTranslation();
-  const { company, selectedFY, lastSyncAt } = useAuth();
+  const { company, selectedFY, lastSyncAt, isAuthenticated, isLoading: authLoading } = useAuth();
   const { formatAmount, formatAmountCompact } = useSettings();
   const companyGuid = company?.guid;
   const filterBtnRef = useRef<View>(null);
@@ -564,6 +564,10 @@ export default function LedgerScreen() {
   };
 
   const loadLedgers = async () => {
+    // Mirror Home/Stocks: wait for auth hydrate + company before any API call.
+    // Calling without a token hits backend "No token provided" and spams ErrorBanner.
+    if (authLoading || !isAuthenticated || !companyGuid) return;
+
     setApiError(null);
     setPage(1);
     setHasMore(false);
@@ -625,13 +629,19 @@ export default function LedgerScreen() {
         _ledgerCache[cacheKey] = { data: mappedRows, total: total ?? mappedRows.length, ts: Date.now() };
       }
     } catch (err: any) {
-      setApiError(err?.message || 'Failed to load ledgers');
-      console.error('[Ledgers]', err?.message);
+      const msg = err?.message || 'Failed to load ledgers';
+      // Don't banner auth races / logged-out; root layout will redirect
+      if (msg === 'Not authenticated' || msg === 'No token provided') {
+        console.warn('[Ledgers]', msg);
+        return;
+      }
+      setApiError(msg);
+      console.error('[Ledgers]', msg);
     }
   };
 
   const loadMoreLedgers = async () => {
-    if (!companyGuid || isLoadingMore || !hasMore) return;
+    if (authLoading || !isAuthenticated || !companyGuid || isLoadingMore || !hasMore) return;
     const nextPage = page + 1;
     setIsLoadingMore(true);
     try {
@@ -668,16 +678,34 @@ export default function LedgerScreen() {
         setPage(nextPage);
       }
     } catch (err: any) {
-      console.error('[Ledgers loadMore]', err?.message);
+      const msg = err?.message || '';
+      if (msg !== 'Not authenticated' && msg !== 'No token provided') {
+        console.error('[Ledgers loadMore]', msg);
+      }
     } finally {
       setIsLoadingMore(false);
     }
   };
 
   useEffect(() => {
+    if (authLoading) {
+      setIsLoading(true);
+      return;
+    }
+    if (!isAuthenticated) {
+      setApiError(null);
+      setData([]);
+      setIsLoading(false);
+      return;
+    }
+    if (!companyGuid) {
+      // Paired/auth ready but company not hydrated yet — keep loading, avoid API spam
+      setIsLoading(true);
+      return;
+    }
     setIsLoading(true);
     loadLedgers().finally(() => setIsLoading(false));
-  }, [companyGuid, selectedFY?.startDate, lastSyncAt, search, activeNature, activeGroup]);
+  }, [companyGuid, selectedFY?.startDate, lastSyncAt, search, activeNature, activeGroup, isAuthenticated, authLoading]);
 
   const onRefresh = async () => {
     setRefreshing(true);
