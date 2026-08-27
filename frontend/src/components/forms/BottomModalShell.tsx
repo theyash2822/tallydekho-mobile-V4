@@ -1,16 +1,14 @@
 /**
  * BottomModalShell — shared RN Modal bottom-sheet layout for stock/ledger forms.
  *
- * Pattern (iOS + Android safe):
- *   Modal → flex:1 + justifyContent flex-end root
- *        → absolute-fill overlay (tap to dismiss)
- *        → KAV width 100% wrapping only the sheet
- *        → sheet: handle + title + optional headerExtra + ScrollView body + sticky footer
+ * Must sit flush to the bottom edge (full-width white sheet). Avoid KAV
+ * `behavior="height"` when the keyboard is closed — that leaves a gap under
+ * the Save button where the screen behind peeks through.
  */
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView,
-  KeyboardAvoidingView, Platform, ViewStyle,
+  KeyboardAvoidingView, Platform, ViewStyle, Keyboard, useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,7 +27,7 @@ type Props = {
   headerExtra?: React.ReactNode;
   /** Pass ScrollView ref when parent needs scrollToEnd */
   scrollRef?: React.RefObject<ScrollView | null>;
-  /** Disable KAV (e.g. transfer sheets that rely on keyboard insets) */
+  /** Enable keyboard avoidance only while keyboard is open (default true) */
   keyboardAvoiding?: boolean;
   sheetStyle?: ViewStyle;
   scrollContentStyle?: ViewStyle;
@@ -51,9 +49,42 @@ export function BottomModalShell({
   scrollProps,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  useEffect(() => {
+    if (!visible) {
+      setKeyboardOpen(false);
+      return;
+    }
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const subShow = Keyboard.addListener(showEvt, () => setKeyboardOpen(true));
+    const subHide = Keyboard.addListener(hideEvt, () => setKeyboardOpen(false));
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, [visible]);
+
+  // Cap sheet only — do NOT put maxHeight on ScrollView (causes empty white gap).
+  const sheetMaxHeight = Math.round(windowHeight * 0.92);
+  const bottomPad = Math.max(insets.bottom, 12);
 
   const sheet = (
-    <View style={[ms.sheet, { paddingBottom: 0 }, sheetStyle]}>
+    <View
+      style={[
+        ms.sheet,
+        {
+          maxHeight: sheetMaxHeight,
+          width: '100%',
+          alignSelf: 'stretch',
+          // Safe-area padding is INSIDE the sheet so white fills to the device bottom
+          paddingBottom: footer ? 0 : bottomPad,
+        },
+        sheetStyle,
+      ]}
+    >
       <View style={ms.handle} />
 
       <View style={ms.titleRow}>
@@ -67,35 +98,47 @@ export function BottomModalShell({
 
       <ScrollView
         ref={scrollRef as any}
-        style={ms.scrollBody}
+        // flexGrow:0 → height follows content (no reserved blank area under fields)
+        style={shell.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[ms.scroll, scrollContentStyle]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        bounces={false}
         {...scrollProps}
       >
         {children}
       </ScrollView>
 
       {footer ? (
-        <View style={[ms.footer, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+        <View style={[ms.footer, { paddingBottom: bottomPad, backgroundColor: COLORS.cardBg }]}>
           {footer}
         </View>
       ) : null}
     </View>
   );
 
+  // Only apply KAV while keyboard is open — closed KAV (esp. Android `height`)
+  // lifts the sheet and leaves a gap where the list peeks under Save.
+  const useKav = keyboardAvoiding && keyboardOpen;
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
       <View style={shell.root}>
         <TouchableOpacity
-          style={[shell.overlay, StyleSheet.absoluteFillObject]}
+          style={shell.backdrop}
           activeOpacity={1}
           onPress={onClose}
         />
-        {keyboardAvoiding ? (
+        {useKav ? (
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             keyboardVerticalOffset={0}
             style={shell.kav}
           >
@@ -114,10 +157,14 @@ const shell = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
   },
-  overlay: {
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.48)',
   },
   kav: {
     width: '100%',
+  },
+  scroll: {
+    flexGrow: 0,
   },
 });
