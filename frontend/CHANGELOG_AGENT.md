@@ -1,5 +1,16 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-08-27 — AR/AP aging carousel: Due Today + always show trend pills
+
+### Changed
+- `receivables.tsx` / `payables.tsx`: carousel includes **Due Today** from `due_today`; every card always shows a trend pill (`±%` or **"—"** when null/prior=0), matching Home KPI strip.
+
+### How to test
+1. Expo reload → Receivables / Payables → swipe Total Due, Due Today, aging buckets — each has a pill.
+2. Home → Receivables / Payables cards should show live `%` when backend returns `trend_pct`.
+
+---
+
 ## 2026-08-26 — Fix Ledger "No token provided" on mount
 
 ### Root cause

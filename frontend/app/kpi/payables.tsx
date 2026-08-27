@@ -83,29 +83,43 @@ export default function PayablesScreen() {
   useEffect(() => { load(); }, [load]);
 
   const agingCards = useMemo(() => {
+    const fmtTrend = (raw: any) => {
+      const has = raw != null && Number.isFinite(Number(raw));
+      return {
+        hasTrend: has,
+        trend: has ? `${Number(raw) >= 0 ? '+' : ''}${Number(raw)}%` : '—',
+        positive: has ? Number(raw) >= 0 : true,
+      };
+    };
     const total = Number(apiData?.total ?? apiData?.accountingBalance) || 0;
     const rows = Array.isArray(apiData?.aging) ? apiData.aging : [];
-    const totalTrend = apiData?.trend_pct;
-    const hasTotalTrend = totalTrend != null && Number.isFinite(Number(totalTrend));
+    const due = apiData?.due_today;
+    const totalT = fmtTrend(apiData?.trend_pct);
     return [
       {
         id: 'total',
         icon: 'documents-outline',
         label: 'Total Due',
         amount: formatAmountCompact(Math.round(total)),
-        trend: hasTotalTrend ? `${Number(totalTrend) >= 0 ? '+' : ''}${Number(totalTrend)}%` : null,
-        positive: hasTotalTrend ? Number(totalTrend) >= 0 : true,
+        ...totalT,
       },
+      ...(due
+        ? [{
+            id: 'due_today',
+            icon: 'today-outline' as const,
+            label: due.label || 'Due Today',
+            amount: formatAmountCompact(Math.round(Number(due.amount) || 0)),
+            ...fmtTrend(due.trend ?? due.trend_pct),
+          }]
+        : []),
       ...rows.map((a: any) => {
-        const trend = a.trend;
-        const hasTrend = trend != null && Number.isFinite(Number(trend));
+        const t = fmtTrend(a.trend ?? a.trend_pct);
         return {
           id: a.bucket,
-          icon: 'calendar-outline',
+          icon: 'calendar-outline' as const,
           label: a.label || a.bucket,
           amount: formatAmountCompact(Math.round(Number(a.amount) || 0)),
-          trend: hasTrend ? `${Number(trend) >= 0 ? '+' : ''}${Number(trend)}%` : null,
-          positive: hasTrend ? Number(trend) >= 0 : true,
+          ...t,
         };
       }),
     ];
@@ -243,24 +257,32 @@ export default function PayablesScreen() {
                         <Text style={s.agingLabel}>{item.label}</Text>
                         <Text style={s.agingAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount}</Text>
                       </View>
-                      {item.trend != null ? (
-                        <View style={[
-                          s.trendBadge,
-                          { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg },
-                        ]}>
+                      <View style={[
+                        s.trendBadge,
+                        {
+                          backgroundColor: item.hasTrend
+                            ? (item.positive ? COLORS.positiveBg : COLORS.negativeBg)
+                            : COLORS.pageBg,
+                        },
+                      ]}>
+                        {item.hasTrend ? (
                           <Ionicons
                             name={item.positive ? 'trending-up' : 'trending-down'}
                             size={11}
                             color={item.positive ? COLORS.positive : COLORS.negative}
                           />
-                          <Text style={[
-                            s.trendTxt,
-                            { color: item.positive ? COLORS.positive : COLORS.negative },
-                          ]}>
-                            {item.trend}
-                          </Text>
-                        </View>
-                      ) : null}
+                        ) : null}
+                        <Text style={[
+                          s.trendTxt,
+                          {
+                            color: item.hasTrend
+                              ? (item.positive ? COLORS.positive : COLORS.negative)
+                              : COLORS.textTertiary,
+                          },
+                        ]}>
+                          {item.trend}
+                        </Text>
+                      </View>
                     </View>
                   </View>
                 )}
