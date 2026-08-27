@@ -281,41 +281,66 @@ export default function HomeScreen() {
   };
 
   // ── KPI row render ────────────────────────────────────────────────────────
-  const renderKPI = ({ item }: any) => (
-    <View style={styles.kpiItem}>
-      <TouchableOpacity
-        testID={`kpi-card-${item.id}`}
-        style={styles.kpiCard}
-        activeOpacity={0.7}
-        onPress={() => item.route && router.push(item.route as any)}
-      >
-        {/* Left: Icon circle */}
-        <View style={styles.kpiIconBox}>
-          <Ionicons name={item.icon} size={22} color={COLORS.textSecondary} />
-        </View>
+  const renderKPI = ({ item }: any) => {
+    const pct = item.trend_pct;
+    const hasTrend = pct != null && Number.isFinite(Number(pct));
+    const positive = hasTrend
+      ? (item.trend_positive != null ? !!item.trend_positive : Number(pct) >= 0)
+      : !!item.positive;
+    const trendLabel = hasTrend
+      ? `${Number(pct) >= 0 ? '+' : ''}${Number(pct)}%`
+      : (typeof item.trend === 'string' && item.trend ? item.trend : '—');
 
-        {/* Middle: Label + Amount stacked — flex:1 so never clips */}
-        <View style={styles.kpiTextWrap}>
-          <Text style={styles.kpiLabel} numberOfLines={1}>{tKpiLabel(t, item.id, item.label)}</Text>
-          <Text style={styles.kpiAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount_raw != null ? formatAmountCompact(item.amount_raw) : item.amount}</Text>
-        </View>
+    return (
+      <View style={styles.kpiItem}>
+        <TouchableOpacity
+          testID={`kpi-card-${item.id}`}
+          style={styles.kpiCard}
+          activeOpacity={0.7}
+          onPress={() => item.route && router.push(item.route as any)}
+        >
+          {/* Left: Icon circle */}
+          <View style={styles.kpiIconBox}>
+            <Ionicons name={item.icon} size={22} color={COLORS.textSecondary} />
+          </View>
 
-        {/* Right: Trend badge */}
-        {item.trend && (
-          <View style={[styles.kpiTrendBadge, { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg }]}>
-            <Ionicons
-              name={item.positive ? 'trending-up' : 'trending-down'}
-              size={11}
-              color={item.positive ? COLORS.positive : COLORS.negative}
-            />
-            <Text style={[styles.kpiTrendTxt, { color: item.positive ? COLORS.positive : COLORS.negative }]}>
-              {item.trend}
+          {/* Middle: Label + Amount stacked — flex:1 so never clips */}
+          <View style={styles.kpiTextWrap}>
+            <Text style={styles.kpiLabel} numberOfLines={1}>{tKpiLabel(t, item.id, item.label)}</Text>
+            <Text style={styles.kpiAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount_raw != null ? formatAmountCompact(item.amount_raw) : item.amount}</Text>
+          </View>
+
+          {/* Right: Trend badge — always show; "—" when no prior / null */}
+          <View
+            style={[
+              styles.kpiTrendBadge,
+              {
+                backgroundColor: hasTrend
+                  ? (positive ? COLORS.positiveBg : COLORS.negativeBg)
+                  : COLORS.pageBg,
+              },
+            ]}
+          >
+            {hasTrend ? (
+              <Ionicons
+                name={positive ? 'trending-up' : 'trending-down'}
+                size={11}
+                color={positive ? COLORS.positive : COLORS.negative}
+              />
+            ) : null}
+            <Text
+              style={[
+                styles.kpiTrendTxt,
+                { color: hasTrend ? (positive ? COLORS.positive : COLORS.negative) : COLORS.textTertiary },
+              ]}
+            >
+              {trendLabel}
             </Text>
           </View>
-        )}
-      </TouchableOpacity>
-    </View>
-  );
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   const isSearching = searchQuery.trim().length > 0;
 

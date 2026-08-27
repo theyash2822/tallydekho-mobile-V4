@@ -1,3 +1,15 @@
+## [2026-08-27] Home — trend pills on all 7 KPI cards
+
+### Changed
+- `app/(tabs)/index.tsx`: Home KPI carousel always shows a trend badge; green/red `±N%` when `trend_pct` is set; **"—"** (neutral) when null. Wired to enriched `/dashboard/kpi-strip`.
+
+### How to test
+1. Backend on `:3001` with kpi-strip trends + Expo reload
+2. Home → scroll 7 cards (Cash, Bank, Receivables, Payables, Loans, Payments, Receipts)
+3. Each card shows pill or —; no invented %
+
+---
+
 ## [2026-08-26] Phases 2–4 — Cash/Bank/AR/AP/Loans live trend pills
 
 ### Phase 2
