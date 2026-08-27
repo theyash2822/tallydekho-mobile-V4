@@ -1,13 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView,
-  KeyboardAvoidingView, Platform, Keyboard,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Keyboard } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { ALL_TAX_RATES } from '../../data/stockData';
-import { COLORS, TYPOGRAPHY, SPACING } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
 import { createStockItem, getStockGroups, getStockUnits, getWarehouses } from '../../services/api';
 
@@ -15,16 +9,15 @@ import {
   InlineDropdownField, InlineField, CurrencyField, SubmitButton,
   modalStyles as ms,
 } from './StockFormHelpers';
+import { BottomModalShell } from './BottomModalShell';
 
 export function AddItemModal({
   visible, onClose,
 }: {
   visible: boolean; onClose: () => void;
 }) {
-  const insets = useSafeAreaInsets();
   const { company } = useAuth();
 
-  // Real data from Tally — STRICT PRODUCTION DATA RULE
   const [groupOptions,     setGroupOptions]     = useState<{id:string;label:string}[]>([]);
   const [unitOptions,      setUnitOptions]      = useState<{id:string;label:string}[]>([]);
   const [warehouseOptions, setWarehouseOptions] = useState<{id:string;label:string}[]>([]);
@@ -94,7 +87,7 @@ export function AddItemModal({
         companyGuid: company.guid,
         companyName: company.name || '',
         name:        itemName,
-        groupName:   group,   // required — validated above
+        groupName:   group,
         unit:        unit  || 'Nos',
         openingQty:  parseFloat(qty) || 0,
         openingRate: parseFloat(purchPrice) || 0,
@@ -117,107 +110,86 @@ export function AddItemModal({
   const handleClose = () => { reset(); onClose(); };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <TouchableOpacity style={[ms.overlay, StyleSheet.absoluteFillObject]} activeOpacity={1} onPress={handleClose} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
-        <View style={[ms.sheet, { paddingBottom: 0 }]}>
-          <View style={ms.handle} />
+    <BottomModalShell
+      visible={visible}
+      onClose={handleClose}
+      title="Add New Item"
+      footer={
+        <SubmitButton
+          idleLabel="Save Item"
+          loadingLabel="Saving..."
+          successLabel="✓ Saved"
+          onValidate={validate}
+          onDone={handleDone}
+        />
+      }
+    >
+      <InlineDropdownField
+        label="Group"
+        options={groupOptions}
+        value={group}
+        onSelect={setGroup}
+        placeholder={groupOptions.length > 0 ? 'Select group' : 'Loading groups...'}
+        required
+      />
 
-          <View style={ms.titleRow}>
-            <Text style={ms.title}>Add New Item</Text>
-            <TouchableOpacity onPress={handleClose} activeOpacity={0.7}>
-              <Ionicons name="close" size={22} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-          </View>
+      <InlineField
+        label="Product name"
+        value={name}
+        onChange={setName}
+        placeholder="Enter product name"
+        required
+      />
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ms.scroll} keyboardShouldPersistTaps="handled">
-
-            <InlineDropdownField
-              label="Group"
-              options={groupOptions}
-              value={group}
-              onSelect={setGroup}
-              placeholder={groupOptions.length > 0 ? 'Select group' : 'Loading groups...'}
-            />
-
-            <InlineField
-              label="Product name"
-              value={name}
-              onChange={setName}
-              placeholder="Enter product name"
-              required
-            />
-
-            <View style={ms.row}>
-              <InlineDropdownField
-                label="Unit of measure *"
-                options={unitOptions}
-                value={unit}
-                onSelect={setUnit}
-                placeholder={unitOptions.length > 0 ? 'Select unit' : 'Loading...'}
-                required
-              />
-              <InlineDropdownField
-                label="Tax rate (GST %)"
-                options={ALL_TAX_RATES}
-                value={taxRate}
-                onSelect={setTaxRate}
-                placeholder="Select"
-              />
-            </View>
-
-            <CurrencyField
-              label="Purchase Price"
-              value={purchPrice}
-              onChange={setPurchPrice}
-              placeholder="₹ 0.00"
-            />
-
-            <InlineDropdownField
-              label="Warehouse Placement"
-              options={warehouseOptions}
-              value={warehouse}
-              onSelect={setWarehouse}
-              placeholder={warehouseOptions.length > 0 ? 'Select warehouse' : 'Loading...'}
-              icon="home-outline"
-            />
-
-            <View style={ms.row}>
-              <InlineField
-                label="Opening Qty"
-                value={qty}
-                onChange={setQty}
-                placeholder="0"
-                keyboardType="numeric"
-              />
-              <CurrencyField
-                label="Sale Price"
-                value={salePrice}
-                onChange={setSalePrice}
-                placeholder="₹ 0.00"
-              />
-            </View>
-
-          </ScrollView>
-
-          <View style={[ms.footer, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-            <SubmitButton
-              idleLabel="Save Item"
-              loadingLabel="Saving..."
-              successLabel="✓ Saved"
-              onValidate={validate}
-              onDone={handleDone}
-            />
-          </View>
-        </View>
-        </KeyboardAvoidingView>
+      <View style={ms.row}>
+        <InlineDropdownField
+          label="Unit of measure"
+          options={unitOptions}
+          value={unit}
+          onSelect={setUnit}
+          placeholder={unitOptions.length > 0 ? 'Select unit' : 'Loading...'}
+          required
+        />
+        <InlineDropdownField
+          label="Tax rate (GST %)"
+          options={ALL_TAX_RATES}
+          value={taxRate}
+          onSelect={setTaxRate}
+          placeholder="Select"
+        />
       </View>
-    </Modal>
+
+      <CurrencyField
+        label="Purchase Price"
+        value={purchPrice}
+        onChange={setPurchPrice}
+        placeholder="₹ 0.00"
+      />
+
+      <InlineDropdownField
+        label="Warehouse Placement"
+        options={warehouseOptions}
+        value={warehouse}
+        onSelect={setWarehouse}
+        placeholder={warehouseOptions.length > 0 ? 'Select warehouse' : 'Loading...'}
+        icon="home-outline"
+      />
+
+      <View style={ms.row}>
+        <InlineField
+          label="Opening Qty"
+          value={qty}
+          onChange={setQty}
+          placeholder="0"
+          keyboardType="numeric"
+        />
+        <CurrencyField
+          label="Sale Price"
+          value={salePrice}
+          onChange={setSalePrice}
+          placeholder="₹ 0.00"
+        />
+      </View>
+    </BottomModalShell>
   );
 }
-
-const ai = StyleSheet.create({
-  switchRow:      { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: SPACING.md },
-  switchTxt:      { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
-});

@@ -41,51 +41,58 @@ export default function AddPartyModal({ visible, type, onSave, onClose }: Props)
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose} />
-      <View style={[s.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <View style={s.handle} />
-        <View style={s.titleRow}>
-          <Text style={s.title}>Add New {label}</Text>
-          <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
-            <Ionicons name="close" size={22} color={COLORS.textSecondary} />
-          </TouchableOpacity>
-        </View>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-          <FormField label="Name" value={form.name} onChangeText={v => upd('name', v)} placeholder={`${label} name`} required />
-          <FormField label="Contact Number" value={form.contact} onChangeText={v => upd('contact', v)} keyboardType="phone-pad" placeholder="10-digit number" required />
-          <FormField label="Email" value={form.email} onChangeText={v => upd('email', v)} keyboardType="email-address" placeholder="Optional" />
-          <FormField
-            label="Billing Address" value={form.billingAddress}
-            onChangeText={v => upd('billingAddress', v)}
-            placeholder="Full address" required multiline numberOfLines={2}
-            style={{ minHeight: 64, textAlignVertical: 'top' } as any}
-          />
-          <View style={s.switchRow}>
-            <Text style={s.switchLabel}>Shipping same as Billing</Text>
-            <Switch value={form.sameAsBilling} onValueChange={v => upd('sameAsBilling', v)}
-              trackColor={{ false: COLORS.borderDefault, true: COLORS.brandPrimary }}
-              thumbColor={COLORS.white} />
+      <View style={s.root}>
+        <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose} />
+        <View style={[s.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <View style={s.handle} />
+          <View style={s.titleRow}>
+            <Text style={s.title}>Add New {label}</Text>
+            <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
+              <Ionicons name="close" size={22} color={COLORS.textSecondary} />
+            </TouchableOpacity>
           </View>
-          {!form.sameAsBilling && (
+          <ScrollView
+            style={s.scrollBody}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={s.scroll}
+            keyboardShouldPersistTaps="handled"
+          >
+            <FormField label="Name" value={form.name} onChangeText={v => upd('name', v)} placeholder={`${label} name`} required />
+            <FormField label="Contact Number" value={form.contact} onChangeText={v => upd('contact', v)} keyboardType="phone-pad" placeholder="10-digit number" required />
+            <FormField label="Email" value={form.email} onChangeText={v => upd('email', v)} keyboardType="email-address" placeholder="Optional" />
             <FormField
-              label="Shipping Address" value={form.shippingAddress}
-              onChangeText={v => upd('shippingAddress', v)}
-              placeholder="Shipping address" multiline numberOfLines={2}
+              label="Billing Address" value={form.billingAddress}
+              onChangeText={v => upd('billingAddress', v)}
+              placeholder="Full address" required multiline numberOfLines={2}
               style={{ minHeight: 64, textAlignVertical: 'top' } as any}
             />
-          )}
-          <FormField label="GSTIN" value={form.gstin} onChangeText={v => upd('gstin', v.toUpperCase())}
-            placeholder="Optional • 15-digit GSTIN" autoCapitalize="characters"
-            containerStyle={{ marginBottom: 0 }} />
-        </ScrollView>
-        <View style={[s.btnRow, { marginBottom: 4 }]}>
-          <TouchableOpacity style={s.saveOnlyBtn} onPress={() => { setForm(empty()); onClose(); }} activeOpacity={0.7}>
-            <Text style={s.saveOnlyTxt}>Save Only</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={s.saveUseBtn} onPress={handleSave} activeOpacity={0.7}>
-            <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />
-            <Text style={s.saveUseTxt}>Save &amp; Use</Text>
-          </TouchableOpacity>
+            <View style={s.switchRow}>
+              <Text style={s.switchLabel}>Shipping same as Billing</Text>
+              <Switch value={form.sameAsBilling} onValueChange={v => upd('sameAsBilling', v)}
+                trackColor={{ false: COLORS.borderDefault, true: COLORS.brandPrimary }}
+                thumbColor={COLORS.white} />
+            </View>
+            {!form.sameAsBilling && (
+              <FormField
+                label="Shipping Address" value={form.shippingAddress}
+                onChangeText={v => upd('shippingAddress', v)}
+                placeholder="Shipping address" multiline numberOfLines={2}
+                style={{ minHeight: 64, textAlignVertical: 'top' } as any}
+              />
+            )}
+            <FormField label="GSTIN" value={form.gstin} onChangeText={v => upd('gstin', v.toUpperCase())}
+              placeholder="Optional • 15-digit GSTIN" autoCapitalize="characters"
+              containerStyle={{ marginBottom: 0 }} />
+          </ScrollView>
+          <View style={[s.btnRow, { marginBottom: 4 }]}>
+            <TouchableOpacity style={s.saveOnlyBtn} onPress={() => { setForm(empty()); onClose(); }} activeOpacity={0.7}>
+              <Text style={s.saveOnlyTxt}>Save Only</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.saveUseBtn} onPress={handleSave} activeOpacity={0.7}>
+              <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />
+              <Text style={s.saveUseTxt}>Save & Use</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
@@ -93,11 +100,13 @@ export default function AddPartyModal({ visible, type, onSave, onClose }: Props)
 }
 
 const s = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
-  sheet: { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '88%', paddingTop: 12 },
+  root: { flex: 1, justifyContent: 'flex-end' },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
+  sheet: { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '88%', paddingTop: 12, width: '100%' },
   handle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, marginBottom: 0, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   title: { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
+  scrollBody: { flexShrink: 1 },
   scroll: { padding: SPACING.md },
   switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.md, paddingVertical: 4 },
   switchLabel: { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textPrimary, flex: 1 },

@@ -13,18 +13,32 @@ export type BtnPhase = 'idle' | 'loading' | 'success';
 // ─── MODAL SHARED STYLES ──────────────────────────────────────────────────────
 export const modalStyles = StyleSheet.create({
   overlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.48)' },
-  sheet:      { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 22, borderTopRightRadius: 22, maxHeight: '92%', paddingTop: 10 },
+  sheet:      {
+    backgroundColor: COLORS.cardBg,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    maxHeight: '92%',
+    paddingTop: 10,
+    width: '100%',
+  },
   handle:     { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
-  titleRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  title:      { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
-  scroll:     { padding: SPACING.md },
+  titleRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, marginBottom: 0, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  title:      { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary, flexShrink: 1 },
+  /** ScrollView style — shrinks between title and sticky footer */
+  scrollBody: { flexShrink: 1 },
+  scroll:     { padding: SPACING.md, paddingBottom: SPACING.lg },
   footer:     { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
   row:        { flexDirection: 'row', gap: 10, marginBottom: SPACING.md },
   divider:    { height: 1, backgroundColor: COLORS.borderDefault, marginVertical: 12 },
   sectionLbl: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
 });
 
-// ─── INLINE DROPDOWN (safe inside Modals — no nested Modal) ──────────────────
+/** Strip trailing asterisks from label so `required` never double-stars */
+function cleanLabel(label: string): string {
+  return label.replace(/\s*\*+\s*$/, '').trimEnd();
+}
+
+// ─── INLINE DROPDOWN (in-flow expand — safe inside Modal ScrollView) ─────────
 export function InlineDropdownField({
   label, options, value, onSelect, placeholder, icon, required,
 }: {
@@ -37,16 +51,13 @@ export function InlineDropdownField({
   required?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [fieldH, setFieldH] = useState(76); // label + trigger combined height
   const selected = options.find(o => o.id === value);
+  const displayLabel = cleanLabel(label);
 
   return (
-    <View
-      style={[idd.wrap, open && idd.wrapOpen]}
-      onLayout={e => setFieldH(e.nativeEvent.layout.height)}
-    >
+    <View style={idd.wrap}>
       <Text style={idd.label}>
-        {label}{required ? <Text style={idd.star}> *</Text> : null}
+        {displayLabel}{required ? <Text style={idd.star}> *</Text> : null}
       </Text>
       <TouchableOpacity
         style={[idd.trigger, open && idd.triggerOpen]}
@@ -60,7 +71,7 @@ export function InlineDropdownField({
         <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textTertiary} />
       </TouchableOpacity>
       {open ? (
-        <View style={[idd.menu, { position: 'absolute', top: fieldH + 4, left: 0, right: 0, zIndex: 1000, elevation: 1000 }]}>
+        <View style={idd.menu}>
           {options.map((opt, idx) => (
             <TouchableOpacity
               key={opt.id}
@@ -84,22 +95,27 @@ export function InlineDropdownField({
 
 const idd = StyleSheet.create({
   wrap:           { flex: 1, marginBottom: SPACING.md },
-  wrapOpen:       { zIndex: 999, elevation: 999 },
   label:          { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
   star:           { color: COLORS.negative },
   trigger:        { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48 },
   triggerOpen:    { borderColor: COLORS.brandPrimary, borderWidth: 1.5 },
   triggerTxt:     { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, marginRight: 4 },
   placeholder:    { color: COLORS.textTertiary },
-  menu:           { backgroundColor: COLORS.cardBg, borderWidth: 1.5, borderColor: COLORS.brandPrimary, borderRadius: RADIUS.md, overflow: 'hidden',
-                    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8 },
+  // In-flow menu — ScrollView grows; options stay tappable (no absolute clip)
+  menu:           {
+    marginTop: 6,
+    backgroundColor: COLORS.cardBg,
+    borderWidth: 1.5,
+    borderColor: COLORS.brandPrimary,
+    borderRadius: RADIUS.md,
+    overflow: 'hidden',
+  },
   menuItem:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 13 },
   menuItemBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   menuItemActive: { backgroundColor: COLORS.pageBg },
   menuTxt:        { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
   menuTxtActive:  { fontWeight: '700', color: COLORS.brandPrimary },
 });
-
 // ─── QTY STEPPER FIELD ────────────────────────────────────────────────────────
 export function QtyStepperField({
   label, subLabel, value, onChange,
@@ -308,10 +324,11 @@ export function InlineField({
   onFocus?: () => void; onBlur?: () => void;
 }) {
   const [focused, setFocused] = useState(false);
+  const displayLabel = cleanLabel(label);
   return (
     <View style={inf.wrap}>
       <Text style={inf.label}>
-        {label}{required ? <Text style={inf.star}> *</Text> : null}
+        {displayLabel}{required ? <Text style={inf.star}> *</Text> : null}
       </Text>
       <TextInput
         style={[inf.input, focused && inf.focused, multiline && { minHeight: 64, textAlignVertical: 'top' }]}

@@ -66,51 +66,53 @@ export default function FilterBottomSheet({
       animationType="slide"
       onRequestClose={onClose}
     >
-      {/* Backdrop — tap to close */}
-      <TouchableOpacity
-        style={s.overlay}
-        activeOpacity={1}
-        onPress={onClose}
-      />
+      <View style={s.root}>
+        {/* Backdrop — tap to close */}
+        <TouchableOpacity
+          style={s.overlay}
+          activeOpacity={1}
+          onPress={onClose}
+        />
 
-      <View style={[s.sheet, { height: sheetH, paddingBottom: Math.max(insets.bottom, 16) }]}>
-        {/* Handle */}
-        <View style={s.handle} />
+        <View style={[s.sheet, { height: sheetH, paddingBottom: Math.max(insets.bottom, 16) }]}>
+          {/* Handle */}
+          <View style={s.handle} />
 
-        {/* Title row */}
-        <View style={s.titleRow}>
-          <Text style={s.title}>{title}</Text>
-          {onClear && (
-            <TouchableOpacity onPress={onClear} activeOpacity={0.7}>
-              <Text style={s.clearTxt}>
-                {activeCount > 0 ? `Clear All (${activeCount})` : 'Clear All'}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
+          {/* Title row */}
+          <View style={s.titleRow}>
+            <Text style={s.title}>{title}</Text>
+            {onClear && (
+              <TouchableOpacity onPress={onClear} activeOpacity={0.7}>
+                <Text style={s.clearTxt}>
+                  {activeCount > 0 ? `Clear All (${activeCount})` : 'Clear All'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
-        {/* Scrollable content */}
-        <ScrollView
-          style={s.body}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {children}
-        </ScrollView>
-
-        {/* Footer */}
-        <View style={s.footer}>
-          <TouchableOpacity style={s.cancelBtn} onPress={onClose} activeOpacity={0.8}>
-            <Text style={s.cancelTxt}>{cancelLabel}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={s.applyBtn}
-            onPress={onApply}
-            activeOpacity={0.85}
+          {/* Scrollable content */}
+          <ScrollView
+            style={s.body}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
-            <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />
-            <Text style={s.applyTxt}>{applyLabel}</Text>
-          </TouchableOpacity>
+            {children}
+          </ScrollView>
+
+          {/* Footer */}
+          <View style={s.footer}>
+            <TouchableOpacity style={s.cancelBtn} onPress={onClose} activeOpacity={0.8}>
+              <Text style={s.cancelTxt}>{cancelLabel}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.applyBtn}
+              onPress={onApply}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />
+              <Text style={s.applyTxt}>{applyLabel}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
@@ -183,14 +185,18 @@ export function FilterChipGroup({
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
+  root: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
   overlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
     backgroundColor: COLORS.cardBg,
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    width: '100%',
   },
   handle: {
     width: 40, height: 4, backgroundColor: COLORS.borderStrong,
@@ -227,7 +233,6 @@ const s = StyleSheet.create({
   },
   applyTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
 });
-
 const ro = StyleSheet.create({
   row: {
     flexDirection: 'row', alignItems: 'center',

@@ -1,7 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, ScrollView, FlatList, TouchableOpacity, StyleSheet,
-  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -288,9 +287,6 @@ export default function TotalStockScreen() {
   // Use warehouse-filtered stocks if warehouse filter is active, else use all loaded stocks
   const sourceItems = whFilteredStocks ?? liveStocks;
 
-  // Header "+" popover menu
-  const [menuOpen, setMenuOpen] = useState(false);
-
   // Multi-select
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedIds,     setSelectedIds]     = useState<string[]>([]);
@@ -391,28 +387,14 @@ export default function TotalStockScreen() {
             <Ionicons name="funnel-outline" size={22} color={activeFilterCount > 0 ? '#A89060' : COLORS.textPrimary} />
             {activeFilterCount > 0 && <View style={styles.badge}><Text style={styles.badgeTxt}>{activeFilterCount}</Text></View>}
           </TouchableOpacity>
-          {/* Plus icon → popover */}
-          <TouchableOpacity style={styles.iconBtn} onPress={() => setMenuOpen(v => !v)} activeOpacity={0.7}>
+          {/* Plus icon → Add New Item sheet */}
+          <TouchableOpacity style={styles.iconBtn} onPress={() => setAddItemOpen(true)} activeOpacity={0.7}>
             <Ionicons name="add" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* ── Header "+" popover ── */}
-      {menuOpen && (
-        <TouchableOpacity style={[StyleSheet.absoluteFillObject, { zIndex: 98 }]} activeOpacity={1} onPress={() => setMenuOpen(false)} />
-      )}
-      {menuOpen && (
-        <View style={styles.popover}>
-          <TouchableOpacity style={styles.popoverItem} onPress={() => { setMenuOpen(false); setAddItemOpen(true); }} activeOpacity={0.8}>
-            <Ionicons name="add-circle-outline" size={18} color={COLORS.textPrimary} />
-            <Text style={styles.popoverItemTxt}>Add New Item</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* ── Multi-select bar ── */}
-      {multiSelectMode && (
+      {/* ── Multi-select bar ── */}      {multiSelectMode && (
         <View style={styles.multiBar}>
           <TouchableOpacity onPress={exitMultiSelect} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="close" size={20} color={COLORS.white} />
@@ -617,15 +599,8 @@ const styles = StyleSheet.create({
   badge:       { position: 'absolute', top: 4, right: 4, width: 15, height: 15, borderRadius: 8, backgroundColor: '#A89060', alignItems: 'center', justifyContent: 'center' },
   badgeTxt:    { fontSize: 8, fontWeight: '800', color: COLORS.white },
 
-  // Popover
-  popover:        { position: 'absolute', top: 58, right: 12, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.14, shadowRadius: 16, elevation: 10, zIndex: 99, minWidth: 200, overflow: 'hidden' },
-  popoverItem:    { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: SPACING.md, paddingVertical: 14 },
-  popoverItemTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
-  popoverDivider: { height: 1, backgroundColor: COLORS.borderDefault, marginHorizontal: SPACING.md },
-
   // Multi-select bar
-  multiBar:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: SPACING.md, paddingVertical: 12, backgroundColor: '#1A1A1A' },
-  multiCount:   { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
+  multiBar:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: SPACING.md, paddingVertical: 12, backgroundColor: '#1A1A1A' },  multiCount:   { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
   multiActions: { flexDirection: 'row', gap: 8 },
   multiBtn:     { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.full },
   multiBtnAmber:{ backgroundColor: '#A89060' },

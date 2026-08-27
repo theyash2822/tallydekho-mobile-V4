@@ -1,10 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View, Text, TouchableOpacity, Modal, ScrollView,
-  KeyboardAvoidingView, Platform, Keyboard, StyleSheet,
-} from 'react-native';
+import { View, Text, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { StockItem } from '../../data/stockData';
 import { getStockGodowns, createStockAdjustment } from '../../services/api';
@@ -17,6 +13,7 @@ import {
   QtyStepperField, ItemHeaderCard, SubmitButton,
   modalStyles as ms,
 } from './StockFormHelpers';
+import { BottomModalShell } from './BottomModalShell';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -41,7 +38,6 @@ export function StockAdjustmentModal({
 }: {
   visible: boolean; item: StockItem | null; onClose: () => void;
 }) {
-  const insets = useSafeAreaInsets();
   const { company } = useAuth();
 
   // Form state
@@ -163,115 +159,91 @@ export function StockAdjustmentModal({
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <TouchableOpacity style={[ms.overlay, StyleSheet.absoluteFillObject]} activeOpacity={1} onPress={handleClose} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
-        <View style={[ms.sheet, { paddingBottom: 0 }]}>
-          <View style={ms.handle} />
-
-          {/* Header */}
-          <View style={ms.titleRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Ionicons name="options-outline" size={20} color="#A89060" />
-              <Text style={ms.title}>Adjust Stock</Text>
-            </View>
-            <TouchableOpacity onPress={handleClose} activeOpacity={0.7}>
-              <Ionicons name="close" size={22} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={ms.scroll}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-          >
-            {/* Item header card */}
-            {item ? <ItemHeaderCard item={item} /> : null}
-
-            {/* Read-only info */}
-            <ReadonlyField label="Current Qty" value={item ? `${item.qty} ${item.unit || 'units'}` : '—'} />
-
-            {/* Warehouse */}
-            {itemGodowns.length > 1 ? (
-              <InlineDropdownField
-                label="Warehouse *"
-                options={itemGodowns.map(w => ({ id: w, label: w }))}
-                value={warehouse}
-                onSelect={(v) => { Keyboard.dismiss(); setWarehouse(v); }}
-                placeholder="Select warehouse"
-              />
-            ) : (
-              <ReadonlyField label="Warehouse" value={warehouse || item?.warehouse || '—'} />
-            )}
-
-            {/* Adjustment Quantity */}
-            <QtyStepperField
-              label="Adjustment Qty *"
-              value={adjQty}
-              onChange={setAdjQty}
-            />
-
-            {/* Reason */}
-            <InlineDropdownField
-              label="Reason *"
-              options={ADJUSTMENT_REASONS.map(r => ({ id: r.id, label: r.label }))}
-              value={reason}
-              onSelect={(v) => { Keyboard.dismiss(); setReason(v); setDirection(''); }}
-              placeholder="Select reason"
-            />
-
-            {/* Direction — only when Correction */}
-            {isCorrection && (
-              <InlineDropdownField
-                label="Direction *"
-                options={DIRECTION_OPTIONS}
-                value={direction}
-                onSelect={(v) => { Keyboard.dismiss(); setDirection(v); }}
-                placeholder="Add or Reduce?"
-              />
-            )}
-
-            {/* Live preview */}
-            {reason !== '' && (effectiveEffect !== null) && (
-              <View style={{
-                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                backgroundColor: previewColor + '12', borderRadius: 10, padding: 12, marginTop: 4,
-                borderWidth: 1, borderColor: previewColor + '30',
-              }}>
-                <Text style={{ fontSize: 13, color: COLORS.textSecondary, fontWeight: '500' }}>
-                  Effect Preview
-                </Text>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: previewColor }}>
-                  {previewSign}{adjQty} → {newQty !== null ? `${newQty} ${item?.unit || 'units'}` : '—'}
-                </Text>
-              </View>
-            )}
-
-            {/* Note */}
-            <InlineField
-              label="Note / Reference"
-              value={note}
-              onChange={setNote}
-              placeholder="Optional — e.g. damaged during handling"
-              multiline
-            />
-          </ScrollView>
-
-          {/* Footer */}
-          <View style={[ms.footer, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-            <SubmitButton
-              idleLabel="Save Adjustment"
-              loadingLabel="Saving..."
-              successLabel="✓ Adjustment Saved"
-              onValidate={validate}
-              onDone={handleDone}
-            />
-          </View>
+    <BottomModalShell
+      visible={visible}
+      onClose={handleClose}
+      titleNode={(
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
+          <Ionicons name="options-outline" size={20} color="#A89060" />
+          <Text style={ms.title}>Adjust Stock</Text>
         </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
+      )}
+      footer={(
+        <SubmitButton
+          idleLabel="Save Adjustment"
+          loadingLabel="Saving..."
+          successLabel="✓ Adjustment Saved"
+          onValidate={validate}
+          onDone={handleDone}
+        />
+      )}
+    >
+      {item ? <ItemHeaderCard item={item} /> : null}
+
+      <ReadonlyField label="Current Qty" value={item ? `${item.qty} ${item.unit || 'units'}` : '—'} />
+
+      {itemGodowns.length > 1 ? (
+        <InlineDropdownField
+          label="Warehouse"
+          options={itemGodowns.map(w => ({ id: w, label: w }))}
+          value={warehouse}
+          onSelect={(v) => { Keyboard.dismiss(); setWarehouse(v); }}
+          placeholder="Select warehouse"
+          required
+        />
+      ) : (
+        <ReadonlyField label="Warehouse" value={warehouse || item?.warehouse || '—'} />
+      )}
+
+      <QtyStepperField
+        label="Adjustment Qty"
+        subLabel="(required)"
+        value={adjQty}
+        onChange={setAdjQty}
+      />
+
+      <InlineDropdownField
+        label="Reason"
+        options={ADJUSTMENT_REASONS.map(r => ({ id: r.id, label: r.label }))}
+        value={reason}
+        onSelect={(v) => { Keyboard.dismiss(); setReason(v); setDirection(''); }}
+        placeholder="Select reason"
+        required
+      />
+
+      {isCorrection && (
+        <InlineDropdownField
+          label="Direction"
+          options={DIRECTION_OPTIONS}
+          value={direction}
+          onSelect={(v) => { Keyboard.dismiss(); setDirection(v); }}
+          placeholder="Add or Reduce?"
+          required
+        />
+      )}
+
+      {reason !== '' && (effectiveEffect !== null) && (
+        <View style={{
+          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+          backgroundColor: previewColor + '12', borderRadius: 10, padding: 12, marginTop: 4, marginBottom: 12,
+          borderWidth: 1, borderColor: previewColor + '30',
+        }}>
+          <Text style={{ fontSize: 13, color: COLORS.textSecondary, fontWeight: '500' }}>
+            Effect Preview
+          </Text>
+          <Text style={{ fontSize: 14, fontWeight: '700', color: previewColor }}>
+            {previewSign}{adjQty} → {newQty !== null ? `${newQty} ${item?.unit || 'units'}` : '—'}
+          </Text>
+        </View>
+      )}
+
+      <InlineField
+        label="Note / Reference"
+        value={note}
+        onChange={setNote}
+        placeholder="Optional — e.g. damaged during handling"
+        multiline
+      />
+    </BottomModalShell>
   );
 }

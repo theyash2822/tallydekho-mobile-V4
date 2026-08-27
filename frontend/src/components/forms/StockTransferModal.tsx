@@ -1,22 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  View, Text, TouchableOpacity, Modal, ScrollView,
-  Keyboard, StyleSheet,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ScrollView, Keyboard } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { StockItem } from '../../data/stockData';
 import { getWarehouses, getStockGodowns, createStockTransfer } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import { COLORS } from '../../constants/colors';
 import { clearStockListCache } from '../../utils/stockCache';
 
 import {
   InlineDropdownField, InlineField, ReadonlyField,
   QtyStepperField, ItemHeaderCard, SubmitButton,
-  modalStyles as ms,
 } from './StockFormHelpers';
+import { BottomModalShell } from './BottomModalShell';
 
 function parseGodownNames(res: any): string[] {
   const d = res?.data;
@@ -34,7 +28,6 @@ export function StockTransferModal({
 }: {
   visible: boolean; item: StockItem | null; onClose: () => void;
 }) {
-  const insets = useSafeAreaInsets();
   const { company } = useAuth();
   const scrollRef = useRef<ScrollView>(null);
 
@@ -147,85 +140,70 @@ export function StockTransferModal({
   const handleClose = () => { if (!isSubmitting) { Keyboard.dismiss(); reset(); onClose(); } };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <TouchableOpacity style={[ms.overlay, StyleSheet.absoluteFillObject]} activeOpacity={1} onPress={handleClose} />
-        {/* Option A: no KeyboardAvoidingView — ScrollView insets + scrollToEnd only */}
-        <View style={[ms.sheet, { paddingBottom: 0, maxHeight: '92%' }]}>
-          <View style={ms.handle} />
+    <BottomModalShell
+      visible={visible}
+      onClose={handleClose}
+      title="Stock Transfer"
+      keyboardAvoiding={false}
+      scrollRef={scrollRef}
+      scrollContentStyle={{ paddingBottom: 56 }}
+      scrollProps={{
+        keyboardDismissMode: 'interactive',
+        automaticallyAdjustKeyboardInsets: true,
+      }}
+      footer={(
+        <SubmitButton
+          idleLabel="Transfer"
+          loadingLabel="Transferring..."
+          successLabel="✓ Transferred"
+          onValidate={validate}
+          onDone={handleDone}
+        />
+      )}
+    >
+      {item ? <ItemHeaderCard item={item} /> : null}
 
-          <View style={ms.titleRow}>
-            <Text style={ms.title}>Stock Transfer</Text>
-            <TouchableOpacity onPress={handleClose} activeOpacity={0.7}>
-              <Ionicons name="close" size={22} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-          </View>
+      {sourceOptions.length === 1 ? (
+        <ReadonlyField label="Source Warehouse" value={sourceWhName} />
+      ) : (
+        <InlineDropdownField
+          label="Source Warehouse"
+          options={sourceOptions}
+          value={sourceWhName}
+          onSelect={(v) => { setSourceWhName(v); setDestWhName(''); }}
+          icon="home-outline"
+          placeholder="Select source warehouse"
+          required
+        />
+      )}
 
-          <ScrollView
-            ref={scrollRef}
-            style={{ flexGrow: 1 }}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={[ms.scroll, { paddingBottom: 56 }]}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="interactive"
-            automaticallyAdjustKeyboardInsets
-          >
-            {item ? <ItemHeaderCard item={item} /> : null}
+      <ReadonlyField label="On-hand Qty" value={item ? String(item.qty) : '—'} />
 
-            {sourceOptions.length === 1 ? (
-              <ReadonlyField label="Source Warehouse" value={sourceWhName} />
-            ) : (
-              <InlineDropdownField
-                label="Source Warehouse"
-                options={sourceOptions}
-                value={sourceWhName}
-                onSelect={(v) => { setSourceWhName(v); setDestWhName(''); }}
-                icon="home-outline"
-                placeholder="Select source warehouse"
-                required
-              />
-            )}
+      <InlineDropdownField
+        label="Destination Warehouse"
+        options={destOptions}
+        value={destWhName}
+        onSelect={setDestWhName}
+        placeholder="Select destination"
+        icon="home-outline"
+        required
+      />
 
-            <ReadonlyField label="On-hand Qty" value={item ? String(item.qty) : '—'} />
+      <QtyStepperField
+        label="Qty to Transfer"
+        subLabel="(required)"
+        value={transferQty}
+        onChange={setTransferQty}
+      />
 
-            <InlineDropdownField
-              label="Destination Warehouse"
-              options={destOptions}
-              value={destWhName}
-              onSelect={setDestWhName}
-              placeholder="Select destination"
-              icon="home-outline"
-              required
-            />
-
-            <QtyStepperField
-              label="Qty to Transfer"
-              subLabel="(required)"
-              value={transferQty}
-              onChange={setTransferQty}
-            />
-
-            <InlineField
-              label="Narration"
-              value={narration}
-              onChange={setNarration}
-              placeholder="Optional note"
-              multiline
-              onFocus={scrollNoteIntoView}
-            />
-          </ScrollView>
-
-          <View style={[ms.footer, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-            <SubmitButton
-              idleLabel="Transfer"
-              loadingLabel="Transferring..."
-              successLabel="✓ Transferred"
-              onValidate={validate}
-              onDone={handleDone}
-            />
-          </View>
-        </View>
-      </View>
-    </Modal>
+      <InlineField
+        label="Narration"
+        value={narration}
+        onChange={setNarration}
+        placeholder="Optional note"
+        multiline
+        onFocus={scrollNoteIntoView}
+      />
+    </BottomModalShell>
   );
 }

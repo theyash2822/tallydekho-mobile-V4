@@ -1,5 +1,27 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-08-27 — Bottom modal sheets fix (stock + ledger family)
+
+### Product
+- Total Stock `+` opens `AddItemModal` **directly** (removed one-item `menuOpen` popover)
+- Kept Add New Item as in-sheet bottom modal (not full-screen create-item)
+
+### Shared
+- New `BottomModalShell`: flex:1 + `justifyContent:'flex-end'` root, absolute overlay, KAV `width:'100%'`, sticky footer + safe-area, ScrollView `flexShrink` body
+- `InlineDropdownField`: menus are **in-flow** (no `position:'absolute'`) so Modal ScrollView grows and options are tappable
+- Labels: strip trailing `*` when `required` is set (fixes double asterisk); Group marked required
+
+### Sheets updated
+- `AddItemModal`, `EditStockModal`, `StockAdjustmentModal`, `StockTransferModal`, `BulkTransferModal` → `BottomModalShell`
+- `FilterBottomSheet` → flex:1 root + flex-end (was absolute overlay/sheet siblings)
+- `AddPartyModal`, `DatePickerModal` → Pattern A fixed (overlay+sheet under flex root)
+
+### How to test
+1. Total Stock → tap `+` → Add New Item sheet opens immediately
+2. Open Group / Unit / Tax / Warehouse dropdowns → options visible + tappable; Save stays above home indicator
+3. Filter sheet on Total Stock / Ledger; Edit / Adjust / Transfer sheets; voucher date picker; Add Party if used
+
+---
 ## 2026-08-27 — Comprehensive error handling (Phases 1–4)
 
 ### Locked policy

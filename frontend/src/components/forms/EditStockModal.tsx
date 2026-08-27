@@ -1,35 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View, Text, TouchableOpacity, Modal, ScrollView,
-  KeyboardAvoidingView, Platform, Keyboard, StyleSheet,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Keyboard } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { StockItem, ALL_TAX_RATES } from '../../data/stockData';
 import { alterStockItem, getStockGroups } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import { COLORS } from '../../constants/colors';
 
 import {
   InlineDropdownField, InlineField, ReadonlyField,
   ItemHeaderCard, SubmitButton,
-  modalStyles as ms,
 } from './StockFormHelpers';
+import { BottomModalShell } from './BottomModalShell';
 
 // EditStockModal — Stock Master Alteration (NOT a voucher)
-// Edits item metadata: HSN, reorder level, GST rate, notes
-// Per architecture: uses STOCKITEM ACTION="Alter" XML, not Physical Stock voucher
 export function EditStockModal({
   visible, item, onClose,
 }: {
   visible: boolean; item: StockItem | null; onClose: () => void;
 }) {
-  const insets = useSafeAreaInsets();
   const { company } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Editable master fields
   const [hsnCode,      setHsnCode]      = useState('');
   const [reorderLevel, setReorderLevel] = useState('');
   const [taxRateId,    setTaxRateId]    = useState('');
@@ -42,7 +32,7 @@ export function EditStockModal({
       setHsnCode(item.sku || '');
       setReorderLevel(String(item.reorderLevel ?? ''));
       setTaxRateId('');
-      setGroupName(item.group || '');  // pre-fill current group
+      setGroupName(item.group || '');
       setNotes('');
     }
   }, [visible, item?.id]);
@@ -113,83 +103,62 @@ export function EditStockModal({
   const handleClose = () => { Keyboard.dismiss(); reset(); onClose(); };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <TouchableOpacity style={[ms.overlay, StyleSheet.absoluteFillObject]} activeOpacity={1} onPress={handleClose} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
-        <View style={[ms.sheet, { paddingBottom: 0 }]}>
-          <View style={ms.handle} />
+    <BottomModalShell
+      visible={visible}
+      onClose={handleClose}
+      title="Edit Stock Item"
+      footer={
+        <SubmitButton
+          idleLabel="Update in Tally"
+          loadingLabel="Updating..."
+          successLabel="✓ Updated"
+          onValidate={validate}
+          onDone={handleDone}
+        />
+      }
+    >
+      {item ? <ItemHeaderCard item={item} /> : null}
 
-          <View style={ms.titleRow}>
-            <Text style={ms.title}>Edit Stock Item</Text>
-            <TouchableOpacity onPress={handleClose} activeOpacity={0.7}>
-              <Ionicons name="close" size={22} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-          </View>
+      <ReadonlyField label="Item Name"   value={item?.name || '—'} />
+      <ReadonlyField label="Current Qty" value={item ? String(item.qty) : '—'} />
 
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={ms.scroll}
-            keyboardShouldPersistTaps="handled"
-          >
-            {item ? <ItemHeaderCard item={item} /> : null}
+      <InlineField
+        label="HSN Code"
+        value={hsnCode}
+        onChange={setHsnCode}
+        placeholder="e.g. 38089190"
+      />
 
-            {/* Read-only current values */}
-            <ReadonlyField label="Item Name"       value={item?.name || '—'} />
-            <ReadonlyField label="Current Qty"     value={item ? String(item.qty) : '—'} />
+      <InlineField
+        label="Reorder Level"
+        value={reorderLevel}
+        onChange={setReorderLevel}
+        placeholder="e.g. 50"
+      />
 
-            {/* Editable master fields */}
-            <InlineField
-              label="HSN Code"
-              value={hsnCode}
-              onChange={setHsnCode}
-              placeholder="e.g. 38089190"
-            />
+      <InlineDropdownField
+        label="GST Rate"
+        options={ALL_TAX_RATES}
+        value={taxRateId}
+        onSelect={setTaxRateId}
+        placeholder="Select GST rate"
+      />
 
-            <InlineField
-              label="Reorder Level"
-              value={reorderLevel}
-              onChange={setReorderLevel}
-              placeholder="e.g. 50"
-            />
+      <InlineDropdownField
+        label="Stock Group"
+        options={groupOptions}
+        value={groupName}
+        onSelect={setGroupName}
+        placeholder={groupOptions.length > 0 ? 'Select group' : 'Loading groups...'}
+      />
 
-            <InlineDropdownField
-              label="GST Rate"
-              options={ALL_TAX_RATES}
-              value={taxRateId}
-              onSelect={setTaxRateId}
-              placeholder="Select GST rate"
-            />
-
-            <InlineDropdownField
-              label="Stock Group"
-              options={groupOptions}
-              value={groupName}
-              onSelect={setGroupName}
-              placeholder={groupOptions.length > 0 ? 'Select group' : 'Loading groups...'}
-            />
-
-            <InlineField
-              label="Notes / Reference"
-              value={notes}
-              onChange={setNotes}
-              placeholder="Optional"
-              multiline
-            />
-          </ScrollView>
-
-          <View style={[ms.footer, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-            <SubmitButton
-              idleLabel="Update in Tally"
-              loadingLabel="Updating..."
-              successLabel="✓ Updated"
-              onValidate={validate}
-              onDone={handleDone}
-            />
-          </View>
-        </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
+      <InlineField
+        label="Notes / Reference"
+        value={notes}
+        onChange={setNotes}
+        placeholder="Optional"
+        multiline
+      />
+    </BottomModalShell>
   );
 }

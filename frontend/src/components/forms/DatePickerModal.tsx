@@ -102,78 +102,80 @@ export default function DatePickerModal({ visible, value, onSelect, onClose, tit
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={s.backdrop} activeOpacity={1} onPress={onClose} />
-      <View style={s.sheet}>
-        {/* Handle */}
-        <View style={s.handle} />
-        <Text style={s.title}>{title}</Text>
+      <View style={s.root}>
+        <TouchableOpacity style={s.backdrop} activeOpacity={1} onPress={onClose} />
+        <View style={s.sheet}>
+          {/* Handle */}
+          <View style={s.handle} />
+          <Text style={s.title}>{title}</Text>
 
-        {/* Month/Year Navigation */}
-        <View style={s.navRow}>
-          <TouchableOpacity style={s.navBtn} onPress={prevMonth} activeOpacity={0.7}>
-            <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-          <Text style={s.monthYear}>{MONTHS[viewMonth]} {viewYear}</Text>
-          <TouchableOpacity style={s.navBtn} onPress={nextMonth} activeOpacity={0.7}>
-            <Ionicons name="chevron-forward" size={22} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-        </View>
+          {/* Month/Year Navigation */}
+          <View style={s.navRow}>
+            <TouchableOpacity style={s.navBtn} onPress={prevMonth} activeOpacity={0.7}>
+              <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
+            </TouchableOpacity>
+            <Text style={s.monthYear}>{MONTHS[viewMonth]} {viewYear}</Text>
+            <TouchableOpacity style={s.navBtn} onPress={nextMonth} activeOpacity={0.7}>
+              <Ionicons name="chevron-forward" size={22} color={COLORS.textPrimary} />
+            </TouchableOpacity>
+          </View>
 
-        {/* Day Headers */}
-        <View style={s.dayHeaders}>
-          {DAY_LABELS.map(d => (
-            <Text key={d} style={s.dayHeader}>{d}</Text>
-          ))}
-        </View>
+          {/* Day Headers */}
+          <View style={s.dayHeaders}>
+            {DAY_LABELS.map(d => (
+              <Text key={d} style={s.dayHeader}>{d}</Text>
+            ))}
+          </View>
 
-        {/* Calendar Grid */}
-        <View style={s.grid}>
-          {calDays.map((day, idx) => {
-            const disabled = day !== null ? isDisabled(day) : false;
-            return (
-              <View key={idx} style={s.cell}>
-                {day !== null ? (
-                  <TouchableOpacity
-                    style={[
-                      s.dayBtn,
-                      isSelected(day) && s.dayBtnSel,
-                      isToday(day) && !isSelected(day) && s.dayBtnToday,
-                      disabled && { opacity: 0.25 },
-                    ]}
-                    onPress={() => !disabled && setSelected(new Date(viewYear, viewMonth, day))}
-                    activeOpacity={disabled ? 1 : 0.7}
-                    disabled={disabled}
-                  >
-                    <Text style={[
-                      s.dayTxt,
-                      isSelected(day) && s.dayTxtSel,
-                      isToday(day) && !isSelected(day) && s.dayTxtToday,
-                    ]}>{day}</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <View style={s.dayBtn} />
-                )}
-              </View>
-            );
-          })}
-        </View>
+          {/* Calendar Grid */}
+          <View style={s.grid}>
+            {calDays.map((day, idx) => {
+              const disabled = day !== null ? isDisabled(day) : false;
+              return (
+                <View key={idx} style={s.cell}>
+                  {day !== null ? (
+                    <TouchableOpacity
+                      style={[
+                        s.dayBtn,
+                        isSelected(day) && s.dayBtnSel,
+                        isToday(day) && !isSelected(day) && s.dayBtnToday,
+                        disabled && { opacity: 0.25 },
+                      ]}
+                      onPress={() => !disabled && setSelected(new Date(viewYear, viewMonth, day))}
+                      activeOpacity={disabled ? 1 : 0.7}
+                      disabled={disabled}
+                    >
+                      <Text style={[
+                        s.dayTxt,
+                        isSelected(day) && s.dayTxtSel,
+                        isToday(day) && !isSelected(day) && s.dayTxtToday,
+                      ]}>{day}</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={s.dayBtn} />
+                  )}
+                </View>
+              );
+            })}
+          </View>
 
-        {/* Action Buttons */}
-        <View style={s.btnRow}>
-          <TouchableOpacity style={s.cancelBtn} onPress={onClose} activeOpacity={0.7}>
-            <Text style={s.cancelTxt}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[s.confirmBtn, !selected && s.confirmBtnDis]}
-            onPress={handleConfirm}
-            disabled={!selected}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="checkmark" size={16} color={COLORS.white} />
-            <Text style={s.confirmTxt}>
-              {selected ? `Select ${formatDMY(selected)}` : 'Choose a date'}
-            </Text>
-          </TouchableOpacity>
+          {/* Action Buttons */}
+          <View style={s.btnRow}>
+            <TouchableOpacity style={s.cancelBtn} onPress={onClose} activeOpacity={0.7}>
+              <Text style={s.cancelTxt}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.confirmBtn, !selected && s.confirmBtnDis]}
+              onPress={handleConfirm}
+              disabled={!selected}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="checkmark" size={16} color={COLORS.white} />
+              <Text style={s.confirmTxt}>
+                {selected ? `Select ${formatDMY(selected)}` : 'Choose a date'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
@@ -183,11 +185,13 @@ export default function DatePickerModal({ visible, value, onSelect, onClose, tit
 const CELL_SIZE = 44;
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
+  root: { flex: 1, justifyContent: 'flex-end' },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
   sheet: {
     backgroundColor: COLORS.cardBg,
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     paddingHorizontal: SPACING.md, paddingBottom: SPACING.xl,
+    width: '100%',
   },
   handle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 16 },
   title: { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center', marginBottom: 16 },

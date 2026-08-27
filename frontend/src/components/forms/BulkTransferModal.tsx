@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, Modal, ScrollView, TextInput,
+  View, Text, TouchableOpacity, ScrollView, TextInput,
   StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { StockItem } from '../../data/stockData';
 import { getWarehouses, createStockTransfer } from '../../services/api';
@@ -17,6 +16,7 @@ import {
   QtyStepperField, SubmitButton,
   modalStyles as ms,
 } from './StockFormHelpers';
+import { BottomModalShell } from './BottomModalShell';
 
 type TransferRow = { item: StockItem; qty: number };
 
@@ -25,7 +25,6 @@ export function BulkTransferModal({
 }: {
   visible: boolean; preselectedItems: StockItem[]; onClose: () => void;
 }) {
-  const insets = useSafeAreaInsets();
   const { company } = useAuth();
   const scrollRef = useRef<ScrollView>(null);
 
@@ -115,106 +114,95 @@ export function BulkTransferModal({
   const handleClose = () => { if (onClose) onClose(); };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <TouchableOpacity style={[ms.overlay, StyleSheet.absoluteFillObject]} activeOpacity={1} onPress={handleClose} />
-        <View style={[ms.sheet, { paddingBottom: 0, maxHeight: '92%' }]}>
-          <View style={ms.handle} />
-
-          <View style={ms.titleRow}>
-            <View>
-              <Text style={ms.title}>Bulk Transfer</Text>
-              <Text style={bt.subtitle}>{rows.length} item{rows.length !== 1 ? 's' : ''} selected</Text>
+    <BottomModalShell
+      visible={visible}
+      onClose={handleClose}
+      keyboardAvoiding={false}
+      scrollRef={scrollRef}
+      scrollContentStyle={{ paddingBottom: 56 }}
+      scrollProps={{
+        keyboardDismissMode: 'interactive',
+        automaticallyAdjustKeyboardInsets: true,
+      }}
+      titleNode={(
+        <View>
+          <Text style={ms.title}>Bulk Transfer</Text>
+          <Text style={bt.subtitle}>{rows.length} item{rows.length !== 1 ? 's' : ''} selected</Text>
+        </View>
+      )}
+      headerExtra={(
+        <View style={bt.searchWrap}>
+          <Ionicons name="search-outline" size={15} color={COLORS.textTertiary} />
+          <TextInput
+            style={bt.searchInput}
+            value={search}
+            onChangeText={setSearch}
+            placeholder={`Search ${rows.length} selected items...`}
+            placeholderTextColor={COLORS.textTertiary}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch('')}>
+              <Ionicons name="close-circle" size={15} color={COLORS.textTertiary} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+      footer={(
+        <SubmitButton
+          idleLabel={`Transfer ${rows.length} Item${rows.length !== 1 ? 's' : ''}`}
+          loadingLabel="Transferring..."
+          successLabel="✓ Transferred"
+          onValidate={validate}
+          onDone={handleDone}
+        />
+      )}
+    >
+      {filteredRows.map(r => (
+        <View key={r.item.id} style={bt.itemCard}>
+          <View style={bt.itemHeader}>
+            <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+              <Text style={bt.itemName} numberOfLines={1}>{r.item.name}</Text>
+              <Text style={bt.itemSku}>{r.item.sku} · {r.item.qty} {r.item.unit || 'units'} on hand</Text>
             </View>
-            <TouchableOpacity onPress={handleClose} activeOpacity={0.7}>
-              <Ionicons name="close" size={22} color={COLORS.textSecondary} />
+            <TouchableOpacity
+              onPress={() => removeItem(r.item.id)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="trash-outline" size={16} color={COLORS.negative} />
             </TouchableOpacity>
           </View>
-
-          <View style={bt.searchWrap}>
-            <Ionicons name="search-outline" size={15} color={COLORS.textTertiary} />
-            <TextInput
-              style={bt.searchInput}
-              value={search}
-              onChangeText={setSearch}
-              placeholder={`Search ${rows.length} selected items...`}
-              placeholderTextColor={COLORS.textTertiary}
-            />
-            {search.length > 0 && (
-              <TouchableOpacity onPress={() => setSearch('')}>
-                <Ionicons name="close-circle" size={15} color={COLORS.textTertiary} />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <ScrollView
-            ref={scrollRef}
-            style={{ flexGrow: 1 }}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={[ms.scroll, { paddingBottom: 56 }]}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="interactive"
-            automaticallyAdjustKeyboardInsets
-          >
-            {filteredRows.map(r => (
-              <View key={r.item.id} style={bt.itemCard}>
-                <View style={bt.itemHeader}>
-                  <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-                    <Text style={bt.itemName} numberOfLines={1}>{r.item.name}</Text>
-                    <Text style={bt.itemSku}>{r.item.sku} · {r.item.qty} {r.item.unit || 'units'} on hand</Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => removeItem(r.item.id)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Ionicons name="trash-outline" size={16} color={COLORS.negative} />
-                  </TouchableOpacity>
-                </View>
-                <QtyStepperField
-                  label="Qty to Transfer"
-                  value={r.qty}
-                  onChange={q => updQty(r.item.id, q)}
-                />
-              </View>
-            ))}
-
-            {filteredRows.length === 0 && search.trim() && (
-              <Text style={bt.emptyTxt}>No items match "{search}"</Text>
-            )}
-
-            <View style={ms.divider} />
-
-            <InlineDropdownField
-              label="Destination Warehouse *"
-              options={warehouseOptions}
-              value={destWhId}
-              placeholder={warehouseOptions.length > 0 ? 'Select destination' : 'Loading...'}
-              onSelect={setDestWhId}
-              icon="home-outline"
-              required
-            />
-            <InlineField
-              label="Narration"
-              value={narration}
-              onChange={setNarration}
-              placeholder="Optional note"
-              multiline
-              onFocus={scrollNoteIntoView}
-            />
-          </ScrollView>
-
-          <View style={[ms.footer, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-            <SubmitButton
-              idleLabel={`Transfer ${rows.length} Item${rows.length !== 1 ? 's' : ''}`}
-              loadingLabel="Transferring..."
-              successLabel="✓ Transferred"
-              onValidate={validate}
-              onDone={handleDone}
-            />
-          </View>
+          <QtyStepperField
+            label="Qty to Transfer"
+            value={r.qty}
+            onChange={q => updQty(r.item.id, q)}
+          />
         </View>
-      </View>
-    </Modal>
+      ))}
+
+      {filteredRows.length === 0 && search.trim() && (
+        <Text style={bt.emptyTxt}>No items match "{search}"</Text>
+      )}
+
+      <View style={ms.divider} />
+
+      <InlineDropdownField
+        label="Destination Warehouse"
+        options={warehouseOptions}
+        value={destWhId}
+        placeholder={warehouseOptions.length > 0 ? 'Select destination' : 'Loading...'}
+        onSelect={setDestWhId}
+        icon="home-outline"
+        required
+      />
+      <InlineField
+        label="Narration"
+        value={narration}
+        onChange={setNarration}
+        placeholder="Optional note"
+        multiline
+        onFocus={scrollNoteIntoView}
+      />
+    </BottomModalShell>
   );
 }
 
