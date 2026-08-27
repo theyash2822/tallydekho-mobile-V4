@@ -394,7 +394,8 @@ export default function TotalStockScreen() {
         </View>
       </View>
 
-      {/* ── Multi-select bar ── */}      {multiSelectMode && (
+      {/* ── Multi-select bar ── */}
+      {multiSelectMode && (
         <View style={styles.multiBar}>
           <TouchableOpacity onPress={exitMultiSelect} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="close" size={20} color={COLORS.white} />
@@ -600,7 +601,8 @@ const styles = StyleSheet.create({
   badgeTxt:    { fontSize: 8, fontWeight: '800', color: COLORS.white },
 
   // Multi-select bar
-  multiBar:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: SPACING.md, paddingVertical: 12, backgroundColor: '#1A1A1A' },  multiCount:   { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
+  multiBar:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: SPACING.md, paddingVertical: 12, backgroundColor: '#1A1A1A' },
+  multiCount:   { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
   multiActions: { flexDirection: 'row', gap: 8 },
   multiBtn:     { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.full },
   multiBtnAmber:{ backgroundColor: '#A89060' },

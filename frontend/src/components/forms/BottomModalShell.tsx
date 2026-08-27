@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS, TYPOGRAPHY, SPACING } from '../../constants/colors';
+import { COLORS } from '../../constants/colors';
 import { modalStyles as ms } from './StockFormHelpers';
 
 type Props = {
