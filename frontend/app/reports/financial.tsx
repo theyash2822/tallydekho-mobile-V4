@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useFocusEffect } from 'expo-router';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +9,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import DateRangePickerModal, { fmtDMY } from '../../src/components/DateRangePickerModal';
 import { getFullFinancialReport } from '../../src/services/api';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
+import { CardSkeleton } from '../../src/components/ShimmerPlaceholder';
 
 // ── Mock Data (Tally Prime format) — shown when no real data available ───────
 const MOCK_PL = {
@@ -496,11 +496,13 @@ export default function FinancialReportScreen() {
     setCustomTo(null);
   }, [selectedFY?.startDate]);  // startDate always changes on FY switch (finYear was unreliable)
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [plData, setPlData]   = useState<any>(null);
   const [bsData, setBsData]   = useState<any>(null);
   const [tbData, setTbData]   = useState<any>(null);
   const [error,  setError]    = useState<string | null>(null);
+  const hasReportRef = useRef(false);
+  const requestGenRef = useRef(0);
 
   // Convert DD/MM/YY display to ISO for API (only used for custom range)
   const toISO = (dmy: string): string => {
@@ -512,11 +514,13 @@ export default function FinancialReportScreen() {
   // Resolve FY param — finYear (e.g. '2025-2026') or derived from startDate
   const fyParam = fyInfoToParam(selectedFY) ?? selectedFY?.finYear;
 
-  // Core fetch function — called on mount, dep changes, and screen focus
-  const fetchReport = useCallback(() => {
+  // Core fetch — soft when report already showing (no spinner wipe)
+  const fetchReport = useCallback((opts?: { soft?: boolean }) => {
     if (!selectedCompany?.guid) return;
-    setLoading(true);
+    const soft = opts?.soft ?? hasReportRef.current;
+    if (!soft) setLoading(true);
     setError(null);
+    const gen = ++requestGenRef.current;
     getFullFinancialReport(
       selectedCompany.guid,
       fyParam,
@@ -524,28 +528,26 @@ export default function FinancialReportScreen() {
       customTo   ?? undefined
     )
       .then((res: any) => {
+        if (gen !== requestGenRef.current) return;
         const d = res?.data;
         if (d?.pl)           setPlData(d.pl);
         if (d?.bs)           setBsData(d.bs);
         if (d?.trialBalance) setTbData(d.trialBalance);
+        if (d?.pl || d?.bs || d?.trialBalance) hasReportRef.current = true;
       })
       .catch((err: any) => {
+        if (gen !== requestGenRef.current) return;
         setError(err?.message || 'Failed to load financial data');
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (gen === requestGenRef.current) setLoading(false);
+      });
   }, [selectedCompany?.guid, fyParam, customFrom, customTo]);
 
-  // Re-fetch whenever FY, date range, or sync status changes
+  // Single fetch path — drop duplicate useFocusEffect (Phase 3 hygiene)
   useEffect(() => {
-    fetchReport();
+    fetchReport({ soft: hasReportRef.current });
   }, [fetchReport, selectedFY?.startDate, lastSyncAt]);
-
-  // Also re-fetch whenever screen gains focus (catches FY change from home screen)
-  useFocusEffect(
-    useCallback(() => {
-      fetchReport();
-    }, [fetchReport])
-  );
 
   return (
     <SafeAreaView style={s.safe}>
@@ -574,15 +576,14 @@ export default function FinancialReportScreen() {
         </View>
       )}
 
-      {/* ── Loading ── */}
-      {loading && (
-        <View style={s.loadingRow}>
-          <ActivityIndicator size="small" color={COLORS.brandPrimary} />
-          <Text style={s.loadingTxt}>Loading financial data…</Text>
+      {/* ── Loading (first paint only) — soft refresh keeps prior numbers ── */}
+      {loading && !hasReportRef.current ? (
+        <View style={{ paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, flex: 1 }}>
+          <CardSkeleton height={180} />
+          <CardSkeleton height={140} />
+          <CardSkeleton height={140} />
         </View>
-      )}
-
-      {/* ── Scroll content ── */}
+      ) : (
       <ScrollView
         style={s.scroll}
         showsVerticalScrollIndicator={false}
@@ -615,6 +616,7 @@ export default function FinancialReportScreen() {
           <TrialBalanceGrid tb={tbData} />
         </AccSection>
       </ScrollView>
+      )}
 
       <DateRangePickerModal
         visible={showDateSheet}

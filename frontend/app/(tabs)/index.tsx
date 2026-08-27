@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  RefreshControl, FlatList, AppState,
+  RefreshControl, FlatList,
   KeyboardAvoidingView, Platform, Dimensions,
   NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
@@ -135,7 +135,14 @@ export default function HomeScreen() {
   }, [searchResults, filteredActivity]);
 
   // ── Data loading ─────────────────────────────────────────────────────────
+  // Soft-refresh policy: full shimmer only on first load / company switch.
+  // Period chip, PTR, lastSyncAt keep previous KPI/tiles/cashflow/activity.
   const [isLoading, setIsLoading] = useState(true);
+  const hasDashboardDataRef = useRef(false);
+  const requestGenRef = useRef(0);
+  const prevGuidRef = useRef<string | undefined>(companyGuid);
+  const prevFilterRef = useRef<TimeFilter>(activeFilter);
+  const prevFyRef = useRef<string | undefined>(selectedFY?.startDate);
 
   // Keep header FY label in sync with AuthContext (Header owns the picker)
   useEffect(() => {
@@ -147,13 +154,28 @@ export default function HomeScreen() {
     // selectedFY in AuthContext is updated by Header; loadData deps pick it up
   }, []);
 
-  const loadData = useCallback(async () => {
+  // Company switch → hard reset so first paint for new company can shimmer
+  useEffect(() => {
+    if (prevGuidRef.current === companyGuid) return;
+    prevGuidRef.current = companyGuid;
+    hasDashboardDataRef.current = false;
+    setKpiData([]);
+    setMetrics([]);
+    setCashflow(null);
+    setActivity([]);
+    setIsLoading(true);
+  }, [companyGuid]);
+
+  type LoadOpts = { soft?: boolean; skipActivity?: boolean };
+
+  const loadData = useCallback(async (opts?: LoadOpts) => {
     // ── DATA GATE ──────────────────────────────────────────────
     // Unpaired: show empty state, no API calls.
     // Paired but no companyGuid yet: wait (Auth poll adopts company).
     // Paired + company: fetch real data.
     // ─────────────────────────────────────────────────
     if (!isPaired) {
+      hasDashboardDataRef.current = false;
       setKpiData([]);
       setMetrics([]);
       setCashflow(null);
@@ -162,25 +184,34 @@ export default function HomeScreen() {
       return;
     }
     if (!companyGuid) {
-      // Paired but company not hydrated yet — keep loading, avoid MISSING_COMPANY spam
-      setIsLoading(true);
+      // Paired but company not hydrated yet — keep loading only if nothing to show
+      if (!hasDashboardDataRef.current) setIsLoading(true);
       return;
     }
 
-    setIsLoading(true);
+    const soft = opts?.soft ?? hasDashboardDataRef.current;
+    // Full-page shimmer ONLY when no dashboard data yet (first load / company switch)
+    if (!soft) setIsLoading(true);
     setApiError(null);
+    const gen = ++requestGenRef.current;
+
     try {
       const { from, to } = resolvePeriodDates(activeFilter as DashboardPeriod, {
         from: selectedFY?.startDate,
         to: selectedFY?.endDate,
       });
 
-      const [kpi, met, cf, act] = await Promise.all([
+      const core = Promise.all([
         getKPIStrip(companyGuid, activeFilter, from, to),
         getMetrics(companyGuid, activeFilter, from, to),
         getCashflow(companyGuid, activeFilter, from, to),
-        getRecentActivity(companyGuid),
       ]);
+
+      const skipActivity = !!opts?.skipActivity;
+      const actPromise = skipActivity ? null : getRecentActivity(companyGuid);
+
+      const [kpi, met, cf] = await core;
+      if (gen !== requestGenRef.current) return;
 
       const kpiArr = Array.isArray(kpi) ? kpi : (kpi as any)?.data ?? [];
       const metArr = Array.isArray(met) ? met : (met as any)?.data ?? [];
@@ -194,16 +225,48 @@ export default function HomeScreen() {
         setCashflow(null);
       }
 
-      const actArr = Array.isArray(act) ? act : (act as any)?.data ?? [];
-      setActivity(actArr as any);
+      hasDashboardDataRef.current = true;
+
+      if (actPromise) {
+        const act = await actPromise;
+        if (gen !== requestGenRef.current) return;
+        const actArr = Array.isArray(act) ? act : (act as any)?.data ?? [];
+        setActivity(actArr as any);
+      }
     } catch (err: any) {
+      if (gen !== requestGenRef.current) return;
       setApiError(err?.message || t('home.loadFailed'));
     } finally {
-      setIsLoading(false);
+      if (gen === requestGenRef.current) setIsLoading(false);
     }
-  }, [isPaired, activeFilter, companyGuid, lastSyncAt, selectedFY?.startDate, selectedFY?.endDate]);
+  }, [isPaired, activeFilter, companyGuid, selectedFY?.startDate, selectedFY?.endDate, t]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  // Period / FY / company / pairing → load. Period-only: soft + skip activity.
+  useEffect(() => {
+    const periodOnly =
+      hasDashboardDataRef.current &&
+      prevGuidRef.current === companyGuid &&
+      prevFyRef.current === selectedFY?.startDate &&
+      prevFilterRef.current !== activeFilter;
+
+    prevFilterRef.current = activeFilter;
+    prevFyRef.current = selectedFY?.startDate;
+
+    loadData({
+      soft: hasDashboardDataRef.current,
+      skipActivity: periodOnly,
+    });
+  }, [loadData, companyGuid, activeFilter, selectedFY?.startDate]);
+
+  // lastSyncAt → soft background refresh (debounce); never hard-wipe if data showing
+  useEffect(() => {
+    if (!isPaired || !companyGuid || !lastSyncAt) return;
+    if (!hasDashboardDataRef.current) return;
+    const timer = setTimeout(() => {
+      loadData({ soft: true });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [lastSyncAt, isPaired, companyGuid, loadData]);
 
   const readStoredPeriod = useCallback(async () => {
     try {
@@ -275,8 +338,9 @@ export default function HomeScreen() {
   }, [isPaired, companyGuid]);
 
   const onRefresh = async () => {
+    // PTR: native RefreshControl spinner only — soft load, no full-page shimmer
     setRefreshing(true);
-    await loadData(); // isPaired comes from AuthContext, no separate checkPaired needed
+    await loadData({ soft: true });
     setRefreshing(false);
   };
 

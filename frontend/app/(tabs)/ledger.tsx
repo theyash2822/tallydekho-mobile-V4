@@ -3,7 +3,7 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import {
   View, Text, ScrollView, FlatList, TouchableOpacity, StyleSheet,
   TextInput, RefreshControl, Modal, KeyboardAvoidingView,
-  Platform, Linking, Alert, Share, ActivityIndicator, Animated,
+  Platform, Linking, Alert, Share, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
@@ -545,6 +545,16 @@ export default function LedgerScreen() {
   const [hasMore,       setHasMore]       = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
+  // Debounced search for API — avoid hard skeleton wipe on every keystroke
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const hasListRef = useRef(false);
+  const requestGenRef = useRef(0);
+
   const mapLedger = (r: any): LedgerItem => {
     const rawParent = String(r.parent || r.group || '').trim();
     const group = rawParent || '—';
@@ -563,7 +573,7 @@ export default function LedgerScreen() {
     };
   };
 
-  const loadLedgers = async () => {
+  const loadLedgers = async (opts?: { soft?: boolean }) => {
     // Mirror Home/Stocks: wait for auth hydrate + company before any API call.
     // Calling without a token hits backend "No token provided" and spams ErrorBanner.
     if (authLoading || !isAuthenticated || !companyGuid) return;
@@ -572,6 +582,9 @@ export default function LedgerScreen() {
     setPage(1);
     setHasMore(false);
 
+    const soft = opts?.soft ?? hasListRef.current;
+    if (!soft) setIsLoading(true);
+
     const filterParams: Record<string, string> = {};
     if (activeNature !== 'All') filterParams.nature = activeNature;
     if (activeGroup) filterParams.group = activeGroup;
@@ -579,11 +592,12 @@ export default function LedgerScreen() {
 
     // Cache only unfiltered list loads
     const cacheKey = `v2:${companyGuid}:${lastSyncAt}:${selectedFY?.startDate ?? ''}`;
-    if (!hasSheetFilters) {
+    if (!hasSheetFilters && !debouncedSearch) {
       const cached = _ledgerCache[cacheKey];
       if (cached && Date.now() - cached.ts < 5 * 60 * 1000) {
         setData(cached.data);
         setTotalLedgers(cached.total);
+        hasListRef.current = cached.data.length > 0;
         setAllGroups(prev => {
           const merged = new Set(prev);
           cached.data.forEach(d => {
@@ -597,25 +611,28 @@ export default function LedgerScreen() {
       }
     }
 
+    const gen = ++requestGenRef.current;
     try {
       const fyParams = selectedFY?.startDate && selectedFY?.endDate
         ? { from: selectedFY.startDate, to: selectedFY.endDate }
         : {};
       const res = await getLedgers(companyGuid, {
-        search,
+        search: debouncedSearch,
         limit: String(PAGE_SIZE),
         page: 1,
         ...fyParams,
         ...filterParams,
       }) as any;
+      if (gen !== requestGenRef.current) return;
       const rows = res?.data ?? (Array.isArray(res) ? res : []);
       const mappedRows = Array.isArray(rows) ? rows.map(mapLedger) : [];
       setData(mappedRows);
+      hasListRef.current = mappedRows.length > 0 || soft;
       const _total = res?.meta?.total ?? res?.total ?? 0;
       setHasMore(_total > 0 ? mappedRows.length < _total : Array.isArray(rows) && rows.length === PAGE_SIZE);
       const total = res?.meta?.total ?? res?.total ?? null;
       if (total != null) setTotalLedgers(total);
-      if (!hasSheetFilters) {
+      if (!hasSheetFilters && !debouncedSearch) {
         const gset = new Set<string>();
         mappedRows.forEach(d => {
           const g = String(d.group || '').trim();
@@ -629,6 +646,7 @@ export default function LedgerScreen() {
         _ledgerCache[cacheKey] = { data: mappedRows, total: total ?? mappedRows.length, ts: Date.now() };
       }
     } catch (err: any) {
+      if (gen !== requestGenRef.current) return;
       const msg = err?.message || 'Failed to load ledgers';
       // Don't banner auth races / logged-out; root layout will redirect
       if (msg === 'Not authenticated' || msg === 'No token provided') {
@@ -637,6 +655,8 @@ export default function LedgerScreen() {
       }
       setApiError(msg);
       console.error('[Ledgers]', msg);
+    } finally {
+      if (gen === requestGenRef.current) setIsLoading(false);
     }
   };
 
@@ -652,7 +672,7 @@ export default function LedgerScreen() {
       if (activeNature !== 'All') filterParams.nature = activeNature;
       if (activeGroup) filterParams.group = activeGroup;
       const res = await getLedgers(companyGuid, {
-        search,
+        search: debouncedSearch,
         limit: String(PAGE_SIZE),
         page: nextPage,
         ...fyParams,
@@ -689,27 +709,28 @@ export default function LedgerScreen() {
 
   useEffect(() => {
     if (authLoading) {
-      setIsLoading(true);
+      if (!hasListRef.current) setIsLoading(true);
       return;
     }
     if (!isAuthenticated) {
       setApiError(null);
       setData([]);
+      hasListRef.current = false;
       setIsLoading(false);
       return;
     }
     if (!companyGuid) {
       // Paired/auth ready but company not hydrated yet — keep loading, avoid API spam
-      setIsLoading(true);
+      if (!hasListRef.current) setIsLoading(true);
       return;
     }
-    setIsLoading(true);
-    loadLedgers().finally(() => setIsLoading(false));
-  }, [companyGuid, selectedFY?.startDate, lastSyncAt, search, activeNature, activeGroup, isAuthenticated, authLoading]);
+    // Soft when list already showing (search / filter / lastSync); hard only first paint
+    loadLedgers({ soft: hasListRef.current });
+  }, [companyGuid, selectedFY?.startDate, lastSyncAt, debouncedSearch, activeNature, activeGroup, isAuthenticated, authLoading]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadLedgers();
+    await loadLedgers({ soft: true });
     setRefreshing(false);
   };
 
@@ -1042,7 +1063,7 @@ export default function LedgerScreen() {
 
       {/* Ledger List */}
       <FlatList
-        data={isLoading ? [] : filtered}
+        data={isLoading && !hasListRef.current ? [] : filtered}
         keyExtractor={item => item.id}
         style={styles.scroll}
         contentContainerStyle={styles.list}
@@ -1050,7 +1071,7 @@ export default function LedgerScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.brandPrimary} />
         }
-        ListHeaderComponent={!isLoading ? (
+        ListHeaderComponent={!(isLoading && !hasListRef.current) ? (
           <View style={styles.listHeader}>
             <Text style={styles.sectionLabel}>
               {totalLedgers != null
@@ -1060,7 +1081,7 @@ export default function LedgerScreen() {
             </Text>
           </View>
         ) : null}
-        ListEmptyComponent={isLoading ? (
+        ListEmptyComponent={isLoading && !hasListRef.current ? (
           <View style={styles.list}>
             {Array.from({ length: 8 }).map((_, i) => <LedgerRowSkeleton key={i} />)}
           </View>
@@ -1074,7 +1095,12 @@ export default function LedgerScreen() {
         onEndReachedThreshold={0.3}
         ListFooterComponent={() => (
           <>
-            {isLoadingMore && <ActivityIndicator size="small" color={COLORS.brandPrimary} style={{ marginVertical: 12 }} />}
+            {isLoadingMore && (
+              <View style={{ paddingVertical: 8 }}>
+                <LedgerRowSkeleton />
+                <LedgerRowSkeleton />
+              </View>
+            )}
             {!isLoading && !hasMore && data.length > 0 && (
               <Text style={styles.endTxt}>All {data.length} ledgers loaded</Text>
             )}

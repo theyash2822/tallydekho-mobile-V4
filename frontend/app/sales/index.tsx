@@ -37,11 +37,13 @@ export default function SalesScreen() {
   const [metrics, setMetrics] = useState<any>(null);
   const [apiError, setApiError]       = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const hasSalesDataRef = useRef(false);
 
-  const load = useCallback(() => {
+  const load = useCallback((opts?: { soft?: boolean }) => {
     if (!companyGuid) return;
     setApiError(null);
-    setIsLoading(true);
+    const soft = opts?.soft ?? hasSalesDataRef.current;
+    if (!soft) setIsLoading(true);
     const fyParams = selectedFY?.startDate && selectedFY?.endDate
       ? { from: selectedFY.startDate, to: selectedFY.endDate }
       : {};
@@ -80,13 +82,21 @@ export default function SalesScreen() {
         setLiveBanners([]);
       }
       setMetrics(metricsRes?.data ?? metricsRes ?? null);
+      hasSalesDataRef.current = true;
     }).catch((err: any) => {
       setApiError(err?.message || t('sales.loadFailed'));
       console.error('[Sales]', err?.message);
     }).finally(() => setIsLoading(false));
-  }, [companyGuid, lastSyncAt, selectedFY?.startDate, selectedFY?.endDate, formatAmount]);
+  }, [companyGuid, selectedFY?.startDate, selectedFY?.endDate, formatAmount, t]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load({ soft: hasSalesDataRef.current }); }, [load]);
+
+  // lastSyncAt → soft refresh when data already showing
+  useEffect(() => {
+    if (!lastSyncAt || !companyGuid || !hasSalesDataRef.current) return;
+    const timer = setTimeout(() => load({ soft: true }), 400);
+    return () => clearTimeout(timer);
+  }, [lastSyncAt, companyGuid, load]);
 
   const metricCards = useMemo(() => {
     const m = metrics || {};

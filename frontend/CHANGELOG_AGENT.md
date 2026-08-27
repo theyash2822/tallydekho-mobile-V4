@@ -1,5 +1,36 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-08-27 — UX soft-refresh + shimmer policy (Phases 1–4)
+
+### Locked policy
+1. First load / company switch → full-page shimmer OK
+2. Period change → update numbers in place (no section wipe)
+3. PTR → native RefreshControl only (no full-page shimmer)
+4. Spinners only on Save/Submit, OTP/auth busy, PDF generating
+5. Home ↔ Cashflow period stay linked via `CASHFLOW_PERIOD_KEY`
+
+### Phase 1 — Home
+- `app/(tabs)/index.tsx`: `setIsLoading(true)` only when no dashboard data yet; period/PTR/lastSyncAt soft-refresh with request-generation guard; skip `getRecentActivity` on period-only change; lastSyncAt debounced ~400ms soft refresh
+
+### Phase 2 — Tab PTR + soft load
+- `stocks.tsx` / `reports.tsx`: RefreshControl soft PTR; lastSyncAt soft when data exists
+- `ledger.tsx`: PTR stays soft; debounced search (350ms) avoids hard skeleton wipe; pagination footer uses row shimmer
+
+### Phase 3 — Fetch hygiene
+- `reports.tsx` / `reports/financial.tsx`: removed duplicate useEffect + useFocusEffect double fetch; single load path + in-flight guard
+
+### Phase 4 — Spinner → shimmer
+- Financial report first paint uses CardSkeleton; Ledger load-more uses LedgerRowSkeleton
+- `sales/index.tsx`: soft lastSyncAt refresh (keep shimmer for first paint only)
+- Save/OTP/PDF spinners untouched
+
+### How to test
+1. Expo reload → Home first paint shows shimmer; after data, 7D↔1M updates KPIs/tiles/cashflow **in place** (no flick)
+2. PTR on Home / Ledger / Stocks / Reports → native spinner only, content stays
+3. Company switch → shimmer OK; Ledger search typing → list not wiped each keystroke
+
+---
+
 ## 2026-08-27 — AR/AP aging carousel: Due Today + always show trend pills
 
 ### Changed

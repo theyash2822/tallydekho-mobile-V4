@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, Animated,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -81,23 +82,58 @@ export default function StocksDashboard() {
   const [data, setData] = useState<any>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const hasDataRef = useRef(false);
+  const requestGenRef = useRef(0);
+  const prevGuidRef = useRef<string | undefined>(companyGuid);
 
-  const loadStock = useCallback(async () => {
-    if (!companyGuid) return;
-    setApiError(null);
+  // Company switch → hard shimmer
+  useEffect(() => {
+    if (prevGuidRef.current === companyGuid) return;
+    prevGuidRef.current = companyGuid;
+    hasDataRef.current = false;
+    setData(null);
     setIsLoading(true);
-    try {
-      const res = await getStockDashboard(companyGuid);
-      const d = res?.data ?? res;
-      if (d && typeof d === 'object') setData(d);
-    } catch (err: any) {
-      setApiError(err?.message || t('stocks.loadFailed'));
-    } finally {
-      setIsLoading(false);
-    }
   }, [companyGuid]);
 
-  useEffect(() => { loadStock(); }, [loadStock, lastSyncAt]);
+  const loadStock = useCallback(async (opts?: { soft?: boolean }) => {
+    if (!companyGuid) return;
+    const soft = opts?.soft ?? hasDataRef.current;
+    if (!soft) setIsLoading(true);
+    setApiError(null);
+    const gen = ++requestGenRef.current;
+    try {
+      const res = await getStockDashboard(companyGuid);
+      if (gen !== requestGenRef.current) return;
+      const d = res?.data ?? res;
+      if (d && typeof d === 'object') {
+        setData(d);
+        hasDataRef.current = true;
+      }
+    } catch (err: any) {
+      if (gen !== requestGenRef.current) return;
+      setApiError(err?.message || t('stocks.loadFailed'));
+    } finally {
+      if (gen === requestGenRef.current) setIsLoading(false);
+    }
+  }, [companyGuid, t]);
+
+  useEffect(() => {
+    loadStock({ soft: hasDataRef.current });
+  }, [loadStock]);
+
+  // lastSyncAt → soft refresh when data already showing
+  useEffect(() => {
+    if (!lastSyncAt || !companyGuid || !hasDataRef.current) return;
+    const timer = setTimeout(() => loadStock({ soft: true }), 400);
+    return () => clearTimeout(timer);
+  }, [lastSyncAt, companyGuid, loadStock]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadStock({ soft: true });
+    setRefreshing(false);
+  };
 
   const SECONDARY_ACTIONS = [
     { id: 'settings', icon: 'options-outline', route: '/stocks/settings' },
@@ -166,8 +202,16 @@ export default function StocksDashboard() {
         </View>
       </View>
 
-      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
-        {isLoading ? (
+      <ScrollView
+        style={s.scroll}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={s.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.brandPrimary} />
+        }
+      >
+        {/* Soft refresh keeps existing tiles; shimmer only on first load / no data */}
+        {isLoading && !data ? (
           <>
             <CardSkeleton height={140} />
             <View style={{ flexDirection: 'row', gap: 12 }}>
@@ -183,7 +227,7 @@ export default function StocksDashboard() {
           </>
         ) : null}
 
-        {!isLoading && data && (
+        {data && (
           <>
             <TouchableOpacity
               style={s.hero}

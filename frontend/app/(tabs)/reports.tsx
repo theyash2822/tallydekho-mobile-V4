@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions,
-  PanResponder, Platform,
+  PanResponder, Platform, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, {
@@ -10,7 +10,6 @@ import Svg, {
 } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useFocusEffect } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 import { getFinancialData, getGSTReport, getAuditTrail } from '../../src/services/api';
@@ -860,7 +859,7 @@ export default function ReportsScreen() {
   const { company, selectedFY, lastSyncAt } = useAuth();
   const companyGuid = company?.guid;
 
-  // Financial chart data — fetched from API (falls back to mock data)
+  // Financial chart data — fetched from API
   const [finData, setFinData] = useState<{
     months: string[];
     revenue: number[];
@@ -868,63 +867,85 @@ export default function ReportsScreen() {
   } | null>(null);
   const [finLoading, setFinLoading] = useState(true);
   const [apiError, setApiError]      = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const hasFinDataRef = useRef(false);
+  const requestGenRef = useRef(0);
 
   // GST compliance — real filed month count
   const [gstFiledCount, setGstFiledCount] = useState(0);
   const [auditCount, setAuditCount] = useState(0);
   const [auditTotal, setAuditTotal] = useState(100);
 
-  useEffect(() => {
+  const loadReports = useCallback(async (opts?: { soft?: boolean }) => {
     if (!companyGuid) return;
     const from = selectedFY?.startDate;
     const to   = selectedFY?.endDate;
-
+    const soft = opts?.soft ?? hasFinDataRef.current;
+    if (!soft) setFinLoading(true);
     setApiError(null);
-    // Financial chart — scoped to selected FY
-    getFinancialData(companyGuid, from, to).then((res: any) => {
-      const d = res?.data ?? res;
-      if (d?.months) setFinData(d);
-      setFinLoading(false);
-    }).catch((err: any) => {
+    const gen = ++requestGenRef.current;
+
+    try {
+      const [finRes, gstRes, auditRes] = await Promise.all([
+        getFinancialData(companyGuid, from, to),
+        getGSTReport(companyGuid, from, to).catch((err: any) => {
+          console.error('[API Error]', err?.message);
+          return null;
+        }),
+        getAuditTrail(companyGuid).catch((err: any) => {
+          console.error('[API Error]', err?.message);
+          return null;
+        }),
+      ]);
+      if (gen !== requestGenRef.current) return;
+
+      const d = (finRes as any)?.data ?? finRes;
+      if (d?.months) {
+        setFinData(d);
+        hasFinDataRef.current = true;
+      }
+
+      if (gstRes) {
+        const gd = (gstRes as any)?.data ?? gstRes;
+        const filed = gd?.filed_months ?? gd?.months_filed ?? 0;
+        setGstFiledCount(typeof filed === 'number' ? Math.min(filed, 12) : 0);
+      }
+
+      if (auditRes) {
+        const ad = (auditRes as any)?.data ?? auditRes;
+        const entries = ad?.entries ?? ad ?? [];
+        const pending = Array.isArray(entries)
+          ? entries.filter((e: any) => e.status === 'pending' || e.status === 'failed').length
+          : (ad?.stats?.pending_count || 0);
+        const total = Array.isArray(entries) ? entries.length : (ad?.stats?.total || 0);
+        setAuditCount(pending);
+        setAuditTotal(Math.max(total, pending));
+      }
+    } catch (err: any) {
+      if (gen !== requestGenRef.current) return;
       setApiError(err?.message || 'Failed to load financial data');
-      setFinLoading(false);
-    });
+    } finally {
+      if (gen === requestGenRef.current) setFinLoading(false);
+    }
+  }, [companyGuid, selectedFY?.startDate, selectedFY?.endDate]);
 
-    // GST summary — scoped to selected FY
-    getGSTReport(companyGuid, from, to).then((res: any) => {
-      const d = res?.data ?? res;
-      const filed = d?.filed_months ?? d?.months_filed ?? 0;
-      setGstFiledCount(typeof filed === 'number' ? Math.min(filed, 12) : 0);
-    }).catch((err: any) => console.error('[API Error]', err?.message));
+  // Single fetch path — no duplicate useFocusEffect (Phase 3 hygiene)
+  useEffect(() => {
+    loadReports({ soft: hasFinDataRef.current });
+  }, [loadReports]);
 
-    // Audit trail — get pending/unreconciled count (not FY-specific)
-    getAuditTrail(companyGuid).then((res: any) => {
-      const d = res?.data ?? res;
-      const entries = d?.entries ?? d ?? [];
-      const pending = Array.isArray(entries)
-        ? entries.filter((e: any) => e.status === 'pending' || e.status === 'failed').length
-        : (d?.stats?.pending_count || 0);
-      const total = Array.isArray(entries) ? entries.length : (d?.stats?.total || 0);
-      setAuditCount(pending);
-      setAuditTotal(Math.max(total, pending));
-    }).catch((err: any) => console.error('[API Error]', err?.message));
-  }, [companyGuid, selectedFY?.startDate, lastSyncAt]);
+  // lastSyncAt → soft refresh
+  useEffect(() => {
+    if (!lastSyncAt || !companyGuid || !hasFinDataRef.current) return;
+    const timer = setTimeout(() => loadReports({ soft: true }), 400);
+    return () => clearTimeout(timer);
+  }, [lastSyncAt, companyGuid, loadReports]);
 
-  // Re-fetch when tab comes into focus (catches backend restarts / FY changes on other screens)
-  useFocusEffect(useCallback(() => {
-    if (!companyGuid) return;
-    const from = selectedFY?.startDate;
-    const to   = selectedFY?.endDate;
-    getGSTReport(companyGuid, from, to).then((res: any) => {
-      const d = res?.data ?? res;
-      const filed = d?.filed_months ?? d?.months_filed ?? 0;
-      setGstFiledCount(typeof filed === 'number' ? Math.min(filed, 12) : 0);
-    }).catch(() => {});
-    getFinancialData(companyGuid, from, to).then((res: any) => {
-      const d = res?.data ?? res;
-      if (d?.months) { setFinData(d); setFinLoading(false); }
-    }).catch(() => {});
-  }, [companyGuid, selectedFY?.startDate]));
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadReports({ soft: true });
+    setRefreshing(false);
+  };
 
   const revenueTotal = finData?.revenue?.reduce((a, b) => a + b, 0) ?? 0;
   const expenseTotal = finData?.expenses?.reduce((a, b) => a + b, 0) ?? 0;
@@ -933,7 +954,7 @@ export default function ReportsScreen() {
 
   return (
     <SafeAreaView testID="reports-screen" style={styles.safe}>
-      {apiError && <ErrorBanner message={apiError} onRetry={() => { setFinLoading(true); setApiError(null); }} />}
+      {apiError && <ErrorBanner message={apiError} onRetry={() => loadReports({ soft: hasFinDataRef.current })} />}
       {/* Page Header — mirrors Ledger screen style */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{t('reports.title')}</Text>
@@ -943,6 +964,9 @@ export default function ReportsScreen() {
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.brandPrimary} />
+        }
       >
 
         <View style={styles.kpiStrip}>

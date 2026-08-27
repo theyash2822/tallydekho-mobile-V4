@@ -1,3 +1,20 @@
+## [2026-08-27] UX soft-refresh + shimmer policy (Phases 1–4)
+
+### Policy
+- First load / company switch: full shimmer OK
+- Period change: in-place number update
+- PTR: native RefreshControl only
+- Spinners: Save/OTP/PDF only
+- Home ↔ Cashflow: `CASHFLOW_PERIOD_KEY`
+
+### Changed
+- Home soft-refresh + stale-request guard; Stocks/Reports soft PTR; Ledger debounced soft search; Reports/Financial single-fetch hygiene; shimmer replaces content-load spinners on touched screens
+
+### How to test
+1. Home 7D↔1M no flick; PTR on 4 tabs; first load shimmer only
+
+---
+
 ## [2026-08-27] Home — trend pills on all 7 KPI cards
 
 ### Changed
