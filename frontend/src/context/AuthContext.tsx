@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { socketService } from '../services/socketService';
 import { clearVoucherConfigCache } from '../utils/voucherPdf';
+import { setAuthFailureHandler } from '../services/api';
 
 // ── Storage helpers ──────────────────────────────────────────
 const storeToken = async (token: string) => {
@@ -142,7 +143,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     socketService.disconnect();
     await removeToken();
     // The PDF format choice is user-level and cached in memory, so it has to go
@@ -152,7 +153,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsPairedState(false);
     setCompanyState(null);
     setUserState(null);
-  };
+  }, []);
+
+  // Central 401 → invalidate session once (api layer). 403 never reaches here as auth.
+  useEffect(() => {
+    setAuthFailureHandler(() => {
+      signOut().catch(() => {});
+    });
+    return () => setAuthFailureHandler(null);
+  }, [signOut]);
 
   const setIsPaired = (v: boolean) => {
     setIsPairedState(v);

@@ -28,6 +28,9 @@ interface RecentActivityProps {
   activities: Activity[];
   title?: string;
   onSeeAll?: () => void;
+  /** Local unavailable state — does NOT trigger page-level partial banner alone */
+  unavailable?: boolean;
+  onRetry?: () => void;
 }
 
 const ActivityItem: React.FC<{ item: Activity; onPress: () => void }> = ({ item, onPress }) => {
@@ -92,7 +95,9 @@ const ActivityItem: React.FC<{ item: Activity; onPress: () => void }> = ({ item,
   );
 };
 
-const RecentActivity: React.FC<RecentActivityProps> = ({ activities, title }) => {
+const RecentActivity: React.FC<RecentActivityProps> = ({
+  activities, title, unavailable, onRetry,
+}) => {
   const router = useRouter();
   const { t } = useTranslation();
   const sectionTitle = title ?? t('dashboard.recentActivity');
@@ -114,7 +119,19 @@ const RecentActivity: React.FC<RecentActivityProps> = ({ activities, title }) =>
         <Text style={styles.sectionTitle}>{sectionTitle}</Text>
       </View>
       <View style={styles.card}>
-        {displayed.length === 0 ? (
+        {unavailable ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="alert-circle-outline" size={28} color="#DC2626" />
+            <Text style={styles.emptyText}>
+              {t('home.activityUnavailable', 'Recent activity unavailable')}
+            </Text>
+            {onRetry ? (
+              <TouchableOpacity onPress={onRetry} style={styles.retryBtn} activeOpacity={0.8}>
+                <Text style={styles.retryTxt}>{t('common.retry', 'Retry')}</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : displayed.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="receipt-outline" size={28} color={COLORS.textTertiary} />
             <Text style={styles.emptyText}>{t('dashboard.noActivity')}</Text>
@@ -181,6 +198,14 @@ const styles = StyleSheet.create({
   // Empty
   emptyState: { alignItems: 'center', paddingVertical: 28, gap: 8 },
   emptyText: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
+  retryBtn: {
+    marginTop: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.brandPrimary,
+  },
+  retryTxt: { color: '#fff', fontSize: TYPOGRAPHY.sm, fontWeight: '600' },
 });
 
 export default RecentActivity;

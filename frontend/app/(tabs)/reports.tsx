@@ -882,37 +882,39 @@ export default function ReportsScreen() {
     const to   = selectedFY?.endDate;
     const soft = opts?.soft ?? hasFinDataRef.current;
     if (!soft) setFinLoading(true);
-    setApiError(null);
+    if (!soft) setApiError(null);
     const gen = ++requestGenRef.current;
 
     try {
-      const [finRes, gstRes, auditRes] = await Promise.all([
+      const [finSettled, gstSettled, auditSettled] = await Promise.allSettled([
         getFinancialData(companyGuid, from, to),
-        getGSTReport(companyGuid, from, to).catch((err: any) => {
-          console.error('[API Error]', err?.message);
-          return null;
-        }),
-        getAuditTrail(companyGuid).catch((err: any) => {
-          console.error('[API Error]', err?.message);
-          return null;
-        }),
+        getGSTReport(companyGuid, from, to),
+        getAuditTrail(companyGuid),
       ]);
       if (gen !== requestGenRef.current) return;
 
-      const d = (finRes as any)?.data ?? finRes;
-      if (d?.months) {
-        setFinData(d);
-        hasFinDataRef.current = true;
+      let finOk = false;
+      const partialParts: string[] = [];
+
+      if (finSettled.status === 'fulfilled') {
+        const d = (finSettled.value as any)?.data ?? finSettled.value;
+        if (d?.months) {
+          setFinData(d);
+          hasFinDataRef.current = true;
+          finOk = true;
+        }
       }
 
-      if (gstRes) {
-        const gd = (gstRes as any)?.data ?? gstRes;
+      if (gstSettled.status === 'fulfilled') {
+        const gd = (gstSettled.value as any)?.data ?? gstSettled.value;
         const filed = gd?.filed_months ?? gd?.months_filed ?? 0;
         setGstFiledCount(typeof filed === 'number' ? Math.min(filed, 12) : 0);
+      } else {
+        partialParts.push('GST');
       }
 
-      if (auditRes) {
-        const ad = (auditRes as any)?.data ?? auditRes;
+      if (auditSettled.status === 'fulfilled') {
+        const ad = (auditSettled.value as any)?.data ?? auditSettled.value;
         const entries = ad?.entries ?? ad ?? [];
         const pending = Array.isArray(entries)
           ? entries.filter((e: any) => e.status === 'pending' || e.status === 'failed').length
@@ -920,10 +922,31 @@ export default function ReportsScreen() {
         const total = Array.isArray(entries) ? entries.length : (ad?.stats?.total || 0);
         setAuditCount(pending);
         setAuditTotal(Math.max(total, pending));
+      } else {
+        partialParts.push('Audit');
+      }
+
+      if (finOk) {
+        if (partialParts.length) {
+          setApiError(
+            `Some data couldn't be updated (${partialParts.join(', ')})`,
+          );
+        } else {
+          setApiError(null);
+        }
+      } else if (hasFinDataRef.current || soft) {
+        setApiError("Couldn't refresh. Showing previous data. Retry");
+      } else {
+        const err = finSettled.status === 'rejected' ? finSettled.reason : null;
+        setApiError((err as any)?.message || 'Failed to load financial data');
       }
     } catch (err: any) {
       if (gen !== requestGenRef.current) return;
-      setApiError(err?.message || 'Failed to load financial data');
+      if (hasFinDataRef.current || soft) {
+        setApiError("Couldn't refresh. Showing previous data. Retry");
+      } else {
+        setApiError(err?.message || 'Failed to load financial data');
+      }
     } finally {
       if (gen === requestGenRef.current) setFinLoading(false);
     }

@@ -95,14 +95,18 @@ export default function BankBalanceScreen() {
   const [apiData, setApiData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
+  const hasDataRef = useRef(false);
+  const dataAsOfRef = useRef<Date | null>(null);
   const [kpiIdx, setKpiIdx] = useState(0);
   const [bankIdx, setBankIdx] = useState(0);
   const kpiRef = useRef<FlatList>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { soft?: boolean }) => {
     if (!companyGuid) return;
-    setIsLoading(true);
-    setApiError(null);
+    const soft = opts?.soft ?? hasDataRef.current;
+    if (!soft) setIsLoading(true);
+    // Soft refresh: keep stale data + banner until success (no wipe, no toast)
+    if (!soft) setApiError(null);
     try {
       const { from, to } = resolvePeriodDates(period as DashboardPeriod, {
         from: selectedFY?.startDate,
@@ -110,15 +114,24 @@ export default function BankBalanceScreen() {
       });
       const res: any = await getKPIBankBalance(companyGuid, { from, to, period });
       setApiData(res?.data ?? res);
+      hasDataRef.current = true;
+      dataAsOfRef.current = new Date();
+      setApiError(null);
     } catch (err: any) {
-      setApiError(err?.message || 'Failed to load bank balance');
-      setApiData(null);
+      if (hasDataRef.current) {
+        const ts = dataAsOfRef.current
+          ? dataAsOfRef.current.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+          : 'earlier';
+        setApiError(`Couldn't refresh. Showing data from ${ts}. Retry`);
+      } else {
+        setApiError(err?.message || 'Failed to load bank balance');
+      }
     } finally {
       setIsLoading(false);
     }
   }, [companyGuid, period, selectedFY?.startDate, selectedFY?.endDate, lastSyncAt]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load({ soft: hasDataRef.current }); }, [load]);
 
   const banks: BankCardData[] = useMemo(() => {
     const rows = Array.isArray(apiData?.banks) ? apiData.banks : [];
@@ -203,7 +216,7 @@ export default function BankBalanceScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
-        {apiError && <ErrorBanner message={apiError} onRetry={load} />}
+        {apiError && <ErrorBanner message={apiError} onRetry={() => load({ soft: hasDataRef.current })} />}
 
         {isLoading ? (
           <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>

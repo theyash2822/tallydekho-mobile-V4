@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Alert, ActivityIndicator,
@@ -35,12 +35,21 @@ export default function EWayBillScreen() {
   const [generatingIds, setGeneratingIds] = useState<string[]>([]);
   const [sharingId, setSharingId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadEwb = useCallback(() => {
     if (!companyGuid) return;
-    Promise.all([
-      getEWBList(companyGuid).catch(() => null),
-      getEWBPending(companyGuid).catch(() => null),
-    ]).then(([generatedRes, pendingRes]: any[]) => {
+    setApiError(null);
+    Promise.allSettled([
+      getEWBList(companyGuid),
+      getEWBPending(companyGuid),
+    ]).then(([generatedSettled, pendingSettled]) => {
+      const generatedRes = generatedSettled.status === 'fulfilled' ? generatedSettled.value as any : null;
+      const pendingRes = pendingSettled.status === 'fulfilled' ? pendingSettled.value as any : null;
+      if (!generatedRes && !pendingRes) {
+        const err = generatedSettled.status === 'rejected' ? generatedSettled.reason
+          : pendingSettled.status === 'rejected' ? pendingSettled.reason : null;
+        setApiError((err as any)?.message || 'Failed to load data');
+        return;
+      }
       if (generatedRes?.meta?.country_applicable === false) {
         setCountryApplicable(false);
         setNotApplicableMsg(generatedRes.meta.message || 'E-Way Bill not applicable for your country');
@@ -56,7 +65,6 @@ export default function EWayBillScreen() {
         amount:  formatAmount(Math.abs(+(r.amount) || 0)),
         status:  forcedStatus || (r.ewb_number ? 'generated' : 'pending'),
         ewb_no:  r.ewb_number    || null,
-        // Kept raw for the e-Way Bill PDF sheet.
         voucherType:   r.voucher_type || '',
         amountValue:   Math.abs(+(r.amount) || 0),
         ewbDate:       r.ewb_date       || '',
@@ -69,12 +77,18 @@ export default function EWayBillScreen() {
       });
       const generatedBills = generatedRows.map(r => mapRow(r, 'generated'));
       const pendingBills   = pendingRows.map(r => mapRow(r, 'pending'));
-      // Merge: generated first, then pending (avoid duplicates by voucher_number)
       const seenIds = new Set(generatedBills.map((b: any) => b.id));
       const uniquePending = pendingBills.filter((b: any) => !seenIds.has(b.id));
       setLiveBills([...generatedBills, ...uniquePending]);
-    }).catch((err: any) => { console.error('[EWB load error]', err?.message); setApiError(err?.message || 'Failed to load data'); });
-  }, [companyGuid]);
+      if (generatedSettled.status === 'rejected' || pendingSettled.status === 'rejected') {
+        setApiError("Some data couldn't be updated");
+      }
+    });
+  }, [companyGuid, formatAmount]);
+
+  useEffect(() => {
+    loadEwb();
+  }, [loadEwb]);
 
   const handleGenerateEWB = async (item: any) => {
     if (!companyGuid || !item.guid) return;
@@ -169,7 +183,7 @@ export default function EWayBillScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      {apiError && <ErrorBanner message={apiError} onRetry={() => setApiError(null)} />}
+      {apiError && <ErrorBanner message={apiError} onRetry={loadEwb} />}
       {/* ── Header ───────────────────────────────────────────── */}
       <View style={styles.header}>
         <TouchableOpacity

@@ -41,51 +41,71 @@ export default function SalesScreen() {
 
   const load = useCallback((opts?: { soft?: boolean }) => {
     if (!companyGuid) return;
-    setApiError(null);
     const soft = opts?.soft ?? hasSalesDataRef.current;
     if (!soft) setIsLoading(true);
+    if (!soft) setApiError(null);
     const fyParams = selectedFY?.startDate && selectedFY?.endDate
       ? { from: selectedFY.startDate, to: selectedFY.endDate }
       : {};
-    Promise.all([
+    Promise.allSettled([
       getSalesInvoices(companyGuid, { limit: '50', ...fyParams } as any),
       getSalesHomeMetrics(companyGuid, fyParams),
-    ]).then(([invRes, metricsRes]: any[]) => {
-      const rows = invRes?.data ?? [];
-      if (rows.length) {
-        setLiveRecent(rows.slice(0, 5).map((r: any, i: number) => ({
-          id: r.guid || `sale-${r.voucher_number || 'x'}-${r.id ?? i}`,
-          voucher: r.voucher_number || '',
-          party: r.party_name || '',
-          date: r.date || '',
-          amount: formatAmount(Math.abs(+r.amount || 0)),
-          status: r.irn ? 'generated' : 'pending_irn',
-        })));
-        const partyMap: Record<string, number> = {};
-        rows.forEach((r: any) => {
-          if (r.party_name) partyMap[r.party_name] = (partyMap[r.party_name] || 0) + (+r.amount || 0);
-        });
-        const top = Object.entries(partyMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
-        setLiveTopParties(top.map(([name, amt], i) => ({
-          id: `tp${i}`,
-          name,
-          amount: formatAmount(Math.round(+amt)),
-          color: ['#2563EB', '#D97706', '#7C3AED', '#0891B2', '#059669'][i],
-        })));
-        const pendingIRN = rows.filter((r: any) => !r.irn).length;
-        setLiveBanners(pendingIRN > 0
-          ? [{ id: 'b1', bold: t('sales.invoicesCount', { count: pendingIRN }), sub: t('sales.pendingIrn'), action: t('sales.generateNow') }]
-          : []);
-      } else {
-        setLiveRecent([]);
-        setLiveTopParties([]);
-        setLiveBanners([]);
+    ]).then(([invSettled, metricsSettled]) => {
+      let anyOk = false;
+      if (invSettled.status === 'fulfilled') {
+        const invRes: any = invSettled.value;
+        const rows = invRes?.data ?? [];
+        if (rows.length) {
+          setLiveRecent(rows.slice(0, 5).map((r: any, i: number) => ({
+            id: r.guid || `sale-${r.voucher_number || 'x'}-${r.id ?? i}`,
+            voucher: r.voucher_number || '',
+            party: r.party_name || '',
+            date: r.date || '',
+            amount: formatAmount(Math.abs(+r.amount || 0)),
+            status: r.irn ? 'generated' : 'pending_irn',
+          })));
+          const partyMap: Record<string, number> = {};
+          rows.forEach((r: any) => {
+            if (r.party_name) partyMap[r.party_name] = (partyMap[r.party_name] || 0) + (+r.amount || 0);
+          });
+          const top = Object.entries(partyMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
+          setLiveTopParties(top.map(([name, amt], i) => ({
+            id: `tp${i}`,
+            name,
+            amount: formatAmount(Math.round(+amt)),
+            color: ['#2563EB', '#D97706', '#7C3AED', '#0891B2', '#059669'][i],
+          })));
+          const pendingIRN = rows.filter((r: any) => !r.irn).length;
+          setLiveBanners(pendingIRN > 0
+            ? [{ id: 'b1', bold: t('sales.invoicesCount', { count: pendingIRN }), sub: t('sales.pendingIrn'), action: t('sales.generateNow') }]
+            : []);
+        } else {
+          setLiveRecent([]);
+          setLiveTopParties([]);
+          setLiveBanners([]);
+        }
+        anyOk = true;
       }
-      setMetrics(metricsRes?.data ?? metricsRes ?? null);
-      hasSalesDataRef.current = true;
-    }).catch((err: any) => {
-      setApiError(err?.message || t('sales.loadFailed'));
-      console.error('[Sales]', err?.message);
+      if (metricsSettled.status === 'fulfilled') {
+        const metricsRes: any = metricsSettled.value;
+        setMetrics(metricsRes?.data ?? metricsRes ?? null);
+        anyOk = true;
+      }
+      if (anyOk) {
+        hasSalesDataRef.current = true;
+        setApiError(null);
+        if (invSettled.status === 'rejected' || metricsSettled.status === 'rejected') {
+          setApiError(t('home.partialUpdate', "Some data couldn't be updated"));
+        }
+      } else {
+        const err = invSettled.status === 'rejected' ? invSettled.reason
+          : metricsSettled.status === 'rejected' ? metricsSettled.reason : null;
+        if (hasSalesDataRef.current) {
+          setApiError(t('errors.refreshFailedShort', "Couldn't refresh. Showing previous data. Retry"));
+        } else {
+          setApiError(err?.message || t('sales.loadFailed'));
+        }
+      }
     }).finally(() => setIsLoading(false));
   }, [companyGuid, selectedFY?.startDate, selectedFY?.endDate, formatAmount, t]);
 

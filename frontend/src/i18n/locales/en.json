@@ -436,7 +436,14 @@
     "invalidOtp": "Invalid OTP. Please try again.",
     "otpExpired": "OTP expired. Please request a new one.",
     "saveFailed": "Could not save. Please try again.",
-    "loadFailed": "Could not load data. Please try again."
+    "loadFailed": "Could not load data. Please try again.",
+    "noInternet": "No internet connection",
+    "desktopOffline": "Desktop offline · Showing last cached data",
+    "forbidden": "You don't have permission for this action.",
+    "timeout": "Request timed out. Please try again.",
+    "deviceNotPaired": "Device not paired with Tally. Pair to continue.",
+    "companyNotSynced": "Company not synced yet. Wait for desktop sync.",
+    "refreshFailedShort": "Couldn't refresh. Showing previous data. Retry"
   },
   "home": {
     "moduleSales": "Sales",
@@ -451,6 +458,11 @@
     "tallyDisconnected": "Tally Disconnected",
     "tallyDisconnectedSub": "Device was unpaired.",
     "loadFailed": "Failed to load dashboard data",
+    "partialUpdate": "Some data couldn't be updated",
+    "refreshFailed": "Couldn't refresh. Showing data from {{time}}. Retry",
+    "cashflowUnavailable": "Cashflow unavailable",
+    "activityUnavailable": "Recent activity unavailable",
+    "earlier": "earlier",
     "kpiCash": "Cash in Hand",
     "kpiBank": "Bank Balance",
     "kpiReceivables": "Receivables",

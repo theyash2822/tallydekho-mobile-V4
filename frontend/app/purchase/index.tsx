@@ -94,6 +94,7 @@ export default function PurchaseScreen() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
+  const hasPurchaseDataRef = useRef(false);
   const [liveRecent, setLiveRecent] = useState<PurchaseRow[]>([]);
   const [liveTopVendors, setLiveTopVendors] = useState<any[]>([]);
   const [liveBanners, setLiveBanners] = useState<any[]>([]);
@@ -107,7 +108,7 @@ export default function PurchaseScreen() {
   const [fromDate, setFromDate] = useState(() => fyFrom ? isoToDMY(fyFrom) : '01/04/24');
   const [toDate,   setToDate]   = useState(() => fyTo   ? isoToDMY(fyTo)   : '31/03/25');
 
-  const loadData = useCallback(() => {
+  const loadData = useCallback((opts?: { soft?: boolean }) => {
     if (!companyGuid) {
       setLiveRecent([]);
       setLiveTopVendors([]);
@@ -120,78 +121,101 @@ export default function PurchaseScreen() {
     const from = dmyToISO(fromDate) || fyFrom;
     const to   = dmyToISO(toDate)   || fyTo;
     const rangeParams = from && to ? { from, to } : {};
+    const soft = opts?.soft ?? hasPurchaseDataRef.current;
+    if (!soft) setIsLoading(true);
+    if (!soft) setApiError(null);
 
-    setIsLoading(true);
-    setApiError(null);
-
-    Promise.all([
+    Promise.allSettled([
       getPurchaseInvoices(companyGuid, { ...rangeParams, limit: '100', page: '1' } as any),
       getDebitNotes(companyGuid, { ...rangeParams, limit: '50', page: '1' } as any),
     ])
-      .then(([invRes, dnRes]: any[]) => {
-        const rows = invRes?.data ?? [];
-        const debitNotes = dnRes?.data ?? [];
+      .then(([invSettled, dnSettled]) => {
+        let anyOk = false;
+        const rows = invSettled.status === 'fulfilled'
+          ? ((invSettled.value as any)?.data ?? [])
+          : null;
+        const debitNotes = dnSettled.status === 'fulfilled'
+          ? ((dnSettled.value as any)?.data ?? [])
+          : [];
 
-        setMetricCards(buildMetrics(rows, formatAmountCompact).map(c => ({
-          ...c,
-          label: c.id === 'today' ? t('purchase.today')
-            : c.id === 'mtd' ? t('purchase.mtd')
-            : c.id === 'ytd' ? t('purchase.ytd')
-            : c.id === 'avg' ? t('purchase.avgTicket')
-            : c.label,
-        })));
+        if (rows) {
+          anyOk = true;
+          setMetricCards(buildMetrics(rows, formatAmountCompact).map(c => ({
+            ...c,
+            label: c.id === 'today' ? t('purchase.today')
+              : c.id === 'mtd' ? t('purchase.mtd')
+              : c.id === 'ytd' ? t('purchase.ytd')
+              : c.id === 'avg' ? t('purchase.avgTicket')
+              : c.label,
+          })));
 
-        setLiveRecent(rows.slice(0, 20).map((r: any, i: number): PurchaseRow => ({
-          id: r.guid || `pur-${r.voucher_number || 'x'}-${r.id ?? i}`,
-          guid: r.guid,
-          voucher: r.voucher_number || '',
-          vendor: r.party_name || '',
-          date: r.date || '',
-          time: '',
-          amount: formatAmount(Math.abs(parseFloat(r.amount) || 0)),
-          status: r.is_cancelled ? 'unpaid' : 'paid',
-        })));
+          setLiveRecent(rows.slice(0, 20).map((r: any, i: number): PurchaseRow => ({
+            id: r.guid || `pur-${r.voucher_number || 'x'}-${r.id ?? i}`,
+            guid: r.guid,
+            voucher: r.voucher_number || '',
+            vendor: r.party_name || '',
+            date: r.date || '',
+            time: '',
+            amount: formatAmount(Math.abs(parseFloat(r.amount) || 0)),
+            status: r.is_cancelled ? 'unpaid' : 'paid',
+          })));
 
-        const vendorMap: Record<string, { total: number; count: number }> = {};
-        rows.forEach((r: any) => {
-          const name = r.party_name;
-          if (!name) return;
-          const amt = Math.abs(parseFloat(r.amount) || 0);
-          if (!vendorMap[name]) vendorMap[name] = { total: 0, count: 0 };
-          vendorMap[name].total += amt;
-          vendorMap[name].count += 1;
-        });
-        const top = Object.entries(vendorMap)
-          .sort((a, b) => b[1].total - a[1].total)
-          .slice(0, 5)
-          .map(([name, info], i) => ({
-            id: `tv${i}`,
-            name,
-            transactions: info.count,
-            amount: formatAmount(Math.round(info.total)),
-            color: VENDOR_COLORS[i % VENDOR_COLORS.length],
-          }));
-        setLiveTopVendors(top);
+          const vendorMap: Record<string, { total: number; count: number }> = {};
+          rows.forEach((r: any) => {
+            const name = r.party_name;
+            if (!name) return;
+            const amt = Math.abs(parseFloat(r.amount) || 0);
+            if (!vendorMap[name]) vendorMap[name] = { total: 0, count: 0 };
+            vendorMap[name].total += amt;
+            vendorMap[name].count += 1;
+          });
+          const top = Object.entries(vendorMap)
+            .sort((a, b) => b[1].total - a[1].total)
+            .slice(0, 5)
+            .map(([name, info], i) => ({
+              id: `tv${i}`,
+              name,
+              transactions: info.count,
+              amount: formatAmount(Math.round(info.total)),
+              color: VENDOR_COLORS[i % VENDOR_COLORS.length],
+            }));
+          setLiveTopVendors(top);
 
-        const banners: any[] = [];
-        const unpaid = rows.filter((r: any) => r.is_cancelled).length;
-        if (unpaid > 0) {
-          banners.push({ id: 'b1', bold: t('purchase.invoicesCount', { count: unpaid }), sub: t('purchase.cancelledOrPending'), action: t('purchase.viewAll') });
+          const banners: any[] = [];
+          const unpaid = rows.filter((r: any) => r.is_cancelled).length;
+          if (unpaid > 0) {
+            banners.push({ id: 'b1', bold: t('purchase.invoicesCount', { count: unpaid }), sub: t('purchase.cancelledOrPending'), action: t('purchase.viewAll') });
+          }
+          if (debitNotes.length > 0) {
+            banners.push({ id: 'b2', bold: t('purchase.debitNotesCount', { count: debitNotes.length }), sub: t('purchase.inSelectedPeriod'), action: t('purchase.viewAll') });
+          }
+          setLiveBanners(banners);
+        } else if (dnSettled.status === 'fulfilled') {
+          anyOk = true;
         }
-        if (debitNotes.length > 0) {
-          banners.push({ id: 'b2', bold: t('purchase.debitNotesCount', { count: debitNotes.length }), sub: t('purchase.inSelectedPeriod'), action: t('purchase.viewAll') });
+
+        if (anyOk) {
+          hasPurchaseDataRef.current = true;
+          if (invSettled.status === 'rejected' || dnSettled.status === 'rejected') {
+            setApiError(t('home.partialUpdate', "Some data couldn't be updated"));
+          } else {
+            setApiError(null);
+          }
+        } else {
+          const err = invSettled.status === 'rejected' ? invSettled.reason : dnSettled.status === 'rejected' ? dnSettled.reason : null;
+          if (hasPurchaseDataRef.current) {
+            setApiError(t('errors.refreshFailedShort', "Couldn't refresh. Showing previous data. Retry"));
+          } else {
+            setApiError((err as any)?.message || t('purchase.loadFailed'));
+            setLiveRecent([]);
+            setLiveTopVendors([]);
+            setLiveBanners([]);
+            setMetricCards([]);
+          }
         }
-        setLiveBanners(banners);
-      })
-      .catch((err: any) => {
-        setApiError(err?.message || t('purchase.loadFailed'));
-        setLiveRecent([]);
-        setLiveTopVendors([]);
-        setLiveBanners([]);
-        setMetricCards([]);
       })
       .finally(() => setIsLoading(false));
-  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, formatAmount, formatAmountCompact]);
+  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, formatAmount, formatAmountCompact, t]);
 
   useEffect(() => {
     if (fyFrom && fyTo) {
@@ -201,7 +225,7 @@ export default function PurchaseScreen() {
   }, [fyFrom, fyTo]);
 
   useEffect(() => {
-    loadData();
+    loadData({ soft: hasPurchaseDataRef.current });
   }, [loadData, lastSyncAt]);
 
   const metricRef = useRef<FlatList>(null);
@@ -246,7 +270,7 @@ export default function PurchaseScreen() {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      {apiError && <ErrorBanner message={apiError} onRetry={loadData} />}
+      {apiError && <ErrorBanner message={apiError} onRetry={() => loadData({ soft: hasPurchaseDataRef.current })} />}
 
       {/* ── Header ─────────────────────────────────────────────────── */}
       <View style={s.header}>

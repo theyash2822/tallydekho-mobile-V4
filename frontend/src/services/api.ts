@@ -7,8 +7,26 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import {
+  ApiError,
+  kindFromStatus,
+  notifyAuthFailure,
+  setDeviceOnline,
+} from './apiErrors';
+
+export {
+  ApiError,
+  errorMessage,
+  isApiError,
+  setAuthFailureHandler,
+  subscribeDeviceOnline,
+  getDeviceOnline,
+  type ApiErrorKind,
+} from './apiErrors';
 
 const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.241:3001';
+/** Request timeout (ms) — soft upper bound for hung sockets */
+const REQUEST_TIMEOUT_MS = 25_000;
 
 // ── Token helpers (must match AuthContext storage keys) ──────
 const getToken = async (): Promise<string | null> => {
@@ -26,6 +44,30 @@ const getToken = async (): Promise<string | null> => {
   }
 };
 
+async function safeParseJson(res: Response): Promise<any> {
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text.slice(0, 200) };
+  }
+}
+
+function extractErrorMeta(data: any): { message: string; code: string | null } {
+  const code =
+    data?.error?.code ??
+    data?.code ??
+    data?.error_code ??
+    null;
+  const message =
+    data?.error?.message ||
+    data?.message ||
+    (typeof data?.error === 'string' ? data.error : null) ||
+    null;
+  return { message: message || '', code: code ? String(code) : null };
+}
+
 // ── Core HTTP ────────────────────────────────────────────────
 async function request<T>(
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
@@ -37,20 +79,65 @@ async function request<T>(
   const token = requiresAuth ? await getToken() : null;
   // Fail client-side before hitting backend (avoids "No token provided" spam)
   if (requiresAuth && !token) {
-    throw new Error('Not authenticated');
+    throw new ApiError('Not authenticated', { status: 401, kind: 'auth', code: 'NO_TOKEN' });
   }
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE_URL}/${basePrefix}${endpoint}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error?.message || data?.message || `HTTP ${res.status}`);
-  return data;
+  try {
+    const res = await fetch(`${BASE_URL}/${basePrefix}${endpoint}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+
+    setDeviceOnline(true);
+    const data = await safeParseJson(res);
+
+    if (!res.ok) {
+      const { message, code } = extractErrorMeta(data);
+      const kind = kindFromStatus(res.status, code);
+      const err = new ApiError(
+        message || `HTTP ${res.status}`,
+        { status: res.status, code, kind, raw: data },
+      );
+      // Genuine protected 401 → central sign-out. Never logout on 403.
+      if (res.status === 401) {
+        notifyAuthFailure(err);
+      }
+      throw err;
+    }
+
+    return data as T;
+  } catch (e: any) {
+    if (e instanceof ApiError) throw e;
+
+    const aborted =
+      e?.name === 'AbortError' ||
+      e?.message === 'Aborted' ||
+      controller.signal.aborted;
+    if (aborted) {
+      setDeviceOnline(false);
+      throw new ApiError('Request timed out. Please try again.', {
+        status: null,
+        kind: 'timeout',
+        code: 'TIMEOUT',
+      });
+    }
+
+    // Network / DNS / connection refused
+    setDeviceOnline(false);
+    throw new ApiError(
+      e?.message || 'Network error. Please check your connection.',
+      { status: null, kind: 'network', code: 'NETWORK', raw: e },
+    );
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 const get      = <T>(endpoint: string, auth = true) => request<T>('GET', endpoint, undefined, auth);
@@ -399,14 +486,41 @@ export const updateUserSettings = (data: any) => patch<any>('/auth/user-settings
 // ── 2FA / Passkey ─────────────────────────────────────────────────────────────
 // Helper: POST with a custom bearer token (for pre_auth_token flows)
 async function postWithToken<T>(endpoint: string, body: object, customToken: string): Promise<T> {
-  const res = await fetch(`${BASE_URL}/api${endpoint}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${customToken}` },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
-  return data;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${BASE_URL}/api${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${customToken}` },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    setDeviceOnline(true);
+    const data = await safeParseJson(res);
+    if (!res.ok) {
+      const { message, code } = extractErrorMeta(data);
+      const kind = kindFromStatus(res.status, code);
+      const err = new ApiError(message || `HTTP ${res.status}`, {
+        status: res.status, code, kind, raw: data,
+      });
+      // pre_auth 401 should NOT wipe the main session via notifyAuthFailure
+      throw err;
+    }
+    return data as T;
+  } catch (e: any) {
+    if (e instanceof ApiError) throw e;
+    if (e?.name === 'AbortError' || controller.signal.aborted) {
+      throw new ApiError('Request timed out. Please try again.', {
+        status: null, kind: 'timeout', code: 'TIMEOUT',
+      });
+    }
+    setDeviceOnline(false);
+    throw new ApiError(e?.message || 'Network error. Please check your connection.', {
+      status: null, kind: 'network', code: 'NETWORK', raw: e,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // ── Phone / Email Change ────────────────────────────────────────────────
@@ -523,11 +637,38 @@ export const pushPendingBarcodes = (companyGuid: string) =>
 // Returns raw CSV text (not JSON) — pre-filled with all company stocks
 export const downloadBarcodeTemplate = async (companyGuid: string): Promise<string> => {
   const token = await getToken();
-  const res = await fetch(`${BASE_URL}/api/inventory/barcodes/template?companyGuid=${companyGuid}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`Template fetch failed: ${res.status}`);
-  return res.text();
+  if (!token) throw new ApiError('Not authenticated', { status: 401, kind: 'auth', code: 'NO_TOKEN' });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${BASE_URL}/api/inventory/barcodes/template?companyGuid=${companyGuid}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    });
+    setDeviceOnline(true);
+    if (!res.ok) {
+      const err = new ApiError(`Template fetch failed: ${res.status}`, {
+        status: res.status,
+        kind: kindFromStatus(res.status),
+      });
+      if (res.status === 401) notifyAuthFailure(err);
+      throw err;
+    }
+    return res.text();
+  } catch (e: any) {
+    if (e instanceof ApiError) throw e;
+    if (e?.name === 'AbortError' || controller.signal.aborted) {
+      throw new ApiError('Request timed out. Please try again.', {
+        status: null, kind: 'timeout', code: 'TIMEOUT',
+      });
+    }
+    setDeviceOnline(false);
+    throw new ApiError(e?.message || 'Network error. Please check your connection.', {
+      status: null, kind: 'network', code: 'NETWORK', raw: e,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 };
 
 export const getBarcodesByGuids = (companyGuid: string, stockGuids: string[]) =>

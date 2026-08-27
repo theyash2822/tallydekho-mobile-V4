@@ -55,14 +55,18 @@ export default function ReceivablesScreen() {
   const [apiData, setApiData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
+  const hasDataRef = useRef(false);
+  const dataAsOfRef = useRef<Date | null>(null);
 
   const overdueOn = activeChips.has('overdue');
   const receiptsOn = activeChips.has('receipts');
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { soft?: boolean }) => {
     if (!companyGuid) return;
-    setIsLoading(true);
-    setApiError(null);
+    const soft = opts?.soft ?? hasDataRef.current;
+    if (!soft) setIsLoading(true);
+    // Soft refresh: keep stale data + banner until success (no wipe, no toast)
+    if (!soft) setApiError(null);
     try {
       const params: Record<string, string> = {};
       const fromIso = dateFrom ? dmyToISO(dateFrom) : '';
@@ -72,15 +76,24 @@ export default function ReceivablesScreen() {
       if (overdueOn) params.overdue = '1';
       const res: any = await getKPIReceivables(companyGuid, params);
       setApiData(res?.data ?? res);
+      hasDataRef.current = true;
+      dataAsOfRef.current = new Date();
+      setApiError(null);
     } catch (err: any) {
-      setApiError(err?.message || 'Failed to load receivables');
-      setApiData(null);
+      if (hasDataRef.current) {
+        const ts = dataAsOfRef.current
+          ? dataAsOfRef.current.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+          : 'earlier';
+        setApiError(`Couldn't refresh. Showing data from ${ts}. Retry`);
+      } else {
+        setApiError(err?.message || 'Failed to load receivables');
+      }
     } finally {
       setIsLoading(false);
     }
   }, [companyGuid, dateFrom, dateTo, overdueOn, lastSyncAt]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load({ soft: hasDataRef.current }); }, [load]);
 
   const agingCards = useMemo(() => {
     const fmtTrend = (raw: any) => {
@@ -224,7 +237,7 @@ export default function ReceivablesScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
-        {apiError && <ErrorBanner message={apiError} onRetry={load} />}
+        {apiError && <ErrorBanner message={apiError} onRetry={() => load({ soft: hasDataRef.current })} />}
 
         {isLoading ? (
           <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Dimensions, Share, Alert, ActivityIndicator,
@@ -86,7 +86,7 @@ export default function PurchaseRegisterScreen() {
     status: r.is_cancelled ? 'unpaid' : 'paid',
   });
 
-  useEffect(() => {
+  const loadRegister = useCallback(() => {
     if (!companyGuid) return;
     const from = dmyToISO(fromDate) || fyFrom;
     const to   = dmyToISO(toDate)   || fyTo;
@@ -100,7 +100,11 @@ export default function PurchaseRegisterScreen() {
       setLiveInvoices(rows.map(mapPurchaseInv));
       setHasMore(rows.length === PAGE_SIZE);
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); }).finally(() => setIsLoading(false));
-  }, [companyGuid, fromDate, toDate, fyFrom, fyTo]);
+  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, formatAmount]);
+
+  useEffect(() => {
+    loadRegister();
+  }, [loadRegister]);
 
   const loadMore = () => {
     if (!companyGuid || isLoadingMore || !hasMore) return;
@@ -258,7 +262,7 @@ export default function PurchaseRegisterScreen() {
       {/* ── Search ─────────────────────────────────────────────── */}
       <SearchBar value={search} onChangeText={setSearch} placeholder="Search invoices, vendors..." />
 
-      {apiError && <ErrorBanner message={apiError} onRetry={() => { setApiError(null); }} />}
+      {apiError && <ErrorBanner message={apiError} onRetry={loadRegister} />}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: isSelecting ? 120 : 40 }}>
 
         {/* ── Stats 2×2 Grid ──────────────────────────────────────── */}

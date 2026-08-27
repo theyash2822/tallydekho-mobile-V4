@@ -1,5 +1,44 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-08-27 — Comprehensive error handling (Phases 1–4)
+
+### Locked policy
+1. Home partial success via `allSettled` — never fail whole Home if one section fails
+2. Soft refresh fail → keep stale + banner with as-of time; **no toast** for load failures
+3. First load all-primary fail → full-page `ErrorState` + Retry
+4. Loads → banner/section/ErrorState; mutations → toast/snackbar
+5. Visible Retry mandatory on banners/ErrorStates; PTR remains additional
+6. Device “No internet” bar ≠ Desktop/Tally offline chip (`isDesktopOnline`)
+7. Central 401 → AuthContext signOut; **403 never logs out**
+8. Recent Activity local unavailable only — does not alone trigger page partial banner
+
+### Phase 1 — API foundation
+- `src/services/apiErrors.ts`: typed `ApiError` (status/code/kind), auth handler, device-online pub/sub
+- `src/services/api.ts`: 25s timeout + AbortController, safe JSON parse, status/code on errors, 401 → `notifyAuthFailure`, never 403 logout
+- `AuthContext`: registers `setAuthFailureHandler(signOut)`
+- `src/hooks/useDeviceOnline.ts`: device network status (distinct from desktop)
+
+### Phase 2 — Home
+- `app/(tabs)/index.tsx`: `Promise.allSettled` for KPI/metrics/cashflow/activity; section cashflow error; activity local unavailable; page partial banner; first-load ErrorState; soft-refresh stale banner; OfflineBadge device + desktop
+
+### Phase 3 — Soft-refresh + retries
+- KPI screens: soft `hasDataRef` — no wipe on error; ErrorBanner + Retry
+- Sales/Purchase home: `allSettled` partial success
+- Reports: GST/Audit partial failure surfaced (not swallowed)
+- Fixed dead Retries: sales/purchase register, ewaybill, cash-register ErrorBanner
+
+### Phase 4 — i18n
+- en + hi keys for partial/refresh/offline/activity/cashflow strings
+
+### How to test
+1. Kill one Home API (e.g. cashflow) → other sections show; cashflow SectionError + Retry; page partial banner
+2. Airplane mode → device “No internet” bar; desktop offline when Tally offline (distinct copy)
+3. Soft refresh fail (PTR with backend down) → stale data + “Couldn't refresh. Showing data from …”
+4. First load fail all primary → full ErrorState (not zeroed dashboard)
+5. 401 → session cleared centrally; 403 (pairing) must not log out
+
+---
+
 ## 2026-08-27 — UX soft-refresh + shimmer policy (Phases 1–4)
 
 ### Locked policy

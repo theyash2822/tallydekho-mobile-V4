@@ -72,6 +72,24 @@ export function ErrorBanner({
   );
 }
 
+/** Compact section-level error (e.g. Cashflow failed while Home still shows KPIs) */
+export function SectionError({
+  message,
+  onRetry,
+}: { message: string; onRetry?: () => void }) {
+  return (
+    <View style={s.sectionErr}>
+      <Ionicons name="alert-circle-outline" size={16} color="#DC2626" />
+      <Text style={s.sectionErrText} numberOfLines={2}>{message}</Text>
+      {onRetry && (
+        <TouchableOpacity onPress={onRetry} style={s.bannerRetry}>
+          <Text style={s.bannerRetryText}>Retry</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
   center: {
     flex: 1,
@@ -127,4 +145,19 @@ const s = StyleSheet.create({
   bannerText: { flex: 1, fontSize: 13, color: '#DC2626' },
   bannerRetry: { paddingVertical: 2, paddingHorizontal: 8 },
   bannerRetryText: { fontSize: 13, color: '#DC2626', fontWeight: '600', textDecorationLine: 'underline' },
+  sectionErr: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: RADIUS?.md || 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginHorizontal: 16,
+    marginTop: 12,
+    minHeight: 48,
+  },
+  sectionErrText: { flex: 1, fontSize: 13, color: '#DC2626' },
 });

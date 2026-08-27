@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, StyleSheet, ActivityIndicator,
 } from 'react-native';
@@ -53,11 +53,12 @@ export default function CashRegisterScreen() {
           (r.voucher_type||'').toLowerCase().includes('receipt') ? 'receipt' as TxType : 'contra' as TxType,
   });
 
-  React.useEffect(() => {
+  const loadCash = useCallback(() => {
     if (!companyGuid) return;
     setPage(1);
     setHasMore(false);
     setIsLoading(true);
+    setApiError(null);
     const fyParams = selectedFY ? { from: selectedFY.startDate, to: selectedFY.endDate } : {};
     getVouchers(companyGuid, undefined, { ...fyParams, limit: PAGE_SIZE, page: 1 }).then((res: any) => {
       const rows = (res?.data ?? []).filter((r: any) =>
@@ -66,7 +67,11 @@ export default function CashRegisterScreen() {
       setLiveItems(rows.map(mapCashItem));
       setHasMore(rows.length === PAGE_SIZE);
     }).catch((err: any) => setApiError(err?.message || 'Failed to load')).finally(() => setIsLoading(false));
-  }, [companyGuid, selectedFY?.startDate]);
+  }, [companyGuid, selectedFY?.startDate, selectedFY?.endDate, formatAmount]);
+
+  React.useEffect(() => {
+    loadCash();
+  }, [loadCash]);
 
   const loadMore = () => {
     if (!companyGuid || isLoadingMore || !hasMore) return;
@@ -153,6 +158,7 @@ export default function CashRegisterScreen() {
 
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
+      {apiError && <ErrorBanner message={apiError} onRetry={loadCash} />}
 
       {/* Header */}
       <View style={s.header}>

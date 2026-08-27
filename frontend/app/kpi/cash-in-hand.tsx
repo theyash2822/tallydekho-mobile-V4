@@ -401,25 +401,38 @@ export default function CashInHandScreen() {
   const [apiData, setApiData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
+  const hasDataRef = useRef(false);
+  const dataAsOfRef = useRef<Date | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { soft?: boolean }) => {
     if (!companyGuid) return;
-    setIsLoading(true);
-    setApiError(null);
+    const soft = opts?.soft ?? hasDataRef.current;
+    if (!soft) setIsLoading(true);
+    // Soft refresh: keep stale data + banner until success (no wipe, no toast)
+    if (!soft) setApiError(null);
     try {
       const from = dateFrom ? dmyToISO(dateFrom) : (selectedFY?.startDate || undefined);
       const to = dateTo ? dmyToISO(dateTo) : (selectedFY?.endDate || undefined);
       const res: any = await getKPICashInHand(companyGuid, { from, to });
       setApiData(res?.data ?? res);
+      hasDataRef.current = true;
+      dataAsOfRef.current = new Date();
+      setApiError(null);
     } catch (err: any) {
-      setApiError(err?.message || 'Failed to load cash in hand');
-      setApiData(null);
+      if (hasDataRef.current) {
+        const ts = dataAsOfRef.current
+          ? dataAsOfRef.current.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+          : 'earlier';
+        setApiError(`Couldn't refresh. Showing data from ${ts}. Retry`);
+      } else {
+        setApiError(err?.message || 'Failed to load cash in hand');
+      }
     } finally {
       setIsLoading(false);
     }
   }, [companyGuid, dateFrom, dateTo, selectedFY?.startDate, selectedFY?.endDate, lastSyncAt]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load({ soft: hasDataRef.current }); }, [load]);
 
   const summaryCards = useMemo(() => {
     const cards = Array.isArray(apiData?.kpi_cards) ? apiData.kpi_cards : null;
@@ -524,7 +537,7 @@ export default function CashInHandScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
-        {apiError && <ErrorBanner message={apiError} onRetry={load} />}
+        {apiError && <ErrorBanner message={apiError} onRetry={() => load({ soft: hasDataRef.current })} />}
 
         {isLoading ? (
           <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>

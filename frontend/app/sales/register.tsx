@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Dimensions, Share, Alert, ActivityIndicator,
@@ -91,7 +91,7 @@ export default function SalesRegisterScreen() {
     status: r.is_cancelled ? 'unpaid' : 'paid',
   });
 
-  useEffect(() => {
+  const loadRegister = useCallback(() => {
     if (!companyGuid) return;
     setLoadingData(true);
     setPage(1);
@@ -106,7 +106,11 @@ export default function SalesRegisterScreen() {
     }).catch((err: any) => {
       setApiError(err?.message || 'Failed to load sales data');
     }).finally(() => setLoadingData(false));
-  }, [companyGuid, search, fromDate, toDate, fyFrom, fyTo]);
+  }, [companyGuid, search, fromDate, toDate, fyFrom, fyTo, formatAmount]);
+
+  useEffect(() => {
+    loadRegister();
+  }, [loadRegister]);
 
   const loadMore = () => {
     if (!companyGuid || isLoadingMore || !hasMore) return;
@@ -263,7 +267,7 @@ export default function SalesRegisterScreen() {
       {/* ── Search ─────────────────────────────────────────────── */}
       <SearchBar value={search} onChangeText={setSearch} placeholder="Search invoices, parties..." />
 
-      {apiError && <ErrorBanner message={apiError} onRetry={() => { /* trigger reload */ }} />}
+      {apiError && <ErrorBanner message={apiError} onRetry={loadRegister} />}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: isSelecting ? 120 : 40 }}>
 
         {/* ── Stats 2×2 Grid ──────────────────────────────────────── */}

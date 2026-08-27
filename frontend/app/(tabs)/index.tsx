@@ -21,12 +21,14 @@ import CashflowCard from '../../src/components/CashflowCard';
 import ModuleTiles from '../../src/components/ModuleTiles';
 import RecentActivity from '../../src/components/RecentActivity';
 import PairingBanner from '../../src/components/PairingBanner';
+import OfflineBadge from '../../src/components/OfflineBadge';
 import {
   getKPIStrip, getMetrics, getCashflow, getRecentActivity, getTallySyncStatus, getNotifications,
-  searchDashboard,
+  searchDashboard, errorMessage,
 } from '../../src/services/api';
 import Toast from 'react-native-toast-message';
-import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { ErrorBanner, ErrorState, SectionError } from '../../src/components/ApiStateViews';
+import { useDeviceOnline } from '../../src/hooks/useDeviceOnline';
 import { useTranslation } from 'react-i18next';
 import {
   CASHFLOW_PERIOD_KEY,
@@ -51,7 +53,8 @@ const MODULE_CARDS = [
 export default function HomeScreen() {
   const router = useRouter();
   const { t } = useTranslation();
-  const { isPaired, company, user, selectedFY, lastSyncAt } = useAuth();
+  const { isPaired, isDesktopOnline, company, user, selectedFY, lastSyncAt } = useAuth();
+  const deviceOnline = useDeviceOnline();
   const companyGuid = company?.guid;
   const [activeFY, setActiveFY] = useState('');
   const [activeFilter, setActiveFilter] = useState<TimeFilter>('7D');
@@ -60,7 +63,14 @@ export default function HomeScreen() {
   const [cashflow, setCashflow] = useState<any>(null);
   const [activity, setActivity] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [apiError, setApiError] = useState<string | null>(null);
+  /** Page-level banner: partial primary fail OR soft-refresh fail (stale data) */
+  const [pageBanner, setPageBanner] = useState<string | null>(null);
+  const [cashflowError, setCashflowError] = useState<string | null>(null);
+  const [activityError, setActivityError] = useState(false);
+  /** First load: all primary sections failed → full-page ErrorState */
+  const [fatalError, setFatalError] = useState<string | null>(null);
+  const [dataAsOf, setDataAsOf] = useState<Date | null>(null);
+  const dataAsOfRef = useRef<Date | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [notifCount, setNotifCount] = useState(0);
   const wasPaired = useRef(false); // track previous isPaired to detect change
@@ -163,36 +173,52 @@ export default function HomeScreen() {
     setMetrics([]);
     setCashflow(null);
     setActivity([]);
+    setPageBanner(null);
+    setCashflowError(null);
+    setActivityError(false);
+    setFatalError(null);
+    setDataAsOf(null);
     setIsLoading(true);
   }, [companyGuid]);
 
   type LoadOpts = { soft?: boolean; skipActivity?: boolean };
 
+  const formatAsOf = useCallback((d: Date | null) => {
+    if (!d) return t('home.earlier', 'earlier');
+    return d.toLocaleString('en-IN', {
+      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+    });
+  }, [t]);
+
   const loadData = useCallback(async (opts?: LoadOpts) => {
     // ── DATA GATE ──────────────────────────────────────────────
-    // Unpaired: show empty state, no API calls.
-    // Paired but no companyGuid yet: wait (Auth poll adopts company).
-    // Paired + company: fetch real data.
-    // ─────────────────────────────────────────────────
     if (!isPaired) {
       hasDashboardDataRef.current = false;
       setKpiData([]);
       setMetrics([]);
       setCashflow(null);
       setActivity([]);
+      setFatalError(null);
+      setPageBanner(null);
+      setCashflowError(null);
+      setActivityError(false);
       setIsLoading(false);
       return;
     }
     if (!companyGuid) {
-      // Paired but company not hydrated yet — keep loading only if nothing to show
       if (!hasDashboardDataRef.current) setIsLoading(true);
       return;
     }
 
     const soft = opts?.soft ?? hasDashboardDataRef.current;
+    const hadData = hasDashboardDataRef.current;
     // Full-page shimmer ONLY when no dashboard data yet (first load / company switch)
     if (!soft) setIsLoading(true);
-    setApiError(null);
+    // Soft refresh: keep existing banner until success; first load clears fatal
+    if (!soft && !hadData) {
+      setFatalError(null);
+      setPageBanner(null);
+    }
     const gen = ++requestGenRef.current;
 
     try {
@@ -201,45 +227,118 @@ export default function HomeScreen() {
         to: selectedFY?.endDate,
       });
 
-      const core = Promise.all([
+      const skipActivity = !!opts?.skipActivity;
+      const settled = await Promise.allSettled([
         getKPIStrip(companyGuid, activeFilter, from, to),
         getMetrics(companyGuid, activeFilter, from, to),
         getCashflow(companyGuid, activeFilter, from, to),
+        skipActivity
+          ? Promise.resolve({ __skipped: true } as any)
+          : getRecentActivity(companyGuid),
       ]);
-
-      const skipActivity = !!opts?.skipActivity;
-      const actPromise = skipActivity ? null : getRecentActivity(companyGuid);
-
-      const [kpi, met, cf] = await core;
       if (gen !== requestGenRef.current) return;
 
-      const kpiArr = Array.isArray(kpi) ? kpi : (kpi as any)?.data ?? [];
-      const metArr = Array.isArray(met) ? met : (met as any)?.data ?? [];
-      setKpiData(kpiArr as any);
-      setMetrics(metArr as any);
+      const [kpiR, metR, cfR, actR] = settled;
 
-      const cfData = cf ? ((cf as any)?.data ?? cf) : null;
-      if (cfData && typeof cfData === 'object' && !('success' in cfData)) {
-        setCashflow(cfData as any);
-      } else {
-        setCashflow(null);
+      let kpiOk = false;
+      let metOk = false;
+      let cfOk = false;
+
+      if (kpiR.status === 'fulfilled') {
+        const kpi = kpiR.value;
+        const kpiArr = Array.isArray(kpi) ? kpi : (kpi as any)?.data ?? [];
+        setKpiData(kpiArr as any);
+        kpiOk = true;
       }
 
-      hasDashboardDataRef.current = true;
+      if (metR.status === 'fulfilled') {
+        const met = metR.value;
+        const metArr = Array.isArray(met) ? met : (met as any)?.data ?? [];
+        setMetrics(metArr as any);
+        metOk = true;
+      }
 
-      if (actPromise) {
-        const act = await actPromise;
-        if (gen !== requestGenRef.current) return;
-        const actArr = Array.isArray(act) ? act : (act as any)?.data ?? [];
-        setActivity(actArr as any);
+      if (cfR.status === 'fulfilled') {
+        const cf = cfR.value;
+        const cfData = cf ? ((cf as any)?.data ?? cf) : null;
+        if (cfData && typeof cfData === 'object' && !('success' in cfData)) {
+          setCashflow(cfData as any);
+        } else {
+          setCashflow(null);
+        }
+        setCashflowError(null);
+        cfOk = true;
+      } else {
+        setCashflowError(
+          errorMessage(cfR.reason, t('home.cashflowUnavailable', 'Cashflow unavailable')),
+        );
+      }
+
+      if (!skipActivity) {
+        if (actR.status === 'fulfilled' && !(actR.value as any)?.__skipped) {
+          const act = actR.value;
+          const actArr = Array.isArray(act) ? act : (act as any)?.data ?? [];
+          setActivity(actArr as any);
+          setActivityError(false);
+        } else if (actR.status === 'rejected') {
+          setActivityError(true);
+        }
+      }
+
+      const primaryOkCount = [kpiOk, metOk, cfOk].filter(Boolean).length;
+      const anyPrimaryOk = primaryOkCount > 0;
+
+      if (anyPrimaryOk) {
+        hasDashboardDataRef.current = true;
+        const now = new Date();
+        dataAsOfRef.current = now;
+        setDataAsOf(now);
+        setFatalError(null);
+
+        if (primaryOkCount < 3) {
+          setPageBanner(
+            t('home.partialUpdate', "Some data couldn't be updated"),
+          );
+        } else {
+          setPageBanner(null);
+        }
+      } else {
+        if (hadData || soft) {
+          setPageBanner(
+            t('home.refreshFailed', {
+              time: formatAsOf(dataAsOfRef.current),
+              defaultValue: `Couldn't refresh. Showing data from ${formatAsOf(dataAsOfRef.current)}. Retry`,
+            }),
+          );
+        } else {
+          const firstReason =
+            (kpiR.status === 'rejected' && errorMessage(kpiR.reason)) ||
+            (metR.status === 'rejected' && errorMessage(metR.reason)) ||
+            (cfR.status === 'rejected' && errorMessage(cfR.reason)) ||
+            t('home.loadFailed');
+          setFatalError(firstReason);
+          setPageBanner(null);
+        }
       }
     } catch (err: any) {
       if (gen !== requestGenRef.current) return;
-      setApiError(err?.message || t('home.loadFailed'));
+      if (hadData || soft) {
+        setPageBanner(
+          t('home.refreshFailed', {
+            time: formatAsOf(dataAsOfRef.current),
+            defaultValue: `Couldn't refresh. Showing data from ${formatAsOf(dataAsOfRef.current)}. Retry`,
+          }),
+        );
+      } else {
+        setFatalError(errorMessage(err, t('home.loadFailed')));
+      }
     } finally {
       if (gen === requestGenRef.current) setIsLoading(false);
     }
-  }, [isPaired, activeFilter, companyGuid, selectedFY?.startDate, selectedFY?.endDate, t]);
+  }, [
+    isPaired, activeFilter, companyGuid, selectedFY?.startDate, selectedFY?.endDate,
+    t, formatAsOf,
+  ]);
 
   // Period / FY / company / pairing → load. Period-only: soft + skip activity.
   useEffect(() => {
@@ -408,6 +507,27 @@ export default function HomeScreen() {
 
   const isSearching = searchQuery.trim().length > 0;
 
+  // First load: all primary failed → full-page ErrorState (not empty zeros + banner)
+  if (fatalError && !hasDashboardDataRef.current && !isLoading) {
+    return (
+      <SafeAreaView testID="home-screen" style={styles.safe}>
+        <Header
+          companyName={company?.name ?? t('home.myCompany')}
+          fyYear={activeFY}
+          notificationCount={notifCount}
+          userName={user?.name || t('home.user')}
+          lastSyncTime={lastSyncTime ?? undefined}
+          onFYChange={handleFYChange}
+          onSettingsPress={() => router.push('/settings' as any)}
+        />
+        <ErrorState
+          message={fatalError}
+          onRetry={() => loadData({ soft: false })}
+        />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView testID="home-screen" style={styles.safe}>
       {/* Header */}
@@ -438,11 +558,21 @@ export default function HomeScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.brandPrimary} />}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Tally Sync Banner */}
-        {/* Status banners — one or the other, never both */}
+        {/* Status banners */}
         {!isPaired && <PairingBanner />}
-        {/* OfflineBadge removed — was shown when desktop offline, but auto-sync keeps data fresh */}
-        {apiError && <ErrorBanner message={apiError} onRetry={loadData} />}
+        {!deviceOnline && (
+          <OfflineBadge
+            variant="device"
+            onRetry={() => loadData({ soft: hasDashboardDataRef.current })}
+          />
+        )}
+        {deviceOnline && isPaired && !isDesktopOnline && <OfflineBadge variant="desktop" />}
+        {pageBanner && (
+          <ErrorBanner
+            message={pageBanner}
+            onRetry={() => loadData({ soft: hasDashboardDataRef.current })}
+          />
+        )}
 
         {/* KPI Carousel */}
         <View style={styles.kpiSection}>
@@ -499,13 +629,27 @@ export default function HomeScreen() {
 
         <ModuleTiles metrics={Array.isArray(metrics) ? metrics : []} isLoading={isLoading} />
 
-        {/* Cashflow Card */}
-        {isLoading
-          ? <CardSkeleton height={200} />
-          : <CashflowCard {...cashflow} />
-        }
+        {/* Cashflow Card — section error + Retry on fail */}
+        {isLoading ? (
+          <CardSkeleton height={200} />
+        ) : cashflowError && !cashflow ? (
+          <SectionError
+            message={cashflowError}
+            onRetry={() => loadData({ soft: true })}
+          />
+        ) : (
+          <>
+            {cashflowError ? (
+              <SectionError
+                message={cashflowError}
+                onRetry={() => loadData({ soft: true })}
+              />
+            ) : null}
+            <CashflowCard {...(cashflow || {})} />
+          </>
+        )}
 
-        {/* Recent Activity — filtered when searching */}
+        {/* Recent Activity — local unavailable only (not page banner alone) */}
         {isLoading ? (
           <View style={styles.metricsCard}>
             {[0, 1, 2, 3, 4].map(i => <ActivityRowSkeleton key={i} />)}
@@ -519,7 +663,11 @@ export default function HomeScreen() {
             <RecentActivity activities={searchActivities} title={t('dashboard.searchResults')} />
           )
         ) : (
-          <RecentActivity activities={activity} />
+          <RecentActivity
+            activities={activity}
+            unavailable={activityError}
+            onRetry={() => loadData({ soft: true })}
+          />
         )}
 
         {isSearching && !searchLoading && searchActivities.length === 0 && (
