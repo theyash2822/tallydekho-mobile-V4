@@ -123,15 +123,16 @@ export default function SalesScreen() {
 
   const metricCards = useMemo(() => {
     const m = metrics || {};
+    // MTD first — Today is often ₹0 on quiet days and looks like a broken KPI.
     return [
-      { id: 'today', label: t('sales.today'), icon: 'calendar-outline', amount: formatAmountCompact(Math.round(Number(m.today) || 0)) },
       { id: 'mtd', label: t('sales.mtd'), icon: 'calendar-number-outline', amount: formatAmountCompact(Math.round(Number(m.mtd) || 0)) },
       { id: 'ytd', label: t('sales.ytd'), icon: 'ribbon-outline', amount: formatAmountCompact(Math.round(Number(m.ytd) || 0)) },
+      { id: 'today', label: t('sales.today'), icon: 'calendar-outline', amount: formatAmountCompact(Math.round(Number(m.today) || 0)) },
       { id: 'outstanding', label: t('sales.outstanding'), icon: 'wallet-outline', amount: formatAmountCompact(Math.round(Number(m.outstanding) || 0)) },
       { id: 'credit', label: t('sales.creditNotes'), icon: 'receipt-outline', amount: formatAmountCompact(Math.round(Number(m.credit_notes) || 0)) },
       { id: 'avg', label: t('sales.avgTicket'), icon: 'ticket-outline', amount: formatAmountCompact(Math.round(Number(m.avg_ticket) || 0)) },
     ];
-  }, [metrics, formatAmountCompact]);
+  }, [metrics, formatAmountCompact, t]);
 
   // ─ Tab & filter state
   const [tab,      setTab]      = useState<'recent' | 'parties'>('recent');

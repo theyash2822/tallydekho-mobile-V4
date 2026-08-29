@@ -57,7 +57,7 @@ export default function HomeScreen() {
   const deviceOnline = useDeviceOnline();
   const companyGuid = company?.guid;
   const [activeFY, setActiveFY] = useState('');
-  const [activeFilter, setActiveFilter] = useState<TimeFilter>('7D');
+  const [activeFilter, setActiveFilter] = useState<TimeFilter>('1M');
   const [kpiData, setKpiData] = useState<any[]>([]);
   const [metrics, setMetrics] = useState<any[]>([]);
   const [cashflow, setCashflow] = useState<any>(null);
@@ -370,6 +370,12 @@ export default function HomeScreen() {
   const readStoredPeriod = useCallback(async () => {
     try {
       const saved = await AsyncStorage.getItem(CASHFLOW_PERIOD_KEY);
+      // Migrate sticky 7D → 1M: short windows often show ₹0 when last invoice is >7 days ago.
+      if (saved === '7D') {
+        setActiveFilter('1M');
+        AsyncStorage.setItem(CASHFLOW_PERIOD_KEY, '1M').catch(() => {});
+        return;
+      }
       if (isSyncPeriod(saved)) setActiveFilter(saved);
     } catch { /* ignore */ }
   }, []);
