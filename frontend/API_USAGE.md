@@ -61,9 +61,14 @@ getKPIPayments, getKPIReceipts, getKPILoansODs
 All: GET /api/kpi/<type> + ?companyGuid&fy
 
 ## Sales / Purchase
-getSalesInvoices, getSalesOrders, getCreditNotes,
-getDeliveryNotes, getPurchaseInvoices, getPurchaseOrders, getPurchaseDebitNotes
+getSalesInvoices, getSalesVouchers, getSalesOrders, getCreditNotes,
+getDeliveryNotes, getPurchaseInvoices, getPurchaseVouchers, getPurchaseOrders, getDebitNotes
 All: GET /api/sales/* or /api/purchase/* + ?companyGuid&fy
+
+Home Recent (combined feed):
+- `getSalesVouchers(companyGuid, { docTypes: 'invoice,order,credit_note,delivery_note,proforma,quotation', from, to, limit })` — `GET /api/sales/vouchers`
+- `getPurchaseVouchers(companyGuid, { docTypes: 'invoice,order,debit_note', from, to, limit })` — `GET /api/purchase/vouchers`
+- `getExpenses(companyGuid, { type: 'All'|'Direct'|'Indirect', category?, from, to, limit })` — anchored Direct/Indirect + optional exact category parent
 
 Credit Note Sales Return:
 - `getSalesInvoices(companyGuid, { partyName, from, to, limit })` — all Sales invoices for the selected party and FY

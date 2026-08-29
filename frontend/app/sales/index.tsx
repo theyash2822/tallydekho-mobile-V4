@@ -10,23 +10,35 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 import { useAuth } from '../../src/context/AuthContext';
-import { getSalesInvoices, getSalesHomeMetrics } from '../../src/services/api';
+import { getSalesVouchers, getSalesHomeMetrics } from '../../src/services/api';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useSettings } from '../../src/context/SettingsContext';
 import { KPICardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { useTranslation } from 'react-i18next';
+import FilterBottomSheet, { FilterChipGroup } from '../../src/components/FilterBottomSheet';
+import {
+  SALES_DOC_TYPES,
+  ALL_SALES_DOC_TYPE_IDS,
+  DOC_TYPE_LABEL,
+  FilterIconWithBadge,
+  ActiveFilterChips,
+  notifyFiltersApplied,
+  docTypeToRouteType,
+  type SalesDocTypeId,
+} from '../../src/components/voucherHomeFilters';
 
 const AMBER      = '#A89060';
-const AMBER_BG   = '#FDF9F4';
 const BANNER_RED = '#E53935';
 const { width: SW } = Dimensions.get('window');
-const CARD_W  = SW - SPACING.md * 2;
 const BANNER_W = SW - SPACING.md * 2;
+
+// Default: all doc types selected → first paint shows full combined Recent feed.
+const DEFAULT_SALES_TYPES: SalesDocTypeId[] = [...ALL_SALES_DOC_TYPE_IDS];
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function SalesScreen() {
   const { t } = useTranslation();
-  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
+  const { formatAmount, formatAmountCompact } = useSettings();
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
   const { company, lastSyncAt, selectedFY} = useAuth();
@@ -39,16 +51,28 @@ export default function SalesScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const hasSalesDataRef = useRef(false);
 
-  const load = useCallback((opts?: { soft?: boolean }) => {
+  // Doc-type multi-filter (Ledger-style sheet). Default = all types.
+  const [docTypes, setDocTypes] = useState<SalesDocTypeId[]>(DEFAULT_SALES_TYPES);
+  const [draftDocTypes, setDraftDocTypes] = useState<SalesDocTypeId[]>(DEFAULT_SALES_TYPES);
+  const [showTypeFilter, setShowTypeFilter] = useState(false);
+  const allTypesSelected = docTypes.length === ALL_SALES_DOC_TYPE_IDS.length;
+  const filterBadgeCount = allTypesSelected ? 0 : docTypes.length;
+
+  const load = useCallback((opts?: { soft?: boolean; types?: SalesDocTypeId[] }) => {
     if (!companyGuid) return;
     const soft = opts?.soft ?? hasSalesDataRef.current;
+    const types = opts?.types ?? docTypes;
     if (!soft) setIsLoading(true);
     if (!soft) setApiError(null);
     const fyParams = selectedFY?.startDate && selectedFY?.endDate
       ? { from: selectedFY.startDate, to: selectedFY.endDate }
       : {};
     Promise.allSettled([
-      getSalesInvoices(companyGuid, { limit: '50', ...fyParams } as any),
+      getSalesVouchers(companyGuid, {
+        limit: '50',
+        docTypes: types.join(','),
+        ...fyParams,
+      } as any),
       getSalesHomeMetrics(companyGuid, fyParams),
     ]).then(([invSettled, metricsSettled]) => {
       let anyOk = false;
@@ -56,16 +80,25 @@ export default function SalesScreen() {
         const invRes: any = invSettled.value;
         const rows = invRes?.data ?? [];
         if (rows.length) {
-          setLiveRecent(rows.slice(0, 5).map((r: any, i: number) => ({
-            id: r.guid || `sale-${r.voucher_number || 'x'}-${r.id ?? i}`,
-            voucher: r.voucher_number || '',
-            party: r.party_name || '',
-            date: r.date || '',
-            amount: formatAmount(Math.abs(+r.amount || 0)),
-            status: r.irn ? 'generated' : 'pending_irn',
-          })));
+          setLiveRecent(rows.slice(0, 20).map((r: any, i: number) => {
+            const docType = r.doc_type || 'invoice';
+            return {
+              id: r.guid || `sale-${r.voucher_number || 'x'}-${r.id ?? i}`,
+              guid: r.guid,
+              voucher: r.voucher_number || '',
+              party: r.party_name || '',
+              date: r.date || '',
+              time: '',
+              amount: formatAmount(Math.abs(+r.amount || 0)),
+              status: r.irn ? 'generated' : 'pending_irn',
+              docType,
+              voucherType: r.voucher_type || '',
+              isOptional: !!r.is_optional,
+              typeLabel: DOC_TYPE_LABEL[docType] || docType,
+            };
+          }));
           const partyMap: Record<string, number> = {};
-          rows.forEach((r: any) => {
+          rows.filter((r: any) => (r.doc_type || 'invoice') === 'invoice').forEach((r: any) => {
             if (r.party_name) partyMap[r.party_name] = (partyMap[r.party_name] || 0) + (+r.amount || 0);
           });
           const top = Object.entries(partyMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
@@ -75,7 +108,7 @@ export default function SalesScreen() {
             amount: formatAmount(Math.round(+amt)),
             color: ['#2563EB', '#D97706', '#7C3AED', '#0891B2', '#059669'][i],
           })));
-          const pendingIRN = rows.filter((r: any) => !r.irn).length;
+          const pendingIRN = rows.filter((r: any) => !r.irn && (r.doc_type === 'invoice' || !r.doc_type)).length;
           setLiveBanners(pendingIRN > 0
             ? [{ id: 'b1', bold: t('sales.invoicesCount', { count: pendingIRN }), sub: t('sales.pendingIrn'), action: t('sales.generateNow') }]
             : []);
@@ -107,7 +140,7 @@ export default function SalesScreen() {
         }
       }
     }).finally(() => setIsLoading(false));
-  }, [companyGuid, selectedFY?.startDate, selectedFY?.endDate, formatAmount, t]);
+  }, [companyGuid, selectedFY?.startDate, selectedFY?.endDate, formatAmount, t, docTypes]);
 
   useEffect(() => { load({ soft: hasSalesDataRef.current }); }, [load]);
 
@@ -128,7 +161,7 @@ export default function SalesScreen() {
       { id: 'credit', label: t('sales.creditNotes'), icon: 'receipt-outline', amount: formatAmountCompact(Math.round(Number(m.credit_notes) || 0)) },
       { id: 'avg', label: t('sales.avgTicket'), icon: 'ticket-outline', amount: formatAmountCompact(Math.round(Number(m.avg_ticket) || 0)) },
     ];
-  }, [metrics, formatAmountCompact]);
+  }, [metrics, formatAmountCompact, t]);
 
   // ─ Tab & filter state
   const [tab,      setTab]      = useState<'recent' | 'parties'>('recent');
@@ -149,26 +182,26 @@ export default function SalesScreen() {
 
   useEffect(() => {
     if (metricCards.length === 0) return;
-    const t = setInterval(() => {
+    const timer = setInterval(() => {
       setMetricIdx(prev => {
         const next = (prev + 1) % metricCards.length;
         metricRef.current?.scrollToOffset({ offset: next * SW, animated: true });
         return next;
       });
     }, 3000);
-    return () => clearInterval(t);
+    return () => clearInterval(timer);
   }, [metricCards.length]);
 
   useEffect(() => {
     if (liveBanners.length === 0) return;
-    const t = setInterval(() => {
+    const timer = setInterval(() => {
       setBannerIdx(prev => {
         const next = (prev + 1) % liveBanners.length;
         bannerRef.current?.scrollToIndex({ index: next, animated: true, viewPosition: 0 });
         return next;
       });
     }, 3500);
-    return () => clearInterval(t);
+    return () => clearInterval(timer);
   }, [liveBanners.length]);
 
   const sourceRecent = liveRecent;
@@ -186,9 +219,41 @@ export default function SalesScreen() {
     setShowDatePicker(false);
   };
 
+  const openTypeFilter = () => {
+    setDraftDocTypes(docTypes);
+    setShowTypeFilter(true);
+  };
+
+  const applyTypeFilter = () => {
+    const next = draftDocTypes.length ? draftDocTypes : DEFAULT_SALES_TYPES;
+    setDocTypes(next);
+    setShowTypeFilter(false);
+    const narrowed = next.length < ALL_SALES_DOC_TYPE_IDS.length;
+    notifyFiltersApplied(
+      narrowed
+        ? next.map((id) => SALES_DOC_TYPES.find((d) => d.id === id)?.label || id)
+        : []
+    );
+    load({ soft: true, types: next });
+  };
+
+  const activeTypeChips = allTypesSelected
+    ? []
+    : docTypes.map((id) => ({
+        id,
+        label: SALES_DOC_TYPES.find((d) => d.id === id)?.label || id,
+      }));
+
+  const removeTypeChip = (id: string) => {
+    const next = docTypes.filter((x) => x !== id);
+    const applied = next.length ? next : DEFAULT_SALES_TYPES;
+    setDocTypes(applied);
+    load({ soft: true, types: applied });
+  };
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      {apiError && <ErrorBanner message={apiError} onRetry={load} />}
+      {apiError && <ErrorBanner message={apiError} onRetry={() => load({ soft: hasSalesDataRef.current })} />}
 
       {/* ── Header ─────────────────────────────────────────────────── */}
       <View style={s.header}>
@@ -200,14 +265,21 @@ export default function SalesScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>{t('sales.title')}</Text>
-        <TouchableOpacity
-          style={s.ewbBtn}
-          onPress={() => router.push('/reports/ewb-list' as any)}
-          activeOpacity={0.7}
-        >
-          <Text style={s.ewbTxt}>{t('sales.ewayBill')}</Text>
-          <Ionicons name="document-text-outline" size={15} color={COLORS.textPrimary} />
-        </TouchableOpacity>
+        <View style={s.headerRight}>
+          <TouchableOpacity
+            style={s.ewbBtn}
+            onPress={() => router.push('/reports/ewb-list' as any)}
+            activeOpacity={0.7}
+          >
+            <Text style={s.ewbTxt}>{t('sales.ewayBill')}</Text>
+            <Ionicons name="document-text-outline" size={15} color={COLORS.textPrimary} />
+          </TouchableOpacity>
+          <FilterIconWithBadge
+            testID="sales-filter-btn"
+            count={filterBadgeCount}
+            onPress={openTypeFilter}
+          />
+        </View>
       </View>
 
       {/* ── Filter Row ──────────────────────────────────────────────── */}
@@ -245,6 +317,15 @@ export default function SalesScreen() {
           )}
         </View>
       </View>
+
+      <ActiveFilterChips
+        chips={activeTypeChips}
+        onRemove={removeTypeChip}
+        onClearAll={() => {
+          setDocTypes(DEFAULT_SALES_TYPES);
+          load({ soft: true, types: DEFAULT_SALES_TYPES });
+        }}
+      />
 
       {dropdown && (
         <TouchableOpacity style={s.dropOverlay} onPress={() => setDropdown(false)} activeOpacity={1} />
@@ -295,7 +376,7 @@ export default function SalesScreen() {
           </View>
         )}
 
-                {/* ── Tabs ─────────────────────────────────────────────────── */}
+        {/* ── Tabs ─────────────────────────────────────────────────── */}
         <View style={s.tabRow}>
           {(['recent', 'parties'] as const).map(tabKey => (
             <TouchableOpacity
@@ -325,7 +406,9 @@ export default function SalesScreen() {
                   key={inv.id}
                   style={s.itemCard}
                   activeOpacity={0.7}
-                  onPress={() => router.push(`/document/${inv.id}?type=sales_invoice` as any)}
+                  onPress={() => router.push(
+                    `/document/${inv.guid || inv.id}?type=${docTypeToRouteType(inv.docType, 'sales')}` as any
+                  )}
                 >
                   <View style={s.tallyIcon}>
                     <Ionicons name="return-down-back-outline" size={18} color={AMBER} />
@@ -335,7 +418,9 @@ export default function SalesScreen() {
                       {inv.party}{' '}
                       <Text style={s.itemInvId}>• {inv.voucher || inv.id}</Text>
                     </Text>
-                    <Text style={s.itemMeta}>{inv.date} | {inv.time}</Text>
+                    <Text style={s.itemMeta}>
+                      {inv.typeLabel}{inv.date ? ` | ${inv.date}` : ''}{inv.time ? ` | ${inv.time}` : ''}
+                    </Text>
                   </View>
                   <Text style={s.itemAmt}>{inv.amount}</Text>
                 </TouchableOpacity>
@@ -433,6 +518,25 @@ export default function SalesScreen() {
         maxDate={selectedFY?.endDate}
       />
 
+      <FilterBottomSheet
+        visible={showTypeFilter}
+        onClose={() => setShowTypeFilter(false)}
+        title="Filter documents"
+        activeCount={draftDocTypes.length === ALL_SALES_DOC_TYPE_IDS.length ? 0 : draftDocTypes.length}
+        onClear={() => setDraftDocTypes([...DEFAULT_SALES_TYPES])}
+        onApply={applyTypeFilter}
+        applyLabel="Apply Filters"
+        heightFraction={0.55}
+      >
+        <FilterChipGroup
+          label="Document types"
+          multi
+          options={SALES_DOC_TYPES.map((d) => ({ id: d.id, label: d.label }))}
+          selected={draftDocTypes}
+          onSelect={(ids) => setDraftDocTypes(ids as SalesDocTypeId[])}
+        />
+      </FilterBottomSheet>
+
     </SafeAreaView>
   );
 }
@@ -450,6 +554,7 @@ const s = StyleSheet.create({
   },
   backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { flex: 1, textAlign: 'center', fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   ewbBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     paddingHorizontal: 10, paddingVertical: 7,
@@ -509,8 +614,6 @@ const s = StyleSheet.create({
   mIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
   mLabel: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
   mAmount: { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
-  pctBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 5, borderRadius: RADIUS.full },
-  pctTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
 
   // Dots
   dotsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: 10, marginBottom: 4 },
@@ -519,57 +622,68 @@ const s = StyleSheet.create({
 
   // Tabs
   tabRow: {
-    flexDirection: 'row',
-    marginHorizontal: SPACING.md, marginTop: SPACING.md,
-    backgroundColor: COLORS.pageBg,
-    borderRadius: RADIUS.full, padding: 3,
+    flexDirection: 'row', marginHorizontal: SPACING.md, marginTop: SPACING.md,
+    backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, padding: 3,
     borderWidth: 1, borderColor: COLORS.borderDefault,
   },
-  tabBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: RADIUS.full },
-  tabActive: { backgroundColor: COLORS.cardBg, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2 },
+  tabBtn: { flex: 1, paddingVertical: 10, borderRadius: RADIUS.sm, alignItems: 'center' },
+  tabActive: { backgroundColor: COLORS.cardBg },
   tabTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
-  tabActiveTxt: { color: COLORS.textPrimary },
+  tabActiveTxt: { color: COLORS.textPrimary, fontWeight: '700' },
 
   // List
-  listSection: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, gap: 8 },
+  listSection: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm },
   itemCard: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: COLORS.cardBg,
-    borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 14,
+    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md,
+    padding: SPACING.md, marginBottom: 8,
     borderWidth: 1, borderColor: COLORS.borderDefault,
   },
-  tallyIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: AMBER_BG, alignItems: 'center', justifyContent: 'center' },
+  tallyIcon: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: '#FDF9F4',
+    alignItems: 'center', justifyContent: 'center',
+  },
   itemCenter: { flex: 1 },
-  itemParty:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  itemInvId:  { fontSize: TYPOGRAPHY.xs, fontWeight: '400', color: COLORS.textSecondary },
-  itemMeta:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 3 },
-  itemAmt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
-  avatar:     { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  avatarTxt:  { fontSize: TYPOGRAPHY.base, fontWeight: '800' },
-  partyName:  { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  emptyBox:   { alignItems: 'center', paddingVertical: 32, gap: 8 },
-  emptyTxt:   { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
-
-  // View All
+  itemParty: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  itemInvId: { fontWeight: '400', color: COLORS.textSecondary },
+  itemMeta: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
+  itemAmt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  avatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  avatarTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700' },
+  partyName: { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
   viewAllBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
-    backgroundColor: COLORS.cardBg,
-    borderRadius: RADIUS.full, paddingVertical: 12, paddingHorizontal: 32,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-    alignSelf: 'center', marginTop: 4, minWidth: 150,
+    paddingVertical: 14,
   },
   viewAllTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  emptyBox: { alignItems: 'center', paddingVertical: 40, gap: 8 },
+  emptyTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
 
-  // Banner Carousel
-  bannerWrap:     { backgroundColor: COLORS.pageBg, paddingTop: SPACING.sm },
-  bannerCard:     { width: BANNER_W, backgroundColor: BANNER_RED, borderRadius: RADIUS.lg, paddingHorizontal: SPACING.md, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  bannerLeft:     { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
-  bannerIconWrap: { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  bannerBold:     { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white },
-  bannerSub:      { fontSize: 10, color: 'rgba(255,255,255,0.85)', marginTop: 1 },
-  bannerBtn:      { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: COLORS.white, borderRadius: RADIUS.full, paddingHorizontal: 10, paddingVertical: 7, flexShrink: 0 },
-  bannerBtnTxt:   { fontSize: 10, fontWeight: '700', color: BANNER_RED },
-  bannerDots:     { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, paddingTop: 6, paddingBottom: 4 },
-  bannerDot:      { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
-  bannerDotActive:{ width: 14, height: 5, borderRadius: 3, backgroundColor: COLORS.brandPrimary },
+  // Banner
+  bannerWrap: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: COLORS.cardBg,
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
+    paddingTop: 8,
+  },
+  bannerCard: {
+    width: BANNER_W, flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#FEF2F2', borderRadius: RADIUS.md, padding: 10, gap: 8,
+  },
+  bannerLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  bannerIconWrap: {
+    width: 28, height: 28, borderRadius: 14, backgroundColor: BANNER_RED,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  bannerBold: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary },
+  bannerSub: { fontSize: 10, color: COLORS.textSecondary },
+  bannerBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 2,
+    paddingHorizontal: 8, paddingVertical: 6,
+    backgroundColor: COLORS.white, borderRadius: RADIUS.sm,
+  },
+  bannerBtnTxt: { fontSize: 10, fontWeight: '700', color: BANNER_RED },
+  bannerDots: { flexDirection: 'row', justifyContent: 'center', gap: 4, paddingVertical: 6 },
+  bannerDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: COLORS.borderDefault },
+  bannerDotActive: { width: 12, backgroundColor: BANNER_RED },
 });

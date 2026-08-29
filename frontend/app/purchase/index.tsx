@@ -12,17 +12,30 @@ import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
-import { getPurchaseInvoices, getDebitNotes } from '../../src/services/api';
+import { getPurchaseVouchers } from '../../src/services/api';
 import { useTranslation } from 'react-i18next';
+import FilterBottomSheet, { FilterChipGroup } from '../../src/components/FilterBottomSheet';
+import {
+  PURCHASE_DOC_TYPES,
+  ALL_PURCHASE_DOC_TYPE_IDS,
+  DOC_TYPE_LABEL,
+  FilterIconWithBadge,
+  ActiveFilterChips,
+  notifyFiltersApplied,
+  docTypeToRouteType,
+  type PurchaseDocTypeId,
+} from '../../src/components/voucherHomeFilters';
 
 const AMBER      = '#A89060';
 const AMBER_BG   = '#FDF9F4';
 const BANNER_RED = '#E53935';
 const { width: SW } = Dimensions.get('window');
-const CARD_W   = SW - SPACING.md * 2;
 const BANNER_W = SW - SPACING.md * 2;
 
 const VENDOR_COLORS = ['#2563EB', '#D97706', '#059669', '#7C3AED', '#0891B2'];
+
+// Default: all doc types selected → full combined Recent feed on first paint.
+const DEFAULT_PURCHASE_TYPES: PurchaseDocTypeId[] = [...ALL_PURCHASE_DOC_TYPE_IDS];
 
 type PurchaseRow = {
   id: string;
@@ -33,6 +46,8 @@ type PurchaseRow = {
   time: string;
   amount: string;
   status: string;
+  docType?: string;
+  typeLabel?: string;
 };
 
 type MetricCard = {
@@ -104,11 +119,17 @@ export default function PurchaseScreen() {
   const [filter,   setFilter]   = useState('All');
   const [dropdown, setDropdown] = useState(false);
 
+  const [docTypes, setDocTypes] = useState<PurchaseDocTypeId[]>(DEFAULT_PURCHASE_TYPES);
+  const [draftDocTypes, setDraftDocTypes] = useState<PurchaseDocTypeId[]>(DEFAULT_PURCHASE_TYPES);
+  const [showTypeFilter, setShowTypeFilter] = useState(false);
+  const allTypesSelected = docTypes.length === ALL_PURCHASE_DOC_TYPE_IDS.length;
+  const filterBadgeCount = allTypesSelected ? 0 : docTypes.length;
+
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [fromDate, setFromDate] = useState(() => fyFrom ? isoToDMY(fyFrom) : '01/04/24');
   const [toDate,   setToDate]   = useState(() => fyTo   ? isoToDMY(fyTo)   : '31/03/25');
 
-  const loadData = useCallback((opts?: { soft?: boolean }) => {
+  const loadData = useCallback((opts?: { soft?: boolean; types?: PurchaseDocTypeId[] }) => {
     if (!companyGuid) {
       setLiveRecent([]);
       setLiveTopVendors([]);
@@ -122,34 +143,31 @@ export default function PurchaseScreen() {
     const to   = dmyToISO(toDate)   || fyTo;
     const rangeParams = from && to ? { from, to } : {};
     const soft = opts?.soft ?? hasPurchaseDataRef.current;
+    const types = opts?.types ?? docTypes;
     if (!soft) setIsLoading(true);
     if (!soft) setApiError(null);
 
-    Promise.allSettled([
-      getPurchaseInvoices(companyGuid, { ...rangeParams, limit: '100', page: '1' } as any),
-      getDebitNotes(companyGuid, { ...rangeParams, limit: '50', page: '1' } as any),
-    ])
-      .then(([invSettled, dnSettled]) => {
-        let anyOk = false;
-        const rows = invSettled.status === 'fulfilled'
-          ? ((invSettled.value as any)?.data ?? [])
-          : null;
-        const debitNotes = dnSettled.status === 'fulfilled'
-          ? ((dnSettled.value as any)?.data ?? [])
-          : [];
+    getPurchaseVouchers(companyGuid, {
+      ...rangeParams,
+      limit: '100',
+      page: '1',
+      docTypes: types.join(','),
+    } as any)
+      .then((res: any) => {
+        const rows = res?.data ?? [];
+        const invoiceRows = rows.filter((r: any) => (r.doc_type || 'invoice') === 'invoice');
+        setMetricCards(buildMetrics(invoiceRows, formatAmountCompact).map(c => ({
+          ...c,
+          label: c.id === 'today' ? t('purchase.today')
+            : c.id === 'mtd' ? t('purchase.mtd')
+            : c.id === 'ytd' ? t('purchase.ytd')
+            : c.id === 'avg' ? t('purchase.avgTicket')
+            : c.label,
+        })));
 
-        if (rows) {
-          anyOk = true;
-          setMetricCards(buildMetrics(rows, formatAmountCompact).map(c => ({
-            ...c,
-            label: c.id === 'today' ? t('purchase.today')
-              : c.id === 'mtd' ? t('purchase.mtd')
-              : c.id === 'ytd' ? t('purchase.ytd')
-              : c.id === 'avg' ? t('purchase.avgTicket')
-              : c.label,
-          })));
-
-          setLiveRecent(rows.slice(0, 20).map((r: any, i: number): PurchaseRow => ({
+        setLiveRecent(rows.slice(0, 20).map((r: any, i: number): PurchaseRow => {
+          const docType = r.doc_type || 'invoice';
+          return {
             id: r.guid || `pur-${r.voucher_number || 'x'}-${r.id ?? i}`,
             guid: r.guid,
             voucher: r.voucher_number || '',
@@ -158,64 +176,58 @@ export default function PurchaseScreen() {
             time: '',
             amount: formatAmount(Math.abs(parseFloat(r.amount) || 0)),
             status: r.is_cancelled ? 'unpaid' : 'paid',
-          })));
+            docType,
+            typeLabel: DOC_TYPE_LABEL[docType] || docType,
+          };
+        }));
 
-          const vendorMap: Record<string, { total: number; count: number }> = {};
-          rows.forEach((r: any) => {
-            const name = r.party_name;
-            if (!name) return;
-            const amt = Math.abs(parseFloat(r.amount) || 0);
-            if (!vendorMap[name]) vendorMap[name] = { total: 0, count: 0 };
-            vendorMap[name].total += amt;
-            vendorMap[name].count += 1;
-          });
-          const top = Object.entries(vendorMap)
-            .sort((a, b) => b[1].total - a[1].total)
-            .slice(0, 5)
-            .map(([name, info], i) => ({
-              id: `tv${i}`,
-              name,
-              transactions: info.count,
-              amount: formatAmount(Math.round(info.total)),
-              color: VENDOR_COLORS[i % VENDOR_COLORS.length],
-            }));
-          setLiveTopVendors(top);
+        const vendorMap: Record<string, { total: number; count: number }> = {};
+        invoiceRows.forEach((r: any) => {
+          const name = r.party_name;
+          if (!name) return;
+          const amt = Math.abs(parseFloat(r.amount) || 0);
+          if (!vendorMap[name]) vendorMap[name] = { total: 0, count: 0 };
+          vendorMap[name].total += amt;
+          vendorMap[name].count += 1;
+        });
+        const top = Object.entries(vendorMap)
+          .sort((a, b) => b[1].total - a[1].total)
+          .slice(0, 5)
+          .map(([name, info], i) => ({
+            id: `tv${i}`,
+            name,
+            transactions: info.count,
+            amount: formatAmount(Math.round(info.total)),
+            color: VENDOR_COLORS[i % VENDOR_COLORS.length],
+          }));
+        setLiveTopVendors(top);
 
-          const banners: any[] = [];
-          const unpaid = rows.filter((r: any) => r.is_cancelled).length;
-          if (unpaid > 0) {
-            banners.push({ id: 'b1', bold: t('purchase.invoicesCount', { count: unpaid }), sub: t('purchase.cancelledOrPending'), action: t('purchase.viewAll') });
-          }
-          if (debitNotes.length > 0) {
-            banners.push({ id: 'b2', bold: t('purchase.debitNotesCount', { count: debitNotes.length }), sub: t('purchase.inSelectedPeriod'), action: t('purchase.viewAll') });
-          }
-          setLiveBanners(banners);
-        } else if (dnSettled.status === 'fulfilled') {
-          anyOk = true;
+        const banners: any[] = [];
+        const unpaid = invoiceRows.filter((r: any) => r.is_cancelled).length;
+        if (unpaid > 0) {
+          banners.push({ id: 'b1', bold: t('purchase.invoicesCount', { count: unpaid }), sub: t('purchase.cancelledOrPending'), action: t('purchase.viewAll') });
         }
-
-        if (anyOk) {
-          hasPurchaseDataRef.current = true;
-          if (invSettled.status === 'rejected' || dnSettled.status === 'rejected') {
-            setApiError(t('home.partialUpdate', "Some data couldn't be updated"));
-          } else {
-            setApiError(null);
-          }
+        const debitCount = rows.filter((r: any) => r.doc_type === 'debit_note').length;
+        if (debitCount > 0) {
+          banners.push({ id: 'b2', bold: t('purchase.debitNotesCount', { count: debitCount }), sub: t('purchase.inSelectedPeriod'), action: t('purchase.viewAll') });
+        }
+        setLiveBanners(banners);
+        hasPurchaseDataRef.current = true;
+        setApiError(null);
+      })
+      .catch((err: any) => {
+        if (hasPurchaseDataRef.current) {
+          setApiError(t('errors.refreshFailedShort', "Couldn't refresh. Showing previous data. Retry"));
         } else {
-          const err = invSettled.status === 'rejected' ? invSettled.reason : dnSettled.status === 'rejected' ? dnSettled.reason : null;
-          if (hasPurchaseDataRef.current) {
-            setApiError(t('errors.refreshFailedShort', "Couldn't refresh. Showing previous data. Retry"));
-          } else {
-            setApiError((err as any)?.message || t('purchase.loadFailed'));
-            setLiveRecent([]);
-            setLiveTopVendors([]);
-            setLiveBanners([]);
-            setMetricCards([]);
-          }
+          setApiError(err?.message || t('purchase.loadFailed'));
+          setLiveRecent([]);
+          setLiveTopVendors([]);
+          setLiveBanners([]);
+          setMetricCards([]);
         }
       })
       .finally(() => setIsLoading(false));
-  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, formatAmount, formatAmountCompact, t]);
+  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, formatAmount, formatAmountCompact, t, docTypes]);
 
   useEffect(() => {
     if (fyFrom && fyTo) {
@@ -268,6 +280,31 @@ export default function PurchaseScreen() {
     return true;
   }).slice(0, 5), [liveRecent, filter]);
 
+  const openTypeFilter = () => {
+    setDraftDocTypes(docTypes);
+    setShowTypeFilter(true);
+  };
+
+  const applyTypeFilter = () => {
+    const next = draftDocTypes.length ? draftDocTypes : DEFAULT_PURCHASE_TYPES;
+    setDocTypes(next);
+    setShowTypeFilter(false);
+    const narrowed = next.length < ALL_PURCHASE_DOC_TYPE_IDS.length;
+    notifyFiltersApplied(
+      narrowed
+        ? next.map((id) => PURCHASE_DOC_TYPES.find((d) => d.id === id)?.label || id)
+        : []
+    );
+    loadData({ soft: true, types: next });
+  };
+
+  const activeTypeChips = allTypesSelected
+    ? []
+    : docTypes.map((id) => ({
+        id,
+        label: PURCHASE_DOC_TYPES.find((d) => d.id === id)?.label || id,
+      }));
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       {apiError && <ErrorBanner message={apiError} onRetry={() => loadData({ soft: hasPurchaseDataRef.current })} />}
@@ -282,7 +319,11 @@ export default function PurchaseScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>{t('purchase.title')}</Text>
-        <View style={{ width: 36 }} />
+        <FilterIconWithBadge
+          testID="purchase-filter-btn"
+          count={filterBadgeCount}
+          onPress={openTypeFilter}
+        />
       </View>
 
       {/* ── Filter Row ──────────────────────────────────────────────── */}
@@ -318,6 +359,20 @@ export default function PurchaseScreen() {
           )}
         </View>
       </View>
+
+      <ActiveFilterChips
+        chips={activeTypeChips}
+        onRemove={(id) => {
+          const next = docTypes.filter((x) => x !== id);
+          const applied = next.length ? next : DEFAULT_PURCHASE_TYPES;
+          setDocTypes(applied);
+          loadData({ soft: true, types: applied });
+        }}
+        onClearAll={() => {
+          setDocTypes(DEFAULT_PURCHASE_TYPES);
+          loadData({ soft: true, types: DEFAULT_PURCHASE_TYPES });
+        }}
+      />
 
       {dropdown && (
         <TouchableOpacity style={s.dropOverlay} onPress={() => setDropdown(false)} activeOpacity={1} />
@@ -400,13 +455,15 @@ export default function PurchaseScreen() {
                   key={inv.guid || `purchase-${index}`}
                   style={s.itemCard}
                   activeOpacity={0.7}
-                  onPress={() => router.push(`/document/${inv.guid || inv.id}?type=purchase_invoice` as any)}
+                  onPress={() => router.push(
+                    `/document/${inv.guid || inv.id}?type=${docTypeToRouteType(inv.docType || 'invoice', 'purchase')}` as any
+                  )}
                 >
                   {/* Status Row */}
                   <View style={s.itemStatusRow}>
                     <View style={[s.statusDot, { backgroundColor: STATUS_COLOR[inv.status] ?? '#9CA3AF' }]} />
                     <Text style={[s.itemStatusTxt, { color: STATUS_COLOR[inv.status] ?? '#9CA3AF' }]}>
-                      {STATUS_LABEL[inv.status] ?? inv.status}
+                      {inv.typeLabel || STATUS_LABEL[inv.status] || inv.status}
                     </Text>
                     <Text style={s.itemBullet}> • </Text>
                     <Text style={s.itemInvId}>{inv.voucher || inv.id}</Text>
@@ -534,6 +591,25 @@ export default function PurchaseScreen() {
         onApply={(from, to) => { setFromDate(from); setToDate(to); setShowDatePicker(false); }}
         onClose={() => setShowDatePicker(false)}
       />
+
+      <FilterBottomSheet
+        visible={showTypeFilter}
+        onClose={() => setShowTypeFilter(false)}
+        title="Filter documents"
+        activeCount={draftDocTypes.length === ALL_PURCHASE_DOC_TYPE_IDS.length ? 0 : draftDocTypes.length}
+        onClear={() => setDraftDocTypes([...DEFAULT_PURCHASE_TYPES])}
+        onApply={applyTypeFilter}
+        applyLabel="Apply Filters"
+        heightFraction={0.45}
+      >
+        <FilterChipGroup
+          label="Document types"
+          multi
+          options={PURCHASE_DOC_TYPES.map((d) => ({ id: d.id, label: d.label }))}
+          selected={draftDocTypes}
+          onSelect={(ids) => setDraftDocTypes(ids as PurchaseDocTypeId[])}
+        />
+      </FilterBottomSheet>
 
     </SafeAreaView>
   );

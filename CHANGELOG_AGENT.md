@@ -1,3 +1,28 @@
+## [2026-08-29] Option A — Sales/Purchase/Expense home multi-filter + combined Recent
+
+### Policy
+- **Default selection = all doc types** so first paint shows the full combined Recent feed after API is ready.
+- Ledger-style funnel: badge + chips + toast (`Filters applied` / cleared).
+- Paid/Unpaid/All pill on Sales/Purchase unchanged. Register remains a separate nav target (not a voucher-type filter).
+
+### Changed
+- `src/components/voucherHomeFilters.tsx` — FilterIconWithBadge, ActiveFilterChips, notifyFiltersApplied, doc-type catalogs
+- `app/sales/index.tsx` — filter icon right of E-Way Bill; sheet multi-select Invoices/Orders/Credit notes/Delivery notes/Proforma/Quotations; `GET /sales/vouchers`
+- `app/purchase/index.tsx` — same pattern; Invoices/Orders/Debit notes; `GET /purchase/vouchers`
+- `app/expenses/index.tsx` — filter sheet All/Direct/Indirect + API categories; passes `type`/`category`; removed broken `includes('direct')` client match
+- `src/services/api.ts` — `getSalesVouchers`, `getPurchaseVouchers`
+
+### How to test
+1. Backend on `:3001` with new routes → Expo reload
+2. Sales → filter → deselect some types → Apply → Recent updates, chips + toast; Quotation may be empty
+3. Purchase → same for Invoices/Orders/Debit notes; Register still via View All
+4. Expenses → Direct vs Indirect via funnel (no Indirect bleed); category chips from API
+
+### Known gaps
+- Quotations empty until Tally sync has Quotation voucher types
+
+---
+
 ## [2026-08-27] UX soft-refresh + shimmer policy (Phases 1–4)
 
 ### Policy

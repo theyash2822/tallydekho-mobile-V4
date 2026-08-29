@@ -14,6 +14,12 @@ import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPla
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useTranslation } from 'react-i18next';
+import FilterBottomSheet, { FilterChipGroup, FilterRadioRow } from '../../src/components/FilterBottomSheet';
+import {
+  FilterIconWithBadge,
+  ActiveFilterChips,
+  notifyFiltersApplied,
+} from '../../src/components/voucherHomeFilters';
 
 const AMBER    = '#A89060';
 const AMBER_BG = '#FDF9F4';
@@ -21,6 +27,8 @@ const { width: SW } = Dimensions.get('window');
 
 const CATEGORY_COLORS = ['#1A1A1A', '#A89060', '#787774', '#4A4945', '#8B7355', '#2563EB', '#059669', '#7C3AED'];
 const CATEGORY_ICONS = ['receipt-outline', 'flash-outline', 'car-outline', 'home-outline', 'people-outline', 'cube-outline', 'wallet-outline', 'construct-outline'];
+
+type ExpenseTypeFilter = 'All' | 'Direct' | 'Indirect';
 
 type ExpenseRow = {
   id: string;
@@ -62,6 +70,8 @@ export default function ExpenseScreen() {
   const [liveExpenses, setLiveExpenses] = useState<ExpenseRow[]>([]);
   const [liveCategories, setLiveCategories] = useState<any[]>([]);
   const [expenseSummary, setExpenseSummary] = useState<any>(null);
+  const [categoryOptions, setCategoryOptions] = useState<{ id: string; label: string }[]>([]);
+  const hasExpenseDataRef = useRef(false);
 
   const fyFrom = selectedFY?.startDate ?? '';
   const fyTo   = selectedFY?.endDate   ?? '';
@@ -69,14 +79,26 @@ export default function ExpenseScreen() {
   const [fromDate, setFromDate] = useState(() => fyFrom ? isoToDMY(fyFrom) : '01/04/24');
   const [toDate,   setToDate]   = useState(() => fyTo   ? isoToDMY(fyTo)   : '31/03/25');
 
-  const [tab,      setTab]      = useState<'recent' | 'categories'>('recent');
-  const [filter,   setFilter]   = useState('All');
-  const [dropdown, setDropdown] = useState(false);
+  const [tab, setTab] = useState<'recent' | 'categories'>('recent');
+
+  // Server-driven type + category (fixes client includes('direct') bug)
+  const [expType, setExpType] = useState<ExpenseTypeFilter>('All');
+  const [categories, setCategories] = useState<string[]>([]);
+  const [draftType, setDraftType] = useState<ExpenseTypeFilter>('All');
+  const [draftCategories, setDraftCategories] = useState<string[]>([]);
+  const [showFilter, setShowFilter] = useState(false);
+
+  const filterBadgeCount =
+    (expType !== 'All' ? 1 : 0) + (categories.length > 0 ? categories.length : 0);
 
   const metricRef = useRef<FlatList>(null);
   const [metricIdx, setMetricIdx] = useState(0);
 
-  const loadData = useCallback(() => {
+  const loadData = useCallback((opts?: {
+    soft?: boolean;
+    type?: ExpenseTypeFilter;
+    cats?: string[];
+  }) => {
     if (!companyGuid) {
       setLiveExpenses([]);
       setLiveCategories([]);
@@ -88,38 +110,69 @@ export default function ExpenseScreen() {
     const from = dmyToISO(fromDate) || fyFrom;
     const to   = dmyToISO(toDate)   || fyTo;
     const rangeParams = from && to ? { from, to } : {};
+    const soft = opts?.soft ?? hasExpenseDataRef.current;
+    const type = opts?.type ?? expType;
+    const cats = opts?.cats ?? categories;
 
-    setIsLoading(true);
-    setApiError(null);
+    if (!soft) setIsLoading(true);
+    if (!soft) setApiError(null);
 
-    getExpenses(companyGuid, { ...rangeParams, limit: '100', page: '1' } as any)
+    const params: Record<string, string> = {
+      limit: '100',
+      page: '1',
+      type,
+    };
+    if (from) params.from = from;
+    if (to) params.to = to;
+    // Pass first selected category (backend accepts one exact parent); multi = client intersect later if needed
+    if (cats.length === 1) params.category = cats[0];
+
+    getExpenses(companyGuid, params as any)
       .then((res: any) => {
-        const rows = res?.data ?? [];
+        let rows = res?.data ?? [];
+        // If multiple categories selected, filter client-side on expense_group (exact)
+        if (cats.length > 1) {
+          const set = new Set(cats.map((c) => c.toLowerCase()));
+          rows = rows.filter((r: any) => set.has(String(r.expense_group || '').toLowerCase()));
+        }
         setLiveExpenses(rows.map((r: any, i: number) => mapExpenseRow(r, formatAmount, i)));
         setExpenseSummary(res?.summary ?? null);
-        setLiveCategories((res?.categories ?? []).map((c: any, i: number) => ({
+        const catsFromApi = (res?.categories ?? []).map((c: any, i: number) => ({
           id: c.id || `cat${i}`,
           name: c.name || 'Expense',
           amount: formatAmount(Math.round(c.amount_raw || 0)),
           color: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
           icon: CATEGORY_ICONS[i % CATEGORY_ICONS.length],
-        })));
+        }));
+        setLiveCategories(catsFromApi);
+        setCategoryOptions(
+          (res?.categories ?? []).map((c: any) => ({
+            id: String(c.id || c.name),
+            label: String(c.name || c.id),
+          }))
+        );
+        hasExpenseDataRef.current = true;
+        setApiError(null);
       })
       .catch((err: any) => {
-        setApiError(err?.message || t('expenses.loadFailed'));
-        setLiveExpenses([]);
-        setLiveCategories([]);
-        setExpenseSummary(null);
+        if (hasExpenseDataRef.current) {
+          setApiError(t('errors.refreshFailedShort', "Couldn't refresh. Showing previous data. Retry"));
+        } else {
+          setApiError(err?.message || t('expenses.loadFailed'));
+          setLiveExpenses([]);
+          setLiveCategories([]);
+          setExpenseSummary(null);
+        }
       })
       .finally(() => setIsLoading(false));
-  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, formatAmount]);
+  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, formatAmount, expType, categories, t]);
 
   useEffect(() => {
     if (fyFrom && fyTo) { setFromDate(isoToDMY(fyFrom)); setToDate(isoToDMY(fyTo)); }
   }, [fyFrom, fyTo]);
 
   useEffect(() => {
-    loadData();
+    loadData({ soft: hasExpenseDataRef.current });
   }, [loadData, lastSyncAt]);
 
   const metricCards = useMemo(() => {
@@ -129,29 +182,50 @@ export default function ExpenseScreen() {
       { id: 'total', label: t('expenses.totalExpenses'), icon: 'ribbon-outline', amount: total, pct: '' },
       { id: 'count', label: t('expenses.transactions'), icon: 'list-outline', amount: String(count), pct: '' },
     ];
-  }, [expenseSummary, liveExpenses.length, formatAmountCompact]);
+  }, [expenseSummary, liveExpenses.length, formatAmountCompact, t]);
 
   useEffect(() => {
     if (metricCards.length <= 1) return;
-    const t = setInterval(() => {
+    const timer = setInterval(() => {
       setMetricIdx(prev => {
         const next = (prev + 1) % metricCards.length;
         metricRef.current?.scrollToOffset({ offset: next * SW, animated: true });
         return next;
       });
     }, 3000);
-    return () => clearInterval(t);
+    return () => clearInterval(timer);
   }, [metricCards.length]);
 
-  const recent = useMemo(() => liveExpenses.filter((exp) => {
-    if (filter === 'Direct') return (exp.expenseGroup || '').toLowerCase().includes('direct');
-    if (filter === 'Indirect') return (exp.expenseGroup || '').toLowerCase().includes('indirect');
-    return true;
-  }).slice(0, 10), [liveExpenses, filter]);
+  // Server already filtered by type/category — no client includes('direct') matching.
+  const recent = useMemo(() => liveExpenses.slice(0, 10), [liveExpenses]);
+
+  const openFilter = () => {
+    setDraftType(expType);
+    setDraftCategories(categories);
+    setShowFilter(true);
+  };
+
+  const applyFilter = () => {
+    setExpType(draftType);
+    setCategories(draftCategories);
+    setShowFilter(false);
+    const parts: string[] = [];
+    if (draftType !== 'All') parts.push(draftType);
+    draftCategories.forEach((c) => parts.push(c));
+    notifyFiltersApplied(parts);
+    loadData({ soft: true, type: draftType, cats: draftCategories });
+  };
+
+  const activeChips = useMemo(() => {
+    const chips: { id: string; label: string }[] = [];
+    if (expType !== 'All') chips.push({ id: `type:${expType}`, label: expType });
+    categories.forEach((c) => chips.push({ id: `cat:${c}`, label: c }));
+    return chips;
+  }, [expType, categories]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      {apiError && <ErrorBanner message={apiError} onRetry={loadData} />}
+      {apiError && <ErrorBanner message={apiError} onRetry={() => loadData({ soft: hasExpenseDataRef.current })} />}
 
       {/* ── Header ───────────────────────────────────────────────── */}
       <View style={s.header}>
@@ -163,44 +237,41 @@ export default function ExpenseScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>{t('expenses.title')}</Text>
-        <View style={{ width: 36 }} />
+        <FilterIconWithBadge
+          testID="expenses-filter-btn"
+          count={filterBadgeCount}
+          onPress={openFilter}
+        />
       </View>
 
-      {/* ── Filter Row ────────────────────────────────────────────── */}
+      {/* ── Filter Row (date only — type/category moved to sheet) ─── */}
       <View style={s.filterRow}>
         <TouchableOpacity style={s.datePill} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
           <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
           <Text style={s.dateTxt}>{fromDate} – {toDate}</Text>
           <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
         </TouchableOpacity>
-
-        <View style={s.statusWrap}>
-          <TouchableOpacity
-            style={[s.statusPill, dropdown && s.statusPillOpen]}
-            onPress={() => setDropdown(v => !v)}
-            activeOpacity={0.7}
-          >
-            <Text style={s.statusTxt}>{filter}</Text>
-            <Ionicons name={dropdown ? 'chevron-up' : 'chevron-down'} size={13} color={COLORS.textSecondary} />
-          </TouchableOpacity>
-          {dropdown && (
-            <View style={s.dropMenu}>
-              {['All', 'Direct', 'Indirect'].map(opt => (
-                <TouchableOpacity
-                  key={opt} style={s.dropItem} activeOpacity={0.7}
-                  onPress={() => { setFilter(opt); setDropdown(false); }}
-                >
-                  <Text style={[s.dropTxt, filter === opt && s.dropTxtActive]}>{opt}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
       </View>
 
-      {dropdown && (
-        <TouchableOpacity style={s.dropOverlay} onPress={() => setDropdown(false)} activeOpacity={1} />
-      )}
+      <ActiveFilterChips
+        chips={activeChips}
+        onRemove={(id) => {
+          if (id.startsWith('type:')) {
+            setExpType('All');
+            loadData({ soft: true, type: 'All', cats: categories });
+          } else if (id.startsWith('cat:')) {
+            const name = id.slice(4);
+            const next = categories.filter((c) => c !== name);
+            setCategories(next);
+            loadData({ soft: true, type: expType, cats: next });
+          }
+        }}
+        onClearAll={() => {
+          setExpType('All');
+          setCategories([]);
+          loadData({ soft: true, type: 'All', cats: [] });
+        }}
+      />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
         {isLoading ? (
@@ -344,6 +415,37 @@ export default function ExpenseScreen() {
         onApply={(from, to) => { setFromDate(from); setToDate(to); setShowDatePicker(false); }}
         onClose={() => setShowDatePicker(false)}
       />
+
+      <FilterBottomSheet
+        visible={showFilter}
+        onClose={() => setShowFilter(false)}
+        title="Filter expenses"
+        activeCount={(draftType !== 'All' ? 1 : 0) + draftCategories.length}
+        onClear={() => { setDraftType('All'); setDraftCategories([]); }}
+        onApply={applyFilter}
+        applyLabel="Apply Filters"
+        heightFraction={0.65}
+      >
+        <View style={{ paddingTop: 4 }}>
+          {(['All', 'Direct', 'Indirect'] as ExpenseTypeFilter[]).map((opt) => (
+            <FilterRadioRow
+              key={opt}
+              label={opt}
+              selected={draftType === opt}
+              onPress={() => setDraftType(opt)}
+            />
+          ))}
+        </View>
+        {categoryOptions.length > 0 && (
+          <FilterChipGroup
+            label="Categories"
+            multi
+            options={categoryOptions}
+            selected={draftCategories}
+            onSelect={setDraftCategories}
+          />
+        )}
+      </FilterBottomSheet>
     </SafeAreaView>
   );
 }
@@ -359,15 +461,6 @@ const s = StyleSheet.create({
   filterRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, zIndex: 20 },
   datePill:  { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.borderDefault },
   dateTxt:   { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
-  statusWrap: { position: 'relative', zIndex: 100 },
-  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.borderDefault, minWidth: 88 },
-  statusPillOpen: { borderColor: COLORS.brandPrimary },
-  statusTxt:  { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
-  dropMenu:   { position: 'absolute', top: 46, right: 0, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, minWidth: 130, zIndex: 200, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 8 },
-  dropItem:   { paddingHorizontal: SPACING.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  dropTxt:    { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
-  dropTxtActive: { color: COLORS.textPrimary, fontWeight: '700' },
-  dropOverlay:{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50 },
 
   carouselWrap: { paddingTop: SPACING.md },
   metricItem: { width: SW },
