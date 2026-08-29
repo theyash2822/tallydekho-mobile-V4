@@ -70,6 +70,96 @@ export function docTypeToRouteType(docType: string, module: 'sales' | 'purchase'
   }
 }
 
+/** Classify API row → doc_type id (mirrors backend classifySales/PurchaseDocType). */
+export function classifyVoucherDocType(
+  module: 'sales' | 'purchase',
+  row: { doc_type?: string; voucher_type?: string; is_optional?: boolean },
+): string {
+  if (row.doc_type) return String(row.doc_type);
+  const vt = String(row.voucher_type || '');
+  if (module === 'purchase') {
+    if (/debit\s*note/i.test(vt)) return 'debit_note';
+    if (/purchase\s*order/i.test(vt)) return 'order';
+    return 'invoice';
+  }
+  if (/quotation/i.test(vt)) return 'quotation';
+  if (/credit\s*note/i.test(vt)) return 'credit_note';
+  if (/delivery\s*note/i.test(vt)) return 'delivery_note';
+  if (/sales\s*order/i.test(vt)) return 'order';
+  if (row.is_optional) return 'proforma';
+  return 'invoice';
+}
+
+/** List-row badge colors — aligned with DocumentPreview / DOC_TYPE_CONFIG. */
+const VOUCHER_TYPE_BADGE: Record<string, { label: string; color: string; bg: string }> = {
+  sales_invoice:    { label: 'Sales Invoice',    color: '#2D7D46', bg: '#E8F5E9' },
+  purchase_invoice: { label: 'Purchase Invoice', color: '#4527A0', bg: '#EDE7F6' },
+  sales_order:      { label: 'Sales Order',      color: '#1565C0', bg: '#E3F2FD' },
+  purchase_order:   { label: 'Purchase Order',   color: '#1B5E20', bg: '#E8F5E9' },
+  credit_note:      { label: 'Credit Note',      color: '#EF6C00', bg: '#FFF3E0' },
+  debit_note:       { label: 'Debit Note',       color: '#C62828', bg: '#FFEBEE' },
+  delivery_note:    { label: 'Delivery Note',    color: '#00838F', bg: '#E0F7FA' },
+  proforma_invoice: { label: 'Proforma',         color: '#1A1A1A', bg: '#F5F4EF' },
+  quotation:        { label: 'Quotation',        color: '#1565C0', bg: '#E3F2FD' },
+};
+
+export type VoucherTypeBadgeInfo = { label: string; color: string; bg: string; docType: string };
+
+/** Resolve short voucher-kind badge from doc_type / voucher_type / is_optional. */
+export function resolveVoucherTypeBadge(
+  module: 'sales' | 'purchase',
+  row: { docType?: string; doc_type?: string; voucher_type?: string; is_optional?: boolean },
+): VoucherTypeBadgeInfo {
+  const docType = row.docType || classifyVoucherDocType(module, row);
+  const routeKey = docTypeToRouteType(docType, module);
+  const cfg = VOUCHER_TYPE_BADGE[routeKey] || {
+    label: DOC_TYPE_LABEL[docType] || 'Voucher',
+    color: COLORS.textSecondary,
+    bg: COLORS.pageBg,
+  };
+  return { ...cfg, docType };
+}
+
+/** Compact list badge — My Entries / audit-trail pill language (small uppercase tag). */
+export function VoucherTypeBadge({
+  module,
+  docType,
+  voucher_type,
+  is_optional,
+  label: labelOverride,
+}: {
+  module: 'sales' | 'purchase';
+  docType?: string;
+  voucher_type?: string;
+  is_optional?: boolean;
+  label?: string;
+}) {
+  const info = resolveVoucherTypeBadge(module, { docType, voucher_type, is_optional });
+  const label = labelOverride || info.label;
+  return (
+    <View style={[vtBadge.badge, { backgroundColor: info.bg, borderColor: info.color + '66' }]}>
+      <Text style={[vtBadge.txt, { color: info.color }]} numberOfLines={1}>{label}</Text>
+    </View>
+  );
+}
+
+const vtBadge = StyleSheet.create({
+  badge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+    maxWidth: 120,
+  },
+  txt: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+});
+
 export function notifyFiltersApplied(parts: string[]) {
   Toast.show({
     type: 'success',
@@ -389,6 +479,7 @@ export function ExpenseRegisterFilterModal({
       onClear={() => { setLocalTypes([]); setLocalCats([]); }}
       onApply={handleApply}
       applyLabel="Apply Filters"
+      heightFraction={0.68}
     >
       <View style={fm.tabs}>
         {(['Type', 'Category'] as const).map((cat) => (

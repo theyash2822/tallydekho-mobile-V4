@@ -83,9 +83,11 @@ export default function ExpenseRegisterScreen() {
   const [toDate,   setToDate]   = useState(() => fyTo   ? isoToDMY(fyTo)   : '31/03/25');
 
   const mapExpenseItem = (r: any): ExpenseItem => {
+    // Prefer API expense_type from recursive Direct/Indirect root; fall back to group name.
+    const root = String(r.expense_type || '');
     const group = String(r.expense_group || '');
-    // Anchored — avoid "Indirect" matching includes('direct')
-    const isDirect = /^direct\s*expenses?$/i.test(group.trim());
+    const isDirect = /^direct$/i.test(root)
+      || /^direct\s*expenses?$/i.test(group.trim());
     return {
       id: r.guid || String(r.id),
       party: r.expense_ledger || r.party_name || r.narration || 'Expense',

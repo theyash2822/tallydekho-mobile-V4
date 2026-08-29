@@ -15,6 +15,7 @@ import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useSettings } from '../../src/context/SettingsContext';
 import { KPICardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { useTranslation } from 'react-i18next';
+import { VoucherTypeBadge, classifyVoucherDocType, docTypeToRouteType } from '../../src/components/voucherHomeFilters';
 
 const AMBER      = '#A89060';
 const AMBER_BG   = '#FDF9F4';
@@ -63,6 +64,9 @@ export default function SalesScreen() {
             date: r.date || '',
             amount: formatAmount(Math.abs(+r.amount || 0)),
             status: r.irn ? 'generated' : 'pending_irn',
+            docType: r.doc_type || classifyVoucherDocType('sales', r),
+            voucherType: r.voucher_type,
+            isOptional: !!r.is_optional,
           })));
           const partyMap: Record<string, number> = {};
           rows.forEach((r: any) => {
@@ -325,12 +329,23 @@ export default function SalesScreen() {
                   key={inv.id}
                   style={s.itemCard}
                   activeOpacity={0.7}
-                  onPress={() => router.push(`/document/${inv.id}?type=sales_invoice` as any)}
+                  onPress={() => {
+                    const routeType = docTypeToRouteType(inv.docType || 'invoice', 'sales');
+                    router.push(`/document/${inv.id}?type=${routeType}` as any);
+                  }}
                 >
                   <View style={s.tallyIcon}>
                     <Ionicons name="return-down-back-outline" size={18} color={AMBER} />
                   </View>
                   <View style={s.itemCenter}>
+                    <View style={s.itemBadgeRow}>
+                      <VoucherTypeBadge
+                        module="sales"
+                        docType={inv.docType}
+                        voucher_type={inv.voucherType}
+                        is_optional={inv.isOptional}
+                      />
+                    </View>
                     <Text style={s.itemParty} numberOfLines={1}>
                       {inv.party}{' '}
                       <Text style={s.itemInvId}>• {inv.voucher || inv.id}</Text>
@@ -540,6 +555,7 @@ const s = StyleSheet.create({
   },
   tallyIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: AMBER_BG, alignItems: 'center', justifyContent: 'center' },
   itemCenter: { flex: 1 },
+  itemBadgeRow: { marginBottom: 4 },
   itemParty:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   itemInvId:  { fontSize: TYPOGRAPHY.xs, fontWeight: '400', color: COLORS.textSecondary },
   itemMeta:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 3 },

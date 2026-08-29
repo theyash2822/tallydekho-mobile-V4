@@ -23,6 +23,7 @@ import {
   ActiveFilterChips,
   DocTypeFilterModal,
   docTypeToRouteType,
+  VoucherTypeBadge,
 } from '../../src/components/voucherHomeFilters';
 
 const AMBER    = '#A89060';
@@ -52,6 +53,7 @@ const STATUS_LABEL: Record<string, string> = {
 type Invoice = {
   id: string; guid?: string; number: string; party: string; date: string;
   time: string; amount: string; status: string; docType?: string;
+  voucherType?: string; isOptional?: boolean;
 };
 type MonthGroup = { id: string; label: string; invoices: Invoice[] };
 
@@ -105,6 +107,8 @@ export default function SalesRegisterScreen() {
     amount: formatAmount(Math.abs(+r.amount||0)),
     status: r.is_cancelled ? 'unpaid' : 'paid',
     docType: r.doc_type || 'invoice',
+    voucherType: r.voucher_type,
+    isOptional: !!r.is_optional,
   });
 
   const docTypesParam = docTypes.length
@@ -408,6 +412,12 @@ export default function SalesRegisterScreen() {
                             <View style={[s.statusDot, { backgroundColor: STATUS_COLOR[inv.status] ?? COLORS.textTertiary }]} />
                             <View style={s.invInfo}>
                               <View style={s.invTopRow}>
+                                <VoucherTypeBadge
+                                  module="sales"
+                                  docType={inv.docType}
+                                  voucher_type={inv.voucherType}
+                                  is_optional={inv.isOptional}
+                                />
                                 <View style={[s.statusPillBadge, { backgroundColor: STATUS_BG[inv.status] ?? '#F5F5F5', borderColor: STATUS_COLOR[inv.status] ?? COLORS.textTertiary }]}>
                                   <Text style={[s.statusPillTxt, { color: STATUS_COLOR[inv.status] ?? COLORS.textTertiary }]}>
                                     {STATUS_LABEL[inv.status] ?? inv.status}

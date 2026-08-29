@@ -1,5 +1,23 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-08-29 — Voucher type badges + expense filter fix
+
+### Product
+1. **Voucher type badges** on Sales/Purchase home Recent + Register rows (Sales Invoice, Order, CN, DN, Proforma, Quotation / Purchase Invoice, Order, Debit Note). Visual language matches My Entries / audit-trail compact pills + DOC_TYPE colors.
+2. **Expense Register filter**: backend walks Direct/Indirect group tree so Category/Type counts and multi-select work with nested expense groups; client uses `expense_type` for Direct/Indirect.
+
+### Files
+- `src/components/voucherHomeFilters.tsx` — `VoucherTypeBadge`, `resolveVoucherTypeBadge`, `classifyVoucherDocType`; expense sheet `heightFraction`
+- `app/sales|purchase/index.tsx`, `app/sales|purchase/register.tsx` — badge on each row
+- `app/expenses/register.tsx` — map `expense_type`
+
+### How to test
+1. Sales Register (All types) → each row shows type badge + status
+2. Sales home Recent → Invoice badge (invoices-only feed)
+3. Purchase Register / home → Purchase Invoice / Order / Debit Note badges
+4. Expense Register → Filter → Category tab lists sub-groups with counts; Direct-only Apply narrows list; chips/badge/toast OK
+
+---
 ## 2026-08-29 — Register filters: multi-select Type + Groups
 
 ### Product

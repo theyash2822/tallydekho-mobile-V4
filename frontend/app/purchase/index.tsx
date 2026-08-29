@@ -14,6 +14,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { getPurchaseInvoices, getDebitNotes } from '../../src/services/api';
 import { useTranslation } from 'react-i18next';
+import { VoucherTypeBadge, classifyVoucherDocType, docTypeToRouteType } from '../../src/components/voucherHomeFilters';
 
 const AMBER      = '#A89060';
 const AMBER_BG   = '#FDF9F4';
@@ -33,6 +34,9 @@ type PurchaseRow = {
   time: string;
   amount: string;
   status: string;
+  docType?: string;
+  voucherType?: string;
+  isOptional?: boolean;
 };
 
 type MetricCard = {
@@ -158,6 +162,9 @@ export default function PurchaseScreen() {
             time: '',
             amount: formatAmount(Math.abs(parseFloat(r.amount) || 0)),
             status: r.is_cancelled ? 'unpaid' : 'paid',
+            docType: r.doc_type || classifyVoucherDocType('purchase', r),
+            voucherType: r.voucher_type,
+            isOptional: !!r.is_optional,
           })));
 
           const vendorMap: Record<string, { total: number; count: number }> = {};
@@ -400,10 +407,19 @@ export default function PurchaseScreen() {
                   key={inv.guid || `purchase-${index}`}
                   style={s.itemCard}
                   activeOpacity={0.7}
-                  onPress={() => router.push(`/document/${inv.guid || inv.id}?type=purchase_invoice` as any)}
+                  onPress={() => {
+                    const routeType = docTypeToRouteType(inv.docType || 'invoice', 'purchase');
+                    router.push(`/document/${inv.guid || inv.id}?type=${routeType}` as any);
+                  }}
                 >
                   {/* Status Row */}
                   <View style={s.itemStatusRow}>
+                    <VoucherTypeBadge
+                      module="purchase"
+                      docType={inv.docType}
+                      voucher_type={inv.voucherType}
+                      is_optional={inv.isOptional}
+                    />
                     <View style={[s.statusDot, { backgroundColor: STATUS_COLOR[inv.status] ?? '#9CA3AF' }]} />
                     <Text style={[s.itemStatusTxt, { color: STATUS_COLOR[inv.status] ?? '#9CA3AF' }]}>
                       {STATUS_LABEL[inv.status] ?? inv.status}
@@ -635,7 +651,7 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: COLORS.borderDefault,
     gap: 8,
   },
-  itemStatusRow:   { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  itemStatusRow:   { flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' },
   statusDot:       { width: 8, height: 8, borderRadius: 4 },
   itemStatusTxt:   { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
   itemBullet:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
