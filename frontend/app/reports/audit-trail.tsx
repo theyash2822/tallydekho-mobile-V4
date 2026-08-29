@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Dimensions, Modal, Alert, ActivityIndicator,
+  Dimensions, Modal, Alert, ActivityIndicator, TextInput, Pressable, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -253,49 +253,140 @@ const tc = StyleSheet.create({
 });
 
 // ─── Voucher Type Dropdown ────────────────────────────────────────────────────
+const SHEET_MAX_H = Math.round(Dimensions.get('window').height * 0.72);
+/** Room for handle + title + search + bottom inset inside the sheet. */
+const LIST_MAX_H = Math.max(220, SHEET_MAX_H - 168);
+
 function VTypeDropdown({
   value, onSelect, visible, onClose,
 }: { value: VoucherType; onSelect: (v: VoucherType) => void; visible: boolean; onClose: () => void }) {
+  const insets = useSafeAreaInsets();
+  const [query, setQuery] = useState('');
+
+  useEffect(() => {
+    if (visible) setQuery('');
+  }, [visible]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const types = VOUCHER_TYPES.filter((vt) => vt !== 'ALL');
+    if (!q) return ['ALL' as VoucherType, ...types];
+    const matched = types.filter((vt) => vt.toLowerCase().includes(q));
+    // Always keep All Types at top when it matches or query is empty-ish "all"
+    const showAll = !q || 'all types'.includes(q) || 'all'.startsWith(q);
+    return showAll ? (['ALL' as VoucherType, ...matched]) : matched;
+  }, [query]);
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={dd.overlay} activeOpacity={1} onPress={onClose}>
-        <View style={dd.sheet}>
-          <View style={dd.sheetHandle} />
-          <View style={dd.sheetHeader}>
-            <Text style={dd.sheetTitle}>Voucher Type</Text>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close" size={20} color={COLORS.textPrimary} />
-            </TouchableOpacity>
-          </View>
-          {VOUCHER_TYPES.map(vt => (
-            <TouchableOpacity
-              key={vt}
-              style={[dd.option, value === vt && dd.optionActive]}
-              onPress={() => { onSelect(vt); onClose(); }}
-              activeOpacity={0.7}
+      <View style={dd.overlay}>
+        <Pressable style={dd.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={dd.sheetWrap}
+        >
+          <View style={[dd.sheet, { maxHeight: SHEET_MAX_H, paddingBottom: Math.max(insets.bottom, 12) }]}>
+            <View style={dd.sheetHandle} />
+            <View style={dd.sheetHeader}>
+              <Text style={dd.sheetTitle}>Voucher Type</Text>
+              <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={20} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={dd.searchWrap}>
+              <Ionicons name="search-outline" size={16} color={COLORS.textTertiary} />
+              <TextInput
+                style={dd.searchInput}
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search types…"
+                placeholderTextColor={COLORS.textTertiary}
+                autoCorrect={false}
+                autoCapitalize="none"
+                clearButtonMode="while-editing"
+                returnKeyType="search"
+              />
+              {query.length > 0 ? (
+                <TouchableOpacity onPress={() => setQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            <ScrollView
+              style={[dd.list, { maxHeight: LIST_MAX_H }]}
+              contentContainerStyle={dd.listContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator
+              bounces
             >
-              <Text style={[dd.optionTxt, value === vt && dd.optionTxtActive]}>
-                {vt === 'ALL' ? 'All Types' : vt}
-              </Text>
-              {value === vt && <Ionicons name="checkmark" size={16} color={AMBER} />}
-            </TouchableOpacity>
-          ))}
-          <View style={{ height: 20 }} />
-        </View>
-      </TouchableOpacity>
+              {filtered.length === 0 ? (
+                <View style={dd.empty}>
+                  <Text style={dd.emptyTxt}>No types match “{query.trim()}”</Text>
+                </View>
+              ) : (
+                filtered.map((vt) => (
+                  <TouchableOpacity
+                    key={vt}
+                    style={[dd.option, value === vt && dd.optionActive]}
+                    onPress={() => { onSelect(vt); onClose(); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[dd.optionTxt, value === vt && dd.optionTxtActive]}>
+                      {vt === 'ALL' ? 'All Types' : vt}
+                    </Text>
+                    {value === vt && <Ionicons name="checkmark" size={16} color={AMBER} />}
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
 
 const dd = StyleSheet.create({
-  overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.42)', justifyContent: 'flex-end' },
-  sheet:       { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 8 },
+  overlay:     { flex: 1, justifyContent: 'flex-end' },
+  backdrop:    { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.42)' },
+  sheetWrap:   { width: '100%' },
+  sheet: {
+    backgroundColor: COLORS.cardBg,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 8,
+    overflow: 'hidden',
+  },
   sheetHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: COLORS.borderStrong, alignSelf: 'center', marginBottom: 12 },
-  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: SPACING.md, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  sheetHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: SPACING.md, paddingBottom: 10,
+  },
   sheetTitle:  { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-  option:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  optionActive:{ backgroundColor: '#FDF9F4' },
-  optionTxt:   { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
+  searchWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginHorizontal: SPACING.md, marginBottom: 8,
+    paddingHorizontal: 12, paddingVertical: Platform.OS === 'ios' ? 10 : 6,
+    backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  searchInput: {
+    flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, padding: 0,
+    ...(Platform.OS === 'web' ? ({ outlineWidth: 0, outlineStyle: 'none' } as any) : null),
+  },
+  list: { flexGrow: 0 },
+  listContent: { paddingBottom: 8, flexGrow: 1 },
+  empty: { paddingVertical: 40, paddingHorizontal: SPACING.md, alignItems: 'center' },
+  emptyTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, textAlign: 'center' },
+  option: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: SPACING.md, paddingVertical: 15,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  optionActive: { backgroundColor: '#FDF9F4' },
+  optionTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
   optionTxtActive: { color: AMBER, fontWeight: '700' },
 });
 
