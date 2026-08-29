@@ -428,13 +428,12 @@ const dd = StyleSheet.create({
   optionTxtActive: { color: AMBER, fontWeight: '700' },
 });
 
-// ─── Swipe actions (Preview left / Convert right) ─────────────────────────────
+// ─── Swipe actions (Convert only — Preview is tap on tile) ────────────────────
 const swipeSt = StyleSheet.create({
   actionWrap: {
     width: 88, justifyContent: 'center', alignItems: 'center',
     overflow: 'hidden',
   },
-  previewBg: { backgroundColor: COLORS.brandPrimary },
   convertBg: { backgroundColor: AMBER },
   actionInner: { flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center', gap: 4, paddingHorizontal: 6 },
   actionTxt: { fontSize: 11, fontWeight: '700', color: COLORS.white, textAlign: 'center' },
@@ -442,16 +441,12 @@ const swipeSt = StyleSheet.create({
 
 function AuditEntrySwipe({
   enabled,
-  showConvert,
   converting,
-  onPreview,
   onConvert,
   children,
 }: {
   enabled: boolean;
-  showConvert: boolean;
   converting?: boolean;
-  onPreview: () => void;
   onConvert: () => void;
   children: React.ReactNode;
 }) {
@@ -462,23 +457,9 @@ function AuditEntrySwipe({
     <ReanimatedSwipeable
       ref={swipeRef}
       friction={2}
-      leftThreshold={56}
       rightThreshold={56}
-      overshootLeft={false}
       overshootRight={false}
-      renderLeftActions={() => (
-        <View style={[swipeSt.actionWrap, swipeSt.previewBg]}>
-          <TouchableOpacity
-            style={swipeSt.actionInner}
-            onPress={() => { swipeRef.current?.close(); onPreview(); }}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="eye-outline" size={20} color={COLORS.white} />
-            <Text style={swipeSt.actionTxt}>Preview</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      renderRightActions={showConvert ? () => (
+      renderRightActions={() => (
         <View style={[swipeSt.actionWrap, swipeSt.convertBg]}>
           <TouchableOpacity
             style={swipeSt.actionInner}
@@ -494,7 +475,7 @@ function AuditEntrySwipe({
             <Text style={swipeSt.actionTxt}>Convert</Text>
           </TouchableOpacity>
         </View>
-      ) : undefined}
+      )}
     >
       {children}
     </ReanimatedSwipeable>
@@ -817,15 +798,15 @@ export default function AuditTrailScreen() {
     return                              { icon: 'checkmark-circle-outline' as const, color: COLORS.positive, borderColor: 'transparent' };
   };
 
-  /** Books impact icon — Posted / Not Posted / Cancelled (separate from sync). */
-  const getBooksInfo = (entry: VoucherEntry) => {
+  /** Books impact — Posted / Not Posted / Cancelled chip (not an icon). */
+  const getBooksChip = (entry: VoucherEntry): { label: string; tone: 'posted' | 'notPosted' | 'cancelled' } => {
     if (entry.isCancelled || entry.conversionStatus === 'cancelled') {
-      return { icon: 'close-circle' as const, color: COLORS.negative, label: 'Cancelled' };
+      return { label: 'Cancelled', tone: 'cancelled' };
     }
     if (entry.booksImpactStatus === 'posted') {
-      return { icon: 'checkmark-circle' as const, color: COLORS.positive, label: 'Posted' };
+      return { label: 'Posted', tone: 'posted' };
     }
-    return { icon: 'ellipse-outline' as const, color: AMBER, label: 'Not Posted' };
+    return { label: 'Not Posted', tone: 'notPosted' };
   };
 
   const displayRef = (entry: VoucherEntry) => {
@@ -1275,7 +1256,7 @@ export default function AuditTrailScreen() {
                         (entry.syncStatus === 'pending' || entry.syncStatus === 'failed');
 
                       const kind = activeTab === 'myentries' ? entryKindChip(entry) : null;
-                      const books = activeTab === 'myentries' ? getBooksInfo(entry) : null;
+                      const booksChip = activeTab === 'myentries' ? getBooksChip(entry) : null;
                       const irnLabel =
                         activeTab === 'myentries' && entry.eInvoiceStatus === 'generated'
                           ? 'IRN ✓'
@@ -1286,6 +1267,15 @@ export default function AuditTrailScreen() {
                               : null;
                       const showConvert =
                         activeTab === 'myentries' && canConvertProformaEntry(entry);
+                      const drCr = entry.isCredit ? 'Cr' : 'Dr';
+                      const booksChipStyle =
+                        booksChip?.tone === 'posted' ? lb.posted
+                        : booksChip?.tone === 'cancelled' ? lb.cancelled
+                        : lb.notPosted;
+                      const booksChipColor =
+                        booksChip?.tone === 'posted' ? COLORS.positive
+                        : booksChip?.tone === 'cancelled' ? COLORS.negative
+                        : AMBER;
 
                       const rowInner = (
                           <TouchableOpacity
@@ -1310,31 +1300,24 @@ export default function AuditTrailScreen() {
                               </View>
                             ) : null}
 
+                            {/* Sync icon only — Posted/Not Posted is a chip on the date row */}
                             {!multiSelect && activeTab === 'myentries' && sInfo ? (
-                              <View style={s.iconStack}>
-                                <TouchableOpacity
-                                  style={[s.statusIcon, { backgroundColor: sInfo.color + '18' }]}
-                                  onPress={() => {
-                                    if (canRetryEntry(entry)) handleSinglePush(entry);
-                                  }}
-                                  activeOpacity={canRetryEntry(entry) ? 0.7 : 1}
-                                  disabled={!canRetryEntry(entry) || retryingIds.has((entry.id || '').replace('wq_', ''))}
-                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                  accessibilityLabel={`Sync ${entry.syncStatus || 'synced'}`}
-                                >
-                                  {retryingIds.has((entry.id || '').replace('wq_', '')) ? (
-                                    <ActivityIndicator size="small" color={sInfo.color} />
-                                  ) : (
-                                    <Ionicons name={sInfo.icon} size={16} color={sInfo.color} />
-                                  )}
-                                </TouchableOpacity>
-                                <View
-                                  style={[s.statusIcon, { backgroundColor: books!.color + '18' }]}
-                                  accessibilityLabel={books!.label}
-                                >
-                                  <Ionicons name={books!.icon} size={16} color={books!.color} />
-                                </View>
-                              </View>
+                              <TouchableOpacity
+                                style={[s.statusIcon, { backgroundColor: sInfo.color + '18' }]}
+                                onPress={() => {
+                                  if (canRetryEntry(entry)) handleSinglePush(entry);
+                                }}
+                                activeOpacity={canRetryEntry(entry) ? 0.7 : 1}
+                                disabled={!canRetryEntry(entry) || retryingIds.has((entry.id || '').replace('wq_', ''))}
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                accessibilityLabel={`Sync ${entry.syncStatus || 'synced'}`}
+                              >
+                                {retryingIds.has((entry.id || '').replace('wq_', '')) ? (
+                                  <ActivityIndicator size="small" color={sInfo.color} />
+                                ) : (
+                                  <Ionicons name={sInfo.icon} size={16} color={sInfo.color} />
+                                )}
+                              </TouchableOpacity>
                             ) : null}
 
                             {!multiSelect && activeTab === 'daybook' ? (
@@ -1344,22 +1327,29 @@ export default function AuditTrailScreen() {
                             ) : null}
 
                             <View style={s.entryBody}>
-                              {/* Top: party full width */}
+                              {/* Top: party */}
                               <Text style={s.partyTxt} numberOfLines={1}>{entry.party || '—'}</Text>
 
-                              {/* Middle: ref · date | IRN */}
+                              {/* Middle: ref · date | Posted (+ IRN) */}
                               <View style={s.lineRow}>
                                 <Text style={s.lineLeft} numberOfLines={1}>
                                   {displayRef(entry)}{entry.date ? ` · ${entry.date}` : ''}
                                 </Text>
-                                {irnLabel ? (
-                                  <View style={[lb.badge, entry.eInvoiceStatus === 'generated' ? lb.irnDone : lb.irnPending]}>
-                                    <Text style={[lb.badgeTxt, { color: COLORS.info }]}>{irnLabel}</Text>
-                                  </View>
-                                ) : null}
+                                <View style={s.metaRight}>
+                                  {booksChip ? (
+                                    <View style={[lb.badge, booksChipStyle]}>
+                                      <Text style={[lb.badgeTxt, { color: booksChipColor }]}>{booksChip.label}</Text>
+                                    </View>
+                                  ) : null}
+                                  {irnLabel ? (
+                                    <View style={[lb.badge, entry.eInvoiceStatus === 'generated' ? lb.irnDone : lb.irnPending]}>
+                                      <Text style={[lb.badgeTxt, { color: COLORS.info }]}>{irnLabel}</Text>
+                                    </View>
+                                  ) : null}
+                                </View>
                               </View>
 
-                              {/* Bottom: [type] [Regular] | amount */}
+                              {/* Bottom: [type] [Regular] | amount Dr/Cr */}
                               <View style={s.lineRow}>
                                 <View style={s.chipRow}>
                                   <View style={[s.vtypePill, { backgroundColor: color + '18', borderColor: color + '55' }]}>
@@ -1373,7 +1363,10 @@ export default function AuditTrailScreen() {
                                     </View>
                                   ) : null}
                                 </View>
-                                <Text style={s.amtTxt} numberOfLines={1}>{entry.amount}</Text>
+                                <Text style={s.amtTxt} numberOfLines={1}>
+                                  {entry.amount}
+                                  <Text style={s.drCrSuffix}> {drCr}</Text>
+                                </Text>
                               </View>
                             </View>
                           </TouchableOpacity>
@@ -1382,10 +1375,8 @@ export default function AuditTrailScreen() {
                       return (
                         <View key={`${entry.id}_${idx}`}>
                           <AuditEntrySwipe
-                            enabled={!multiSelect && activeTab === 'myentries'}
-                            showConvert={showConvert}
+                            enabled={!multiSelect && showConvert}
                             converting={!!(entry.tdkRef && convertingIds.has(entry.tdkRef))}
-                            onPreview={() => openEntry(entry)}
                             onConvert={() => handleConvertProforma(entry)}
                           >
                             {rowInner}
@@ -1584,45 +1575,51 @@ const s = StyleSheet.create({
     overflow: 'hidden', marginBottom: SPACING.sm,
   },
   entryRow: {
-    flexDirection: 'row', alignItems: 'flex-start',
-    paddingHorizontal: SPACING.md, paddingVertical: 10, gap: 10,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: SPACING.md, paddingVertical: 14, gap: 12,
   },
   entryRowSelected: { backgroundColor: COLORS.activeBg },
 
   checkbox:      { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: COLORS.borderStrong, alignItems: 'center', justifyContent: 'center' },
   checkboxActive:{ backgroundColor: COLORS.textPrimary, borderColor: COLORS.textPrimary },
 
-  statusIcon: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  iconStack: { width: 30, gap: 6, alignItems: 'center', flexShrink: 0 },
+  statusIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
 
-  entryBody: { flex: 1, minWidth: 0 },
+  entryBody: { flex: 1, minWidth: 0, gap: 5 },
   partyTxt:  {
     fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary,
-    lineHeight: 18, marginBottom: 3,
+    lineHeight: 20, marginBottom: 1,
   },
   lineRow: {
     flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', gap: 8, minHeight: 18, marginTop: 2,
+    justifyContent: 'space-between', gap: 10, minHeight: 20,
   },
   lineLeft: {
     flex: 1, minWidth: 0,
-    fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500', lineHeight: 15,
+    fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500', lineHeight: 16,
   },
   chipRow: {
     flex: 1, minWidth: 0,
-    flexDirection: 'row', alignItems: 'center', flexWrap: 'nowrap', gap: 4,
+    flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6,
+  },
+  metaRight: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
+    flexShrink: 0, gap: 6, maxWidth: '48%',
   },
   vtypePill: {
-    paddingHorizontal: 6, paddingVertical: 2, borderRadius: RADIUS.full,
+    paddingHorizontal: 7, paddingVertical: 3, borderRadius: RADIUS.full,
     borderWidth: 1, maxWidth: 110, flexShrink: 1,
   },
   vtypePillTxt: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.2 },
   amtTxt: {
     fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary,
-    textAlign: 'right', flexShrink: 0, lineHeight: 18,
+    textAlign: 'right', flexShrink: 0, lineHeight: 20,
+  },
+  drCrSuffix: {
+    fontSize: 10, fontWeight: '700', color: COLORS.textSecondary,
   },
 
-  divider: { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 52 },
+  divider: { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 56 },
 
   empty:    { alignItems: 'center', paddingVertical: 60, gap: 12 },
   emptyTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
@@ -1672,10 +1669,13 @@ const lb = StyleSheet.create({
   },
   // Phase D11(c): elevate Posted / Not Posted into bolder pills so status reads at-a-glance.
   // Regular/Optional kept as low-contrast outline tags (informational, not status).
-  badge:       { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999 },
+  badge:       { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
   badgeTxt:    { fontSize: 9, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
   regular:     { backgroundColor: 'transparent', borderWidth: 1, borderColor: COLORS.borderDefault },
   optional:    { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#E8C77A' },
+  posted:      { backgroundColor: COLORS.positiveBg, borderWidth: 1, borderColor: COLORS.positive },
+  notPosted:   { backgroundColor: '#FFF7E6', borderWidth: 1, borderColor: '#F4C77E' },
+  cancelled:   { backgroundColor: '#FEE2E2', borderWidth: 1, borderColor: '#F4B4B4' },
   irnDone:     { backgroundColor: COLORS.infoBg },
   irnPending:  { backgroundColor: COLORS.infoBg },
 });

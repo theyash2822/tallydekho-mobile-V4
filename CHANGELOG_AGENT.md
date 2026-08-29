@@ -1,4 +1,22 @@
-## [2026-08-29] List tile v2 — amount + chip row
+## [2026-08-29] Audit Trail My Entries tile — Posted chip + Dr/Cr
+
+### Why
+My Entries tiles needed clearer books status and Dr/Cr without crowding Preview/Convert.
+
+### Layout
+- Left: sync icon (retry when pending/failed)
+- Party; ref · date | Posted/Not Posted/Cancelled (+ IRN)
+- [type] [Regular|Optional|Proforma] | amount **Dr/Cr**
+- Tap → Preview; swipe left → Convert (Proforma only)
+
+### Changed
+- `frontend/app/reports/audit-trail.tsx`
+
+### QA
+YELLOW — tsc clean; device visual/gesture smoke pending
+
+---
+
 
 ### Layout
 Left: party · voucher no · date  
