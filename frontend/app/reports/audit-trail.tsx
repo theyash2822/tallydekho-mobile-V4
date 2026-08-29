@@ -205,8 +205,9 @@ const ACTION_COLORS: Record<string, string> = {
   Created: '#2D7D46', Edited: '#D97706', Deleted: '#C0392B',
 };
 
-// ─── Type Breakdown Card ──────────────────────────────────────────────────────
+// ─── Type Breakdown Card (collapsible — shared My Entries + Day Book) ─────────
 function TypeBreakdownCard({ entries }: { entries: VoucherEntry[] }) {
+  const [expanded, setExpanded] = useState(false);
   const breakdown = useMemo(() => {
     const map: Record<string, number> = {};
     entries.forEach(e => { map[e.type] = (map[e.type] || 0) + 1; });
@@ -217,19 +218,41 @@ function TypeBreakdownCard({ entries }: { entries: VoucherEntry[] }) {
 
   return (
     <View style={tc.card}>
-      <Text style={tc.title}>Voucher Breakdown</Text>
-      <View style={tc.grid}>
-        {breakdown.map(([type, count]) => {
-          const color = TYPE_COLORS[type] || COLORS.textSecondary;
-          return (
-            <View key={type} style={tc.cell}>
-              <View style={[tc.dot, { backgroundColor: color }]} />
-              <Text style={tc.typeLabel} numberOfLines={1}>{type}</Text>
-              <Text style={[tc.count, { color }]}>{count}</Text>
-            </View>
-          );
-        })}
-      </View>
+      <TouchableOpacity
+        style={tc.header}
+        onPress={() => setExpanded((v) => !v)}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        accessibilityLabel={`Voucher Breakdown, ${breakdown.length} types`}
+      >
+        <View style={tc.headerLeft}>
+          <Text style={tc.title}>Voucher Breakdown</Text>
+          <View style={tc.countPill}>
+            <Text style={tc.countPillTxt}>{breakdown.length} types</Text>
+          </View>
+        </View>
+        <Ionicons
+          name={expanded ? 'chevron-up' : 'chevron-down'}
+          size={16}
+          color={COLORS.textSecondary}
+        />
+      </TouchableOpacity>
+
+      {expanded ? (
+        <View style={tc.grid}>
+          {breakdown.map(([type, count]) => {
+            const color = TYPE_COLORS[type] || COLORS.textSecondary;
+            return (
+              <View key={type} style={tc.cell}>
+                <View style={[tc.dot, { backgroundColor: color }]} />
+                <Text style={tc.typeLabel} numberOfLines={1}>{type}</Text>
+                <Text style={[tc.count, { color }]}>{count}</Text>
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -238,10 +261,21 @@ const tc = StyleSheet.create({
   card: {
     backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
     borderWidth: 1, borderColor: COLORS.borderDefault,
-    padding: SPACING.md, marginBottom: SPACING.sm,
+    paddingHorizontal: SPACING.md, paddingVertical: 10, marginBottom: SPACING.sm,
   },
-  title: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 10 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    minHeight: 28,
+  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  title: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  countPill: {
+    backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full,
+    paddingHorizontal: 8, paddingVertical: 2,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+  },
+  countPillTxt: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
   cell: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm,
