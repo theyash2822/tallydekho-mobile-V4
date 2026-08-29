@@ -23,25 +23,11 @@ import {
   ActiveFilterChips,
   DocTypeFilterModal,
   docTypeToRouteType,
-  VoucherTypeBadge,
 } from '../../src/components/voucherHomeFilters';
+import { VoucherListTile } from '../../src/components/VoucherListTile';
 
-const AMBER    = '#A89060';
-const AMBER_BG = '#FDF9F4';
 const { width: SW } = Dimensions.get('window');
 
-const STATUS_COLOR: Record<string, string> = {
-  paid:       '#2D7D46',
-  unpaid:     '#DC2626',
-  irm:        '#787774',
-  debit_note: '#A89060',
-};
-const STATUS_BG: Record<string, string> = {
-  paid:       '#F0FBF4',
-  unpaid:     '#FFF0F0',
-  irm:        '#F5F5F5',
-  debit_note: '#FDF9F4',
-};
 const STATUS_LABEL: Record<string, string> = {
   paid:       'Paid',
   unpaid:     'Unpaid',
@@ -398,33 +384,17 @@ export default function PurchaseRegisterScreen() {
                               {isSelected && <Ionicons name="checkmark" size={12} color={COLORS.white} />}
                             </View>
                           )}
-                          <View style={s.invLeft}>
-                            <View style={[s.statusDot, { backgroundColor: STATUS_COLOR[inv.status] ?? COLORS.textTertiary }]} />
-                            <View style={s.invInfo}>
-                              <View style={s.invTopRow}>
-                                <VoucherTypeBadge
-                                  module="purchase"
-                                  docType={inv.docType}
-                                  voucher_type={inv.voucherType}
-                                  is_optional={inv.isOptional}
-                                />
-                                <View style={[s.statusPillBadge, { backgroundColor: STATUS_BG[inv.status] ?? '#F5F5F5', borderColor: STATUS_COLOR[inv.status] ?? COLORS.textTertiary }]}>
-                                  <Text style={[s.statusPillTxt, { color: STATUS_COLOR[inv.status] ?? COLORS.textTertiary }]}>
-                                    {STATUS_LABEL[inv.status] ?? inv.status}
-                                  </Text>
-                                </View>
-                                <Text style={s.invId}>• {inv.number || inv.id}</Text>
-                              </View>
-                              <Text style={s.invVendor}>{inv.vendor}</Text>
-                              <Text style={s.invMeta}>{inv.date} | {inv.time}</Text>
-                            </View>
-                          </View>
-                          <View style={s.invRight}>
-                            <Text style={s.invAmt}>{inv.amount}</Text>
-                            <View style={s.tallyIcon}>
-                              <Ionicons name="return-down-back-outline" size={13} color={AMBER} />
-                            </View>
-                          </View>
+                          <VoucherListTile
+                            party={inv.vendor}
+                            voucherNo={inv.number || inv.id}
+                            date={inv.date}
+                            amount={inv.amount}
+                            status={inv.status}
+                            module="purchase"
+                            docType={inv.docType}
+                            voucherType={inv.voucherType}
+                            isOptional={inv.isOptional}
+                          />
                         </TouchableOpacity>
                         {idx < groupInvoices.length - 1 && <View style={s.divider} />}
                       </View>
@@ -534,24 +504,8 @@ const s = StyleSheet.create({
   monthCount:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500' },
 
   listCard:   { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
-  invRow:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 14, gap: 10 },
+  invRow:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 14, gap: 10 },
   invRowSelected: { backgroundColor: COLORS.brandPrimary + '08' },
-  invLeft:    { flexDirection: 'row', alignItems: 'flex-start', gap: 10, flex: 1 },
-  statusDot:  { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
-  invInfo:    { flex: 1, gap: 3 },
-  invTopRow:  { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  statusPillBadge: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 8, paddingVertical: 3,
-    borderRadius: RADIUS.full, borderWidth: 1,
-  },
-  statusPillTxt: { fontSize: 10, fontWeight: '700' },
-  invId:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
-  invVendor:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  invMeta:    { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
-  invRight:   { alignItems: 'flex-end', gap: 8 },
-  invAmt:     { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
-  tallyIcon:  { width: 28, height: 28, borderRadius: 14, backgroundColor: AMBER_BG, alignItems: 'center', justifyContent: 'center' },
   divider:    { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: SPACING.md },
 
   selectCircle:       { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: COLORS.borderDefault, alignItems: 'center', justifyContent: 'center' },

@@ -14,10 +14,9 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { getPurchaseInvoices, getDebitNotes } from '../../src/services/api';
 import { useTranslation } from 'react-i18next';
-import { VoucherTypeBadge, classifyVoucherDocType, docTypeToRouteType } from '../../src/components/voucherHomeFilters';
+import { classifyVoucherDocType, docTypeToRouteType } from '../../src/components/voucherHomeFilters';
+import { VoucherListTile } from '../../src/components/VoucherListTile';
 
-const AMBER      = '#A89060';
-const AMBER_BG   = '#FDF9F4';
 const BANNER_RED = '#E53935';
 const { width: SW } = Dimensions.get('window');
 const CARD_W   = SW - SPACING.md * 2;
@@ -46,17 +45,6 @@ type MetricCard = {
   amount: string;
   pct: string;
   pos: boolean;
-};
-
-const STATUS_COLOR: Record<string, string> = {
-  paid:   '#2D7D46',
-  unpaid: '#DC2626',
-  irm:    '#787774',
-};
-const STATUS_LABEL: Record<string, string> = {
-  paid:   'Paid',
-  unpaid: 'Unpaid',
-  irm:    'IRM',
 };
 
 function buildMetrics(rows: any[], formatAmountCompact: (n: number) => string): MetricCard[] {
@@ -412,32 +400,17 @@ export default function PurchaseScreen() {
                     router.push(`/document/${inv.guid || inv.id}?type=${routeType}` as any);
                   }}
                 >
-                  {/* Status Row */}
-                  <View style={s.itemStatusRow}>
-                    <VoucherTypeBadge
-                      module="purchase"
-                      docType={inv.docType}
-                      voucher_type={inv.voucherType}
-                      is_optional={inv.isOptional}
-                    />
-                    <View style={[s.statusDot, { backgroundColor: STATUS_COLOR[inv.status] ?? '#9CA3AF' }]} />
-                    <Text style={[s.itemStatusTxt, { color: STATUS_COLOR[inv.status] ?? '#9CA3AF' }]}>
-                      {STATUS_LABEL[inv.status] ?? inv.status}
-                    </Text>
-                    <Text style={s.itemBullet}> • </Text>
-                    <Text style={s.itemInvId}>{inv.voucher || inv.id}</Text>
-                  </View>
-                  {/* Content Row */}
-                  <View style={s.itemContentRow}>
-                    <View style={s.tallyIcon}>
-                      <Ionicons name="return-down-back-outline" size={16} color={AMBER} />
-                    </View>
-                    <View style={s.itemCenter}>
-                      <Text style={s.itemVendor} numberOfLines={1}>{inv.vendor}</Text>
-                      <Text style={s.itemMeta}>{inv.date} | {inv.time}</Text>
-                    </View>
-                    <Text style={s.itemAmt}>{inv.amount}</Text>
-                  </View>
+                  <VoucherListTile
+                    party={inv.vendor}
+                    voucherNo={inv.voucher || inv.id}
+                    date={inv.date}
+                    amount={inv.amount}
+                    status={inv.status}
+                    module="purchase"
+                    docType={inv.docType}
+                    voucherType={inv.voucherType}
+                    isOptional={inv.isOptional}
+                  />
                 </TouchableOpacity>
               ))
             )}
@@ -647,21 +620,9 @@ const s = StyleSheet.create({
   // Invoice Item Card (Recent Purchases)
   itemCard: {
     backgroundColor: COLORS.cardBg,
-    borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 12,
+    borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 14,
     borderWidth: 1, borderColor: COLORS.borderDefault,
-    gap: 8,
   },
-  itemStatusRow:   { flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' },
-  statusDot:       { width: 8, height: 8, borderRadius: 4 },
-  itemStatusTxt:   { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
-  itemBullet:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
-  itemInvId:       { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, flex: 1 },
-  itemContentRow:  { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  tallyIcon:       { width: 38, height: 38, borderRadius: 10, backgroundColor: AMBER_BG, alignItems: 'center', justifyContent: 'center' },
-  itemCenter:      { flex: 1 },
-  itemVendor:      { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  itemMeta:        { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 3 },
-  itemAmt:         { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
 
   // Vendor Card (Top Vendors)
   vendorCard: {
@@ -675,6 +636,7 @@ const s = StyleSheet.create({
   vendorInfo:      { flex: 1 },
   vendorName:      { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   vendorTxn:       { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 3 },
+  itemAmt:         { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
 
   // View All
   viewAllBtn: {

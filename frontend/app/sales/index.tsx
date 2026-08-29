@@ -15,10 +15,9 @@ import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useSettings } from '../../src/context/SettingsContext';
 import { KPICardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { useTranslation } from 'react-i18next';
-import { VoucherTypeBadge, classifyVoucherDocType, docTypeToRouteType } from '../../src/components/voucherHomeFilters';
+import { classifyVoucherDocType, docTypeToRouteType } from '../../src/components/voucherHomeFilters';
+import { VoucherListTile } from '../../src/components/VoucherListTile';
 
-const AMBER      = '#A89060';
-const AMBER_BG   = '#FDF9F4';
 const BANNER_RED = '#E53935';
 const { width: SW } = Dimensions.get('window');
 const CARD_W  = SW - SPACING.md * 2;
@@ -63,7 +62,7 @@ export default function SalesScreen() {
             party: r.party_name || '',
             date: r.date || '',
             amount: formatAmount(Math.abs(+r.amount || 0)),
-            status: r.irn ? 'generated' : 'pending_irn',
+            status: r.is_cancelled ? 'unpaid' : 'paid',
             docType: r.doc_type || classifyVoucherDocType('sales', r),
             voucherType: r.voucher_type,
             isOptional: !!r.is_optional,
@@ -334,25 +333,17 @@ export default function SalesScreen() {
                     router.push(`/document/${inv.id}?type=${routeType}` as any);
                   }}
                 >
-                  <View style={s.tallyIcon}>
-                    <Ionicons name="return-down-back-outline" size={18} color={AMBER} />
-                  </View>
-                  <View style={s.itemCenter}>
-                    <View style={s.itemBadgeRow}>
-                      <VoucherTypeBadge
-                        module="sales"
-                        docType={inv.docType}
-                        voucher_type={inv.voucherType}
-                        is_optional={inv.isOptional}
-                      />
-                    </View>
-                    <Text style={s.itemParty} numberOfLines={1}>
-                      {inv.party}{' '}
-                      <Text style={s.itemInvId}>• {inv.voucher || inv.id}</Text>
-                    </Text>
-                    <Text style={s.itemMeta}>{inv.date} | {inv.time}</Text>
-                  </View>
-                  <Text style={s.itemAmt}>{inv.amount}</Text>
+                  <VoucherListTile
+                    party={inv.party}
+                    voucherNo={inv.voucher || inv.id}
+                    date={inv.date}
+                    amount={inv.amount}
+                    status={inv.status}
+                    module="sales"
+                    docType={inv.docType}
+                    voucherType={inv.voucherType}
+                    isOptional={inv.isOptional}
+                  />
                 </TouchableOpacity>
               ))
             )}
@@ -548,21 +539,14 @@ const s = StyleSheet.create({
   // List
   listSection: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, gap: 8 },
   itemCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
     backgroundColor: COLORS.cardBg,
     borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 14,
     borderWidth: 1, borderColor: COLORS.borderDefault,
   },
-  tallyIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: AMBER_BG, alignItems: 'center', justifyContent: 'center' },
-  itemCenter: { flex: 1 },
-  itemBadgeRow: { marginBottom: 4 },
-  itemParty:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  itemInvId:  { fontSize: TYPOGRAPHY.xs, fontWeight: '400', color: COLORS.textSecondary },
-  itemMeta:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 3 },
-  itemAmt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
   avatar:     { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   avatarTxt:  { fontSize: TYPOGRAPHY.base, fontWeight: '800' },
   partyName:  { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  itemAmt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
   emptyBox:   { alignItems: 'center', paddingVertical: 32, gap: 8 },
   emptyTxt:   { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
 

@@ -14,9 +14,8 @@ import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPla
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useTranslation } from 'react-i18next';
+import { VoucherListTile, ExpenseTypeBadge } from '../../src/components/VoucherListTile';
 
-const AMBER    = '#A89060';
-const AMBER_BG = '#FDF9F4';
 const { width: SW } = Dimensions.get('window');
 
 const CATEGORY_COLORS = ['#1A1A1A', '#A89060', '#787774', '#4A4945', '#8B7355', '#2563EB', '#059669', '#7C3AED'];
@@ -274,18 +273,14 @@ export default function ExpenseScreen() {
                       activeOpacity={0.7}
                       onPress={() => router.push(`/document/${exp.guid || exp.id}?type=expense` as any)}
                     >
-                      <View style={s.tallyIcon}>
-                        <Ionicons name="return-down-back-outline" size={18} color={AMBER} />
-                      </View>
-                      <View style={s.itemCenter}>
-                        <View style={s.itemTopRow}>
-                          <Text style={s.itemParty} numberOfLines={1}>{exp.party}</Text>
-                          <Text style={s.itemBullet}> • </Text>
-                          <Text style={s.itemId}>{exp.voucher || exp.id}</Text>
-                        </View>
-                        <Text style={s.itemMeta}>{exp.date}{exp.expenseGroup ? ` | ${exp.expenseGroup}` : ''}</Text>
-                      </View>
-                      <Text style={s.itemAmt}>{exp.amount}</Text>
+                      <VoucherListTile
+                        party={exp.party}
+                        voucherNo={exp.voucher || exp.id}
+                        date={exp.date}
+                        amount={exp.amount}
+                        status={exp.status}
+                        typeBadge={<ExpenseTypeBadge type={exp.expenseType || 'indirect'} />}
+                      />
                     </TouchableOpacity>
                   ))
                 )}
@@ -396,15 +391,7 @@ const s = StyleSheet.create({
 
   listSection: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, gap: 8 },
 
-  itemCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 14, borderWidth: 1, borderColor: COLORS.borderDefault },
-  tallyIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: AMBER_BG, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  itemCenter: { flex: 1 },
-  itemTopRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
-  itemParty:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  itemBullet: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
-  itemId:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
-  itemMeta:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 3 },
-  itemAmt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
+  itemCard: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 14, borderWidth: 1, borderColor: COLORS.borderDefault },
 
   catCard:      { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 14, borderWidth: 1, borderColor: COLORS.borderDefault },
   catAvatar:    { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },

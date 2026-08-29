@@ -20,21 +20,10 @@ import {
   ExpenseRegisterFilterModal,
   type ExpenseTypeId,
 } from '../../src/components/voucherHomeFilters';
+import { VoucherListTile, ExpenseTypeBadge } from '../../src/components/VoucherListTile';
 
-type TxItem = { id: string; voucher: string; desc: string; date: string; amount: string; positive: boolean; type: 'payment' | 'receipt' | 'contra'; party?: string; time?: string; status?: string; };
-
-const AMBER    = '#A89060';
-const AMBER_BG = '#FDF9F4';
 const { width: SW } = Dimensions.get('window');
 
-const STATUS_COLOR: Record<string, string> = {
-  paid:   '#2D7D46',
-  unpaid: '#DC2626',
-};
-const STATUS_BG: Record<string, string> = {
-  paid:   '#F0FBF4',
-  unpaid: '#FFF0F0',
-};
 const STATUS_LABEL: Record<string, string> = {
   paid:   'Paid',
   unpaid: 'Unpaid',
@@ -42,7 +31,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 // ─── Types ────────────────────────────────────────────────────────────
 type ExpenseItem = {
-  id: string; party: string; date: string;
+  id: string; voucher?: string; party: string; date: string;
   time: string; amount: string; status: string; type: 'direct' | 'indirect';
 };
 type MonthGroup = { id: string; label: string; items: ExpenseItem[] };
@@ -103,6 +92,7 @@ export default function ExpenseRegisterScreen() {
     else if (/^indirect\s*expenses?$/i.test(group)) kind = 'indirect';
     return {
       id: r.guid || String(r.id),
+      voucher: r.voucher_number || '',
       party: r.expense_ledger || r.party_name || r.narration || 'Expense',
       date: r.date || '',
       time: '',
@@ -386,35 +376,14 @@ export default function ExpenseRegisterScreen() {
                               {isSel && <Ionicons name="checkmark" size={12} color={COLORS.white} />}
                             </View>
                           )}
-                          <View style={s.expItemWrap}>
-                            {/* Status row */}
-                            <View style={s.expStatusRow}>
-                              <View style={[s.statusDot, { backgroundColor: STATUS_COLOR[item.status] ?? '#9CA3AF' }]} />
-                              <Text style={[s.expStatusTxt, { color: STATUS_COLOR[item.status] ?? '#9CA3AF' }]}>
-                                {STATUS_LABEL[item.status] ?? item.status}
-                              </Text>
-                              <Text style={s.expBullet}> • </Text>
-                              <Text style={s.expId}>{item.id}</Text>
-                            </View>
-                            {/* Content row */}
-                            <View style={s.expContentRow}>
-                              <View style={s.tallyIcon}>
-                                <Ionicons name="return-down-back-outline" size={16} color={AMBER} />
-                              </View>
-                              <View style={s.expCenter}>
-                                <View style={s.expTitleRow}>
-                                  <Text style={s.expParty} numberOfLines={1}>{item.party}</Text>
-                                  <View style={[s.typePill, item.type === 'direct' ? s.typePillDirect : s.typePillIndirect]}>
-                                    <Text style={[s.typePillTxt, item.type === 'direct' ? s.typePillTxtDirect : s.typePillTxtIndirect]}>
-                                      {item.type === 'direct' ? 'Direct' : 'Indirect'}
-                                    </Text>
-                                  </View>
-                                </View>
-                                <Text style={s.expMeta}>{item.date}{item.time ? ` | ${item.time}` : ''}</Text>
-                              </View>
-                              <Text style={s.expAmt}>{item.amount}</Text>
-                            </View>
-                          </View>
+                          <VoucherListTile
+                            party={item.party}
+                            voucherNo={item.voucher || item.id}
+                            date={item.date}
+                            amount={item.amount}
+                            status={item.status}
+                            typeBadge={<ExpenseTypeBadge type={item.type} />}
+                          />
                         </TouchableOpacity>
                         {idx < groupItems.length - 1 && <View style={s.divider} />}
                       </View>
@@ -532,27 +501,8 @@ const s = StyleSheet.create({
 
   listCard:   { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
 
-  expRow:         { paddingHorizontal: SPACING.md, paddingVertical: 12, gap: 8, flexDirection: 'row', alignItems: 'center' },
+  expRow:         { paddingHorizontal: SPACING.md, paddingVertical: 14, gap: 10, flexDirection: 'row', alignItems: 'center' },
   expRowSelected: { backgroundColor: COLORS.brandPrimary + '08' },
-  expItemWrap:    { flex: 1, gap: 8 },
-  expStatusRow:   { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  statusDot:      { width: 8, height: 8, borderRadius: 4 },
-  expStatusTxt:   { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
-  expBullet:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
-  expId:          { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
-  expContentRow:  { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  tallyIcon:      { width: 34, height: 34, borderRadius: 9, backgroundColor: AMBER_BG, alignItems: 'center', justifyContent: 'center' },
-  expCenter:      { flex: 1 },
-  expTitleRow:    { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  expParty:       { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, flexShrink: 1 },
-  typePill:       { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
-  typePillDirect: { backgroundColor: '#EEF2FF' },
-  typePillIndirect: { backgroundColor: '#F5F3FF' },
-  typePillTxt:    { fontSize: 10, fontWeight: '700' },
-  typePillTxtDirect: { color: '#4338CA' },
-  typePillTxtIndirect: { color: '#6D28D9' },
-  expMeta:        { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
-  expAmt:         { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
   divider:        { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: SPACING.md },
 
   selectCircle:       { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: COLORS.borderDefault, alignItems: 'center', justifyContent: 'center' },

@@ -1,3 +1,21 @@
+## [2026-08-29] Voucher list tile redesign — 2-column layout
+
+### Why
+Sales/Purchase/Expense list tiles were cluttered (badges + ID + party stacked, status dot + return-arrow icon).
+
+### Layout
+Left: party · voucher no · date  
+Right: type badge · amount · status badge  
+Dropped: green status dot, circular return-arrow.
+
+### Changed
+- `src/components/VoucherListTile.tsx` — shared tile + PaymentStatusBadge + ExpenseTypeBadge
+- Sales/Purchase/Expense home + register wire-up
+- Sales home status → paid/unpaid (Paid filter works)
+
+### QA
+YELLOW — tsc clean; Paid still cancelled-proxy (pre-existing).
+
 ## [2026-08-29] Expense Register — FY date sync (empty list fix)
 
 ### Why
