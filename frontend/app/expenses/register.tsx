@@ -82,6 +82,15 @@ export default function ExpenseRegisterScreen() {
   const [fromDate, setFromDate] = useState(() => fyFrom ? isoToDMY(fyFrom) : '01/04/24');
   const [toDate,   setToDate]   = useState(() => fyTo   ? isoToDMY(fyTo)   : '31/03/25');
 
+  // When FY loads/changes, reset date range to full FY (same as Sales/Purchase registers).
+  // Without this, async Auth leaves stale 01/04/24–31/03/25 → 0 expenses for current FY.
+  useEffect(() => {
+    if (fyFrom && fyTo) {
+      setFromDate(isoToDMY(fyFrom));
+      setToDate(isoToDMY(fyTo));
+    }
+  }, [fyFrom, fyTo]);
+
   const mapExpenseItem = (r: any): ExpenseItem => {
     // Prefer API expense_type (recursive root). Fall back to anchored group name —
     // NEVER use includes('direct') (matches "Indirect Expenses").

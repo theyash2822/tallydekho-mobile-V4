@@ -1,3 +1,14 @@
+## [2026-08-29] Expense Register — FY date sync (empty list fix)
+
+### Why
+Register initialized date range to `01/04/24–31/03/25` before Auth FY loaded, then never synced. Yash expenses are May 2025–Aug 2026 → list/counts looked empty and Type filter appeared broken.
+
+### Changed
+- `app/expenses/register.tsx` — sync `fromDate`/`toDate` when `fyFrom`/`fyTo` load (parity with Sales/Purchase/Home)
+
+### Note
+Yash Ki Company: Direct=0, Indirect=11 (data). Direct empty is expected.
+
 ## [2026-08-29] Option A — Sales/Purchase/Expense home multi-filter + combined Recent
 
 ### Policy
