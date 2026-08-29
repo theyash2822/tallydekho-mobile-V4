@@ -39,11 +39,11 @@ export function PaymentStatusBadge({ status }: { status: string }) {
   );
 }
 
-/** Direct / Indirect — blue / orange (not red/green/B&W). */
+/** Direct / Indirect — theme info blue / warning amber (not red/green/B&W). */
 export function ExpenseTypeBadge({ type }: { type: 'direct' | 'indirect' | string }) {
   const isDirect = String(type).toLowerCase() === 'direct';
-  const color = isDirect ? '#0277BD' : '#EF6C00';
-  const bg = isDirect ? '#E1F5FE' : '#FFF3E0';
+  const color = isDirect ? '#2563EB' : '#D97706';
+  const bg = isDirect ? '#EFF6FF' : '#FFFBEB';
   return (
     <View style={[st.typePill, { backgroundColor: bg, borderColor: color + '66' }]}>
       <Text style={[st.typePillTxt, { color }]}>

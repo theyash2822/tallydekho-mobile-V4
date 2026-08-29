@@ -91,17 +91,26 @@ export function classifyVoucherDocType(
   return 'invoice';
 }
 
-/** List-row badge colors — no red / green / black-white (reserved for Paid/Unpaid & UI). */
+/** List-row badge colors — theme-aligned; no red / green / black-white; blues ≠ purples. */
 const VOUCHER_TYPE_BADGE: Record<string, { label: string; color: string; bg: string }> = {
-  sales_invoice:    { label: 'Sales Invoice',    color: '#3949AB', bg: '#E8EAF6' }, // indigo (was green)
-  purchase_invoice: { label: 'Purchase Invoice', color: '#6A1B9A', bg: '#F3E5F5' }, // purple
-  sales_order:      { label: 'Sales Order',      color: '#0277BD', bg: '#E1F5FE' }, // sky blue
-  purchase_order:   { label: 'Purchase Order',   color: '#6D4C41', bg: '#EFEBE9' }, // brown (was green)
-  credit_note:      { label: 'Credit Note',      color: '#EF6C00', bg: '#FFF3E0' }, // orange
-  debit_note:       { label: 'Debit Note',       color: '#AD1457', bg: '#FCE4EC' }, // magenta (was red)
-  delivery_note:    { label: 'Delivery Note',    color: '#00838F', bg: '#E0F7FA' }, // teal
-  proforma_invoice: { label: 'Proforma',         color: '#5E35B1', bg: '#EDE7F6' }, // violet (was B&W)
-  quotation:        { label: 'Quotation',        color: '#7B1FA2', bg: '#F3E5F5' }, // purple (not green/red/B&W)
+  // Theme info blue — primary sales doc
+  sales_invoice:    { label: 'Sales Invoice',    color: '#2563EB', bg: '#EFF6FF' },
+  // Warm brand amber (app accent) — not purple
+  purchase_invoice: { label: 'Purchase Invoice', color: '#A89060', bg: '#FDF9F4' },
+  // Cyan — clearly not blue/purple
+  sales_order:      { label: 'Sales Order',      color: '#0891B2', bg: '#ECFEFF' },
+  // Warm taupe — theme secondary family
+  purchase_order:   { label: 'Purchase Order',   color: '#8B7355', bg: '#F7F3EE' },
+  // Theme warning amber
+  credit_note:      { label: 'Credit Note',      color: '#D97706', bg: '#FFFBEB' },
+  // Soft rose (not traffic red)
+  debit_note:       { label: 'Debit Note',       color: '#DB2777', bg: '#FDF2F8' },
+  // Teal
+  delivery_note:    { label: 'Delivery Note',    color: '#0E7490', bg: '#F0FDFA' },
+  // Soft lilac (lighter than before — not dark purple)
+  proforma_invoice: { label: 'Proforma',         color: '#A78BFA', bg: '#F5F3FF' },
+  // Soft peach — distinct from blue/purple/amber warning
+  quotation:        { label: 'Quotation',        color: '#C97B4A', bg: '#FBF0E8' },
 };
 
 export type VoucherTypeBadgeInfo = { label: string; color: string; bg: string; docType: string };
