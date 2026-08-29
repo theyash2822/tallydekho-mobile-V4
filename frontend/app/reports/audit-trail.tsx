@@ -7,13 +7,19 @@ import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
-import { getVouchers, getMyEntries, retryMyEntry } from '../../src/services/api';
+import { getVouchers, getMyEntries, retryMyEntry, getInvoicePreview } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 import { socketService } from '../../src/services/socketService';
 import { useTranslation } from 'react-i18next';
+import {
+  buildProformaToInvoicePrefillFromPreview,
+  proformaPrefillStorageKey,
+} from '../../src/utils/proformaToInvoicePrefill';
 
 const SCREEN_W = Dimensions.get('window').width;
 const AMBER = '#A89060';
@@ -422,6 +428,79 @@ const dd = StyleSheet.create({
   optionTxtActive: { color: AMBER, fontWeight: '700' },
 });
 
+// ─── Swipe actions (Preview left / Convert right) ─────────────────────────────
+const swipeSt = StyleSheet.create({
+  actionWrap: {
+    width: 88, justifyContent: 'center', alignItems: 'center',
+    overflow: 'hidden',
+  },
+  previewBg: { backgroundColor: COLORS.brandPrimary },
+  convertBg: { backgroundColor: AMBER },
+  actionInner: { flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center', gap: 4, paddingHorizontal: 6 },
+  actionTxt: { fontSize: 11, fontWeight: '700', color: COLORS.white, textAlign: 'center' },
+});
+
+function AuditEntrySwipe({
+  enabled,
+  showConvert,
+  converting,
+  onPreview,
+  onConvert,
+  children,
+}: {
+  enabled: boolean;
+  showConvert: boolean;
+  converting?: boolean;
+  onPreview: () => void;
+  onConvert: () => void;
+  children: React.ReactNode;
+}) {
+  const swipeRef = useRef<any>(null);
+  if (!enabled) return <>{children}</>;
+
+  return (
+    <ReanimatedSwipeable
+      ref={swipeRef}
+      friction={2}
+      leftThreshold={56}
+      rightThreshold={56}
+      overshootLeft={false}
+      overshootRight={false}
+      renderLeftActions={() => (
+        <View style={[swipeSt.actionWrap, swipeSt.previewBg]}>
+          <TouchableOpacity
+            style={swipeSt.actionInner}
+            onPress={() => { swipeRef.current?.close(); onPreview(); }}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="eye-outline" size={20} color={COLORS.white} />
+            <Text style={swipeSt.actionTxt}>Preview</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      renderRightActions={showConvert ? () => (
+        <View style={[swipeSt.actionWrap, swipeSt.convertBg]}>
+          <TouchableOpacity
+            style={swipeSt.actionInner}
+            onPress={() => { swipeRef.current?.close(); onConvert(); }}
+            activeOpacity={0.85}
+            disabled={converting}
+          >
+            {converting ? (
+              <ActivityIndicator size="small" color={COLORS.white} />
+            ) : (
+              <Ionicons name="swap-horizontal-outline" size={20} color={COLORS.white} />
+            )}
+            <Text style={swipeSt.actionTxt}>Convert</Text>
+          </TouchableOpacity>
+        </View>
+      ) : undefined}
+    >
+      {children}
+    </ReanimatedSwipeable>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function AuditTrailScreen() {
   const { t } = useTranslation();
@@ -467,6 +546,8 @@ export default function AuditTrailScreen() {
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
   const retryingRef = useRef<Set<string>>(new Set());
   const bulkRetryingRef = useRef(false);
+  const convertingRef = useRef<Set<string>>(new Set());
+  const [convertingIds, setConvertingIds] = useState<Set<string>>(new Set());
 
   // ── API State ─────────────────────────────────────────────
   const [apiEntries, setApiEntries] = useState<VoucherEntry[]>([]);
@@ -866,6 +947,93 @@ export default function AuditTrailScreen() {
     clearSelection();
   };
 
+  const canConvertProformaEntry = (entry: VoucherEntry) =>
+    entry.type === 'Proforma Invoice'
+    && entry.currentEntryType === 'optional'
+    && entry.conversionStatus !== 'converted'
+    && !!entry.tdkRef
+    && (!!entry.tallyVoucherNo || entry.syncStatus === 'synced');
+
+  const handleConvertProforma = (entry: VoucherEntry) => {
+    if (!entry.tdkRef || !company?.guid) return;
+    if (!canConvertProformaEntry(entry)) {
+      Toast.show({
+        type: 'info',
+        text1: 'Wait for sync',
+        text2: 'Convert after Tally syncs this Proforma.',
+        visibilityTime: 2800,
+      });
+      return;
+    }
+    if (convertingRef.current.has(entry.tdkRef)) return;
+    convertingRef.current.add(entry.tdkRef);
+    setConvertingIds(new Set(convertingRef.current));
+    (async () => {
+      try {
+        const res: any = await getInvoicePreview(entry.tdkRef!, company.guid);
+        if (!res?.status || !res?.data) throw new Error(res?.message || 'Could not load Proforma');
+        const prefill = buildProformaToInvoicePrefillFromPreview(res.data, entry.tdkRef!);
+        await AsyncStorage.setItem(proformaPrefillStorageKey(company.guid), JSON.stringify(prefill));
+        router.push('/sales/create-invoice' as any);
+      } catch (e: any) {
+        Toast.show({ type: 'error', text1: 'Could not start invoice', text2: e?.message || 'Try again after sync.' });
+      } finally {
+        convertingRef.current.delete(entry.tdkRef!);
+        setConvertingIds(new Set(convertingRef.current));
+      }
+    })();
+  };
+
+  const openEntry = (entry: VoucherEntry) => {
+    if (entry.isMaster || entry.queueId) {
+      const qid = entry.queueId
+        || (String(entry.id).startsWith('wq_') ? String(entry.id).replace(/^wq_/, '') : null);
+      if (qid && (entry.isMaster || ['New Ledger', 'New Warehouse', 'New Item', 'Stock Edit'].includes(entry.type))) {
+        router.push(`/masters/preview?queueId=${encodeURIComponent(String(qid))}` as any);
+        return;
+      }
+    }
+    const docId = entry.tallyVoucherNo || entry.ref;
+    if (!docId) {
+      if (entry.tdkRef) {
+        const ref = entry.tdkRef;
+        let route = `/sales/invoice-preview?tdkRef=${encodeURIComponent(ref)}`;
+        if (/TDK-(?:OPT-)?SOR-/i.test(ref) || entry.type === 'Sales Order') {
+          route = `/sales/order-preview?tdkRef=${encodeURIComponent(ref)}`;
+        } else if (/TDK-(?:OPT-)?CON-/i.test(ref)) {
+          route = `/voucher/contra-preview?tdkRef=${encodeURIComponent(ref)}`;
+        } else if (/TDK-(?:OPT-)?JOR-/i.test(ref)) {
+          route = `/voucher/journal-preview?tdkRef=${encodeURIComponent(ref)}`;
+        } else if (/TDK-(?:OPT-)?PAY-/i.test(ref)) {
+          route = `/voucher/payment-preview?tdkRef=${encodeURIComponent(ref)}`;
+        } else if (/TDK-(?:OPT-)?RCP-/i.test(ref)) {
+          route = `/voucher/receipt-preview?tdkRef=${encodeURIComponent(ref)}`;
+        } else if (/TDK-(?:OPT-)?PHY-/i.test(ref)) {
+          route = `/stocks/adjustment-preview?tdkRef=${encodeURIComponent(ref)}`;
+        } else if (/TDK-(?:OPT-)?STJ-/i.test(ref)) {
+          route = `/stocks/transfer-preview?tdkRef=${encodeURIComponent(ref)}`;
+        } else if (/TDK-(?:OPT-)?CN-/i.test(ref)) {
+          route = `/sales/credit-note-preview?tdkRef=${encodeURIComponent(ref)}`;
+        } else if (/TDK-(?:OPT-)?DBN-/i.test(ref)) {
+          route = `/purchase/debit-note-preview?tdkRef=${encodeURIComponent(ref)}`;
+        } else if (/TDK-(?:OPT-)?DN-/i.test(ref)) {
+          route = `/sales/delivery-note-preview?tdkRef=${encodeURIComponent(ref)}`;
+        } else if (/TDK-(?:OPT-)?POR-/i.test(ref)) {
+          route = `/purchase/order-preview?tdkRef=${encodeURIComponent(ref)}`;
+        }
+        router.push(route as any);
+      } else {
+        Alert.alert(
+          'Not yet synced',
+          'Preview is not available yet. Check again after Tally syncs.',
+          [{ text: 'OK' }]
+        );
+      }
+      return;
+    }
+    router.push(`/document/${docId}` as any);
+  };
+
   const handleShare = () =>
     Alert.alert('Export', `Export ${selected.length > 0 ? selected.length : 'all'} entries?`, [
       { text: 'Cancel',     style: 'cancel' },
@@ -1106,8 +1274,20 @@ export default function AuditTrailScreen() {
                         activeTab === 'myentries' &&
                         (entry.syncStatus === 'pending' || entry.syncStatus === 'failed');
 
-                      return (
-                        <View key={`${entry.id}_${idx}`}>
+                      const kind = activeTab === 'myentries' ? entryKindChip(entry) : null;
+                      const books = activeTab === 'myentries' ? getBooksInfo(entry) : null;
+                      const irnLabel =
+                        activeTab === 'myentries' && entry.eInvoiceStatus === 'generated'
+                          ? 'IRN ✓'
+                          : activeTab === 'myentries' && entry.eInvoiceStatus === 'failed'
+                            ? 'IRN Failed'
+                            : activeTab === 'myentries' && entry.eInvoiceStatus === 'generating'
+                              ? 'IRN Pending'
+                              : null;
+                      const showConvert =
+                        activeTab === 'myentries' && canConvertProformaEntry(entry);
+
+                      const rowInner = (
                           <TouchableOpacity
                             style={[
                               s.entryRow,
@@ -1118,73 +1298,18 @@ export default function AuditTrailScreen() {
                             ]}
                             activeOpacity={0.75}
                             onPress={() => {
-                              if (multiSelect) {
-                                toggleSelect(entry.id);
-                              } else if (entry.isMaster || entry.queueId) {
-                                const qid = entry.queueId
-                                  || (String(entry.id).startsWith('wq_') ? String(entry.id).replace(/^wq_/, '') : null);
-                                if (qid && (entry.isMaster || ['New Ledger', 'New Warehouse', 'New Item', 'Stock Edit'].includes(entry.type))) {
-                                  router.push(`/masters/preview?queueId=${encodeURIComponent(String(qid))}` as any);
-                                  return;
-                                }
-                              }
-                              if (!multiSelect) {
-                                // Use Tally voucher number when available (My Entries queue rows have
-                                // empty ref since wq.tally_voucher_number is never returned by Tally's
-                                // ImportData API — tallyVoucherNo is the reconciled value from app_vouchers)
-                                const docId = entry.tallyVoucherNo || entry.ref;
-                                if (!docId) {
-                                  // Route provisional preview by TDK voucher family (not always Sales invoice UI)
-                                  if (entry.tdkRef) {
-                                    const ref = entry.tdkRef;
-                                    let route = `/sales/invoice-preview?tdkRef=${encodeURIComponent(ref)}`;
-                                    if (/TDK-(?:OPT-)?SOR-/i.test(ref) || entry.type === 'Sales Order') {
-                                      route = `/sales/order-preview?tdkRef=${encodeURIComponent(ref)}`;
-                                    } else if (/TDK-(?:OPT-)?CON-/i.test(ref)) {
-                                      route = `/voucher/contra-preview?tdkRef=${encodeURIComponent(ref)}`;
-                                    } else if (/TDK-(?:OPT-)?JOR-/i.test(ref)) {
-                                      route = `/voucher/journal-preview?tdkRef=${encodeURIComponent(ref)}`;
-                                    } else if (/TDK-(?:OPT-)?PAY-/i.test(ref)) {
-                                      route = `/voucher/payment-preview?tdkRef=${encodeURIComponent(ref)}`;
-                                    } else if (/TDK-(?:OPT-)?RCP-/i.test(ref)) {
-                                      route = `/voucher/receipt-preview?tdkRef=${encodeURIComponent(ref)}`;
-                                    } else if (/TDK-(?:OPT-)?PHY-/i.test(ref)) {
-                                      route = `/stocks/adjustment-preview?tdkRef=${encodeURIComponent(ref)}`;
-                                    } else if (/TDK-(?:OPT-)?STJ-/i.test(ref)) {
-                                      route = `/stocks/transfer-preview?tdkRef=${encodeURIComponent(ref)}`;
-                                    } else if (/TDK-(?:OPT-)?CN-/i.test(ref)) {
-                                      route = `/sales/credit-note-preview?tdkRef=${encodeURIComponent(ref)}`;
-                                    } else if (/TDK-(?:OPT-)?DBN-/i.test(ref)) {
-                                      route = `/purchase/debit-note-preview?tdkRef=${encodeURIComponent(ref)}`;
-                                    } else if (/TDK-(?:OPT-)?DN-/i.test(ref)) {
-                                      route = `/sales/delivery-note-preview?tdkRef=${encodeURIComponent(ref)}`;
-                                    } else if (/TDK-(?:OPT-)?POR-/i.test(ref)) {
-                                      route = `/purchase/order-preview?tdkRef=${encodeURIComponent(ref)}`;
-                                    }
-                                    router.push(route as any);
-                                  } else {
-                                    Alert.alert(
-                                      'Not yet synced',
-                                      'Preview is not available yet. Check again after Tally syncs.',
-                                      [{ text: 'OK' }]
-                                    );
-                                  }
-                                  return;
-                                }
-                                router.push(`/document/${docId}` as any);
-                              }
+                              if (multiSelect) toggleSelect(entry.id);
+                              else openEntry(entry);
                             }}
                             onLongPress={() => { setMultiSelect(true); toggleSelect(entry.id); }}
                             delayLongPress={450}
                           >
-                            {/* Checkbox */}
                             {multiSelect ? (
                               <View style={[s.checkbox, isSel && s.checkboxActive]}>
                                 {isSel ? <Ionicons name="checkmark" size={12} color={COLORS.white} /> : null}
                               </View>
                             ) : null}
 
-                            {/* Dual icons — My Entries: sync (top) + books (bottom) */}
                             {!multiSelect && activeTab === 'myentries' && sInfo ? (
                               <View style={s.iconStack}>
                                 <TouchableOpacity
@@ -1200,78 +1325,71 @@ export default function AuditTrailScreen() {
                                   {retryingIds.has((entry.id || '').replace('wq_', '')) ? (
                                     <ActivityIndicator size="small" color={sInfo.color} />
                                   ) : (
-                                    <Ionicons name={sInfo.icon} size={18} color={sInfo.color} />
+                                    <Ionicons name={sInfo.icon} size={16} color={sInfo.color} />
                                   )}
                                 </TouchableOpacity>
-                                {(() => {
-                                  const b = getBooksInfo(entry);
-                                  return (
-                                    <View
-                                      style={[s.statusIcon, { backgroundColor: b.color + '18' }]}
-                                      accessibilityLabel={b.label}
-                                    >
-                                      <Ionicons name={b.icon} size={18} color={b.color} />
-                                    </View>
-                                  );
-                                })()}
+                                <View
+                                  style={[s.statusIcon, { backgroundColor: books!.color + '18' }]}
+                                  accessibilityLabel={books!.label}
+                                >
+                                  <Ionicons name={books!.icon} size={16} color={books!.color} />
+                                </View>
                               </View>
                             ) : null}
 
-                            {/* Action icon — Day Book */}
                             {!multiSelect && activeTab === 'daybook' ? (
                               <View style={[s.statusIcon, { backgroundColor: (ACTION_COLORS[entry.action || 'Created'] || '#999') + '18' }]}>
-                                <Ionicons name="book-outline" size={18} color={color} />
+                                <Ionicons name="book-outline" size={16} color={color} />
                               </View>
                             ) : null}
 
-                            {/*
-                              Layout:
-                              [icons] Party name (full width)
-                                      ref · date                    [IRN]
-                                      [type] [Regular]              amount
-                            */}
                             <View style={s.entryBody}>
+                              {/* Top: party full width */}
                               <Text style={s.partyTxt} numberOfLines={1}>{entry.party || '—'}</Text>
 
-                              <View style={s.metaRow}>
-                                <Text style={s.metaTxt} numberOfLines={1}>
-                                  {displayRef(entry)}
-                                  {entry.date ? `  ·  ${entry.date}` : ''}
+                              {/* Middle: ref · date | IRN */}
+                              <View style={s.lineRow}>
+                                <Text style={s.lineLeft} numberOfLines={1}>
+                                  {displayRef(entry)}{entry.date ? ` · ${entry.date}` : ''}
                                 </Text>
-                                {activeTab === 'myentries' && entry.eInvoiceStatus === 'generated' ? (
-                                  <View style={[lb.badge, lb.irnDone]}>
-                                    <Text style={[lb.badgeTxt, { color: COLORS.info }]}>IRN ✓</Text>
-                                  </View>
-                                ) : activeTab === 'myentries' && ['generating', 'failed'].includes(entry.eInvoiceStatus || '') ? (
-                                  <View style={[lb.badge, lb.irnPending]}>
-                                    <Text style={[lb.badgeTxt, { color: COLORS.info }]}>
-                                      {entry.eInvoiceStatus === 'failed' ? 'IRN Failed' : 'IRN Pending'}
-                                    </Text>
+                                {irnLabel ? (
+                                  <View style={[lb.badge, entry.eInvoiceStatus === 'generated' ? lb.irnDone : lb.irnPending]}>
+                                    <Text style={[lb.badgeTxt, { color: COLORS.info }]}>{irnLabel}</Text>
                                   </View>
                                 ) : null}
                               </View>
 
-                              <View style={s.bottomRow}>
-                                <View style={s.chipRowLeft}>
+                              {/* Bottom: [type] [Regular] | amount */}
+                              <View style={s.lineRow}>
+                                <View style={s.chipRow}>
                                   <View style={[s.vtypePill, { backgroundColor: color + '18', borderColor: color + '55' }]}>
                                     <Text style={[s.vtypePillTxt, { color }]} numberOfLines={1}>{entry.type}</Text>
                                   </View>
-                                  {activeTab === 'myentries' && (() => {
-                                    const kind = entryKindChip(entry);
-                                    if (!kind) return null;
-                                    return (
-                                      <View style={[lb.badge, kind.tone === 'optional' ? lb.optional : lb.regular]}>
-                                        <Text style={[lb.badgeTxt, { color: kind.tone === 'optional' ? AMBER : COLORS.positive }]}>
-                                          {kind.label}
-                                        </Text>
-                                      </View>
-                                    );
-                                  })()}
+                                  {kind ? (
+                                    <View style={[lb.badge, kind.tone === 'optional' ? lb.optional : lb.regular]}>
+                                      <Text style={[lb.badgeTxt, { color: kind.tone === 'optional' ? AMBER : COLORS.positive }]}>
+                                        {kind.label}
+                                      </Text>
+                                    </View>
+                                  ) : null}
                                 </View>
                                 <Text style={s.amtTxt} numberOfLines={1}>{entry.amount}</Text>
                               </View>
                             </View>
                           </TouchableOpacity>
+                      );
+
+                      return (
+                        <View key={`${entry.id}_${idx}`}>
+                          <AuditEntrySwipe
+                            enabled={!multiSelect && activeTab === 'myentries'}
+                            showConvert={showConvert}
+                            converting={!!(entry.tdkRef && convertingIds.has(entry.tdkRef))}
+                            onPreview={() => openEntry(entry)}
+                            onConvert={() => handleConvertProforma(entry)}
+                          >
+                            {rowInner}
+                          </AuditEntrySwipe>
                           {idx < entries.length - 1 ? <View style={s.divider} /> : null}
                         </View>
                       );
@@ -1474,20 +1592,37 @@ const s = StyleSheet.create({
   checkbox:      { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: COLORS.borderStrong, alignItems: 'center', justifyContent: 'center' },
   checkboxActive:{ backgroundColor: COLORS.textPrimary, borderColor: COLORS.textPrimary },
 
-  statusIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  iconStack: { gap: 6, alignItems: 'center' },
+  statusIcon: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  iconStack: { width: 30, gap: 6, alignItems: 'center', flexShrink: 0 },
 
-  entryBody: { flex: 1, minWidth: 0, gap: 4 },
-  partyTxt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, lineHeight: 18 },
-  metaRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  metaTxt:   { flex: 1, minWidth: 0, fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500' },
-  bottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  chipRowLeft: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, flex: 1, minWidth: 0 },
-  vtypePill:    { paddingHorizontal: 6, paddingVertical: 2, borderRadius: RADIUS.full, borderWidth: 1, maxWidth: 120 },
+  entryBody: { flex: 1, minWidth: 0 },
+  partyTxt:  {
+    fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary,
+    lineHeight: 18, marginBottom: 3,
+  },
+  lineRow: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', gap: 8, minHeight: 18, marginTop: 2,
+  },
+  lineLeft: {
+    flex: 1, minWidth: 0,
+    fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500', lineHeight: 15,
+  },
+  chipRow: {
+    flex: 1, minWidth: 0,
+    flexDirection: 'row', alignItems: 'center', flexWrap: 'nowrap', gap: 4,
+  },
+  vtypePill: {
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: RADIUS.full,
+    borderWidth: 1, maxWidth: 110, flexShrink: 1,
+  },
   vtypePillTxt: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.2 },
-  amtTxt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary, textAlign: 'right', flexShrink: 0 },
+  amtTxt: {
+    fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary,
+    textAlign: 'right', flexShrink: 0, lineHeight: 18,
+  },
 
-  divider: { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 56 },
+  divider: { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 52 },
 
   empty:    { alignItems: 'center', paddingVertical: 60, gap: 12 },
   emptyTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
