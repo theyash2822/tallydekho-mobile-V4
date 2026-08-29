@@ -266,6 +266,7 @@ export const searchDashboard   = (q: string, companyGuid?: string) => get<any>(w
 
 export const getSalesInvoices  = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/invoices', companyGuid, params));
 export const getSalesVouchers  = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/vouchers', companyGuid, params));
+export const getSalesVoucherCounts = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/vouchers/counts', companyGuid, params));
 export const getSalesInvoiceCreditNoteContext = (invoiceId: string, companyGuid: string) =>
   get<any>(withCompany(`/sales/invoices/${encodeURIComponent(invoiceId)}/credit-note-context`, companyGuid));
 export const getSalesOrders    = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/orders', companyGuid, params));
@@ -306,6 +307,7 @@ export const createDeliveryNote  = (payload: any) => tallyPost<any>('/voucher/de
 
 export const getPurchaseInvoices = (companyGuid?: string, params?: any) => get<any>(withCompany('/purchase/invoices', companyGuid, params));
 export const getPurchaseVouchers = (companyGuid?: string, params?: any) => get<any>(withCompany('/purchase/vouchers', companyGuid, params));
+export const getPurchaseVoucherCounts = (companyGuid?: string, params?: any) => get<any>(withCompany('/purchase/vouchers/counts', companyGuid, params));
 export const getPurchaseInvoiceDebitNoteContext = (invoiceId: string, companyGuid: string) =>
   get<any>(withCompany(`/purchase/invoices/${encodeURIComponent(invoiceId)}/debit-note-context`, companyGuid));
 export const getPurchaseOrders   = (companyGuid?: string, params?: any) => get<any>(withCompany('/purchase/orders', companyGuid, params));
@@ -452,6 +454,7 @@ export const getSalesHomeMetrics = (companyGuid?: string, params?: any) => get<a
 // ══════════════════════════════════════════════════════════════
 
 export const getExpenses = (companyGuid?: string, params?: any) => get<any>(withCompany('/expenses', companyGuid, params));
+export const getExpenseCounts = (companyGuid?: string, params?: any) => get<any>(withCompany('/expenses/counts', companyGuid, params));
 export const getDaybook  = (companyGuid?: string, date?: string) => get<any>(withCompany('/daybook', companyGuid, date ? { date } : {}));
 
 // ══════════════════════════════════════════════════════════════

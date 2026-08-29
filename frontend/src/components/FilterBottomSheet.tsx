@@ -121,16 +121,17 @@ export default function FilterBottomSheet({
 
 // ── Small helper components reusable inside the sheet ──────────────────────────
 
-/** Radio option row — single select */
+/** Radio option row — single select. Optional trailing count (e.g. "Credit Note  90"). */
 export function FilterRadioRow({
-  label, selected, onPress,
-}: { label: string; selected: boolean; onPress: () => void }) {
+  label, count, selected, onPress,
+}: { label: string; count?: number; selected: boolean; onPress: () => void }) {
+  const display = count != null ? `${label}  ${count}` : label;
   return (
     <TouchableOpacity style={ro.row} onPress={onPress} activeOpacity={0.7}>
       <View style={[ro.radio, selected && ro.radioActive]}>
         {selected && <View style={ro.radioDot} />}
       </View>
-      <Text style={[ro.label, selected && ro.labelActive]}>{label}</Text>
+      <Text style={[ro.label, selected && ro.labelActive]}>{display}</Text>
     </TouchableOpacity>
   );
 }

@@ -61,14 +61,17 @@ getKPIPayments, getKPIReceipts, getKPILoansODs
 All: GET /api/kpi/<type> + ?companyGuid&fy
 
 ## Sales / Purchase
-getSalesInvoices, getSalesVouchers, getSalesOrders, getCreditNotes,
-getDeliveryNotes, getPurchaseInvoices, getPurchaseVouchers, getPurchaseOrders, getDebitNotes
+getSalesInvoices, getSalesVouchers, getSalesVoucherCounts, getSalesOrders, getCreditNotes,
+getDeliveryNotes, getPurchaseInvoices, getPurchaseVouchers, getPurchaseVoucherCounts,
+getPurchaseOrders, getDebitNotes
 All: GET /api/sales/* or /api/purchase/* + ?companyGuid&fy
 
-Home Recent (combined feed):
-- `getSalesVouchers(companyGuid, { docTypes: 'invoice,order,credit_note,delivery_note,proforma,quotation', from, to, limit })` — `GET /api/sales/vouchers`
-- `getPurchaseVouchers(companyGuid, { docTypes: 'invoice,order,debit_note', from, to, limit })` — `GET /api/purchase/vouchers`
+Register filters (Ledger-style sheet; homes use invoices-only Recent):
+- `getSalesVouchers(companyGuid, { docTypes, from, to, limit, page })` — `GET /api/sales/vouchers`
+- `getSalesVoucherCounts(companyGuid, { from, to })` — `GET /api/sales/vouchers/counts` → `{ invoice, order, credit_note, delivery_note, proforma, quotation, all }`
+- `getPurchaseVouchers` / `getPurchaseVoucherCounts` — same for Purchase (`invoice|order|debit_note`)
 - `getExpenses(companyGuid, { type: 'All'|'Direct'|'Indirect', category?, from, to, limit })` — anchored Direct/Indirect + optional exact category parent
+- `getExpenseCounts(companyGuid, { from, to })` — `GET /api/expenses/counts` → `{ all, direct, indirect, categories:[{name,count}] }`
 
 Credit Note Sales Return:
 - `getSalesInvoices(companyGuid, { partyName, from, to, limit })` — all Sales invoices for the selected party and FY

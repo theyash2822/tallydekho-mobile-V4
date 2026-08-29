@@ -10,11 +10,20 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 import { useAuth } from '../../src/context/AuthContext';
-import { getSalesInvoices } from '../../src/services/api';
+import { getSalesVouchers, getSalesVoucherCounts } from '../../src/services/api';
 import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
 import SearchBar from '../../src/components/SearchBar';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useTranslation } from 'react-i18next';
+import {
+  SALES_DOC_TYPES,
+  ALL_SALES_DOC_TYPE_IDS,
+  DOC_TYPE_LABEL,
+  FilterIconWithBadge,
+  ActiveFilterChips,
+  DocTypeFilterModal,
+  docTypeToRouteType,
+} from '../../src/components/voucherHomeFilters';
 
 const AMBER    = '#A89060';
 const AMBER_BG = '#FDF9F4';
@@ -41,8 +50,8 @@ const STATUS_LABEL: Record<string, string> = {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type Invoice = {
-  id: string; number: string; party: string; date: string;
-  time: string; amount: string; status: string;
+  id: string; guid?: string; number: string; party: string; date: string;
+  time: string; amount: string; status: string; docType?: string;
 };
 type MonthGroup = { id: string; label: string; invoices: Invoice[] };
 
@@ -58,6 +67,9 @@ export default function SalesRegisterScreen() {
   const [statusFilter,   setStatusFilter]   = useState('All');
   const [dropdown,       setDropdown]       = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [docType, setDocType] = useState<string>('all');
+  const [showTypeFilter, setShowTypeFilter] = useState(false);
+  const [typeCounts, setTypeCounts] = useState<Record<string, number>>({});
   // Init date range from selected FY; update when FY changes
   const fyFrom = selectedFY?.startDate ?? '';
   const fyTo   = selectedFY?.endDate   ?? '';
@@ -83,13 +95,19 @@ export default function SalesRegisterScreen() {
   const mapSalesInv = (r: any, i: number): Invoice => ({
     // Prefer Tally guid — voucher_number can repeat across parties/FYs (e.g. TD1531-3-2026)
     id: r.guid || `sale-${r.voucher_number || 'x'}-${r.id ?? i}`,
+    guid: r.guid,
     number: r.voucher_number || String(r.id || ''),
     party: r.party_name || '',
     date: r.date || '',
     time: '',
     amount: formatAmount(Math.abs(+r.amount||0)),
     status: r.is_cancelled ? 'unpaid' : 'paid',
+    docType: r.doc_type || 'invoice',
   });
+
+  const docTypesParam = docType === 'all'
+    ? ALL_SALES_DOC_TYPE_IDS.join(',')
+    : docType;
 
   const loadRegister = useCallback(() => {
     if (!companyGuid) return;
@@ -98,15 +116,22 @@ export default function SalesRegisterScreen() {
     setHasMore(false);
     const from = dmyToISO(fromDate) || fyFrom;
     const to   = dmyToISO(toDate)   || fyTo;
+    const range = from && to ? { from, to } : {};
     setApiError(null);
-    getSalesInvoices(companyGuid, { search, ...(from && to ? { from, to } : {}), limit: PAGE_SIZE, page: 1 }).then((res: any) => {
-      const rows = res?.data ?? [];
+    Promise.all([
+      getSalesVouchers(companyGuid, {
+        search, ...range, limit: PAGE_SIZE, page: 1, docTypes: docTypesParam,
+      }),
+      getSalesVoucherCounts(companyGuid, range),
+    ]).then(([listRes, cntRes]: any[]) => {
+      const rows = listRes?.data ?? [];
       setLiveInvoices(rows.map(mapSalesInv));
       setHasMore(rows.length === PAGE_SIZE);
+      setTypeCounts(cntRes?.data ?? {});
     }).catch((err: any) => {
       setApiError(err?.message || 'Failed to load sales data');
     }).finally(() => setLoadingData(false));
-  }, [companyGuid, search, fromDate, toDate, fyFrom, fyTo, formatAmount]);
+  }, [companyGuid, search, fromDate, toDate, fyFrom, fyTo, formatAmount, docTypesParam]);
 
   useEffect(() => {
     loadRegister();
@@ -118,7 +143,13 @@ export default function SalesRegisterScreen() {
     setIsLoadingMore(true);
     const from = dmyToISO(fromDate) || fyFrom;
     const to   = dmyToISO(toDate)   || fyTo;
-    getSalesInvoices(companyGuid, { search, ...(from && to ? { from, to } : {}), limit: PAGE_SIZE, page: nextPage }).then((res: any) => {
+    getSalesVouchers(companyGuid, {
+      search,
+      ...(from && to ? { from, to } : {}),
+      limit: PAGE_SIZE,
+      page: nextPage,
+      docTypes: docTypesParam,
+    }).then((res: any) => {
       const rows = res?.data ?? [];
       setLiveInvoices(prev => [...prev, ...rows.map(mapSalesInv)]);
       setHasMore(rows.length === PAGE_SIZE);
@@ -225,7 +256,11 @@ export default function SalesRegisterScreen() {
             <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
           <Text style={s.headerTitle}>{t('sales.register')}</Text>
-          <View style={{ width: 36 }} />
+          <FilterIconWithBadge
+            testID="sales-register-filter-btn"
+            count={docType !== 'all' ? 1 : 0}
+            onPress={() => setShowTypeFilter(true)}
+          />
         </View>
       )}
 
@@ -260,12 +295,18 @@ export default function SalesRegisterScreen() {
         </View>
       </View>
 
+      <ActiveFilterChips
+        chips={docType !== 'all' ? [{ id: docType, label: DOC_TYPE_LABEL[docType] || docType }] : []}
+        onRemove={() => setDocType('all')}
+        onClearAll={() => setDocType('all')}
+      />
+
       {dropdown && (
         <TouchableOpacity style={s.dropOverlay} onPress={() => setDropdown(false)} activeOpacity={1} />
       )}
 
       {/* ── Search ─────────────────────────────────────────────── */}
-      <SearchBar value={search} onChangeText={setSearch} placeholder="Search invoices, parties..." />
+      <SearchBar value={search} onChangeText={setSearch} placeholder="Search vouchers, parties..." />
 
       {apiError && <ErrorBanner message={apiError} onRetry={loadRegister} />}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: isSelecting ? 120 : 40 }}>
@@ -295,8 +336,8 @@ export default function SalesRegisterScreen() {
         {!loadingData && liveInvoices.length === 0 && allFiltered.length === 0 && (
           <View style={{ alignItems: 'center', padding: 40, gap: 8 }}>
             <Ionicons name="document-outline" size={40} color={COLORS.textTertiary} />
-            <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textSecondary }}>No sales invoices</Text>
-            <Text style={{ fontSize: 13, color: COLORS.textTertiary, textAlign: 'center' }}>Sync your Tally data or create a new invoice</Text>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textSecondary }}>No sales vouchers</Text>
+            <Text style={{ fontSize: 13, color: COLORS.textTertiary, textAlign: 'center' }}>Sync your Tally data or adjust filters</Text>
           </View>
         )}
         {/* ── Collapsible Month Sections ────────────────────────────── */}
@@ -316,7 +357,7 @@ export default function SalesRegisterScreen() {
                 <View style={s.monthHeaderLeft}>
                   <View style={s.monthDot} />
                   <Text style={s.monthLabel}>{group.label}</Text>
-                  <Text style={s.monthCount}>{groupInvoices.length} invoices</Text>
+                  <Text style={s.monthCount}>{groupInvoices.length} docs</Text>
                 </View>
                 <Ionicons
                   name={isOpen ? 'chevron-up' : 'chevron-down'}
@@ -337,7 +378,10 @@ export default function SalesRegisterScreen() {
                           activeOpacity={0.7}
                           onPress={() => {
                             if (isSelecting) { toggleSelect(inv.id); }
-                            else { router.push(`/document/${inv.id}?type=sales_invoice` as any); }
+                            else {
+                              const routeType = docTypeToRouteType(inv.docType || 'invoice', 'sales');
+                              router.push(`/document/${inv.guid || inv.id}?type=${routeType}` as any);
+                            }
                           }}
                           onLongPress={() => toggleSelect(inv.id)}
                           delayLongPress={500}
@@ -424,6 +468,16 @@ export default function SalesRegisterScreen() {
         maxDate={fyTo || undefined}
         onApply={(from, to) => { setFromDate(from); setToDate(to); setShowDatePicker(false); }}
         onClose={() => setShowDatePicker(false)}
+      />
+
+      <DocTypeFilterModal
+        visible={showTypeFilter}
+        onClose={() => setShowTypeFilter(false)}
+        title="Filter Sales"
+        options={SALES_DOC_TYPES}
+        selectedId={docType}
+        counts={typeCounts}
+        onApply={setDocType}
       />
     </SafeAreaView>
   );

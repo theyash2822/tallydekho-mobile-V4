@@ -10,11 +10,20 @@ import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 import { useAuth } from '../../src/context/AuthContext';
-import { getPurchaseInvoices } from '../../src/services/api';
+import { getPurchaseVouchers, getPurchaseVoucherCounts } from '../../src/services/api';
 import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
 import SearchBar from '../../src/components/SearchBar';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useTranslation } from 'react-i18next';
+import {
+  PURCHASE_DOC_TYPES,
+  ALL_PURCHASE_DOC_TYPE_IDS,
+  DOC_TYPE_LABEL,
+  FilterIconWithBadge,
+  ActiveFilterChips,
+  DocTypeFilterModal,
+  docTypeToRouteType,
+} from '../../src/components/voucherHomeFilters';
 
 const AMBER    = '#A89060';
 const AMBER_BG = '#FDF9F4';
@@ -46,6 +55,7 @@ type PurchaseInvoice = {
   number: string;
   vendor: string; date: string;
   time: string; amount: string; status: string;
+  docType?: string;
 };
 type MonthGroup = { id: string; label: string; invoices: PurchaseInvoice[] };
 
@@ -59,6 +69,9 @@ export default function PurchaseRegisterScreen() {
   const [liveInvoices, setLiveInvoices] = useState<PurchaseInvoice[]>([]);
   const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [docType, setDocType] = useState<string>('all');
+  const [showTypeFilter, setShowTypeFilter] = useState(false);
+  const [typeCounts, setTypeCounts] = useState<Record<string, number>>({});
 
   const PAGE_SIZE = 50;
   const [page,          setPage]          = useState(1);
@@ -70,6 +83,9 @@ export default function PurchaseRegisterScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [fromDate, setFromDate] = useState(() => fyFrom ? isoToDMY(fyFrom) : '01/04/24');
   const [toDate,   setToDate]   = useState(() => fyTo   ? isoToDMY(fyTo)   : '31/03/25');
+  const [search,         setSearch]         = useState('');
+  const [statusFilter,   setStatusFilter]   = useState('All');
+  const [dropdown,       setDropdown]       = useState(false);
 
   useEffect(() => {
     if (fyFrom && fyTo) { setFromDate(isoToDMY(fyFrom)); setToDate(isoToDMY(fyTo)); }
@@ -84,7 +100,12 @@ export default function PurchaseRegisterScreen() {
     time: '',
     amount: formatAmount(Math.abs(+r.amount||0)),
     status: r.is_cancelled ? 'unpaid' : 'paid',
+    docType: r.doc_type || 'invoice',
   });
+
+  const docTypesParam = docType === 'all'
+    ? ALL_PURCHASE_DOC_TYPE_IDS.join(',')
+    : docType;
 
   const loadRegister = useCallback(() => {
     if (!companyGuid) return;
@@ -95,12 +116,18 @@ export default function PurchaseRegisterScreen() {
     setApiError(null);
     setPage(1);
     setHasMore(false);
-    getPurchaseInvoices(companyGuid, { ...fyParams, limit: PAGE_SIZE, page: 1 }).then((res: any) => {
-      const rows = res?.data ?? [];
+    Promise.all([
+      getPurchaseVouchers(companyGuid, {
+        ...fyParams, limit: PAGE_SIZE, page: 1, docTypes: docTypesParam, search,
+      }),
+      getPurchaseVoucherCounts(companyGuid, fyParams),
+    ]).then(([listRes, cntRes]: any[]) => {
+      const rows = listRes?.data ?? [];
       setLiveInvoices(rows.map(mapPurchaseInv));
       setHasMore(rows.length === PAGE_SIZE);
+      setTypeCounts(cntRes?.data ?? {});
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); }).finally(() => setIsLoading(false));
-  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, formatAmount]);
+  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, formatAmount, docTypesParam, search]);
 
   useEffect(() => {
     loadRegister();
@@ -113,17 +140,15 @@ export default function PurchaseRegisterScreen() {
     const from = dmyToISO(fromDate) || fyFrom;
     const to   = dmyToISO(toDate)   || fyTo;
     const fyParams = from && to ? { from, to } : {};
-    getPurchaseInvoices(companyGuid, { ...fyParams, limit: PAGE_SIZE, page: nextPage }).then((res: any) => {
+    getPurchaseVouchers(companyGuid, {
+      ...fyParams, limit: PAGE_SIZE, page: nextPage, docTypes: docTypesParam, search,
+    }).then((res: any) => {
       const rows = res?.data ?? [];
       setLiveInvoices(prev => [...prev, ...rows.map(mapPurchaseInv)]);
       setHasMore(rows.length === PAGE_SIZE);
       setPage(nextPage);
     }).finally(() => setIsLoadingMore(false));
   };
-
-  const [search,         setSearch]         = useState('');
-  const [statusFilter,   setStatusFilter]   = useState('All');
-  const [dropdown,       setDropdown]       = useState(false);
 
   // Collapsible months — all open by default
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -220,7 +245,11 @@ export default function PurchaseRegisterScreen() {
             <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
           <Text style={s.headerTitle}>{t('purchase.register')}</Text>
-          <View style={{ width: 36 }} />
+          <FilterIconWithBadge
+            testID="purchase-register-filter-btn"
+            count={docType !== 'all' ? 1 : 0}
+            onPress={() => setShowTypeFilter(true)}
+          />
         </View>
       )}
 
@@ -255,12 +284,18 @@ export default function PurchaseRegisterScreen() {
         </View>
       </View>
 
+      <ActiveFilterChips
+        chips={docType !== 'all' ? [{ id: docType, label: DOC_TYPE_LABEL[docType] || docType }] : []}
+        onRemove={() => setDocType('all')}
+        onClearAll={() => setDocType('all')}
+      />
+
       {dropdown && (
         <TouchableOpacity style={s.dropOverlay} onPress={() => setDropdown(false)} activeOpacity={1} />
       )}
 
       {/* ── Search ─────────────────────────────────────────────── */}
-      <SearchBar value={search} onChangeText={setSearch} placeholder="Search invoices, vendors..." />
+      <SearchBar value={search} onChangeText={setSearch} placeholder="Search vouchers, vendors..." />
 
       {apiError && <ErrorBanner message={apiError} onRetry={loadRegister} />}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: isSelecting ? 120 : 40 }}>
@@ -290,7 +325,7 @@ export default function PurchaseRegisterScreen() {
         {liveInvoices.length === 0 && allFiltered.length === 0 && (
           <View style={{ alignItems: 'center', padding: 40, gap: 8 }}>
             <Ionicons name="cart-outline" size={40} color={COLORS.textTertiary} />
-            <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textSecondary }}>No purchase invoices</Text>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textSecondary }}>No purchase vouchers</Text>
             <Text style={{ fontSize: 13, color: COLORS.textTertiary, textAlign: 'center' }}>Sync your Tally data or create a new purchase entry</Text>
           </View>
         )}
@@ -332,7 +367,10 @@ export default function PurchaseRegisterScreen() {
                           activeOpacity={0.7}
                           onPress={() => {
                             if (isSelecting) { toggleSelect(inv.id); }
-                            else { router.push(`/document/${inv.guid || inv.id}?type=purchase_invoice` as any); }
+                            else {
+                              const routeType = docTypeToRouteType(inv.docType || 'invoice', 'purchase');
+                              router.push(`/document/${inv.guid || inv.id}?type=${routeType}` as any);
+                            }
                           }}
                           onLongPress={() => toggleSelect(inv.id)}
                           delayLongPress={500}
@@ -419,6 +457,16 @@ export default function PurchaseRegisterScreen() {
         maxDate={fyTo || undefined}
         onApply={(from, to) => { setFromDate(from); setToDate(to); setShowDatePicker(false); }}
         onClose={() => setShowDatePicker(false)}
+      />
+
+      <DocTypeFilterModal
+        visible={showTypeFilter}
+        onClose={() => setShowTypeFilter(false)}
+        title="Filter Purchase"
+        options={PURCHASE_DOC_TYPES}
+        selectedId={docType}
+        counts={typeCounts}
+        onApply={setDocType}
       />
     </SafeAreaView>
   );

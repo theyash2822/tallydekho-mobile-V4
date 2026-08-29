@@ -1,5 +1,29 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-08-29 — Relocate voucher filters to Register (Ledger radio pattern)
+
+### Product
+- **Removed** multi doc-type filter icon/chips from Sales / Purchase / Expense **homes**; homes back to invoices-focused Recent (Paid/Unpaid kept on Sales home)
+- **Added** Ledger-style `FilterBottomSheet` + **radio rows with counts** on Register only:
+  - Sales Register: All / Invoice / Order / Credit Note / Delivery Note / Proforma / Quotation
+  - Purchase Register: All / Invoice / Order / Debit Note
+  - Expense Register: Tab Type (All/Direct/Indirect) + Tab Category (API categories); fixed Direct vs Indirect client mapping
+- Toast + funnel badge + removable chips after Apply (Ledger pattern)
+- List wired via `getSalesVouchers` / `getPurchaseVouchers` / `getExpenses` + new counts endpoints
+
+### Files
+- `app/sales|purchase|expenses/index.tsx` — restore pre-home-filter Recent
+- `app/sales|purchase|expenses/register.tsx` — filter sheet + API filter
+- `src/components/voucherHomeFilters.tsx` — DocTypeFilterModal + ExpenseRegisterFilterModal
+- `src/components/FilterBottomSheet.tsx` — optional `count` on FilterRadioRow
+- `src/services/api.ts`, `API_USAGE.md`
+
+### How to test
+1. Sales home — no funnel next to E-Way Bill; Recent = invoices; Paid/Unpaid still works
+2. Sales → Register → filter icon → radio list with counts → pick Credit Note → Apply → toast + chip + filtered list
+3. Purchase / Expense Register same pattern; Expense Type Direct must not include Indirect
+
+---
 ## 2026-08-27 — Bottom modal sheets fix (stock + ledger family)
 
 ### Product

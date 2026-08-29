@@ -10,10 +10,16 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
 import SearchBar from '../../src/components/SearchBar';
 import { useAuth } from '../../src/context/AuthContext';
-import { getExpenses } from '../../src/services/api';
+import { getExpenses, getExpenseCounts } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useTranslation } from 'react-i18next';
+import {
+  FilterIconWithBadge,
+  ActiveFilterChips,
+  ExpenseRegisterFilterModal,
+  type ExpenseTypeFilter,
+} from '../../src/components/voucherHomeFilters';
 
 type TxItem = { id: string; voucher: string; desc: string; date: string; amount: string; positive: boolean; type: 'payment' | 'receipt' | 'contra'; party?: string; time?: string; status?: string; };
 
@@ -64,17 +70,22 @@ export default function ExpenseRegisterScreen() {
   const fyTo   = selectedFY?.endDate   ?? '';
 
   const [search,       setSearch]       = useState('');
-  const [typeFilter,   setTypeFilter]   = useState('All');
+  const [typeFilter,   setTypeFilter]   = useState<ExpenseTypeFilter>('All');
+  const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [typeOpen,     setTypeOpen]     = useState(false);
   const [statusOpen,   setStatusOpen]   = useState(false);
+  const [showFilter,   setShowFilter]   = useState(false);
+  const [typeCounts, setTypeCounts] = useState({ all: 0, direct: 0, indirect: 0 });
+  const [categoryCounts, setCategoryCounts] = useState<{ name: string; count: number }[]>([]);
 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [fromDate, setFromDate] = useState(() => fyFrom ? isoToDMY(fyFrom) : '01/04/24');
   const [toDate,   setToDate]   = useState(() => fyTo   ? isoToDMY(fyTo)   : '31/03/25');
 
   const mapExpenseItem = (r: any): ExpenseItem => {
-    const group = (r.expense_group || '').toLowerCase();
+    const group = String(r.expense_group || '');
+    // Anchored — avoid "Indirect" matching includes('direct')
+    const isDirect = /^direct\s*expenses?$/i.test(group.trim());
     return {
       id: r.guid || String(r.id),
       party: r.expense_ledger || r.party_name || r.narration || 'Expense',
@@ -82,7 +93,7 @@ export default function ExpenseRegisterScreen() {
       time: '',
       amount: formatAmount(Math.abs(parseFloat(r.expense_amount ?? r.amount) || 0)),
       status: 'paid',
-      type: group.includes('direct') ? 'direct' : 'indirect',
+      type: isDirect ? 'direct' : 'indirect',
     };
   };
 
@@ -91,14 +102,33 @@ export default function ExpenseRegisterScreen() {
     const from = dmyToISO(fromDate) || fyFrom;
     const to   = dmyToISO(toDate)   || fyTo;
     const rangeParams = from && to ? { from, to } : {};
-    const typeParam = typeFilter === 'Direct' ? { type: 'Direct' } : typeFilter === 'Indirect' ? { type: 'Indirect' } : {};
-    return getExpenses(companyGuid, { ...rangeParams, ...typeParam, limit: PAGE_SIZE, page: pageNum } as any).then((res: any) => {
+    const typeParam = typeFilter === 'Direct' || typeFilter === 'Indirect' ? { type: typeFilter } : {};
+    const catParam = categoryFilter ? { category: categoryFilter } : {};
+    return getExpenses(companyGuid, {
+      ...rangeParams, ...typeParam, ...catParam, limit: PAGE_SIZE, page: pageNum,
+    } as any).then((res: any) => {
       const rows = res?.data ?? [];
       const mapped = rows.map(mapExpenseItem);
       setLiveItems(prev => append ? [...prev, ...mapped] : mapped);
       setHasMore(rows.length === PAGE_SIZE);
       setPage(pageNum);
     });
+  };
+
+  const loadCounts = () => {
+    if (!companyGuid) return;
+    const from = dmyToISO(fromDate) || fyFrom;
+    const to   = dmyToISO(toDate)   || fyTo;
+    const rangeParams = from && to ? { from, to } : {};
+    getExpenseCounts(companyGuid, rangeParams as any).then((res: any) => {
+      const d = res?.data ?? {};
+      setTypeCounts({
+        all: d.all ?? 0,
+        direct: d.direct ?? 0,
+        indirect: d.indirect ?? 0,
+      });
+      setCategoryCounts(Array.isArray(d.categories) ? d.categories : []);
+    }).catch(() => {});
   };
 
   useEffect(() => {
@@ -110,7 +140,8 @@ export default function ExpenseRegisterScreen() {
     loadPage(1)
       .catch((err: any) => setApiError(err?.message || 'Failed to load'))
       .finally(() => setIsLoading(false));
-  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, typeFilter]);
+    loadCounts();
+  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, typeFilter, categoryFilter]);
 
   const loadMore = () => {
     if (!companyGuid || isLoadingMore || !hasMore) return;
@@ -152,17 +183,14 @@ export default function ExpenseRegisterScreen() {
     clearSelect();
   };
 
-  // Filter helper
+  // Filter helper — type/category already applied server-side
   const filterItems = (items: ExpenseItem[]) =>
     items.filter(item => {
       const matchSearch = !search ||
         item.party.toLowerCase().includes(search.toLowerCase()) ||
         item.id.toLowerCase().includes(search.toLowerCase());
       const matchStatus = statusFilter === 'All' || STATUS_LABEL[item.status] === statusFilter;
-      const matchType   = typeFilter === 'All' ||
-        (typeFilter === 'Direct' && item.type === 'direct') ||
-        (typeFilter === 'Indirect' && item.type === 'indirect');
-      return matchSearch && matchStatus && matchType;
+      return matchSearch && matchStatus;
     });
 
   const allFiltered = filterItems(liveItems);
@@ -172,7 +200,11 @@ export default function ExpenseRegisterScreen() {
   }, 0);
   const taxAmt = Math.round(totalAmt * 0.18);
 
-  const closeAll = () => { setTypeOpen(false); setStatusOpen(false); };
+  const filterBadgeCount = (typeFilter !== 'All' ? 1 : 0) + (categoryFilter ? 1 : 0);
+  const activeChips = [
+    ...(typeFilter !== 'All' ? [{ id: 'type', label: typeFilter }] : []),
+    ...(categoryFilter ? [{ id: 'cat', label: categoryFilter }] : []),
+  ];
 
   return (
     <SafeAreaView style={s.safe}>
@@ -194,47 +226,26 @@ export default function ExpenseRegisterScreen() {
             <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
           <Text style={s.headerTitle}>{t('expenses.register')}</Text>
-          <View style={{ width: 36 }} />
+          <FilterIconWithBadge
+            testID="expense-register-filter-btn"
+            count={filterBadgeCount}
+            onPress={() => setShowFilter(true)}
+          />
         </View>
       )}
 
-      {/* ── 3-Filter Row ─────────────────────────────────────────── */}
+      {/* ── Filter Row (date + status) ─────────────────────────── */}
       <View style={s.filterRow}>
-        {/* Date Range */}
-        <TouchableOpacity style={s.datePill} onPress={() => { closeAll(); setShowDatePicker(true); }} activeOpacity={0.7}>
+        <TouchableOpacity style={s.datePill} onPress={() => { setStatusOpen(false); setShowDatePicker(true); }} activeOpacity={0.7}>
           <Ionicons name="calendar-outline" size={13} color={COLORS.textSecondary} />
           <Text style={s.dateTxt} numberOfLines={1}>{fromDate} – {toDate}</Text>
           <Ionicons name="chevron-down" size={12} color={COLORS.textSecondary} />
         </TouchableOpacity>
 
-        {/* Type Dropdown */}
-        <View style={s.filterWrap}>
-          <TouchableOpacity
-            style={[s.filterPill, typeOpen && s.filterPillOpen]}
-            onPress={() => { setStatusOpen(false); setTypeOpen(v => !v); }}
-            activeOpacity={0.7}
-          >
-            <Text style={s.filterTxt}>{typeFilter === 'All' ? 'Type' : typeFilter}</Text>
-            <Ionicons name={typeOpen ? 'chevron-up' : 'chevron-down'} size={12} color={COLORS.textSecondary} />
-          </TouchableOpacity>
-          {typeOpen && (
-            <View style={s.dropMenu}>
-              {['All', 'Direct', 'Indirect'].map(opt => (
-                <TouchableOpacity key={opt} style={s.dropItem} activeOpacity={0.7}
-                  onPress={() => { setTypeFilter(opt); setTypeOpen(false); }}
-                >
-                  <Text style={[s.dropTxt, typeFilter === opt && s.dropTxtActive]}>{opt}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
-
-        {/* Status Dropdown */}
         <View style={s.filterWrap}>
           <TouchableOpacity
             style={[s.filterPill, statusOpen && s.filterPillOpen]}
-            onPress={() => { setTypeOpen(false); setStatusOpen(v => !v); }}
+            onPress={() => setStatusOpen(v => !v)}
             activeOpacity={0.7}
           >
             <Text style={s.filterTxt}>{statusFilter === 'All' ? 'Status' : statusFilter}</Text>
@@ -254,12 +265,27 @@ export default function ExpenseRegisterScreen() {
         </View>
       </View>
 
-      {(typeOpen || statusOpen) && (
-        <TouchableOpacity style={s.dropOverlay} onPress={closeAll} activeOpacity={1} />
+      <ActiveFilterChips
+        chips={activeChips}
+        onRemove={(id) => {
+          if (id === 'type') setTypeFilter('All');
+          if (id === 'cat') setCategoryFilter('');
+        }}
+        onClearAll={() => { setTypeFilter('All'); setCategoryFilter(''); }}
+      />
+
+      {statusOpen && (
+        <TouchableOpacity style={s.dropOverlay} onPress={() => setStatusOpen(false)} activeOpacity={1} />
       )}
 
       {/* ── Search ─────────────────────────────────────────────── */}
       <SearchBar value={search} onChangeText={setSearch} placeholder="Search expenses, parties..." />
+
+      {apiError && <ErrorBanner message={apiError} onRetry={() => {
+        setIsLoading(true);
+        loadPage(1).catch((err: any) => setApiError(err?.message || 'Failed to load')).finally(() => setIsLoading(false));
+        loadCounts();
+      }} />}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: isSelecting ? 120 : 40 }}>
 
@@ -421,6 +447,19 @@ export default function ExpenseRegisterScreen() {
         maxDate={fyTo || undefined}
         onApply={(from, to) => { setFromDate(from); setToDate(to); setShowDatePicker(false); }}
         onClose={() => setShowDatePicker(false)}
+      />
+
+      <ExpenseRegisterFilterModal
+        visible={showFilter}
+        onClose={() => setShowFilter(false)}
+        activeType={typeFilter}
+        activeCategory={categoryFilter}
+        typeCounts={typeCounts}
+        categories={categoryCounts}
+        onApply={(type, category) => {
+          setTypeFilter(type);
+          setCategoryFilter(category);
+        }}
       />
     </SafeAreaView>
   );
