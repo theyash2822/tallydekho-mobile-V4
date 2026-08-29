@@ -1115,7 +1115,19 @@ export default function AuditTrailScreen() {
                                 {!!entry.description && (
                                   <Text style={s.descTxt} numberOfLines={1}>{entry.description}</Text>
                                 )}
-                                {/* Lifecycle Badges — My Entries only */}
+                              </View>
+
+                              <View style={s.entryRight}>
+                                <Text style={s.amtTxt} numberOfLines={1}>{entry.amount}</Text>
+                                <View style={s.chipRow}>
+                                  <View style={[s.vtypePill, { backgroundColor: color + '18', borderColor: color + '55' }]}>
+                                    <Text style={[s.vtypePillTxt, { color }]} numberOfLines={1}>{entry.type}</Text>
+                                  </View>
+                                  <Text style={[s.drCrLbl, { color: entry.isCredit ? COLORS.negative : COLORS.positive }]}>
+                                    {entry.isCredit ? 'Cr' : 'Dr'}
+                                  </Text>
+                                </View>
+                                {/* Lifecycle badges — all on the right (My Entries) */}
                                 {activeTab === 'myentries' && (
                                   <View style={lb.row}>
                                     {!entry.isMaster && entry.type === 'Proforma Invoice' && entry.currentEntryType === 'optional' && (
@@ -1180,18 +1192,6 @@ export default function AuditTrailScreen() {
                                     )}
                                   </View>
                                 )}
-                              </View>
-
-                              <View style={s.entryRight}>
-                                <Text style={s.amtTxt} numberOfLines={1}>{entry.amount}</Text>
-                                <View style={s.chipRow}>
-                                  <View style={[s.vtypePill, { backgroundColor: color + '18', borderColor: color + '55' }]}>
-                                    <Text style={[s.vtypePillTxt, { color }]} numberOfLines={1}>{entry.type}</Text>
-                                  </View>
-                                  <Text style={[s.drCrLbl, { color: entry.isCredit ? COLORS.negative : COLORS.positive }]}>
-                                    {entry.isCredit ? 'Cr' : 'Dr'}
-                                  </Text>
-                                </View>
                                 {activeTab === 'myentries' && isProformaOrigin(entry) && entry.tdkRef && !multiSelect ? (
                                   <View style={s.actionBtns}>
                                     <TouchableOpacity
@@ -1501,7 +1501,10 @@ const lf = StyleSheet.create({
 
 // ─── Lifecycle Badge Styles ───────────────────────────────────────────────────
 const lb = StyleSheet.create({
-  row:         { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 3 },
+  row: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 2,
+    justifyContent: 'flex-end', alignSelf: 'flex-end', maxWidth: '100%',
+  },
   // Phase D11(c): elevate Posted / Not Posted into bolder pills so status reads at-a-glance.
   // Regular/Optional kept as low-contrast outline tags (informational, not status).
   badge:       { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999 },
