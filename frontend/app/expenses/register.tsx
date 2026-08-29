@@ -83,11 +83,15 @@ export default function ExpenseRegisterScreen() {
   const [toDate,   setToDate]   = useState(() => fyTo   ? isoToDMY(fyTo)   : '31/03/25');
 
   const mapExpenseItem = (r: any): ExpenseItem => {
-    // Prefer API expense_type from recursive Direct/Indirect root; fall back to group name.
-    const root = String(r.expense_type || '');
-    const group = String(r.expense_group || '');
-    const isDirect = /^direct$/i.test(root)
-      || /^direct\s*expenses?$/i.test(group.trim());
+    // Prefer API expense_type (recursive root). Fall back to anchored group name —
+    // NEVER use includes('direct') (matches "Indirect Expenses").
+    const root = String(r.expense_type || '').trim();
+    const group = String(r.expense_group || '').trim();
+    let kind: 'direct' | 'indirect' = 'indirect';
+    if (/^direct$/i.test(root)) kind = 'direct';
+    else if (/^indirect$/i.test(root)) kind = 'indirect';
+    else if (/^direct\s*expenses?$/i.test(group)) kind = 'direct';
+    else if (/^indirect\s*expenses?$/i.test(group)) kind = 'indirect';
     return {
       id: r.guid || String(r.id),
       party: r.expense_ledger || r.party_name || r.narration || 'Expense',
@@ -95,7 +99,7 @@ export default function ExpenseRegisterScreen() {
       time: '',
       amount: formatAmount(Math.abs(parseFloat(r.expense_amount ?? r.amount) || 0)),
       status: 'paid',
-      type: isDirect ? 'direct' : 'indirect',
+      type: kind,
     };
   };
 
@@ -104,7 +108,10 @@ export default function ExpenseRegisterScreen() {
     const from = dmyToISO(fromDate) || fyFrom;
     const to   = dmyToISO(toDate)   || fyTo;
     const rangeParams = from && to ? { from, to } : {};
-    const typeParam = typeFilters.length ? { types: typeFilters.join(',') } : {};
+    // Radio Type: 0 or 1 value. Send both `types` (multi API) and legacy `type`.
+    const typeParam = typeFilters.length
+      ? { types: typeFilters.join(','), type: typeFilters[0] }
+      : {};
     const catParam = categoryFilters.length ? { categories: categoryFilters.join(',') } : {};
     return getExpenses(companyGuid, {
       ...rangeParams, ...typeParam, ...catParam, limit: PAGE_SIZE, page: pageNum,
@@ -185,7 +192,7 @@ export default function ExpenseRegisterScreen() {
     clearSelect();
   };
 
-  // Filter helper — type/category already applied server-side
+  // Search/status only — type/category applied server-side (no client includes('direct') trap)
   const filterItems = (items: ExpenseItem[]) =>
     items.filter(item => {
       const matchSearch = !search ||
@@ -386,8 +393,15 @@ export default function ExpenseRegisterScreen() {
                                 <Ionicons name="return-down-back-outline" size={16} color={AMBER} />
                               </View>
                               <View style={s.expCenter}>
-                                <Text style={s.expParty}>{item.party}</Text>
-                                <Text style={s.expMeta}>{item.date} | {item.time}</Text>
+                                <View style={s.expTitleRow}>
+                                  <Text style={s.expParty} numberOfLines={1}>{item.party}</Text>
+                                  <View style={[s.typePill, item.type === 'direct' ? s.typePillDirect : s.typePillIndirect]}>
+                                    <Text style={[s.typePillTxt, item.type === 'direct' ? s.typePillTxtDirect : s.typePillTxtIndirect]}>
+                                      {item.type === 'direct' ? 'Direct' : 'Indirect'}
+                                    </Text>
+                                  </View>
+                                </View>
+                                <Text style={s.expMeta}>{item.date}{item.time ? ` | ${item.time}` : ''}</Text>
                               </View>
                               <Text style={s.expAmt}>{item.amount}</Text>
                             </View>
@@ -520,7 +534,14 @@ const s = StyleSheet.create({
   expContentRow:  { flexDirection: 'row', alignItems: 'center', gap: 12 },
   tallyIcon:      { width: 34, height: 34, borderRadius: 9, backgroundColor: AMBER_BG, alignItems: 'center', justifyContent: 'center' },
   expCenter:      { flex: 1 },
-  expParty:       { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  expTitleRow:    { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  expParty:       { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, flexShrink: 1 },
+  typePill:       { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  typePillDirect: { backgroundColor: '#EEF2FF' },
+  typePillIndirect: { backgroundColor: '#F5F3FF' },
+  typePillTxt:    { fontSize: 10, fontWeight: '700' },
+  typePillTxtDirect: { color: '#4338CA' },
+  typePillTxtIndirect: { color: '#6D28D9' },
   expMeta:        { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
   expAmt:         { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
   divider:        { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: SPACING.md },

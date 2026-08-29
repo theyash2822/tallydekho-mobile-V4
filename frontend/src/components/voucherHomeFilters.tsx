@@ -3,7 +3,8 @@
  * (Ledger-style funnel + removable chips). Homes no longer use multi doc-type filters.
  *
  * Sales/Purchase: Type multi-select + Party Group tab (ledgers.parent of party).
- * Expenses: Type multi among Direct/Indirect (empty = All) + Category multi (ledger parents).
+ * Expenses: Type is radio All / Direct / Indirect (empty = All) + Category multi (ledger parents).
+ *   Multi-check on Type was a UX trap: tapping Indirect after Direct selected BOTH → treated as All.
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -12,7 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
-import FilterBottomSheet, { FilterCheckRow } from './FilterBottomSheet';
+import FilterBottomSheet, { FilterCheckRow, FilterRadioRow } from './FilterBottomSheet';
 
 // ── Doc-type catalogs (Register filter sheet) ─────────────────────────────────
 
@@ -402,6 +403,13 @@ export function DocTypeFilterModal({
 
 export type ExpenseTypeId = 'Direct' | 'Indirect';
 
+/** Normalize legacy multi-select → radio (empty / single). Both selected ⇒ All. */
+function normalizeExpenseTypeRadio(types: ExpenseTypeId[]): ExpenseTypeId | 'All' {
+  const uniq = [...new Set(types.filter((t) => t === 'Direct' || t === 'Indirect'))];
+  if (uniq.length === 1) return uniq[0];
+  return 'All';
+}
+
 export function ExpenseRegisterFilterModal({
   visible,
   onClose,
@@ -413,7 +421,7 @@ export function ExpenseRegisterFilterModal({
 }: {
   visible: boolean;
   onClose: () => void;
-  /** Empty = All (Direct + Indirect). */
+  /** Empty = All. At most one of Direct | Indirect (radio). */
   activeTypes: ExpenseTypeId[];
   activeCategories: string[];
   typeCounts: { all: number; direct: number; indirect: number };
@@ -421,38 +429,26 @@ export function ExpenseRegisterFilterModal({
   onApply: (types: ExpenseTypeId[], categories: string[]) => void;
 }) {
   const [tab, setTab] = useState<'Type' | 'Category'>('Type');
-  const [localTypes, setLocalTypes] = useState<ExpenseTypeId[]>(activeTypes);
+  const [localType, setLocalType] = useState<'All' | ExpenseTypeId>(() => normalizeExpenseTypeRadio(activeTypes));
   const [localCats, setLocalCats] = useState<string[]>(activeCategories);
   const [catSearch, setCatSearch] = useState('');
 
   useEffect(() => {
     if (visible) {
-      setLocalTypes(activeTypes);
+      setLocalType(normalizeExpenseTypeRadio(activeTypes));
       setLocalCats(activeCategories);
       setCatSearch('');
       setTab('Type');
     }
   }, [visible, activeTypes, activeCategories]);
 
-  const isAllTypes = localTypes.length === 0
-    || (localTypes.includes('Direct') && localTypes.includes('Indirect'));
-  const activeCount = (isAllTypes ? 0 : localTypes.length) + localCats.length;
+  const activeCount = (localType === 'All' ? 0 : 1) + localCats.length;
 
   const filteredCats = useMemo(() => {
     const q = catSearch.trim().toLowerCase();
     if (!q) return categories;
     return categories.filter((c) => c.name.toLowerCase().includes(q));
   }, [categories, catSearch]);
-
-  const toggleType = (id: ExpenseTypeId) => {
-    setLocalTypes((prev) => {
-      const base = (prev.length === 0
-        || (prev.includes('Direct') && prev.includes('Indirect')))
-        ? []
-        : prev;
-      return base.includes(id) ? base.filter((x) => x !== id) : [...base, id];
-    });
-  };
 
   const toggleCat = (name: string) => {
     setLocalCats((prev) => (
@@ -461,11 +457,11 @@ export function ExpenseRegisterFilterModal({
   };
 
   const handleApply = () => {
-    const nextTypes: ExpenseTypeId[] = isAllTypes ? [] : localTypes;
+    const nextTypes: ExpenseTypeId[] = localType === 'All' ? [] : [localType];
     onApply(nextTypes, localCats);
     onClose();
     const parts: string[] = [];
-    if (nextTypes.length) parts.push(nextTypes.join(', '));
+    if (nextTypes.length) parts.push(nextTypes[0]);
     if (localCats.length) parts.push(...localCats);
     notifyFiltersApplied(parts);
   };
@@ -476,7 +472,7 @@ export function ExpenseRegisterFilterModal({
       onClose={onClose}
       title="Filter Expenses"
       activeCount={activeCount}
-      onClear={() => { setLocalTypes([]); setLocalCats([]); }}
+      onClear={() => { setLocalType('All'); setLocalCats([]); }}
       onApply={handleApply}
       applyLabel="Apply Filters"
       heightFraction={0.68}
@@ -496,23 +492,23 @@ export function ExpenseRegisterFilterModal({
 
       {tab === 'Type' ? (
         <View>
-          <FilterCheckRow
+          <FilterRadioRow
             label="All"
             count={typeCounts.all}
-            selected={isAllTypes}
-            onPress={() => setLocalTypes([])}
+            selected={localType === 'All'}
+            onPress={() => setLocalType('All')}
           />
-          <FilterCheckRow
+          <FilterRadioRow
             label="Direct"
             count={typeCounts.direct}
-            selected={!isAllTypes && localTypes.includes('Direct')}
-            onPress={() => toggleType('Direct')}
+            selected={localType === 'Direct'}
+            onPress={() => setLocalType('Direct')}
           />
-          <FilterCheckRow
+          <FilterRadioRow
             label="Indirect"
             count={typeCounts.indirect}
-            selected={!isAllTypes && localTypes.includes('Indirect')}
-            onPress={() => toggleType('Indirect')}
+            selected={localType === 'Indirect'}
+            onPress={() => setLocalType('Indirect')}
           />
         </View>
       ) : (

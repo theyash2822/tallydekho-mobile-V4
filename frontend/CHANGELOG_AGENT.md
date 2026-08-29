@@ -1,5 +1,26 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-08-29 — Expense Type All/Direct/Indirect actually filters
+
+### Root cause
+1. **Register Type was multi-checkbox**: tapping Indirect after Direct selected *both* → treated as All → list unchanged.
+2. **Expenses home** used `expenseGroup.includes('direct')` which matches **"Indirect Expenses"**.
+
+### Fix
+- Expense Register Type tab → **radio** All / Direct / Indirect (Category stays multi).
+- Register sends `types` + legacy `type`; row shows Direct/Indirect pill from `expense_type`.
+- Expenses home passes `types`/`type` to API; removed includes('direct') client filter.
+
+### Files
+- `src/components/voucherHomeFilters.tsx`
+- `app/expenses/register.tsx`, `app/expenses/index.tsx`
+
+### How to test
+1. Reload app → Expenses → Register → Filter → Direct → Apply → list empty on Yash Ki Company (counts Direct=0) or only Direct rows on Y.K Industries.
+2. Same sheet → Indirect → only Indirect rows; chips show one type.
+3. Expenses home dropdown Direct/Indirect must diverge the same way.
+
+---
 ## 2026-08-29 — Voucher type badges + expense filter fix
 
 ### Product

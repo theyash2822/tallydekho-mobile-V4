@@ -32,6 +32,7 @@ type ExpenseRow = {
   amount: string;
   status: string;
   expenseGroup?: string;
+  expenseType?: string;
 };
 
 function mapExpenseRow(r: any, formatAmount: (n: number) => string, i = 0): ExpenseRow {
@@ -46,6 +47,7 @@ function mapExpenseRow(r: any, formatAmount: (n: number) => string, i = 0): Expe
     amount: formatAmount(amt),
     status: 'paid',
     expenseGroup: r.expense_group || '',
+    expenseType: r.expense_type || '',
   };
 }
 
@@ -88,11 +90,14 @@ export default function ExpenseScreen() {
     const from = dmyToISO(fromDate) || fyFrom;
     const to   = dmyToISO(toDate)   || fyTo;
     const rangeParams = from && to ? { from, to } : {};
+    const typeParam = filter === 'Direct' || filter === 'Indirect'
+      ? { types: filter, type: filter }
+      : {};
 
     setIsLoading(true);
     setApiError(null);
 
-    getExpenses(companyGuid, { ...rangeParams, limit: '100', page: '1' } as any)
+    getExpenses(companyGuid, { ...rangeParams, ...typeParam, limit: '100', page: '1' } as any)
       .then((res: any) => {
         const rows = res?.data ?? [];
         setLiveExpenses(rows.map((r: any, i: number) => mapExpenseRow(r, formatAmount, i)));
@@ -112,7 +117,7 @@ export default function ExpenseScreen() {
         setExpenseSummary(null);
       })
       .finally(() => setIsLoading(false));
-  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, formatAmount]);
+  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, formatAmount, filter, t]);
 
   useEffect(() => {
     if (fyFrom && fyTo) { setFromDate(isoToDMY(fyFrom)); setToDate(isoToDMY(fyTo)); }
@@ -143,11 +148,8 @@ export default function ExpenseScreen() {
     return () => clearInterval(t);
   }, [metricCards.length]);
 
-  const recent = useMemo(() => liveExpenses.filter((exp) => {
-    if (filter === 'Direct') return (exp.expenseGroup || '').toLowerCase().includes('direct');
-    if (filter === 'Indirect') return (exp.expenseGroup || '').toLowerCase().includes('indirect');
-    return true;
-  }).slice(0, 10), [liveExpenses, filter]);
+  // Type filter is server-side via types=/type=; list is already narrowed.
+  const recent = useMemo(() => liveExpenses.slice(0, 10), [liveExpenses]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
