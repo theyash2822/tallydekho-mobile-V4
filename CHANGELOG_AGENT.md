@@ -1,4 +1,21 @@
-## [2026-08-29] Audit Trail My Entries tile — Posted chip + Dr/Cr
+## [2026-08-29] Audit Trail tiles — closed borders, no swipe
+
+### Why
+Month-group card + left border accent clipped the right outline; swipe also broke the edge.
+
+### Change
+- Each entry is its own bordered tile
+- Sync accent = absolute strip (not borderLeftWidth)
+- No swipe actions (tap opens preview; Convert swipe removed)
+
+### File
+- `frontend/app/reports/audit-trail.tsx`
+
+### QA
+YELLOW — tsc clean; device smoke of closed tile borders pending
+
+---
+
 
 ### Why
 My Entries tiles needed clearer books status and Dr/Cr without crowding Preview/Convert.

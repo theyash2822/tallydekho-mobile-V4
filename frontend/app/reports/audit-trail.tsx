@@ -7,19 +7,13 @@ import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
-import { getVouchers, getMyEntries, retryMyEntry, getInvoicePreview } from '../../src/services/api';
+import { getVouchers, getMyEntries, retryMyEntry } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 import { socketService } from '../../src/services/socketService';
 import { useTranslation } from 'react-i18next';
-import {
-  buildProformaToInvoicePrefillFromPreview,
-  proformaPrefillStorageKey,
-} from '../../src/utils/proformaToInvoicePrefill';
 
 const SCREEN_W = Dimensions.get('window').width;
 const AMBER = '#A89060';
@@ -428,60 +422,6 @@ const dd = StyleSheet.create({
   optionTxtActive: { color: AMBER, fontWeight: '700' },
 });
 
-// ─── Swipe actions (Convert only — Preview is tap on tile) ────────────────────
-const swipeSt = StyleSheet.create({
-  actionWrap: {
-    width: 88, justifyContent: 'center', alignItems: 'center',
-    overflow: 'hidden',
-  },
-  convertBg: { backgroundColor: AMBER },
-  actionInner: { flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center', gap: 4, paddingHorizontal: 6 },
-  actionTxt: { fontSize: 11, fontWeight: '700', color: COLORS.white, textAlign: 'center' },
-});
-
-function AuditEntrySwipe({
-  enabled,
-  converting,
-  onConvert,
-  children,
-}: {
-  enabled: boolean;
-  converting?: boolean;
-  onConvert: () => void;
-  children: React.ReactNode;
-}) {
-  const swipeRef = useRef<any>(null);
-  if (!enabled) return <>{children}</>;
-
-  return (
-    <ReanimatedSwipeable
-      ref={swipeRef}
-      friction={2}
-      rightThreshold={56}
-      overshootRight={false}
-      renderRightActions={() => (
-        <View style={[swipeSt.actionWrap, swipeSt.convertBg]}>
-          <TouchableOpacity
-            style={swipeSt.actionInner}
-            onPress={() => { swipeRef.current?.close(); onConvert(); }}
-            activeOpacity={0.85}
-            disabled={converting}
-          >
-            {converting ? (
-              <ActivityIndicator size="small" color={COLORS.white} />
-            ) : (
-              <Ionicons name="swap-horizontal-outline" size={20} color={COLORS.white} />
-            )}
-            <Text style={swipeSt.actionTxt}>Convert</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    >
-      {children}
-    </ReanimatedSwipeable>
-  );
-}
-
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function AuditTrailScreen() {
   const { t } = useTranslation();
@@ -527,8 +467,6 @@ export default function AuditTrailScreen() {
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
   const retryingRef = useRef<Set<string>>(new Set());
   const bulkRetryingRef = useRef(false);
-  const convertingRef = useRef<Set<string>>(new Set());
-  const [convertingIds, setConvertingIds] = useState<Set<string>>(new Set());
 
   // ── API State ─────────────────────────────────────────────
   const [apiEntries, setApiEntries] = useState<VoucherEntry[]>([]);
@@ -928,43 +866,6 @@ export default function AuditTrailScreen() {
     clearSelection();
   };
 
-  const canConvertProformaEntry = (entry: VoucherEntry) =>
-    entry.type === 'Proforma Invoice'
-    && entry.currentEntryType === 'optional'
-    && entry.conversionStatus !== 'converted'
-    && !!entry.tdkRef
-    && (!!entry.tallyVoucherNo || entry.syncStatus === 'synced');
-
-  const handleConvertProforma = (entry: VoucherEntry) => {
-    if (!entry.tdkRef || !company?.guid) return;
-    if (!canConvertProformaEntry(entry)) {
-      Toast.show({
-        type: 'info',
-        text1: 'Wait for sync',
-        text2: 'Convert after Tally syncs this Proforma.',
-        visibilityTime: 2800,
-      });
-      return;
-    }
-    if (convertingRef.current.has(entry.tdkRef)) return;
-    convertingRef.current.add(entry.tdkRef);
-    setConvertingIds(new Set(convertingRef.current));
-    (async () => {
-      try {
-        const res: any = await getInvoicePreview(entry.tdkRef!, company.guid);
-        if (!res?.status || !res?.data) throw new Error(res?.message || 'Could not load Proforma');
-        const prefill = buildProformaToInvoicePrefillFromPreview(res.data, entry.tdkRef!);
-        await AsyncStorage.setItem(proformaPrefillStorageKey(company.guid), JSON.stringify(prefill));
-        router.push('/sales/create-invoice' as any);
-      } catch (e: any) {
-        Toast.show({ type: 'error', text1: 'Could not start invoice', text2: e?.message || 'Try again after sync.' });
-      } finally {
-        convertingRef.current.delete(entry.tdkRef!);
-        setConvertingIds(new Set(convertingRef.current));
-      }
-    })();
-  };
-
   const openEntry = (entry: VoucherEntry) => {
     if (entry.isMaster || entry.queueId) {
       const qid = entry.queueId
@@ -1246,7 +1147,7 @@ export default function AuditTrailScreen() {
 
                 {/* Entries — hidden when collapsed */}
                 {collapsedMonths.has(month) ? null : (
-                  <View style={s.monthCard}>
+                  <View style={s.monthList}>
                     {entries.map((entry, idx) => {
                       const isSel  = selected.includes(entry.id);
                       const color  = TYPE_COLORS[entry.type] || COLORS.textSecondary;
@@ -1265,8 +1166,6 @@ export default function AuditTrailScreen() {
                             : activeTab === 'myentries' && entry.eInvoiceStatus === 'generating'
                               ? 'IRN Pending'
                               : null;
-                      const showConvert =
-                        activeTab === 'myentries' && canConvertProformaEntry(entry);
                       const drCr = entry.isCredit ? 'Cr' : 'Dr';
                       const booksChipStyle =
                         booksChip?.tone === 'posted' ? lb.posted
@@ -1277,30 +1176,32 @@ export default function AuditTrailScreen() {
                         : booksChip?.tone === 'cancelled' ? COLORS.negative
                         : AMBER;
 
-                      const rowInner = (
-                          <TouchableOpacity
-                            style={[
-                              s.entryRow,
-                              isSel && s.entryRowSelected,
-                              hasBorder
-                                ? { borderLeftWidth: 3, borderLeftColor: sInfo!.borderColor }
-                                : null,
-                            ]}
-                            activeOpacity={0.75}
-                            onPress={() => {
-                              if (multiSelect) toggleSelect(entry.id);
-                              else openEntry(entry);
-                            }}
-                            onLongPress={() => { setMultiSelect(true); toggleSelect(entry.id); }}
-                            delayLongPress={450}
-                          >
+                      return (
+                        <TouchableOpacity
+                          key={`${entry.id}_${idx}`}
+                          style={[
+                            s.entryCard,
+                            isSel && s.entryRowSelected,
+                          ]}
+                          activeOpacity={0.75}
+                          onPress={() => {
+                            if (multiSelect) toggleSelect(entry.id);
+                            else openEntry(entry);
+                          }}
+                          onLongPress={() => { setMultiSelect(true); toggleSelect(entry.id); }}
+                          delayLongPress={450}
+                        >
+                          {hasBorder && sInfo ? (
+                            <View style={[s.syncAccent, { backgroundColor: sInfo.borderColor }]} />
+                          ) : null}
+
+                          <View style={s.entryRow}>
                             {multiSelect ? (
                               <View style={[s.checkbox, isSel && s.checkboxActive]}>
                                 {isSel ? <Ionicons name="checkmark" size={12} color={COLORS.white} /> : null}
                               </View>
                             ) : null}
 
-                            {/* Sync icon only — Posted/Not Posted is a chip on the date row */}
                             {!multiSelect && activeTab === 'myentries' && sInfo ? (
                               <TouchableOpacity
                                 style={[s.statusIcon, { backgroundColor: sInfo.color + '18' }]}
@@ -1327,10 +1228,8 @@ export default function AuditTrailScreen() {
                             ) : null}
 
                             <View style={s.entryBody}>
-                              {/* Top: party */}
                               <Text style={s.partyTxt} numberOfLines={1}>{entry.party || '—'}</Text>
 
-                              {/* Middle: ref · date | Posted (+ IRN) */}
                               <View style={s.lineRow}>
                                 <Text style={s.lineLeft} numberOfLines={1}>
                                   {displayRef(entry)}{entry.date ? ` · ${entry.date}` : ''}
@@ -1349,7 +1248,6 @@ export default function AuditTrailScreen() {
                                 </View>
                               </View>
 
-                              {/* Bottom: [type] [Regular] | amount Dr/Cr */}
                               <View style={s.lineRow}>
                                 <View style={s.chipRow}>
                                   <View style={[s.vtypePill, { backgroundColor: color + '18', borderColor: color + '55' }]}>
@@ -1369,20 +1267,8 @@ export default function AuditTrailScreen() {
                                 </Text>
                               </View>
                             </View>
-                          </TouchableOpacity>
-                      );
-
-                      return (
-                        <View key={`${entry.id}_${idx}`}>
-                          <AuditEntrySwipe
-                            enabled={!multiSelect && showConvert}
-                            converting={!!(entry.tdkRef && convertingIds.has(entry.tdkRef))}
-                            onConvert={() => handleConvertProforma(entry)}
-                          >
-                            {rowInner}
-                          </AuditEntrySwipe>
-                          {idx < entries.length - 1 ? <View style={s.divider} /> : null}
-                        </View>
+                          </View>
+                        </TouchableOpacity>
                       );
                     })}
                   </View>
@@ -1568,11 +1454,26 @@ const s = StyleSheet.create({
   monthCountBadge:{ backgroundColor: COLORS.activeBg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: RADIUS.full },
   monthCountTxt:  { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary },
 
-  // Month card + rows
-  monthCard: {
-    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-    overflow: 'hidden', marginBottom: SPACING.sm,
+  // Month list — each entry is its own closed bordered tile
+  monthList: {
+    gap: 8,
+    marginBottom: SPACING.sm,
+  },
+  entryCard: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.borderDefault,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  syncAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    zIndex: 1,
   },
   entryRow: {
     flexDirection: 'row', alignItems: 'center',
@@ -1585,7 +1486,7 @@ const s = StyleSheet.create({
 
   statusIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
 
-  entryBody: { flex: 1, minWidth: 0, gap: 5 },
+  entryBody: { flex: 1, minWidth: 0, gap: 5, overflow: 'hidden' },
   partyTxt:  {
     fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary,
     lineHeight: 20, marginBottom: 1,
@@ -1618,8 +1519,6 @@ const s = StyleSheet.create({
   drCrSuffix: {
     fontSize: 10, fontWeight: '700', color: COLORS.textSecondary,
   },
-
-  divider: { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 56 },
 
   empty:    { alignItems: 'center', paddingVertical: 60, gap: 12 },
   emptyTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
