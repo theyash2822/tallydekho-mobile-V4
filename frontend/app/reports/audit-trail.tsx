@@ -180,11 +180,26 @@ const mapApiRow = (r: any, fmt: (n: number) => string = (n) => String(n)): Vouch
   parentTallyVoucherNo: r.parent_tally_voucher_no || null,
 });
 
-// ─── Color Maps ───────────────────────────────────────────────────────────────
+// ─── Color Maps (theme-aligned; no red/green/B&W for voucher types) ───────────
 const TYPE_COLORS: Record<string, string> = {
-  'Sales': '#2D7D46', 'Proforma Invoice': '#1A1A1A', 'Sales Order': '#059669', 'Purchase': '#2563EB', 'Payment': '#C0392B',
-  'Receipt': '#2D7D46', 'Journal': '#D97706', 'Contra': '#7C3AED',
-  'Debit Note': '#C0392B', 'Credit Note': '#2D7D46', 'Delivery Note': '#0891B2',
+  'Sales':            '#2563EB', // theme info blue
+  'Proforma Invoice':  '#A78BFA', // soft lilac
+  'Sales Order':      '#0891B2', // cyan
+  'Purchase':         '#A89060', // brand amber
+  'Purchase Order':   '#8B7355', // taupe
+  'Payment':          '#C97B4A', // peach
+  'Receipt':          '#0E7490', // teal
+  'Journal':          '#D97706', // theme warning
+  'Contra':           '#8B5CF6', // soft violet
+  'Debit Note':       '#DB2777', // soft rose
+  'Credit Note':      '#D97706', // warning amber
+  'Delivery Note':    '#0E7490', // teal
+  'Stock Transfer':   '#0891B2',
+  'Adjustment':       '#8B7355',
+  'Stock Edit':       '#A89060',
+  'New Item':         '#2563EB',
+  'New Ledger':       '#A89060',
+  'New Warehouse':    '#0891B2',
 };
 const ACTION_COLORS: Record<string, string> = {
   Created: '#2D7D46', Edited: '#D97706', Deleted: '#C0392B',
@@ -1080,163 +1095,139 @@ export default function AuditTrailScreen() {
                               </View>
                             ) : null}
 
-                            {/* Entry detail */}
-                            <View style={s.entryInfo}>
-                              <View style={s.entryTopRow}>
-                                <View style={[s.vtypePill, { backgroundColor: color + '18' }]}>
-                                  <Text style={[s.vtypePillTxt, { color }]}>{entry.type}</Text>
-                                </View>
-                                <Text style={s.refTxt}>
+                            {/* Entry detail — 2-col: party/ref/date | amount + type chip */}
+                            <View style={s.entryBody}>
+                              <View style={s.entryLeft}>
+                                <Text style={s.partyTxt} numberOfLines={1}>{entry.party || '—'}</Text>
+                                <Text style={s.refTxt} numberOfLines={1}>
                                   {(() => {
-                                    if (activeTab !== 'myentries') return entry.ref;
-                                    // Once Tally assigns a real number → always show it
+                                    if (activeTab !== 'myentries') return entry.ref || '—';
                                     if (entry.tallyVoucherNo) return entry.tallyVoucherNo;
-                                    // Posted but tallyVoucherNo somehow missing → fall back to ref
                                     if (entry.booksImpactStatus === 'posted' && entry.ref) return entry.ref;
-                                    // Optional not yet converted → show TDK ref
                                     if (entry.currentEntryType === 'optional' && entry.conversionStatus !== 'converted') {
                                       return entry.tdkRef || entry.ref || 'Opt. Ref';
                                     }
-                                    // Pending/queued → show TDK ref so user knows it's ours
                                     if (entry.tdkRef) return entry.tdkRef;
                                     return entry.ref || '—';
                                   })()}
                                 </Text>
+                                <Text style={s.entryDateTxt}>{entry.date}</Text>
+                                {!!entry.description && (
+                                  <Text style={s.descTxt} numberOfLines={1}>{entry.description}</Text>
+                                )}
+                                {/* Lifecycle Badges — My Entries only */}
+                                {activeTab === 'myentries' && (
+                                  <View style={lb.row}>
+                                    {!entry.isMaster && entry.type === 'Proforma Invoice' && entry.currentEntryType === 'optional' && (
+                                      <View style={[lb.badge, lb.optional]}>
+                                        <Text style={[lb.badgeTxt, { color: AMBER }]}>Proforma</Text>
+                                      </View>
+                                    )}
+                                    {!entry.isMaster && entry.type !== 'Proforma Invoice' && entry.currentEntryType === 'optional' && (
+                                      <View style={[lb.badge, lb.optional]}>
+                                        <Text style={[lb.badgeTxt, { color: AMBER }]}>Optional</Text>
+                                      </View>
+                                    )}
+                                    {!entry.isMaster && (entry.currentEntryType === 'regular' || (!entry.currentEntryType && entry.syncStatus === 'synced')) && (
+                                      <View style={[lb.badge, lb.regular]}>
+                                        <Text style={[lb.badgeTxt, { color: COLORS.positive }]}>Regular</Text>
+                                      </View>
+                                    )}
+                                    {!entry.isMaster && isProformaOrigin(entry) && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
+                                      <View style={[lb.badge, lb.origOptional]}>
+                                        <Text style={[lb.badgeTxt, { color: COLORS.info }]}>From Proforma</Text>
+                                      </View>
+                                    )}
+                                    {!entry.isMaster && !isProformaOrigin(entry) && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
+                                      <View style={[lb.badge, lb.origOptional]}>
+                                        <Text style={[lb.badgeTxt, { color: COLORS.info }]}>Orig. Optional</Text>
+                                      </View>
+                                    )}
+                                    {entry.syncStatus === 'pending' && (
+                                      <View style={[lb.badge, lb.pendingSync]}>
+                                        <Text style={[lb.badgeTxt, { color: AMBER }]}>Pending Sync</Text>
+                                      </View>
+                                    )}
+                                    {entry.syncStatus === 'failed' && (
+                                      <View style={[lb.badge, lb.failed]}>
+                                        <Text style={[lb.badgeTxt, { color: COLORS.negative }]}>Failed</Text>
+                                      </View>
+                                    )}
+                                    {entry.isMaster && entry.booksImpactStatus === 'not_posted' && entry.syncStatus === 'synced' && (
+                                      <View style={[lb.badge, lb.notPosted]}>
+                                        <Text style={[lb.badgeTxt, { color: AMBER }]}>Awaiting Sync</Text>
+                                      </View>
+                                    )}
+                                    {entry.booksImpactStatus === 'not_posted' && entry.syncStatus !== 'failed' && !(entry.isMaster && entry.syncStatus === 'synced') && (
+                                      <View style={[lb.badge, lb.notPosted]}>
+                                        <Text style={[lb.badgeTxt, { color: AMBER }]}>Not Posted</Text>
+                                      </View>
+                                    )}
+                                    {entry.booksImpactStatus === 'posted' && (
+                                      <View style={[lb.badge, lb.posted]}>
+                                        <Text style={[lb.badgeTxt, { color: COLORS.positive }]}>Posted</Text>
+                                      </View>
+                                    )}
+                                    {entry.eInvoiceStatus === 'generated' && (
+                                      <View style={[lb.badge, lb.irnDone]}>
+                                        <Text style={[lb.badgeTxt, { color: COLORS.info }]}>IRN ✓</Text>
+                                      </View>
+                                    )}
+                                    {['generating','failed'].includes(entry.eInvoiceStatus || '') && (
+                                      <View style={[lb.badge, lb.irnPending]}>
+                                        <Text style={[lb.badgeTxt, { color: COLORS.info }]}>{entry.eInvoiceStatus === 'failed' ? 'IRN Failed' : 'IRN Pending'}</Text>
+                                      </View>
+                                    )}
+                                  </View>
+                                )}
                               </View>
-                              {/* Lifecycle Badges — My Entries only */}
-                              {activeTab === 'myentries' && (
-                                <View style={lb.row}>
-                                  {!entry.isMaster && entry.type === 'Proforma Invoice' && entry.currentEntryType === 'optional' && (
-                                    <View style={[lb.badge, lb.optional]}>
-                                      <Text style={[lb.badgeTxt, { color: AMBER }]}>Proforma</Text>
-                                    </View>
-                                  )}
-                                  {!entry.isMaster && entry.type !== 'Proforma Invoice' && entry.currentEntryType === 'optional' && (
-                                    <View style={[lb.badge, lb.optional]}>
-                                      <Text style={[lb.badgeTxt, { color: AMBER }]}>Optional</Text>
-                                    </View>
-                                  )}
-                                  {!entry.isMaster && (entry.currentEntryType === 'regular' || (!entry.currentEntryType && entry.syncStatus === 'synced')) && (
-                                    <View style={[lb.badge, lb.regular]}>
-                                      <Text style={[lb.badgeTxt, { color: COLORS.positive }]}>Regular</Text>
-                                    </View>
-                                  )}
-                                  {!entry.isMaster && isProformaOrigin(entry) && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
-                                    <View style={[lb.badge, lb.origOptional]}>
-                                      <Text style={[lb.badgeTxt, { color: COLORS.info }]}>From Proforma</Text>
-                                    </View>
-                                  )}
-                                  {!entry.isMaster && !isProformaOrigin(entry) && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
-                                    <View style={[lb.badge, lb.origOptional]}>
-                                      <Text style={[lb.badgeTxt, { color: COLORS.info }]}>Orig. Optional</Text>
-                                    </View>
-                                  )}
-                                  {entry.syncStatus === 'pending' && (
-                                    <View style={[lb.badge, lb.pendingSync]}>
-                                      <Text style={[lb.badgeTxt, { color: AMBER }]}>Pending Sync</Text>
-                                    </View>
-                                  )}
-                                  {entry.syncStatus === 'failed' && (
-                                    <View style={[lb.badge, lb.failed]}>
-                                      <Text style={[lb.badgeTxt, { color: COLORS.negative }]}>Failed</Text>
-                                    </View>
-                                  )}
-                                  {entry.isMaster && entry.booksImpactStatus === 'not_posted' && entry.syncStatus === 'synced' && (
-                                    <View style={[lb.badge, lb.notPosted]}>
-                                      <Text style={[lb.badgeTxt, { color: AMBER }]}>Awaiting Sync</Text>
-                                    </View>
-                                  )}
-                                  {entry.booksImpactStatus === 'not_posted' && entry.syncStatus !== 'failed' && !(entry.isMaster && entry.syncStatus === 'synced') && (
-                                    <View style={[lb.badge, lb.notPosted]}>
-                                      <Text style={[lb.badgeTxt, { color: AMBER }]}>Not Posted</Text>
-                                    </View>
-                                  )}
-                                  {entry.booksImpactStatus === 'posted' && (
-                                    <View style={[lb.badge, lb.posted]}>
-                                      <Text style={[lb.badgeTxt, { color: COLORS.positive }]}>Posted</Text>
-                                    </View>
-                                  )}
-                                  {entry.eInvoiceStatus === 'generated' && (
-                                    <View style={[lb.badge, lb.irnDone]}>
-                                      <Text style={[lb.badgeTxt, { color: COLORS.info }]}>IRN ✓</Text>
-                                    </View>
-                                  )}
-                                  {['generating','failed'].includes(entry.eInvoiceStatus || '') && (
-                                    <View style={[lb.badge, lb.irnPending]}>
-                                      <Text style={[lb.badgeTxt, { color: COLORS.info }]}>{entry.eInvoiceStatus === 'failed' ? 'IRN Failed' : 'IRN Pending'}</Text>
-                                    </View>
-                                  )}
-                                </View>
-                              )}
-                              {/* Receipt rows render as normal tiles (2026-07-01 UX decision). Sales+Receipt
-                                  always appear sequentially in the same date group, so users infer the pairing
-                                  visually — no explicit "Linked to Sales" subtitle needed. Parent linkage data
-                                  (parentTdkRef / parentTallyVoucherNo) still flows through the model for future
-                                  drill-down features. */}
-                              <Text style={s.partyTxt}>{entry.party}</Text>
-                              <Text style={s.descTxt}>{entry.description}</Text>
-                              {activeTab === 'myentries' && entry.type === 'Proforma Invoice' && entry.currentEntryType === 'optional' && entry.conversionStatus !== 'converted' && (
-                                <Text style={{ fontSize: 9, color: AMBER, fontWeight: '700' }}>PROFORMA (OPTIONAL)</Text>
-                              )}
-                              {activeTab === 'myentries' && entry.type !== 'Proforma Invoice' && entry.currentEntryType === 'optional' && entry.conversionStatus !== 'converted' && (
-                                <Text style={{ fontSize: 9, color: AMBER, fontWeight: '700' }}>OPTIONAL VOUCHER NO.</Text>
-                              )}
-                              {activeTab === 'myentries' && isProformaOrigin(entry) && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
-                                <Text style={{ fontSize: 9, color: COLORS.info, fontWeight: '700' }}>CONVERTED FROM PROFORMA</Text>
-                              )}
-                              {activeTab === 'myentries' && !isProformaOrigin(entry) && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
-                                <Text style={{ fontSize: 9, color: COLORS.info, fontWeight: '700' }}>ORIG. ENTRY TYPE: OPTIONAL</Text>
-                              )}
-                              <Text style={s.entryDateTxt}>{entry.date}</Text>
-                            </View>
 
-                            {/* Amount + SO convert shortcut */}
-                            <View style={s.amtCol}>
-                              <Text style={[s.amtTxt, { color: entry.isCredit ? COLORS.negative : COLORS.positive }]}>
-                                {entry.amount}
-                              </Text>
-                              <Text style={[s.drCrLbl, { color: entry.isCredit ? COLORS.negative : COLORS.positive }]}>
-                                {entry.isCredit ? 'Cr' : 'Dr'}
-                              </Text>
-                              {activeTab === 'myentries' && isProformaOrigin(entry) && entry.tdkRef && !multiSelect ? (
-                                <View style={{ marginTop: 6, gap: 4, alignItems: 'flex-end' }}>
+                              <View style={s.entryRight}>
+                                <Text style={s.amtTxt} numberOfLines={1}>{entry.amount}</Text>
+                                <View style={s.chipRow}>
+                                  <View style={[s.vtypePill, { backgroundColor: color + '18', borderColor: color + '55' }]}>
+                                    <Text style={[s.vtypePillTxt, { color }]} numberOfLines={1}>{entry.type}</Text>
+                                  </View>
+                                  <Text style={[s.drCrLbl, { color: entry.isCredit ? COLORS.negative : COLORS.positive }]}>
+                                    {entry.isCredit ? 'Cr' : 'Dr'}
+                                  </Text>
+                                </View>
+                                {activeTab === 'myentries' && isProformaOrigin(entry) && entry.tdkRef && !multiSelect ? (
+                                  <View style={s.actionBtns}>
+                                    <TouchableOpacity
+                                      style={s.previewBtn}
+                                      onPress={() => router.push(`/sales/invoice-preview?tdkRef=${encodeURIComponent(entry.tdkRef!)}` as any)}
+                                      activeOpacity={0.75}
+                                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                    >
+                                      <Text style={s.previewBtnTxt}>Preview</Text>
+                                    </TouchableOpacity>
+                                    {entry.currentEntryType === 'optional' && entry.conversionStatus !== 'converted' ? (
+                                      <TouchableOpacity
+                                        style={[s.convertBtn, convertingIds.has(entry.tdkRef) && { opacity: 0.6 }]}
+                                        onPress={() => handleConvertProforma(entry)}
+                                        activeOpacity={0.75}
+                                        disabled={convertingIds.has(entry.tdkRef)}
+                                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                      >
+                                        <Text style={s.convertBtnTxt}>
+                                          {convertingIds.has(entry.tdkRef) ? '…' : 'Convert'}
+                                        </Text>
+                                      </TouchableOpacity>
+                                    ) : null}
+                                  </View>
+                                ) : null}
+                                {activeTab === 'myentries' && entry.type === 'Sales Order' && entry.tdkRef && !multiSelect ? (
                                   <TouchableOpacity
-                                    style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: COLORS.brandPrimary + '14' }}
-                                    onPress={() => router.push(`/sales/invoice-preview?tdkRef=${encodeURIComponent(entry.tdkRef!)}` as any)}
+                                    style={s.soConvertBtn}
+                                    onPress={() => router.push(`/sales/order-preview?tdkRef=${encodeURIComponent(entry.tdkRef!)}` as any)}
                                     activeOpacity={0.75}
                                     hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                                   >
-                                    <Text style={{ fontSize: 10, fontWeight: '700', color: COLORS.brandPrimary }}>Preview</Text>
+                                    <Text style={s.soConvertBtnTxt}>Convert</Text>
                                   </TouchableOpacity>
-                                  {entry.currentEntryType === 'optional' && entry.conversionStatus !== 'converted' ? (
-                                    <TouchableOpacity
-                                      style={{
-                                        paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
-                                        backgroundColor: COLORS.brandPrimary,
-                                        opacity: convertingIds.has(entry.tdkRef) ? 0.6 : 1,
-                                      }}
-                                      onPress={() => handleConvertProforma(entry)}
-                                      activeOpacity={0.75}
-                                      disabled={convertingIds.has(entry.tdkRef)}
-                                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                    >
-                                      <Text style={{ fontSize: 10, fontWeight: '700', color: COLORS.white }}>
-                                        {convertingIds.has(entry.tdkRef) ? '…' : 'Convert'}
-                                      </Text>
-                                    </TouchableOpacity>
-                                  ) : null}
-                                </View>
-                              ) : null}
-                              {activeTab === 'myentries' && entry.type === 'Sales Order' && entry.tdkRef && !multiSelect ? (
-                                <TouchableOpacity
-                                  style={{ marginTop: 6, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: '#05966918' }}
-                                  onPress={() => router.push(`/sales/order-preview?tdkRef=${encodeURIComponent(entry.tdkRef!)}` as any)}
-                                  activeOpacity={0.75}
-                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                >
-                                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#059669' }}>Convert</Text>
-                                </TouchableOpacity>
-                              ) : null}
+                                ) : null}
+                              </View>
                             </View>
                           </TouchableOpacity>
                           {idx < entries.length - 1 ? <View style={s.divider} /> : null}
@@ -1434,30 +1425,39 @@ const s = StyleSheet.create({
   },
   entryRow: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: SPACING.md, paddingVertical: 14, gap: 12,
+    paddingHorizontal: SPACING.md, paddingVertical: 10, gap: 10,
   },
   entryRowSelected: { backgroundColor: COLORS.activeBg },
 
   checkbox:      { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: COLORS.borderStrong, alignItems: 'center', justifyContent: 'center' },
   checkboxActive:{ backgroundColor: COLORS.textPrimary, borderColor: COLORS.textPrimary },
 
-  statusIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  statusIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
 
-  entryInfo:    { flex: 1, gap: 3 },
-  entryTopRow:  { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 5 },
-  vtypePill:    { paddingHorizontal: 7, paddingVertical: 2, borderRadius: RADIUS.sm },
-  vtypePillTxt: { fontSize: 10, fontWeight: '700' },
-  refTxt:       { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
+  entryBody:  { flex: 1, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
+  entryLeft:  { flex: 1, minWidth: 0, gap: 1 },
+  entryRight: { alignItems: 'flex-end', gap: 4, maxWidth: '48%', flexShrink: 0 },
+  chipRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 4 },
+  vtypePill:    { paddingHorizontal: 6, paddingVertical: 2, borderRadius: RADIUS.full, borderWidth: 1, maxWidth: 110 },
+  vtypePillTxt: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.2 },
+  refTxt:       { fontSize: TYPOGRAPHY.xs, fontWeight: '500', color: COLORS.textSecondary, lineHeight: 15 },
 
-  partyTxt:     { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  descTxt:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
-  entryDateTxt: { fontSize: 10, color: COLORS.textTertiary },
+  partyTxt:     { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, lineHeight: 18 },
+  descTxt:      { fontSize: 10, color: COLORS.textTertiary, lineHeight: 14 },
+  entryDateTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, lineHeight: 15 },
 
-  amtCol:  { alignItems: 'flex-end', gap: 2 },
-  amtTxt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700' },
-  drCrLbl: { fontSize: 10, fontWeight: '600' },
+  amtTxt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary, textAlign: 'right', lineHeight: 18 },
+  drCrLbl: { fontSize: 9, fontWeight: '700' },
 
-  divider: { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 64 },
+  actionBtns: { marginTop: 2, gap: 4, alignItems: 'flex-end' },
+  previewBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: COLORS.brandPrimary + '14' },
+  previewBtnTxt: { fontSize: 10, fontWeight: '700', color: COLORS.brandPrimary },
+  convertBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: COLORS.brandPrimary },
+  convertBtnTxt: { fontSize: 10, fontWeight: '700', color: COLORS.white },
+  soConvertBtn: { marginTop: 2, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: '#0891B218' },
+  soConvertBtnTxt: { fontSize: 10, fontWeight: '700', color: '#0891B2' },
+
+  divider: { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 56 },
 
   empty:    { alignItems: 'center', paddingVertical: 60, gap: 12 },
   emptyTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
