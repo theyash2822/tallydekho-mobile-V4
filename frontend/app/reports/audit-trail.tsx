@@ -7,18 +7,13 @@ import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
-import { getVouchers, getMyEntries, retryMyEntry, getInvoicePreview } from '../../src/services/api';
+import { getVouchers, getMyEntries, retryMyEntry } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 import { socketService } from '../../src/services/socketService';
 import { useTranslation } from 'react-i18next';
-import {
-  buildProformaToInvoicePrefillFromPreview,
-  proformaPrefillStorageKey,
-} from '../../src/utils/proformaToInvoicePrefill';
 
 const SCREEN_W = Dimensions.get('window').width;
 const AMBER = '#A89060';
@@ -69,6 +64,8 @@ interface VoucherEntry {
   currentEntryType?: 'regular' | 'optional';
   booksImpactStatus?: 'posted' | 'not_posted';
   conversionStatus?: 'pending' | 'converted' | 'cancelled';
+  /** Tally voucher cancelled (distinct from Not Posted / sync failed). */
+  isCancelled?: boolean;
   eInvoiceStatus?: string;
   eWayBillStatus?: string;
   // For Receipt vouchers auto-created by a collect_payment Sales invoice
@@ -173,6 +170,7 @@ const mapApiRow = (r: any, fmt: (n: number) => string = (n) => String(n)): Vouch
   currentEntryType: r.current_entry_type,
   booksImpactStatus: r.books_impact_status,
   conversionStatus: r.conversion_status,
+  isCancelled: !!(r.is_cancelled || r.conversion_status === 'cancelled'),
   eInvoiceStatus: r.e_invoice_status,
   eWayBillStatus: r.e_way_bill_status,
   parentInvoiceUuid: r.parent_invoice_uuid || null,
@@ -469,8 +467,6 @@ export default function AuditTrailScreen() {
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
   const retryingRef = useRef<Set<string>>(new Set());
   const bulkRetryingRef = useRef(false);
-  const convertingRef = useRef<Set<string>>(new Set());
-  const [convertingIds, setConvertingIds] = useState<Set<string>>(new Set());
 
   // ── API State ─────────────────────────────────────────────
   const [apiEntries, setApiEntries] = useState<VoucherEntry[]>([]);
@@ -562,6 +558,7 @@ export default function AuditTrailScreen() {
     currentEntryType: p.current_entry_type,
     booksImpactStatus: p.books_impact_status || 'not_posted',
     conversionStatus: p.conversion_status,
+    isCancelled: !!(p.is_cancelled || p.conversion_status === 'cancelled'),
     eInvoiceStatus: p.e_invoice_status,
     eWayBillStatus: p.e_way_bill_status,
     parentInvoiceUuid: p.parent_invoice_uuid || null,
@@ -739,6 +736,40 @@ export default function AuditTrailScreen() {
     return                              { icon: 'checkmark-circle-outline' as const, color: COLORS.positive, borderColor: 'transparent' };
   };
 
+  /** Books impact icon — Posted / Not Posted / Cancelled (separate from sync). */
+  const getBooksInfo = (entry: VoucherEntry) => {
+    if (entry.isCancelled || entry.conversionStatus === 'cancelled') {
+      return { icon: 'close-circle' as const, color: COLORS.negative, label: 'Cancelled' };
+    }
+    if (entry.booksImpactStatus === 'posted') {
+      return { icon: 'checkmark-circle' as const, color: COLORS.positive, label: 'Posted' };
+    }
+    return { icon: 'ellipse-outline' as const, color: AMBER, label: 'Not Posted' };
+  };
+
+  const displayRef = (entry: VoucherEntry) => {
+    if (activeTab !== 'myentries') return entry.ref || '—';
+    if (entry.tallyVoucherNo) return entry.tallyVoucherNo;
+    if (entry.booksImpactStatus === 'posted' && entry.ref) return entry.ref;
+    if (entry.currentEntryType === 'optional' && entry.conversionStatus !== 'converted') {
+      return entry.tdkRef || entry.ref || 'Opt. Ref';
+    }
+    if (entry.tdkRef) return entry.tdkRef;
+    return entry.ref || '—';
+  };
+
+  const entryKindChip = (entry: VoucherEntry): { label: string; tone: 'regular' | 'optional' } | null => {
+    if (entry.isMaster) return null;
+    if (entry.type === 'Proforma Invoice' && entry.currentEntryType === 'optional') {
+      return { label: 'Proforma', tone: 'optional' };
+    }
+    if (entry.currentEntryType === 'optional') return { label: 'Optional', tone: 'optional' };
+    if (entry.currentEntryType === 'regular' || (!entry.currentEntryType && entry.syncStatus === 'synced')) {
+      return { label: 'Regular', tone: 'regular' };
+    }
+    return null;
+  };
+
   // Queued/failed can be retried once. Synced and in-flight must not re-push —
   // re-forwarding the same XML creates duplicate vouchers in Tally.
   const canRetryEntry = (entry: VoucherEntry) =>
@@ -833,43 +864,6 @@ export default function AuditTrailScreen() {
     }
     setRefreshKey(k => k + 1);
     clearSelection();
-  };
-
-  const canConvertProformaEntry = (entry: VoucherEntry) =>
-    entry.type === 'Proforma Invoice'
-    && entry.currentEntryType === 'optional'
-    && entry.conversionStatus !== 'converted'
-    && !!entry.tdkRef
-    && (!!entry.tallyVoucherNo || entry.syncStatus === 'synced');
-
-  const handleConvertProforma = (entry: VoucherEntry) => {
-    if (!entry.tdkRef || !company?.guid) return;
-    if (!canConvertProformaEntry(entry)) {
-      Toast.show({
-        type: 'info',
-        text1: 'Wait for sync',
-        text2: 'Convert after Tally syncs this Proforma.',
-        visibilityTime: 2800,
-      });
-      return;
-    }
-    if (convertingRef.current.has(entry.tdkRef)) return;
-    convertingRef.current.add(entry.tdkRef);
-    setConvertingIds(new Set(convertingRef.current));
-    (async () => {
-      try {
-        const res: any = await getInvoicePreview(entry.tdkRef!, company.guid);
-        if (!res?.status || !res?.data) throw new Error(res?.message || 'Could not load Proforma');
-        const prefill = buildProformaToInvoicePrefillFromPreview(res.data, entry.tdkRef!);
-        await AsyncStorage.setItem(proformaPrefillStorageKey(company.guid), JSON.stringify(prefill));
-        router.push('/sales/create-invoice' as any);
-      } catch (e: any) {
-        Toast.show({ type: 'error', text1: 'Could not start invoice', text2: e?.message || 'Try again after sync.' });
-      } finally {
-        convertingRef.current.delete(entry.tdkRef!);
-        setConvertingIds(new Set(convertingRef.current));
-      }
-    })();
   };
 
   const handleShare = () =>
@@ -1190,168 +1184,91 @@ export default function AuditTrailScreen() {
                               </View>
                             ) : null}
 
-                            {/* Sync icon — My Entries */}
+                            {/* Dual icons — My Entries: sync (top) + books (bottom) */}
                             {!multiSelect && activeTab === 'myentries' && sInfo ? (
-                              <TouchableOpacity
-                                style={[s.statusIcon, { backgroundColor: sInfo.color + '18' }]}
-                                onPress={() => {
-                                  if (canRetryEntry(entry)) handleSinglePush(entry);
-                                }}
-                                activeOpacity={canRetryEntry(entry) ? 0.7 : 1}
-                                disabled={!canRetryEntry(entry) || retryingIds.has((entry.id || '').replace('wq_', ''))}
-                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                              >
-                                {retryingIds.has((entry.id || '').replace('wq_', '')) ? (
-                                  <ActivityIndicator size="small" color={sInfo.color} />
-                                ) : (
-                                  <Ionicons name={sInfo.icon} size={19} color={sInfo.color} />
-                                )}
-                              </TouchableOpacity>
+                              <View style={s.iconStack}>
+                                <TouchableOpacity
+                                  style={[s.statusIcon, { backgroundColor: sInfo.color + '18' }]}
+                                  onPress={() => {
+                                    if (canRetryEntry(entry)) handleSinglePush(entry);
+                                  }}
+                                  activeOpacity={canRetryEntry(entry) ? 0.7 : 1}
+                                  disabled={!canRetryEntry(entry) || retryingIds.has((entry.id || '').replace('wq_', ''))}
+                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                  accessibilityLabel={`Sync ${entry.syncStatus || 'synced'}`}
+                                >
+                                  {retryingIds.has((entry.id || '').replace('wq_', '')) ? (
+                                    <ActivityIndicator size="small" color={sInfo.color} />
+                                  ) : (
+                                    <Ionicons name={sInfo.icon} size={18} color={sInfo.color} />
+                                  )}
+                                </TouchableOpacity>
+                                {(() => {
+                                  const b = getBooksInfo(entry);
+                                  return (
+                                    <View
+                                      style={[s.statusIcon, { backgroundColor: b.color + '18' }]}
+                                      accessibilityLabel={b.label}
+                                    >
+                                      <Ionicons name={b.icon} size={18} color={b.color} />
+                                    </View>
+                                  );
+                                })()}
+                              </View>
                             ) : null}
 
                             {/* Action icon — Day Book */}
                             {!multiSelect && activeTab === 'daybook' ? (
                               <View style={[s.statusIcon, { backgroundColor: (ACTION_COLORS[entry.action || 'Created'] || '#999') + '18' }]}>
-                                <Ionicons
-                                  name="book-outline"
-                                  size={19}
-                                  color={color}
-                                />
+                                <Ionicons name="book-outline" size={18} color={color} />
                               </View>
                             ) : null}
 
-                            {/* Entry detail — 2-col: party/ref/date | amount + type chip */}
+                            {/*
+                              Layout:
+                              [icons] Party name (full width)
+                                      ref · date                    [IRN]
+                                      [type] [Regular]              amount
+                            */}
                             <View style={s.entryBody}>
-                              <View style={s.entryLeft}>
-                                <Text style={s.partyTxt} numberOfLines={1}>{entry.party || '—'}</Text>
-                                <Text style={s.refTxt} numberOfLines={1}>
-                                  {(() => {
-                                    if (activeTab !== 'myentries') return entry.ref || '—';
-                                    if (entry.tallyVoucherNo) return entry.tallyVoucherNo;
-                                    if (entry.booksImpactStatus === 'posted' && entry.ref) return entry.ref;
-                                    if (entry.currentEntryType === 'optional' && entry.conversionStatus !== 'converted') {
-                                      return entry.tdkRef || entry.ref || 'Opt. Ref';
-                                    }
-                                    if (entry.tdkRef) return entry.tdkRef;
-                                    return entry.ref || '—';
-                                  })()}
+                              <Text style={s.partyTxt} numberOfLines={1}>{entry.party || '—'}</Text>
+
+                              <View style={s.metaRow}>
+                                <Text style={s.metaTxt} numberOfLines={1}>
+                                  {displayRef(entry)}
+                                  {entry.date ? `  ·  ${entry.date}` : ''}
                                 </Text>
-                                <Text style={s.entryDateTxt}>{entry.date}</Text>
-                                {!!entry.description && (
-                                  <Text style={s.descTxt} numberOfLines={1}>{entry.description}</Text>
-                                )}
+                                {activeTab === 'myentries' && entry.eInvoiceStatus === 'generated' ? (
+                                  <View style={[lb.badge, lb.irnDone]}>
+                                    <Text style={[lb.badgeTxt, { color: COLORS.info }]}>IRN ✓</Text>
+                                  </View>
+                                ) : activeTab === 'myentries' && ['generating', 'failed'].includes(entry.eInvoiceStatus || '') ? (
+                                  <View style={[lb.badge, lb.irnPending]}>
+                                    <Text style={[lb.badgeTxt, { color: COLORS.info }]}>
+                                      {entry.eInvoiceStatus === 'failed' ? 'IRN Failed' : 'IRN Pending'}
+                                    </Text>
+                                  </View>
+                                ) : null}
                               </View>
 
-                              <View style={s.entryRight}>
-                                <Text style={s.amtTxt} numberOfLines={1}>{entry.amount}</Text>
-                                <View style={s.chipRow}>
+                              <View style={s.bottomRow}>
+                                <View style={s.chipRowLeft}>
                                   <View style={[s.vtypePill, { backgroundColor: color + '18', borderColor: color + '55' }]}>
                                     <Text style={[s.vtypePillTxt, { color }]} numberOfLines={1}>{entry.type}</Text>
                                   </View>
-                                  <Text style={[s.drCrLbl, { color: entry.isCredit ? COLORS.negative : COLORS.positive }]}>
-                                    {entry.isCredit ? 'Cr' : 'Dr'}
-                                  </Text>
-                                </View>
-                                {/* Lifecycle badges — all on the right (My Entries) */}
-                                {activeTab === 'myentries' && (
-                                  <View style={lb.row}>
-                                    {!entry.isMaster && entry.type === 'Proforma Invoice' && entry.currentEntryType === 'optional' && (
-                                      <View style={[lb.badge, lb.optional]}>
-                                        <Text style={[lb.badgeTxt, { color: AMBER }]}>Proforma</Text>
-                                      </View>
-                                    )}
-                                    {!entry.isMaster && entry.type !== 'Proforma Invoice' && entry.currentEntryType === 'optional' && (
-                                      <View style={[lb.badge, lb.optional]}>
-                                        <Text style={[lb.badgeTxt, { color: AMBER }]}>Optional</Text>
-                                      </View>
-                                    )}
-                                    {!entry.isMaster && (entry.currentEntryType === 'regular' || (!entry.currentEntryType && entry.syncStatus === 'synced')) && (
-                                      <View style={[lb.badge, lb.regular]}>
-                                        <Text style={[lb.badgeTxt, { color: COLORS.positive }]}>Regular</Text>
-                                      </View>
-                                    )}
-                                    {!entry.isMaster && isProformaOrigin(entry) && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
-                                      <View style={[lb.badge, lb.origOptional]}>
-                                        <Text style={[lb.badgeTxt, { color: COLORS.info }]}>From Proforma</Text>
-                                      </View>
-                                    )}
-                                    {!entry.isMaster && !isProformaOrigin(entry) && entry.originalEntryType === 'optional' && entry.currentEntryType === 'regular' && (
-                                      <View style={[lb.badge, lb.origOptional]}>
-                                        <Text style={[lb.badgeTxt, { color: COLORS.info }]}>Orig. Optional</Text>
-                                      </View>
-                                    )}
-                                    {entry.syncStatus === 'pending' && (
-                                      <View style={[lb.badge, lb.pendingSync]}>
-                                        <Text style={[lb.badgeTxt, { color: AMBER }]}>Pending Sync</Text>
-                                      </View>
-                                    )}
-                                    {entry.syncStatus === 'failed' && (
-                                      <View style={[lb.badge, lb.failed]}>
-                                        <Text style={[lb.badgeTxt, { color: COLORS.negative }]}>Failed</Text>
-                                      </View>
-                                    )}
-                                    {entry.isMaster && entry.booksImpactStatus === 'not_posted' && entry.syncStatus === 'synced' && (
-                                      <View style={[lb.badge, lb.notPosted]}>
-                                        <Text style={[lb.badgeTxt, { color: AMBER }]}>Awaiting Sync</Text>
-                                      </View>
-                                    )}
-                                    {entry.booksImpactStatus === 'not_posted' && entry.syncStatus !== 'failed' && !(entry.isMaster && entry.syncStatus === 'synced') && (
-                                      <View style={[lb.badge, lb.notPosted]}>
-                                        <Text style={[lb.badgeTxt, { color: AMBER }]}>Not Posted</Text>
-                                      </View>
-                                    )}
-                                    {entry.booksImpactStatus === 'posted' && (
-                                      <View style={[lb.badge, lb.posted]}>
-                                        <Text style={[lb.badgeTxt, { color: COLORS.positive }]}>Posted</Text>
-                                      </View>
-                                    )}
-                                    {entry.eInvoiceStatus === 'generated' && (
-                                      <View style={[lb.badge, lb.irnDone]}>
-                                        <Text style={[lb.badgeTxt, { color: COLORS.info }]}>IRN ✓</Text>
-                                      </View>
-                                    )}
-                                    {['generating','failed'].includes(entry.eInvoiceStatus || '') && (
-                                      <View style={[lb.badge, lb.irnPending]}>
-                                        <Text style={[lb.badgeTxt, { color: COLORS.info }]}>{entry.eInvoiceStatus === 'failed' ? 'IRN Failed' : 'IRN Pending'}</Text>
-                                      </View>
-                                    )}
-                                  </View>
-                                )}
-                                {activeTab === 'myentries' && isProformaOrigin(entry) && entry.tdkRef && !multiSelect ? (
-                                  <View style={s.actionBtns}>
-                                    <TouchableOpacity
-                                      style={s.previewBtn}
-                                      onPress={() => router.push(`/sales/invoice-preview?tdkRef=${encodeURIComponent(entry.tdkRef!)}` as any)}
-                                      activeOpacity={0.75}
-                                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                    >
-                                      <Text style={s.previewBtnTxt}>Preview</Text>
-                                    </TouchableOpacity>
-                                    {entry.currentEntryType === 'optional' && entry.conversionStatus !== 'converted' ? (
-                                      <TouchableOpacity
-                                        style={[s.convertBtn, convertingIds.has(entry.tdkRef) && { opacity: 0.6 }]}
-                                        onPress={() => handleConvertProforma(entry)}
-                                        activeOpacity={0.75}
-                                        disabled={convertingIds.has(entry.tdkRef)}
-                                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                      >
-                                        <Text style={s.convertBtnTxt}>
-                                          {convertingIds.has(entry.tdkRef) ? '…' : 'Convert'}
+                                  {activeTab === 'myentries' && (() => {
+                                    const kind = entryKindChip(entry);
+                                    if (!kind) return null;
+                                    return (
+                                      <View style={[lb.badge, kind.tone === 'optional' ? lb.optional : lb.regular]}>
+                                        <Text style={[lb.badgeTxt, { color: kind.tone === 'optional' ? AMBER : COLORS.positive }]}>
+                                          {kind.label}
                                         </Text>
-                                      </TouchableOpacity>
-                                    ) : null}
-                                  </View>
-                                ) : null}
-                                {activeTab === 'myentries' && entry.type === 'Sales Order' && entry.tdkRef && !multiSelect ? (
-                                  <TouchableOpacity
-                                    style={s.soConvertBtn}
-                                    onPress={() => router.push(`/sales/order-preview?tdkRef=${encodeURIComponent(entry.tdkRef!)}` as any)}
-                                    activeOpacity={0.75}
-                                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                  >
-                                    <Text style={s.soConvertBtnTxt}>Convert</Text>
-                                  </TouchableOpacity>
-                                ) : null}
+                                      </View>
+                                    );
+                                  })()}
+                                </View>
+                                <Text style={s.amtTxt} numberOfLines={1}>{entry.amount}</Text>
                               </View>
                             </View>
                           </TouchableOpacity>
@@ -1549,7 +1466,7 @@ const s = StyleSheet.create({
     overflow: 'hidden', marginBottom: SPACING.sm,
   },
   entryRow: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row', alignItems: 'flex-start',
     paddingHorizontal: SPACING.md, paddingVertical: 10, gap: 10,
   },
   entryRowSelected: { backgroundColor: COLORS.activeBg },
@@ -1557,30 +1474,18 @@ const s = StyleSheet.create({
   checkbox:      { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: COLORS.borderStrong, alignItems: 'center', justifyContent: 'center' },
   checkboxActive:{ backgroundColor: COLORS.textPrimary, borderColor: COLORS.textPrimary },
 
-  statusIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  statusIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  iconStack: { gap: 6, alignItems: 'center' },
 
-  entryBody:  { flex: 1, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
-  entryLeft:  { flex: 1, minWidth: 0, gap: 1 },
-  entryRight: { alignItems: 'flex-end', gap: 4, maxWidth: '48%', flexShrink: 0 },
-  chipRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 4 },
-  vtypePill:    { paddingHorizontal: 6, paddingVertical: 2, borderRadius: RADIUS.full, borderWidth: 1, maxWidth: 110 },
+  entryBody: { flex: 1, minWidth: 0, gap: 4 },
+  partyTxt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, lineHeight: 18 },
+  metaRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  metaTxt:   { flex: 1, minWidth: 0, fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500' },
+  bottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  chipRowLeft: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, flex: 1, minWidth: 0 },
+  vtypePill:    { paddingHorizontal: 6, paddingVertical: 2, borderRadius: RADIUS.full, borderWidth: 1, maxWidth: 120 },
   vtypePillTxt: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.2 },
-  refTxt:       { fontSize: TYPOGRAPHY.xs, fontWeight: '500', color: COLORS.textSecondary, lineHeight: 15 },
-
-  partyTxt:     { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, lineHeight: 18 },
-  descTxt:      { fontSize: 10, color: COLORS.textTertiary, lineHeight: 14 },
-  entryDateTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, lineHeight: 15 },
-
-  amtTxt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary, textAlign: 'right', lineHeight: 18 },
-  drCrLbl: { fontSize: 9, fontWeight: '700' },
-
-  actionBtns: { marginTop: 2, gap: 4, alignItems: 'flex-end' },
-  previewBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: COLORS.brandPrimary + '14' },
-  previewBtnTxt: { fontSize: 10, fontWeight: '700', color: COLORS.brandPrimary },
-  convertBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: COLORS.brandPrimary },
-  convertBtnTxt: { fontSize: 10, fontWeight: '700', color: COLORS.white },
-  soConvertBtn: { marginTop: 2, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: '#0891B218' },
-  soConvertBtnTxt: { fontSize: 10, fontWeight: '700', color: '#0891B2' },
+  amtTxt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary, textAlign: 'right', flexShrink: 0 },
 
   divider: { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: 56 },
 
@@ -1636,11 +1541,6 @@ const lb = StyleSheet.create({
   badgeTxt:    { fontSize: 9, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
   regular:     { backgroundColor: 'transparent', borderWidth: 1, borderColor: COLORS.borderDefault },
   optional:    { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#E8C77A' },
-  origOptional:{ backgroundColor: COLORS.infoBg },
-  pendingSync: { backgroundColor: '#FDF3E0', borderWidth: 1, borderColor: '#F4C77E' },
-  failed:      { backgroundColor: '#FEE2E2', borderWidth: 1, borderColor: '#F4B4B4' },
-  notPosted:   { backgroundColor: '#FFF7E6', borderWidth: 1, borderColor: '#F4C77E' },
-  posted:      { backgroundColor: COLORS.positiveBg, borderWidth: 1, borderColor: COLORS.positive },
   irnDone:     { backgroundColor: COLORS.infoBg },
   irnPending:  { backgroundColor: COLORS.infoBg },
 });
