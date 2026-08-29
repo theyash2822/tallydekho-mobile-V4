@@ -91,17 +91,17 @@ export function classifyVoucherDocType(
   return 'invoice';
 }
 
-/** List-row badge colors — aligned with DocumentPreview / DOC_TYPE_CONFIG. */
+/** List-row badge colors — no red / green / black-white (reserved for Paid/Unpaid & UI). */
 const VOUCHER_TYPE_BADGE: Record<string, { label: string; color: string; bg: string }> = {
-  sales_invoice:    { label: 'Sales Invoice',    color: '#2D7D46', bg: '#E8F5E9' },
-  purchase_invoice: { label: 'Purchase Invoice', color: '#4527A0', bg: '#EDE7F6' },
-  sales_order:      { label: 'Sales Order',      color: '#1565C0', bg: '#E3F2FD' },
-  purchase_order:   { label: 'Purchase Order',   color: '#1B5E20', bg: '#E8F5E9' },
-  credit_note:      { label: 'Credit Note',      color: '#EF6C00', bg: '#FFF3E0' },
-  debit_note:       { label: 'Debit Note',       color: '#C62828', bg: '#FFEBEE' },
-  delivery_note:    { label: 'Delivery Note',    color: '#00838F', bg: '#E0F7FA' },
-  proforma_invoice: { label: 'Proforma',         color: '#1A1A1A', bg: '#F5F4EF' },
-  quotation:        { label: 'Quotation',        color: '#1565C0', bg: '#E3F2FD' },
+  sales_invoice:    { label: 'Sales Invoice',    color: '#3949AB', bg: '#E8EAF6' }, // indigo (was green)
+  purchase_invoice: { label: 'Purchase Invoice', color: '#6A1B9A', bg: '#F3E5F5' }, // purple
+  sales_order:      { label: 'Sales Order',      color: '#0277BD', bg: '#E1F5FE' }, // sky blue
+  purchase_order:   { label: 'Purchase Order',   color: '#6D4C41', bg: '#EFEBE9' }, // brown (was green)
+  credit_note:      { label: 'Credit Note',      color: '#EF6C00', bg: '#FFF3E0' }, // orange
+  debit_note:       { label: 'Debit Note',       color: '#AD1457', bg: '#FCE4EC' }, // magenta (was red)
+  delivery_note:    { label: 'Delivery Note',    color: '#00838F', bg: '#E0F7FA' }, // teal
+  proforma_invoice: { label: 'Proforma',         color: '#5E35B1', bg: '#EDE7F6' }, // violet (was B&W)
+  quotation:        { label: 'Quotation',        color: '#7B1FA2', bg: '#F3E5F5' }, // purple (not green/red/B&W)
 };
 
 export type VoucherTypeBadgeInfo = { label: string; color: string; bg: string; docType: string };
@@ -146,17 +146,17 @@ export function VoucherTypeBadge({
 
 const vtBadge = StyleSheet.create({
   badge: {
-    paddingHorizontal: 7,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 999,
     borderWidth: 1,
     alignSelf: 'flex-start',
-    maxWidth: 120,
+    maxWidth: 110,
   },
   txt: {
     fontSize: 9,
     fontWeight: '800',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
     textTransform: 'uppercase',
   },
 });

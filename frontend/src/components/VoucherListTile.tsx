@@ -5,13 +5,13 @@
  * Right: amount
  *        [type chip] [Paid/Unpaid]  ← same row
  *
- * Type chips: black & white (Proforma-style) for every voucher type.
+ * Type chips: remapped multi-color (no red / green / black-white).
  * Paid = green, Unpaid = red.
  */
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { COLORS, TYPOGRAPHY, RADIUS } from '../constants/colors';
-import { resolveVoucherTypeBadge } from './voucherHomeFilters';
+import { VoucherTypeBadge } from './voucherHomeFilters';
 
 export const PAYMENT_STATUS_COLOR: Record<string, string> = {
   paid:   '#2D7D46',
@@ -26,15 +26,6 @@ export const PAYMENT_STATUS_LABEL: Record<string, string> = {
   unpaid: 'Unpaid',
 };
 
-/** Proforma-style mono chip — black text on white/light. */
-export function MonoTypeBadge({ label }: { label: string }) {
-  return (
-    <View style={st.monoBadge}>
-      <Text style={st.monoTxt} numberOfLines={1}>{label}</Text>
-    </View>
-  );
-}
-
 /** Paid (green) / Unpaid (red) chip. */
 export function PaymentStatusBadge({ status }: { status: string }) {
   const key = String(status || '').toLowerCase();
@@ -48,10 +39,18 @@ export function PaymentStatusBadge({ status }: { status: string }) {
   );
 }
 
-/** Direct / Indirect — same black & white as other type chips. */
+/** Direct / Indirect — blue / orange (not red/green/B&W). */
 export function ExpenseTypeBadge({ type }: { type: 'direct' | 'indirect' | string }) {
   const isDirect = String(type).toLowerCase() === 'direct';
-  return <MonoTypeBadge label={isDirect ? 'Direct' : 'Indirect'} />;
+  const color = isDirect ? '#0277BD' : '#EF6C00';
+  const bg = isDirect ? '#E1F5FE' : '#FFF3E0';
+  return (
+    <View style={[st.typePill, { backgroundColor: bg, borderColor: color + '66' }]}>
+      <Text style={[st.typePillTxt, { color }]}>
+        {isDirect ? 'Direct' : 'Indirect'}
+      </Text>
+    </View>
+  );
 }
 
 export type VoucherListTileProps = {
@@ -86,12 +85,11 @@ export function VoucherListTile({
 }: VoucherListTileProps) {
   const typeNode = typeBadge ?? (
     module ? (
-      <MonoTypeBadge
-        label={resolveVoucherTypeBadge(module, {
-          docType,
-          voucher_type: voucherType,
-          is_optional: isOptional,
-        }).label}
+      <VoucherTypeBadge
+        module={module}
+        docType={docType}
+        voucher_type={voucherType}
+        is_optional={isOptional}
       />
     ) : null
   );
@@ -169,21 +167,18 @@ const st = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 4,
   },
-  monoBadge: {
+  typePill: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: RADIUS.full,
     borderWidth: 1,
-    borderColor: COLORS.textPrimary,
-    backgroundColor: COLORS.cardBg,
     maxWidth: 110,
   },
-  monoTxt: {
+  typePillTxt: {
     fontSize: 9,
     fontWeight: '800',
     letterSpacing: 0.2,
     textTransform: 'uppercase',
-    color: COLORS.textPrimary,
   },
   statusBadge: {
     paddingHorizontal: 6,
