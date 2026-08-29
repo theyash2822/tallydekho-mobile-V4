@@ -136,6 +136,21 @@ export function FilterRadioRow({
   );
 }
 
+/** Checkbox option row — multi select. Optional trailing count (e.g. "Credit Note  90"). */
+export function FilterCheckRow({
+  label, count, selected, onPress,
+}: { label: string; count?: number; selected: boolean; onPress: () => void }) {
+  const display = count != null ? `${label}  ${count}` : label;
+  return (
+    <TouchableOpacity style={ro.row} onPress={onPress} activeOpacity={0.7}>
+      <View style={[ro.check, selected && ro.checkActive]}>
+        {selected && <Ionicons name="checkmark" size={14} color={COLORS.white} />}
+      </View>
+      <Text style={[ro.label, selected && ro.labelActive]}>{display}</Text>
+    </TouchableOpacity>
+  );
+}
+
 /** Chip group — single or multi select */
 export function FilterChipGroup({
   label,
@@ -249,6 +264,15 @@ const ro = StyleSheet.create({
   radioActive: { borderColor: COLORS.brandPrimary },
   radioDot: {
     width: 10, height: 10, borderRadius: 5,
+    backgroundColor: COLORS.brandPrimary,
+  },
+  check: {
+    width: 20, height: 20, borderRadius: 4,
+    borderWidth: 2, borderColor: COLORS.borderStrong,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  checkActive: {
+    borderColor: COLORS.brandPrimary,
     backgroundColor: COLORS.brandPrimary,
   },
   label: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, fontWeight: '500' },

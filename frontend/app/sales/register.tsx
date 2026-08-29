@@ -67,9 +67,11 @@ export default function SalesRegisterScreen() {
   const [statusFilter,   setStatusFilter]   = useState('All');
   const [dropdown,       setDropdown]       = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [docType, setDocType] = useState<string>('all');
+  const [docTypes, setDocTypes] = useState<string[]>([]);
+  const [partyGroups, setPartyGroups] = useState<string[]>([]);
   const [showTypeFilter, setShowTypeFilter] = useState(false);
   const [typeCounts, setTypeCounts] = useState<Record<string, number>>({});
+  const [partyGroupOptions, setPartyGroupOptions] = useState<{ name: string; count: number }[]>([]);
   // Init date range from selected FY; update when FY changes
   const fyFrom = selectedFY?.startDate ?? '';
   const fyTo   = selectedFY?.endDate   ?? '';
@@ -105,9 +107,10 @@ export default function SalesRegisterScreen() {
     docType: r.doc_type || 'invoice',
   });
 
-  const docTypesParam = docType === 'all'
-    ? ALL_SALES_DOC_TYPE_IDS.join(',')
-    : docType;
+  const docTypesParam = docTypes.length
+    ? docTypes.join(',')
+    : ALL_SALES_DOC_TYPE_IDS.join(',');
+  const partyGroupsParam = partyGroups.length ? partyGroups.join(',') : undefined;
 
   const loadRegister = useCallback(() => {
     if (!companyGuid) return;
@@ -121,17 +124,20 @@ export default function SalesRegisterScreen() {
     Promise.all([
       getSalesVouchers(companyGuid, {
         search, ...range, limit: PAGE_SIZE, page: 1, docTypes: docTypesParam,
+        ...(partyGroupsParam ? { partyGroups: partyGroupsParam } : {}),
       }),
       getSalesVoucherCounts(companyGuid, range),
     ]).then(([listRes, cntRes]: any[]) => {
       const rows = listRes?.data ?? [];
       setLiveInvoices(rows.map(mapSalesInv));
       setHasMore(rows.length === PAGE_SIZE);
-      setTypeCounts(cntRes?.data ?? {});
+      const cntData = cntRes?.data ?? {};
+      setTypeCounts(cntData);
+      setPartyGroupOptions(Array.isArray(cntData.partyGroups) ? cntData.partyGroups : []);
     }).catch((err: any) => {
       setApiError(err?.message || 'Failed to load sales data');
     }).finally(() => setLoadingData(false));
-  }, [companyGuid, search, fromDate, toDate, fyFrom, fyTo, formatAmount, docTypesParam]);
+  }, [companyGuid, search, fromDate, toDate, fyFrom, fyTo, formatAmount, docTypesParam, partyGroupsParam]);
 
   useEffect(() => {
     loadRegister();
@@ -149,6 +155,7 @@ export default function SalesRegisterScreen() {
       limit: PAGE_SIZE,
       page: nextPage,
       docTypes: docTypesParam,
+      ...(partyGroupsParam ? { partyGroups: partyGroupsParam } : {}),
     }).then((res: any) => {
       const rows = res?.data ?? [];
       setLiveInvoices(prev => [...prev, ...rows.map(mapSalesInv)]);
@@ -258,7 +265,7 @@ export default function SalesRegisterScreen() {
           <Text style={s.headerTitle}>{t('sales.register')}</Text>
           <FilterIconWithBadge
             testID="sales-register-filter-btn"
-            count={docType !== 'all' ? 1 : 0}
+            count={docTypes.length + partyGroups.length}
             onPress={() => setShowTypeFilter(true)}
           />
         </View>
@@ -296,9 +303,15 @@ export default function SalesRegisterScreen() {
       </View>
 
       <ActiveFilterChips
-        chips={docType !== 'all' ? [{ id: docType, label: DOC_TYPE_LABEL[docType] || docType }] : []}
-        onRemove={() => setDocType('all')}
-        onClearAll={() => setDocType('all')}
+        chips={[
+          ...docTypes.map((id) => ({ id: `type:${id}`, label: DOC_TYPE_LABEL[id] || id })),
+          ...partyGroups.map((g) => ({ id: `group:${g}`, label: g })),
+        ]}
+        onRemove={(chipId) => {
+          if (chipId.startsWith('type:')) setDocTypes((prev) => prev.filter((x) => x !== chipId.slice(5)));
+          if (chipId.startsWith('group:')) setPartyGroups((prev) => prev.filter((x) => x !== chipId.slice(6)));
+        }}
+        onClearAll={() => { setDocTypes([]); setPartyGroups([]); }}
       />
 
       {dropdown && (
@@ -475,9 +488,11 @@ export default function SalesRegisterScreen() {
         onClose={() => setShowTypeFilter(false)}
         title="Filter Sales"
         options={SALES_DOC_TYPES}
-        selectedId={docType}
+        selectedIds={docTypes}
+        selectedGroups={partyGroups}
         counts={typeCounts}
-        onApply={setDocType}
+        partyGroups={partyGroupOptions}
+        onApply={(ids, groups) => { setDocTypes(ids); setPartyGroups(groups); }}
       />
     </SafeAreaView>
   );

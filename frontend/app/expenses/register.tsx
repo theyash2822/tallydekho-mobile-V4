@@ -18,7 +18,7 @@ import {
   FilterIconWithBadge,
   ActiveFilterChips,
   ExpenseRegisterFilterModal,
-  type ExpenseTypeFilter,
+  type ExpenseTypeId,
 } from '../../src/components/voucherHomeFilters';
 
 type TxItem = { id: string; voucher: string; desc: string; date: string; amount: string; positive: boolean; type: 'payment' | 'receipt' | 'contra'; party?: string; time?: string; status?: string; };
@@ -70,8 +70,8 @@ export default function ExpenseRegisterScreen() {
   const fyTo   = selectedFY?.endDate   ?? '';
 
   const [search,       setSearch]       = useState('');
-  const [typeFilter,   setTypeFilter]   = useState<ExpenseTypeFilter>('All');
-  const [categoryFilter, setCategoryFilter] = useState('');
+  const [typeFilters,  setTypeFilters]  = useState<ExpenseTypeId[]>([]);
+  const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState('All');
   const [statusOpen,   setStatusOpen]   = useState(false);
   const [showFilter,   setShowFilter]   = useState(false);
@@ -102,8 +102,8 @@ export default function ExpenseRegisterScreen() {
     const from = dmyToISO(fromDate) || fyFrom;
     const to   = dmyToISO(toDate)   || fyTo;
     const rangeParams = from && to ? { from, to } : {};
-    const typeParam = typeFilter === 'Direct' || typeFilter === 'Indirect' ? { type: typeFilter } : {};
-    const catParam = categoryFilter ? { category: categoryFilter } : {};
+    const typeParam = typeFilters.length ? { types: typeFilters.join(',') } : {};
+    const catParam = categoryFilters.length ? { categories: categoryFilters.join(',') } : {};
     return getExpenses(companyGuid, {
       ...rangeParams, ...typeParam, ...catParam, limit: PAGE_SIZE, page: pageNum,
     } as any).then((res: any) => {
@@ -141,7 +141,7 @@ export default function ExpenseRegisterScreen() {
       .catch((err: any) => setApiError(err?.message || 'Failed to load'))
       .finally(() => setIsLoading(false));
     loadCounts();
-  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, typeFilter, categoryFilter]);
+  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, typeFilters.join(','), categoryFilters.join(',')]);
 
   const loadMore = () => {
     if (!companyGuid || isLoadingMore || !hasMore) return;
@@ -200,10 +200,10 @@ export default function ExpenseRegisterScreen() {
   }, 0);
   const taxAmt = Math.round(totalAmt * 0.18);
 
-  const filterBadgeCount = (typeFilter !== 'All' ? 1 : 0) + (categoryFilter ? 1 : 0);
+  const filterBadgeCount = typeFilters.length + categoryFilters.length;
   const activeChips = [
-    ...(typeFilter !== 'All' ? [{ id: 'type', label: typeFilter }] : []),
-    ...(categoryFilter ? [{ id: 'cat', label: categoryFilter }] : []),
+    ...typeFilters.map((t) => ({ id: `type:${t}`, label: t })),
+    ...categoryFilters.map((c) => ({ id: `cat:${c}`, label: c })),
   ];
 
   return (
@@ -268,10 +268,10 @@ export default function ExpenseRegisterScreen() {
       <ActiveFilterChips
         chips={activeChips}
         onRemove={(id) => {
-          if (id === 'type') setTypeFilter('All');
-          if (id === 'cat') setCategoryFilter('');
+          if (id.startsWith('type:')) setTypeFilters((prev) => prev.filter((x) => x !== id.slice(5)));
+          if (id.startsWith('cat:')) setCategoryFilters((prev) => prev.filter((x) => x !== id.slice(4)));
         }}
-        onClearAll={() => { setTypeFilter('All'); setCategoryFilter(''); }}
+        onClearAll={() => { setTypeFilters([]); setCategoryFilters([]); }}
       />
 
       {statusOpen && (
@@ -452,13 +452,13 @@ export default function ExpenseRegisterScreen() {
       <ExpenseRegisterFilterModal
         visible={showFilter}
         onClose={() => setShowFilter(false)}
-        activeType={typeFilter}
-        activeCategory={categoryFilter}
+        activeTypes={typeFilters}
+        activeCategories={categoryFilters}
         typeCounts={typeCounts}
         categories={categoryCounts}
-        onApply={(type, category) => {
-          setTypeFilter(type);
-          setCategoryFilter(category);
+        onApply={(types, categories) => {
+          setTypeFilters(types);
+          setCategoryFilters(categories);
         }}
       />
     </SafeAreaView>

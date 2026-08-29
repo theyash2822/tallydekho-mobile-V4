@@ -1,5 +1,25 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-08-29 — Register filters: multi-select Type + Groups
+
+### Product
+- **Type = multi-select** (checkboxes) on Sales / Purchase / Expense Register — e.g. Credit Note + Order
+- **Sales/Purchase Group tab**: party ledger parents from counts API (`ledgers.parent` via party_guid/name)
+- **Expense**: Type multi among Direct/Indirect (All clears); Category multi-select from API parents
+- Clear All / Apply / toast / badge / chips unchanged pattern
+
+### Files
+- `src/components/FilterBottomSheet.tsx` — `FilterCheckRow`
+- `src/components/voucherHomeFilters.tsx` — DocTypeFilterModal + ExpenseRegisterFilterModal multi
+- `app/sales|purchase|expenses/register.tsx` — state + API params
+- `API_USAGE.md`
+
+### How to test
+1. Sales Register → filter → Type: tick Credit Note + Order → Apply → chips + filtered list
+2. Group tab → pick a party group → Apply → list narrowed
+3. Expense Register → Direct+Indirect or Category multi → Apply
+
+---
 ## 2026-08-29 — Relocate voucher filters to Register (Ledger radio pattern)
 
 ### Product

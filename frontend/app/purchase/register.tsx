@@ -69,9 +69,11 @@ export default function PurchaseRegisterScreen() {
   const [liveInvoices, setLiveInvoices] = useState<PurchaseInvoice[]>([]);
   const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [docType, setDocType] = useState<string>('all');
+  const [docTypes, setDocTypes] = useState<string[]>([]);
+  const [partyGroups, setPartyGroups] = useState<string[]>([]);
   const [showTypeFilter, setShowTypeFilter] = useState(false);
   const [typeCounts, setTypeCounts] = useState<Record<string, number>>({});
+  const [partyGroupOptions, setPartyGroupOptions] = useState<{ name: string; count: number }[]>([]);
 
   const PAGE_SIZE = 50;
   const [page,          setPage]          = useState(1);
@@ -103,9 +105,10 @@ export default function PurchaseRegisterScreen() {
     docType: r.doc_type || 'invoice',
   });
 
-  const docTypesParam = docType === 'all'
-    ? ALL_PURCHASE_DOC_TYPE_IDS.join(',')
-    : docType;
+  const docTypesParam = docTypes.length
+    ? docTypes.join(',')
+    : ALL_PURCHASE_DOC_TYPE_IDS.join(',');
+  const partyGroupsParam = partyGroups.length ? partyGroups.join(',') : undefined;
 
   const loadRegister = useCallback(() => {
     if (!companyGuid) return;
@@ -119,15 +122,18 @@ export default function PurchaseRegisterScreen() {
     Promise.all([
       getPurchaseVouchers(companyGuid, {
         ...fyParams, limit: PAGE_SIZE, page: 1, docTypes: docTypesParam, search,
+        ...(partyGroupsParam ? { partyGroups: partyGroupsParam } : {}),
       }),
       getPurchaseVoucherCounts(companyGuid, fyParams),
     ]).then(([listRes, cntRes]: any[]) => {
       const rows = listRes?.data ?? [];
       setLiveInvoices(rows.map(mapPurchaseInv));
       setHasMore(rows.length === PAGE_SIZE);
-      setTypeCounts(cntRes?.data ?? {});
+      const cntData = cntRes?.data ?? {};
+      setTypeCounts(cntData);
+      setPartyGroupOptions(Array.isArray(cntData.partyGroups) ? cntData.partyGroups : []);
     }).catch((err: any) => { console.error('[API Error]', err?.message); setApiError(err?.message || 'Failed to load data'); }).finally(() => setIsLoading(false));
-  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, formatAmount, docTypesParam, search]);
+  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, formatAmount, docTypesParam, partyGroupsParam, search]);
 
   useEffect(() => {
     loadRegister();
@@ -142,6 +148,7 @@ export default function PurchaseRegisterScreen() {
     const fyParams = from && to ? { from, to } : {};
     getPurchaseVouchers(companyGuid, {
       ...fyParams, limit: PAGE_SIZE, page: nextPage, docTypes: docTypesParam, search,
+      ...(partyGroupsParam ? { partyGroups: partyGroupsParam } : {}),
     }).then((res: any) => {
       const rows = res?.data ?? [];
       setLiveInvoices(prev => [...prev, ...rows.map(mapPurchaseInv)]);
@@ -247,7 +254,7 @@ export default function PurchaseRegisterScreen() {
           <Text style={s.headerTitle}>{t('purchase.register')}</Text>
           <FilterIconWithBadge
             testID="purchase-register-filter-btn"
-            count={docType !== 'all' ? 1 : 0}
+            count={docTypes.length + partyGroups.length}
             onPress={() => setShowTypeFilter(true)}
           />
         </View>
@@ -285,9 +292,15 @@ export default function PurchaseRegisterScreen() {
       </View>
 
       <ActiveFilterChips
-        chips={docType !== 'all' ? [{ id: docType, label: DOC_TYPE_LABEL[docType] || docType }] : []}
-        onRemove={() => setDocType('all')}
-        onClearAll={() => setDocType('all')}
+        chips={[
+          ...docTypes.map((id) => ({ id: `type:${id}`, label: DOC_TYPE_LABEL[id] || id })),
+          ...partyGroups.map((g) => ({ id: `group:${g}`, label: g })),
+        ]}
+        onRemove={(chipId) => {
+          if (chipId.startsWith('type:')) setDocTypes((prev) => prev.filter((x) => x !== chipId.slice(5)));
+          if (chipId.startsWith('group:')) setPartyGroups((prev) => prev.filter((x) => x !== chipId.slice(6)));
+        }}
+        onClearAll={() => { setDocTypes([]); setPartyGroups([]); }}
       />
 
       {dropdown && (
@@ -464,9 +477,11 @@ export default function PurchaseRegisterScreen() {
         onClose={() => setShowTypeFilter(false)}
         title="Filter Purchase"
         options={PURCHASE_DOC_TYPES}
-        selectedId={docType}
+        selectedIds={docTypes}
+        selectedGroups={partyGroups}
         counts={typeCounts}
-        onApply={setDocType}
+        partyGroups={partyGroupOptions}
+        onApply={(ids, groups) => { setDocTypes(ids); setPartyGroups(groups); }}
       />
     </SafeAreaView>
   );

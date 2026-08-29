@@ -1,6 +1,9 @@
 /**
  * Shared filter chrome for Sales / Purchase / Expense **Register** screens
  * (Ledger-style funnel + removable chips). Homes no longer use multi doc-type filters.
+ *
+ * Sales/Purchase: Type multi-select + Party Group tab (ledgers.parent of party).
+ * Expenses: Type multi among Direct/Indirect (empty = All) + Category multi (ledger parents).
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -9,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
-import FilterBottomSheet, { FilterRadioRow } from './FilterBottomSheet';
+import FilterBottomSheet, { FilterCheckRow } from './FilterBottomSheet';
 
 // ── Doc-type catalogs (Register filter sheet) ─────────────────────────────────
 
@@ -143,7 +146,7 @@ export function ActiveFilterChips({
   );
 }
 
-// ── Doc-type filter modal (Sales / Purchase Register) ─────────────────────────
+// ── Doc-type + Party Group filter modal (Sales / Purchase Register) ───────────
 
 type DocOption = { id: string; label: string };
 
@@ -152,34 +155,79 @@ export function DocTypeFilterModal({
   onClose,
   title,
   options,
-  selectedId,
+  selectedIds,
+  selectedGroups,
   counts,
+  partyGroups,
   onApply,
 }: {
   visible: boolean;
   onClose: () => void;
   title: string;
   options: readonly DocOption[];
-  selectedId: string;
+  /** Empty or all option ids → no type narrowing (show all). */
+  selectedIds: string[];
+  selectedGroups: string[];
   counts: Record<string, number>;
-  onApply: (id: string) => void;
+  partyGroups: { name: string; count: number }[];
+  onApply: (ids: string[], groups: string[]) => void;
 }) {
-  const [localId, setLocalId] = useState(selectedId);
+  const [tab, setTab] = useState<'Type' | 'Group'>('Type');
+  const [localIds, setLocalIds] = useState<string[]>(selectedIds);
+  const [localGroups, setLocalGroups] = useState<string[]>(selectedGroups);
+  const [groupSearch, setGroupSearch] = useState('');
 
   useEffect(() => {
-    if (visible) setLocalId(selectedId);
-  }, [visible, selectedId]);
+    if (visible) {
+      setLocalIds(selectedIds);
+      setLocalGroups(selectedGroups);
+      setGroupSearch('');
+      setTab('Type');
+    }
+  }, [visible, selectedIds, selectedGroups]);
 
-  const activeCount = localId !== 'all' ? 1 : 0;
+  const allOptionIds = options.map((o) => o.id);
+  const isAllTypes = localIds.length === 0
+    || (localIds.length === allOptionIds.length && allOptionIds.every((id) => localIds.includes(id)));
+
+  const activeCount = (isAllTypes ? 0 : localIds.length) + localGroups.length;
   const allCount = counts.all ?? options.reduce((s, o) => s + (counts[o.id] || 0), 0);
 
+  const filteredGroups = useMemo(() => {
+    const q = groupSearch.trim().toLowerCase();
+    if (!q) return partyGroups;
+    return partyGroups.filter((g) => g.name.toLowerCase().includes(q));
+  }, [partyGroups, groupSearch]);
+
+  const toggleType = (id: string) => {
+    setLocalIds((prev) => {
+      // Treat "all selected" / empty as empty baseline so toggling one starts from none
+      const base = (prev.length === 0
+        || (prev.length === allOptionIds.length && allOptionIds.every((x) => prev.includes(x))))
+        ? []
+        : prev;
+      return base.includes(id) ? base.filter((x) => x !== id) : [...base, id];
+    });
+  };
+
+  const toggleGroup = (name: string) => {
+    setLocalGroups((prev) => (
+      prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name]
+    ));
+  };
+
   const handleApply = () => {
-    onApply(localId);
+    const nextIds = isAllTypes ? [] : localIds;
+    onApply(nextIds, localGroups);
     onClose();
-    const label = localId === 'all'
-      ? ''
-      : (options.find((o) => o.id === localId)?.label || localId);
-    notifyFiltersApplied(label ? [label] : []);
+    const parts: string[] = [];
+    if (nextIds.length) {
+      parts.push(
+        nextIds.map((id) => options.find((o) => o.id === id)?.label || DOC_TYPE_LABEL[id] || id).join(', ')
+      );
+    }
+    if (localGroups.length) parts.push(...localGroups);
+    notifyFiltersApplied(parts);
   };
 
   return (
@@ -188,71 +236,117 @@ export function DocTypeFilterModal({
       onClose={onClose}
       title={title}
       activeCount={activeCount}
-      onClear={() => setLocalId('all')}
+      onClear={() => { setLocalIds([]); setLocalGroups([]); }}
       onApply={handleApply}
       applyLabel="Apply Filters"
-      heightFraction={0.62}
+      heightFraction={0.68}
     >
       <View style={fm.tabs}>
-        <View style={[fm.tab, fm.tabActive]}>
-          <Text style={[fm.tabTxt, fm.tabTxtActive]}>Type</Text>
-        </View>
+        {(['Type', 'Group'] as const).map((cat) => (
+          <TouchableOpacity
+            key={cat}
+            style={[fm.tab, tab === cat && fm.tabActive]}
+            onPress={() => setTab(cat)}
+            activeOpacity={0.7}
+          >
+            <Text style={[fm.tabTxt, tab === cat && fm.tabTxtActive]}>{cat}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
-      <FilterRadioRow
-        label="All"
-        count={allCount}
-        selected={localId === 'all'}
-        onPress={() => setLocalId('all')}
-      />
-      {options.map((opt) => (
-        <FilterRadioRow
-          key={opt.id}
-          label={opt.label}
-          count={counts[opt.id] ?? 0}
-          selected={localId === opt.id}
-          onPress={() => setLocalId(localId === opt.id ? 'all' : opt.id)}
-        />
-      ))}
+
+      {tab === 'Type' ? (
+        <View>
+          <FilterCheckRow
+            label="All"
+            count={allCount}
+            selected={isAllTypes}
+            onPress={() => setLocalIds([])}
+          />
+          {options.map((opt) => (
+            <FilterCheckRow
+              key={opt.id}
+              label={opt.label}
+              count={counts[opt.id] ?? 0}
+              selected={!isAllTypes && localIds.includes(opt.id)}
+              onPress={() => toggleType(opt.id)}
+            />
+          ))}
+        </View>
+      ) : (
+        <View style={fm.groupPanel}>
+          <View style={fm.searchBox}>
+            <Ionicons name="search" size={14} color={COLORS.textTertiary} />
+            <TextInput
+              style={fm.searchInput}
+              placeholder="Search party group..."
+              placeholderTextColor={COLORS.textTertiary}
+              value={groupSearch}
+              onChangeText={setGroupSearch}
+            />
+          </View>
+          <FilterCheckRow
+            label="All groups"
+            selected={localGroups.length === 0}
+            onPress={() => setLocalGroups([])}
+          />
+          {filteredGroups.length === 0 ? (
+            <Text style={fm.groupHint}>No party groups in this date range</Text>
+          ) : (
+            filteredGroups.map((g) => (
+              <FilterCheckRow
+                key={g.name}
+                label={g.name}
+                count={g.count}
+                selected={localGroups.includes(g.name)}
+                onPress={() => toggleGroup(g.name)}
+              />
+            ))
+          )}
+        </View>
+      )}
     </FilterBottomSheet>
   );
 }
 
-// ── Expense register filter (Type + Category tabs) ────────────────────────────
+// ── Expense register filter (Type + Category tabs, both multi) ────────────────
 
-export type ExpenseTypeFilter = 'All' | 'Direct' | 'Indirect';
+export type ExpenseTypeId = 'Direct' | 'Indirect';
 
 export function ExpenseRegisterFilterModal({
   visible,
   onClose,
-  activeType,
-  activeCategory,
+  activeTypes,
+  activeCategories,
   typeCounts,
   categories,
   onApply,
 }: {
   visible: boolean;
   onClose: () => void;
-  activeType: ExpenseTypeFilter;
-  activeCategory: string;
+  /** Empty = All (Direct + Indirect). */
+  activeTypes: ExpenseTypeId[];
+  activeCategories: string[];
   typeCounts: { all: number; direct: number; indirect: number };
   categories: { name: string; count: number }[];
-  onApply: (type: ExpenseTypeFilter, category: string) => void;
+  onApply: (types: ExpenseTypeId[], categories: string[]) => void;
 }) {
   const [tab, setTab] = useState<'Type' | 'Category'>('Type');
-  const [localType, setLocalType] = useState<ExpenseTypeFilter>(activeType);
-  const [localCat, setLocalCat] = useState(activeCategory);
+  const [localTypes, setLocalTypes] = useState<ExpenseTypeId[]>(activeTypes);
+  const [localCats, setLocalCats] = useState<string[]>(activeCategories);
   const [catSearch, setCatSearch] = useState('');
 
   useEffect(() => {
     if (visible) {
-      setLocalType(activeType);
-      setLocalCat(activeCategory);
+      setLocalTypes(activeTypes);
+      setLocalCats(activeCategories);
       setCatSearch('');
       setTab('Type');
     }
-  }, [visible, activeType, activeCategory]);
+  }, [visible, activeTypes, activeCategories]);
 
-  const activeCount = (localType !== 'All' ? 1 : 0) + (localCat ? 1 : 0);
+  const isAllTypes = localTypes.length === 0
+    || (localTypes.includes('Direct') && localTypes.includes('Indirect'));
+  const activeCount = (isAllTypes ? 0 : localTypes.length) + localCats.length;
 
   const filteredCats = useMemo(() => {
     const q = catSearch.trim().toLowerCase();
@@ -260,12 +354,29 @@ export function ExpenseRegisterFilterModal({
     return categories.filter((c) => c.name.toLowerCase().includes(q));
   }, [categories, catSearch]);
 
+  const toggleType = (id: ExpenseTypeId) => {
+    setLocalTypes((prev) => {
+      const base = (prev.length === 0
+        || (prev.includes('Direct') && prev.includes('Indirect')))
+        ? []
+        : prev;
+      return base.includes(id) ? base.filter((x) => x !== id) : [...base, id];
+    });
+  };
+
+  const toggleCat = (name: string) => {
+    setLocalCats((prev) => (
+      prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name]
+    ));
+  };
+
   const handleApply = () => {
-    onApply(localType, localCat);
+    const nextTypes: ExpenseTypeId[] = isAllTypes ? [] : localTypes;
+    onApply(nextTypes, localCats);
     onClose();
     const parts: string[] = [];
-    if (localType !== 'All') parts.push(localType);
-    if (localCat) parts.push(localCat);
+    if (nextTypes.length) parts.push(nextTypes.join(', '));
+    if (localCats.length) parts.push(...localCats);
     notifyFiltersApplied(parts);
   };
 
@@ -275,7 +386,7 @@ export function ExpenseRegisterFilterModal({
       onClose={onClose}
       title="Filter Expenses"
       activeCount={activeCount}
-      onClear={() => { setLocalType('All'); setLocalCat(''); }}
+      onClear={() => { setLocalTypes([]); setLocalCats([]); }}
       onApply={handleApply}
       applyLabel="Apply Filters"
     >
@@ -294,19 +405,24 @@ export function ExpenseRegisterFilterModal({
 
       {tab === 'Type' ? (
         <View>
-          {([
-            { id: 'All' as const, count: typeCounts.all },
-            { id: 'Direct' as const, count: typeCounts.direct },
-            { id: 'Indirect' as const, count: typeCounts.indirect },
-          ]).map((opt) => (
-            <FilterRadioRow
-              key={opt.id}
-              label={opt.id}
-              count={opt.count}
-              selected={localType === opt.id}
-              onPress={() => setLocalType(localType === opt.id && opt.id !== 'All' ? 'All' : opt.id)}
-            />
-          ))}
+          <FilterCheckRow
+            label="All"
+            count={typeCounts.all}
+            selected={isAllTypes}
+            onPress={() => setLocalTypes([])}
+          />
+          <FilterCheckRow
+            label="Direct"
+            count={typeCounts.direct}
+            selected={!isAllTypes && localTypes.includes('Direct')}
+            onPress={() => toggleType('Direct')}
+          />
+          <FilterCheckRow
+            label="Indirect"
+            count={typeCounts.indirect}
+            selected={!isAllTypes && localTypes.includes('Indirect')}
+            onPress={() => toggleType('Indirect')}
+          />
         </View>
       ) : (
         <View style={fm.groupPanel}>
@@ -320,21 +436,21 @@ export function ExpenseRegisterFilterModal({
               onChangeText={setCatSearch}
             />
           </View>
-          <FilterRadioRow
+          <FilterCheckRow
             label="All categories"
-            selected={!localCat}
-            onPress={() => setLocalCat('')}
+            selected={localCats.length === 0}
+            onPress={() => setLocalCats([])}
           />
           {filteredCats.length === 0 ? (
             <Text style={fm.groupHint}>No categories in this date range</Text>
           ) : (
             filteredCats.map((c) => (
-              <FilterRadioRow
+              <FilterCheckRow
                 key={c.name}
                 label={c.name}
                 count={c.count}
-                selected={localCat === c.name}
-                onPress={() => setLocalCat(localCat === c.name ? '' : c.name)}
+                selected={localCats.includes(c.name)}
+                onPress={() => toggleCat(c.name)}
               />
             ))
           )}
@@ -343,6 +459,9 @@ export function ExpenseRegisterFilterModal({
     </FilterBottomSheet>
   );
 }
+
+/** @deprecated Prefer ExpenseTypeId[]; kept for any stray imports. */
+export type ExpenseTypeFilter = 'All' | 'Direct' | 'Indirect';
 
 const fi = StyleSheet.create({
   btn: {

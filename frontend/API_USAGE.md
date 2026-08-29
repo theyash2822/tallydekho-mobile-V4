@@ -67,10 +67,10 @@ getPurchaseOrders, getDebitNotes
 All: GET /api/sales/* or /api/purchase/* + ?companyGuid&fy
 
 Register filters (Ledger-style sheet; homes use invoices-only Recent):
-- `getSalesVouchers(companyGuid, { docTypes, from, to, limit, page })` — `GET /api/sales/vouchers`
-- `getSalesVoucherCounts(companyGuid, { from, to })` — `GET /api/sales/vouchers/counts` → `{ invoice, order, credit_note, delivery_note, proforma, quotation, all }`
-- `getPurchaseVouchers` / `getPurchaseVoucherCounts` — same for Purchase (`invoice|order|debit_note`)
-- `getExpenses(companyGuid, { type: 'All'|'Direct'|'Indirect', category?, from, to, limit })` — anchored Direct/Indirect + optional exact category parent
+- `getSalesVouchers(companyGuid, { docTypes, partyGroups?, from, to, limit, page })` — `GET /api/sales/vouchers` (multi docTypes + optional party ledger parents)
+- `getSalesVoucherCounts(companyGuid, { from, to })` — `GET /api/sales/vouchers/counts` → `{ invoice, order, …, all, partyGroups:[{name,count}] }`
+- `getPurchaseVouchers` / `getPurchaseVoucherCounts` — same for Purchase (`invoice|order|debit_note` + partyGroups)
+- `getExpenses(companyGuid, { types?: 'Direct,Indirect', categories?: comma parents, type?, category?, from, to, limit })` — multi type/category; legacy `type`/`category` still work
 - `getExpenseCounts(companyGuid, { from, to })` — `GET /api/expenses/counts` → `{ all, direct, indirect, categories:[{name,count}] }`
 
 Credit Note Sales Return:
