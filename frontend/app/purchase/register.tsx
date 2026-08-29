@@ -504,7 +504,7 @@ const s = StyleSheet.create({
   monthCount:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500' },
 
   listCard:   { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
-  invRow:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 14, gap: 10 },
+  invRow:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 10, gap: 8 },
   invRowSelected: { backgroundColor: COLORS.brandPrimary + '08' },
   divider:    { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: SPACING.md },
 

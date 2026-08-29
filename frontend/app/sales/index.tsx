@@ -540,7 +540,7 @@ const s = StyleSheet.create({
   listSection: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, gap: 8 },
   itemCard: {
     backgroundColor: COLORS.cardBg,
-    borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 14,
+    borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 10,
     borderWidth: 1, borderColor: COLORS.borderDefault,
   },
   avatar:     { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },

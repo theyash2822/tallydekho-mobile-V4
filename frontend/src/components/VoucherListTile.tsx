@@ -1,15 +1,17 @@
 /**
- * Shared voucher list row — clean 2-column layout.
+ * Shared voucher list row — compact 2-column layout.
  *
- * Left (start):  party · voucher no · date
- * Right (end):   type badge · amount · status badge
+ * Left:  party · voucher no · date
+ * Right: amount
+ *        [type chip] [Paid/Unpaid]  ← same row
  *
- * No status dot, no circular return-arrow icon.
+ * Type chips: black & white (Proforma-style) for every voucher type.
+ * Paid = green, Unpaid = red.
  */
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { COLORS, TYPOGRAPHY, RADIUS } from '../constants/colors';
-import { VoucherTypeBadge } from './voucherHomeFilters';
+import { resolveVoucherTypeBadge } from './voucherHomeFilters';
 
 export const PAYMENT_STATUS_COLOR: Record<string, string> = {
   paid:   '#2D7D46',
@@ -24,7 +26,16 @@ export const PAYMENT_STATUS_LABEL: Record<string, string> = {
   unpaid: 'Unpaid',
 };
 
-/** Colored payment-status chip (Paid / Unpaid). */
+/** Proforma-style mono chip — black text on white/light. */
+export function MonoTypeBadge({ label }: { label: string }) {
+  return (
+    <View style={st.monoBadge}>
+      <Text style={st.monoTxt} numberOfLines={1}>{label}</Text>
+    </View>
+  );
+}
+
+/** Paid (green) / Unpaid (red) chip. */
 export function PaymentStatusBadge({ status }: { status: string }) {
   const key = String(status || '').toLowerCase();
   const color = PAYMENT_STATUS_COLOR[key] ?? COLORS.textTertiary;
@@ -37,16 +48,10 @@ export function PaymentStatusBadge({ status }: { status: string }) {
   );
 }
 
-/** Direct / Indirect expense type chip. */
+/** Direct / Indirect — same black & white as other type chips. */
 export function ExpenseTypeBadge({ type }: { type: 'direct' | 'indirect' | string }) {
   const isDirect = String(type).toLowerCase() === 'direct';
-  return (
-    <View style={[st.typePill, isDirect ? st.typeDirect : st.typeIndirect]}>
-      <Text style={[st.typePillTxt, isDirect ? st.typeDirectTxt : st.typeIndirectTxt]}>
-        {isDirect ? 'Direct' : 'Indirect'}
-      </Text>
-    </View>
-  );
+  return <MonoTypeBadge label={isDirect ? 'Direct' : 'Indirect'} />;
 }
 
 export type VoucherListTileProps = {
@@ -54,16 +59,13 @@ export type VoucherListTileProps = {
   voucherNo: string;
   date: string;
   amount: string;
-  /** Payment status key — renders PaymentStatusBadge when set. */
   status?: string;
-  /** Sales/Purchase: built-in VoucherTypeBadge. */
   module?: 'sales' | 'purchase';
   docType?: string;
   voucherType?: string;
   isOptional?: boolean;
-  /** Override / custom type chip (e.g. ExpenseTypeBadge). Wins over module badge. */
+  /** Override type chip (e.g. ExpenseTypeBadge). Wins over module badge. */
   typeBadge?: React.ReactNode;
-  /** Hide status chip (e.g. if not applicable). */
   hideStatus?: boolean;
   style?: ViewStyle;
 };
@@ -84,16 +86,18 @@ export function VoucherListTile({
 }: VoucherListTileProps) {
   const typeNode = typeBadge ?? (
     module ? (
-      <VoucherTypeBadge
-        module={module}
-        docType={docType}
-        voucher_type={voucherType}
-        is_optional={isOptional}
+      <MonoTypeBadge
+        label={resolveVoucherTypeBadge(module, {
+          docType,
+          voucher_type: voucherType,
+          is_optional: isOptional,
+        }).label}
       />
     ) : null
   );
 
   const showStatus = !hideStatus && !!status;
+  const showChipRow = !!typeNode || showStatus;
 
   return (
     <View style={[st.row, style]}>
@@ -103,9 +107,13 @@ export function VoucherListTile({
         <Text style={st.date} numberOfLines={1}>{date || ''}</Text>
       </View>
       <View style={st.right}>
-        {typeNode ? <View style={st.typeWrap}>{typeNode}</View> : null}
         <Text style={st.amount} numberOfLines={1}>{amount}</Text>
-        {showStatus ? <PaymentStatusBadge status={status!} /> : null}
+        {showChipRow ? (
+          <View style={st.chipRow}>
+            {typeNode}
+            {showStatus ? <PaymentStatusBadge status={status!} /> : null}
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -114,65 +122,77 @@ export function VoucherListTile({
 const st = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 10,
     flex: 1,
   },
   left: {
     flex: 1,
     minWidth: 0,
-    gap: 3,
+    gap: 1,
   },
   right: {
     alignItems: 'flex-end',
     gap: 4,
-    maxWidth: '48%',
+    maxWidth: '52%',
+    flexShrink: 0,
   },
   party: {
     fontSize: TYPOGRAPHY.sm,
     fontWeight: '700',
     color: COLORS.textPrimary,
+    lineHeight: 18,
   },
   id: {
     fontSize: TYPOGRAPHY.xs,
     color: COLORS.textSecondary,
     fontWeight: '500',
+    lineHeight: 15,
   },
   date: {
     fontSize: TYPOGRAPHY.xs,
     color: COLORS.textTertiary,
-  },
-  typeWrap: {
-    alignItems: 'flex-end',
+    lineHeight: 15,
   },
   amount: {
-    fontSize: TYPOGRAPHY.base,
+    fontSize: TYPOGRAPHY.sm,
     fontWeight: '800',
     color: COLORS.textPrimary,
     textAlign: 'right',
+    lineHeight: 18,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  monoBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.textPrimary,
+    backgroundColor: COLORS.cardBg,
+    maxWidth: 110,
+  },
+  monoTxt: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+    color: COLORS.textPrimary,
   },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: RADIUS.full,
     borderWidth: 1,
-    alignSelf: 'flex-end',
   },
   statusTxt: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
   },
-  typePill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    alignSelf: 'flex-end',
-  },
-  typeDirect: { backgroundColor: '#EFF6FF', borderColor: '#2563EB66' },
-  typeIndirect: { backgroundColor: '#FFF7ED', borderColor: '#EA580C66' },
-  typePillTxt: { fontSize: 9, fontWeight: '800', letterSpacing: 0.3, textTransform: 'uppercase' },
-  typeDirectTxt: { color: '#2563EB' },
-  typeIndirectTxt: { color: '#EA580C' },
 });

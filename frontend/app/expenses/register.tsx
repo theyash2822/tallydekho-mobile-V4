@@ -501,7 +501,7 @@ const s = StyleSheet.create({
 
   listCard:   { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
 
-  expRow:         { paddingHorizontal: SPACING.md, paddingVertical: 14, gap: 10, flexDirection: 'row', alignItems: 'center' },
+  expRow:         { paddingHorizontal: SPACING.md, paddingVertical: 10, gap: 8, flexDirection: 'row', alignItems: 'center' },
   expRowSelected: { backgroundColor: COLORS.brandPrimary + '08' },
   divider:        { height: 1, backgroundColor: COLORS.borderDefault, marginLeft: SPACING.md },
 

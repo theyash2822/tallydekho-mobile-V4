@@ -391,7 +391,7 @@ const s = StyleSheet.create({
 
   listSection: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, gap: 8 },
 
-  itemCard: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 14, borderWidth: 1, borderColor: COLORS.borderDefault },
+  itemCard: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.borderDefault },
 
   catCard:      { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 14, borderWidth: 1, borderColor: COLORS.borderDefault },
   catAvatar:    { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },

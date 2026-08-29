@@ -620,7 +620,7 @@ const s = StyleSheet.create({
   // Invoice Item Card (Recent Purchases)
   itemCard: {
     backgroundColor: COLORS.cardBg,
-    borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 14,
+    borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 10,
     borderWidth: 1, borderColor: COLORS.borderDefault,
   },
 

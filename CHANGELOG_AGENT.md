@@ -1,3 +1,17 @@
+## [2026-08-29] List tile v2 — amount + chip row
+
+### Layout
+Left: party · voucher no · date  
+Right: amount; then type + Paid/Unpaid chips on one row
+
+### Style
+- All type chips black & white (Proforma-style)
+- Paid green / Unpaid red
+- Tighter row padding (14→10)
+
+### QA
+GREEN
+
 ## [2026-08-29] Voucher list tile redesign — 2-column layout
 
 ### Why
