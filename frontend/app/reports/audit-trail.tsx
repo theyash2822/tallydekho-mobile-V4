@@ -368,7 +368,7 @@ function VTypeDropdown({
                     <Text style={[dd.optionTxt, value === vt && dd.optionTxtActive]}>
                       {vt === 'ALL' ? 'All Types' : vt}
                     </Text>
-                    {value === vt && <Ionicons name="checkmark" size={16} color={AMBER} />}
+                    {value === vt && <Ionicons name="checkmark" size={16} color={COLORS.brandPrimary} />}
                   </TouchableOpacity>
                 ))
               )}
@@ -417,9 +417,9 @@ const dd = StyleSheet.create({
     paddingHorizontal: SPACING.md, paddingVertical: 15,
     borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
-  optionActive: { backgroundColor: '#FDF9F4' },
+  optionActive: { backgroundColor: COLORS.activeBg },
   optionTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
-  optionTxtActive: { color: AMBER, fontWeight: '700' },
+  optionTxtActive: { color: COLORS.brandPrimary, fontWeight: '700' },
 });
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
@@ -955,7 +955,7 @@ export default function AuditTrailScreen() {
           <TouchableOpacity style={s.iconBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
             <Ionicons
               name="calendar-outline" size={20}
-              color={isDateActive ? AMBER : COLORS.textSecondary}
+              color={isDateActive ? COLORS.brandPrimary : COLORS.textSecondary}
             />
           </TouchableOpacity>
         )}
@@ -984,7 +984,7 @@ export default function AuditTrailScreen() {
 
       {/* ── Date Range Strip ───────────────────────────────────────────── */}
       <TouchableOpacity style={s.dateStrip} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
-        <Ionicons name="calendar-outline" size={13} color={isDateActive ? AMBER : COLORS.textTertiary} />
+        <Ionicons name="calendar-outline" size={13} color={isDateActive ? COLORS.brandPrimary : COLORS.textTertiary} />
         <Text style={[s.dateStripTxt, isDateActive && s.dateStripActive]}>
           {isDateActive ? `${fromDate}  →  ${toDate}` : 'All Dates'}
         </Text>
@@ -998,7 +998,7 @@ export default function AuditTrailScreen() {
             }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="close-circle" size={16} color={AMBER} />
+            <Ionicons name="close-circle" size={16} color={COLORS.brandPrimary} />
           </TouchableOpacity>
         )}
       </TouchableOpacity>
@@ -1023,7 +1023,7 @@ export default function AuditTrailScreen() {
         {/* Loading Indicator */}
         {isLoading ? (
           <View style={s.loadingBox}>
-            <ActivityIndicator size="large" color={AMBER} />
+            <ActivityIndicator size="large" color={COLORS.brandPrimary} />
             <Text style={s.loadingTxt}>Loading vouchers...</Text>
           </View>
         ) : (
@@ -1084,7 +1084,7 @@ export default function AuditTrailScreen() {
               <TouchableOpacity style={s.vTypeBtn} onPress={() => setShowVTypeModal(true)} activeOpacity={0.8}>
                 <Ionicons
                   name="filter-outline" size={14}
-                  color={voucherType !== 'ALL' ? AMBER : COLORS.textSecondary}
+                  color={voucherType !== 'ALL' ? COLORS.brandPrimary : COLORS.textSecondary}
                 />
                 <Text style={[s.vTypeTxt, voucherType !== 'ALL' && s.vTypeTxtActive]} numberOfLines={1}>
                   {voucherType === 'ALL' ? 'Voucher Type' : voucherType}
@@ -1366,7 +1366,7 @@ const s = StyleSheet.create({
     justifyContent: 'space-between', paddingHorizontal: SPACING.sm,
   },
   selectCountTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-  selectAllTxt:   { fontSize: TYPOGRAPHY.sm,   fontWeight: '600', color: AMBER },
+  selectAllTxt:   { fontSize: TYPOGRAPHY.sm,   fontWeight: '600', color: COLORS.brandPrimary },
 
   // Tab Toggle
   tabRow: {
@@ -1391,7 +1391,7 @@ const s = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
   },
   dateStripTxt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
-  dateStripActive: { color: AMBER },
+  dateStripActive: { color: COLORS.brandPrimary },
 
   scroll:        { flex: 1 },
   scrollContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.md },
@@ -1431,7 +1431,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 11,
   },
   vTypeTxt:       { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '500' },
-  vTypeTxtActive: { color: AMBER, fontWeight: '700' },
+  vTypeTxtActive: { color: COLORS.brandPrimary, fontWeight: '700' },
 
   drCrGroup: { flexDirection: 'row', gap: 6 },
   drCrChip: {

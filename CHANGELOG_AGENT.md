@@ -1,4 +1,20 @@
-## [2026-08-29] Audit Trail tiles — closed borders, no swipe
+## [2026-08-31] Audit Trail chrome — Ledger black accents
+
+### Why
+Calendar / voucher-type filter used gold (AMBER); Ledger uses brandPrimary black.
+
+### Change
+- Calendar, date strip, voucher-type active, sheet check → `COLORS.brandPrimary`
+- Keep AMBER for pending sync + Not Posted / Optional status chips
+
+### File
+- `frontend/app/reports/audit-trail.tsx`
+
+### QA
+GREEN — tsc clean; chrome → brandPrimary; AMBER kept for status only
+
+---
+
 
 ### Why
 Month-group card + left border accent clipped the right outline; swipe also broke the edge.
