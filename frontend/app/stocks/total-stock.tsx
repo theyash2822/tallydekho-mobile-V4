@@ -19,6 +19,7 @@ import { StockAdjustmentModal } from '../../src/components/forms/StockAdjustment
 import { BulkTransferModal } from '../../src/components/forms/BulkTransferModal';
 import FilterBottomSheet, { FilterChipGroup } from '../../src/components/FilterBottomSheet';
 import SearchBar from '../../src/components/SearchBar';
+import { FilterIconWithBadge, ActiveFilterChips } from '../../src/components/voucherHomeFilters';
 import { StockItem } from '../../src/data/stockData';
 import { useSettings } from '../../src/context/SettingsContext';
 
@@ -43,20 +44,18 @@ const sw = StyleSheet.create({
   actionTxt:  { fontSize: 11, fontWeight: '700', color: COLORS.white, textAlign: 'center' },
 });
 const sc = StyleSheet.create({
-  // No borderRadius here — swipeable containerStyle clips card + actions together (Ledger pattern)
-  card:          { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.cardBg, padding: SPACING.sm, borderWidth: 1, borderColor: COLORS.borderDefault },
-  cardRounded:   { borderRadius: RADIUS.md },
-  cardSelected:  { borderColor: '#1A1A1A', borderWidth: 1.5, backgroundColor: '#F0EFE9' },
-  icon:          { width: 42, height: 42, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E8E7E1' },
-  checkbox:      { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: COLORS.borderStrong, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.cardBg },
-  checkboxActive:{ backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
+  // Ledger itemCard — flat row, clipped by swipeable containerStyle
+  card:          { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.cardBg, padding: 14, borderWidth: 1, borderColor: COLORS.borderDefault },
+  cardSelected:  { borderColor: COLORS.brandPrimary, borderWidth: 2, backgroundColor: COLORS.brandPrimary + '08' },
+  avatar:        { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center' },
+  avatarText:    { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
   info:          { flex: 1 },
-  name:          { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  sku:           { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
-  right:         { alignItems: 'flex-end', gap: 4 },
-  value:         { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  qtyBadge:      { backgroundColor: COLORS.pageBg, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: COLORS.borderDefault },
-  qtyTxt:        { fontSize: 10, fontWeight: '600', color: COLORS.textSecondary },
+  name:          { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+  group:         { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
+  right:         { alignItems: 'flex-end', gap: 6 },
+  value:         { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  qtyBadge:      { paddingHorizontal: 10, paddingVertical: 3, borderRadius: RADIUS.full, backgroundColor: COLORS.pageBg },
+  qtyTxt:        { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
 });
 
 function SwipeableStockCard({ item, isMultiSelectMode, isSelected, onPress, onLongPress, onEditStock, onTransfer, onAdjust }: {
@@ -94,33 +93,31 @@ function SwipeableStockCard({ item, isMultiSelectMode, isSelected, onPress, onLo
       <Text style={sw.actionTxt}>Edit Stock</Text>
     </TouchableOpacity>
   );
+  const subline = [item.group, item.sku].filter(Boolean).join(' · ') || item.category || '—';
   const cardInner = (
     <TouchableOpacity
-      style={[
-        sc.card,
-        isMultiSelectMode && sc.cardRounded,
-        isSelected && sc.cardSelected,
-      ]}
+      style={[sc.card, isSelected && sc.cardSelected]}
       onPress={onPress}
       onLongPress={onLongPress}
-      activeOpacity={0.85}
-      delayLongPress={380}
+      activeOpacity={0.7}
+      delayLongPress={500}
     >
-      {isMultiSelectMode ? (
-        <View style={[sc.checkbox, isSelected && sc.checkboxActive]}>
-          {isSelected && <Ionicons name="checkmark" size={12} color={COLORS.white} />}
-        </View>
-      ) : null}
-      <View style={sc.icon}><Ionicons name="cube-outline" size={20} color={COLORS.textPrimary} /></View>
+      <View style={sc.avatar}>
+        {isMultiSelectMode && isSelected
+          ? <Ionicons name="checkmark" size={20} color={COLORS.white} />
+          : <Text style={sc.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
+        }
+      </View>
       <View style={sc.info}>
         <Text style={sc.name} numberOfLines={1}>{item.name}</Text>
-        <Text style={sc.sku}>{item.sku} · {item.category}</Text>
+        <Text style={sc.group} numberOfLines={1}>{subline}</Text>
       </View>
       <View style={sc.right}>
         <Text style={sc.value}>{item.value}</Text>
-        <View style={sc.qtyBadge}><Text style={sc.qtyTxt}>{item.qty} units</Text></View>
+        <View style={sc.qtyBadge}>
+          <Text style={sc.qtyTxt}>{item.qty} {item.unit || 'units'}</Text>
+        </View>
       </View>
-      {!isMultiSelectMode && <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} style={{ marginLeft: 4 }} />}
     </TouchableOpacity>
   );
   if (isMultiSelectMode) return cardInner;
@@ -370,6 +367,38 @@ export default function TotalStockScreen() {
   const activeFilterCount = selWh.length + selGrp.length; // warehouse now backed by API re-fetch
   const allSelected       = filtered.length > 0 && filtered.every(i => selectedIds.includes(i.id));
 
+  const filterDropLabel = activeFilterCount === 0
+    ? 'All Items'
+    : activeFilterCount === 1
+      ? (selWh[0] || selGrp[0])
+      : `Filtered (${activeFilterCount})`;
+
+  const activeFilterChips = [
+    ...selWh.map(w => ({ id: `wh:${w}`, label: w })),
+    ...selGrp.map(g => ({ id: `grp:${g}`, label: g })),
+  ];
+
+  const clearAllFilters = () => {
+    setSelWh([]);
+    setSelCat([]);
+    setSelGrp([]);
+    setWhFilteredStocks(null);
+  };
+
+  const removeFilterChip = (id: string) => {
+    if (id.startsWith('wh:')) {
+      const w = id.slice(3);
+      setSelWh(p => {
+        const next = p.filter(x => x !== w);
+        if (next.length === 0) setWhFilteredStocks(null);
+        return next;
+      });
+    } else if (id.startsWith('grp:')) {
+      const g = id.slice(5);
+      setSelGrp(p => p.filter(x => x !== g));
+    }
+  };
+
   // Handlers
   const handleLongPress = useCallback((id: string) => {
     setMultiSelectMode(true);
@@ -410,12 +439,7 @@ export default function TotalStockScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('stocks.totalStock')}</Text>
         <View style={styles.headerRight}>
-          {/* Filter / Sort icon */}
-          <TouchableOpacity style={styles.iconBtn} onPress={() => setFilterOpen(true)} activeOpacity={0.7}>
-            <Ionicons name="funnel-outline" size={22} color={activeFilterCount > 0 ? '#A89060' : COLORS.textPrimary} />
-            {activeFilterCount > 0 && <View style={styles.badge}><Text style={styles.badgeTxt}>{activeFilterCount}</Text></View>}
-          </TouchableOpacity>
-          {/* Plus icon → Add New Item sheet */}
+          <FilterIconWithBadge count={activeFilterCount} onPress={() => setFilterOpen(true)} />
           <TouchableOpacity style={styles.iconBtn} onPress={() => setAddItemOpen(true)} activeOpacity={0.7}>
             <Ionicons name="add" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
@@ -442,33 +466,6 @@ export default function TotalStockScreen() {
         </View>
       )}
 
-      {/* ── Active filter chips ── */}
-      {activeFilterCount > 0 && !multiSelectMode && (
-        <View style={styles.activeFiltersRow}>
-          {selWh.map(w => (
-            <TouchableOpacity key={w} style={styles.activeChip} onPress={() => { setSelWh(p => { const next = p.filter(x => x !== w); if (next.length === 0) setWhFilteredStocks(null); return next; }); }} activeOpacity={0.7}>
-              <Text style={styles.activeChipTxt} numberOfLines={1} ellipsizeMode="tail">{w}</Text>
-              <Ionicons name="close-circle" size={12} color="#A89060" />
-            </TouchableOpacity>
-          ))}
-          {selGrp.map(g => (
-            <TouchableOpacity key={g} style={styles.activeChip} onPress={() => setSelGrp(p => p.filter(x => x !== g))} activeOpacity={0.7}>
-              <Text style={styles.activeChipTxt} numberOfLines={1} ellipsizeMode="tail">{g}</Text>
-              <Ionicons name="close-circle" size={12} color="#A89060" />
-            </TouchableOpacity>
-          ))}
-          {activeFilterCount > 1 && (
-            <TouchableOpacity
-              style={[styles.activeChip, { backgroundColor: '#FFF0F0', borderColor: '#FFCCCC' }]}
-              onPress={() => { setSelWh([]); setSelCat([]); setSelGrp([]); setWhFilteredStocks(null); }}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.activeChipTxt, { color: COLORS.negative }]}>Clear all</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-
       {/* ── Warehouse filter loading indicator ── */}
       {whFilterLoading && (
         <View style={{ paddingVertical: 6, alignItems: 'center', backgroundColor: COLORS.cardBg }}>
@@ -491,51 +488,97 @@ export default function TotalStockScreen() {
       </View>
 
       {/* ── Search bar ── */}
-      <SearchBar value={query} onChangeText={setQuery} placeholder="Search items..." />
+      <SearchBar value={query} onChangeText={setQuery} placeholder="Search items..." style={styles.searchBarInset} />
+
+      {/* ── Filter bar (Ledger-style) ── */}
+      {!multiSelectMode && (
+        <View style={styles.tabRow}>
+          <TouchableOpacity
+            style={[styles.filterDropBtn, activeFilterCount > 0 && styles.filterDropBtnActive]}
+            onPress={() => setFilterOpen(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="list" size={15} color={activeFilterCount > 0 ? COLORS.brandPrimary : COLORS.textSecondary} />
+            <Text
+              style={[styles.filterDropBtnTxt, activeFilterCount > 0 && styles.filterDropBtnTxtActive]}
+              numberOfLines={1}
+            >
+              {filterDropLabel}
+            </Text>
+            <Ionicons name="chevron-down" size={14} color={activeFilterCount > 0 ? COLORS.brandPrimary : COLORS.textSecondary} />
+          </TouchableOpacity>
+
+          <View style={styles.rightControls}>
+            <TouchableOpacity
+              style={[styles.hideZeroChip, onhandOnly && styles.hideZeroChipOn]}
+              onPress={() => setOnhandOnly(v => !v)}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={onhandOnly ? 'eye-off' : 'eye-outline'}
+                size={13}
+                color={onhandOnly ? '#fff' : COLORS.textSecondary}
+              />
+              <Text style={[styles.hideZeroChipTxt, onhandOnly && styles.hideZeroChipTxtOn]}>
+                Hide 0 qty
+              </Text>
+            </TouchableOpacity>
+
+            <View style={styles.sortBtns}>
+              <TouchableOpacity
+                style={[styles.sortBtn, sortType === 'alpha' && styles.sortBtnActive]}
+                onPress={() => handleSort('alpha')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.sortBtnLabel, sortType === 'alpha' && styles.sortBtnLabelActive]}>
+                  {sortType === 'alpha' && sortDir === 'desc' ? 'Z–A' : 'A–Z'}
+                </Text>
+                <Ionicons
+                  name={sortType === 'alpha' && sortDir === 'desc' ? 'arrow-up' : 'arrow-down'}
+                  size={11}
+                  color={sortType === 'alpha' ? COLORS.brandPrimary : COLORS.textTertiary}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.sortBtn, sortType === 'amount' && styles.sortBtnActive]}
+                onPress={() => handleSort('amount')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.sortBtnLabel, sortType === 'amount' && styles.sortBtnLabelActive]}>₹</Text>
+                <Ionicons
+                  name={sortType === 'amount' && sortDir === 'desc' ? 'arrow-down' : 'arrow-up'}
+                  size={11}
+                  color={sortType === 'amount' ? COLORS.brandPrimary : COLORS.textTertiary}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* ── Active filter badges (Ledger-style) ── */}
+      {!multiSelectMode && (
+        <ActiveFilterChips
+          chips={activeFilterChips}
+          onRemove={removeFilterChip}
+          onClearAll={clearAllFilters}
+        />
+      )}
 
       {/* ── Item list ── */}
       <FlatList
         data={isLoading ? [] : filtered}
         keyExtractor={item => item.id}
         style={styles.scroll}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={styles.listHeader}>
             <Text style={styles.sectionLabel}>{filtered.length} item{filtered.length !== 1 ? 's' : ''}</Text>
-            {multiSelectMode ? (
+            {multiSelectMode && (
               <TouchableOpacity onPress={() => setSelectedIds(allSelected ? [] : filtered.map(i => i.id))} activeOpacity={0.7}>
                 <Text style={styles.selectAllTxt}>{allSelected ? 'Deselect All' : 'Select All'}</Text>
               </TouchableOpacity>
-            ) : (
-              <View style={styles.sortBtns}>
-                <TouchableOpacity
-                  style={[styles.sortBtn, sortType === 'alpha' && styles.sortBtnActive]}
-                  onPress={() => handleSort('alpha')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.sortBtnLabel, sortType === 'alpha' && styles.sortBtnLabelActive]}>
-                    {sortType === 'alpha' && sortDir === 'desc' ? 'Z–A' : 'A–Z'}
-                  </Text>
-                  <Ionicons
-                    name={sortType === 'alpha' && sortDir === 'desc' ? 'arrow-up' : 'arrow-down'}
-                    size={11}
-                    color={sortType === 'alpha' ? COLORS.brandPrimary : COLORS.textTertiary}
-                  />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.sortBtn, sortType === 'amount' && styles.sortBtnActive]}
-                  onPress={() => handleSort('amount')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.sortBtnLabel, sortType === 'amount' && styles.sortBtnLabelActive]}>₹</Text>
-                  <Ionicons
-                    name={sortType === 'amount' && sortDir === 'desc' ? 'arrow-down' : 'arrow-up'}
-                    size={11}
-                    color={sortType === 'amount' ? COLORS.brandPrimary : COLORS.textTertiary}
-                  />
-                </TouchableOpacity>
-              </View>
             )}
           </View>
         }
@@ -551,7 +594,7 @@ export default function TotalStockScreen() {
           <View style={styles.emptyState}>
             <Ionicons name="cube-outline" size={40} color={COLORS.textTertiary} />
             <Text style={styles.emptyTxt}>No items match your filters</Text>
-            <TouchableOpacity onPress={() => { setSelWh([]); setSelCat([]); setSelGrp([]); setWhFilteredStocks(null); setQuery(''); }} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => { clearAllFilters(); setQuery(''); setOnhandOnly(false); }} activeOpacity={0.7}>
               <Text style={styles.emptyAction}>Clear all filters</Text>
             </TouchableOpacity>
           </View>
@@ -623,10 +666,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 14, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   backBtn:     { width: 40, alignItems: 'flex-start' },
   headerTitle: { flex: 1, fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
-  headerRight: { width: 80, flexDirection: 'row', justifyContent: 'flex-end', gap: 2 },
-  iconBtn:     { position: 'relative', padding: 8 },
-  badge:       { position: 'absolute', top: 4, right: 4, width: 15, height: 15, borderRadius: 8, backgroundColor: '#A89060', alignItems: 'center', justifyContent: 'center' },
-  badgeTxt:    { fontSize: 8, fontWeight: '800', color: COLORS.white },
+  headerRight: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2 },
+  iconBtn:     { padding: 8 },
 
   // Multi-select bar
   multiBar:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: SPACING.md, paddingVertical: 12, backgroundColor: '#1A1A1A' },
@@ -637,26 +678,60 @@ const styles = StyleSheet.create({
   multiBtnGray: { backgroundColor: '#444444' },
   multiBtnTxt:  { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white },
 
-  // Active filter chips
-  activeFiltersRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 8, gap: 6, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  activeChip:       { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: '#FBF7EE', borderRadius: RADIUS.full, borderWidth: 1, borderColor: '#F0E8D5', maxWidth: 110, alignSelf: 'flex-start' },
-
-  activeChipTxt:    { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: '#A89060', flexShrink: 1 },
-
   // Summary KPI
   summaryRow:   { flexDirection: 'row', backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, paddingVertical: 12 },
   summaryItem:  { flex: 1, alignItems: 'center' },
   summaryVal:   { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
   summaryLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
 
+  searchBarInset: {
+    marginTop: 4,
+    marginBottom: 4,
+    marginHorizontal: SPACING.md,
+  },
+  tabRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginHorizontal: SPACING.md, marginBottom: 2,
+    paddingHorizontal: 10, paddingVertical: 6,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.md,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    gap: 8,
+  },
+  filterDropBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 7,
+    borderRadius: RADIUS.full,
+    borderWidth: 1, borderColor: COLORS.borderDefault,
+    backgroundColor: COLORS.cardBg,
+    flexShrink: 0,
+    maxWidth: '42%',
+  },
+  filterDropBtnActive: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary + '12' },
+  filterDropBtnTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary, flexShrink: 1 },
+  filterDropBtnTxtActive: { color: COLORS.brandPrimary },
+  rightControls: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, flexShrink: 1 },
+  hideZeroChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 9, paddingVertical: 7,
+    borderRadius: RADIUS.full,
+    borderWidth: 1.5, borderColor: COLORS.borderDefault,
+    backgroundColor: COLORS.cardBg,
+    flexShrink: 1,
+  },
+  hideZeroChipOn: {
+    borderColor: COLORS.brandPrimary,
+    backgroundColor: COLORS.brandPrimary,
+  },
+  hideZeroChipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
+  hideZeroChipTxtOn: { color: '#FFFFFF' },
+
   // List
   scroll:       { flex: 1 },
-  content:      { padding: SPACING.md, gap: 8 },
-  listHeader:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  sectionLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textTertiary },
-  selectAllTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: '#A89060' },
-  swipeHint:    { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  swipeHintTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
+  list:         { paddingHorizontal: SPACING.md, paddingTop: 2, paddingBottom: SPACING.md, gap: 8 },
+  listHeader:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 0, paddingTop: 2, paddingBottom: 4 },
+  sectionLabel: { fontSize: TYPOGRAPHY.xs, fontWeight: '500', color: COLORS.textTertiary },
+  selectAllTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.brandPrimary },
   sortBtns:         { flexDirection: 'row', gap: 4 },
   sortBtn:          { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 9, paddingVertical: 7, borderRadius: RADIUS.sm, backgroundColor: COLORS.pageBg, borderWidth: 1.5, borderColor: COLORS.borderDefault },
   sortBtnActive:    { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary + '12' },
@@ -666,5 +741,5 @@ const styles = StyleSheet.create({
   // Empty
   emptyState: { alignItems: 'center', paddingVertical: 48, gap: 10 },
   emptyTxt:   { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textTertiary },
-  emptyAction:{ fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: '#A89060', textDecorationLine: 'underline' },
+  emptyAction:{ fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.brandPrimary, textDecorationLine: 'underline' },
 });
