@@ -1,4 +1,19 @@
-## [2026-08-31] Audit Trail chrome — Ledger black accents
+## [2026-08-31] Proforma optional chip — show Optional not duplicate Proforma
+
+### Why
+Optional Proforma rows showed `[Proforma Invoice]` + `[Proforma]` — redundant.
+
+### Change
+Second chip follows same rule as Sales: **Regular** or **Optional** from `currentEntryType`.
+
+### File
+- `frontend/app/reports/audit-trail.tsx`
+
+### QA
+GREEN — tsc clean
+
+---
+
 
 ### Why
 Calendar / voucher-type filter used gold (AMBER); Ledger uses brandPrimary black.

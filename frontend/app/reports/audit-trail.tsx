@@ -760,9 +760,6 @@ export default function AuditTrailScreen() {
 
   const entryKindChip = (entry: VoucherEntry): { label: string; tone: 'regular' | 'optional' } | null => {
     if (entry.isMaster) return null;
-    if (entry.type === 'Proforma Invoice' && entry.currentEntryType === 'optional') {
-      return { label: 'Proforma', tone: 'optional' };
-    }
     if (entry.currentEntryType === 'optional') return { label: 'Optional', tone: 'optional' };
     if (entry.currentEntryType === 'regular' || (!entry.currentEntryType && entry.syncStatus === 'synced')) {
       return { label: 'Regular', tone: 'regular' };
