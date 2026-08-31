@@ -1,4 +1,21 @@
-## [2026-08-31] Proforma optional chip — show Optional not duplicate Proforma
+## [2026-08-31] Swipe actions — Ledger square geometry everywhere
+
+### Why
+Stock / Bank Feeds swipe buttons were rounded islands; Ledger uses flush full-height slabs.
+
+### Change
+- Total Stock: width 80, no per-button radius, no gap, swipeable `overflow: hidden` clip
+- Bank Feeds: same slab geometry; clip radius 18 to match bank card
+
+### Files
+- `frontend/app/stocks/total-stock.tsx`
+- `frontend/app/settings/bank-feeds.tsx`
+
+### QA
+GREEN — tsc clean; Ledger/Stock/Bank Feeds swipe geometry aligned
+
+---
+
 
 ### Why
 Optional Proforma rows showed `[Proforma Invoice]` + `[Proforma]` — redundant.

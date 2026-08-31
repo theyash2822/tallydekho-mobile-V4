@@ -386,7 +386,8 @@ function BankCard({ account, isSelecting, isSelected }: {
   );
 }
 const bc = StyleSheet.create({
-  card:     { borderRadius: 18, padding: 18, minHeight: 165 },
+  // No radius on card — swipeClip on parent clips card + action together (Ledger pattern)
+  card:     { padding: 18, minHeight: 165 },
   topRow:   { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bankPill: { backgroundColor: 'rgba(255,255,255,0.92)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: RADIUS.full, maxWidth: 130 },
   bankPillTxt: { fontSize: 11, fontWeight: '800', color: '#111', letterSpacing: 0.2 },
@@ -396,7 +397,7 @@ const bc = StyleSheet.create({
   bottomRow:{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'auto' },
   branchTxt:{ fontSize: 12, color: 'rgba(255,255,255,0.78)', fontWeight: '500' },
   typeBadge:{ fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.95)', letterSpacing: 1.2 },
-  selOverlay:       { ...StyleSheet.absoluteFillObject, borderRadius: 18, borderWidth: 2.5, borderColor: 'transparent' },
+  selOverlay:       { ...StyleSheet.absoluteFillObject, borderWidth: 2.5, borderColor: 'transparent' },
   selOverlayActive: { borderColor: COLORS.white, backgroundColor: 'rgba(0,0,0,0.28)' },
   checkCircle: { position: 'absolute', top: 12, right: 12, width: 28, height: 28, borderRadius: 14, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center' },
 });
@@ -432,45 +433,55 @@ function SwipeableCard({ account, isSelecting, isSelected, onPress, onLongPress,
     if (!didLongPress.current) onPress();
   }, [cancelTimer, onPress]);
 
+  // Ledger geometry: full-height square slab, no pill radius / no side margin
   const renderRightActions = useCallback(() => (
     <TouchableOpacity
       style={sw.editAction}
       onPress={() => { swipeRef.current?.close(); onEditPress(); }}
       activeOpacity={0.85}
     >
-      <Ionicons name="pencil-outline" size={20} color={COLORS.white} />
-      <Text style={sw.editTxt}>Edit{'\n'}Detail</Text>
+      <Ionicons name="pencil-outline" size={22} color={COLORS.white} />
+      <Text style={sw.editTxt}>Edit Detail</Text>
     </TouchableOpacity>
   ), [onEditPress]);
 
   return (
-    <ReanimatedSwipeable
-      ref={swipeRef}
-      renderRightActions={isSelecting ? undefined : renderRightActions}
-      friction={2}
-      rightThreshold={60}
-      overshootRight={false}
-      enabled={!isSelecting}
-      onSwipeableWillOpen={cancelTimer}
-    >
-      <TouchableOpacity
-        onPressIn={startTimer}
-        onPressOut={cancelTimer}
-        onPress={handlePress}
-        activeOpacity={isSelecting ? 0.75 : 1}
-        style={sw.cardWrapper}
+    <View style={sw.rowWrap}>
+      <ReanimatedSwipeable
+        ref={swipeRef}
+        renderRightActions={isSelecting ? undefined : renderRightActions}
+        friction={2}
+        rightThreshold={40}
+        overshootRight={false}
+        enabled={!isSelecting}
+        onSwipeableWillOpen={cancelTimer}
+        containerStyle={sw.swipeClip}
       >
-        <BankCard account={account} isSelecting={isSelecting} isSelected={isSelected} />
-      </TouchableOpacity>
-    </ReanimatedSwipeable>
+        <TouchableOpacity
+          onPressIn={startTimer}
+          onPressOut={cancelTimer}
+          onPress={handlePress}
+          activeOpacity={isSelecting ? 0.75 : 1}
+        >
+          <BankCard account={account} isSelecting={isSelecting} isSelected={isSelected} />
+        </TouchableOpacity>
+      </ReanimatedSwipeable>
+    </View>
   );
 }
 const sw = StyleSheet.create({
-  cardWrapper: { marginBottom: SPACING.md },
-  editAction:  { backgroundColor: COLORS.brandPrimary, borderRadius: 18, marginBottom: SPACING.md, marginLeft: 8, width: 76, alignItems: 'center', justifyContent: 'center', gap: 5 },
-  editTxt:     { fontSize: 11, fontWeight: '700', color: COLORS.white, textAlign: 'center', lineHeight: 14 },
+  rowWrap:   { marginBottom: SPACING.md },
+  // Match BankCard radius so card + action clip as one unit (Ledger pattern)
+  swipeClip: { borderRadius: 18, overflow: 'hidden' },
+  editAction: {
+    width: 80,
+    backgroundColor: COLORS.brandPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  editTxt: { fontSize: 11, fontWeight: '700', color: COLORS.white, textAlign: 'center' },
 });
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Screen
 // ─────────────────────────────────────────────────────────────────────────────

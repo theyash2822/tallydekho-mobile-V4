@@ -28,16 +28,24 @@ export { clearStockListCache };
 
 // ─── SWIPEABLE STOCK CARD ─────────────────────────────────────────────────────
 
+// Swipe actions — Ledger geometry: full-height square slabs, flush, clipped by swipeable
 const sw = StyleSheet.create({
-  actionWrap: { width: 88, justifyContent: 'center', alignItems: 'center', borderRadius: RADIUS.md, overflow: 'hidden' },
+  actionsRow: { flexDirection: 'row' },
+  action: {
+    width: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
   transferBg: { backgroundColor: COLORS.brandPrimary },
   adjustBg:   { backgroundColor: '#A89060' },
   editBg:     { backgroundColor: '#A89060' },
-  actionInner:{ flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center', gap: 5 },
-  actionTxt:  { fontSize: 11, fontWeight: '700', color: COLORS.white },
+  actionTxt:  { fontSize: 11, fontWeight: '700', color: COLORS.white, textAlign: 'center' },
 });
 const sc = StyleSheet.create({
-  card:          { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, padding: SPACING.sm, borderWidth: 1, borderColor: COLORS.borderDefault },
+  // No borderRadius here — swipeable containerStyle clips card + actions together (Ledger pattern)
+  card:          { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.cardBg, padding: SPACING.sm, borderWidth: 1, borderColor: COLORS.borderDefault },
+  cardRounded:   { borderRadius: RADIUS.md },
   cardSelected:  { borderColor: '#1A1A1A', borderWidth: 1.5, backgroundColor: '#F0EFE9' },
   icon:          { width: 42, height: 42, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E8E7E1' },
   checkbox:      { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: COLORS.borderStrong, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.cardBg },
@@ -56,38 +64,48 @@ function SwipeableStockCard({ item, isMultiSelectMode, isSelected, onPress, onLo
   onPress: () => void; onLongPress: () => void; onEditStock: () => void; onTransfer: () => void; onAdjust: () => void;
 }) {
   const swipeRef = useRef<any>(null);
-  const renderLeftActions = () => {
-    return (
-      <View style={{ flexDirection: 'row', gap: 6 }}>
-        {/* Transfer */}
-        <View style={[sw.actionWrap, sw.transferBg]}>
-          <TouchableOpacity style={sw.actionInner} onPress={() => { swipeRef.current?.close(); onTransfer(); }} activeOpacity={0.85}>
-            <Ionicons name="swap-horizontal-outline" size={22} color={COLORS.white} />
-            <Text style={sw.actionTxt}>Transfer</Text>
-          </TouchableOpacity>
-        </View>
-        {/* Adjust */}
-        <View style={[sw.actionWrap, sw.adjustBg]}>
-          <TouchableOpacity style={sw.actionInner} onPress={() => { swipeRef.current?.close(); onAdjust(); }} activeOpacity={0.85}>
-            <Ionicons name="options-outline" size={22} color={COLORS.white} />
-            <Text style={sw.actionTxt}>Adjust</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
-  const renderRightActions = () => {
-    return (
-      <View style={[sw.actionWrap, sw.editBg]}>
-        <TouchableOpacity style={sw.actionInner} onPress={() => { swipeRef.current?.close(); onEditStock(); }} activeOpacity={0.85}>
-          <Ionicons name="create-outline" size={22} color={COLORS.white} />
-          <Text style={sw.actionTxt}>Edit Stock</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  };
+  const renderLeftActions = () => (
+    <View style={sw.actionsRow}>
+      <TouchableOpacity
+        style={[sw.action, sw.transferBg]}
+        onPress={() => { swipeRef.current?.close(); onTransfer(); }}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="swap-horizontal-outline" size={22} color={COLORS.white} />
+        <Text style={sw.actionTxt}>Transfer</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[sw.action, sw.adjustBg]}
+        onPress={() => { swipeRef.current?.close(); onAdjust(); }}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="options-outline" size={22} color={COLORS.white} />
+        <Text style={sw.actionTxt}>Adjust</Text>
+      </TouchableOpacity>
+    </View>
+  );
+  const renderRightActions = () => (
+    <TouchableOpacity
+      style={[sw.action, sw.editBg]}
+      onPress={() => { swipeRef.current?.close(); onEditStock(); }}
+      activeOpacity={0.85}
+    >
+      <Ionicons name="create-outline" size={22} color={COLORS.white} />
+      <Text style={sw.actionTxt}>Edit Stock</Text>
+    </TouchableOpacity>
+  );
   const cardInner = (
-    <TouchableOpacity style={[sc.card, isSelected && sc.cardSelected]} onPress={onPress} onLongPress={onLongPress} activeOpacity={0.85} delayLongPress={380}>
+    <TouchableOpacity
+      style={[
+        sc.card,
+        isMultiSelectMode && sc.cardRounded,
+        isSelected && sc.cardSelected,
+      ]}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      activeOpacity={0.85}
+      delayLongPress={380}
+    >
       {isMultiSelectMode ? (
         <View style={[sc.checkbox, isSelected && sc.checkboxActive]}>
           {isSelected && <Ionicons name="checkmark" size={12} color={COLORS.white} />}
@@ -107,7 +125,17 @@ function SwipeableStockCard({ item, isMultiSelectMode, isSelected, onPress, onLo
   );
   if (isMultiSelectMode) return cardInner;
   return (
-    <ReanimatedSwipeable ref={swipeRef} renderLeftActions={renderLeftActions} renderRightActions={renderRightActions} friction={2} leftThreshold={88} rightThreshold={40} overshootLeft={false} overshootRight={false}>
+    <ReanimatedSwipeable
+      ref={swipeRef}
+      renderLeftActions={renderLeftActions}
+      renderRightActions={renderRightActions}
+      friction={2}
+      leftThreshold={80}
+      rightThreshold={40}
+      overshootLeft={false}
+      overshootRight={false}
+      containerStyle={{ borderRadius: RADIUS.md, overflow: 'hidden' }}
+    >
       {cardInner}
     </ReanimatedSwipeable>
   );
