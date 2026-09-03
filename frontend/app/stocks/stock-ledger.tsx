@@ -1,16 +1,30 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Modal, ActivityIndicator,
+  TextInput, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import SearchBar from '../../src/components/SearchBar';
+import FilterBottomSheet, {
+  FilterCheckRow,
+  filterSheetContentStyles as fm,
+  isFilterAllSelected,
+  isFilterOptionChecked,
+  toggleFilterFromAll,
+  toggleFilterAll,
+  useMultiFilterHydration,
+  isFilterSelectionValid,
+  normalizeFilterAllSelection,
+} from '../../src/components/FilterBottomSheet';
+import { FilterIconWithBadge, ActiveFilterChips } from '../../src/components/voucherHomeFilters';
+import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
-import { getStockLedger, getStocks } from '../../src/services/api';
+import { getStockLedger } from '../../src/services/api';
 import { LoadingState, ErrorState } from '../../src/components/ApiStateViews';
 import { useTranslation } from 'react-i18next';
 
@@ -132,6 +146,115 @@ const TYPE_COLOR: Record<TxnType, string> = {
   Sales: '#A89060', Purchase: COLORS.textPrimary, Transfer: '#7C3AED', Adjustment: '#D97706', Opening: '#3A3A3A',
 };
 
+// ── Filter modal (Warehouse | Transaction Type — Ledger-style R2 multi-select) ─
+
+function StockLedgerFilterModal({ visible, onClose, onApply, initWh, initTypes, whOptions, typeOptions }: {
+  visible: boolean; onClose: () => void;
+  onApply: (wh: string[], types: string[]) => void;
+  initWh: string[]; initTypes: string[];
+  whOptions: { id: string; label: string }[];
+  typeOptions: { id: string; label: string }[];
+}) {
+  const [tab, setTab] = useState<'Warehouse' | 'Type'>('Warehouse');
+  const [selWh, setSelWh] = useState<string[]>([]);
+  const [selTypes, setSelTypes] = useState<string[]>([]);
+  const [whSearch, setWhSearch] = useState('');
+  const [typeSearch, setTypeSearch] = useState('');
+
+  const whIds = useMemo(() => whOptions.map(w => w.id), [whOptions]);
+  const typeIds = useMemo(() => typeOptions.map(t => t.id), [typeOptions]);
+
+  useMultiFilterHydration(visible, initWh, whIds, setSelWh);
+  useMultiFilterHydration(visible, initTypes, typeIds, setSelTypes);
+
+  useEffect(() => {
+    if (visible) {
+      setWhSearch('');
+      setTypeSearch('');
+      setTab('Warehouse');
+    }
+  }, [visible]);
+
+  const isAllWh = isFilterAllSelected(selWh, whIds);
+  const isAllTypes = isFilterAllSelected(selTypes, typeIds);
+  const activeCount = (isAllWh ? 0 : selWh.length) + (isAllTypes ? 0 : selTypes.length);
+  const canApply =
+    isFilterSelectionValid(selWh, whIds) && isFilterSelectionValid(selTypes, typeIds);
+
+  const filteredWh = useMemo(() => {
+    const q = whSearch.trim().toLowerCase();
+    const list = whOptions.filter(Boolean);
+    if (!q) return list;
+    return list.filter(w => w.label.toLowerCase().includes(q) || w.id.toLowerCase().includes(q));
+  }, [whOptions, whSearch]);
+
+  const filteredTypes = useMemo(() => {
+    const q = typeSearch.trim().toLowerCase();
+    const list = typeOptions.filter(Boolean);
+    if (!q) return list;
+    return list.filter(t => t.label.toLowerCase().includes(q) || t.id.toLowerCase().includes(q));
+  }, [typeOptions, typeSearch]);
+
+  const handleApply = () => {
+    if (!canApply) return;
+    onApply(normalizeFilterAllSelection(selWh, whIds), normalizeFilterAllSelection(selTypes, typeIds));
+    onClose();
+  };
+
+  return (
+    <FilterBottomSheet
+      visible={visible}
+      onClose={onClose}
+      title="Filter Stock Ledger"
+      activeCount={activeCount}
+      onClear={() => { setSelWh([...whIds]); setSelTypes([...typeIds]); }}
+      onApply={handleApply}
+      applyLabel="Apply Filters"
+      applyDisabled={!canApply}
+      heightFraction={0.68}
+    >
+      <View style={fm.tabs}>
+        {(['Warehouse', 'Type'] as const).map(cat => (
+          <TouchableOpacity key={cat} style={[fm.tab, tab === cat && fm.tabActive]} onPress={() => setTab(cat)} activeOpacity={0.7}>
+            <Text style={[fm.tabTxt, tab === cat && fm.tabTxtActive]}>{cat === 'Type' ? 'Transaction Type' : cat}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {tab === 'Warehouse' ? (
+        <View style={fm.panel}>
+          <View style={fm.searchBox}>
+            <Ionicons name="search" size={14} color={COLORS.textTertiary} />
+            <TextInput style={fm.searchInput} placeholder="Search warehouse..." placeholderTextColor={COLORS.textTertiary} value={whSearch} onChangeText={setWhSearch} />
+          </View>
+          <FilterCheckRow label="All warehouses" selected={isAllWh} onPress={() => setSelWh(prev => toggleFilterAll(prev, whIds))} />
+          {whOptions.length === 0 ? (
+            <Text style={fm.hint}>No warehouses available</Text>
+          ) : filteredWh.length === 0 ? (
+            <Text style={fm.hint}>No warehouses match your search</Text>
+          ) : filteredWh.map(w => (
+            <FilterCheckRow key={w.id} label={w.label} selected={isFilterOptionChecked(selWh, w.id)} onPress={() => setSelWh(prev => toggleFilterFromAll(prev, w.id, whIds))} />
+          ))}
+        </View>
+      ) : (
+        <View style={fm.panel}>
+          <View style={fm.searchBox}>
+            <Ionicons name="search" size={14} color={COLORS.textTertiary} />
+            <TextInput style={fm.searchInput} placeholder="Search transaction type..." placeholderTextColor={COLORS.textTertiary} value={typeSearch} onChangeText={setTypeSearch} />
+          </View>
+          <FilterCheckRow label="All types" selected={isAllTypes} onPress={() => setSelTypes(prev => toggleFilterAll(prev, typeIds))} />
+          {typeOptions.length === 0 ? (
+            <Text style={fm.hint}>No transaction types found</Text>
+          ) : filteredTypes.length === 0 ? (
+            <Text style={fm.hint}>No types match your search</Text>
+          ) : filteredTypes.map(t => (
+            <FilterCheckRow key={t.id} label={t.label} selected={isFilterOptionChecked(selTypes, t.id)} onPress={() => setSelTypes(prev => toggleFilterFromAll(prev, t.id, typeIds))} />
+          ))}
+        </View>
+      )}
+    </FilterBottomSheet>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function StockLedgerScreen() {
   const { t } = useTranslation();
@@ -144,87 +267,15 @@ export default function StockLedgerScreen() {
   const [expanded,    setExpanded]    = useState<Set<string>>(new Set());
   const [selected,    setSelected]    = useState<Set<string>>(new Set());
 
-  // Filter modal
-  const [filterApplied,      setFilterApplied]      = useState(0);
-  const [showFilter,         setShowFilter]         = useState(false);
-  const [showDatePick,       setShowDatePick]        = useState(false);
-  const [pendingReopenFilter,setPendingReopenFilter] = useState(false);
-
-  // Applied filters
-  const [dateFrom,    setDateFrom]    = useState('01/04/24');
-  const [dateTo,      setDateTo]      = useState('31/03/25');
-  const [selWH,       setSelWH]       = useState<Set<string>>(new Set());
-  const [selItems,    setSelItems]    = useState<Set<string>>(new Set());
-  const [batchSearch, setBatchSearch] = useState('');
-  const [selVouchers, setSelVouchers] = useState<Set<VoucherType>>(new Set());
-
-  // Draft filters (inside modal before Apply)
-  const [draftWH,         setDraftWH]         = useState<Set<string>>(new Set());
-  const [draftWHSearch,   setDraftWHSearch]   = useState('');
-  const [draftItems,      setDraftItems]      = useState<Set<string>>(new Set());
-  const [draftItemSearch, setDraftItemSearch] = useState('');
-  const [draftBatch,      setDraftBatch]      = useState('');
-  const [draftVouchers,   setDraftVouchers]   = useState<Set<VoucherType>>(new Set());
-  const [draftFrom,       setDraftFrom]       = useState('01/04/24');
-  const [draftTo,         setDraftTo]         = useState('31/03/25');
-
-  // Item autocomplete list
-  const [stockItemsList, setStockItemsList] = useState<string[]>([]);
-  const [itemsLoading,   setItemsLoading]   = useState(false);
-  const [voucherTypesLoading, setVoucherTypesLoading] = useState(false);
-
-  // Open filter → copy applied → draft
-  const openFilter = () => {
-    setDraftWH(new Set(selWH));
-    setDraftWHSearch('');
-    setDraftItems(new Set(selItems));
-    setDraftItemSearch('');
-    setDraftBatch(batchSearch);
-    setDraftVouchers(new Set(selVouchers));
-    setDraftFrom(dateFrom);
-    setDraftTo(dateTo);
-    setShowFilter(true);
-    loadStockItems();
-  };
-
-  const applyFilters = () => {
-    setSelWH(new Set(draftWH));
-    setSelItems(new Set(draftItems));
-    setBatchSearch(draftBatch);
-    setSelVouchers(new Set(draftVouchers));
-    setDateFrom(draftFrom);
-    setDateTo(draftTo);
-    setShowFilter(false);
-    // Increment trigger — useEffect fires AFTER re-render when fetchLedger has fresh state
-    setFilterApplied(n => n + 1);
-  };
-
-  const resetFilters = () => {
-    const f = selectedFY?.startDate ? isoToDdmmyy(selectedFY.startDate) : '01/04/24';
-    const t = selectedFY?.endDate   ? isoToDdmmyy(selectedFY.endDate)   : '31/03/25';
-    setDraftWH(new Set()); setDraftWHSearch('');
-    setDraftItems(new Set()); setDraftItemSearch('');
-    setDraftBatch('');
-    setDraftVouchers(new Set());
-    setDraftFrom(f); setDraftTo(t);
-  };
-
-  // Issue 1 fix: close filter → open date picker → reopen filter on apply
-  const openDateFromFilter = () => {
-    setShowFilter(false);
-    setPendingReopenFilter(true);
-    setTimeout(() => setShowDatePick(true), 350);
-  };
-
-  const handleDateApply = (f: string, t: string) => {
-    setDraftFrom(f);
-    setDraftTo(t);
-    setShowDatePick(false);
-    if (pendingReopenFilter) {
-      setPendingReopenFilter(false);
-      setTimeout(() => setShowFilter(true), 350);
-    }
-  };
+  // Filters & search
+  const [showFilter,   setShowFilter]   = useState(false);
+  const [showDatePick, setShowDatePick] = useState(false);
+  const [dateFrom,     setDateFrom]     = useState('01/04/24');
+  const [dateTo,       setDateTo]       = useState('31/03/25');
+  const [selWH,        setSelWH]        = useState<string[]>([]);
+  const [selVouchers,  setSelVouchers]  = useState<string[]>([]);
+  const [search,       setSearch]       = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
   const toggleExpand = (id: string) => {
     setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -234,39 +285,21 @@ export default function StockLedgerScreen() {
     setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
 
-  const fmtDateLabel = (s: string) => {
-    const p = s.split('/');
-    if (p.length < 3) return s;
-    const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return `${p[0]} ${m[parseInt(p[1])-1]} ${p[2]}`;
-  };
-
   // ── Auth ────────────────────────────────────────────────────────────────
   const { company, selectedFY } = useAuth();
-
-  // Load stock items for autocomplete (once per session)
-  const loadStockItems = useCallback(async () => {
-    if (!company?.guid || stockItemsList.length > 0 || itemsLoading) return;
-    setItemsLoading(true);
-    try {
-      const res = await getStocks(company.guid, { limit: 500 });
-      if (res?.data?.items) {
-        setStockItemsList(res.data.items.map((i: any) => i.name).filter(Boolean).sort((a: string, b: string) => a.localeCompare(b)));
-      }
-    } catch {}
-    finally { setItemsLoading(false); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [company?.guid, stockItemsList.length, itemsLoading]);
 
   // Sync date range to selected FY whenever FY changes
   useEffect(() => {
     if (selectedFY?.startDate && selectedFY?.endDate) {
-      const f = isoToDdmmyy(selectedFY.startDate);
-      const t = isoToDdmmyy(selectedFY.endDate);
-      setDateFrom(f); setDateTo(t);
-      setDraftFrom(f); setDraftTo(t);
+      setDateFrom(isoToDdmmyy(selectedFY.startDate));
+      setDateTo(isoToDdmmyy(selectedFY.endDate));
     }
   }, [selectedFY?.startDate, selectedFY?.endDate]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   // ── API state ───────────────────────────────────────────────────────────
   // Separate data per mode (API returns different shapes per mode)
@@ -282,6 +315,12 @@ export default function StockLedgerScreen() {
   const [warehouses,    setWarehouses]    = useState<string[]>([]);
   const [apiVoucherTypes, setApiVoucherTypes] = useState<string[]>([]);
   const [summary,    setSummary]    = useState({ entries: 0, totalIn: 0, totalOut: 0, value: 0 });
+
+  const [voucherTypesLoading, setVoucherTypesLoading] = useState(false);
+
+  const whOptions = useMemo(() => warehouses.map(w => ({ id: w, label: w })), [warehouses]);
+  const typeOptions = useMemo(() => apiVoucherTypes.map(v => ({ id: v, label: v })), [apiVoucherTypes]);
+  const activeFilterCount = (selWH.length > 0 ? selWH.length : 0) + (selVouchers.length > 0 ? selVouchers.length : 0);
 
   // Load voucher types independently — called on mount + FY change so filter is always ready
   const loadVoucherTypes = useCallback(async () => {
@@ -314,10 +353,9 @@ export default function StockLedgerScreen() {
       if (fyParam)          params.fy          = fyParam;
       if (dateFrom)        { params.from        = ddmmyyToISO(dateFrom); delete params.fy; }
       if (dateTo)            params.to          = ddmmyyToISO(dateTo);
-      if (selItems.size > 0) params.item        = [...selItems].join(',');
-      if (batchSearch)       params.batch       = batchSearch;
-      if (selWH.size > 0)    params.warehouse   = [...selWH].join(',');
-      if (selVouchers.size > 0) params.voucherType = [...selVouchers].join(',');
+      if (debouncedSearch)   params.search      = debouncedSearch;
+      if (selWH.length > 0)    params.warehouse   = selWH.join(',');
+      if (selVouchers.length > 0) params.voucherType = selVouchers.join(',');
 
       const res = await getStockLedger(company.guid, params);
       if (res?.data) {
@@ -362,27 +400,18 @@ export default function StockLedgerScreen() {
       setIsLoadMore(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [company?.guid, selectedFY, apiMode, dateFrom, dateTo, selItems, batchSearch, selWH, selVouchers]);
+  }, [company?.guid, selectedFY, apiMode, dateFrom, dateTo, debouncedSearch, selWH, selVouchers]);
 
   // Always keep a ref to the latest fetchLedger so effects never call a stale closure
   const fetchLedgerRef = useRef(fetchLedger);
   useEffect(() => { fetchLedgerRef.current = fetchLedger; }); // runs every render, no deps
 
-  // Re-fetch on company / FY change
-  useEffect(() => { fetchLedgerRef.current(1, true); }, [company?.guid, selectedFY]);
-  // Re-fetch when tab switches — uses ref so it always has the latest filter state
-  useEffect(() => { fetchLedgerRef.current(1, true); }, [apiMode]);
-  // Re-fetch when filters are applied (filterApplied > 0 skips the initial mount)
-  useEffect(() => { if (filterApplied > 0) fetchLedgerRef.current(1, true); }, [filterApplied]);
-  // Load voucher types proactively on mount + FY change so filter panel is always ready
+  // Re-fetch on company / FY / filters / search / tab change
+  useEffect(() => { fetchLedgerRef.current(1, true); }, [company?.guid, selectedFY, apiMode, dateFrom, dateTo, debouncedSearch, selWH.join(','), selVouchers.join(',')]);
   useEffect(() => { loadVoucherTypes(); }, [company?.guid, selectedFY]);
 
   // Chronological: filters already sent to API — just use data as-is
   const filtered = chronoData;
-
-  const activeFilterCount =
-    selWH.size + selVouchers.size + selItems.size +
-    (batchSearch ? 1 : 0);
 
   // Active item count for empty-state check
   const activeCount = viewMode === 'chronological' ? filtered.length
@@ -565,21 +594,31 @@ export default function StockLedgerScreen() {
   // ── Main Render ───────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
-      {/* Header */}
-      <View style={s.header}>
-        <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={s.headerTitle}>{t('stocks.stockLedger')}</Text>
-        <TouchableOpacity style={s.headerBtn} onPress={openFilter} activeOpacity={0.7}>
-          <Ionicons name="options-outline" size={22} color={COLORS.textPrimary} />
-          {activeFilterCount > 0 && (
-            <View style={s.filterBadge}>
-              <Text style={s.filterBadgeTxt}>{activeFilterCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title={t('stocks.stockLedger')}
+        onBack={() => router.back()}
+        right={(
+          <View style={s.headerActions}>
+            <TouchableOpacity style={s.headerIconBtn} onPress={() => setShowDatePick(true)} activeOpacity={0.7}>
+              <Ionicons name="calendar-outline" size={20} color={COLORS.textPrimary} />
+            </TouchableOpacity>
+            <FilterIconWithBadge count={activeFilterCount} onPress={() => setShowFilter(true)} />
+          </View>
+        )}
+      />
+
+      <ActiveFilterChips
+        variant="amber"
+        chips={[
+          ...selWH.map(w => ({ id: `wh:${w}`, label: w })),
+          ...selVouchers.map(v => ({ id: `vt:${v}`, label: v })),
+        ]}
+        onRemove={(chipId) => {
+          if (chipId.startsWith('wh:')) setSelWH(p => p.filter(x => x !== chipId.slice(3)));
+          if (chipId.startsWith('vt:')) setSelVouchers(p => p.filter(x => x !== chipId.slice(3)));
+        }}
+        onClearAll={() => { setSelWH([]); setSelVouchers([]); }}
+      />
 
       {/* View Mode Tabs */}
       <View style={s.tabRow}>
@@ -639,6 +678,8 @@ export default function StockLedgerScreen() {
         </View>
       </View>
 
+      <SearchBar value={search} onChangeText={setSearch} placeholder="Search items, documents..." />
+
       {/* List */}
       {loading ? (
         <View style={{ flex: 1 }}><LoadingState message="Loading stock ledger..." /></View>
@@ -690,242 +731,22 @@ export default function StockLedgerScreen() {
         </View>
       )}
 
-      {/* Filter Modal — inlined (NOT a sub-component) to prevent remount on re-render */}
-      <Modal visible={showFilter} transparent animationType="slide" onRequestClose={() => setShowFilter(false)}>
-        <View style={s.modalOverlay}>
-          <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowFilter(false)} activeOpacity={1} />
-          <View style={[s.modalSheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-            <View style={s.modalHandle} />
-            <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Filter</Text>
-              <TouchableOpacity onPress={() => setShowFilter(false)} activeOpacity={0.7}>
-                <Ionicons name="close" size={22} color={COLORS.textPrimary} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              {/* Date Range */}
-              <View style={s.filterSection}>
-                <Text style={s.filterSectionTitle}>Date range</Text>
-                <TouchableOpacity style={s.dateRangeRow} onPress={openDateFromFilter} activeOpacity={0.8}>
-                  <View style={s.dateField}>
-                    <Ionicons name="calendar-outline" size={14} color={COLORS.brandPrimary} />
-                    <Text style={s.dateFieldTxt}>{fmtDateLabel(draftFrom)}</Text>
-                  </View>
-                  <Ionicons name="arrow-forward" size={14} color={COLORS.textTertiary} />
-                  <View style={s.dateField}>
-                    <Ionicons name="calendar-outline" size={14} color={COLORS.brandPrimary} />
-                    <Text style={s.dateFieldTxt}>{fmtDateLabel(draftTo)}</Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-              {/* Warehouse */}
-              <View style={s.filterSection}>
-                <Text style={s.filterSectionTitle}>Warehouse</Text>
+      <StockLedgerFilterModal
+        visible={showFilter}
+        onClose={() => setShowFilter(false)}
+        onApply={(wh, types) => { setSelWH(wh); setSelVouchers(types); }}
+        initWh={selWH}
+        initTypes={selVouchers}
+        whOptions={whOptions}
+        typeOptions={typeOptions}
+      />
 
-                {/* Selected chips */}
-                {draftWH.size > 0 && (
-                  <View style={s.chipWrap}>
-                    {[...draftWH].map(w => (
-                      <TouchableOpacity
-                        key={w}
-                        style={s.filterChipActive}
-                        onPress={() => setDraftWH(prev => { const n = new Set(prev); n.delete(w); return n; })}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={s.filterChipTxtActive}>{w}</Text>
-                        <Ionicons name="close" size={12} color="#fff" />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-
-                {/* Search bar */}
-                <View style={[s.searchInput, { marginTop: draftWH.size > 0 ? 8 : 0 }]}>
-                  <Ionicons name="search-outline" size={15} color={COLORS.textTertiary} />
-                  <TextInput
-                    style={s.searchTxt}
-                    placeholder="Search warehouse..."
-                    placeholderTextColor={COLORS.textTertiary}
-                    value={draftWHSearch}
-                    onChangeText={setDraftWHSearch}
-                  />
-                  {draftWHSearch.length > 0 && (
-                    <TouchableOpacity onPress={() => setDraftWHSearch('')} activeOpacity={0.7}>
-                      <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {/* Results — visible only when typing */}
-                {draftWHSearch.length > 0 && (
-                  <View style={s.whList}>
-                    {warehouses
-                      .filter(w => w.toLowerCase().includes(draftWHSearch.toLowerCase()))
-                      .map((w, idx, arr) => {
-                        const checked = draftWH.has(w);
-                        return (
-                          <TouchableOpacity
-                            key={w}
-                            style={[s.whRow, idx === arr.length - 1 && { borderBottomWidth: 0 }]}
-                            onPress={() => {
-                              setDraftWH(prev => { const n = new Set(prev); checked ? n.delete(w) : n.add(w); return n; });
-                              if (!checked) setDraftWHSearch('');
-                            }}
-                            activeOpacity={0.7}
-                          >
-                            <Ionicons name="business-outline" size={15} color={COLORS.textSecondary} />
-                            <Text style={s.whRowTxt}>{w}</Text>
-                            <View style={[s.checkbox, checked && s.checkboxActive]}>
-                              {checked && <Ionicons name="checkmark" size={12} color="#fff" />}
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })
-                    }
-                  </View>
-                )}
-              </View>
-              {/* Item / SKU */}
-              <View style={s.filterSection}>
-                <Text style={s.filterSectionTitle}>Item / SKU</Text>
-
-                {/* Selected item chips */}
-                {draftItems.size > 0 && (
-                  <View style={s.chipWrap}>
-                    {[...draftItems].map(itm => (
-                      <TouchableOpacity
-                        key={itm}
-                        style={s.filterChipActive}
-                        onPress={() => setDraftItems(prev => { const n = new Set(prev); n.delete(itm); return n; })}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={s.filterChipTxtActive} numberOfLines={1}>{itm}</Text>
-                        <Ionicons name="close" size={12} color="#fff" />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-
-                {/* Search input */}
-                <View style={[s.searchInput, { marginTop: draftItems.size > 0 ? 8 : 0 }]}>
-                  <Ionicons name="search-outline" size={15} color={COLORS.textTertiary} />
-                  <TextInput
-                    style={s.searchTxt}
-                    placeholder="Search item or SKU"
-                    placeholderTextColor={COLORS.textTertiary}
-                    value={draftItemSearch}
-                    onChangeText={setDraftItemSearch}
-                  />
-                  {draftItemSearch.length > 0 && (
-                    <TouchableOpacity onPress={() => setDraftItemSearch('')} activeOpacity={0.7}>
-                      <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {/* Item suggestion list — visible only when typing */}
-                {draftItemSearch.length > 0 && (
-                  <View style={s.whList}>
-                    {itemsLoading ? (
-                      <ActivityIndicator size="small" color={COLORS.brandPrimary} style={{ padding: 12 }} />
-                    ) : (
-                      stockItemsList
-                        .filter(itm => itm.toLowerCase().includes(draftItemSearch.toLowerCase()))
-                        .filter(itm => !draftItems.has(itm))
-                        .slice(0, 25)
-                        .map((itm, idx, arr) => (
-                          <TouchableOpacity
-                            key={itm}
-                            style={[s.whRow, idx === arr.length - 1 && { borderBottomWidth: 0 }]}
-                            onPress={() => {
-                              setDraftItems(prev => { const n = new Set(prev); n.add(itm); return n; });
-                              setDraftItemSearch('');
-                            }}
-                            activeOpacity={0.7}
-                          >
-                            <Ionicons name="cube-outline" size={15} color={COLORS.textSecondary} />
-                            <Text style={s.whRowTxt} numberOfLines={1}>{itm}</Text>
-                          </TouchableOpacity>
-                        ))
-                    )}
-                  </View>
-                )}
-              </View>
-
-              {/* Batch / Serial */}
-              <View style={s.filterSection}>
-                <Text style={s.filterSectionTitle}>Batch / Serial</Text>
-                <View style={s.searchInput}>
-                  <Ionicons name="search-outline" size={15} color={COLORS.textTertiary} />
-                  <TextInput
-                    style={s.searchTxt}
-                    placeholder="Search batch or serial no."
-                    placeholderTextColor={COLORS.textTertiary}
-                    value={draftBatch}
-                    onChangeText={setDraftBatch}
-                  />
-                  {draftBatch.length > 0 && (
-                    <TouchableOpacity onPress={() => setDraftBatch('')} activeOpacity={0.7}>
-                      <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-              {/* Transaction type — dynamic from API (actual Tally voucher type names) */}
-              <View style={s.filterSection}>
-                <Text style={s.filterSectionTitle}>Transaction type</Text>
-                {voucherTypesLoading ? (
-                  <ActivityIndicator size="small" color={COLORS.brandPrimary} style={{ marginTop: 8, alignSelf: 'flex-start' }} />
-                ) : apiVoucherTypes.length === 0 ? (
-                  <Text style={[s.filterSectionTitle, { fontWeight: '400', color: COLORS.textTertiary, marginTop: 4 }]}>No transaction types found</Text>
-                ) : (
-                  <View style={s.typeList}>
-                    {apiVoucherTypes.map((v, idx) => {
-                      const active = draftVouchers.has(v);
-                      return (
-                        <TouchableOpacity
-                          key={v}
-                          style={[s.typeRow, idx === apiVoucherTypes.length - 1 && { borderBottomWidth: 0 }]}
-                          onPress={() => setDraftVouchers(prev => { const n = new Set(prev); active ? n.delete(v) : n.add(v); return n; })}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[s.typeRowTxt, active && s.typeRowTxtActive]}>{v}</Text>
-                          <View style={[s.checkbox, active && s.checkboxActive]}>
-                            {active && <Ionicons name="checkmark" size={12} color="#fff" />}
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                )}
-              </View>
-              <View style={{ height: 24 }} />
-            </ScrollView>
-            <View style={s.modalFooter}>
-              <TouchableOpacity style={s.cancelBtn} onPress={resetFilters} activeOpacity={0.7}>
-                <Text style={s.cancelTxt}>Reset</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.applyBtn} onPress={applyFilters} activeOpacity={0.8}>
-                <Text style={s.applyTxt}>Apply Filters</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* DateRangePicker — outside filter modal, no nesting */}
       <DateRangePickerModal
         visible={showDatePick}
-        fromDate={draftFrom}
-        toDate={draftTo}
-        onApply={handleDateApply}
-        onClose={() => {
-          setShowDatePick(false);
-          if (pendingReopenFilter) {
-            setPendingReopenFilter(false);
-            setTimeout(() => setShowFilter(true), 350);
-          }
-        }}
+        fromDate={dateFrom}
+        toDate={dateTo}
+        onApply={(from, to) => { setDateFrom(from); setDateTo(to); setShowDatePick(false); }}
+        onClose={() => setShowDatePick(false)}
         minDate={selectedFY?.startDate}
         maxDate={selectedFY?.endDate}
       />
@@ -940,6 +761,8 @@ const s = StyleSheet.create({
   header:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.sm, paddingVertical: 12, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   headerBtn:   { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { flex: 1, textAlign: 'center', fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 4, overflow: 'visible' },
+  headerIconBtn: { width: 38, height: 38, borderRadius: RADIUS.sm, alignItems: 'center', justifyContent: 'center' },
   filterBadge: { position: 'absolute', top: 6, right: 6, width: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center' },
   filterBadgeTxt: { fontSize: 9, fontWeight: '700', color: '#fff' },
 

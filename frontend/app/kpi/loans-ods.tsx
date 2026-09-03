@@ -13,6 +13,10 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { getKPILoansODs } from '../../src/services/api';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+import {
+  KPICarouselCard, KPICarouselPage, KPICarouselDots, KPI_CAROUSEL_PAGE_WIDTH,
+} from '../../src/components/KPICarouselCard';
+import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { useTranslation } from 'react-i18next';
 
 const { width: SW } = Dimensions.get('window');
@@ -280,15 +284,15 @@ export default function LoansODsScreen() {
   }, [active?._key, isOd]);
 
   const kpiCards = useMemo(() => {
-    const cards = Array.isArray(apiData?.kpi_cards) ? apiData.kpi_cards : null;
+    const apiKpiCards = Array.isArray(apiData?.kpi_cards) ? apiData.kpi_cards : null;
     const icons: Record<string, string> = {
       total: 'cash-outline',
       term: 'business-outline',
       od: 'swap-horizontal-outline',
       count: 'list-outline',
     };
-    if (cards?.length) {
-      return cards.map((c: any) => {
+    if (apiKpiCards?.length) {
+      return apiKpiCards.map((c: any) => {
         const trend = c.trend_pct;
         const hasTrend = trend != null && Number.isFinite(Number(trend));
         const positive = c.trend_positive != null ? !!c.trend_positive : Number(trend) >= 0;
@@ -314,7 +318,7 @@ export default function LoansODsScreen() {
       { id: 'od', icon: 'swap-horizontal-outline', label: 'ODs / Overdraft', amount: formatAmountCompact(Math.round(odTotal)), trend: null, positive: true },
       { id: 'count', icon: 'list-outline', label: 'Accounts', amount: String(cards.length), trend: null, positive: true },
     ];
-  }, [apiData, cards.length, formatAmountCompact]);
+  }, [apiData, cards.length, formatAmountCompact, t]);
 
   const outstandingRows = useMemo(() => {
     const hist = Array.isArray(active?.outstandingHistory) ? active.outstandingHistory : [];
@@ -358,13 +362,7 @@ export default function LoansODsScreen() {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      <View style={s.header}>
-        <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={s.headerTitle}>{t('kpi.loansOds')}</Text>
-        <View style={s.headerBtn} />
-      </View>
+      <ScreenHeader title={t('kpi.loansOds')} onBack={() => router.back()} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
         {apiError && <ErrorBanner message={apiError} onRetry={() => load({ soft: hasDataRef.current })} />}
@@ -384,39 +382,23 @@ export default function LoansODsScreen() {
                 data={kpiCards}
                 keyExtractor={(i) => i.id}
                 showsHorizontalScrollIndicator={false}
-                getItemLayout={(_, index) => ({ length: SW, offset: SW * index, index })}
+                getItemLayout={(_, index) => ({ length: KPI_CAROUSEL_PAGE_WIDTH, offset: KPI_CAROUSEL_PAGE_WIDTH * index, index })}
                 onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
-                  setKpiIdx(Math.round(e.nativeEvent.contentOffset.x / SW));
+                  setKpiIdx(Math.round(e.nativeEvent.contentOffset.x / KPI_CAROUSEL_PAGE_WIDTH));
                 }}
                 renderItem={({ item }) => (
-                  <View style={s.kpiItem}>
-                    <View style={s.kpiCard}>
-                      <View style={s.kpiIconBox}>
-                        <Ionicons name={item.icon as any} size={20} color={COLORS.textSecondary} />
-                      </View>
-                      <View style={s.kpiTextWrap}>
-                        <Text style={s.kpiLabel}>{item.label}</Text>
-                        <Text style={s.kpiAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount}</Text>
-                      </View>
-                      {item.trend != null ? (
-                        <View style={[s.kpiTrendBadge, { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg }]}>
-                          <Ionicons
-                            name={item.positive ? 'trending-up' : 'trending-down'}
-                            size={11}
-                            color={item.positive ? COLORS.positive : COLORS.negative}
-                          />
-                          <Text style={[s.kpiTrendTxt, { color: item.positive ? COLORS.positive : COLORS.negative }]}>
-                            {item.trend}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  </View>
+                  <KPICarouselPage>
+                    <KPICarouselCard
+                      icon={item.icon}
+                      label={item.label}
+                      amount={item.amount}
+                      trend={item.trend}
+                      positive={item.positive}
+                    />
+                  </KPICarouselPage>
                 )}
               />
-              <View style={s.dots}>
-                {kpiCards.map((_: any, i: number) => <View key={i} style={[s.dot, i === kpiIdx && s.dotActive]} />)}
-              </View>
+              <KPICarouselDots count={kpiCards.length} activeIndex={kpiIdx} />
             </View>
 
             {cards.length === 0 ? (
@@ -488,9 +470,7 @@ export default function LoansODsScreen() {
                     </View>
                   )}
                 />
-                <View style={s.dots}>
-                  {cards.map((_, i) => <View key={i} style={[s.dot, i === cardIdx && s.dotActive]} />)}
-                </View>
+                <KPICarouselDots count={cards.length} activeIndex={cardIdx} />
               </View>
             )}
 
@@ -663,22 +643,6 @@ const s = StyleSheet.create({
   headerTitle: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
 
   kpiSection: { marginBottom: SPACING.md },
-  kpiItem: { width: SW },
-  kpiCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
-    paddingHorizontal: 14, paddingVertical: 12, marginHorizontal: SPACING.md,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  kpiIconBox: {
-    width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.pageBg,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  kpiTextWrap: { flex: 1, gap: 2 },
-  kpiLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600' },
-  kpiAmount: { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
-  kpiTrendBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: RADIUS.full, flexShrink: 0 },
-  kpiTrendTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
 
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: 10 },
   dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },

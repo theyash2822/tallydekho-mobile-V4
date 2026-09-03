@@ -223,6 +223,46 @@ export async function shareStatementPdf(
 }
 
 /**
+ * Shares multiple ledger statements as a single PDF (page-break between each).
+ * Same Family C layout as `shareStatementPdf`.
+ */
+export async function shareMultiStatementPdf(
+  inputs: StatementInput[],
+  opts: { fileName?: string; onBeforeShare?: () => void } = {}
+): Promise<void> {
+  if (!inputs.length) throw new Error('No ledgers to share');
+  if (inputs.length === 1) {
+    await shareStatementPdf(inputs[0], opts);
+    return;
+  }
+
+  const sections = inputs.map((input, idx) => {
+    const full = renderTallyStatementHTML(input);
+    const match = full.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+    const body = match ? match[1] : full;
+    const breakStyle = idx === 0 ? '' : 'page-break-before:always;';
+    return `<div style="${breakStyle}padding:10mm">${body}</div>`;
+  }).join('\n');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:Arial,Helvetica,sans-serif;color:#000;background:#fff}
+  table{width:100%;border-collapse:collapse}
+</style></head><body>${sections}</body></html>`;
+
+  const { uri } = await Print.printToFileAsync({ html, base64: false, ...A4 });
+  opts.onBeforeShare?.();
+
+  const dialogTitle = opts.fileName || `Ledgers (${inputs.length}) — Statements.pdf`;
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle, UTI: 'com.adobe.pdf' });
+    return;
+  }
+  await Share.share({ url: uri, title: dialogTitle });
+}
+
+/**
  * Shares a master (ledger / bank / warehouse / stock item) as a Tally-style
  * summary sheet. Masters carry no `VoucherDocument`, so they get their own
  * renderer but the same print-and-share plumbing.

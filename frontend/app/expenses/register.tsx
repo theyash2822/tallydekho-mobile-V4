@@ -21,6 +21,7 @@ import {
   type ExpenseTypeId,
 } from '../../src/components/voucherHomeFilters';
 import { VoucherListTile, ExpenseTypeBadge } from '../../src/components/VoucherListTile';
+import { FilterPillRow, FilterDatePill, FilterDropdownPill } from '../../src/components/FilterPillRow';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -242,36 +243,21 @@ export default function ExpenseRegisterScreen() {
         </View>
       )}
 
-      {/* ── Filter Row (date + status) ─────────────────────────── */}
-      <View style={s.filterRow}>
-        <TouchableOpacity style={s.datePill} onPress={() => { setStatusOpen(false); setShowDatePicker(true); }} activeOpacity={0.7}>
-          <Ionicons name="calendar-outline" size={13} color={COLORS.textSecondary} />
-          <Text style={s.dateTxt} numberOfLines={1}>{fromDate} – {toDate}</Text>
-          <Ionicons name="chevron-down" size={12} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-
-        <View style={s.filterWrap}>
-          <TouchableOpacity
-            style={[s.filterPill, statusOpen && s.filterPillOpen]}
-            onPress={() => setStatusOpen(v => !v)}
-            activeOpacity={0.7}
-          >
-            <Text style={s.filterTxt}>{statusFilter === 'All' ? 'Status' : statusFilter}</Text>
-            <Ionicons name={statusOpen ? 'chevron-up' : 'chevron-down'} size={12} color={COLORS.textSecondary} />
-          </TouchableOpacity>
-          {statusOpen && (
-            <View style={s.dropMenu}>
-              {['All', 'Paid', 'Unpaid'].map(opt => (
-                <TouchableOpacity key={opt} style={s.dropItem} activeOpacity={0.7}
-                  onPress={() => { setStatusFilter(opt); setStatusOpen(false); }}
-                >
-                  <Text style={[s.dropTxt, statusFilter === opt && s.dropTxtActive]}>{opt}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
-      </View>
+      <FilterPillRow>
+        <FilterDatePill
+          label={`${fromDate} – ${toDate}`}
+          onPress={() => { setStatusOpen(false); setShowDatePicker(true); }}
+        />
+        <FilterDropdownPill
+          label={statusFilter}
+          open={statusOpen}
+          onToggle={() => setStatusOpen(v => !v)}
+          options={['All', 'Paid', 'Unpaid']}
+          selected={statusFilter}
+          onSelect={(opt) => { setStatusFilter(opt); setStatusOpen(false); }}
+          placeholder="Status"
+        />
+      </FilterPillRow>
 
       <ActiveFilterChips
         chips={activeChips}

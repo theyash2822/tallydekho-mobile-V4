@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 import { useSettings } from '../context/SettingsContext';
 import { tMetricLabel } from '../i18n/labelMap';
+import { MetricTrendBadge } from './MetricTrendBadge';
 import ShimmerPlaceholder from './ShimmerPlaceholder';
 
 // ── Compact large amounts so they never clip in the narrow tile ──────────────
@@ -72,7 +73,7 @@ export default function ModuleTiles({ metrics, isLoading }: Props) {
     <View style={s.row}>
       {metrics.map(item => {
         const id = IDENTITY[item.id] || { accent: COLORS.textSecondary, tint: COLORS.pageBg };
-        const trendColor = item.positive ? COLORS.positive : COLORS.negative;
+        const isFlat = Number(item.change) === 0;
         return (
           <TouchableOpacity
             key={item.id}
@@ -99,14 +100,11 @@ export default function ModuleTiles({ metrics, isLoading }: Props) {
               {displayAmount(item)}
             </Text>
 
-            <View style={s.trendRow}>
-              <Ionicons
-                name={item.positive ? 'arrow-up' : 'arrow-down'}
-                size={11}
-                color={trendColor}
-              />
-              <Text style={[s.trendTxt, { color: trendColor }]}>{item.change}%</Text>
-            </View>
+            <MetricTrendBadge
+              trend={`${isFlat ? '0' : item.change}%`}
+              positive={item.positive}
+              alwaysShow
+            />
           </TouchableOpacity>
         );
       })}
@@ -157,14 +155,5 @@ const s = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.textPrimary,
     letterSpacing: -0.4,
-  },
-  trendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  trendTxt: {
-    fontSize: TYPOGRAPHY.xs,
-    fontWeight: '700',
   },
 });

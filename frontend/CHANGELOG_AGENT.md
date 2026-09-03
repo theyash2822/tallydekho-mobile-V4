@@ -1,5 +1,27 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-01 — 0% KPI trend is grey + black
+
+### Why
+Loans & ODs (and any flat KPI) showed 0% in green because `trend_positive` is true for `>= 0`.
+
+### Change
+- Home KPI strip, module tiles, and Loans / Payments / Receipts / Bank KPI carousels: **0%** uses grey `activeBg` and black `textPrimary`, no arrow.
+- Non-zero % stays green/red.
+
+### Files
+- `frontend/app/(tabs)/index.tsx`
+- `frontend/src/components/ModuleTiles.tsx`
+- `frontend/app/kpi/loans-ods.tsx`
+- `frontend/app/kpi/payments.tsx`
+- `frontend/app/kpi/receipts.tsx`
+- `frontend/app/kpi/bank-balance.tsx`
+
+### QA
+Reload home; Loans 0% should be grey/black. Not pushed.
+
+---
+
 ## 2026-08-29 — Expense Type All/Direct/Indirect actually filters
 
 ### Root cause

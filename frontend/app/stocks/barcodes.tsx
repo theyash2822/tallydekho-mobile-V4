@@ -3,8 +3,8 @@ import { useBarcodeScanner } from '../../src/hooks/useBarcodeScanner';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Modal, FlatList, Pressable, Animated,
-  KeyboardAvoidingView, Platform, Vibration, Alert, ActivityIndicator, Switch, RefreshControl, Linking,
-  useWindowDimensions,
+  Platform, Vibration, Alert, ActivityIndicator, Switch, RefreshControl, Linking,
+  useWindowDimensions, Dimensions,
 } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';
 import { encodeCode128B } from '../../src/utils/barcode';
@@ -17,15 +17,277 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import SearchBar from '../../src/components/SearchBar';
+import FilterBottomSheet, {
+  FilterCheckRow,
+  FilterRadioRow,
+  filterSheetContentStyles as fm,
+  isFilterAllSelected,
+  isFilterOptionChecked,
+  toggleFilterFromAll,
+  toggleFilterAll,
+  useMultiFilterHydration,
+  isFilterSelectionValid,
+  normalizeFilterAllSelection,
+  isFilterNarrowing,
+} from '../../src/components/FilterBottomSheet';
+import { FilterIconWithBadge, ActiveFilterChips } from '../../src/components/voucherHomeFilters';
+import Toast from 'react-native-toast-message';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useAuth } from '../../src/context/AuthContext';
 import {
   getBarcodeList, getBarcodeSettings, saveBarcodeSettings, pushPendingBarcodes, downloadBarcodeTemplate,
   generateBarcode, generateBulkBarcodes, linkBarcode, lookupBarcode,
   bulkImportBarcodes, BarcodeItem, BarcodeSettings,
+  startBulkBarcodeJob, getBulkBarcodeJobStatus, getActiveBulkBarcodeJob,
+  BulkBarcodeJobStatus,
 } from '../../src/services/api';
 
 const AMBER = '#A89060';
+const SCREEN_H = Dimensions.get('window').height;
+
+/** Bottom sheet shell for Import / Settings / item actions (RN Modal). */
+function BarcodeActionSheet({
+  visible,
+  onClose,
+  title,
+  children,
+  footer,
+  headerContent,
+  heightFraction = 0.88,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  headerContent?: React.ReactNode;
+  heightFraction?: number;
+}) {
+  const insets = useSafeAreaInsets();
+  const sheetH = Math.min(SCREEN_H * heightFraction, SCREEN_H * 0.92);
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={s.modalRoot}>
+        <TouchableOpacity style={s.modalBackdrop} activeOpacity={1} onPress={onClose} />
+        <View style={s.modalSheetContainer} pointerEvents="box-none">
+          <View style={[s.actionSheet, { height: sheetH, paddingBottom: Math.max(insets.bottom, 16) }]}>
+            <View style={s.modalHandle} />
+            <View style={s.importHeader}>
+              <Text style={s.importTitle}>{title}</Text>
+              <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
+                <Ionicons name="close" size={22} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            {headerContent ? (
+              <View style={s.actionSheetHeader}>{headerContent}</View>
+            ) : null}
+            <ScrollView
+              style={s.actionSheetBody}
+              contentContainerStyle={s.actionSheetBodyContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+            >
+              {children}
+            </ScrollView>
+            {footer ? <View style={s.actionSheetFooter}>{footer}</View> : null}
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function BarcodeFilterModal({
+  visible,
+  onClose,
+  onApply,
+  initPeriod,
+  initGroup,
+  initStatus,
+  groupOptions,
+  statusOptions,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onApply: (period: string, groups: string[], statuses: string[]) => void;
+  initPeriod: string;
+  initGroup: string[];
+  initStatus: string[];
+  groupOptions: { id: string; label: string }[];
+  statusOptions: { id: string; label: string }[];
+}) {
+  const [tab, setTab] = useState<'Period' | 'Group' | 'Status'>('Period');
+  const [selPeriod, setSelPeriod] = useState('All');
+  const [selGroup, setSelGroup] = useState<string[]>([]);
+  const [selStatus, setSelStatus] = useState<string[]>([]);
+  const [grpSearch, setGrpSearch] = useState('');
+  const [statusSearch, setStatusSearch] = useState('');
+
+  const grpIds = useMemo(() => groupOptions.map(g => g.id), [groupOptions]);
+  const statusIds = useMemo(() => statusOptions.map(st => st.id), [statusOptions]);
+
+  useEffect(() => {
+    if (visible) {
+      setSelPeriod(initPeriod);
+      setGrpSearch('');
+      setStatusSearch('');
+      setTab('Period');
+    }
+  }, [visible, initPeriod]);
+
+  useMultiFilterHydration(visible, initGroup, grpIds, setSelGroup);
+  useMultiFilterHydration(visible, initStatus, statusIds, setSelStatus);
+
+  const isAllGrp = isFilterAllSelected(selGroup, grpIds);
+  const isAllStatus = isFilterAllSelected(selStatus, statusIds);
+  const activeCount =
+    (selPeriod !== 'All' ? 1 : 0)
+    + (isAllGrp ? 0 : selGroup.length)
+    + (isAllStatus ? 0 : selStatus.length);
+  const canApply =
+    isFilterSelectionValid(selGroup, grpIds) && isFilterSelectionValid(selStatus, statusIds);
+
+  const filteredGrp = useMemo(() => {
+    const q = grpSearch.trim().toLowerCase();
+    const list = groupOptions.filter(Boolean);
+    if (!q) return list;
+    return list.filter(g => g.label.toLowerCase().includes(q) || g.id.toLowerCase().includes(q));
+  }, [groupOptions, grpSearch]);
+
+  const filteredStatus = useMemo(() => {
+    const q = statusSearch.trim().toLowerCase();
+    const list = statusOptions.filter(Boolean);
+    if (!q) return list;
+    return list.filter(st => st.label.toLowerCase().includes(q) || st.id.toLowerCase().includes(q));
+  }, [statusOptions, statusSearch]);
+
+  const handleApply = () => {
+    if (!canApply) return;
+    const nextGroup = normalizeFilterAllSelection(selGroup, grpIds);
+    const nextStatus = normalizeFilterAllSelection(selStatus, statusIds);
+    onApply(selPeriod, nextGroup, nextStatus);
+    onClose();
+    const toastParts = [
+      ...(selPeriod !== 'All' ? [selPeriod] : []),
+      ...(nextGroup.length ? [`${nextGroup.length} group${nextGroup.length !== 1 ? 's' : ''}`] : []),
+      ...(nextStatus.length ? [`${nextStatus.length} status${nextStatus.length !== 1 ? 'es' : ''}`] : []),
+    ];
+    Toast.show({
+      type: 'success',
+      text1: toastParts.length ? 'Filters applied' : 'Filters cleared',
+      text2: toastParts.length ? toastParts.join(' · ') : 'Showing all items',
+      visibilityTime: 2000,
+    });
+  };
+
+  return (
+    <FilterBottomSheet
+      visible={visible}
+      onClose={onClose}
+      title="Filter Barcodes"
+      activeCount={activeCount}
+      onClear={() => {
+        setSelPeriod('All');
+        setSelGroup([...grpIds]);
+        setSelStatus([...statusIds]);
+      }}
+      onApply={handleApply}
+      applyLabel="Apply Filters"
+      applyDisabled={!canApply}
+      heightFraction={0.72}
+    >
+      <View style={fm.tabs}>
+        {(['Period', 'Group', 'Status'] as const).map(cat => (
+          <TouchableOpacity
+            key={cat}
+            style={[fm.tab, tab === cat && fm.tabActive]}
+            onPress={() => setTab(cat)}
+            activeOpacity={0.7}
+          >
+            <Text style={[fm.tabTxt, tab === cat && fm.tabTxtActive]}>{cat}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {tab === 'Period' ? (
+        <View style={fm.panel}>
+          {PERIODS.map(opt => (
+            <FilterRadioRow
+              key={opt}
+              label={opt === 'All' ? 'All periods' : opt}
+              selected={selPeriod === opt}
+              onPress={() => setSelPeriod(opt)}
+            />
+          ))}
+        </View>
+      ) : tab === 'Group' ? (
+        <View style={fm.panel}>
+          <View style={fm.searchBox}>
+            <Ionicons name="search" size={14} color={COLORS.textTertiary} />
+            <TextInput
+              style={fm.searchInput}
+              placeholder="Search group..."
+              placeholderTextColor={COLORS.textTertiary}
+              value={grpSearch}
+              onChangeText={setGrpSearch}
+            />
+          </View>
+          <FilterCheckRow
+            label="All groups"
+            selected={isAllGrp}
+            onPress={() => setSelGroup(prev => toggleFilterAll(prev, grpIds))}
+          />
+          {groupOptions.length === 0 ? (
+            <Text style={fm.hint}>No groups available. Sync Tally first.</Text>
+          ) : filteredGrp.length === 0 ? (
+            <Text style={fm.hint}>No groups match your search</Text>
+          ) : (
+            filteredGrp.map(g => (
+              <FilterCheckRow
+                key={g.id}
+                label={g.label}
+                selected={isFilterOptionChecked(selGroup, g.id)}
+                onPress={() => setSelGroup(prev => toggleFilterFromAll(prev, g.id, grpIds))}
+              />
+            ))
+          )}
+        </View>
+      ) : (
+        <View style={fm.panel}>
+          <View style={fm.searchBox}>
+            <Ionicons name="search" size={14} color={COLORS.textTertiary} />
+            <TextInput
+              style={fm.searchInput}
+              placeholder="Search status..."
+              placeholderTextColor={COLORS.textTertiary}
+              value={statusSearch}
+              onChangeText={setStatusSearch}
+            />
+          </View>
+          <FilterCheckRow
+            label="All statuses"
+            selected={isAllStatus}
+            onPress={() => setSelStatus(prev => toggleFilterAll(prev, statusIds))}
+          />
+          {filteredStatus.length === 0 ? (
+            <Text style={fm.hint}>No statuses match your search</Text>
+          ) : (
+            filteredStatus.map(st => (
+              <FilterCheckRow
+                key={st.id}
+                label={st.label}
+                selected={isFilterOptionChecked(selStatus, st.id)}
+                onPress={() => setSelStatus(prev => toggleFilterFromAll(prev, st.id, statusIds))}
+              />
+            ))
+          )}
+        </View>
+      )}
+    </FilterBottomSheet>
+  );
+}
 
 // ─── Real CODE128B barcode SVG (scannable) ──────────────────────────────
 // Uses integer virtual coordinates + viewBox scaling so bar ratios (1:2:3:4)
@@ -86,18 +348,16 @@ export default function BarcodesScreen() {
   const [loading,   setLoading]   = useState(false);
   const [groups,    setGroups]    = useState<string[]>(['All']);
   const [statuses,  setStatuses]  = useState<string[]>(['All', 'In Stock', 'Low Stock', 'Out of Stock', 'Linked', 'Unlinked']);
-  const [summary,   setSummary]   = useState({ totalItems: 0, linked: 0, unlinked: 0 });
+  const [summary,   setSummary]   = useState({ totalItems: 0, linked: 0, unlinked: 0, unlinkedInFilter: 0 });
   const [page,      setPage]      = useState(1);
   const [hasMore,   setHasMore]   = useState(false);
 
   // ── Filter state ────────────────────────────────────────────────────────────
-  const [search,    setSearch]       = useState('');
-  const [selPeriod, setSelPeriod]    = useState('All');
-  const [selGroup,  setSelGroup]     = useState('All');
-  const [selStatus, setSelStatus]    = useState('All');
-  const [periodOpen, setPeriodOpen]  = useState(false);
-  const [groupOpen,  setGroupOpen]   = useState(false);
-  const [statusOpen, setStatusOpen]  = useState(false);
+  const [search,       setSearch]       = useState('');
+  const [selPeriod,    setSelPeriod]    = useState('All');
+  const [selGroup,     setSelGroup]     = useState<string[]>([]);
+  const [selStatus,    setSelStatus]    = useState<string[]>([]);
+  const [showFilter,   setShowFilter]   = useState(false);
 
   // ── Multi-select ────────────────────────────────────────────────────────────
   const [selectedIds,    setSelectedIds]    = useState<Set<string>>(new Set());
@@ -105,7 +365,9 @@ export default function BarcodesScreen() {
 
   // ── Generation state ────────────────────────────────────────────────────────
   const [generatingIds,  setGeneratingIds]  = useState<Set<string>>(new Set()); // per-row inline spinner
-  const [generatingAll,  setGeneratingAll]  = useState(false);                  // bulk in-progress
+  const [generatingAll,  setGeneratingAll]  = useState(false);
+  const [bulkJob,        setBulkJob]        = useState<BulkBarcodeJobStatus | null>(null);
+  const bulkPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Modals ──────────────────────────────────────────────────────────────────
   const [scannerVisible,  setScannerVisible]  = useState(false);
@@ -167,6 +429,7 @@ export default function BarcodesScreen() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [linkVisible,     setLinkVisible]     = useState(false);
   const [viewBarcodeItem, setViewBarcodeItem] = useState<BarcodeItem | null>(null);
+  const [linkedActionItem, setLinkedActionItem] = useState<BarcodeItem | null>(null);
 
   // ── Barcode scanner hook — scan state + lookup, no inline API calls ────────
   const {
@@ -263,20 +526,41 @@ export default function BarcodesScreen() {
   // ── Search debounce + barcode scan ref ─────────────────────────────────────
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const groupOptions = useMemo(
+    () => groups.filter(g => g !== 'All').map(g => ({ id: g, label: g })),
+    [groups],
+  );
+  const statusOptions = useMemo(
+    () => statuses.filter(st => st !== 'All').map(st => ({ id: st, label: st })),
+    [statuses],
+  );
+  const groupIds = useMemo(() => groupOptions.map(g => g.id), [groupOptions]);
+  const statusIds = useMemo(() => statusOptions.map(st => st.id), [statusOptions]);
+
+  const activeFilterCount = useMemo(() => {
+    let n = selPeriod !== 'All' ? 1 : 0;
+    if (isFilterNarrowing(selGroup, groupIds)) n += selGroup.length;
+    if (isFilterNarrowing(selStatus, statusIds)) n += selStatus.length;
+    return n;
+  }, [selPeriod, selGroup, selStatus, groupIds, statusIds]);
+
   // ── Load data ───────────────────────────────────────────────────────────────
   const loadItems = useCallback(async (p = 1, reset = true) => {
     if (!companyGuid) return;
     setLoading(true);
     try {
       const res = await getBarcodeList(companyGuid, {
-        period: selPeriod, group: selGroup, status: selStatus, search, page: p, pageSize: 50,
+        period: selPeriod,
+        group: selGroup.length ? selGroup.join(',') : 'All',
+        status: selStatus.length ? selStatus.join(',') : 'All',
+        search, page: p, pageSize: 50,
       });
       const d = res?.data || res;
       if (reset) setItems(d.items || []);
       else setItems(prev => [...prev, ...(d.items || [])]);
       setGroups(d.filters?.groups || ['All']);
       setStatuses(d.filters?.statuses || ['All']);
-      setSummary(d.summary || { totalItems: 0, linked: 0, unlinked: 0 });
+      setSummary(d.summary || { totalItems: 0, linked: 0, unlinked: 0, unlinkedInFilter: 0 });
       const { page: pg, pageSize, total } = d.pagination || {};
       setHasMore((pg || 1) * (pageSize || 50) < (total || 0));
       setPage(p);
@@ -309,9 +593,71 @@ export default function BarcodesScreen() {
 
   useEffect(() => { loadSettings(); }, [loadSettings]);
 
+  const stopBulkPoll = useCallback(() => {
+    if (bulkPollRef.current) {
+      clearInterval(bulkPollRef.current);
+      bulkPollRef.current = null;
+    }
+  }, []);
+
+  const finishBulkJob = useCallback(async (job: BulkBarcodeJobStatus) => {
+    stopBulkPoll();
+    setBulkJob(null);
+    setGeneratingAll(false);
+    await loadItems(1, true);
+    if (job.status === 'completed') {
+      Toast.show({
+        type: 'success',
+        text1: 'Barcodes generated',
+        text2: `${job.generated} created${job.errors ? `, ${job.errors} failed` : ''}`,
+        visibilityTime: 3000,
+      });
+    } else if (job.status === 'failed') {
+      Alert.alert('Generation failed', job.errorMessage || 'Something went wrong. Try again.');
+    }
+  }, [loadItems, stopBulkPoll]);
+
+  const pollBulkJob = useCallback(async (jobId: string) => {
+    if (!companyGuid) return;
+    try {
+      const res = await getBulkBarcodeJobStatus(companyGuid, jobId);
+      const job = res?.data;
+      if (!job) return;
+      setBulkJob(job);
+      if (job.status === 'completed' || job.status === 'failed') {
+        await finishBulkJob(job);
+      }
+    } catch { /* keep polling */ }
+  }, [companyGuid, finishBulkJob]);
+
+  const beginBulkJobPolling = useCallback((jobId: string) => {
+    stopBulkPoll();
+    pollBulkJob(jobId);
+    bulkPollRef.current = setInterval(() => pollBulkJob(jobId), 1200);
+  }, [pollBulkJob, stopBulkPoll]);
+
+  // Resume progress UI if a job is still running (e.g. user navigated away and back)
+  useEffect(() => {
+    if (!companyGuid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getActiveBulkBarcodeJob(companyGuid);
+        const job = res?.data;
+        if (cancelled || !job?.jobId || !['pending', 'running'].includes(job.status)) return;
+        setBulkJob(job);
+        setGeneratingAll(true);
+        beginBulkJobPolling(job.jobId);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [companyGuid, beginBulkJobPolling]);
+
+  useEffect(() => () => stopBulkPoll(), [stopBulkPoll]);
+
   // ── Link search (search stock items in already-loaded items) ─────────────
   useEffect(() => {
-    if (!linkSearch.trim()) { setLinkResults([]); return; }
+    if (!linkSearch.trim()) return;
     const q = linkSearch.toLowerCase();
     setLinkResults(items.filter(i =>
       i.displayName.toLowerCase().includes(q) ||
@@ -319,6 +665,23 @@ export default function BarcodesScreen() {
       i.name.toLowerCase().includes(q)
     ).slice(0, 20));
   }, [linkSearch, items]);
+
+  const openLinkBarcodeSheet = useCallback((opts: {
+    barcode?: string;
+    scanned?: string;
+    seedResults?: BarcodeItem[];
+    delayMs?: number;
+  }) => {
+    const run = () => {
+      if (opts.scanned !== undefined) setScannedCode(opts.scanned);
+      if (opts.barcode !== undefined) setManualBarcode(opts.barcode);
+      setLinkSearch('');
+      setLinkResults(opts.seedResults ?? []);
+      setLinkVisible(true);
+    };
+    if (opts.delayMs && opts.delayMs > 0) setTimeout(run, opts.delayMs);
+    else run();
+  }, []);
 
   // ── Multi-select helpers ───────────────────────────────────────────────────
   const enterMultiSelect = (id: string) => {
@@ -397,32 +760,60 @@ export default function BarcodesScreen() {
     }
   };
 
+  const filtersActive = selPeriod !== 'All' || selGroup.length > 0 || selStatus.length > 0 || !!search.trim();
+
   // ── Generate All unlinked items (bulk) ────────────────────────────────────
   const handleGenerateAll = () => {
-    const unlinked = items.filter(i => !i.barcode);
-    if (!unlinked.length) {
-      Alert.alert('All linked', 'Every item already has a barcode.');
+    const unlinkedCount = summary.unlinkedInFilter ?? summary.unlinked ?? 0;
+    if (!unlinkedCount) {
+      Alert.alert('All linked', filtersActive
+        ? 'Every item matching your filters already has a barcode.'
+        : 'Every item already has a barcode.');
       return;
     }
+    const scopeLabel = filtersActive ? ' matching current filters' : ' in your company';
     Alert.alert(
       'Generate All Barcodes',
-      `Generate barcodes for ${unlinked.length} unlinked item${unlinked.length !== 1 ? 's' : ''}?`,
+      `Generate barcodes for ${unlinkedCount} unlinked item${unlinkedCount !== 1 ? 's' : ''}${scopeLabel}?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: `Generate ${unlinked.length}`, onPress: async () => {
+        { text: `Generate ${unlinkedCount}`, onPress: async () => {
           setGeneratingAll(true);
           try {
-            const res = await generateBulkBarcodes(companyGuid, {
+            const res = await startBulkBarcodeJob(companyGuid, {
               all: true,
+              period: selPeriod,
+              group: selGroup.length ? selGroup.join(',') : 'All',
+              status: selStatus.length ? selStatus.join(',') : 'All',
+              search,
               barcodeType: settings.defaultBarcodeType,
-              syncTarget:  settings.barcodeStorageMode,
+              syncTarget: settings.barcodeStorageMode,
             });
-            const d = res?.data || res;
-            await loadItems(1, true);
-            Alert.alert('✅ Done', `Generated ${d.generated} barcodes${d.errors ? `, ${d.errors} failed` : '.'}`);
+            const d = res?.data;
+            if (!d?.jobId) {
+              setGeneratingAll(false);
+              if ((d?.generated ?? 0) === 0 && unlinkedCount === 0) {
+                Alert.alert('All linked', 'Every item matching your filters already has a barcode.');
+              } else {
+                await loadItems(1, true);
+              }
+              return;
+            }
+            const job: BulkBarcodeJobStatus = {
+              jobId: d.jobId,
+              status: (d.status as BulkBarcodeJobStatus['status']) || 'pending',
+              total: d.total ?? 0,
+              processed: d.processed ?? 0,
+              generated: d.generated ?? 0,
+              errors: d.errors ?? 0,
+              pct: d.total ? Math.round(((d.processed ?? 0) / d.total) * 100) : 0,
+            };
+            setBulkJob(job);
+            beginBulkJobPolling(d.jobId);
           } catch (err: any) {
-            Alert.alert('Error', err?.message || 'Bulk generate failed');
-          } finally { setGeneratingAll(false); }
+            setGeneratingAll(false);
+            Alert.alert('Error', err?.message || 'Could not start bulk generation');
+          }
         }},
       ]
     );
@@ -446,29 +837,19 @@ export default function BarcodesScreen() {
     router.push(`/stocks/print-settings?ids=${Array.from(selectedIds).join(',')}` as any);
   };
 
-  // ── Link scanned barcode to stock item ─────────────────────────────────────
+  // ── Link barcode (scan or manual field) to stock item ──────────────────────
   const handleLinkToItem = async (targetItem: BarcodeItem) => {
-    if (!companyGuid || !scannedCode) return;
+    const code = manualBarcode.trim() || scannedCode;
+    if (!companyGuid || !code) return;
+    const source = manualBarcode.trim() ? 'manual' : 'scan';
     setLinking(true);
     try {
-      await linkBarcode(companyGuid, targetItem.stockGuid, scannedCode, 'CODE128', 'scan', settings.barcodeStorageMode);
+      await linkBarcode(companyGuid, targetItem.stockGuid, code, 'CODE128', source, settings.barcodeStorageMode);
       setLinkVisible(false);
       setScannedCode('');
-      Alert.alert('Linked!', `"${scannedCode}" linked to ${targetItem.displayName}`);
-      loadItems(1, true);
-    } catch (err: any) {
-      Alert.alert('Link Failed', err?.message || 'Could not link barcode');
-    } finally { setLinking(false); }
-  };
-
-  // ── Link manually typed barcode ────────────────────────────────────────────
-  const handleLinkManual = async (targetItem: BarcodeItem) => {
-    if (!companyGuid || !manualBarcode.trim()) return;
-    setLinking(true);
-    try {
-      await linkBarcode(companyGuid, targetItem.stockGuid, manualBarcode.trim(), 'CODE128', 'manual', settings.barcodeStorageMode);
-      setLinkVisible(false);
-      Alert.alert('Linked!', `"${manualBarcode.trim()}" linked to ${targetItem.displayName}`);
+      setManualBarcode('');
+      setLinkSearch('');
+      Alert.alert('Linked!', `"${code}" linked to ${targetItem.displayName}`);
       loadItems(1, true);
     } catch (err: any) {
       Alert.alert('Link Failed', err?.message || 'Could not link barcode');
@@ -487,17 +868,11 @@ export default function BarcodesScreen() {
     }
   };
 
-  // ── Item long-press — multi-select (unlinked) or options menu (linked) ────
+  // ── Item long-press — multi-select (unlinked) or options sheet (linked) ───
   const handleItemLongPress = (item: BarcodeItem) => {
     if (isMultiSelect) { toggleSelect(item.stockGuid); return; }
     if (!item.barcode) { enterMultiSelect(item.stockGuid); return; }
-    Alert.alert(item.displayName, item.barcode, [
-      { text: '🔲 View Barcode Image', onPress: () => setViewBarcodeItem(item) },
-      { text: 'Select for Print', onPress: () => enterMultiSelect(item.stockGuid) },
-      { text: 'Link Different Barcode', onPress: () => { setScannedCode(''); setManualBarcode(item.barcode || ''); setLinkSearch(''); setLinkResults([item]); setLinkVisible(true); } },
-      { text: 'Open Details', onPress: () => router.push(`/stocks/item-detail?id=${item.stockGuid}` as any) },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+    setLinkedActionItem(item);
   };
 
   // ── Import ─────────────────────────────────────────────────────────────────
@@ -612,7 +987,7 @@ export default function BarcodesScreen() {
         <View style={s.itemIconWrap}>
           {isGenerating
             ? <ActivityIndicator size="small" color={AMBER} />
-            : <Ionicons name={isLinked ? 'barcode-outline' : 'cube-outline'} size={20} color={isLinked ? AMBER : COLORS.textSecondary} />}
+            : <Ionicons name={isLinked ? 'barcode-outline' : 'cube-outline'} size={20} color={isLinked ? COLORS.textPrimary : COLORS.textSecondary} />}
         </View>
         <View style={s.itemInfo}>
           <Text style={s.itemName} numberOfLines={1}>{item.displayName}</Text>
@@ -628,9 +1003,9 @@ export default function BarcodesScreen() {
       {/* ── Multi-select banner */}
       {isMultiSelect && (
         <View style={s.selBanner}>
-          <Text style={s.selBannerText}>{selectedIds.size} selected</Text>
-          <TouchableOpacity onPress={exitMultiSelect} activeOpacity={0.7}>
-            <Text style={s.selBannerCancel}>Cancel</Text>
+          <Text style={s.selBannerCount}>{selectedIds.size} selected</Text>
+          <TouchableOpacity onPress={exitMultiSelect} activeOpacity={0.7} style={s.selBannerClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
         </View>
       )}
@@ -644,81 +1019,44 @@ export default function BarcodesScreen() {
           <Text style={s.headerTitle}>Barcode</Text>
           <View style={s.headerActions}>
             <TouchableOpacity style={s.headerIcon} onPress={openScanner} activeOpacity={0.7}>
-              <Ionicons name="scan-outline" size={22} color={COLORS.textPrimary} />
+              <Ionicons name="scan-outline" size={20} color={COLORS.textPrimary} />
             </TouchableOpacity>
             <TouchableOpacity style={s.headerIcon} onPress={() => setImportVisible(true)} activeOpacity={0.7}>
-              <Ionicons name="cloud-upload-outline" size={22} color={COLORS.textPrimary} />
+              <Ionicons name="cloud-upload-outline" size={20} color={COLORS.textPrimary} />
             </TouchableOpacity>
-            {/* ⚡ Generate All unlinked items */}
             <TouchableOpacity style={s.headerIcon} onPress={handleGenerateAll} activeOpacity={0.7} disabled={generatingAll}>
               {generatingAll
-                ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
-                : <Ionicons name="flash-outline" size={22} color={COLORS.brandPrimary} />}
+                ? <ActivityIndicator size="small" color={COLORS.textPrimary} />
+                : <Ionicons name="flash-outline" size={20} color={COLORS.textPrimary} />}
             </TouchableOpacity>
             <TouchableOpacity style={s.headerIcon} onPress={() => { setDraftSettings({ ...settings }); setSettingsVisible(true); }} activeOpacity={0.7}>
-              <Ionicons name="settings-outline" size={21} color={COLORS.textPrimary} />
+              <Ionicons name="settings-outline" size={20} color={COLORS.textPrimary} />
             </TouchableOpacity>
+            <FilterIconWithBadge count={activeFilterCount} onPress={() => setShowFilter(true)} />
           </View>
         </View>
       )}
 
-      {/* ── Filter chips */}
-      <View style={s.filterRow}>
-        <TouchableOpacity style={[s.filterChip, selPeriod !== 'All' && s.filterChipActive]} onPress={() => { setPeriodOpen(v => !v); setGroupOpen(false); setStatusOpen(false); }} activeOpacity={0.7}>
-          <Ionicons name="calendar-outline" size={13} color={selPeriod !== 'All' ? '#fff' : COLORS.textSecondary} />
-          <Text style={[s.filterChipText, selPeriod !== 'All' && s.filterChipTextActive]}>{selPeriod === 'All' ? 'Period' : selPeriod}</Text>
-          <Ionicons name="chevron-down" size={12} color={selPeriod !== 'All' ? '#fff' : COLORS.textTertiary} />
-        </TouchableOpacity>
-        <TouchableOpacity style={[s.filterChip, selGroup !== 'All' && s.filterChipActive]} onPress={() => { setGroupOpen(v => !v); setPeriodOpen(false); setStatusOpen(false); }} activeOpacity={0.7}>
-          <Ionicons name="layers-outline" size={13} color={selGroup !== 'All' ? '#fff' : COLORS.textSecondary} />
-          <Text style={[s.filterChipText, selGroup !== 'All' && s.filterChipTextActive]}>{selGroup === 'All' ? 'Group' : selGroup}</Text>
-          <Ionicons name="chevron-down" size={12} color={selGroup !== 'All' ? '#fff' : COLORS.textTertiary} />
-        </TouchableOpacity>
-        <TouchableOpacity style={[s.filterChip, selStatus !== 'All' && s.filterChipActive]} onPress={() => { setStatusOpen(v => !v); setPeriodOpen(false); setGroupOpen(false); }} activeOpacity={0.7}>
-          <Ionicons name="checkmark-circle-outline" size={13} color={selStatus !== 'All' ? '#fff' : COLORS.textSecondary} />
-          <Text style={[s.filterChipText, selStatus !== 'All' && s.filterChipTextActive]}>{selStatus === 'All' ? 'Status' : selStatus}</Text>
-          <Ionicons name="chevron-down" size={12} color={selStatus !== 'All' ? '#fff' : COLORS.textTertiary} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Inline filter dropdowns */}
-      {periodOpen && (
-        <View style={s.dropdownMenu}>
-          {PERIODS.map(opt => (
-            <TouchableOpacity key={opt} style={s.dropdownItem} onPress={() => { setSelPeriod(opt); setPeriodOpen(false); }} activeOpacity={0.7}>
-              <Text style={[s.dropdownItemText, selPeriod === opt && s.dropdownItemTextActive]}>{opt}</Text>
-              {selPeriod === opt && <Ionicons name="checkmark" size={14} color={AMBER} />}
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-      {groupOpen && (
-        <View style={s.dropdownMenu}>
-          {groups.map(opt => (
-            <TouchableOpacity key={opt} style={s.dropdownItem} onPress={() => { setSelGroup(opt); setGroupOpen(false); }} activeOpacity={0.7}>
-              <Text style={[s.dropdownItemText, selGroup === opt && s.dropdownItemTextActive]}>{opt}</Text>
-              {selGroup === opt && <Ionicons name="checkmark" size={14} color={AMBER} />}
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-      {statusOpen && (
-        <View style={s.dropdownMenu}>
-          {statuses.map(opt => (
-            <TouchableOpacity key={opt} style={s.dropdownItem} onPress={() => { setSelStatus(opt); setStatusOpen(false); }} activeOpacity={0.7}>
-              <Text style={[s.dropdownItemText, selStatus === opt && s.dropdownItemTextActive]}>{opt}</Text>
-              {selStatus === opt && <Ionicons name="checkmark" size={14} color={AMBER} />}
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-
-      {/* ── Search bar */}
+      {/* ── Search + active filters */}
       <SearchBar
         value={search}
         onChangeText={setSearch}
         placeholder="Search by name, SKU or barcode..."
         inputProps={{ returnKeyType: 'search' }}
+      />
+      <ActiveFilterChips
+        variant="amber"
+        chips={[
+          ...(selPeriod !== 'All' ? [{ id: 'period', label: selPeriod }] : []),
+          ...selGroup.map(g => ({ id: `grp:${g}`, label: g })),
+          ...selStatus.map(st => ({ id: `st:${st}`, label: st })),
+        ]}
+        onRemove={(chipId) => {
+          if (chipId === 'period') setSelPeriod('All');
+          else if (chipId.startsWith('grp:')) setSelGroup(p => p.filter(x => x !== chipId.slice(4)));
+          else if (chipId.startsWith('st:')) setSelStatus(p => p.filter(x => x !== chipId.slice(3)));
+        }}
+        onClearAll={() => { setSelPeriod('All'); setSelGroup([]); setSelStatus([]); }}
       />
 
       {/* ── Item list */}
@@ -946,11 +1284,11 @@ export default function BarcodesScreen() {
                       activeOpacity={0.85}
                       onPress={() => {
                         closeScanner();
-                        setScannedCode(scanResult.barcode);
-                        setManualBarcode(scanResult.barcode);
-                        setLinkSearch('');
-                        setLinkResults([]);
-                        setLinkVisible(true);
+                        openLinkBarcodeSheet({
+                          scanned: scanResult.barcode,
+                          barcode: scanResult.barcode,
+                          delayMs: 350,
+                        });
                       }}
                     >
                       <Ionicons name="link-outline" size={16} color="#fff" />
@@ -971,219 +1309,292 @@ export default function BarcodesScreen() {
       {/* ════════════════════════════════════════════
           IMPORT BULK BARCODES MODAL
       ════════════════════════════════════════════ */}
-      <Modal visible={importVisible} animationType="slide" transparent onRequestClose={() => setImportVisible(false)}>
-        <Pressable style={s.modalOverlay} onPress={() => setImportVisible(false)}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
-            <Pressable style={s.importSheet} onPress={e => e.stopPropagation()}>
-              <View style={s.modalHandle} />
-              <View style={s.importHeader}>
-                <Text style={s.importTitle}>Import Bulk Barcodes</Text>
-                <TouchableOpacity onPress={() => setImportVisible(false)} activeOpacity={0.7}>
-                  <Ionicons name="close" size={22} color={COLORS.textPrimary} />
-                </TouchableOpacity>
-              </View>
-              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                <TouchableOpacity style={s.dropZone} onPress={handlePickFile} activeOpacity={0.8}>
-                  <Ionicons name="cloud-upload-outline" size={36} color={COLORS.textTertiary} />
-                  <Text style={s.dropZoneText}>Tap to choose CSV file</Text>
-                  <Text style={s.dropZoneSub}>Supports .csv, .txt</Text>
-                </TouchableOpacity>
-                {/* Download pre-filled template with all stock names */}
-                <TouchableOpacity
-                  style={s.templateLink}
-                  activeOpacity={0.7}
-                  onPress={handleDownloadTemplate}
-                  disabled={downloadingTemplate}
-                >
-                  {downloadingTemplate
-                    ? <ActivityIndicator size="small" color={AMBER} />
-                    : <Ionicons name="download-outline" size={14} color={AMBER} />}
-                  <Text style={s.templateLinkText}>
-                    {downloadingTemplate ? 'Downloading…' : 'Download Template (pre-filled with your items)'}
-                  </Text>
-                </TouchableOpacity>
-                <Text style={s.templateHint}>
-                  Opens in Excel/Sheets · Fill barcode column · Save as CSV · Upload above
-                </Text>
-                <View style={s.orDivider}>
-                  <View style={s.orLine} />
-                  <Text style={s.orText}>OR</Text>
-                  <View style={s.orLine} />
-                </View>
-                <Text style={s.importLabel}>Paste Barcodes (one per line, or item_name,barcode)</Text>
-                <TextInput
-                  style={s.pasteInput}
-                  value={pasteText}
-                  onChangeText={setPasteText}
-                  multiline
-                  numberOfLines={5}
-                  placeholder={"8901234567890\nBlack JBL Speaker,4902780764600\n..."}
-                  placeholderTextColor={COLORS.textTertiary}
-                  textAlignVertical="top"
-                />
-                <View style={s.importActions}>
-                  <TouchableOpacity style={s.importCancelBtn} onPress={() => setImportVisible(false)} activeOpacity={0.7}>
-                    <Text style={s.importCancelText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={s.importSubmitBtn} onPress={handleImportSubmit} activeOpacity={0.8} disabled={importing}>
-                    {importing
-                      ? <ActivityIndicator size="small" color="#fff" />
-                      : <><Ionicons name="cloud-upload-outline" size={16} color="#fff" /><Text style={s.importSubmitText}>Import</Text></>}
-                  </TouchableOpacity>
-                </View>
-                <View style={{ height: 40 }} />
-              </ScrollView>
-            </Pressable>
-          </KeyboardAvoidingView>
-        </Pressable>
-      </Modal>
+      <BarcodeActionSheet
+        visible={importVisible}
+        onClose={() => setImportVisible(false)}
+        title="Import Bulk Barcodes"
+        footer={(
+          <View style={s.importActions}>
+            <TouchableOpacity style={s.importCancelBtn} onPress={() => setImportVisible(false)} activeOpacity={0.7}>
+              <Text style={s.importCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.importSubmitBtn} onPress={handleImportSubmit} activeOpacity={0.8} disabled={importing}>
+              {importing
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <><Ionicons name="cloud-upload-outline" size={16} color="#fff" /><Text style={s.importSubmitText}>Import</Text></>}
+            </TouchableOpacity>
+          </View>
+        )}
+      >
+        <TouchableOpacity style={s.dropZone} onPress={handlePickFile} activeOpacity={0.8}>
+          <Ionicons name="cloud-upload-outline" size={36} color={COLORS.textTertiary} />
+          <Text style={s.dropZoneText}>Tap to choose CSV file</Text>
+          <Text style={s.dropZoneSub}>Supports .csv, .txt</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={s.templateLink}
+          activeOpacity={0.7}
+          onPress={handleDownloadTemplate}
+          disabled={downloadingTemplate}
+        >
+          {downloadingTemplate
+            ? <ActivityIndicator size="small" color={AMBER} />
+            : <Ionicons name="download-outline" size={14} color={AMBER} />}
+          <Text style={s.templateLinkText}>
+            {downloadingTemplate ? 'Downloading…' : 'Download Template (pre-filled with your items)'}
+          </Text>
+        </TouchableOpacity>
+        <Text style={s.templateHint}>
+          Opens in Excel/Sheets · Fill barcode column · Save as CSV · Upload above
+        </Text>
+        <View style={s.orDivider}>
+          <View style={s.orLine} />
+          <Text style={s.orText}>OR</Text>
+          <View style={s.orLine} />
+        </View>
+        <Text style={s.importLabel}>Paste Barcodes (one per line, or item_name,barcode)</Text>
+        <TextInput
+          style={s.pasteInput}
+          value={pasteText}
+          onChangeText={setPasteText}
+          multiline
+          numberOfLines={5}
+          placeholder={"8901234567890\nBlack JBL Speaker,4902780764600\n..."}
+          placeholderTextColor={COLORS.textTertiary}
+          textAlignVertical="top"
+        />
+      </BarcodeActionSheet>
 
       {/* ════════════════════════════════════════════
           BARCODE SETTINGS MODAL
       ════════════════════════════════════════════ */}
-      <Modal visible={settingsVisible} animationType="slide" transparent onRequestClose={() => setSettingsVisible(false)}>
-        <Pressable style={s.modalOverlay} onPress={() => setSettingsVisible(false)}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-            <Pressable style={s.importSheet} onPress={e => e.stopPropagation()}>
-              <View style={s.modalHandle} />
-              <View style={s.importHeader}>
-                <Text style={s.importTitle}>Barcode Settings</Text>
-                <TouchableOpacity onPress={() => setSettingsVisible(false)} activeOpacity={0.7}>
-                  <Ionicons name="close" size={22} color={COLORS.textPrimary} />
-                </TouchableOpacity>
-              </View>
-              {settingsLoading ? (
-                <View style={{ padding: 32, alignItems: 'center' }}><ActivityIndicator size="large" color={COLORS.brandPrimary} /></View>
-              ) : (
-                <ScrollView showsVerticalScrollIndicator={false}>
-                  {/* Storage mode */}
-                  <Text style={s.settingsSectionTitle}>Barcode Storage Mode</Text>
-                  {Object.entries(STORAGE_MODE_LABELS).map(([key, label]) => (
-                    <TouchableOpacity key={key} style={s.settingsRow} onPress={() => setDraftSettings(d => ({ ...d, barcodeStorageMode: key }))} activeOpacity={0.7}>
-                      <View style={[s.settingsRadio, draftSettings.barcodeStorageMode === key && s.settingsRadioActive]}>
-                        {draftSettings.barcodeStorageMode === key && <View style={s.settingsRadioDot} />}
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.settingsRowLabel}>{label}</Text>
-                        {key === 'app_only' && <Text style={s.settingsRowSub}>Barcodes work only inside TallyDekho</Text>}
-                        {key === 'tally_alias' && <Text style={s.settingsRowSub}>Appends barcode to Tally stock item aliases</Text>}
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-
-                  {/* Default barcode type */}
-                  <Text style={[s.settingsSectionTitle, { marginTop: 20 }]}>Default Barcode Type</Text>
-                  {Object.entries(BARCODE_TYPE_LABELS).map(([key, label]) => (
-                    <TouchableOpacity key={key} style={s.settingsRow} onPress={() => setDraftSettings(d => ({ ...d, defaultBarcodeType: key }))} activeOpacity={0.7}>
-                      <View style={[s.settingsRadio, draftSettings.defaultBarcodeType === key && s.settingsRadioActive]}>
-                        {draftSettings.defaultBarcodeType === key && <View style={s.settingsRadioDot} />}
-                      </View>
-                      <Text style={s.settingsRowLabel}>{label}</Text>
-                    </TouchableOpacity>
-                  ))}
-
-                  {/* Auto sync toggle */}
-                  <View style={[s.settingsRow, { marginTop: 20 }]}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.settingsRowLabel}>Auto Sync to Tally</Text>
-                      <Text style={s.settingsRowSub}>Automatically queue Tally sync when barcode is generated</Text>
-                    </View>
-                    <Switch
-                      value={draftSettings.autoSyncToTally}
-                      onValueChange={v => setDraftSettings(d => ({ ...d, autoSyncToTally: v }))}
-                      trackColor={{ false: COLORS.borderDefault, true: COLORS.brandPrimary }}
-                      thumbColor="#fff"
-                    />
-                  </View>
-
-                  {/* Sync Now button — visible when a Tally sync target is selected */}
-                  {settings.barcodeStorageMode !== 'app_only' && (
-                    <TouchableOpacity
-                      style={[s.syncNowBtn, syncingNow && { opacity: 0.5 }]}
-                      onPress={handleSyncNow}
-                      activeOpacity={0.8}
-                      disabled={syncingNow}
-                    >
-                      {syncingNow
-                        ? <ActivityIndicator size="small" color={AMBER} />
-                        : <Ionicons name="cloud-upload-outline" size={16} color={AMBER} />}
-                      <Text style={s.syncNowBtnText}>
-                        {syncingNow ? 'Syncing…' : 'Sync Pending to Tally Now'}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-
-                  <View style={s.importActions}>
-                    <TouchableOpacity style={s.importCancelBtn} onPress={() => setSettingsVisible(false)} activeOpacity={0.7}>
-                      <Text style={s.importCancelText}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={s.importSubmitBtn} onPress={handleSaveSettings} activeOpacity={0.8} disabled={settingsSaving}>
-                      {settingsSaving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={s.importSubmitText}>Save Settings</Text>}
-                    </TouchableOpacity>
-                  </View>
-                  <View style={{ height: 40 }} />
-                </ScrollView>
-              )}
-            </Pressable>
-          </KeyboardAvoidingView>
-        </Pressable>
-      </Modal>
-
-      {/* ════════════════════════════════════════════
-          LINK BARCODE MODAL
-      ════════════════════════════════════════════ */}
-      <Modal visible={linkVisible} animationType="slide" transparent onRequestClose={() => setLinkVisible(false)}>
-        <Pressable style={s.modalOverlay} onPress={() => setLinkVisible(false)}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-            <Pressable style={s.importSheet} onPress={e => e.stopPropagation()}>
-              <View style={s.modalHandle} />
-              <View style={s.importHeader}>
-                <Text style={s.importTitle}>Link Barcode to Product</Text>
-                <TouchableOpacity onPress={() => setLinkVisible(false)} activeOpacity={0.7}>
-                  <Ionicons name="close" size={22} color={COLORS.textPrimary} />
-                </TouchableOpacity>
-              </View>
-              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                {/* Barcode value */}
-                <Text style={s.importLabel}>Barcode</Text>
-                <TextInput
-                  style={[s.pasteInput, { minHeight: 44, paddingVertical: 12 }]}
-                  value={manualBarcode}
-                  onChangeText={setManualBarcode}
-                  placeholder="Enter or scan barcode..."
-                  placeholderTextColor={COLORS.textTertiary}
-                  numberOfLines={1}
-                  multiline={false}
-                />
-                {/* Search product */}
-                <Text style={[s.importLabel, { marginTop: 12 }]}>Search Product</Text>
-                <View style={[s.searchWrap, { marginHorizontal: 0, marginVertical: 0, marginBottom: 8 }]}>
-                  <Ionicons name="search-outline" size={16} color={COLORS.textTertiary} />
-                  <TextInput
-                    style={s.searchInput}
-                    placeholder="Product name or SKU..."
-                    placeholderTextColor={COLORS.textTertiary}
-                    value={linkSearch}
-                    onChangeText={setLinkSearch}
-                  />
+      <BarcodeActionSheet
+        visible={settingsVisible}
+        onClose={() => setSettingsVisible(false)}
+        title="Barcode Settings"
+        footer={settingsLoading ? undefined : (
+          <View style={s.importActions}>
+            <TouchableOpacity style={s.importCancelBtn} onPress={() => setSettingsVisible(false)} activeOpacity={0.7}>
+              <Text style={s.importCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.importSubmitBtn} onPress={handleSaveSettings} activeOpacity={0.8} disabled={settingsSaving}>
+              {settingsSaving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={s.importSubmitText}>Save Settings</Text>}
+            </TouchableOpacity>
+          </View>
+        )}
+      >
+        {settingsLoading ? (
+          <View style={{ padding: 32, alignItems: 'center' }}><ActivityIndicator size="large" color={COLORS.brandPrimary} /></View>
+        ) : (
+          <>
+            <Text style={s.settingsSectionTitle}>Barcode Storage Mode</Text>
+            {Object.entries(STORAGE_MODE_LABELS).map(([key, label]) => (
+              <TouchableOpacity key={key} style={s.settingsRow} onPress={() => setDraftSettings(d => ({ ...d, barcodeStorageMode: key }))} activeOpacity={0.7}>
+                <View style={[s.settingsRadio, draftSettings.barcodeStorageMode === key && s.settingsRadioActive]}>
+                  {draftSettings.barcodeStorageMode === key && <View style={s.settingsRadioDot} />}
                 </View>
-                {linkResults.map(item => (
-                  <TouchableOpacity key={item.stockGuid} style={s.linkResultRow} onPress={() => handleLinkToItem(item)} activeOpacity={0.7} disabled={linking}>
-                    <View style={s.linkResultInfo}>
-                      <Text style={s.linkResultName} numberOfLines={1}>{item.displayName}</Text>
-                      <Text style={s.linkResultSku}>{item.sku || item.alias || '—'}</Text>
-                    </View>
-                    {linking ? <ActivityIndicator size="small" color={COLORS.brandPrimary} /> : <Ionicons name="link-outline" size={18} color={AMBER} />}
-                  </TouchableOpacity>
-                ))}
-                {linkSearch.length > 0 && linkResults.length === 0 && (
-                  <Text style={{ color: COLORS.textTertiary, fontSize: TYPOGRAPHY.sm, textAlign: 'center', paddingVertical: 16 }}>No products found</Text>
-                )}
-                <View style={{ height: 40 }} />
-              </ScrollView>
-            </Pressable>
-          </KeyboardAvoidingView>
-        </Pressable>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.settingsRowLabel}>{label}</Text>
+                  {key === 'app_only' && <Text style={s.settingsRowSub}>Barcodes work only inside TallyDekho</Text>}
+                  {key === 'tally_alias' && <Text style={s.settingsRowSub}>Appends barcode to Tally stock item aliases</Text>}
+                </View>
+              </TouchableOpacity>
+            ))}
+
+            <Text style={[s.settingsSectionTitle, { marginTop: 20 }]}>Default Barcode Type</Text>
+            {Object.entries(BARCODE_TYPE_LABELS).map(([key, label]) => (
+              <TouchableOpacity key={key} style={s.settingsRow} onPress={() => setDraftSettings(d => ({ ...d, defaultBarcodeType: key }))} activeOpacity={0.7}>
+                <View style={[s.settingsRadio, draftSettings.defaultBarcodeType === key && s.settingsRadioActive]}>
+                  {draftSettings.defaultBarcodeType === key && <View style={s.settingsRadioDot} />}
+                </View>
+                <Text style={s.settingsRowLabel}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+
+            <View style={[s.settingsRow, { marginTop: 20 }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.settingsRowLabel}>Auto Sync to Tally</Text>
+                <Text style={s.settingsRowSub}>Automatically queue Tally sync when barcode is generated</Text>
+              </View>
+              <Switch
+                value={draftSettings.autoSyncToTally}
+                onValueChange={v => setDraftSettings(d => ({ ...d, autoSyncToTally: v }))}
+                trackColor={{ false: COLORS.borderDefault, true: COLORS.brandPrimary }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            {settings.barcodeStorageMode !== 'app_only' && (
+              <TouchableOpacity
+                style={[s.syncNowBtn, syncingNow && { opacity: 0.5 }]}
+                onPress={handleSyncNow}
+                activeOpacity={0.8}
+                disabled={syncingNow}
+              >
+                {syncingNow
+                  ? <ActivityIndicator size="small" color={AMBER} />
+                  : <Ionicons name="cloud-upload-outline" size={16} color={AMBER} />}
+                <Text style={s.syncNowBtnText}>
+                  {syncingNow ? 'Syncing…' : 'Sync Pending to Tally Now'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
+      </BarcodeActionSheet>
+
+      <BarcodeFilterModal
+        visible={showFilter}
+        onClose={() => setShowFilter(false)}
+        initPeriod={selPeriod}
+        initGroup={selGroup}
+        initStatus={selStatus}
+        groupOptions={groupOptions}
+        statusOptions={statusOptions}
+        onApply={(period, groups, statuses) => {
+          setSelPeriod(period);
+          setSelGroup(groups);
+          setSelStatus(statuses);
+        }}
+      />
+
+      {/* Linked item long-press actions */}
+      <BarcodeActionSheet
+        visible={!!linkedActionItem}
+        onClose={() => setLinkedActionItem(null)}
+        title={linkedActionItem?.displayName || 'Item actions'}
+        heightFraction={0.36}
+      >
+        <TouchableOpacity
+          style={s.itemActionRow}
+          activeOpacity={0.7}
+          onPress={() => {
+            if (linkedActionItem) enterMultiSelect(linkedActionItem.stockGuid);
+            setLinkedActionItem(null);
+          }}
+        >
+          <View style={s.itemActionIcon}>
+            <Ionicons name="print-outline" size={18} color={COLORS.textPrimary} />
+          </View>
+          <Text style={s.itemActionLabel}>Select for Print</Text>
+          <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={s.itemActionRow}
+          activeOpacity={0.7}
+          onPress={() => {
+            if (!linkedActionItem) return;
+            const item = linkedActionItem;
+            setLinkedActionItem(null);
+            openLinkBarcodeSheet({
+              barcode: item.barcode || '',
+              seedResults: [item],
+              delayMs: 350,
+            });
+          }}
+        >
+          <View style={s.itemActionIcon}>
+            <Ionicons name="link-outline" size={18} color={COLORS.textPrimary} />
+          </View>
+          <Text style={s.itemActionLabel}>Link Different Barcode</Text>
+          <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
+        </TouchableOpacity>
+      </BarcodeActionSheet>
+
+      <FilterBottomSheet
+        visible={linkVisible}
+        onClose={() => setLinkVisible(false)}
+        title="Link Barcode to Product"
+        heightFraction={0.72}
+        hideFooter
+        onApply={() => setLinkVisible(false)}
+      >
+        <View style={fm.panel}>
+          <Text style={s.linkFieldLabel}>Barcode</Text>
+          <View style={fm.searchBox}>
+            <Ionicons name="barcode-outline" size={14} color={COLORS.textTertiary} />
+            <TextInput
+              style={fm.searchInput}
+              value={manualBarcode}
+              onChangeText={setManualBarcode}
+              placeholder="Enter or scan barcode..."
+              placeholderTextColor={COLORS.textTertiary}
+              returnKeyType="next"
+              autoCorrect={false}
+            />
+          </View>
+
+          <Text style={s.linkFieldLabel}>Search Product</Text>
+          <View style={fm.searchBox}>
+            <Ionicons name="search" size={14} color={COLORS.textTertiary} />
+            <TextInput
+              style={fm.searchInput}
+              placeholder="Product name or SKU..."
+              placeholderTextColor={COLORS.textTertiary}
+              value={linkSearch}
+              onChangeText={setLinkSearch}
+              returnKeyType="search"
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+            {linkSearch.length > 0 && (
+              <TouchableOpacity onPress={() => setLinkSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {linkResults.length === 0 ? (
+            <Text style={fm.hint}>
+              {linkSearch.trim() ? 'No products match your search' : 'Type to search products'}
+            </Text>
+          ) : (
+            linkResults.map(item => (
+              <TouchableOpacity
+                key={item.stockGuid}
+                style={s.linkResultRow}
+                onPress={() => handleLinkToItem(item)}
+                activeOpacity={0.7}
+                disabled={linking}
+              >
+                <View style={s.linkResultInfo}>
+                  <Text style={s.linkResultName} numberOfLines={1}>{item.displayName}</Text>
+                  <Text style={s.linkResultSku}>{item.sku || item.alias || '—'}</Text>
+                </View>
+                {linking
+                  ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+                  : <Ionicons name="link-outline" size={18} color={AMBER} />}
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
+      </FilterBottomSheet>
+
+      {/* Bulk generate progress overlay */}
+      <Modal visible={!!bulkJob} transparent animationType="fade" onRequestClose={() => {}}>
+        <View style={s.progressOverlay}>
+          <View style={s.progressCard}>
+            <View style={s.progressIconWrap}>
+              <Ionicons name="flash" size={28} color={COLORS.brandPrimary} />
+            </View>
+            <Text style={s.progressTitle}>Generating barcodes</Text>
+            <Text style={s.progressSub}>
+              {bulkJob?.processed ?? 0} / {bulkJob?.total ?? 0} items processed
+            </Text>
+            <View style={s.progressTrack}>
+              <View style={[s.progressFill, { width: `${bulkJob?.pct ?? 0}%` as any }]} />
+            </View>
+            <Text style={s.progressPct}>{bulkJob?.pct ?? 0}%</Text>
+            <Text style={s.progressHint}>
+              Runs in the background — you can stay on this screen. List refreshes when done.
+            </Text>
+            {(bulkJob?.generated ?? 0) > 0 && (
+              <Text style={s.progressStat}>
+                {bulkJob?.generated} generated{bulkJob?.errors ? ` · ${bulkJob.errors} failed` : ''}
+              </Text>
+            )}
+          </View>
+        </View>
       </Modal>
 
       {/* ════════════════════════════════════════════
@@ -1274,26 +1685,50 @@ export default function BarcodesScreen() {
 const s = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: COLORS.pageBg },
 
-  selBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 14, backgroundColor: COLORS.brandPrimary },
-  selBannerText:   { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: '#fff' },
-  selBannerCancel: { fontSize: TYPOGRAPHY.sm, color: 'rgba(255,255,255,0.7)' },
+  selBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.activeBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  selBannerCount:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  selBannerClose:  { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+
+  itemActionRow:  { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
+  itemActionIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
+  itemActionLabel:{ flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
+
+  progressOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.52)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: SPACING.lg },
+  progressCard:    { width: '100%', maxWidth: 340, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.xl, padding: SPACING.lg, alignItems: 'center', borderWidth: 1, borderColor: COLORS.borderDefault },
+  progressIconWrap:{ width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.activeBg, alignItems: 'center', justifyContent: 'center', marginBottom: SPACING.md },
+  progressTitle:   { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary, marginBottom: 4 },
+  progressSub:     { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, marginBottom: SPACING.md },
+  progressTrack:   { width: '100%', height: 8, borderRadius: 4, backgroundColor: COLORS.pageBg, overflow: 'hidden', marginBottom: 6 },
+  progressFill:      { height: 8, borderRadius: 4, backgroundColor: COLORS.brandPrimary },
+  progressPct:       { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary, marginBottom: SPACING.sm },
+  progressHint:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, textAlign: 'center', lineHeight: 18 },
+  progressStat:      { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.brandPrimary, marginTop: SPACING.sm },
 
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.sm, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   headerBtn:     { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   headerTitle:   { flex: 1, fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
-  headerActions: { flexDirection: 'row', gap: 2 },
-  headerIcon:    { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 0 },
+  headerIcon:    { width: 38, height: 44, alignItems: 'center', justifyContent: 'center' },
 
-  filterRow:           { flexDirection: 'row', gap: 8, paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  filterChip:          { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderStrong, backgroundColor: COLORS.cardBg },
-  filterChipActive:    { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
-  filterChipText:      { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
-  filterChipTextActive:{ color: '#fff' },
+  modalRoot:            { flex: 1, justifyContent: 'flex-end' },
+  modalBackdrop:        { ...StyleSheet.absoluteFillObject, backgroundColor: COLORS.overlay },
+  modalSheetContainer:  { width: '100%' },
+  actionSheet:          { backgroundColor: COLORS.cardBg, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, paddingHorizontal: SPACING.md, width: '100%' },
+  actionSheetHeader:    { width: '100%', alignSelf: 'stretch', paddingBottom: SPACING.sm },
+  actionSheetBody:      { flex: 1, width: '100%' },
+  actionSheetBodyContent: { paddingBottom: SPACING.sm, width: '100%' },
+  actionSheetFooter:    { paddingTop: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, width: '100%' },
 
-  dropdownMenu:           { backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, paddingHorizontal: SPACING.md },
-  dropdownItem:           { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  dropdownItemText:       { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
-  dropdownItemTextActive: { fontWeight: '700', color: COLORS.textPrimary },
+  linkFieldLabel: {
+    fontSize: TYPOGRAPHY.xs,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.sm,
+    paddingBottom: 4,
+  },
 
   searchWrap:  { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: SPACING.md, marginVertical: 10, paddingHorizontal: SPACING.md, paddingVertical: 11, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault },
   searchInput: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, padding: 0 },
@@ -1363,10 +1798,8 @@ const s = StyleSheet.create({
   scanResultBtnSecondary: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 13, borderRadius: RADIUS.full, backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
   scanResultBtnSecondaryText: { color: '#fff', fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
 
-  modalOverlay:  { flex: 1, backgroundColor: COLORS.overlay, justifyContent: 'flex-end' },
-  importSheet:   { backgroundColor: COLORS.cardBg, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, maxHeight: '85%', paddingHorizontal: SPACING.md },
   modalHandle:   { width: 38, height: 4, borderRadius: 2, backgroundColor: COLORS.borderStrong, alignSelf: 'center', marginTop: 10, marginBottom: 6 },
-  importHeader:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, marginBottom: SPACING.md },
+  importHeader:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   importTitle:   { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
   dropZone:      { borderWidth: 2, borderStyle: 'dashed', borderColor: COLORS.borderStrong, borderRadius: RADIUS.lg, paddingVertical: 36, alignItems: 'center', gap: 8, marginBottom: SPACING.sm },
   dropZoneText:  { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
@@ -1381,7 +1814,7 @@ const s = StyleSheet.create({
   pasteInput:    { borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md, padding: SPACING.md, minHeight: 100, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, backgroundColor: COLORS.pageBg },
   syncNowBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, marginTop: SPACING.md, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: AMBER, backgroundColor: 'rgba(168,144,96,0.08)' },
   syncNowBtnText: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: AMBER },
-  importActions: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.lg },
+  importActions: { flexDirection: 'row', gap: SPACING.sm },
   importCancelBtn: { flex: 1, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.borderStrong },
   importCancelText: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
   importSubmitBtn:  { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 46, borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary },
@@ -1397,7 +1830,7 @@ const s = StyleSheet.create({
   settingsRadioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.brandPrimary },
 
   // Link modal
-  linkResultRow:  { flexDirection: 'row', alignItems: 'center', paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, gap: 12 },
+  linkResultRow:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, gap: 12 },
   linkResultInfo: { flex: 1 },
   linkResultName: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
   linkResultSku:  { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Modal,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,20 @@ import { getExpirySchedule } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
+import { EntityListTile } from '../../src/components/EntityListTile';
+import { ScreenHeader } from '../../src/components/ScreenHeader';
+import FilterBottomSheet, {
+  FilterCheckRow,
+  filterSheetContentStyles as fm,
+  isFilterAllSelected,
+  isFilterOptionChecked,
+  toggleFilterFromAll,
+  toggleFilterAll,
+  useMultiFilterHydration,
+  isFilterSelectionValid,
+  normalizeFilterAllSelection,
+} from '../../src/components/FilterBottomSheet';
+import { FilterIconWithBadge, ActiveFilterChips } from '../../src/components/voucherHomeFilters';
 import { useTranslation } from 'react-i18next';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -28,6 +42,110 @@ const DAY_TABS: { key: DayTab; label: string }[] = [
   { key: '>60',     label: '>60 Day'   },
   { key: 'expired', label: 'Expired'   },
 ];
+
+// ── Filter modal (Warehouse | Item Group — Ledger-style R2 multi-select) ─────
+
+function ExpiryFilterModal({ visible, onClose, onApply, initWh, initGrp, whOptions, grpOptions }: {
+  visible: boolean; onClose: () => void;
+  onApply: (wh: string[], grp: string[]) => void;
+  initWh: string[]; initGrp: string[];
+  whOptions: { id: string; label: string }[];
+  grpOptions: { id: string; label: string }[];
+}) {
+  const [tab, setTab] = useState<'Warehouse' | 'Group'>('Warehouse');
+  const [selWh, setSelWh] = useState<string[]>([]);
+  const [selGrp, setSelGrp] = useState<string[]>([]);
+  const [whSearch, setWhSearch] = useState('');
+  const [grpSearch, setGrpSearch] = useState('');
+
+  const whIds = useMemo(() => whOptions.map(w => w.id), [whOptions]);
+  const grpIds = useMemo(() => grpOptions.map(g => g.id), [grpOptions]);
+
+  useMultiFilterHydration(visible, initWh, whIds, setSelWh);
+  useMultiFilterHydration(visible, initGrp, grpIds, setSelGrp);
+
+  useEffect(() => {
+    if (visible) {
+      setWhSearch('');
+      setGrpSearch('');
+      setTab('Warehouse');
+    }
+  }, [visible]);
+
+  const isAllWh = isFilterAllSelected(selWh, whIds);
+  const isAllGrp = isFilterAllSelected(selGrp, grpIds);
+  const activeCount = (isAllWh ? 0 : selWh.length) + (isAllGrp ? 0 : selGrp.length);
+  const canApply = isFilterSelectionValid(selWh, whIds) && isFilterSelectionValid(selGrp, grpIds);
+
+  const filteredWh = useMemo(() => {
+    const q = whSearch.trim().toLowerCase();
+    const list = whOptions.filter(Boolean);
+    if (!q) return list;
+    return list.filter(w => w.label.toLowerCase().includes(q) || w.id.toLowerCase().includes(q));
+  }, [whOptions, whSearch]);
+
+  const filteredGrp = useMemo(() => {
+    const q = grpSearch.trim().toLowerCase();
+    const list = grpOptions.filter(Boolean);
+    if (!q) return list;
+    return list.filter(g => g.label.toLowerCase().includes(q) || g.id.toLowerCase().includes(q));
+  }, [grpOptions, grpSearch]);
+
+  const handleApply = () => {
+    if (!canApply) return;
+    onApply(normalizeFilterAllSelection(selWh, whIds), normalizeFilterAllSelection(selGrp, grpIds));
+    onClose();
+  };
+
+  return (
+    <FilterBottomSheet
+      visible={visible}
+      onClose={onClose}
+      title="Filter Expiry"
+      activeCount={activeCount}
+      onClear={() => { setSelWh([...whIds]); setSelGrp([...grpIds]); }}
+      onApply={handleApply}
+      applyLabel="Apply Filters"
+      applyDisabled={!canApply}
+      heightFraction={0.68}
+    >
+      <View style={fm.tabs}>
+        {(['Warehouse', 'Group'] as const).map(cat => (
+          <TouchableOpacity key={cat} style={[fm.tab, tab === cat && fm.tabActive]} onPress={() => setTab(cat)} activeOpacity={0.7}>
+            <Text style={[fm.tabTxt, tab === cat && fm.tabTxtActive]}>{cat === 'Group' ? 'Item Group' : cat}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {tab === 'Warehouse' ? (
+        <View style={fm.panel}>
+          <View style={fm.searchBox}>
+            <Ionicons name="search" size={14} color={COLORS.textTertiary} />
+            <TextInput style={fm.searchInput} placeholder="Search warehouse..." placeholderTextColor={COLORS.textTertiary} value={whSearch} onChangeText={setWhSearch} />
+          </View>
+          <FilterCheckRow label="All warehouses" selected={isAllWh} onPress={() => setSelWh(prev => toggleFilterAll(prev, whIds))} />
+          {filteredWh.length === 0 ? (
+            <Text style={fm.hint}>No warehouses match your search</Text>
+          ) : filteredWh.map(w => (
+            <FilterCheckRow key={w.id} label={w.label} selected={isFilterOptionChecked(selWh, w.id)} onPress={() => setSelWh(prev => toggleFilterFromAll(prev, w.id, whIds))} />
+          ))}
+        </View>
+      ) : (
+        <View style={fm.panel}>
+          <View style={fm.searchBox}>
+            <Ionicons name="search" size={14} color={COLORS.textTertiary} />
+            <TextInput style={fm.searchInput} placeholder="Search group..." placeholderTextColor={COLORS.textTertiary} value={grpSearch} onChangeText={setGrpSearch} />
+          </View>
+          <FilterCheckRow label="All groups" selected={isAllGrp} onPress={() => setSelGrp(prev => toggleFilterAll(prev, grpIds))} />
+          {filteredGrp.length === 0 ? (
+            <Text style={fm.hint}>No groups match your search</Text>
+          ) : filteredGrp.map(g => (
+            <FilterCheckRow key={g.id} label={g.label} selected={isFilterOptionChecked(selGrp, g.id)} onPress={() => setSelGrp(prev => toggleFilterFromAll(prev, g.id, grpIds))} />
+          ))}
+        </View>
+      )}
+    </FilterBottomSheet>
+  );
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function ExpiryScheduleScreen() {
@@ -62,40 +180,29 @@ export default function ExpiryScheduleScreen() {
   useEffect(() => { load(); }, [load]);
 
   // ── Tab & filter ──────────────────────────────────────────────────────────
-  const [activeTab,      setActiveTab]      = useState<DayTab>('0-30');
-  const [activeWHChips,  setActiveWHChips]  = useState<Set<string>>(new Set());
-  const [showFilter,     setShowFilter]     = useState(false);
-  const [draftWH,        setDraftWH]        = useState<Set<string>>(new Set());
-  const [draftWHSearch,  setDraftWHSearch]  = useState('');
-  const [draftItemGroup, setDraftItemGroup] = useState('');
-  const [selItemGroup,   setSelItemGroup]   = useState('');
+  const [activeTab,    setActiveTab]    = useState<DayTab>('0-30');
+  const [selWh,        setSelWh]        = useState<string[]>([]);
+  const [selGrp,       setSelGrp]       = useState<string[]>([]);
+  const [showFilter,   setShowFilter]   = useState(false);
+
+  const whOptions = useMemo(() => warehouses.map(w => ({ id: w, label: w })), [warehouses]);
+  const grpOptions = useMemo(() => groups.map(g => ({ id: g, label: g })), [groups]);
 
   // ── Multi-select ──────────────────────────────────────────────────────────
   const [selectedIds,     setSelectedIds]     = useState<Set<string>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
 
-  const activeFilterCount = activeWHChips.size + (selItemGroup ? 1 : 0);
+  const activeFilterCount = (selWh.length > 0 ? selWh.length : 0) + (selGrp.length > 0 ? selGrp.length : 0);
 
-  // ── Filter handlers ───────────────────────────────────────────────────────
-  const openFilter = () => {
-    setDraftWH(new Set(activeWHChips));
-    setDraftWHSearch('');
-    setDraftItemGroup(selItemGroup);
-    setShowFilter(true);
-  };
-
-  const applyFilters = () => {
-    setActiveWHChips(new Set(draftWH));
-    setSelItemGroup(draftItemGroup);
-    setShowFilter(false);
-  };
-
-  const resetFilters = () => {
-    setDraftWH(new Set()); setDraftWHSearch('');
-    setDraftItemGroup('');
-  };
-
-  // ── Selection handlers ────────────────────────────────────────────────────
+  // ── Filter items for current tab ──────────────────────────────────────────
+  const visibleItems = useMemo(() =>
+    items.filter(item => {
+      if (item.tab !== activeTab) return false;
+      if (selWh.length > 0 && !selWh.includes(item.warehouse)) return false;
+      if (selGrp.length > 0 && !selGrp.includes(item.groupName)) return false;
+      return true;
+    }),
+  [items, activeTab, selWh, selGrp]);
   const handleLongPress = (id: string) => {
     setIsSelectionMode(true);
     setSelectedIds(new Set([id]));
@@ -126,19 +233,7 @@ export default function ExpiryScheduleScreen() {
     setIsSelectionMode(true);
   };
 
-  // ── Filter items for current tab ──────────────────────────────────────────
-  const visibleItems = useMemo(() =>
-    items.filter(item => {
-      if (item.tab !== activeTab) return false;
-      if (activeWHChips.size > 0 && !activeWHChips.has(item.warehouse)) return false;
-      if (selItemGroup && item.groupName !== selItemGroup) return false;
-      return true;
-    }),
-  [items, activeTab, activeWHChips, selItemGroup]);
-
-  const filteredWarehouses = useMemo(() =>
-    warehouses.filter(w => w.toLowerCase().includes(draftWHSearch.toLowerCase())),
-  [warehouses, draftWHSearch]);
+  // ── Selection handlers ────────────────────────────────────────────────────
 
   const daysLeftColor = (item: ExpiryItem) => {
     if (item.tab === 'expired') return COLORS.negative;
@@ -154,30 +249,44 @@ export default function ExpiryScheduleScreen() {
   };
 
   // ── Tab counts ────────────────────────────────────────────────────────────
+  // Tab counts respect warehouse/group filters
+  const filteredForCounts = useMemo(() =>
+    items.filter(item => {
+      if (selWh.length > 0 && !selWh.includes(item.warehouse)) return false;
+      if (selGrp.length > 0 && !selGrp.includes(item.groupName)) return false;
+      return true;
+    }),
+  [items, selWh, selGrp]);
+
   const tabCounts = useMemo(() => {
     const counts: Record<DayTab, number> = { '0-30': 0, '31-60': 0, '>60': 0, 'expired': 0 };
-    for (const item of items) counts[item.tab] = (counts[item.tab] || 0) + 1;
+    for (const item of filteredForCounts) counts[item.tab] = (counts[item.tab] || 0) + 1;
     return counts;
-  }, [items]);
+  }, [filteredForCounts]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
-      {/* Header */}
-      <View style={s.header}>
-        <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={s.headerTitle}>{t('stocks.expirySchedule')}</Text>
-        <TouchableOpacity style={s.headerBtn} onPress={openFilter} activeOpacity={0.7}>
-          <Ionicons name="options-outline" size={22} color={COLORS.textPrimary} />
-          {activeFilterCount > 0 && (
-            <View style={s.filterBadge}><Text style={s.filterBadgeTxt}>{activeFilterCount}</Text></View>
-          )}
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title={t('stocks.expirySchedule')}
+        onBack={() => router.back()}
+        right={<FilterIconWithBadge count={activeFilterCount} onPress={() => setShowFilter(true)} />}
+      />
 
       {/* Error */}
       {apiError && <ErrorBanner message={apiError} />}
+
+      <ActiveFilterChips
+        variant="amber"
+        chips={[
+          ...selWh.map(w => ({ id: `wh:${w}`, label: w })),
+          ...selGrp.map(g => ({ id: `grp:${g}`, label: g })),
+        ]}
+        onRemove={(chipId) => {
+          if (chipId.startsWith('wh:')) setSelWh(p => p.filter(x => x !== chipId.slice(3)));
+          if (chipId.startsWith('grp:')) setSelGrp(p => p.filter(x => x !== chipId.slice(4)));
+        }}
+        onClearAll={() => { setSelWh([]); setSelGrp([]); }}
+      />
 
       {/* Selection Mode Banner */}
       {isSelectionMode && (
@@ -190,26 +299,6 @@ export default function ExpiryScheduleScreen() {
           <TouchableOpacity onPress={selectAll} activeOpacity={0.7} style={s.selBannerBtn}>
             <Text style={s.selBannerAll}>All</Text>
           </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Warehouse Filter chips row */}
-      {!isSelectionMode && activeWHChips.size > 0 && (
-        <View style={s.whFilterRow}>
-          <View style={s.chipWrap}>
-            {[...activeWHChips].map(w => (
-              <TouchableOpacity
-                key={w}
-                style={s.whChip}
-                onPress={() => setActiveWHChips(prev => { const n = new Set(prev); n.delete(w); return n; })}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="business-outline" size={12} color="#fff" />
-                <Text style={s.whChipTxt}>{w}</Text>
-                <Ionicons name="close" size={12} color="#fff" />
-              </TouchableOpacity>
-            ))}
-          </View>
         </View>
       )}
 
@@ -271,55 +360,46 @@ export default function ExpiryScheduleScreen() {
                     <Text style={s.warehouseLabel}>{item.warehouse}</Text>
                   </View>
 
-                  {/* Item Card */}
-                  <TouchableOpacity
-                    style={[s.itemCard, isSel && s.itemCardSel]}
+                  <EntityListTile
+                    name={item.item}
+                    subtitle={item.code || undefined}
+                    selected={isSel}
+                    borderRadius={RADIUS.lg}
                     onPress={() => handleItemPress(item.id)}
                     onLongPress={() => handleLongPress(item.id)}
                     delayLongPress={350}
-                    activeOpacity={0.8}
-                  >
-                    {/* Avatar */}
-                    <View style={s.itemTop}>
-                      <View style={[s.avatar, isSel && s.avatarSel]}>
-                        {isSel
-                          ? <Ionicons name="checkmark" size={20} color="#fff" />
-                          : <Text style={s.avatarTxt}>{item.item.charAt(0).toUpperCase()}</Text>
-                        }
-                      </View>
-                      <View style={s.itemMeta}>
-                        <Text style={s.itemName}>{item.item}</Text>
-                        {item.code ? <Text style={s.itemCode}>{item.code}</Text> : null}
-                      </View>
-                      {/* Days-left badge */}
+                    style={{ marginBottom: 4 }}
+                    trailing={(
                       <View style={[s.daysBadge, { backgroundColor: daysLeftColor(item) + '18' }]}>
                         <Text style={[s.daysBadgeTxt, { color: daysLeftColor(item) }]}>
                           {daysLeftText(item)}
                         </Text>
                       </View>
-                    </View>
-
-                    {/* Data Grid */}
-                    <View style={s.divider} />
-                    <View style={s.gridRow}>
-                      <View style={s.gridItem}>
-                        <Text style={s.gridLbl}>Batch/Lot</Text>
-                        <Text style={s.gridVal}>{item.batch}</Text>
-                      </View>
-                      <View style={s.gridItem}>
-                        <Text style={s.gridLbl}>Expiry Date</Text>
-                        <Text style={s.gridVal}>{item.expiryDate}</Text>
-                      </View>
-                      <View style={s.gridItem}>
-                        <Text style={s.gridLbl}>QTY</Text>
-                        <Text style={s.gridVal}>{item.qty}</Text>
-                      </View>
-                      <View style={s.gridItem}>
-                        <Text style={s.gridLbl}>Value</Text>
-                        <Text style={s.gridVal}>{item.value}</Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
+                    )}
+                    footer={(
+                      <>
+                        <View style={s.divider} />
+                        <View style={s.gridRow}>
+                          <View style={s.gridItem}>
+                            <Text style={s.gridLbl}>Batch/Lot</Text>
+                            <Text style={s.gridVal}>{item.batch}</Text>
+                          </View>
+                          <View style={s.gridItem}>
+                            <Text style={s.gridLbl}>Expiry Date</Text>
+                            <Text style={s.gridVal}>{item.expiryDate}</Text>
+                          </View>
+                          <View style={s.gridItem}>
+                            <Text style={s.gridLbl}>QTY</Text>
+                            <Text style={s.gridVal}>{item.qty}</Text>
+                          </View>
+                          <View style={s.gridItem}>
+                            <Text style={s.gridLbl}>Value</Text>
+                            <Text style={s.gridVal}>{item.value}</Text>
+                          </View>
+                        </View>
+                      </>
+                    )}
+                  />
                 </View>
               );
             })
@@ -343,125 +423,15 @@ export default function ExpiryScheduleScreen() {
         </View>
       )}
 
-      {/* Filter Modal */}
-      <Modal visible={showFilter} transparent animationType="slide" onRequestClose={() => setShowFilter(false)}>
-        <View style={s.modalOverlay}>
-          <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowFilter(false)} activeOpacity={1} />
-          <View style={[s.modalSheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-            <View style={s.modalHandle} />
-            <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Filter</Text>
-              <TouchableOpacity onPress={() => setShowFilter(false)} activeOpacity={0.7}>
-                <Ionicons name="close" size={22} color={COLORS.textPrimary} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-
-              {/* Warehouse */}
-              <View style={s.filterSection}>
-                <Text style={s.filterSectionTitle}>Warehouse</Text>
-                {draftWH.size > 0 && (
-                  <View style={s.chipWrap}>
-                    {[...draftWH].map(w => (
-                      <TouchableOpacity
-                        key={w} style={s.chip}
-                        onPress={() => setDraftWH(prev => { const n = new Set(prev); n.delete(w); return n; })}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={s.chipTxt}>{w}</Text>
-                        <Ionicons name="close" size={12} color="#fff" />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-                <View style={[s.searchRow, { marginTop: draftWH.size > 0 ? 8 : 0 }]}>
-                  <Ionicons name="search-outline" size={15} color={COLORS.textTertiary} />
-                  <TextInput
-                    style={s.searchTxt}
-                    placeholder="Search warehouse..."
-                    placeholderTextColor={COLORS.textTertiary}
-                    value={draftWHSearch}
-                    onChangeText={setDraftWHSearch}
-                  />
-                  {draftWHSearch.length > 0 && (
-                    <TouchableOpacity onPress={() => setDraftWHSearch('')} activeOpacity={0.7}>
-                      <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-                {(draftWHSearch.length > 0 || warehouses.length > 0) && (
-                  <View style={s.whList}>
-                    {(draftWHSearch.length > 0 ? filteredWarehouses : warehouses).map((w, idx, arr) => {
-                      const checked = draftWH.has(w);
-                      return (
-                        <TouchableOpacity
-                          key={w}
-                          style={[s.whRow, idx === arr.length - 1 && { borderBottomWidth: 0 }]}
-                          onPress={() => {
-                            setDraftWH(prev => { const n = new Set(prev); checked ? n.delete(w) : n.add(w); return n; });
-                            if (!checked) setDraftWHSearch('');
-                          }}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="business-outline" size={15} color={COLORS.textSecondary} />
-                          <Text style={s.whRowTxt}>{w}</Text>
-                          <View style={[s.checkbox, checked && s.checkboxActive]}>
-                            {checked && <Ionicons name="checkmark" size={12} color="#fff" />}
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                )}
-              </View>
-
-              {/* Item Group */}
-              {groups.length > 0 && (
-                <View style={s.filterSection}>
-                  <Text style={s.filterSectionTitle}>Item Group</Text>
-                  <View style={s.optionList}>
-                    <TouchableOpacity
-                      style={s.optionRow}
-                      onPress={() => setDraftItemGroup('')}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[s.optionTxt, !draftItemGroup && s.optionTxtActive]}>All Groups</Text>
-                      <View style={[s.radio, !draftItemGroup && s.radioActive]}>
-                        {!draftItemGroup && <View style={s.radioInner} />}
-                      </View>
-                    </TouchableOpacity>
-                    {groups.map((g, idx) => {
-                      const active = draftItemGroup === g;
-                      return (
-                        <TouchableOpacity
-                          key={g}
-                          style={[s.optionRow, idx === groups.length - 1 && { borderBottomWidth: 0 }]}
-                          onPress={() => setDraftItemGroup(g)}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[s.optionTxt, active && s.optionTxtActive]}>{g}</Text>
-                          <View style={[s.radio, active && s.radioActive]}>
-                            {active && <View style={s.radioInner} />}
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-              )}
-              <View style={{ height: 24 }} />
-            </ScrollView>
-            <View style={s.modalFooter}>
-              <TouchableOpacity style={s.cancelBtn} onPress={resetFilters} activeOpacity={0.7}>
-                <Text style={s.cancelTxt}>Reset</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.applyBtn} onPress={applyFilters} activeOpacity={0.8}>
-                <Text style={s.applyTxt}>Apply Filters</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <ExpiryFilterModal
+        visible={showFilter}
+        onClose={() => setShowFilter(false)}
+        onApply={(wh, grp) => { setSelWh(wh); setSelGrp(grp); }}
+        initWh={selWh}
+        initGrp={selGrp}
+        whOptions={whOptions}
+        grpOptions={grpOptions}
+      />
     </SafeAreaView>
   );
 }
@@ -472,6 +442,7 @@ const s = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.sm, paddingVertical: 12, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   headerBtn:      { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   headerTitle:    { flex: 1, textAlign: 'center', fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  headerActions:  { flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 44, justifyContent: 'flex-end' },
   filterBadge:    { position: 'absolute', top: 6, right: 6, width: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.brandPrimary, alignItems: 'center', justifyContent: 'center' },
   filterBadgeTxt: { fontSize: 9, fontWeight: '700', color: '#fff' },
 

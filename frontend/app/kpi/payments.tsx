@@ -14,6 +14,11 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { getKPIPayments } from '../../src/services/api';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+import {
+  KPICarouselCard, KPICarouselPage, KPICarouselDots, KPI_CAROUSEL_PAGE_WIDTH,
+} from '../../src/components/KPICarouselCard';
+import { ScreenHeader } from '../../src/components/ScreenHeader';
+import { TxnListRow } from '../../src/components/TxnListRow';
 import { useTranslation } from 'react-i18next';
 import {
   resolvePeriodDates,
@@ -405,13 +410,7 @@ export default function PaymentsScreen() {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      <View style={s.header}>
-        <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={s.headerTitle}>{t('kpi.payments')}</Text>
-        <View style={s.headerBtn} />
-      </View>
+      <ScreenHeader title={t('kpi.payments')} onBack={() => router.back()} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
         {apiError && <ErrorBanner message={apiError} onRetry={() => load({ soft: hasDataRef.current })} />}
@@ -430,37 +429,21 @@ export default function PaymentsScreen() {
                 data={kpiCards}
                 keyExtractor={(i) => i.id}
                 showsHorizontalScrollIndicator={false}
-                getItemLayout={(_, index) => ({ length: SW, offset: SW * index, index })}
-                onMomentumScrollEnd={(e) => setKpiIdx(Math.round(e.nativeEvent.contentOffset.x / SW))}
+                getItemLayout={(_, index) => ({ length: KPI_CAROUSEL_PAGE_WIDTH, offset: KPI_CAROUSEL_PAGE_WIDTH * index, index })}
+                onMomentumScrollEnd={(e) => setKpiIdx(Math.round(e.nativeEvent.contentOffset.x / KPI_CAROUSEL_PAGE_WIDTH))}
                 renderItem={({ item }) => (
-                  <View style={s.kpiItem}>
-                    <View style={s.kpiCard}>
-                      <View style={s.kpiIconBox}>
-                        <Ionicons name={item.icon as any} size={20} color={COLORS.textSecondary} />
-                      </View>
-                      <View style={s.kpiTextWrap}>
-                        <Text style={s.kpiLabel}>{item.label}</Text>
-                        <Text style={s.kpiAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount}</Text>
-                      </View>
-                      {item.trend != null ? (
-                        <View style={[s.kpiTrendBadge, { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg }]}>
-                          <Ionicons
-                            name={item.positive ? 'trending-up' : 'trending-down'}
-                            size={11}
-                            color={item.positive ? COLORS.positive : COLORS.negative}
-                          />
-                          <Text style={[s.kpiTrendTxt, { color: item.positive ? COLORS.positive : COLORS.negative }]}>
-                            {item.trend}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  </View>
+                  <KPICarouselPage>
+                    <KPICarouselCard
+                      icon={item.icon}
+                      label={item.label}
+                      amount={item.amount}
+                      trend={item.trend}
+                      positive={item.positive}
+                    />
+                  </KPICarouselPage>
                 )}
               />
-              <View style={s.dots}>
-                {kpiCards.map((_: any, i: number) => <View key={i} style={[s.dot, i === kpiIdx && s.dotActive]} />)}
-              </View>
+              <KPICarouselDots count={kpiCards.length} activeIndex={kpiIdx} />
             </View>
 
             {daily.length > 0 && (
@@ -504,32 +487,16 @@ export default function PaymentsScreen() {
                   <Text style={s.emptyTxt}>No payments in this period</Text>
                 </View>
               ) : filtered.map((p, idx) => (
-                <TouchableOpacity
+                <TxnListRow
                   key={p.guid || `${p.voucher_number}-${idx}`}
-                  style={[s.txRow, idx < filtered.length - 1 && s.txBorder]}
-                  activeOpacity={0.7}
+                  icon={p.mode === 'Cash' ? 'cash-outline' : 'card-outline'}
+                  title={p.mode || 'Payment'}
+                  refLabel={p.voucher_number || '—'}
+                  subtitle={`${p.party_name || '—'} · ${fmtDate(p.date)}`}
+                  amount={formatAmount(Math.round(p.amount))}
+                  showBorder={idx < filtered.length - 1}
                   onPress={() => p.guid && router.push(`/document/${p.guid}?type=payment` as any)}
-                >
-                  <View style={s.txIconBox}>
-                    <Ionicons
-                      name={p.mode === 'Cash' ? 'cash-outline' : 'card-outline'}
-                      size={17}
-                      color={COLORS.textSecondary}
-                    />
-                  </View>
-                  <View style={s.txInfo}>
-                    <View style={s.txTopRow}>
-                      <Text style={s.txMode}>{p.mode || 'Payment'}</Text>
-                      <Text style={s.txRef}> · {p.voucher_number || '—'}</Text>
-                    </View>
-                    <Text style={s.txSub} numberOfLines={1}>
-                      {p.party_name || '—'} · {fmtDate(p.date)}
-                    </Text>
-                  </View>
-                  <View style={s.txRight}>
-                    <Text style={s.txAmt}>{formatAmount(Math.round(p.amount))}</Text>
-                  </View>
-                </TouchableOpacity>
+                />
               ))}
             </View>
           </>
@@ -548,18 +515,6 @@ const s = StyleSheet.create({
   headerTitle: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
 
   kpiSection: { marginBottom: SPACING.md },
-  kpiItem: { width: SW },
-  kpiCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, paddingHorizontal: 14, paddingVertical: 12, marginHorizontal: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
-  kpiIconBox: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
-  kpiTextWrap: { flex: 1, gap: 2, minWidth: 0 },
-  kpiLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600' },
-  kpiAmount: { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
-  kpiTrendBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: RADIUS.full, flexShrink: 0 },
-  kpiTrendTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
-
-  dots: { flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: 10 },
-  dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
-  dotActive: { width: 16, height: 5, borderRadius: 3, backgroundColor: COLORS.textPrimary },
 
   recentCard: { marginHorizontal: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
   recentHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, paddingTop: 14, paddingBottom: 10 },

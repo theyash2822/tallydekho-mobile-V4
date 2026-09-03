@@ -11,6 +11,8 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import SearchBar from '../../src/components/SearchBar';
+import { EntityListTile } from '../../src/components/EntityListTile';
+import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { useTranslation } from 'react-i18next';
 
 const AMBER = '#A89060';
@@ -105,14 +107,7 @@ export default function NegativeStockScreen() {
 
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
-      {/* ── Header */}
-      <View style={s.header}>
-        <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={s.headerTitle}>{t('stocks.negativeStock')}</Text>
-        <View style={{ width: 44 }} />
-      </View>
+      <ScreenHeader title={t('stocks.negativeStock')} onBack={() => router.back()} />
 
       {apiError && <ErrorBanner message={apiError} />}
 
@@ -165,64 +160,56 @@ export default function NegativeStockScreen() {
               const hasMultiWH = item.warehouses.length > 1;
 
               return (
-                <TouchableOpacity
+                <EntityListTile
                   key={item.id}
-                  style={[s.card, isSel && s.cardSel]}
+                  name={item.displayName || item.name}
+                  subtitle={item.sku || undefined}
+                  meta={item.group}
+                  selected={isSel}
+                  alignTop
+                  borderRadius={RADIUS.lg}
+                  avatarBgColor={AMBER}
+                  avatar={isSel ? undefined : <Ionicons name="cube-outline" size={20} color="#fff" />}
                   onPress={() => handlePress(item.id)}
                   onLongPress={() => handleLongPress(item.id)}
                   delayLongPress={350}
-                  activeOpacity={0.85}
-                >
-                  {/* Avatar */}
-                  <View style={[s.avatar, isSel && s.avatarSel]}>
-                    {isSel
-                      ? <Ionicons name="checkmark" size={18} color="#fff" />
-                      : <Ionicons name="cube-outline" size={20} color="#fff" />
-                    }
-                  </View>
-
-                  <View style={s.cardContent}>
-                    {/* Name + sku + group */}
-                    <Text style={s.itemName}>{item.displayName || item.name}</Text>
-                    {item.sku ? <Text style={s.itemGroup}>{item.sku}</Text> : null}
-                    <Text style={s.itemGroup}>{item.group}</Text>
-
-                    <View style={s.divider} />
-
-                    {/* Warehouse breakdown */}
-                    <View style={s.whHeader}>
-                      <Ionicons name="business-outline" size={12} color={COLORS.textTertiary} />
-                      <Text style={s.whHeaderTxt}>
-                        {hasMultiWH ? 'Warehouse Breakdown' : 'Warehouse'}
-                      </Text>
-                    </View>
-
-                    {item.warehouses.length > 0 ? (
-                      <View style={s.whList}>
-                        {item.warehouses.map((wh, idx) => (
-                          <View key={idx} style={s.whRow}>
-                            <View style={s.whDot} />
-                            <Text style={s.whName} numberOfLines={1}>{wh.warehouse}</Text>
-                            <Text style={s.whQty}>
-                              {fmtQty(wh.qty)}{item.unit ? ` ${item.unit}` : ''}
-                            </Text>
-                            {item.rate > 0 && (
-                              <Text style={s.whVal}>{fmtVal(wh.qty, item.rate)}</Text>
-                            )}
-                          </View>
-                        ))}
-                      </View>
-                    ) : (
-                      <View style={s.whRow}>
-                        <View style={s.whDot} />
-                        <Text style={s.whName}>All Warehouses</Text>
-                        <Text style={s.whQty}>
-                          {fmtQty(item.total_qty)}{item.unit ? ` ${item.unit}` : ''}
+                  style={{ marginBottom: SPACING.md }}
+                  footer={(
+                    <>
+                      <View style={s.divider} />
+                      <View style={s.whHeader}>
+                        <Ionicons name="business-outline" size={12} color={COLORS.textTertiary} />
+                        <Text style={s.whHeaderTxt}>
+                          {hasMultiWH ? 'Warehouse Breakdown' : 'Warehouse'}
                         </Text>
                       </View>
-                    )}
-                  </View>
-                </TouchableOpacity>
+                      {item.warehouses.length > 0 ? (
+                        <View style={s.whList}>
+                          {item.warehouses.map((wh, idx) => (
+                            <View key={idx} style={s.whRow}>
+                              <View style={s.whDot} />
+                              <Text style={s.whName} numberOfLines={1}>{wh.warehouse}</Text>
+                              <Text style={s.whQty}>
+                                {fmtQty(wh.qty)}{item.unit ? ` ${item.unit}` : ''}
+                              </Text>
+                              {item.rate > 0 && (
+                                <Text style={s.whVal}>{fmtVal(wh.qty, item.rate)}</Text>
+                              )}
+                            </View>
+                          ))}
+                        </View>
+                      ) : (
+                        <View style={s.whRow}>
+                          <View style={s.whDot} />
+                          <Text style={s.whName}>All Warehouses</Text>
+                          <Text style={s.whQty}>
+                            {fmtQty(item.total_qty)}{item.unit ? ` ${item.unit}` : ''}
+                          </Text>
+                        </View>
+                      )}
+                    </>
+                  )}
+                />
               );
             })
           )}

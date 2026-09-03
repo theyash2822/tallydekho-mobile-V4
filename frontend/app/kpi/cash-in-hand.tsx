@@ -16,6 +16,11 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { getKPICashInHand } from '../../src/services/api';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+import {
+  KPICarouselCard, KPICarouselPage, KPICarouselDots, KPI_CAROUSEL_PAGE_WIDTH,
+} from '../../src/components/KPICarouselCard';
+import { ScreenHeader } from '../../src/components/ScreenHeader';
+import { ViewAllButton } from '../../src/components/ViewAllButton';
 import { useTranslation } from 'react-i18next';
 
 const { width: SW } = Dimensions.get('window');
@@ -520,13 +525,7 @@ export default function CashInHandScreen() {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      <View style={s.header}>
-        <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={s.headerTitle}>{t('kpi.cashInHand')}</Text>
-        <View style={s.headerBtn} />
-      </View>
+      <ScreenHeader title={t('kpi.cashInHand')} onBack={() => router.back()} />
 
       <View style={s.filterRow}>
         <TouchableOpacity style={s.dateChip} onPress={() => setShowDatePick(true)} activeOpacity={0.7}>
@@ -557,47 +556,23 @@ export default function CashInHandScreen() {
                 data={summaryCards}
                 keyExtractor={(i) => i.id}
                 showsHorizontalScrollIndicator={false}
-                getItemLayout={(_, idx) => ({ length: SW, offset: SW * idx, index: idx })}
+                getItemLayout={(_, idx) => ({ length: KPI_CAROUSEL_PAGE_WIDTH, offset: KPI_CAROUSEL_PAGE_WIDTH * idx, index: idx })}
                 onScrollToIndexFailed={() => {}}
                 onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) =>
-                  setSumIdx(Math.round(e.nativeEvent.contentOffset.x / SW))}
+                  setSumIdx(Math.round(e.nativeEvent.contentOffset.x / KPI_CAROUSEL_PAGE_WIDTH))}
                 renderItem={({ item }) => (
-                  <View style={s.cardItem}>
-                    <View style={s.sumCard}>
-                      <View style={s.sumIconBox}>
-                        <Ionicons name={item.icon as any} size={22} color={COLORS.textSecondary} />
-                      </View>
-                      <View style={s.sumTextWrap}>
-                        <Text style={s.sumLabel}>{item.label}</Text>
-                        <Text style={s.sumAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount}</Text>
-                      </View>
-                      {item.trend != null ? (
-                        <View style={[
-                          s.trendBadge,
-                          { backgroundColor: item.positive ? COLORS.positiveBg : COLORS.negativeBg },
-                        ]}>
-                          <Ionicons
-                            name={item.positive ? 'trending-up' : 'trending-down'}
-                            size={11}
-                            color={item.positive ? COLORS.positive : COLORS.negative}
-                          />
-                          <Text style={[
-                            s.trendTxt,
-                            { color: item.positive ? COLORS.positive : COLORS.negative },
-                          ]}>
-                            {item.trend}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  </View>
+                  <KPICarouselPage>
+                    <KPICarouselCard
+                      icon={item.icon}
+                      label={item.label}
+                      amount={item.amount}
+                      trend={item.trend}
+                      positive={item.positive}
+                    />
+                  </KPICarouselPage>
                 )}
               />
-              <View style={s.dots}>
-                {summaryCards.map((_: any, i: number) => (
-                  <View key={i} style={[s.dot, i === sumIdx && s.dotActive]} />
-                ))}
-              </View>
+              <KPICarouselDots count={summaryCards.length} activeIndex={sumIdx} />
             </View>
 
             {daily.length > 0 && (
@@ -649,21 +624,18 @@ export default function CashInHandScreen() {
             <View style={s.recentCard}>
               <View style={s.recentHeader}>
                 <Text style={s.chartTitle}>{t('kpi.recentTransactions')}</Text>
-                <TouchableOpacity
-                  style={s.viewAllBtn}
+                <ViewAllButton
+                  variant="inline"
+                  label="View All"
                   onPress={() => router.push('/kpi/cash-register' as any)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={s.viewAllTxt}>View All</Text>
-                  <Ionicons name="chevron-forward" size={14} color={COLORS.textPrimary} />
-                </TouchableOpacity>
+                />
               </View>
               {txs.length === 0 ? (
                 <View style={s.empty}><Text style={s.emptyTxt}>{t('kpi.noCashMovements')}</Text></View>
-              ) : txs.map((txn: any, idx: number) => (
+              ) : txs.slice(0, 5).map((txn: any, idx: number, arr) => (
                 <TouchableOpacity
                   key={`tx-${idx}-${txn.guid || txn.voucher_number || 'x'}`}
-                  style={[s.txRow, idx < txs.length - 1 && s.txBorder]}
+                  style={[s.txRow, idx < arr.length - 1 && s.txBorder]}
                   activeOpacity={0.7}
                   onPress={() => txn.guid && router.push(`/document/${txn.guid}` as any)}
                 >
@@ -714,17 +686,6 @@ const s = StyleSheet.create({
   dateChipTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
 
   carouselWrap: { marginTop: SPACING.md, marginBottom: SPACING.sm },
-  cardItem: { width: SW },
-  sumCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, paddingHorizontal: 16, paddingVertical: 16, marginHorizontal: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
-  sumIconBox: { width: 48, height: 48, borderRadius: 8, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  sumTextWrap: { flex: 1, gap: 4 },
-  sumLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-  sumAmount: { fontSize: TYPOGRAPHY.xl, fontWeight: '800', color: COLORS.textPrimary },
-  trendBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: RADIUS.full, flexShrink: 0 },
-  trendTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
-  dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: 10 },
-  dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
-  dotActive: { width: 16, height: 5, borderRadius: 3, backgroundColor: COLORS.textPrimary },
 
   chartCard: { marginHorizontal: SPACING.md, marginBottom: SPACING.md, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, paddingTop: SPACING.md, paddingBottom: 8, overflow: 'hidden' },
   chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: SPACING.md, marginBottom: 8 },

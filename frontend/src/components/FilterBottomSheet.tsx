@@ -37,10 +37,14 @@ interface FilterBottomSheetProps {
   onApply: () => void;
   applyLabel?: string;
   cancelLabel?: string;
+  /** When true, Apply is muted and does nothing (e.g. need ≥1 selection). */
+  applyDisabled?: boolean;
   /** Content between the title row and the footer buttons */
   children: React.ReactNode;
   /** Height as a fraction of screen height (default 0.72) */
   heightFraction?: number;
+  /** Hide Cancel/Apply footer (e.g. pickers that close on row tap). */
+  hideFooter?: boolean;
 }
 
 export default function FilterBottomSheet({
@@ -52,8 +56,10 @@ export default function FilterBottomSheet({
   onApply,
   applyLabel = 'Apply Filters',
   cancelLabel = 'Cancel',
+  applyDisabled = false,
   children,
   heightFraction = 0.72,
+  hideFooter = false,
 }: FilterBottomSheetProps) {
   const insets = useSafeAreaInsets();
   // Dynamic max height — never more than 72% of screen, never less than 30%
@@ -100,19 +106,22 @@ export default function FilterBottomSheet({
           </ScrollView>
 
           {/* Footer */}
-          <View style={s.footer}>
-            <TouchableOpacity style={s.cancelBtn} onPress={onClose} activeOpacity={0.8}>
-              <Text style={s.cancelTxt}>{cancelLabel}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={s.applyBtn}
-              onPress={onApply}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />
-              <Text style={s.applyTxt}>{applyLabel}</Text>
-            </TouchableOpacity>
-          </View>
+          {!hideFooter && (
+            <View style={s.footer}>
+              <TouchableOpacity style={s.cancelBtn} onPress={onClose} activeOpacity={0.8}>
+                <Text style={s.cancelTxt}>{cancelLabel}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.applyBtn, applyDisabled && s.applyBtnDisabled]}
+                onPress={() => { if (!applyDisabled) onApply(); }}
+                activeOpacity={applyDisabled ? 1 : 0.85}
+                disabled={applyDisabled}
+              >
+                <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />
+                <Text style={s.applyTxt}>{applyLabel}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </View>
     </Modal>
@@ -149,6 +158,122 @@ export function FilterCheckRow({
       <Text style={[ro.label, selected && ro.labelActive]}>{display}</Text>
     </TouchableOpacity>
   );
+}
+
+/**
+ * Multi-check R2 model (unified):
+ * - Explicit ids only. [] = nothing selected (invalid for Apply).
+ * - All selected = every id in selected[] (parent may still store [] after Apply = no filter).
+ * - Tap All: select all ↔ clear all in one click.
+ * - Individual rows toggle freely (can reach 0).
+ * - Apply disabled while any list with options has 0 selected.
+ */
+export function isFilterAllSelected(selected: string[], allIds: string[]): boolean {
+  if (allIds.length === 0) return true;
+  return selected.length === allIds.length && allIds.every((id) => selected.includes(id));
+}
+
+export function isFilterOptionChecked(
+  selected: string[],
+  id: string,
+  _allIds?: string[],
+): boolean {
+  return selected.includes(id);
+}
+
+/** Toggle one id; allows empty selection. */
+export function toggleFilterFromAll(
+  prev: string[],
+  id: string,
+  _allIds?: string[],
+): string[] {
+  return prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+}
+
+/** Tap All: if all selected → clear; else → select all. */
+export function toggleFilterAll(prev: string[], allIds: string[]): string[] {
+  if (allIds.length === 0) return [];
+  return isFilterAllSelected(prev, allIds) ? [] : [...allIds];
+}
+
+/** Parent stored [] (= no filter) → expand to full ids for the sheet UI. */
+export function hydrateFilterSelection(stored: string[], allIds: string[]): string[] {
+  if (allIds.length === 0) return [];
+  if (stored.length === 0) return [...allIds];
+  return stored.filter((id) => allIds.includes(id));
+}
+
+/**
+ * Seed local multi-check state when a filter sheet opens.
+ * - Runs once per open (visible false→true).
+ * - If option ids appear later (async) and local is still empty while parent means All,
+ *   fills to all ids once — does not wipe in-progress toggles.
+ */
+export function useMultiFilterHydration(
+  visible: boolean,
+  stored: string[],
+  allIds: string[],
+  setLocal: (next: string[]) => void,
+) {
+  const wasVisibleRef = React.useRef(false);
+  const prevIdsLenRef = React.useRef(0);
+  const idsKey = allIds.join('\u0001');
+  const storedKey = stored.join('\u0001');
+
+  React.useEffect(() => {
+    if (!visible) {
+      wasVisibleRef.current = false;
+      prevIdsLenRef.current = 0;
+      return;
+    }
+    const opening = !wasVisibleRef.current;
+    wasVisibleRef.current = true;
+    const storedNow = storedKey.length ? storedKey.split('\u0001') : [];
+    const idsNow = idsKey.length ? idsKey.split('\u0001') : [];
+
+    if (opening) {
+      setLocal(hydrateFilterSelection(storedNow, idsNow));
+      prevIdsLenRef.current = idsNow.length;
+      return;
+    }
+
+    // Options arrived after open (e.g. groups loaded) — seed once if still empty + parent is All
+    if (prevIdsLenRef.current === 0 && idsNow.length > 0 && storedNow.length === 0) {
+      setLocal(hydrateFilterSelection([], idsNow));
+    }
+    prevIdsLenRef.current = idsNow.length;
+  }, [visible, idsKey, storedKey, setLocal]);
+}
+
+/** True when this list can be applied (≥1, or no options). */
+export function isFilterSelectionValid(selected: string[], allIds: string[]): boolean {
+  if (allIds.length === 0) return true;
+  return selected.length > 0;
+}
+
+/** On Apply: full set or empty → [] (no narrowing). Partial → keep explicit ids. */
+export function normalizeFilterAllSelection(selected: string[], allIds: string[]): string[] {
+  if (selected.length === 0) return [];
+  return isFilterAllSelected(selected, allIds) ? [] : [...selected];
+}
+
+/** True when selection narrows the list (not empty-All and not every option). */
+export function isFilterNarrowing(selected: string[], allIds: string[]): boolean {
+  if (!selected.length) return false;
+  if (!allIds.length) return false;
+  return !isFilterAllSelected(selected, allIds);
+}
+
+/** Match helper — value must belong to selected when narrowing. */
+export function matchesFilterSelection(
+  selected: string[],
+  allIds: string[],
+  value: string,
+  equals: (selectedId: string, value: string) => boolean = (a, b) => a === b,
+): boolean {
+  if (!isFilterNarrowing(selected, allIds)) return true;
+  const v = String(value || '');
+  return selected.some((id) => equals(id, v));
 }
 
 /** Chip group — single or multi select */
@@ -247,6 +372,7 @@ const s = StyleSheet.create({
     borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary,
     alignItems: 'center', justifyContent: 'center',
   },
+  applyBtnDisabled: { opacity: 0.4 },
   applyTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
 });
 const ro = StyleSheet.create({
@@ -294,4 +420,29 @@ const cg = StyleSheet.create({
   chipActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
   chipTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textSecondary },
   chipTxtActive: { color: COLORS.white, fontWeight: '700' },
+});
+
+/** Shared tab/search layout inside FilterBottomSheet — matches Ledger filter modal. */
+export const filterSheetContentStyles = StyleSheet.create({
+  tabs: {
+    flexDirection: 'row', gap: 8,
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  tab: {
+    paddingHorizontal: 16, paddingVertical: 8,
+    borderRadius: RADIUS.full, borderWidth: 1.5,
+    borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg,
+  },
+  tabActive: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary },
+  tabTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+  tabTxtActive: { color: COLORS.white, fontWeight: '700' },
+  panel: { paddingBottom: SPACING.md },
+  searchBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    margin: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,
+    paddingHorizontal: 12, paddingVertical: 10, backgroundColor: COLORS.pageBg,
+  },
+  searchInput: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
+  hint: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, paddingHorizontal: SPACING.md, paddingVertical: 8 },
 });

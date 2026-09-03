@@ -12,14 +12,12 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+import { EntityListTile } from '../../src/components/EntityListTile';
+import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { getStocks } from '../../src/services/api';
 import { useTranslation } from 'react-i18next';
 
-const ICON_PALETTE = [
-  { icon: 'cube-outline', iconBg: COLORS.positiveBg, iconColor: COLORS.positive },
-  { icon: 'layers-outline', iconBg: COLORS.infoBg, iconColor: COLORS.info },
-  { icon: 'pricetag-outline', iconBg: COLORS.negativeBg, iconColor: COLORS.negative },
-];
+const STOCK_ICON_BG = '#E8E7E1';
 
 function OnHandCard({
   item, onPress,
@@ -27,31 +25,26 @@ function OnHandCard({
   item: any; onPress: () => void;
 }) {
   return (
-    <TouchableOpacity style={sc.card} onPress={onPress} activeOpacity={0.8}>
-      <View style={[sc.icon, { backgroundColor: item.iconBg }]}>
-        <Ionicons name={item.icon as any} size={20} color={item.iconColor} />
-      </View>
-      <View style={sc.info}>
-        <Text style={sc.name} numberOfLines={1}>{item.displayName || item.name}</Text>
-        <Text style={sc.sku}>{item.sku} · {item.category}</Text>
-      </View>
-      <View style={sc.right}>
-        <Text style={sc.value}>{item.value}</Text>
-        <View style={[sc.qtyBadge, item.qty <= 10 && sc.qtyLow]}>
-          <Text style={[sc.qtyTxt, item.qty <= 10 && sc.qtyLowTxt]}>{item.qty} on hand</Text>
+    <EntityListTile
+      name={item.displayName || item.name}
+      subtitle={`${item.sku} · ${item.category}`}
+      onPress={onPress}
+      avatar={<Ionicons name="cube-outline" size={20} color={COLORS.textPrimary} />}
+      avatarBgColor={STOCK_ICON_BG}
+      avatarRadius={RADIUS.md}
+      trailing={(
+        <View style={sc.right}>
+          <Text style={sc.value}>{item.value}</Text>
+          <View style={[sc.qtyBadge, item.qty <= 10 && sc.qtyLow]}>
+            <Text style={[sc.qtyTxt, item.qty <= 10 && sc.qtyLowTxt]}>{item.qty} units</Text>
+          </View>
         </View>
-      </View>
-      <Ionicons name="chevron-forward" size={14} color={COLORS.textTertiary} style={{ marginLeft: 4 }} />
-    </TouchableOpacity>
+      )}
+    />
   );
 }
 
 const sc = StyleSheet.create({
-  card:     { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, padding: SPACING.sm, borderWidth: 1, borderColor: COLORS.borderDefault },
-  icon:     { width: 42, height: 42, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center' },
-  info:     { flex: 1 },
-  name:     { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  sku:      { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, marginTop: 2 },
   right:    { alignItems: 'flex-end', gap: 4 },
   value:    { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   qtyBadge: { backgroundColor: COLORS.pageBg, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: COLORS.borderDefault },
@@ -88,21 +81,17 @@ export default function OnHandStockScreen() {
         const raw = res?.data?.items ?? [];
         const mapped = raw
           .filter((r: any) => +(r.closing_qty || 0) > 0)
-          .map((r: any, idx: number) => {
-            const palette = ICON_PALETTE[idx % ICON_PALETTE.length];
-            return {
-              id: r.guid || String(r.id),
-              name: r.displayName || r.name || '',
-              displayName: r.displayName || r.name || '',
-              sku: r.sku || r.alias || r.hsn || '—',
-              category: r.category || r.group_name || 'Other',
-              qty: +(r.closing_qty || 0),
-              value: r.closing_value
-                ? formatAmount(Math.round(+r.closing_value))
-                : formatAmount(0),
-              ...palette,
-            };
-          });
+          .map((r: any) => ({
+            id: r.guid || String(r.id),
+            name: r.displayName || r.name || '',
+            displayName: r.displayName || r.name || '',
+            sku: r.sku || r.alias || r.hsn || '—',
+            category: r.category || r.group_name || 'Other',
+            qty: +(r.closing_qty || 0),
+            value: r.closing_value
+              ? formatAmount(Math.round(+r.closing_value))
+              : formatAmount(0),
+          }));
         setItems(mapped);
       })
       .catch((e: any) => setApiError(e?.message || 'Failed to load stock'))
@@ -123,15 +112,15 @@ export default function OnHandStockScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('stocks.onHand')}</Text>
-        <TouchableOpacity style={styles.calBtn} onPress={() => setCalOpen(true)} activeOpacity={0.7}>
-          <Ionicons name="calendar-outline" size={20} color={COLORS.brandPrimary} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title={t('stocks.onHand')}
+        onBack={() => router.back()}
+        right={(
+          <TouchableOpacity style={styles.calBtn} onPress={() => setCalOpen(true)} activeOpacity={0.7}>
+            <Ionicons name="calendar-outline" size={20} color={COLORS.brandPrimary} />
+          </TouchableOpacity>
+        )}
+      />
 
       {apiError && <ErrorBanner message={apiError} onRetry={load} />}
 
@@ -200,15 +189,7 @@ export default function OnHandStockScreen() {
 
 const styles = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: COLORS.pageBg },
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: SPACING.md, paddingVertical: 14,
-    backgroundColor: COLORS.cardBg,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-  },
-  backBtn:     { width: 40, alignItems: 'flex-start' },
-  headerTitle: { flex: 1, fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
-  calBtn:      { width: 40, alignItems: 'flex-end' },
+  calBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   dateBar: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: '#FBF7EE', paddingHorizontal: SPACING.md, paddingVertical: 8,

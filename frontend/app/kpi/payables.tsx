@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, FlatList,
-  Dimensions, NativeSyntheticEvent, NativeScrollEvent, Linking, Alert,
+  NativeSyntheticEvent, NativeScrollEvent, Linking, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,9 +14,11 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { getKPIPayables } from '../../src/services/api';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
+import {
+  KPICarouselCard, KPICarouselPage, KPICarouselDots, KPI_CAROUSEL_PAGE_WIDTH,
+} from '../../src/components/KPICarouselCard';
+import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { useTranslation } from 'react-i18next';
-
-const { width: SW } = Dimensions.get('window');
 
 function fmtDate(iso?: string) {
   if (!iso) return '';
@@ -99,9 +101,8 @@ export default function PayablesScreen() {
     const fmtTrend = (raw: any) => {
       const has = raw != null && Number.isFinite(Number(raw));
       return {
-        hasTrend: has,
-        trend: has ? `${Number(raw) >= 0 ? '+' : ''}${Number(raw)}%` : '—',
-        positive: has ? Number(raw) >= 0 : true,
+        trend_pct: has ? Number(raw) : null,
+        trend_positive: has ? Number(raw) >= 0 : null,
       };
     };
     const total = Number(apiData?.total ?? apiData?.accountingBalance) || 0;
@@ -204,13 +205,7 @@ export default function PayablesScreen() {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      <View style={s.header}>
-        <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={s.headerTitle}>{t('kpi.payables')}</Text>
-        <View style={s.headerBtn} />
-      </View>
+      <ScreenHeader title={t('kpi.payables')} onBack={() => router.back()} />
 
       <View style={s.filterRow}>
         <TouchableOpacity style={s.dateChip} onPress={() => setShowDatePick(true)} activeOpacity={0.7}>
@@ -255,56 +250,25 @@ export default function PayablesScreen() {
                 data={agingCards}
                 keyExtractor={(i) => i.id}
                 showsHorizontalScrollIndicator={false}
-                getItemLayout={(_, index) => ({ length: SW, offset: SW * index, index })}
+                getItemLayout={(_, index) => ({ length: KPI_CAROUSEL_PAGE_WIDTH, offset: KPI_CAROUSEL_PAGE_WIDTH * index, index })}
                 onScrollToIndexFailed={() => {}}
                 onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
-                  setAgingIdx(Math.round(e.nativeEvent.contentOffset.x / SW));
+                  setAgingIdx(Math.round(e.nativeEvent.contentOffset.x / KPI_CAROUSEL_PAGE_WIDTH));
                 }}
                 renderItem={({ item }) => (
-                  <View style={s.agingItem}>
-                    <View style={s.agingCard}>
-                      <View style={s.agingIconBox}>
-                        <Ionicons name={item.icon as any} size={24} color={COLORS.textSecondary} />
-                      </View>
-                      <View style={s.agingTextWrap}>
-                        <Text style={s.agingLabel}>{item.label}</Text>
-                        <Text style={s.agingAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount}</Text>
-                      </View>
-                      <View style={[
-                        s.trendBadge,
-                        {
-                          backgroundColor: item.hasTrend
-                            ? (item.positive ? COLORS.positiveBg : COLORS.negativeBg)
-                            : COLORS.pageBg,
-                        },
-                      ]}>
-                        {item.hasTrend ? (
-                          <Ionicons
-                            name={item.positive ? 'trending-up' : 'trending-down'}
-                            size={11}
-                            color={item.positive ? COLORS.positive : COLORS.negative}
-                          />
-                        ) : null}
-                        <Text style={[
-                          s.trendTxt,
-                          {
-                            color: item.hasTrend
-                              ? (item.positive ? COLORS.positive : COLORS.negative)
-                              : COLORS.textTertiary,
-                          },
-                        ]}>
-                          {item.trend}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
+                  <KPICarouselPage>
+                    <KPICarouselCard
+                      icon={item.icon}
+                      label={item.label}
+                      amount={item.amount}
+                      trend_pct={item.trend_pct}
+                      trend_positive={item.trend_positive}
+                      alwaysShowTrend
+                    />
+                  </KPICarouselPage>
                 )}
               />
-              <View style={s.dots}>
-                {agingCards.map((_, i) => (
-                  <View key={i} style={[s.dot, i === agingIdx && s.dotActive]} />
-                ))}
-              </View>
+              <KPICarouselDots count={agingCards.length} activeIndex={agingIdx} />
             </View>
 
             <View style={s.tabCard}>
@@ -455,18 +419,6 @@ const s = StyleSheet.create({
   filterChipActiveTxt: { color: '#FFFFFF' },
 
   agingSection: { marginTop: SPACING.md, marginBottom: SPACING.sm },
-  agingItem: { width: SW },
-  agingCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, paddingHorizontal: 16, paddingVertical: 16, marginHorizontal: SPACING.md, borderWidth: 1, borderColor: COLORS.borderDefault },
-  agingIconBox: { width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  agingTextWrap: { flex: 1, gap: 4 },
-  agingLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-  agingAmount: { fontSize: TYPOGRAPHY.xl, fontWeight: '800', color: COLORS.textPrimary },
-  trendBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: RADIUS.full, flexShrink: 0 },
-  trendTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
-
-  dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: 10 },
-  dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
-  dotActive: { width: 16, height: 5, borderRadius: 3, backgroundColor: COLORS.textPrimary },
 
   tabCard: { marginHorizontal: SPACING.md, marginTop: SPACING.sm, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
   tabRow: { flexDirection: 'row', backgroundColor: COLORS.pageBg, margin: 4, borderRadius: RADIUS.md, padding: 3 },

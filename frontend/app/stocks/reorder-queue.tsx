@@ -7,6 +7,8 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { getStocks } from '../../src/services/api';
 import { LoadingState, ErrorState, EmptyState } from '../../src/components/ApiStateViews';
+import { EntityListTile } from '../../src/components/EntityListTile';
+import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { useTranslation } from 'react-i18next';
 
 type Priority = 'critical' | 'high' | 'medium' | 'low';
@@ -108,18 +110,15 @@ export default function ReorderQueueScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('stocks.reorder')}</Text>
-        {criticalCount > 0 && (
+      <ScreenHeader
+        title={t('stocks.reorder')}
+        onBack={() => router.back()}
+        right={criticalCount > 0 ? (
           <View style={styles.criticalBadge}>
             <Text style={styles.criticalText}>{criticalCount}</Text>
           </View>
-        )}
-      </View>
+        ) : undefined}
+      />
 
       {/* Summary strip */}
       <View style={styles.summaryRow}>
@@ -159,48 +158,50 @@ export default function ReorderQueueScreen() {
           const p = PRIORITY_CONFIG[item.priority as Priority];
           const progressPct = Math.round((item.current / item.reorderAt) * 100);
           return (
-            <View key={item.id} style={styles.itemCard}>
-              <View style={styles.cardTop}>
-                <View style={styles.cardLeft}>
-                  <Text style={styles.itemName} numberOfLines={1}>{item.displayName || item.name}</Text>
-                  <Text style={styles.itemSku}>{[item.sku, item.warehouse].filter(Boolean).join(' · ')}</Text>
-                </View>
+            <EntityListTile
+              key={item.id}
+              name={item.displayName || item.name}
+              subtitle={[item.sku, item.warehouse].filter(Boolean).join(' · ')}
+              borderRadius={RADIUS.lg}
+              trailing={(
                 <View style={[styles.priorityBadge, { backgroundColor: p.bg }]}>
                   <Text style={[styles.priorityText, { color: p.color }]}>{p.label}</Text>
                 </View>
-              </View>
-
-              <View style={styles.progressSection}>
-                <View style={styles.statsRow}>
-                  <Text style={styles.statLabel}>
-                    Current: <Text style={{ fontWeight: '700', color: item.current === 0 ? '#DC2626' : COLORS.textPrimary }}>{item.current}</Text>
-                  </Text>
-                  <Text style={styles.statLabel}>
-                    Reorder at: <Text style={{ fontWeight: '700', color: COLORS.textPrimary }}>{item.reorderAt}</Text>
-                  </Text>
-                </View>
-                <View style={styles.progressTrack}>
-                  <View style={[styles.progressFill, {
-                    width: `${Math.min(progressPct, 100)}%` as any,
-                    backgroundColor: item.current === 0 ? '#DC2626' : p.barColor,
-                  }]} />
-                </View>
-              </View>
-
-              <View style={styles.cardActions}>
-                <Text style={styles.suggText}>
-                  Suggest: <Text style={{ fontWeight: '700', color: COLORS.textPrimary }}>{item.suggest} units</Text>
-                </Text>
-                <TouchableOpacity
-                  style={styles.reorderBtn}
-                  activeOpacity={0.8}
-                  onPress={() => router.push('/purchase/create-order')}
-                >
-                  <Ionicons name="cart-outline" size={13} color={COLORS.white} />
-                  <Text style={styles.reorderBtnText}>Add to PO</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+              )}
+              footer={(
+                <>
+                  <View style={styles.progressSection}>
+                    <View style={styles.statsRow}>
+                      <Text style={styles.statLabel}>
+                        Current: <Text style={{ fontWeight: '700', color: item.current === 0 ? '#DC2626' : COLORS.textPrimary }}>{item.current}</Text>
+                      </Text>
+                      <Text style={styles.statLabel}>
+                        Reorder at: <Text style={{ fontWeight: '700', color: COLORS.textPrimary }}>{item.reorderAt}</Text>
+                      </Text>
+                    </View>
+                    <View style={styles.progressTrack}>
+                      <View style={[styles.progressFill, {
+                        width: `${Math.min(progressPct, 100)}%` as any,
+                        backgroundColor: item.current === 0 ? '#DC2626' : p.barColor,
+                      }]} />
+                    </View>
+                  </View>
+                  <View style={styles.cardActions}>
+                    <Text style={styles.suggText}>
+                      Suggest: <Text style={{ fontWeight: '700', color: COLORS.textPrimary }}>{item.suggest} units</Text>
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.reorderBtn}
+                      activeOpacity={0.8}
+                      onPress={() => router.push('/purchase/create-order')}
+                    >
+                      <Ionicons name="cart-outline" size={13} color={COLORS.white} />
+                      <Text style={styles.reorderBtnText}>Add to PO</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            />
           );
         })}
         <View style={{ height: 80 }} />

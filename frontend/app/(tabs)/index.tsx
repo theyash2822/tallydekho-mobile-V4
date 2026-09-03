@@ -20,6 +20,7 @@ import SearchBar from '../../src/components/SearchBar';
 import CashflowCard from '../../src/components/CashflowCard';
 import ModuleTiles from '../../src/components/ModuleTiles';
 import RecentActivity from '../../src/components/RecentActivity';
+import { KPICarouselCard, KPICarouselPage, KPICarouselDots } from '../../src/components/KPICarouselCard';
 import PairingBanner from '../../src/components/PairingBanner';
 import OfflineBadge from '../../src/components/OfflineBadge';
 import {
@@ -451,63 +452,21 @@ export default function HomeScreen() {
 
   // ── KPI row render ────────────────────────────────────────────────────────
   const renderKPI = ({ item }: any) => {
-    const pct = item.trend_pct;
-    const hasTrend = pct != null && Number.isFinite(Number(pct));
-    const positive = hasTrend
-      ? (item.trend_positive != null ? !!item.trend_positive : Number(pct) >= 0)
-      : !!item.positive;
-    const trendLabel = hasTrend
-      ? `${Number(pct) >= 0 ? '+' : ''}${Number(pct)}%`
-      : (typeof item.trend === 'string' && item.trend ? item.trend : '—');
-
+    const amount = item.amount_raw != null
+      ? formatAmountCompact(item.amount_raw)
+      : item.amount;
     return (
-      <View style={styles.kpiItem}>
-        <TouchableOpacity
+      <KPICarouselPage>
+        <KPICarouselCard
           testID={`kpi-card-${item.id}`}
-          style={styles.kpiCard}
-          activeOpacity={0.7}
+          icon={item.icon}
+          label={tKpiLabel(t, item.id, item.label)}
+          amount={amount}
+          trend_pct={item.trend_pct}
+          trend_positive={item.trend_positive != null ? item.trend_positive : item.positive}
           onPress={() => item.route && router.push(item.route as any)}
-        >
-          {/* Left: Icon circle */}
-          <View style={styles.kpiIconBox}>
-            <Ionicons name={item.icon} size={22} color={COLORS.textSecondary} />
-          </View>
-
-          {/* Middle: Label + Amount stacked — flex:1 so never clips */}
-          <View style={styles.kpiTextWrap}>
-            <Text style={styles.kpiLabel} numberOfLines={1}>{tKpiLabel(t, item.id, item.label)}</Text>
-            <Text style={styles.kpiAmount} numberOfLines={1} adjustsFontSizeToFit>{item.amount_raw != null ? formatAmountCompact(item.amount_raw) : item.amount}</Text>
-          </View>
-
-          {/* Right: Trend badge — always show; "—" when no prior / null */}
-          <View
-            style={[
-              styles.kpiTrendBadge,
-              {
-                backgroundColor: hasTrend
-                  ? (positive ? COLORS.positiveBg : COLORS.negativeBg)
-                  : COLORS.pageBg,
-              },
-            ]}
-          >
-            {hasTrend ? (
-              <Ionicons
-                name={positive ? 'trending-up' : 'trending-down'}
-                size={11}
-                color={positive ? COLORS.positive : COLORS.negative}
-              />
-            ) : null}
-            <Text
-              style={[
-                styles.kpiTrendTxt,
-                { color: hasTrend ? (positive ? COLORS.positive : COLORS.negative) : COLORS.textTertiary },
-              ]}
-            >
-              {trendLabel}
-            </Text>
-          </View>
-        </TouchableOpacity>
-      </View>
+        />
+      </KPICarouselPage>
     );
   };
 
@@ -606,11 +565,7 @@ export default function HomeScreen() {
           )}
           {/* Dot Indicators */}
           {!isLoading && Array.isArray(kpiData) && (
-            <View style={styles.kpiDots}>
-              {kpiData.map((_, i) => (
-                <View key={i} style={[styles.kpiDot, i === kpiIdx && styles.kpiDotActive]} />
-              ))}
-            </View>
+            <KPICarouselDots count={kpiData.length} activeIndex={kpiIdx} />
           )}
         </View>
 
@@ -708,33 +663,6 @@ const styles = StyleSheet.create({
   syncSubtitle: { fontSize: TYPOGRAPHY.xs, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
   kpiSection: { marginTop: SPACING.md },
   kpiList: { paddingHorizontal: 0 },
-  kpiItem: {
-    width: SW,                          // exact page width — fixes carousel snap
-  },
-  kpiCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
-    paddingHorizontal: 14, paddingVertical: 12,
-    marginHorizontal: SPACING.md,       // visual indent inside the page
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  kpiIconBox: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: COLORS.pageBg,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-  },
-  kpiTextWrap: { flex: 1, gap: 2 },      // flex:1 ensures label+amount never clip
-  kpiLabel:   { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '600' },
-  kpiAmount:  { fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary },
-  kpiTrendBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    paddingHorizontal: 7, paddingVertical: 3, borderRadius: RADIUS.full,
-    flexShrink: 0,
-  },
-  kpiTrendTxt:    { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
-  kpiDots:        { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: 10, marginBottom: 2 },
-  kpiDot:         { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
-  kpiDotActive:   { width: 16, height: 5, borderRadius: 3, backgroundColor: COLORS.brandPrimary },
   filterWrap: { paddingHorizontal: SPACING.md, marginTop: SPACING.md },
   filterRow: {
     flexDirection: 'row', backgroundColor: COLORS.pageBg,

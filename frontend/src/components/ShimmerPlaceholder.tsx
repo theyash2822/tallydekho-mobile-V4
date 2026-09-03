@@ -86,15 +86,23 @@ export function LedgerRowSkeleton() {
   );
 }
 
-/** KPI card skeleton — matches the horizontal carousel card */
-export function KPICardSkeleton() {
+/** KPI carousel skeleton — matches KPICarouselCard horizontal layout. */
+export function KPICarouselSkeleton() {
   return (
-    <View style={sk.kpiCard}>
-      <ShimmerPlaceholder width={40} height={40} borderRadius={20} style={{ marginBottom: 10 }} />
-      <ShimmerPlaceholder width="70%" height={12} borderRadius={5} style={{ marginBottom: 6 }} />
-      <ShimmerPlaceholder width="90%" height={18} borderRadius={7} />
+    <View style={sk.carouselCard}>
+      <ShimmerPlaceholder width={40} height={40} borderRadius={20} />
+      <View style={sk.carouselBody}>
+        <ShimmerPlaceholder width="55%" height={11} borderRadius={5} style={{ marginBottom: 6 }} />
+        <ShimmerPlaceholder width="75%" height={16} borderRadius={6} />
+      </View>
+      <ShimmerPlaceholder width={48} height={22} borderRadius={11} />
     </View>
   );
+}
+
+/** @deprecated Use KPICarouselSkeleton — kept for backward compatibility */
+export function KPICardSkeleton() {
+  return <KPICarouselSkeleton />;
 }
 
 /** Metric card skeleton (2-column grid cards on home screen) */
@@ -141,6 +149,20 @@ const sk = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.06)',
   },
   rowBody: { flex: 1 },
+  carouselCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+  },
+  carouselBody: { flex: 1 },
   kpiCard: {
     width: 140, height: 110,
     backgroundColor: '#fff', borderRadius: 14,

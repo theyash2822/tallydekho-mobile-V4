@@ -13,7 +13,17 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
-import FilterBottomSheet, { FilterCheckRow, FilterRadioRow } from './FilterBottomSheet';
+import FilterBottomSheet, {
+  FilterCheckRow,
+  FilterRadioRow,
+  isFilterAllSelected,
+  isFilterOptionChecked,
+  toggleFilterFromAll,
+  toggleFilterAll,
+  useMultiFilterHydration,
+  isFilterSelectionValid,
+  normalizeFilterAllSelection,
+} from './FilterBottomSheet';
 
 // ── Doc-type catalogs (Register filter sheet) ─────────────────────────────────
 
@@ -212,12 +222,18 @@ export function ActiveFilterChips({
   chips,
   onRemove,
   onClearAll,
+  variant = 'default',
 }: {
   chips: { id: string; label: string }[];
   onRemove: (id: string) => void;
   onClearAll?: () => void;
+  /** 'amber' matches Total Stock chip styling */
+  variant?: 'default' | 'amber';
 }) {
   if (!chips.length) return null;
+  const chipStyle = variant === 'amber' ? fi.chipAmber : fi.chip;
+  const chipTxtStyle = variant === 'amber' ? fi.chipTxtAmber : fi.chipTxt;
+  const closeColor = variant === 'amber' ? '#A89060' : COLORS.brandPrimary;
   return (
     <View style={fi.chipRowWrap}>
       <ScrollView
@@ -226,19 +242,23 @@ export function ActiveFilterChips({
         contentContainerStyle={fi.chipRow}
       >
         {chips.map((c) => (
-          <View key={c.id} style={fi.chip}>
-            <Text style={fi.chipTxt} numberOfLines={1}>{c.label}</Text>
+          <View key={c.id} style={chipStyle}>
+            <Text style={chipTxtStyle} numberOfLines={1}>{c.label}</Text>
             <TouchableOpacity
               onPress={() => onRemove(c.id)}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="close-circle" size={14} color={COLORS.brandPrimary} />
+              <Ionicons name="close-circle" size={variant === 'amber' ? 12 : 14} color={closeColor} />
             </TouchableOpacity>
           </View>
         ))}
         {onClearAll && chips.length > 1 && (
-          <TouchableOpacity style={fi.clearChip} onPress={onClearAll} activeOpacity={0.7}>
-            <Text style={fi.clearChipTxt}>Clear</Text>
+          <TouchableOpacity
+            style={variant === 'amber' ? fi.clearChipAmber : fi.clearChip}
+            onPress={onClearAll}
+            activeOpacity={0.7}
+          >
+            <Text style={variant === 'amber' ? fi.clearChipTxtAmber : fi.clearChipTxt}>Clear all</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -273,25 +293,31 @@ export function DocTypeFilterModal({
   onApply: (ids: string[], groups: string[]) => void;
 }) {
   const [tab, setTab] = useState<'Type' | 'Group'>('Type');
-  const [localIds, setLocalIds] = useState<string[]>(selectedIds);
-  const [localGroups, setLocalGroups] = useState<string[]>(selectedGroups);
+  const [localIds, setLocalIds] = useState<string[]>([]);
+  const [localGroups, setLocalGroups] = useState<string[]>([]);
   const [groupSearch, setGroupSearch] = useState('');
+
+  const allOptionIds = useMemo(() => options.map((o) => o.id), [options]);
+  const allGroupNames = useMemo(() => partyGroups.map((g) => g.name), [partyGroups]);
+
+  useMultiFilterHydration(visible, selectedIds, allOptionIds, setLocalIds);
+  useMultiFilterHydration(visible, selectedGroups, allGroupNames, setLocalGroups);
 
   useEffect(() => {
     if (visible) {
-      setLocalIds(selectedIds);
-      setLocalGroups(selectedGroups);
       setGroupSearch('');
       setTab('Type');
     }
-  }, [visible, selectedIds, selectedGroups]);
+  }, [visible]);
 
-  const allOptionIds = options.map((o) => o.id);
-  const isAllTypes = localIds.length === 0
-    || (localIds.length === allOptionIds.length && allOptionIds.every((id) => localIds.includes(id)));
+  const isAllTypes = isFilterAllSelected(localIds, allOptionIds);
+  const isAllGroups = isFilterAllSelected(localGroups, allGroupNames);
 
-  const activeCount = (isAllTypes ? 0 : localIds.length) + localGroups.length;
+  const activeCount = (isAllTypes ? 0 : localIds.length) + (isAllGroups ? 0 : localGroups.length);
   const allCount = counts.all ?? options.reduce((s, o) => s + (counts[o.id] || 0), 0);
+  const canApply =
+    isFilterSelectionValid(localIds, allOptionIds)
+    && isFilterSelectionValid(localGroups, allGroupNames);
 
   const filteredGroups = useMemo(() => {
     const q = groupSearch.trim().toLowerCase();
@@ -300,25 +326,18 @@ export function DocTypeFilterModal({
   }, [partyGroups, groupSearch]);
 
   const toggleType = (id: string) => {
-    setLocalIds((prev) => {
-      // Treat "all selected" / empty as empty baseline so toggling one starts from none
-      const base = (prev.length === 0
-        || (prev.length === allOptionIds.length && allOptionIds.every((x) => prev.includes(x))))
-        ? []
-        : prev;
-      return base.includes(id) ? base.filter((x) => x !== id) : [...base, id];
-    });
+    setLocalIds((prev) => toggleFilterFromAll(prev, id));
   };
 
   const toggleGroup = (name: string) => {
-    setLocalGroups((prev) => (
-      prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name]
-    ));
+    setLocalGroups((prev) => toggleFilterFromAll(prev, name));
   };
 
   const handleApply = () => {
-    const nextIds = isAllTypes ? [] : localIds;
-    onApply(nextIds, localGroups);
+    if (!canApply) return;
+    const nextIds = normalizeFilterAllSelection(localIds, allOptionIds);
+    const nextGroups = normalizeFilterAllSelection(localGroups, allGroupNames);
+    onApply(nextIds, nextGroups);
     onClose();
     const parts: string[] = [];
     if (nextIds.length) {
@@ -326,7 +345,7 @@ export function DocTypeFilterModal({
         nextIds.map((id) => options.find((o) => o.id === id)?.label || DOC_TYPE_LABEL[id] || id).join(', ')
       );
     }
-    if (localGroups.length) parts.push(...localGroups);
+    if (nextGroups.length) parts.push(...nextGroups);
     notifyFiltersApplied(parts);
   };
 
@@ -336,9 +355,10 @@ export function DocTypeFilterModal({
       onClose={onClose}
       title={title}
       activeCount={activeCount}
-      onClear={() => { setLocalIds([]); setLocalGroups([]); }}
+      onClear={() => { setLocalIds([...allOptionIds]); setLocalGroups([...allGroupNames]); }}
       onApply={handleApply}
       applyLabel="Apply Filters"
+      applyDisabled={!canApply}
       heightFraction={0.68}
     >
       <View style={fm.tabs}>
@@ -360,14 +380,14 @@ export function DocTypeFilterModal({
             label="All"
             count={allCount}
             selected={isAllTypes}
-            onPress={() => setLocalIds([])}
+            onPress={() => setLocalIds((prev) => toggleFilterAll(prev, allOptionIds))}
           />
           {options.map((opt) => (
             <FilterCheckRow
               key={opt.id}
               label={opt.label}
               count={counts[opt.id] ?? 0}
-              selected={!isAllTypes && localIds.includes(opt.id)}
+              selected={isFilterOptionChecked(localIds, opt.id)}
               onPress={() => toggleType(opt.id)}
             />
           ))}
@@ -386,8 +406,8 @@ export function DocTypeFilterModal({
           </View>
           <FilterCheckRow
             label="All groups"
-            selected={localGroups.length === 0}
-            onPress={() => setLocalGroups([])}
+            selected={isAllGroups}
+            onPress={() => setLocalGroups((prev) => toggleFilterAll(prev, allGroupNames))}
           />
           {filteredGroups.length === 0 ? (
             <Text style={fm.groupHint}>No party groups in this date range</Text>
@@ -397,7 +417,7 @@ export function DocTypeFilterModal({
                 key={g.name}
                 label={g.name}
                 count={g.count}
-                selected={localGroups.includes(g.name)}
+                selected={isFilterOptionChecked(localGroups, g.name)}
                 onPress={() => toggleGroup(g.name)}
               />
             ))
@@ -439,19 +459,24 @@ export function ExpenseRegisterFilterModal({
 }) {
   const [tab, setTab] = useState<'Type' | 'Category'>('Type');
   const [localType, setLocalType] = useState<'All' | ExpenseTypeId>(() => normalizeExpenseTypeRadio(activeTypes));
-  const [localCats, setLocalCats] = useState<string[]>(activeCategories);
+  const [localCats, setLocalCats] = useState<string[]>([]);
   const [catSearch, setCatSearch] = useState('');
+
+  const allCatNames = useMemo(() => categories.map((c) => c.name), [categories]);
+
+  useMultiFilterHydration(visible, activeCategories, allCatNames, setLocalCats);
 
   useEffect(() => {
     if (visible) {
       setLocalType(normalizeExpenseTypeRadio(activeTypes));
-      setLocalCats(activeCategories);
       setCatSearch('');
       setTab('Type');
     }
-  }, [visible, activeTypes, activeCategories]);
+  }, [visible, activeTypes]);
 
-  const activeCount = (localType === 'All' ? 0 : 1) + localCats.length;
+  const isAllCats = isFilterAllSelected(localCats, allCatNames);
+  const activeCount = (localType === 'All' ? 0 : 1) + (isAllCats ? 0 : localCats.length);
+  const canApply = isFilterSelectionValid(localCats, allCatNames);
 
   const filteredCats = useMemo(() => {
     const q = catSearch.trim().toLowerCase();
@@ -460,18 +485,18 @@ export function ExpenseRegisterFilterModal({
   }, [categories, catSearch]);
 
   const toggleCat = (name: string) => {
-    setLocalCats((prev) => (
-      prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name]
-    ));
+    setLocalCats((prev) => toggleFilterFromAll(prev, name));
   };
 
   const handleApply = () => {
+    if (!canApply) return;
     const nextTypes: ExpenseTypeId[] = localType === 'All' ? [] : [localType];
-    onApply(nextTypes, localCats);
+    const nextCats = normalizeFilterAllSelection(localCats, allCatNames);
+    onApply(nextTypes, nextCats);
     onClose();
     const parts: string[] = [];
     if (nextTypes.length) parts.push(nextTypes[0]);
-    if (localCats.length) parts.push(...localCats);
+    if (nextCats.length) parts.push(...nextCats);
     notifyFiltersApplied(parts);
   };
 
@@ -481,9 +506,10 @@ export function ExpenseRegisterFilterModal({
       onClose={onClose}
       title="Filter Expenses"
       activeCount={activeCount}
-      onClear={() => { setLocalType('All'); setLocalCats([]); }}
+      onClear={() => { setLocalType('All'); setLocalCats([...allCatNames]); }}
       onApply={handleApply}
       applyLabel="Apply Filters"
+      applyDisabled={!canApply}
       heightFraction={0.68}
     >
       <View style={fm.tabs}>
@@ -534,8 +560,8 @@ export function ExpenseRegisterFilterModal({
           </View>
           <FilterCheckRow
             label="All categories"
-            selected={localCats.length === 0}
-            onPress={() => setLocalCats([])}
+            selected={isAllCats}
+            onPress={() => setLocalCats((prev) => toggleFilterAll(prev, allCatNames))}
           />
           {filteredCats.length === 0 ? (
             <Text style={fm.groupHint}>No categories in this date range</Text>
@@ -545,7 +571,7 @@ export function ExpenseRegisterFilterModal({
                 key={c.name}
                 label={c.name}
                 count={c.count}
-                selected={localCats.includes(c.name)}
+                selected={isFilterOptionChecked(localCats, c.name)}
                 onPress={() => toggleCat(c.name)}
               />
             ))
@@ -563,6 +589,8 @@ const fi = StyleSheet.create({
   btn: {
     width: 38, height: 38, borderRadius: RADIUS.sm,
     alignItems: 'center', justifyContent: 'center',
+    position: 'relative',
+    overflow: 'visible',
   },
   badge: {
     position: 'absolute', top: 2, right: 2,
@@ -589,10 +617,26 @@ const fi = StyleSheet.create({
     maxWidth: 180,
   },
   chipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.brandPrimary, flexShrink: 1 },
+  chipAmber: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: RADIUS.full,
+    backgroundColor: '#FBF7EE',
+    borderWidth: 1, borderColor: '#F0E8D5',
+    maxWidth: 140,
+  },
+  chipTxtAmber: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: '#A89060', flexShrink: 1 },
   clearChip: {
     paddingHorizontal: 10, paddingVertical: 5,
   },
   clearChipTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
+  clearChipAmber: {
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: RADIUS.full,
+    backgroundColor: '#FFF0F0',
+    borderWidth: 1, borderColor: '#FFCCCC',
+  },
+  clearChipTxtAmber: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.negative },
 });
 
 const fm = StyleSheet.create({

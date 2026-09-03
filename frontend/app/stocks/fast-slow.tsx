@@ -13,6 +13,8 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
+import { EntityListTile } from '../../src/components/EntityListTile';
+import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { useTranslation } from 'react-i18next';
 
 const { width: SW } = Dimensions.get('window');
@@ -147,14 +149,7 @@ export default function FastSlowMovingScreen() {
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
 
-      {/* ── Header ────────────────────────────────────────────────────── */}
-      <View style={s.header}>
-        <TouchableOpacity style={s.headerBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={s.headerTitle} numberOfLines={1}>Fast / Slow Moving Items</Text>
-        <View style={{ width: 44 }} />
-      </View>
+      <ScreenHeader title="Fast / Slow Moving Items" onBack={() => router.back()} />
 
       {/* ── Error Banner ────────────────────────────────────────────────── */}
       {apiError && <ErrorBanner message={apiError} onRetry={loadData} />}
@@ -342,78 +337,72 @@ export default function FastSlowMovingScreen() {
             const isSel = selectedIds.has(item.id);
             const isFast = item.tab === 'fast';
             return (
-              <TouchableOpacity
+              <EntityListTile
                 key={item.id}
-                style={[s.itemCard, isSel && s.itemCardSel]}
+                name={item.displayName || item.name}
+                subtitle={item.sku || undefined}
+                meta={item.group}
+                selected={isSel}
+                alignTop
+                borderRadius={RADIUS.lg}
+                avatarBgColor={isSel ? undefined : (isFast ? COLORS.brandPrimary : COLORS.activeBg)}
+                avatar={isSel ? undefined : (
+                  <Text style={[s.avatarTxt, !isFast && { color: COLORS.textSecondary }]}>
+                    {(item.displayName || item.name).charAt(0).toUpperCase()}
+                  </Text>
+                )}
                 onPress={() => handleCardPress(item.id)}
                 onLongPress={() => handleLongPress(item.id)}
                 delayLongPress={350}
-                activeOpacity={0.85}
-              >
-                {/* Badge */}
-                <View style={[s.badge, { backgroundColor: isFast ? COLORS.activeBg : COLORS.warningBg }]}>
-                  <Ionicons
-                    name={isFast ? 'flash' : 'hourglass-outline'}
-                    size={11}
-                    color={isFast ? COLORS.textPrimary : COLORS.textSecondary}
-                  />
-                  <Text style={[s.badgeTxt, { color: isFast ? COLORS.textPrimary : COLORS.textSecondary }]}>
-                    {isFast ? 'Fast' : 'Slow'} #{item.rank}
-                  </Text>
-                </View>
-
-                {/* Top row */}
-                <View style={s.cardTop}>
-                  <View style={[s.avatar, isSel && s.avatarSel,
-                    !isSel && { backgroundColor: isFast ? COLORS.brandPrimary : COLORS.activeBg }]}>
-                    {isSel
-                      ? <Ionicons name="checkmark" size={20} color="#fff" />
-                      : <Text style={[s.avatarTxt, !isFast && { color: COLORS.textSecondary }]}>{(item.displayName || item.name).charAt(0).toUpperCase()}</Text>
-                    }
-                  </View>
-                  <View style={s.cardMeta}>
-                    <Text style={s.cardName} numberOfLines={1}>{item.displayName || item.name}</Text>
-                    {item.sku ? <Text style={s.cardGroup} numberOfLines={1}>{item.sku}</Text> : null}
-                    <Text style={s.cardGroup} numberOfLines={1}>{item.group}</Text>
-                  </View>
-                </View>
-
-                <View style={s.cardDivider} />
-
-                {/* Stats grid */}
-                <View style={s.statsGrid}>
-                  <View style={s.statItem}>
-                    <Text style={s.statLbl}>Outward Qty</Text>
-                    <Text style={[s.statVal, { color: isFast ? COLORS.textPrimary : COLORS.textSecondary }]}>
-                      {fmtQty(item.total_outward_qty)}{item.unit ? ` ${item.unit}` : ''}
-                    </Text>
-                  </View>
-                  <View style={s.statItem}>
-                    <Text style={s.statLbl}>Txn Count</Text>
-                    <Text style={s.statVal}>{item.outward_txn_count}</Text>
-                  </View>
-                  <View style={s.statItem}>
-                    <Text style={s.statLbl}>Closing Stock</Text>
-                    <Text style={[s.statVal, { color: item.closing_qty < 0 ? COLORS.negative : COLORS.textPrimary }]}>
-                      {fmtQty(item.closing_qty)}{item.unit ? ` ${item.unit}` : ''}
-                    </Text>
-                  </View>
-                  <View style={s.statItem}>
-                    <Text style={s.statLbl}>Stock Value</Text>
-                    <Text style={s.statVal}>{fmtVal(item.closing_value)}</Text>
-                  </View>
-                </View>
-
-                {/* Days remaining banner — only when meaningful */}
-                {item.avg_daily_outward > 0 && item.closing_qty > 0 && item.days_remaining != null && (
-                  <View style={[s.daysRow, { backgroundColor: isFast ? COLORS.activeBg : COLORS.warningBg }]}>
-                    <Ionicons name="time-outline" size={12} color={isFast ? COLORS.textPrimary : COLORS.textSecondary} />
-                    <Text style={[s.daysTxt, { color: isFast ? COLORS.textPrimary : COLORS.textSecondary }]}>
-                      ~{item.days_remaining} days stock remaining at current rate
+                style={{ marginBottom: SPACING.md }}
+                headerExtra={(
+                  <View style={[s.badge, { backgroundColor: isFast ? COLORS.activeBg : COLORS.warningBg }]}>
+                    <Ionicons
+                      name={isFast ? 'flash' : 'hourglass-outline'}
+                      size={11}
+                      color={isFast ? COLORS.textPrimary : COLORS.textSecondary}
+                    />
+                    <Text style={[s.badgeTxt, { color: isFast ? COLORS.textPrimary : COLORS.textSecondary }]}>
+                      {isFast ? 'Fast' : 'Slow'} #{item.rank}
                     </Text>
                   </View>
                 )}
-              </TouchableOpacity>
+                footer={(
+                  <>
+                    <View style={s.cardDivider} />
+                    <View style={s.statsGrid}>
+                      <View style={s.statItem}>
+                        <Text style={s.statLbl}>Outward Qty</Text>
+                        <Text style={[s.statVal, { color: isFast ? COLORS.textPrimary : COLORS.textSecondary }]}>
+                          {fmtQty(item.total_outward_qty)}{item.unit ? ` ${item.unit}` : ''}
+                        </Text>
+                      </View>
+                      <View style={s.statItem}>
+                        <Text style={s.statLbl}>Txn Count</Text>
+                        <Text style={s.statVal}>{item.outward_txn_count}</Text>
+                      </View>
+                      <View style={s.statItem}>
+                        <Text style={s.statLbl}>Closing Stock</Text>
+                        <Text style={[s.statVal, { color: item.closing_qty < 0 ? COLORS.negative : COLORS.textPrimary }]}>
+                          {fmtQty(item.closing_qty)}{item.unit ? ` ${item.unit}` : ''}
+                        </Text>
+                      </View>
+                      <View style={s.statItem}>
+                        <Text style={s.statLbl}>Stock Value</Text>
+                        <Text style={s.statVal}>{fmtVal(item.closing_value)}</Text>
+                      </View>
+                    </View>
+                    {item.avg_daily_outward > 0 && item.closing_qty > 0 && item.days_remaining != null && (
+                      <View style={[s.daysRow, { backgroundColor: isFast ? COLORS.activeBg : COLORS.warningBg }]}>
+                        <Ionicons name="time-outline" size={12} color={isFast ? COLORS.textPrimary : COLORS.textSecondary} />
+                        <Text style={[s.daysTxt, { color: isFast ? COLORS.textPrimary : COLORS.textSecondary }]}>
+                          ~{item.days_remaining} days stock remaining at current rate
+                        </Text>
+                      </View>
+                    )}
+                  </>
+                )}
+              />
             );
           })}
 

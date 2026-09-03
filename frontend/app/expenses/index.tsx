@@ -7,19 +7,22 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
-import { getExpenses } from '../../src/services/api';
+import { getExpenses, getExpensesHomeMetrics } from '../../src/services/api';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useTranslation } from 'react-i18next';
 import { VoucherListTile, ExpenseTypeBadge } from '../../src/components/VoucherListTile';
+import { openLedgerDetail } from '../../src/utils/openLedger';
+import { buildHomeMetricCards } from '../../src/utils/homeMetricCards';
+import { KPICarouselCard, KPICarouselPage, KPICarouselDots } from '../../src/components/KPICarouselCard';
+import { EntityListTile } from '../../src/components/EntityListTile';
+import { ListTileShell } from '../../src/components/ListTileShell';
+import { ScreenHeader } from '../../src/components/ScreenHeader';
+import { ViewAllButton } from '../../src/components/ViewAllButton';
 
 const { width: SW } = Dimensions.get('window');
-
-const CATEGORY_COLORS = ['#1A1A1A', '#A89060', '#787774', '#4A4945', '#8B7355', '#2563EB', '#059669', '#7C3AED'];
-const CATEGORY_ICONS = ['receipt-outline', 'flash-outline', 'car-outline', 'home-outline', 'people-outline', 'cube-outline', 'wallet-outline', 'construct-outline'];
 
 type ExpenseRow = {
   id: string;
@@ -62,17 +65,12 @@ export default function ExpenseScreen() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [liveExpenses, setLiveExpenses] = useState<ExpenseRow[]>([]);
   const [liveCategories, setLiveCategories] = useState<any[]>([]);
-  const [expenseSummary, setExpenseSummary] = useState<any>(null);
+  const [homeMetrics, setHomeMetrics] = useState<any>(null);
 
   const fyFrom = selectedFY?.startDate ?? '';
   const fyTo   = selectedFY?.endDate   ?? '';
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [fromDate, setFromDate] = useState(() => fyFrom ? isoToDMY(fyFrom) : '01/04/24');
-  const [toDate,   setToDate]   = useState(() => fyTo   ? isoToDMY(fyTo)   : '31/03/25');
 
-  const [tab,      setTab]      = useState<'recent' | 'categories'>('recent');
-  const [filter,   setFilter]   = useState('All');
-  const [dropdown, setDropdown] = useState(false);
+  const [tab, setTab] = useState<'recent' | 'categories'>('recent');
 
   const metricRef = useRef<FlatList>(null);
   const [metricIdx, setMetricIdx] = useState(0);
@@ -81,59 +79,69 @@ export default function ExpenseScreen() {
     if (!companyGuid) {
       setLiveExpenses([]);
       setLiveCategories([]);
-      setExpenseSummary(null);
+      setHomeMetrics(null);
       setIsLoading(false);
       return;
     }
 
-    const from = dmyToISO(fromDate) || fyFrom;
-    const to   = dmyToISO(toDate)   || fyTo;
-    const rangeParams = from && to ? { from, to } : {};
-    const typeParam = filter === 'Direct' || filter === 'Indirect'
-      ? { types: filter, type: filter }
-      : {};
+    const rangeParams = fyFrom && fyTo ? { from: fyFrom, to: fyTo } : {};
 
     setIsLoading(true);
     setApiError(null);
 
-    getExpenses(companyGuid, { ...rangeParams, ...typeParam, limit: '100', page: '1' } as any)
-      .then((res: any) => {
-        const rows = res?.data ?? [];
-        setLiveExpenses(rows.map((r: any, i: number) => mapExpenseRow(r, formatAmount, i)));
-        setExpenseSummary(res?.summary ?? null);
-        setLiveCategories((res?.categories ?? []).map((c: any, i: number) => ({
-          id: c.id || `cat${i}`,
-          name: c.name || 'Expense',
-          amount: formatAmount(Math.round(c.amount_raw || 0)),
-          color: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
-          icon: CATEGORY_ICONS[i % CATEGORY_ICONS.length],
-        })));
+    Promise.allSettled([
+      getExpenses(companyGuid, { ...rangeParams, limit: '100', page: '1' } as any),
+      getExpensesHomeMetrics(companyGuid, rangeParams),
+    ])
+      .then(([expSettled, metricsSettled]) => {
+        if (expSettled.status === 'fulfilled') {
+          const res: any = expSettled.value;
+          const rows = res?.data ?? [];
+          setLiveExpenses(rows.map((r: any, i: number) => mapExpenseRow(r, formatAmount, i)));
+          setLiveCategories((res?.categories ?? []).slice(0, 5).map((c: any, i: number) => ({
+            id: c.id || `cat${i}`,
+            name: c.name || 'Expense',
+            amount: formatAmount(Math.round(c.amount_raw || 0)),
+          })));
+        } else {
+          setLiveExpenses([]);
+          setLiveCategories([]);
+        }
+
+        if (metricsSettled.status === 'fulfilled') {
+          const metricsRes: any = metricsSettled.value;
+          setHomeMetrics(metricsRes?.data ?? metricsRes ?? null);
+        } else {
+          setHomeMetrics(null);
+        }
+
+        if (expSettled.status === 'rejected' && metricsSettled.status === 'rejected') {
+          const err = expSettled.reason;
+          setApiError(err?.message || t('expenses.loadFailed'));
+        } else if (expSettled.status === 'rejected' || metricsSettled.status === 'rejected') {
+          setApiError(t('home.partialUpdate', "Some data couldn't be updated"));
+        } else {
+          setApiError(null);
+        }
       })
       .catch((err: any) => {
         setApiError(err?.message || t('expenses.loadFailed'));
         setLiveExpenses([]);
         setLiveCategories([]);
-        setExpenseSummary(null);
+        setHomeMetrics(null);
       })
       .finally(() => setIsLoading(false));
-  }, [companyGuid, fromDate, toDate, fyFrom, fyTo, formatAmount, filter, t]);
-
-  useEffect(() => {
-    if (fyFrom && fyTo) { setFromDate(isoToDMY(fyFrom)); setToDate(isoToDMY(fyTo)); }
-  }, [fyFrom, fyTo]);
+  }, [companyGuid, fyFrom, fyTo, formatAmount, t]);
 
   useEffect(() => {
     loadData();
   }, [loadData, lastSyncAt]);
 
-  const metricCards = useMemo(() => {
-    const total = expenseSummary?.display || formatAmountCompact(0);
-    const count = expenseSummary?.count ?? liveExpenses.length;
-    return [
-      { id: 'total', label: t('expenses.totalExpenses'), icon: 'ribbon-outline', amount: total, pct: '' },
-      { id: 'count', label: t('expenses.transactions'), icon: 'list-outline', amount: String(count), pct: '' },
-    ];
-  }, [expenseSummary, liveExpenses.length, formatAmountCompact]);
+  const metricCards = useMemo(() => buildHomeMetricCards(homeMetrics, [
+    { id: 'mtd', label: t('purchase.mtd'), icon: 'calendar-number-outline' },
+    { id: 'ytd', label: t('purchase.ytd'), icon: 'ribbon-outline' },
+    { id: 'today', label: t('purchase.today'), icon: 'calendar-outline' },
+  ], formatAmountCompact), [homeMetrics, formatAmountCompact, t]);
 
   useEffect(() => {
     if (metricCards.length <= 1) return;
@@ -147,61 +155,13 @@ export default function ExpenseScreen() {
     return () => clearInterval(t);
   }, [metricCards.length]);
 
-  // Type filter is server-side via types=/type=; list is already narrowed.
-  const recent = useMemo(() => liveExpenses.slice(0, 10), [liveExpenses]);
+  const recent = liveExpenses.slice(0, 5);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       {apiError && <ErrorBanner message={apiError} onRetry={loadData} />}
 
-      {/* ── Header ───────────────────────────────────────────────── */}
-      <View style={s.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={s.backBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={s.headerTitle}>{t('expenses.title')}</Text>
-        <View style={{ width: 36 }} />
-      </View>
-
-      {/* ── Filter Row ────────────────────────────────────────────── */}
-      <View style={s.filterRow}>
-        <TouchableOpacity style={s.datePill} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
-          <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
-          <Text style={s.dateTxt}>{fromDate} – {toDate}</Text>
-          <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-
-        <View style={s.statusWrap}>
-          <TouchableOpacity
-            style={[s.statusPill, dropdown && s.statusPillOpen]}
-            onPress={() => setDropdown(v => !v)}
-            activeOpacity={0.7}
-          >
-            <Text style={s.statusTxt}>{filter}</Text>
-            <Ionicons name={dropdown ? 'chevron-up' : 'chevron-down'} size={13} color={COLORS.textSecondary} />
-          </TouchableOpacity>
-          {dropdown && (
-            <View style={s.dropMenu}>
-              {['All', 'Direct', 'Indirect'].map(opt => (
-                <TouchableOpacity
-                  key={opt} style={s.dropItem} activeOpacity={0.7}
-                  onPress={() => { setFilter(opt); setDropdown(false); }}
-                >
-                  <Text style={[s.dropTxt, filter === opt && s.dropTxtActive]}>{opt}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
-      </View>
-
-      {dropdown && (
-        <TouchableOpacity style={s.dropOverlay} onPress={() => setDropdown(false)} activeOpacity={1} />
-      )}
+      <ScreenHeader title={t('expenses.title')} onBack={() => router.back()} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
         {isLoading ? (
@@ -225,22 +185,18 @@ export default function ExpenseScreen() {
                   setMetricIdx(Math.round(e.nativeEvent.contentOffset.x / SW));
                 }}
                 renderItem={({ item: c }) => (
-                  <View style={s.metricItem}>
-                    <View style={s.metricCard}>
-                      <View style={s.mIcon}>
-                        <Ionicons name={c.icon as any} size={22} color={COLORS.textSecondary} />
-                      </View>
-                      <Text style={s.mLabel}>{c.label}</Text>
-                      <Text style={s.mAmount}>{c.amount}</Text>
-                    </View>
-                  </View>
+                  <KPICarouselPage>
+                    <KPICarouselCard
+                      icon={c.icon}
+                      label={c.label}
+                      amount={c.amount}
+                      trend_pct={c.trend_pct}
+                      trend_positive={c.trend_positive}
+                    />
+                  </KPICarouselPage>
                 )}
               />
-              <View style={s.dotsRow}>
-                {metricCards.map((_, i) => (
-                  <View key={i} style={[s.dot, i === metricIdx && s.dotActive]} />
-                ))}
-              </View>
+              <KPICarouselDots count={metricCards.length} activeIndex={metricIdx} />
             </View>
 
             <View style={s.tabRow}>
@@ -267,10 +223,8 @@ export default function ExpenseScreen() {
                   </View>
                 ) : (
                   recent.map((exp, index) => (
-                    <TouchableOpacity
+                    <ListTileShell
                       key={exp.guid || `expense-${index}`}
-                      style={s.itemCard}
-                      activeOpacity={0.7}
                       onPress={() => router.push(`/document/${exp.guid || exp.id}?type=expense` as any)}
                     >
                       <VoucherListTile
@@ -281,17 +235,13 @@ export default function ExpenseScreen() {
                         status={exp.status}
                         typeBadge={<ExpenseTypeBadge type={exp.expenseType || 'indirect'} />}
                       />
-                    </TouchableOpacity>
+                    </ListTileShell>
                   ))
                 )}
-                <TouchableOpacity
-                  style={s.viewAllBtn}
+                <ViewAllButton
+                  label={t('expenses.viewAll')}
                   onPress={() => router.push('/expenses/register' as any)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={s.viewAllTxt}>{t('expenses.viewAll')}</Text>
-                  <Ionicons name="chevron-forward" size={14} color={COLORS.textPrimary} />
-                </TouchableOpacity>
+                />
               </View>
             )}
 
@@ -304,43 +254,23 @@ export default function ExpenseScreen() {
                   </View>
                 ) : (
                   liveCategories.map((cat, index) => (
-                    <TouchableOpacity
+                    <EntityListTile
                       key={`${cat.id}-${index}`}
-                      style={s.catCard}
-                      activeOpacity={0.7}
-                      onPress={() => router.push('/ledger' as any)}
-                    >
-                      <View style={[s.catAvatar, { backgroundColor: cat.color }]}>
-                        <Ionicons name={cat.icon as any} size={22} color={COLORS.white} />
-                      </View>
-                      <Text style={s.catName}>{cat.name}</Text>
-                      <Text style={s.catAmt}>{cat.amount}</Text>
-                    </TouchableOpacity>
+                      name={cat.name}
+                      amount={cat.amount}
+                      onPress={() => openLedgerDetail(router, companyGuid, { name: cat.name, group: cat.name })}
+                    />
                   ))
                 )}
-                <TouchableOpacity
-                  style={s.viewAllBtn}
+                <ViewAllButton
+                  label={t('expenses.viewAll')}
                   onPress={() => router.push('/ledger' as any)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={s.viewAllTxt}>{t('expenses.viewAll')}</Text>
-                  <Ionicons name="chevron-forward" size={14} color={COLORS.textPrimary} />
-                </TouchableOpacity>
+                />
               </View>
             )}
           </>
         )}
       </ScrollView>
-
-      <DateRangePickerModal
-        visible={showDatePicker}
-        fromDate={fromDate}
-        toDate={toDate}
-        minDate={fyFrom || undefined}
-        maxDate={fyTo || undefined}
-        onApply={(from, to) => { setFromDate(from); setToDate(to); setShowDatePicker(false); }}
-        onClose={() => setShowDatePicker(false)}
-      />
     </SafeAreaView>
   );
 }
@@ -353,35 +283,7 @@ const s = StyleSheet.create({
   backBtn:      { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
   headerTitle:  { flex: 1, textAlign: 'center', fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
 
-  filterRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault, zIndex: 20 },
-  datePill:  { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.borderDefault },
-  dateTxt:   { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
-  statusWrap: { position: 'relative', zIndex: 100 },
-  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.borderDefault, minWidth: 88 },
-  statusPillOpen: { borderColor: COLORS.brandPrimary },
-  statusTxt:  { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
-  dropMenu:   { position: 'absolute', top: 46, right: 0, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, minWidth: 130, zIndex: 200, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 8 },
-  dropItem:   { paddingHorizontal: SPACING.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  dropTxt:    { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
-  dropTxtActive: { color: COLORS.textPrimary, fontWeight: '700' },
-  dropOverlay:{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50 },
-
   carouselWrap: { paddingTop: SPACING.md },
-  metricItem: { width: SW },
-  metricCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
-    paddingHorizontal: SPACING.md, paddingVertical: 16,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-    marginHorizontal: SPACING.md,
-  },
-  mIcon:  { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
-  mLabel: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
-  mAmount:{ fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
-
-  dotsRow:   { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: 10, marginBottom: 4 },
-  dot:       { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
-  dotActive: { width: 16, height: 5, borderRadius: 3, backgroundColor: COLORS.brandPrimary },
 
   tabRow: { flexDirection: 'row', marginHorizontal: SPACING.md, marginTop: SPACING.md, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full, padding: 3, borderWidth: 1, borderColor: COLORS.borderDefault },
   tabBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: RADIUS.full },
@@ -390,13 +292,6 @@ const s = StyleSheet.create({
   tabActiveTxt: { color: COLORS.textPrimary },
 
   listSection: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, gap: 8 },
-
-  itemCard: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.borderDefault },
-
-  catCard:      { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 14, borderWidth: 1, borderColor: COLORS.borderDefault },
-  catAvatar:    { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  catName:      { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  catAmt:       { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
 
   viewAllBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.full, paddingVertical: 12, paddingHorizontal: 32, borderWidth: 1, borderColor: COLORS.borderDefault, alignSelf: 'center', marginTop: 4, minWidth: 150 },
   viewAllTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },

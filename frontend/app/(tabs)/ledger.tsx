@@ -3,28 +3,41 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import {
   View, Text, ScrollView, FlatList, TouchableOpacity, StyleSheet,
   TextInput, RefreshControl, Modal, KeyboardAvoidingView,
-  Platform, Linking, Alert, Share, Animated,
+  Platform, Linking, Alert, ActivityIndicator, Animated,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Ionicons } from '@expo/vector-icons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { getLedgers, createLedger } from '../../src/services/api';
+import { getLedgers, createLedger, getLedgerStatement } from '../../src/services/api';
+import { shareMultiStatementPdf } from '../../src/utils/voucherPdf';
+import type { StatementInput } from '../../src/utils/pdf/tallyLayout';
 
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useTranslation } from 'react-i18next';
 
-import FilterBottomSheet, { FilterRadioRow } from '../../src/components/FilterBottomSheet';
+import FilterBottomSheet, {
+  FilterCheckRow,
+  isFilterAllSelected,
+  isFilterOptionChecked,
+  toggleFilterFromAll,
+  toggleFilterAll,
+  useMultiFilterHydration,
+  isFilterSelectionValid,
+  normalizeFilterAllSelection,
+} from '../../src/components/FilterBottomSheet';
 import SearchBar from '../../src/components/SearchBar';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
+import { EntityListTile } from '../../src/components/EntityListTile';
 import { inferNatureFromGroup } from '../../src/utils/ledgerNature';
 import Toast from 'react-native-toast-message';
 
 type FilterType = 'All' | 'Debit' | 'Credit';
-type NatureType = 'All' | 'Assets' | 'Liabilities' | 'Income' | 'Expense';
+const NATURE_FILTER_OPTIONS = ['Assets', 'Liabilities', 'Income', 'Expense'] as const;
+const NATURE_IDS: string[] = [...NATURE_FILTER_OPTIONS];
 
 interface LedgerItem {
   id: string;
@@ -342,48 +355,66 @@ function CreateLedgerModal({ visible, onClose, onSave }: CreateLedgerModalProps)
   );
 }
 
-// ─── Filter Modal ─────────────────────────────────────────────────────────────
-const NATURE_FILTER_OPTIONS: NatureType[] = ['Assets', 'Liabilities', 'Income', 'Expense'];
+// ─── Filter Modal (R2: All toggles select-all ↔ clear-all; Apply needs ≥1 each) ─
 
 interface FilterModalProps {
   visible: boolean;
   onClose: () => void;
-  activeNature: NatureType;
-  activeGroup: string;
+  activeNatures: string[];
+  activeGroups: string[];
   groups: string[];
-  onApply: (nature: NatureType, group: string) => void;
+  onApply: (natures: string[], groups: string[]) => void;
 }
 
-function FilterModal({ visible, onClose, activeNature, activeGroup, groups, onApply }: FilterModalProps) {
+function FilterModal({ visible, onClose, activeNatures, activeGroups, groups, onApply }: FilterModalProps) {
   const [selectedCategory, setSelectedCategory] = useState<'Nature' | 'Group'>('Nature');
-  const [localNature, setLocalNature] = useState<NatureType>(activeNature);
-  const [localGroup, setLocalGroup] = useState(activeGroup);
+  const [localNatures, setLocalNatures] = useState<string[]>(NATURE_IDS);
+  const [localGroups, setLocalGroups] = useState<string[]>([]);
+  const [natureSearch, setNatureSearch] = useState('');
   const [groupSearch, setGroupSearch] = useState('');
+
+  useMultiFilterHydration(visible, activeNatures, NATURE_IDS, setLocalNatures);
+  useMultiFilterHydration(visible, activeGroups, groups, setLocalGroups);
 
   React.useEffect(() => {
     if (visible) {
-      setLocalNature(activeNature);
-      setLocalGroup(activeGroup);
+      setNatureSearch('');
       setGroupSearch('');
+      setSelectedCategory('Nature');
     }
-  }, [visible, activeNature, activeGroup]);
+  }, [visible]);
 
   const CATEGORIES = ['Nature', 'Group'] as const;
-  const activeCount = (localNature !== 'All' ? 1 : 0) + (localGroup ? 1 : 0);
+  const isAllNatures = isFilterAllSelected(localNatures, NATURE_IDS);
+  const isAllGroups = isFilterAllSelected(localGroups, groups);
+  const activeCount =
+    (isAllNatures ? 0 : localNatures.length) + (isAllGroups ? 0 : localGroups.length);
+  const canApply =
+    isFilterSelectionValid(localNatures, NATURE_IDS)
+    && isFilterSelectionValid(localGroups, groups);
+
+  const filteredNatures = useMemo(() => {
+    const q = natureSearch.trim().toLowerCase();
+    if (!q) return NATURE_IDS;
+    return NATURE_IDS.filter((n) => n.toLowerCase().includes(q));
+  }, [natureSearch]);
 
   const filteredGroups = useMemo(() => {
     const q = groupSearch.trim().toLowerCase();
     const list = groups.filter(Boolean);
     if (!q) return list;
-    return list.filter(g => g.toLowerCase().includes(q));
+    return list.filter((g) => g.toLowerCase().includes(q));
   }, [groups, groupSearch]);
 
   const handleApply = () => {
-    onApply(localNature, localGroup);
+    if (!canApply) return;
+    const nextNatures = normalizeFilterAllSelection(localNatures, NATURE_IDS);
+    const nextGroups = normalizeFilterAllSelection(localGroups, groups);
+    onApply(nextNatures, nextGroups);
     onClose();
     const parts: string[] = [];
-    if (localNature !== 'All') parts.push(localNature);
-    if (localGroup) parts.push(localGroup);
+    if (nextNatures.length) parts.push(nextNatures.join(', '));
+    if (nextGroups.length) parts.push(...nextGroups);
     Toast.show({
       type: 'success',
       text1: parts.length ? 'Filters applied' : 'Filters cleared',
@@ -393,8 +424,8 @@ function FilterModal({ visible, onClose, activeNature, activeGroup, groups, onAp
   };
 
   const handleClear = () => {
-    setLocalNature('All');
-    setLocalGroup('');
+    setLocalNatures([...NATURE_IDS]);
+    setLocalGroups([...groups]);
   };
 
   return (
@@ -406,10 +437,10 @@ function FilterModal({ visible, onClose, activeNature, activeGroup, groups, onAp
       onClear={handleClear}
       onApply={handleApply}
       applyLabel="Apply Filters"
+      applyDisabled={!canApply}
     >
-      {/* Tab selector: Nature | Group */}
       <View style={fm.tabs}>
-        {CATEGORIES.map(cat => (
+        {CATEGORIES.map((cat) => (
           <TouchableOpacity
             key={cat}
             style={[fm.tab, selectedCategory === cat && fm.tabActive]}
@@ -421,22 +452,48 @@ function FilterModal({ visible, onClose, activeNature, activeGroup, groups, onAp
         ))}
       </View>
 
-      {/* Content */}
       {selectedCategory === 'Nature' ? (
-        <View>
-          <FilterRadioRow
-            label="All"
-            selected={localNature === 'All'}
-            onPress={() => setLocalNature('All')}
-          />
-          {NATURE_FILTER_OPTIONS.map(opt => (
-            <FilterRadioRow
-              key={opt}
-              label={opt}
-              selected={localNature === opt}
-              onPress={() => setLocalNature(localNature === opt ? 'All' : opt)}
+        <View style={fm.groupPanel}>
+          <View style={fm.searchBox}>
+            <Ionicons name="search" size={14} color={COLORS.textTertiary} />
+            <TextInput
+              style={fm.searchInput}
+              placeholder="Search Nature..."
+              placeholderTextColor={COLORS.textTertiary}
+              value={natureSearch}
+              onChangeText={setNatureSearch}
             />
-          ))}
+          </View>
+          <FilterCheckRow
+            label="All"
+            selected={isAllNatures}
+            onPress={() => {
+              // When searching, All only toggles visible rows (not the whole catalog)
+              const visible = filteredNatures;
+              if (!natureSearch.trim()) {
+                setLocalNatures((prev) => toggleFilterAll(prev, NATURE_IDS));
+                return;
+              }
+              const allVisibleOn = visible.length > 0 && visible.every((id) => localNatures.includes(id));
+              setLocalNatures((prev) => (
+                allVisibleOn
+                  ? prev.filter((id) => !visible.includes(id))
+                  : [...new Set([...prev, ...visible])]
+              ));
+            }}
+          />
+          {filteredNatures.length === 0 ? (
+            <Text style={fm.groupHint}>No natures match your search</Text>
+          ) : (
+            filteredNatures.map((opt) => (
+              <FilterCheckRow
+                key={opt}
+                label={opt}
+                selected={isFilterOptionChecked(localNatures, opt)}
+                onPress={() => setLocalNatures((prev) => toggleFilterFromAll(prev, opt))}
+              />
+            ))
+          )}
         </View>
       ) : (
         <View style={fm.groupPanel}>
@@ -450,20 +507,32 @@ function FilterModal({ visible, onClose, activeNature, activeGroup, groups, onAp
               onChangeText={setGroupSearch}
             />
           </View>
-          <FilterRadioRow
+          <FilterCheckRow
             label="All groups"
-            selected={!localGroup}
-            onPress={() => setLocalGroup('')}
+            selected={isAllGroups}
+            onPress={() => {
+              const visible = filteredGroups;
+              if (!groupSearch.trim()) {
+                setLocalGroups((prev) => toggleFilterAll(prev, groups));
+                return;
+              }
+              const allVisibleOn = visible.length > 0 && visible.every((id) => localGroups.includes(id));
+              setLocalGroups((prev) => (
+                allVisibleOn
+                  ? prev.filter((id) => !visible.includes(id))
+                  : [...new Set([...prev, ...visible])]
+              ));
+            }}
           />
           {filteredGroups.length === 0 ? (
             <Text style={fm.groupHint}>No groups found in loaded ledgers</Text>
           ) : (
-            filteredGroups.map(g => (
-              <FilterRadioRow
+            filteredGroups.map((g) => (
+              <FilterCheckRow
                 key={g}
                 label={g}
-                selected={localGroup === g}
-                onPress={() => setLocalGroup(localGroup === g ? '' : g)}
+                selected={isFilterOptionChecked(localGroups, g)}
+                onPress={() => setLocalGroups((prev) => toggleFilterFromAll(prev, g))}
               />
             ))
           )}
@@ -478,6 +547,9 @@ export default function LedgerScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { company, selectedFY, lastSyncAt, isAuthenticated, isLoading: authLoading } = useAuth();
+  const insets = useSafeAreaInsets();
+  /** Floating tab bar (~60) + home-indicator — share bar must sit above it. */
+  const TAB_BAR_CLEARANCE = 60 + Math.max(insets.bottom, 4);
   const { formatAmount, formatAmountCompact } = useSettings();
   const companyGuid = company?.guid;
   const filterBtnRef = useRef<View>(null);
@@ -485,8 +557,8 @@ export default function LedgerScreen() {
   const [totalLedgers, setTotalLedgers] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('All');
-  const [activeNature, setActiveNature] = useState<NatureType>('All');
-  const [activeGroup, setActiveGroup] = useState('');
+  const [activeNatures, setActiveNatures] = useState<string[]>([]);
+  const [activeGroups, setActiveGroups] = useState<string[]>([]);
   const [allGroups, setAllGroups] = useState<string[]>([]);
   const [sortType, setSortType] = useState<'alpha' | 'amount'>('alpha');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -501,6 +573,7 @@ export default function LedgerScreen() {
   // ── Multi-select state ─────────────────────────────────────────────────────
   const [selected,    setSelected]    = useState<string[]>([]);
   const [selectMode,  setSelectMode]  = useState(false);
+  const [isSharing,   setIsSharing]   = useState(false);
 
   const enterSelectMode = (id: string) => {
     setSelectMode(true);
@@ -514,17 +587,107 @@ export default function LedgerScreen() {
   const cancelSelectMode = () => { setSelectMode(false); setSelected([]); };
   const selectAll = () => setSelected(filtered.map(i => i.id));
 
-  const handleShareMock = async () => {
+  const isoToDisplay = (iso: string) => {
+    if (!iso || !iso.includes('-')) return iso || '';
+    const parts = iso.split('-');
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${parseInt(parts[2], 10)} ${months[parseInt(parts[1], 10) - 1] || ''}`;
+  };
+
+  const handleShareSelected = async () => {
+    if (!companyGuid || selected.length === 0 || isSharing) return;
+    const ledgers = filtered.filter(i => selected.includes(i.id));
+    if (ledgers.length === 0) return;
+
+    setIsSharing(true);
     try {
-      await Share.share({
-        message: `TallyDekho — Sharing ${selected.length} ledger(s) as PDF\n` +
-          filtered.filter(i => selected.includes(i.id)).map(i => `• ${i.name}: ${i.balance}`).join('\n'),
-        title: 'Share Ledger Report',
-      });
-    } catch (err: any) { console.error('[API Error]', err?.message);
-      Alert.alert('Share PDF', `${selected.length} ledger(s) ready to share as PDF.`);
+      const fyParams = selectedFY?.startDate && selectedFY?.endDate
+        ? { from: selectedFY.startDate, to: selectedFY.endDate }
+        : undefined;
+      const period = selectedFY?.startDate && selectedFY?.endDate
+        ? `${isoToDisplay(selectedFY.startDate)} to ${isoToDisplay(selectedFY.endDate)}`
+        : undefined;
+
+      const companyBlock = {
+        name: company?.name,
+        address: (company as any)?.address,
+        gstin: (company as any)?.gstin,
+        state: (company as any)?.state,
+      };
+
+      const results = await Promise.all(
+        ledgers.map(async (item): Promise<StatementInput | null> => {
+          try {
+            const res: any = await getLedgerStatement(companyGuid, item.id, undefined, fyParams);
+            const ledger = res?.data?.ledger;
+            const txns = res?.data?.transactions || [];
+            const openingBal = res?.data?.opening_balance != null
+              ? Math.round(Math.abs(parseFloat(res.data.opening_balance)))
+              : undefined;
+            const closingBal = res?.data?.closing_balance != null
+              ? Math.round(Math.abs(parseFloat(res.data.closing_balance)))
+              : undefined;
+            const openingSide = (res?.data?.opening_balance_type === 'Cr' ? 'Cr' : 'Dr') as 'Dr' | 'Cr';
+            const closingSide = (res?.data?.closing_balance_type === 'Cr' ? 'Cr' : 'Dr') as 'Dr' | 'Cr';
+
+            return {
+              company: companyBlock,
+              title: 'Ledger Account',
+              partyName: ledger?.name || item.name,
+              partyAddress: ledger?.address,
+              period,
+              openingLabel: 'Opening Balance',
+              openingAmount: openingBal,
+              openingSide,
+              rows: txns.map((t: any) => ({
+                date: isoToDisplay(t.date || ''),
+                particulars: t.party_name || t.voucher_type || '',
+                vchType: t.voucher_type,
+                vchNo: t.voucher_number,
+                debit: t.dr_cr === 'Dr' ? Math.abs(t.debit || t.credit || 0) : null,
+                credit: t.dr_cr === 'Dr' ? null : Math.abs(t.debit || t.credit || 0),
+              })),
+              closingLabel: 'Closing Balance',
+              closingAmount: closingBal,
+              closingSide,
+            };
+          } catch {
+            // Fallback: balance-only sheet from list data if statement API fails
+            const amt = parseInt(String(item.balance).replace(/[^0-9]/g, ''), 10) || 0;
+            return {
+              company: companyBlock,
+              title: 'Ledger Account',
+              partyName: item.name,
+              period,
+              openingLabel: 'Opening Balance',
+              openingAmount: 0,
+              openingSide: 'Dr',
+              rows: [],
+              closingLabel: 'Closing Balance',
+              closingAmount: amt,
+              closingSide: item.type === 'credit' ? 'Cr' : 'Dr',
+            };
+          }
+        })
+      );
+
+      const inputs = results.filter((x): x is StatementInput => x != null);
+      if (!inputs.length) {
+        Alert.alert('Error', 'Could not load ledger data for PDF.');
+        return;
+      }
+
+      const fileName = inputs.length === 1
+        ? `${inputs[0].partyName || 'Ledger'} — Statement.pdf`
+        : `Ledgers (${inputs.length}) — Statements.pdf`;
+
+      await shareMultiStatementPdf(inputs, { fileName });
+      cancelSelectMode();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not generate PDF. Please try again.');
+    } finally {
+      setIsSharing(false);
     }
-    cancelSelectMode();
   };
 
   // Toggle sort: clicking same type flips direction, clicking new type sets asc
@@ -586,9 +749,11 @@ export default function LedgerScreen() {
     if (!soft) setIsLoading(true);
 
     const filterParams: Record<string, string> = {};
-    if (activeNature !== 'All') filterParams.nature = activeNature;
-    if (activeGroup) filterParams.group = activeGroup;
-    const hasSheetFilters = Object.keys(filterParams).length > 0;
+    // Always send joined multi filters — backend supports comma-separated nature/group
+    if (activeNatures.length > 0) filterParams.nature = activeNatures.join(',');
+    if (activeGroups.length > 0) filterParams.group = activeGroups.join(',');
+    const hasSheetFilters = activeNatures.length > 0 || activeGroups.length > 0;
+    const pageLimit = String(PAGE_SIZE);
 
     // Cache only unfiltered list loads
     const cacheKey = `v2:${companyGuid}:${lastSyncAt}:${selectedFY?.startDate ?? ''}`;
@@ -618,7 +783,7 @@ export default function LedgerScreen() {
         : {};
       const res = await getLedgers(companyGuid, {
         search: debouncedSearch,
-        limit: String(PAGE_SIZE),
+        limit: pageLimit,
         page: 1,
         ...fyParams,
         ...filterParams,
@@ -626,15 +791,23 @@ export default function LedgerScreen() {
       if (gen !== requestGenRef.current) return;
       const rows = res?.data ?? (Array.isArray(res) ? res : []);
       const mappedRows = Array.isArray(rows) ? rows.map(mapLedger) : [];
-      setData(mappedRows);
-      hasListRef.current = mappedRows.length > 0 || soft;
+      // Dedupe by guid — backend JOIN can fan out when duplicate group names exist
+      const seen = new Set<string>();
+      const uniqueRows = mappedRows.filter(r => {
+        const k = r.id || r.name;
+        if (!k || seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+      setData(uniqueRows);
+      hasListRef.current = uniqueRows.length > 0 || soft;
       const _total = res?.meta?.total ?? res?.total ?? 0;
-      setHasMore(_total > 0 ? mappedRows.length < _total : Array.isArray(rows) && rows.length === PAGE_SIZE);
+      setHasMore(_total > 0 ? uniqueRows.length < _total : Array.isArray(rows) && rows.length === PAGE_SIZE);
       const total = res?.meta?.total ?? res?.total ?? null;
       if (total != null) setTotalLedgers(total);
       if (!hasSheetFilters && !debouncedSearch) {
         const gset = new Set<string>();
-        mappedRows.forEach(d => {
+        uniqueRows.forEach(d => {
           const g = String(d.group || '').trim();
           if (g && g !== '—') gset.add(g);
         });
@@ -643,7 +816,7 @@ export default function LedgerScreen() {
           const merged = new Set([...prev, ...gset]);
           return Array.from(merged).sort((a, b) => a.localeCompare(b));
         });
-        _ledgerCache[cacheKey] = { data: mappedRows, total: total ?? mappedRows.length, ts: Date.now() };
+        _ledgerCache[cacheKey] = { data: uniqueRows, total: total ?? uniqueRows.length, ts: Date.now() };
       }
     } catch (err: any) {
       if (gen !== requestGenRef.current) return;
@@ -669,8 +842,8 @@ export default function LedgerScreen() {
         ? { from: selectedFY.startDate, to: selectedFY.endDate }
         : {};
       const filterParams: Record<string, string> = {};
-      if (activeNature !== 'All') filterParams.nature = activeNature;
-      if (activeGroup) filterParams.group = activeGroup;
+      if (activeNatures.length > 0) filterParams.nature = activeNatures.join(',');
+      if (activeGroups.length > 0) filterParams.group = activeGroups.join(',');
       const res = await getLedgers(companyGuid, {
         search: debouncedSearch,
         limit: String(PAGE_SIZE),
@@ -681,8 +854,16 @@ export default function LedgerScreen() {
       const rows = res?.data ?? (Array.isArray(res) ? res : []);
       if (Array.isArray(rows)) {
         const mapped = rows.map(mapLedger);
-        setData(prev => [...prev, ...mapped]);
-        if (activeNature === 'All' && !activeGroup) {
+        setData(prev => {
+          const seen = new Set(prev.map(p => p.id));
+          const added = mapped.filter(r => {
+            if (!r.id || seen.has(r.id)) return false;
+            seen.add(r.id);
+            return true;
+          });
+          return [...prev, ...added];
+        });
+        if (activeNatures.length === 0 && activeGroups.length === 0) {
           setAllGroups(prev => {
             const merged = new Set(prev);
             mapped.forEach(d => {
@@ -726,7 +907,7 @@ export default function LedgerScreen() {
     }
     // Soft when list already showing (search / filter / lastSync); hard only first paint
     loadLedgers({ soft: hasListRef.current });
-  }, [companyGuid, selectedFY?.startDate, lastSyncAt, debouncedSearch, activeNature, activeGroup, isAuthenticated, authLoading]);
+  }, [companyGuid, selectedFY?.startDate, lastSyncAt, debouncedSearch, activeNatures, activeGroups, isAuthenticated, authLoading]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -757,6 +938,14 @@ export default function LedgerScreen() {
     return v;
   };
 
+  // Nature match — same rules as backend (exact / prefix either way)
+  const natureMatches = (itemNature: string, want: string) => {
+    const n = normNature(itemNature);
+    const w = normNature(want);
+    if (!n || !w) return false;
+    return n === w || n.startsWith(w) || w.startsWith(n);
+  };
+
   const filtered = useMemo(() => data
     .filter(item => {
       const matchSearch = item.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -765,8 +954,11 @@ export default function LedgerScreen() {
         (filter === 'Debit' && item.type === 'debit') ||
         (filter === 'Credit' && item.type === 'credit');
       const matchZero = hideZero ? !isZeroBalance(item.balance) : true;
-      const matchNature = activeNature === 'All' || normNature(item.nature ?? '') === normNature(activeNature);
-      const matchGroup = !activeGroup || item.group === activeGroup;
+      // Empty activeNatures = All (no nature narrowing). Partial = must match one selected.
+      const matchNature = activeNatures.length === 0
+        || activeNatures.some((n) => natureMatches(item.nature ?? '', n));
+      const matchGroup = activeGroups.length === 0
+        || activeGroups.some((g) => g.trim() === String(item.group || '').trim());
       return matchSearch && matchFilter && matchZero && matchNature && matchGroup;
     })
     .sort((a, b) => {
@@ -782,7 +974,7 @@ export default function LedgerScreen() {
         return sortDir === 'asc' ? aAmt - bAmt : bAmt - aAmt;
       }
     }),
-  [data, search, filter, hideZero, activeNature, activeGroup, sortType, sortDir]);
+  [data, search, filter, hideZero, activeNatures, activeGroups, sortType, sortDir]);
 
   const availableGroups = useMemo(() => {
     if (allGroups.length > 0) return allGroups;
@@ -1002,24 +1194,30 @@ export default function LedgerScreen() {
       </View>
 
       {/* Active filter badges — compact inset row (no extra full-bleed gap) */}
-      {(activeNature !== 'All' || !!activeGroup) && (
+      {(activeNatures.length > 0 || activeGroups.length > 0) && (
         <View style={styles.activeBadgeRow}>
-          {activeNature !== 'All' && (
-            <View style={styles.activeBadge}>
-              <Text style={styles.activeBadgeTxt}>{activeNature}</Text>
-              <TouchableOpacity onPress={() => setActiveNature('All')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          {activeNatures.map((n) => (
+            <View key={`n:${n}`} style={styles.activeBadge}>
+              <Text style={styles.activeBadgeTxt}>{n}</Text>
+              <TouchableOpacity
+                onPress={() => setActiveNatures((prev) => prev.filter((x) => x !== n))}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
                 <Ionicons name="close-circle" size={14} color={COLORS.brandPrimary} />
               </TouchableOpacity>
             </View>
-          )}
-          {!!activeGroup && (
-            <View style={styles.activeBadge}>
-              <Text style={styles.activeBadgeTxt} numberOfLines={1}>{activeGroup}</Text>
-              <TouchableOpacity onPress={() => setActiveGroup('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          ))}
+          {activeGroups.map((g) => (
+            <View key={`g:${g}`} style={styles.activeBadge}>
+              <Text style={styles.activeBadgeTxt} numberOfLines={1}>{g}</Text>
+              <TouchableOpacity
+                onPress={() => setActiveGroups((prev) => prev.filter((x) => x !== g))}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
                 <Ionicons name="close-circle" size={14} color={COLORS.brandPrimary} />
               </TouchableOpacity>
             </View>
-          )}
+          ))}
         </View>
       )}
 
@@ -1064,7 +1262,7 @@ export default function LedgerScreen() {
       {/* Ledger List */}
       <FlatList
         data={isLoading && !hasListRef.current ? [] : filtered}
-        keyExtractor={item => item.id}
+        keyExtractor={(item, index) => item.id || `ledger-${index}`}
         style={styles.scroll}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
@@ -1074,10 +1272,11 @@ export default function LedgerScreen() {
         ListHeaderComponent={!(isLoading && !hasListRef.current) ? (
           <View style={styles.listHeader}>
             <Text style={styles.sectionLabel}>
-              {totalLedgers != null
-                ? `${totalLedgers} ledger${totalLedgers !== 1 ? 's' : ''}`
-                : `${data.length} ledger${data.length !== 1 ? 's' : ''}`
-              }
+              {(() => {
+                const hasLocal = filter !== 'All' || hideZero || !!search.trim();
+                const count = hasLocal ? filtered.length : (totalLedgers ?? filtered.length);
+                return `${count} ledger${count !== 1 ? 's' : ''}`;
+              })()}
             </Text>
           </View>
         ) : null}
@@ -1104,7 +1303,7 @@ export default function LedgerScreen() {
             {!isLoading && !hasMore && data.length > 0 && (
               <Text style={styles.endTxt}>All {data.length} ledgers loaded</Text>
             )}
-            <View style={{ height: selectMode ? 100 : 80 }} />
+            <View style={{ height: selectMode ? TAB_BAR_CLEARANCE + 90 : 80 }} />
           </>
         )}
         renderItem={({ item }) => {
@@ -1146,50 +1345,35 @@ export default function LedgerScreen() {
           };
 
           const cardContent = (
-            <TouchableOpacity
+            <EntityListTile
               testID={`ledger-item-${item.id}`}
-              style={[styles.itemCard, isSelected && styles.itemCardSelected]}
-              activeOpacity={0.7}
+              name={item.name}
+              subtitle={item.group}
+              meta={item.gstin || undefined}
+              selected={isSelected}
               onPress={() => {
                 if (selectMode) { toggleSelect(item.id); }
                 else { router.push(`/ledger/${item.id}` as any); }
               }}
               onLongPress={() => enterSelectMode(item.id)}
               delayLongPress={500}
-            >
-              {/* Avatar / Checkbox */}
-              <View style={[styles.avatar, isSelected && styles.avatarSelected]}>
-                {isSelected
-                  ? <Ionicons name="checkmark" size={20} color={COLORS.white} />
-                  : <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
-                }
-              </View>
-              {/* Info */}
-              <View style={styles.itemInfo}>
-                <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-                <Text style={styles.itemGroup}>{item.group}</Text>
-                {item.gstin ? (
-                  <Text style={{ fontSize: 10, color: COLORS.positive, marginTop: 1, fontWeight: '500' }} numberOfLines={1}>
-                    {item.gstin}
-                  </Text>
-                ) : null}
-              </View>
-              {/* Right: balance + Cr/Dr badge */}
-              <View style={styles.itemRight}>
-                <Text style={styles.itemBalance}>{item.balance}</Text>
-                <View style={[
-                  styles.typeBadge,
-                  { backgroundColor: item.type === 'credit' ? COLORS.positiveBg : COLORS.negativeBg }
-                ]}>
-                  <Text style={[
-                    styles.typeText,
-                    { color: item.type === 'credit' ? COLORS.positive : COLORS.negative }
+              trailing={(
+                <View style={styles.itemRight}>
+                  <Text style={styles.itemBalance}>{item.balance}</Text>
+                  <View style={[
+                    styles.typeBadge,
+                    { backgroundColor: item.type === 'credit' ? COLORS.positiveBg : COLORS.negativeBg }
                   ]}>
-                    {item.type === 'credit' ? 'Cr' : 'Dr'}
-                  </Text>
+                    <Text style={[
+                      styles.typeText,
+                      { color: item.type === 'credit' ? COLORS.positive : COLORS.negative }
+                    ]}>
+                      {item.type === 'credit' ? 'Cr' : 'Dr'}
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            </TouchableOpacity>
+              )}
+            />
           );
 
           return hasPhone && !selectMode ? (
@@ -1210,7 +1394,7 @@ export default function LedgerScreen() {
 
       {/* ── Multi-select Share Bar ─────────────────────────────────────── */}
       {selectMode && (
-        <View style={styles.shareBar}>
+        <View style={[styles.shareBar, { bottom: TAB_BAR_CLEARANCE }]}>
           <View style={styles.shareLeft}>
             <Text style={styles.shareCount}>{selected.length} selected</Text>
             <TouchableOpacity
@@ -1222,13 +1406,16 @@ export default function LedgerScreen() {
             </TouchableOpacity>
           </View>
           <TouchableOpacity
-            style={[styles.shareActionBtn, selected.length === 0 && { opacity: 0.5 }]}
-            onPress={handleShareMock}
+            style={[styles.shareActionBtn, (selected.length === 0 || isSharing) && { opacity: 0.5 }]}
+            onPress={handleShareSelected}
             activeOpacity={0.85}
-            disabled={selected.length === 0}
+            disabled={selected.length === 0 || isSharing}
           >
-            <Ionicons name="share-outline" size={16} color={COLORS.white} />
-            <Text style={styles.shareActionTxt}>Share PDF / XLS</Text>
+            {isSharing
+              ? <ActivityIndicator size="small" color={COLORS.white} />
+              : <Ionicons name="share-outline" size={16} color={COLORS.white} />
+            }
+            <Text style={styles.shareActionTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1245,12 +1432,12 @@ export default function LedgerScreen() {
       <FilterModal
         visible={showFilter}
         onClose={() => setShowFilter(false)}
-        activeNature={activeNature}
-        activeGroup={activeGroup}
+        activeNatures={activeNatures}
+        activeGroups={activeGroups}
         groups={availableGroups}
-        onApply={(nature, group) => {
-          setActiveNature(nature);
-          setActiveGroup(group);
+        onApply={(natures, groups) => {
+          setActiveNatures(natures);
+          setActiveGroups(groups);
         }}
       />
       {/* Ledger Type Selection Sheet */}
@@ -1392,11 +1579,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0, paddingTop: 2, paddingBottom: 4,
   },
   sectionLabel: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, fontWeight: '500' as const },
-  itemCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: COLORS.cardBg,
-    padding: 14, borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
   // Swipe right-actions container
   swipeActions: {
     flexDirection: 'row',
@@ -1417,15 +1599,6 @@ const styles = StyleSheet.create({
   actionLabel: {
     fontSize: 11, fontWeight: '700', color: '#fff',
   },
-  avatar: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: COLORS.brandPrimary,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  avatarText: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
-  itemInfo: { flex: 1 },
-  itemName: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  itemGroup: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
   itemRight: { alignItems: 'flex-end', gap: 6 },
   itemBalance: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
   typeBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: RADIUS.full },
@@ -1434,14 +1607,6 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textSecondary },
 
   // ── Multi-select styles ────────────────────────────────────────────────────
-  itemCardSelected: {
-    borderColor: COLORS.brandPrimary,
-    borderWidth: 2,
-    backgroundColor: COLORS.brandPrimary + '08',
-  },
-  avatarSelected: {
-    backgroundColor: COLORS.brandPrimary,
-  },
   headerTextBtn: {
     paddingHorizontal: 10, paddingVertical: 8,
     alignItems: 'center', justifyContent: 'center',
@@ -1453,14 +1618,14 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.negative,
   },
   shareBar: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
+    position: 'absolute', left: 0, right: 0,
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: SPACING.md, paddingVertical: 14,
     backgroundColor: COLORS.cardBg,
     borderTopWidth: 1, borderTopColor: COLORS.borderDefault,
     gap: 12,
     shadowColor: '#000', shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.08, shadowRadius: 6, elevation: 8,
+    shadowOpacity: 0.08, shadowRadius: 6, elevation: 20, zIndex: 20,
   },
   shareLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14 },
   shareCount: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },

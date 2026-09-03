@@ -25,6 +25,7 @@ import {
   docTypeToRouteType,
 } from '../../src/components/voucherHomeFilters';
 import { VoucherListTile } from '../../src/components/VoucherListTile';
+import { FilterPillRow, FilterDatePill, FilterDropdownPill } from '../../src/components/FilterPillRow';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -251,36 +252,21 @@ export default function PurchaseRegisterScreen() {
         </View>
       )}
 
-      {/* ── Filter Row ──────────────────────────────────────────── */}
-      <View style={s.filterRow}>
-        <TouchableOpacity style={s.datePill} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
-          <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
-          <Text style={s.dateTxt}>{fromDate} – {toDate}</Text>
-          <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-        <View style={s.statusWrap}>
-          <TouchableOpacity
-            style={[s.statusPill, dropdown && s.statusPillOpen]}
-            onPress={() => setDropdown(v => !v)}
-            activeOpacity={0.7}
-          >
-            <Text style={s.statusTxt}>{statusFilter}</Text>
-            <Ionicons name={dropdown ? 'chevron-up' : 'chevron-down'} size={13} color={COLORS.textSecondary} />
-          </TouchableOpacity>
-          {dropdown && (
-            <View style={s.dropMenu}>
-              {['All', 'Paid', 'Unpaid', 'IRM'].map(opt => (
-                <TouchableOpacity
-                  key={opt} style={s.dropItem} activeOpacity={0.7}
-                  onPress={() => { setStatusFilter(opt); setDropdown(false); }}
-                >
-                  <Text style={[s.dropTxt, statusFilter === opt && s.dropTxtActive]}>{opt}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
-      </View>
+      <FilterPillRow>
+        <FilterDatePill
+          label={`${fromDate} – ${toDate}`}
+          onPress={() => setShowDatePicker(true)}
+        />
+        <FilterDropdownPill
+          label={statusFilter}
+          open={dropdown}
+          onToggle={() => setDropdown(v => !v)}
+          options={['All', 'Paid', 'Unpaid', 'IRM']}
+          selected={statusFilter}
+          onSelect={(opt) => { setStatusFilter(opt); setDropdown(false); }}
+          placeholder="Status"
+        />
+      </FilterPillRow>
 
       <ActiveFilterChips
         chips={[

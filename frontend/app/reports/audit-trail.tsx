@@ -979,27 +979,6 @@ export default function AuditTrailScreen() {
         ))}
       </View>
 
-      {/* ── Date Range Strip ───────────────────────────────────────────── */}
-      <TouchableOpacity style={s.dateStrip} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
-        <Ionicons name="calendar-outline" size={13} color={isDateActive ? COLORS.brandPrimary : COLORS.textTertiary} />
-        <Text style={[s.dateStripTxt, isDateActive && s.dateStripActive]}>
-          {isDateActive ? `${fromDate}  →  ${toDate}` : 'All Dates'}
-        </Text>
-        {!isDateActive && <Ionicons name="chevron-down" size={11} color={COLORS.textTertiary} />}
-        {isDateActive && (
-          <TouchableOpacity
-            onPress={() => {
-              const d = new Date(); d.setDate(d.getDate() - 30);
-              setFromDate(d.toISOString().split('T')[0]);
-              setToDate(new Date().toISOString().split('T')[0]);
-            }}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="close-circle" size={16} color={COLORS.brandPrimary} />
-          </TouchableOpacity>
-        )}
-      </TouchableOpacity>
-
       {/* ── Main Content ───────────────────────────────────────────────── */}
       <ScrollView
         style={s.scroll}
@@ -1380,15 +1359,6 @@ const s = StyleSheet.create({
   tabBtnActive: { backgroundColor: COLORS.textPrimary, borderColor: COLORS.textPrimary },
   tabTxt:       { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
   tabTxtActive: { color: COLORS.white, fontWeight: '700' },
-
-  // Date Strip
-  dateStrip: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingVertical: 9, backgroundColor: COLORS.cardBg,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-  },
-  dateStripTxt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
-  dateStripActive: { color: COLORS.brandPrimary },
 
   scroll:        { flex: 1 },
   scrollContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.md },

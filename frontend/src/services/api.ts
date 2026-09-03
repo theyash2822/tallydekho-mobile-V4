@@ -448,6 +448,8 @@ export const getKPILoansODs    = (companyGuid?: string) => get<any>(withCompany(
 export const getKPIPayments    = (companyGuid?: string, params?: any) => get<any>(withCompany('/kpi/payments', companyGuid, params));
 export const getKPIReceipts    = (companyGuid?: string, params?: any) => get<any>(withCompany('/kpi/receipts', companyGuid, params));
 export const getSalesHomeMetrics = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/home-metrics', companyGuid, params));
+export const getPurchaseHomeMetrics = (companyGuid?: string, params?: any) => get<any>(withCompany('/purchase/home-metrics', companyGuid, params));
+export const getExpensesHomeMetrics = (companyGuid?: string, params?: any) => get<any>(withCompany('/expenses/home-metrics', companyGuid, params));
 
 // ══════════════════════════════════════════════════════════════
 // EXPENSES + DAYBOOK
@@ -681,8 +683,56 @@ export const getBarcodesByGuids = (companyGuid: string, stockGuids: string[]) =>
 
 export const generateBulkBarcodes = (
   companyGuid: string,
-  options: { stockGuids?: string[]; all?: boolean; barcodeType?: string; syncTarget?: string }
+  options: {
+    stockGuids?: string[];
+    all?: boolean;
+    period?: string;
+    group?: string;
+    status?: string;
+    search?: string;
+    barcodeType?: string;
+    syncTarget?: string;
+  }
 ) => post<any>('/inventory/barcodes/generate-bulk', { companyGuid, ...options });
+
+export type BulkBarcodeJobStatus = {
+  jobId: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  total: number;
+  processed: number;
+  generated: number;
+  errors: number;
+  pct?: number;
+  errorMessage?: string | null;
+  resumed?: boolean;
+};
+
+export const startBulkBarcodeJob = (
+  companyGuid: string,
+  options: {
+    all?: boolean;
+    stockGuids?: string[];
+    period?: string;
+    group?: string;
+    status?: string;
+    search?: string;
+    barcodeType?: string;
+    syncTarget?: string;
+  }
+) => post<{ data: BulkBarcodeJobStatus | { jobId: null; total: 0; status: string; generated: number; errors: number } }>(
+  '/inventory/barcodes/generate-bulk/start',
+  { companyGuid, ...options },
+);
+
+export const getBulkBarcodeJobStatus = (companyGuid: string, jobId: string) =>
+  get<{ data: BulkBarcodeJobStatus }>(
+    `/inventory/barcodes/generate-bulk/status/${encodeURIComponent(jobId)}?companyGuid=${encodeURIComponent(companyGuid)}`,
+  );
+
+export const getActiveBulkBarcodeJob = (companyGuid: string) =>
+  get<{ data: BulkBarcodeJobStatus | null }>(
+    `/inventory/barcodes/generate-bulk/active?companyGuid=${encodeURIComponent(companyGuid)}`,
+  );
 
 // ── Compliance Config ──────────────────────────────────────────────────────────
 export const getComplianceConfig  = (guid: string) => get<any>(`/company/${guid}/compliance-config`);

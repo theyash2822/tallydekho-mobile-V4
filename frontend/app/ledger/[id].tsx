@@ -608,7 +608,7 @@ export default function LedgerDetailScreen() {
                     const isTxnSelected = selectedTxns.includes(txn.id);
                     return (
                     <TouchableOpacity
-                      key={txn.id}
+                      key={`${txn.id}-${idx}`}
                       style={[
                         styles.txnRow,
                         idx === monTxns.length - 1 && { borderBottomWidth: 0 },

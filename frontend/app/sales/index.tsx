@@ -11,17 +11,21 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getSalesInvoices, getSalesHomeMetrics } from '../../src/services/api';
-import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useSettings } from '../../src/context/SettingsContext';
 import { KPICardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { useTranslation } from 'react-i18next';
 import { classifyVoucherDocType, docTypeToRouteType } from '../../src/components/voucherHomeFilters';
 import { VoucherListTile } from '../../src/components/VoucherListTile';
+import { openLedgerDetail } from '../../src/utils/openLedger';
+import { buildHomeMetricCards } from '../../src/utils/homeMetricCards';
+import { KPICarouselCard, KPICarouselPage, KPICarouselDots } from '../../src/components/KPICarouselCard';
+import { EntityListTile } from '../../src/components/EntityListTile';
+import { ListTileShell } from '../../src/components/ListTileShell';
+import { ScreenHeader } from '../../src/components/ScreenHeader';
+import { ViewAllButton } from '../../src/components/ViewAllButton';
+import { AlertBannerCarousel } from '../../src/components/AlertBannerCarousel';
 
-const BANNER_RED = '#E53935';
 const { width: SW } = Dimensions.get('window');
-const CARD_W  = SW - SPACING.md * 2;
-const BANNER_W = SW - SPACING.md * 2;
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function SalesScreen() {
@@ -69,14 +73,16 @@ export default function SalesScreen() {
           })));
           const partyMap: Record<string, number> = {};
           rows.forEach((r: any) => {
-            if (r.party_name) partyMap[r.party_name] = (partyMap[r.party_name] || 0) + (+r.amount || 0);
+            const name = String(r.party_name || '').trim();
+            if (!name) return;
+            partyMap[name] = (partyMap[name] || 0) + (+r.amount || 0);
           });
           const top = Object.entries(partyMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
-          setLiveTopParties(top.map(([name, amt], i) => ({
-            id: `tp${i}`,
+          setLiveTopParties(top.map(([name, total]) => ({
+            // Key by party name — vouchers.party_guid is often wrong/shared across parties
+            id: `party-${name}`,
             name,
-            amount: formatAmount(Math.round(+amt)),
-            color: ['#2563EB', '#D97706', '#7C3AED', '#0891B2', '#059669'][i],
+            amount: formatAmount(Math.round(+total)),
           })));
           const pendingIRN = rows.filter((r: any) => !r.irn).length;
           setLiveBanners(pendingIRN > 0
@@ -123,33 +129,22 @@ export default function SalesScreen() {
 
   const metricCards = useMemo(() => {
     const m = metrics || {};
-    // MTD first — Today is often ₹0 on quiet days and looks like a broken KPI.
-    return [
-      { id: 'mtd', label: t('sales.mtd'), icon: 'calendar-number-outline', amount: formatAmountCompact(Math.round(Number(m.mtd) || 0)) },
-      { id: 'ytd', label: t('sales.ytd'), icon: 'ribbon-outline', amount: formatAmountCompact(Math.round(Number(m.ytd) || 0)) },
-      { id: 'today', label: t('sales.today'), icon: 'calendar-outline', amount: formatAmountCompact(Math.round(Number(m.today) || 0)) },
-      { id: 'outstanding', label: t('sales.outstanding'), icon: 'wallet-outline', amount: formatAmountCompact(Math.round(Number(m.outstanding) || 0)) },
-      { id: 'credit', label: t('sales.creditNotes'), icon: 'receipt-outline', amount: formatAmountCompact(Math.round(Number(m.credit_notes) || 0)) },
-      { id: 'avg', label: t('sales.avgTicket'), icon: 'ticket-outline', amount: formatAmountCompact(Math.round(Number(m.avg_ticket) || 0)) },
-    ];
+    return buildHomeMetricCards(m, [
+      { id: 'mtd', label: t('sales.mtd'), icon: 'calendar-number-outline' },
+      { id: 'ytd', label: t('sales.ytd'), icon: 'ribbon-outline' },
+      { id: 'today', label: t('sales.today'), icon: 'calendar-outline' },
+      { id: 'outstanding', label: t('sales.outstanding'), icon: 'wallet-outline' },
+      { id: 'credit', label: t('sales.creditNotes'), icon: 'receipt-outline', valueKey: 'credit_notes', trendKey: 'credit_notes' },
+      { id: 'avg', label: t('sales.avgTicket'), icon: 'ticket-outline', valueKey: 'avg_ticket', trendKey: 'avg_ticket' },
+    ], formatAmountCompact);
   }, [metrics, formatAmountCompact, t]);
 
-  // ─ Tab & filter state
-  const [tab,      setTab]      = useState<'recent' | 'parties'>('recent');
-  const [filter,   setFilter]   = useState('All');
-  const [dropdown, setDropdown] = useState(false);
-
-  // ─ Date range state
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [fromDate,       setFromDate]       = useState('01/01/25');
-  const [toDate,         setToDate]         = useState('22/04/25');
-  const dateLabel = `${fromDate} – ${toDate}`;
+  // ─ Tab state
+  const [tab, setTab] = useState<'recent' | 'parties'>('recent');
 
   // ─ Carousel state
   const metricRef  = useRef<FlatList>(null);
-  const bannerRef  = useRef<FlatList>(null);
   const [metricIdx, setMetricIdx] = useState(0);
-  const [bannerIdx, setBannerIdx] = useState(0);
 
   useEffect(() => {
     if (metricCards.length === 0) return;
@@ -163,96 +158,28 @@ export default function SalesScreen() {
     return () => clearInterval(t);
   }, [metricCards.length]);
 
-  useEffect(() => {
-    if (liveBanners.length === 0) return;
-    const t = setInterval(() => {
-      setBannerIdx(prev => {
-        const next = (prev + 1) % liveBanners.length;
-        bannerRef.current?.scrollToIndex({ index: next, animated: true, viewPosition: 0 });
-        return next;
-      });
-    }, 3500);
-    return () => clearInterval(t);
-  }, [liveBanners.length]);
-
-  const sourceRecent = liveRecent;
-  const recent = sourceRecent.filter((inv: any) => {
-    if (filter === 'Paid')   return inv.status === 'paid';
-    if (filter === 'Unpaid') return inv.status === 'unpaid';
-    return true;
-  }).slice(0, 5);
+  const recent = liveRecent.slice(0, 5);
   const displayTopParties = liveTopParties;
   const displayBanners = liveBanners;
-
-  const handleDateApply = (from: string, to: string) => {
-    setFromDate(from);
-    setToDate(to);
-    setShowDatePicker(false);
-  };
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       {apiError && <ErrorBanner message={apiError} onRetry={load} />}
 
-      {/* ── Header ─────────────────────────────────────────────────── */}
-      <View style={s.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={s.backBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={s.headerTitle}>{t('sales.title')}</Text>
-        <TouchableOpacity
-          style={s.ewbBtn}
-          onPress={() => router.push('/reports/ewb-list' as any)}
-          activeOpacity={0.7}
-        >
-          <Text style={s.ewbTxt}>{t('sales.ewayBill')}</Text>
-          <Ionicons name="document-text-outline" size={15} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-      </View>
-
-      {/* ── Filter Row ──────────────────────────────────────────────── */}
-      <View style={s.filterRow}>
-        <TouchableOpacity style={s.datePill} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
-          <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
-          <Text style={s.dateTxt}>{dateLabel}</Text>
-          <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-
-        <View style={s.statusWrap}>
+      <ScreenHeader
+        title={t('sales.title')}
+        onBack={() => router.back()}
+        right={(
           <TouchableOpacity
-            style={[s.statusPill, dropdown && s.statusPillOpen]}
-            onPress={() => setDropdown(v => !v)}
+            style={s.ewbBtn}
+            onPress={() => router.push('/reports/ewb-list' as any)}
             activeOpacity={0.7}
           >
-            <Text style={s.statusTxt}>{
-              filter === 'Paid' ? t('sales.paid') : filter === 'Unpaid' ? t('sales.unpaid') : t('sales.all')
-            }</Text>
-            <Ionicons name={dropdown ? 'chevron-up' : 'chevron-down'} size={13} color={COLORS.textSecondary} />
+            <Text style={s.ewbTxt}>{t('sales.ewayBill')}</Text>
+            <Ionicons name="document-text-outline" size={15} color={COLORS.textPrimary} />
           </TouchableOpacity>
-          {dropdown && (
-            <View style={s.dropMenu}>
-              {([{id:'All',key:'sales.all'},{id:'Paid',key:'sales.paid'},{id:'Unpaid',key:'sales.unpaid'}]).map(({id:opt,key}) => (
-                <TouchableOpacity
-                  key={opt}
-                  style={s.dropItem}
-                  activeOpacity={0.7}
-                  onPress={() => { setFilter(opt); setDropdown(false); }}
-                >
-                  <Text style={[s.dropTxt, filter === opt && s.dropTxtActive]}>{t(key)}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
-      </View>
-
-      {dropdown && (
-        <TouchableOpacity style={s.dropOverlay} onPress={() => setDropdown(false)} activeOpacity={1} />
-      )}
+        )}
+      />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
 
@@ -272,22 +199,18 @@ export default function SalesScreen() {
               setMetricIdx(idx);
             }}
             renderItem={({ item: c }) => (
-              <View style={s.metricItem}>
-                <View style={s.metricCard}>
-                  <View style={s.mIcon}>
-                    <Ionicons name={c.icon as any} size={22} color={COLORS.textSecondary} />
-                  </View>
-                  <Text style={s.mLabel}>{c.label}</Text>
-                  <Text style={s.mAmount}>{c.amount}</Text>
-                </View>
-              </View>
+              <KPICarouselPage>
+                <KPICarouselCard
+                  icon={c.icon}
+                  label={c.label}
+                  amount={c.amount}
+                  trend_pct={c.trend_pct}
+                  trend_positive={c.trend_positive}
+                />
+              </KPICarouselPage>
             )}
           />
-          <View style={s.dotsRow}>
-            {metricCards.map((_, i) => (
-              <View key={i} style={[s.dot, i === metricIdx && s.dotActive]} />
-            ))}
-          </View>
+          <KPICarouselDots count={metricCards.length} activeIndex={metricIdx} />
         </View>
 
         {isLoading && (
@@ -325,10 +248,8 @@ export default function SalesScreen() {
               </View>
             ) : (
               recent.map(inv => (
-                <TouchableOpacity
+                <ListTileShell
                   key={inv.id}
-                  style={s.itemCard}
-                  activeOpacity={0.7}
                   onPress={() => {
                     const routeType = docTypeToRouteType(inv.docType || 'invoice', 'sales');
                     router.push(`/document/${inv.id}?type=${routeType}` as any);
@@ -345,17 +266,13 @@ export default function SalesScreen() {
                     voucherType={inv.voucherType}
                     isOptional={inv.isOptional}
                   />
-                </TouchableOpacity>
+                </ListTileShell>
               ))
             )}
-            <TouchableOpacity
-              style={s.viewAllBtn}
+            <ViewAllButton
+              label={t('sales.viewAll')}
               onPress={() => router.push('/sales/register' as any)}
-              activeOpacity={0.7}
-            >
-              <Text style={s.viewAllTxt}>{t('sales.viewAll')}</Text>
-              <Ionicons name="chevron-forward" size={14} color={COLORS.textPrimary} />
-            </TouchableOpacity>
+            />
           </View>
         )}
 
@@ -367,78 +284,29 @@ export default function SalesScreen() {
                 <Ionicons name="people-outline" size={28} color={COLORS.textTertiary} />
                 <Text style={s.emptyTxt}>No party sales yet</Text>
               </View>
-            ) : displayTopParties.map(p => (
-              <TouchableOpacity key={p.id} style={s.itemCard} activeOpacity={0.7}>
-                <View style={[s.avatar, { backgroundColor: p.color + '22' }]}>
-                  <Text style={[s.avatarTxt, { color: p.color }]}>{p.name.charAt(0)}</Text>
-                </View>
-                <Text style={s.partyName}>{p.name}</Text>
-                <Text style={s.itemAmt}>{p.amount}</Text>
-              </TouchableOpacity>
+            ) : displayTopParties.map((p, idx) => (
+              <EntityListTile
+                key={p.id || `party-${idx}`}
+                name={p.name}
+                amount={p.amount}
+                onPress={() => openLedgerDetail(router, companyGuid, { name: p.name })}
+              />
             ))}
-            <TouchableOpacity
-              style={s.viewAllBtn}
+            <ViewAllButton
+              label={t('sales.viewAll')}
               onPress={() => router.push('/ledger' as any)}
-              activeOpacity={0.7}
-            >
-              <Text style={s.viewAllTxt}>{t('sales.viewAll')}</Text>
-              <Ionicons name="chevron-forward" size={14} color={COLORS.textPrimary} />
-            </TouchableOpacity>
+            />
           </View>
         )}
       </ScrollView>
 
       {/* ── Sticky Banner Carousel ─────────────────────────────────── */}
       {displayBanners.length > 0 && (
-      <View style={[s.bannerWrap, { paddingBottom: insets.bottom > 0 ? insets.bottom : 8 }]}>
-        <FlatList
-          ref={bannerRef}
-          data={displayBanners}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={b => b.id}
-          scrollEnabled={false}
-          snapToInterval={BANNER_W + 10}
-          decelerationRate="fast"
-          getItemLayout={(_, index) => ({ length: BANNER_W + 10, offset: (BANNER_W + 10) * index, index })}
-          onScrollToIndexFailed={() => {}}
-          contentContainerStyle={{ paddingHorizontal: SPACING.md, gap: 10 }}
-          renderItem={({ item: b }) => (
-            <View style={s.bannerCard}>
-              <View style={s.bannerLeft}>
-                <View style={s.bannerIconWrap}>
-                  <Ionicons name="warning-outline" size={15} color={COLORS.white} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.bannerBold} numberOfLines={1}>{b.bold}</Text>
-                  <Text style={s.bannerSub} numberOfLines={1}>{b.sub}</Text>
-                </View>
-              </View>
-              <TouchableOpacity style={s.bannerBtn} activeOpacity={0.85}>
-                <Text style={s.bannerBtnTxt}>{b.action}</Text>
-                <Ionicons name="chevron-forward" size={11} color={BANNER_RED} />
-              </TouchableOpacity>
-            </View>
-          )}
+        <AlertBannerCarousel
+          banners={displayBanners}
+          bottomInset={insets.bottom > 0 ? insets.bottom : 8}
         />
-        <View style={s.bannerDots}>
-          {displayBanners.map((_, i) => (
-            <View key={i} style={[s.bannerDot, i === bannerIdx && s.bannerDotActive]} />
-          ))}
-        </View>
-      </View>
       )}
-
-      {/* ── Date Range Picker ──────────────────────────────────────── */}
-      <DateRangePickerModal
-        visible={showDatePicker}
-        fromDate={fromDate}
-        toDate={toDate}
-        onApply={handleDateApply}
-        onClose={() => setShowDatePicker(false)}
-        minDate={selectedFY?.startDate}
-        maxDate={selectedFY?.endDate}
-      />
 
     </SafeAreaView>
   );
@@ -465,64 +333,8 @@ const s = StyleSheet.create({
   },
   ewbTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textPrimary },
 
-  // Filter Row
-  filterRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: SPACING.md, paddingVertical: 10,
-    backgroundColor: COLORS.cardBg,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
-    zIndex: 20,
-  },
-  datePill: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: COLORS.pageBg,
-    borderRadius: RADIUS.full, paddingHorizontal: 14, paddingVertical: 10,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  dateTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
-  statusWrap: { position: 'relative', zIndex: 100 },
-  statusPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: COLORS.pageBg,
-    borderRadius: RADIUS.full, paddingHorizontal: 16, paddingVertical: 10,
-    borderWidth: 1, borderColor: COLORS.borderDefault, minWidth: 88,
-  },
-  statusPillOpen: { borderColor: COLORS.brandPrimary },
-  statusTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, fontWeight: '500' },
-  dropMenu: {
-    position: 'absolute', top: 46, right: 0,
-    backgroundColor: COLORS.cardBg,
-    borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault,
-    minWidth: 130, zIndex: 200,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12, shadowRadius: 8, elevation: 8,
-  },
-  dropItem: { paddingHorizontal: SPACING.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  dropTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary },
-  dropTxtActive: { color: COLORS.textPrimary, fontWeight: '700' },
-  dropOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50 },
-
   // Metric Carousel
   carouselWrap: { paddingTop: SPACING.md },
-  metricItem: { width: SW },
-  metricCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: COLORS.cardBg,
-    borderRadius: RADIUS.lg,
-    paddingHorizontal: SPACING.md, paddingVertical: 16,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-    marginHorizontal: SPACING.md,
-  },
-  mIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center' },
-  mLabel: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
-  mAmount: { fontSize: TYPOGRAPHY.base, fontWeight: '800', color: COLORS.textPrimary },
-  pctBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 5, borderRadius: RADIUS.full },
-  pctTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
-
-  // Dots
-  dotsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: 10, marginBottom: 4 },
-  dot:       { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
-  dotActive: { width: 16, height: 5, borderRadius: 3, backgroundColor: COLORS.brandPrimary },
 
   // Tabs
   tabRow: {
@@ -539,38 +351,6 @@ const s = StyleSheet.create({
 
   // List
   listSection: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, gap: 8 },
-  itemCard: {
-    backgroundColor: COLORS.cardBg,
-    borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 10,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-  },
-  avatar:     { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  avatarTxt:  { fontSize: TYPOGRAPHY.base, fontWeight: '800' },
-  partyName:  { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  itemAmt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '800', color: COLORS.textPrimary },
   emptyBox:   { alignItems: 'center', paddingVertical: 32, gap: 8 },
   emptyTxt:   { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
-
-  // View All
-  viewAllBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
-    backgroundColor: COLORS.cardBg,
-    borderRadius: RADIUS.full, paddingVertical: 12, paddingHorizontal: 32,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-    alignSelf: 'center', marginTop: 4, minWidth: 150,
-  },
-  viewAllTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-
-  // Banner Carousel
-  bannerWrap:     { backgroundColor: COLORS.pageBg, paddingTop: SPACING.sm },
-  bannerCard:     { width: BANNER_W, backgroundColor: BANNER_RED, borderRadius: RADIUS.lg, paddingHorizontal: SPACING.md, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  bannerLeft:     { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
-  bannerIconWrap: { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  bannerBold:     { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white },
-  bannerSub:      { fontSize: 10, color: 'rgba(255,255,255,0.85)', marginTop: 1 },
-  bannerBtn:      { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: COLORS.white, borderRadius: RADIUS.full, paddingHorizontal: 10, paddingVertical: 7, flexShrink: 0 },
-  bannerBtnTxt:   { fontSize: 10, fontWeight: '700', color: BANNER_RED },
-  bannerDots:     { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, paddingTop: 6, paddingBottom: 4 },
-  bannerDot:      { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.borderDefault },
-  bannerDotActive:{ width: 14, height: 5, borderRadius: 3, backgroundColor: COLORS.brandPrimary },
 });

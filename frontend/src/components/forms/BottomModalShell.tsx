@@ -98,8 +98,8 @@ export function BottomModalShell({
 
       <ScrollView
         ref={scrollRef as any}
-        // flexGrow:0 → height follows content (no reserved blank area under fields)
-        style={shell.scroll}
+        // flexGrow:0 → height follows content; flexShrink:1 → compress above keyboard
+        style={[shell.scroll, keyboardOpen && shell.scrollWithKeyboard]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[ms.scroll, scrollContentStyle]}
         keyboardShouldPersistTaps="handled"
@@ -166,5 +166,8 @@ const shell = StyleSheet.create({
   },
   scroll: {
     flexGrow: 0,
+  },
+  scrollWithKeyboard: {
+    flexShrink: 1,
   },
 });

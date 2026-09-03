@@ -1,3 +1,9 @@
+## 2026-09-01 — 0% KPI trend is grey + black
+
+Home + KPI carousels: flat **0%** is grey background and black text (not green/red). See `frontend/CHANGELOG_AGENT.md`. Not pushed.
+
+---
+
 ## [2026-08-31] Swipe actions — Ledger square geometry everywhere
 
 ### Why

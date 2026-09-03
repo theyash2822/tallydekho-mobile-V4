@@ -1,8 +1,8 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
-  View, Text, ScrollView, FlatList, TouchableOpacity, StyleSheet,
+  View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
@@ -17,7 +17,18 @@ import { EditStockModal } from '../../src/components/forms/EditStockModal';
 import { StockTransferModal } from '../../src/components/forms/StockTransferModal';
 import { StockAdjustmentModal } from '../../src/components/forms/StockAdjustmentModal';
 import { BulkTransferModal } from '../../src/components/forms/BulkTransferModal';
-import FilterBottomSheet, { FilterChipGroup } from '../../src/components/FilterBottomSheet';
+import { FilterIconWithBadge, ActiveFilterChips } from '../../src/components/voucherHomeFilters';
+import FilterBottomSheet, {
+  FilterCheckRow,
+  filterSheetContentStyles as fm,
+  isFilterAllSelected,
+  isFilterOptionChecked,
+  toggleFilterFromAll,
+  toggleFilterAll,
+  useMultiFilterHydration,
+  isFilterSelectionValid,
+  normalizeFilterAllSelection,
+} from '../../src/components/FilterBottomSheet';
 import SearchBar from '../../src/components/SearchBar';
 import { StockItem } from '../../src/data/stockData';
 import { useSettings } from '../../src/context/SettingsContext';
@@ -141,7 +152,7 @@ function SwipeableStockCard({ item, isMultiSelectMode, isSelected, onPress, onLo
   );
 }
 
-// ─── FILTER MODAL (uses shared FilterBottomSheet + FilterChipGroup) ──────────
+// ─── FILTER MODAL (Ledger-style tabs: Warehouse | Group, search on both, multi-select) ─
 
 function FilterModal({ visible, onClose, onApply, initWh, initGrp, whOptions, grpOptions }: {
   visible: boolean; onClose: () => void;
@@ -150,15 +161,66 @@ function FilterModal({ visible, onClose, onApply, initWh, initGrp, whOptions, gr
   whOptions: { id: string; label: string }[];
   grpOptions: { id: string; label: string }[];
 }) {
-  const [selWh,  setSelWh]  = useState<string[]>(initWh);
-  const [selGrp, setSelGrp] = useState<string[]>(initGrp);
-  // Sync state when modal opens
-  useEffect(() => { if (visible) { setSelWh(initWh); setSelGrp(initGrp); } }, [visible]);
-  const total = selWh.length + selGrp.length;
+  const [tab, setTab] = useState<'Warehouse' | 'Group'>('Warehouse');
+  const [selWh, setSelWh] = useState<string[]>([]);
+  const [selGrp, setSelGrp] = useState<string[]>([]);
+  const [whSearch, setWhSearch] = useState('');
+  const [grpSearch, setGrpSearch] = useState('');
+
+  const whIds = useMemo(() => whOptions.map(w => w.id), [whOptions]);
+  const grpIds = useMemo(() => grpOptions.map(g => g.id), [grpOptions]);
+
+  useMultiFilterHydration(visible, initWh, whIds, setSelWh);
+  useMultiFilterHydration(visible, initGrp, grpIds, setSelGrp);
+
+  useEffect(() => {
+    if (visible) {
+      setWhSearch('');
+      setGrpSearch('');
+      setTab('Warehouse');
+    }
+  }, [visible]);
+
+  const isAllWh = isFilterAllSelected(selWh, whIds);
+  const isAllGrp = isFilterAllSelected(selGrp, grpIds);
+  const total =
+    (isAllWh ? 0 : selWh.length) + (isAllGrp ? 0 : selGrp.length);
+  const canApply =
+    isFilterSelectionValid(selWh, whIds) && isFilterSelectionValid(selGrp, grpIds);
+
+  const filteredWh = useMemo(() => {
+    const q = whSearch.trim().toLowerCase();
+    const list = whOptions.filter(Boolean);
+    if (!q) return list;
+    return list.filter(w => w.label.toLowerCase().includes(q) || w.id.toLowerCase().includes(q));
+  }, [whOptions, whSearch]);
+
+  const filteredGrp = useMemo(() => {
+    const q = grpSearch.trim().toLowerCase();
+    const list = grpOptions.filter(Boolean);
+    if (!q) return list;
+    return list.filter(g => g.label.toLowerCase().includes(q) || g.id.toLowerCase().includes(q));
+  }, [grpOptions, grpSearch]);
+
+  const toggleWh = (id: string) => setSelWh(prev => toggleFilterFromAll(prev, id, whIds));
+  const toggleGrp = (id: string) => setSelGrp(prev => toggleFilterFromAll(prev, id, grpIds));
 
   const handleApply = () => {
-    onApply(selWh, selGrp);
+    if (!canApply) return;
+    const nextWh = normalizeFilterAllSelection(selWh, whIds);
+    const nextGrp = normalizeFilterAllSelection(selGrp, grpIds);
+    onApply(nextWh, nextGrp);
     onClose();
+    const toastParts = [
+      ...(nextWh.length ? [`${nextWh.length} warehouse${nextWh.length !== 1 ? 's' : ''}`] : []),
+      ...(nextGrp.length ? [`${nextGrp.length} group${nextGrp.length !== 1 ? 's' : ''}`] : []),
+    ];
+    Toast.show({
+      type: 'success',
+      text1: toastParts.length ? 'Filters applied' : 'Filters cleared',
+      text2: toastParts.length ? toastParts.join(' · ') : 'Showing all items',
+      visibilityTime: 2000,
+    });
   };
 
   return (
@@ -167,34 +229,89 @@ function FilterModal({ visible, onClose, onApply, initWh, initGrp, whOptions, gr
       onClose={onClose}
       title="Filter Items"
       activeCount={total}
-      onClear={() => { setSelWh([]); setSelGrp([]); }}
+      onClear={() => { setSelWh([...whIds]); setSelGrp([...grpIds]); }}
       onApply={handleApply}
-      applyLabel={total > 0 ? `Apply (${total} active)` : 'Apply'}
+      applyLabel="Apply Filters"
+      applyDisabled={!canApply}
     >
-      {whOptions.length > 0 && (
-        <FilterChipGroup
-          label="Warehouse"
-          options={whOptions}
-          selected={selWh}
-          multi
-          onSelect={setSelWh}
-        />
-      )}
-      {grpOptions.length > 0 && (
-        <FilterChipGroup
-          label="Item Group"
-          options={grpOptions}
-          selected={selGrp}
-          multi
-          onSelect={setSelGrp}
-        />
-      )}
-      {whOptions.length === 0 && grpOptions.length === 0 && (
-        <View style={{ paddingVertical: 24, alignItems: 'center' }}>
-          <Text style={{ color: COLORS.textSecondary, fontSize: 14 }}>No filter options available. Sync Tally first.</Text>
+      <View style={fm.tabs}>
+        {(['Warehouse', 'Group'] as const).map(cat => (
+          <TouchableOpacity
+            key={cat}
+            style={[fm.tab, tab === cat && fm.tabActive]}
+            onPress={() => setTab(cat)}
+            activeOpacity={0.7}
+          >
+            <Text style={[fm.tabTxt, tab === cat && fm.tabTxtActive]}>{cat}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {tab === 'Warehouse' ? (
+        <View style={fm.panel}>
+          <View style={fm.searchBox}>
+            <Ionicons name="search" size={14} color={COLORS.textTertiary} />
+            <TextInput
+              style={fm.searchInput}
+              placeholder="Search Warehouse..."
+              placeholderTextColor={COLORS.textTertiary}
+              value={whSearch}
+              onChangeText={setWhSearch}
+            />
+          </View>
+          <FilterCheckRow
+            label="All warehouses"
+            selected={isAllWh}
+            onPress={() => setSelWh(prev => toggleFilterAll(prev, whIds))}
+          />
+          {whOptions.length === 0 ? (
+            <Text style={fm.hint}>No warehouses available. Sync Tally first.</Text>
+          ) : filteredWh.length === 0 ? (
+            <Text style={fm.hint}>No warehouses match your search</Text>
+          ) : (
+            filteredWh.map(w => (
+              <FilterCheckRow
+                key={w.id}
+                label={w.label}
+                selected={isFilterOptionChecked(selWh, w.id)}
+                onPress={() => toggleWh(w.id)}
+              />
+            ))
+          )}
+        </View>
+      ) : (
+        <View style={fm.panel}>
+          <View style={fm.searchBox}>
+            <Ionicons name="search" size={14} color={COLORS.textTertiary} />
+            <TextInput
+              style={fm.searchInput}
+              placeholder="Search Group..."
+              placeholderTextColor={COLORS.textTertiary}
+              value={grpSearch}
+              onChangeText={setGrpSearch}
+            />
+          </View>
+          <FilterCheckRow
+            label="All groups"
+            selected={isAllGrp}
+            onPress={() => setSelGrp(prev => toggleFilterAll(prev, grpIds))}
+          />
+          {grpOptions.length === 0 ? (
+            <Text style={fm.hint}>No groups available. Sync Tally first.</Text>
+          ) : filteredGrp.length === 0 ? (
+            <Text style={fm.hint}>No groups match your search</Text>
+          ) : (
+            filteredGrp.map(g => (
+              <FilterCheckRow
+                key={g.id}
+                label={g.label}
+                selected={isFilterOptionChecked(selGrp, g.id)}
+                onPress={() => toggleGrp(g.id)}
+              />
+            ))
+          )}
         </View>
       )}
-      <View style={{ height: 16 }} />
     </FilterBottomSheet>
   );
 }
@@ -202,6 +319,23 @@ function FilterModal({ visible, onClose, onApply, initWh, initGrp, whOptions, gr
 // ─── (AddItemModal → src/components/forms/AddItemModal.tsx) ─────────────────
 
 // ─── (EditStockModal, StockTransferModal, BulkTransferModal → src/components/forms/) ─
+
+function mapStockRows(items: any[], formatAmount: (n: number) => string): StockItem[] {
+  return items.map((r: any) => ({
+    id: r.guid || String(r.id),
+    name: r.displayName || r.name || '',
+    sku: r.sku || r.alias || r.hsn || '',
+    category: r.category || '',
+    group: r.group_name || '',
+    qty: +(r.closing_qty || 0),
+    value: r.closing_value ? formatAmount(Math.round(+r.closing_value)) : formatAmount(0),
+    unit: r.unit || 'pcs',
+    warehouse: r.primary_warehouse || r.warehouse_name || 'Default',
+    warehouseId: r.primary_warehouse || r.warehouse_name || 'WH01',
+    reorderLevel: +(r.reorder_level || 0),
+    status: +r.closing_qty <= 0 ? 'out_of_stock' : +r.closing_qty <= +(r.reorder_level || 0) ? 'low_stock' : 'in_stock',
+  }));
+}
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
 
@@ -246,24 +380,30 @@ export default function TotalStockScreen() {
     setGrpOptions(grps.map(g => ({ id: g, label: g })));
   }, [companyGuid, liveStocks.length]);
 
+  const fetchFilteredStocks = useCallback(async (warehouses: string[], groups: string[]) => {
+    if (!companyGuid || (warehouses.length === 0 && groups.length === 0)) {
+      setWhFilteredStocks(null);
+      return;
+    }
+    setWhFilterLoading(true);
+    try {
+      const params: Record<string, string> = { limit: '1000' };
+      if (warehouses.length) params.warehouse = warehouses.join(',');
+      if (groups.length) params.group = groups.join(',');
+      const res: any = await getStocks(companyGuid, params);
+      setWhFilteredStocks(mapStockRows(res?.data?.items ?? [], formatAmount));
+    } catch {
+      setWhFilteredStocks([]);
+    } finally {
+      setWhFilterLoading(false);
+    }
+  }, [companyGuid, formatAmount]);
+
   // If navigated from warehouse-detail with pre-filter, auto-apply warehouse filter on mount
   useEffect(() => {
     if (!preWarehouse || !companyGuid) return;
-    setWhFilterLoading(true);
-    getStocks(companyGuid, { limit: '1000', warehouse: preWarehouse }).then((res: any) => {
-      const items = res?.data?.items ?? [];
-      const mapped: StockItem[] = items.map((r: any) => ({
-        id: r.guid || String(r.id), name: r.displayName || r.name || '', sku: r.sku || r.alias || r.hsn || '',
-        category: r.category || '', group: r.group_name || '',
-        qty: +(r.closing_qty || 0),
-        value: r.closing_value ? formatAmount(Math.round(+r.closing_value)) : formatAmount(0),
-        unit: r.unit || 'pcs', warehouse: r.primary_warehouse || r.warehouse_name || 'Default',
-        warehouseId: r.primary_warehouse || r.warehouse_name || 'WH01', reorderLevel: +(r.reorder_level || 0),
-        status: +r.closing_qty <= 0 ? 'out_of_stock' : +r.closing_qty <= +(r.reorder_level||0) ? 'low_stock' : 'in_stock',
-      }));
-      setWhFilteredStocks(mapped);
-    }).catch(() => {}).finally(() => setWhFilterLoading(false));
-  }, [preWarehouse, companyGuid]);
+    fetchFilteredStocks([preWarehouse], []);
+  }, [preWarehouse, companyGuid, fetchFilteredStocks]);
 
   useEffect(() => {
     if (!companyGuid) return;
@@ -280,26 +420,12 @@ export default function TotalStockScreen() {
 
     setIsLoading(true);
     getStocks(companyGuid, { limit: '1000' }).then((res: any) => {
-      const items = res?.data?.items ?? [];
-      const mapped: StockItem[] = items.map((r: any) => ({
-        id: r.guid || String(r.id),
-        name: r.displayName || r.name || '',
-        sku: r.sku || r.alias || r.hsn || '',
-        category: r.category || '',
-        group: r.group_name || '',
-        qty: +(r.closing_qty || 0),
-        value: r.closing_value ? formatAmount(Math.round(+r.closing_value)) : formatAmount(0),
-        unit: r.unit || 'pcs',
-        warehouse: r.primary_warehouse || r.warehouse_name || 'Default',
-        warehouseId: r.primary_warehouse || r.warehouse_name || 'WH01',
-        reorderLevel: +(r.reorder_level || 0),
-        status: +r.closing_qty <= 0 ? 'out_of_stock' : +r.closing_qty <= +(r.reorder_level||0) ? 'low_stock' : 'in_stock',
-      }));
+      const mapped = mapStockRows(res?.data?.items ?? [], formatAmount);
       const _stockCache = getStockListCache();
       _stockCache[cacheKey] = { data: mapped, ts: Date.now() };
       if (mapped.length) setLiveStocks(mapped);
     }).catch(() => {}).finally(() => setIsLoading(false));
-  }, [companyGuid, lastSyncAt]);
+  }, [companyGuid, lastSyncAt, formatAmount]);
 
   // Search & filters
   const [query,    setQuery]    = useState('');
@@ -312,8 +438,9 @@ export default function TotalStockScreen() {
   const [whFilterLoading, setWhFilterLoading] = useState(false);
   const [onhandOnly, setOnhandOnly] = useState(preOnhand);
 
-  // Use warehouse-filtered stocks if warehouse filter is active, else use all loaded stocks
-  const sourceItems = whFilteredStocks ?? liveStocks;
+  // Use API-filtered stocks when warehouse/group filter active, else full loaded list
+  const apiFilterActive = selWh.length > 0 || selGrp.length > 0;
+  const sourceItems = apiFilterActive ? (whFilteredStocks ?? []) : liveStocks;
 
   // Multi-select
   const [multiSelectMode, setMultiSelectMode] = useState(false);
@@ -345,12 +472,9 @@ export default function TotalStockScreen() {
     .filter(item => {
       const q = query.toLowerCase();
       const qMatch  = !query || item.name.toLowerCase().includes(q) || item.sku.toLowerCase().includes(q);
-      // Warehouse filter handled by API refetch (whFilteredStocks). whMatch always true.
-      const whMatch    = true;
       const catMatch   = selCat.length === 0 || selCat.includes(item.category?.trim());
-      const grpMatch   = selGrp.length === 0 || selGrp.includes(item.group?.trim());
       const onhandMatch = !onhandOnly || item.qty > 0;
-      return qMatch && whMatch && catMatch && grpMatch && onhandMatch;
+      return qMatch && catMatch && onhandMatch;
     })
     .sort((a, b) => {
       if (sortType === 'alpha') {
@@ -364,10 +488,10 @@ export default function TotalStockScreen() {
       return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
     });
 
-  const totalQty          = sourceItems.reduce((s, i) => s + i.qty, 0);
-  const totalValueRaw      = sourceItems.reduce((s, i) => s + (+(i.value?.replace(/[^0-9.]/g, '') || 0)), 0);
+  const totalQty          = filtered.reduce((s, i) => s + i.qty, 0);
+  const totalValueRaw      = filtered.reduce((s, i) => s + (+(i.value?.replace(/[^0-9.]/g, '') || 0)), 0);
   const totalValueLabel    = totalValueRaw > 0 ? `₹${(totalValueRaw/100000).toFixed(1)}L` : '—';
-  const activeFilterCount = selWh.length + selGrp.length; // warehouse now backed by API re-fetch
+  const activeFilterCount = (selWh.length > 0 ? selWh.length : 0) + (selGrp.length > 0 ? selGrp.length : 0);
   const allSelected       = filtered.length > 0 && filtered.every(i => selectedIds.includes(i.id));
 
   // Handlers
@@ -410,13 +534,8 @@ export default function TotalStockScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('stocks.totalStock')}</Text>
         <View style={styles.headerRight}>
-          {/* Filter / Sort icon */}
-          <TouchableOpacity style={styles.iconBtn} onPress={() => setFilterOpen(true)} activeOpacity={0.7}>
-            <Ionicons name="funnel-outline" size={22} color={activeFilterCount > 0 ? '#A89060' : COLORS.textPrimary} />
-            {activeFilterCount > 0 && <View style={styles.badge}><Text style={styles.badgeTxt}>{activeFilterCount}</Text></View>}
-          </TouchableOpacity>
-          {/* Plus icon → Add New Item sheet */}
-          <TouchableOpacity style={styles.iconBtn} onPress={() => setAddItemOpen(true)} activeOpacity={0.7}>
+          <FilterIconWithBadge count={activeFilterCount} onPress={() => setFilterOpen(true)} />
+          <TouchableOpacity style={styles.headerIconBtn} onPress={() => setAddItemOpen(true)} activeOpacity={0.7}>
             <Ionicons name="add" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
         </View>
@@ -443,30 +562,31 @@ export default function TotalStockScreen() {
       )}
 
       {/* ── Active filter chips ── */}
-      {activeFilterCount > 0 && !multiSelectMode && (
-        <View style={styles.activeFiltersRow}>
-          {selWh.map(w => (
-            <TouchableOpacity key={w} style={styles.activeChip} onPress={() => { setSelWh(p => { const next = p.filter(x => x !== w); if (next.length === 0) setWhFilteredStocks(null); return next; }); }} activeOpacity={0.7}>
-              <Text style={styles.activeChipTxt} numberOfLines={1} ellipsizeMode="tail">{w}</Text>
-              <Ionicons name="close-circle" size={12} color="#A89060" />
-            </TouchableOpacity>
-          ))}
-          {selGrp.map(g => (
-            <TouchableOpacity key={g} style={styles.activeChip} onPress={() => setSelGrp(p => p.filter(x => x !== g))} activeOpacity={0.7}>
-              <Text style={styles.activeChipTxt} numberOfLines={1} ellipsizeMode="tail">{g}</Text>
-              <Ionicons name="close-circle" size={12} color="#A89060" />
-            </TouchableOpacity>
-          ))}
-          {activeFilterCount > 1 && (
-            <TouchableOpacity
-              style={[styles.activeChip, { backgroundColor: '#FFF0F0', borderColor: '#FFCCCC' }]}
-              onPress={() => { setSelWh([]); setSelCat([]); setSelGrp([]); setWhFilteredStocks(null); }}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.activeChipTxt, { color: COLORS.negative }]}>Clear all</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+      {!multiSelectMode && (
+        <ActiveFilterChips
+          variant="amber"
+          chips={[
+            ...selWh.map(w => ({ id: `wh:${w}`, label: w })),
+            ...selGrp.map(g => ({ id: `grp:${g}`, label: g })),
+          ]}
+          onRemove={(chipId) => {
+            if (chipId.startsWith('wh:')) {
+              setSelWh(p => {
+                const next = p.filter(x => x !== chipId.slice(3));
+                fetchFilteredStocks(next, selGrp);
+                return next;
+              });
+            }
+            if (chipId.startsWith('grp:')) {
+              setSelGrp(p => {
+                const next = p.filter(x => x !== chipId.slice(4));
+                fetchFilteredStocks(selWh, next);
+                return next;
+              });
+            }
+          }}
+          onClearAll={() => { setSelWh([]); setSelCat([]); setSelGrp([]); fetchFilteredStocks([], []); }}
+        />
       )}
 
       {/* ── Warehouse filter loading indicator ── */}
@@ -479,7 +599,7 @@ export default function TotalStockScreen() {
       {/* ── Summary KPI strip ── */}
       <View style={styles.summaryRow}>
         {[
-          { label: 'No. of SKUs', value: `${sourceItems.length}` },
+          { label: 'No. of SKUs', value: `${filtered.length}` },
           { label: 'Total Qty',   value: totalQty.toLocaleString('en-IN') },
           { label: 'Value (INR)', value: totalValueLabel },
         ].map((s, i) => (
@@ -551,7 +671,7 @@ export default function TotalStockScreen() {
           <View style={styles.emptyState}>
             <Ionicons name="cube-outline" size={40} color={COLORS.textTertiary} />
             <Text style={styles.emptyTxt}>No items match your filters</Text>
-            <TouchableOpacity onPress={() => { setSelWh([]); setSelCat([]); setSelGrp([]); setWhFilteredStocks(null); setQuery(''); }} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => { setSelWh([]); setSelCat([]); setSelGrp([]); fetchFilteredStocks([], []); setQuery(''); }} activeOpacity={0.7}>
               <Text style={styles.emptyAction}>Clear all filters</Text>
             </TouchableOpacity>
           </View>
@@ -578,31 +698,7 @@ export default function TotalStockScreen() {
         onApply={(wh, grp) => {
           setSelWh(wh);
           setSelGrp(grp);
-          // If warehouse selected — re-fetch stocks from backend with ?warehouse= param
-          if (wh.length > 0 && companyGuid) {
-            setWhFilterLoading(true);
-            getStocks(companyGuid, { limit: '1000', warehouse: wh[0] }).then((res: any) => {
-              const items = res?.data?.items ?? [];
-              const mapped: StockItem[] = items.map((r: any) => ({
-                id: r.guid || String(r.id),
-                name: r.displayName || r.name || '',
-                sku: r.sku || r.alias || r.hsn || '',
-                category: r.category || '',
-                group: r.group_name || '',
-                qty: +(r.closing_qty || 0),
-                value: r.closing_value ? formatAmount(Math.round(+r.closing_value)) : formatAmount(0),
-                unit: r.unit || 'pcs',
-                warehouse: r.primary_warehouse || r.warehouse_name || 'Default',
-                warehouseId: r.primary_warehouse || r.warehouse_name || 'WH01',
-                reorderLevel: +(r.reorder_level || 0),
-                status: +r.closing_qty <= 0 ? 'out_of_stock' : +r.closing_qty <= +(r.reorder_level||0) ? 'low_stock' : 'in_stock',
-              }));
-              setWhFilteredStocks(mapped);
-            }).catch(() => setWhFilteredStocks([])).finally(() => setWhFilterLoading(false));
-          } else {
-            // Warehouse filter cleared — revert to all stocks
-            setWhFilteredStocks(null);
-          }
+          fetchFilteredStocks(wh, grp);
         }}
         initWh={selWh} initGrp={selGrp}
         whOptions={whOptions} grpOptions={grpOptions}
@@ -623,10 +719,11 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 14, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   backBtn:     { width: 40, alignItems: 'flex-start' },
   headerTitle: { flex: 1, fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
-  headerRight: { width: 80, flexDirection: 'row', justifyContent: 'flex-end', gap: 2 },
-  iconBtn:     { position: 'relative', padding: 8 },
-  badge:       { position: 'absolute', top: 4, right: 4, width: 15, height: 15, borderRadius: 8, backgroundColor: '#A89060', alignItems: 'center', justifyContent: 'center' },
-  badgeTxt:    { fontSize: 8, fontWeight: '800', color: COLORS.white },
+  headerRight: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2 },
+  headerIconBtn: {
+    width: 38, height: 38, borderRadius: RADIUS.sm,
+    alignItems: 'center', justifyContent: 'center',
+  },
 
   // Multi-select bar
   multiBar:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: SPACING.md, paddingVertical: 12, backgroundColor: '#1A1A1A' },
