@@ -421,7 +421,7 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
       <TouchableOpacity style={p.shareBtn} onPress={handleShare} activeOpacity={0.85} disabled={pdfLoading}>
         {pdfLoading
           ? <ActivityIndicator size="small" color={COLORS.white} />
-          : <Ionicons name="share-outline" size={17} color={COLORS.white} />}
+          : <Ionicons name="share-outline" size={20} color={COLORS.white} />}
         <Text style={p.shareBtnText}>{pdfLoading ? 'Preparing…' : 'Share as PDF'}</Text>
       </TouchableOpacity>
     </View>
@@ -504,7 +504,7 @@ const p = StyleSheet.create({
   // Paper sheet
   sheet: {
     backgroundColor: PAPER,
-    borderWidth: 1, borderColor: COLORS.white,
+    borderWidth: 1, borderColor: INK,
     borderRadius: 2, overflow: 'hidden',
     shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 }, elevation: 5,
@@ -625,11 +625,11 @@ const p = StyleSheet.create({
   // Action bar
   actionBar: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: COLORS.brandPrimary, paddingTop: 8, paddingHorizontal: SPACING.md,
+    backgroundColor: COLORS.brandPrimary, paddingTop: 12, paddingHorizontal: SPACING.md,
   },
   shareBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 7, paddingVertical: 7,
+    gap: 8, paddingVertical: 10,
   },
-  shareBtnText: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white, letterSpacing: 0.3 },
+  shareBtnText: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white, letterSpacing: 0.3 },
 });
