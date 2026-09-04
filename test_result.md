@@ -436,6 +436,73 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: |
+      DOCUMENT PREVIEW — FULL REDESIGN TO PRINT-SHEET STYLE (user requested)
+
+      The user wanted the preview to look like a REAL Tally print/paper preview (ruled grid,
+      boxed company letterhead, bordered party/detail cells, column-lined item table, totals,
+      amount-in-words, declaration + signature block) — rendered on a themed "paper sheet":
+      lighter warm off-white (#FAF8F2) with app BLACK ink (#1A1A1A) and app fonts. NO gold accents.
+
+      FILE FULLY REWRITTEN: src/components/document/DocumentPreviewPage.tsx
+      - Paper sheet: bordered (#1A1A1A 1px) + soft shadow, sitting on a desk-mat background.
+      - Two layouts, auto-selected: VOUCHER (has ledgerEntries) vs INVOICE (has items).
+        * Voucher: title ribbon → company block → Voucher No/Dated row → Dr/Cr ledger grid
+          (fits screen, no more letter-wrapping) → amount in words → payment/narration → signature.
+        * Invoice: title ribbon → company block → Buyer/Consignee + facts grid → item grid
+          (horizontal scroll, ruled) → totals (Sub Total, Output CGST/SGST, Round Off, Total) →
+          amount in words → declaration + Authorised Signatory.
+      - Share-as-PDF (expo-print) preserved.
+      - Lint: clean.
+
+      PRIOR CHANGE (still valid): src/data/mockDocuments.ts rebuilt with field-accurate mocks per
+      Tally PDF; audit-trail "My Entries" lists 11 vouchers each routing to /document/{ref}?type=.
+
+      NOTE: I could not drive the onboarding horizontal pager reliably via the screenshot tool
+      (RNW paging quirks) to reach the previews. Please verify visually.
+
+      AUTH/NAV FLOW to reach previews:
+      - Onboarding carousel: tap "Skip" (top-right) OR "Next" through slides then "Get Started".
+      - Enter phone 9876543210 → Send OTP → OTP 1234 → Continue → (if register) fill name+email,
+        accept terms, Login → Tally Sync screen → tap "Skip" → lands on Home tabs.
+      - Bottom nav → "Reports" tab → tap "Audit Trail" card → "My Entries" tab.
+
+      TEST FOCUS (frontend only):
+      1. My Entries shows 11 rows; tap each and confirm the PRINT-SHEET preview renders cleanly
+         (no broken/letter-wrapped text), correct title, and:
+         - Vouchers (RV-23 Receipt, CV-3 Contra, PV-9 Payment, JV-2 Journal, EV-5 Expense) → Dr/Cr grid + totals + amount in words.
+         - Invoices (PI-1 Purchase, SI-000 Sales, PF-0002 Proforma, PO-2 Purchase Order, DN-1 Delivery Note, CN-1 Credit Note) → item grid + totals.
+      2. "Share as PDF" button present and does not crash on tap.
+
+  - agent: "main_prev"
+    message: |
+
+      WHAT CHANGED:
+      1. src/types/document.ts — added 2 DocumentTypes: 'proforma_invoice', 'expense_voucher'.
+      2. src/utils/documentHelpers.ts — added DOC_TYPE_CONFIG + TX_TO_DOC_TYPE entries for the 2 new types.
+      3. src/data/mockDocuments.ts — FULLY REBUILT with field-accurate mocks matching the Tally PDFs
+         (seller = "Yash Ki Company"): Receipt(RV-23), Contra(CV-3), Payment(PV-9), Journal(JV-2),
+         Expense(EV-5), Purchase Order(PO-2), Purchase Invoice(PI-1), Proforma(PF-0002),
+         Sales/Tax Invoice(SI-000), Credit Note(CN-1, std format), Delivery Note(DN-1, std format).
+         getDocument() now resolves each id from a REGISTRY and falls back per-type template.
+      4. app/reports/audit-trail.tsx — "My Entries" now lists all 11 vouchers (Aug 26 group), each row
+         carries docType and routes to /document/{ref}?type={docType} so the correct preview opens.
+         Added new pill types/colors: Purchase Order, Proforma, Expense.
+
+      AUTH FLOW for testing (per prior notes):
+      - Skip onboarding → enter phone 9876543210 → Send OTP → enter OTP 1234 → Continue
+      - If registration shown: fill name+email, accept terms, Login → on Tally Sync screen tap "Skip"/"Sync with Tally"
+      - Reach Home tabs → Reports tab → tap "Audit Trail" card
+
+      TEST FOCUS (frontend only):
+      - Reports → Audit Trail → My Entries: verify all 11 entries render.
+      - Tap each entry (RV-23 Receipt, CV-3 Contra, PV-9 Payment, JV-2 Journal, EV-5 Expense,
+        PO-2 Purchase Order, PI-1 Purchase Invoice, PF-0002 Proforma, SI-000 Sales, DN-1 Delivery Note,
+        CN-1 Credit Note) → confirm the DocumentPreviewPage opens with the CORRECT badge/title and
+        type-appropriate sections (ledger vouchers show Ledger Entries; item docs show Items table + Tax).
+      - Voucher-type filter dropdown includes the new types and filters correctly.
+
+  - agent: "main_earlier"
+    message: |
       COMPREHENSIVE APP AUDIT COMPLETE — FULL TEST REQUESTED
 
       CRITICAL FIXES (import regressions):

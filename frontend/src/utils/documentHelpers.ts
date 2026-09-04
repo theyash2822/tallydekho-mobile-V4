@@ -60,6 +60,8 @@ export const DOC_TYPE_CONFIG: Record<DocumentType, { label: string; color: strin
   contra_voucher:   { label: 'Contra Voucher',    color: '#37474F', bg: '#ECEFF1' },
   journal_voucher:  { label: 'Journal Voucher',   color: '#4E342E', bg: '#EFEBE9' },
   stock_journal:    { label: 'Stock Journal',     color: '#558B2F', bg: '#F1F8E9' },
+  proforma_invoice: { label: 'Proforma Invoice',  color: '#6A1B9A', bg: '#F3E5F5' },
+  expense_voucher:  { label: 'Expense Voucher',   color: '#B71C1C', bg: '#FFEBEE' },
 };
 
 // ── PDF HTML Template Generator ──────────────────────────────────────────────
@@ -304,4 +306,8 @@ export const TX_TO_DOC_TYPE: Record<string, DocumentType> = {
   'Receipt Voucher':  'receipt_voucher',
   'Contra':           'contra_voucher',
   'Journal':          'journal_voucher',
+  'Proforma':         'proforma_invoice',
+  'Proforma Invoice': 'proforma_invoice',
+  'Expense':          'expense_voucher',
+  'Expense Voucher':  'expense_voucher',
 };

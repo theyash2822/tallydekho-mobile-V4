@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router';
 import Svg, { Rect, Text as SvgText, G } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import { DocumentType } from '../../src/types/document';
 
 const SCREEN_W = Dimensions.get('window').width;
 const AMBER = '#A89060';
@@ -18,8 +19,9 @@ const AMBER = '#A89060';
 type TabType = 'myentries' | 'daybook';
 type SyncStatus = 'synced' | 'pending' | 'failed';
 type VoucherType =
-  | 'ALL' | 'Sales' | 'Purchase' | 'Payment' | 'Receipt'
-  | 'Journal' | 'Contra' | 'Debit Note' | 'Credit Note' | 'Delivery Note';
+  | 'ALL' | 'Sales' | 'Purchase' | 'Purchase Order' | 'Proforma'
+  | 'Payment' | 'Receipt' | 'Journal' | 'Contra' | 'Expense'
+  | 'Debit Note' | 'Credit Note' | 'Delivery Note';
 
 interface VoucherEntry {
   id: string;
@@ -27,6 +29,7 @@ interface VoucherEntry {
   date: string;
   month: string;
   type: Exclude<VoucherType, 'ALL'>;
+  docType?: DocumentType;
   party: string;
   description: string;
   amount: string;
@@ -38,21 +41,24 @@ interface VoucherEntry {
 
 // ─── Voucher Types ────────────────────────────────────────────────────────────
 const VOUCHER_TYPES: VoucherType[] = [
-  'ALL', 'Sales', 'Purchase', 'Payment', 'Receipt',
-  'Journal', 'Contra', 'Debit Note', 'Credit Note', 'Delivery Note',
+  'ALL', 'Sales', 'Purchase', 'Purchase Order', 'Proforma',
+  'Payment', 'Receipt', 'Journal', 'Contra', 'Expense',
+  'Debit Note', 'Credit Note', 'Delivery Note',
 ];
 
-// ─── Mock Data — My Entries ───────────────────────────────────────────────────
+// ─── Mock Data — My Entries (mapped to Tally PDF previews) ────────────────────
 const MY_ENTRIES: VoucherEntry[] = [
-  { id: 'm1', ref: 'PV-2098', date: '07 May', month: 'May 25', type: 'Payment', party: 'Netaji Industries', description: 'HDFC → Rent', amount: '₹75,000', isCredit: true, syncStatus: 'pending', isMine: true },
-  { id: 'm2', ref: 'JV-0142', date: '08 May', month: 'May 25', type: 'Journal', party: 'Netaji Industries', description: 'Journal → Salary Accrual', amount: '₹75,000', isCredit: true, syncStatus: 'pending', isMine: true },
-  { id: 'm3', ref: 'INV-0901', date: '09 May', month: 'May 25', type: 'Sales', party: 'ABC Traders', description: 'Sales → Export Invoice', amount: '₹42,500', isCredit: false, syncStatus: 'failed', isMine: true },
-  { id: 'm4', ref: 'PO-0234', date: '12 May', month: 'May 25', type: 'Purchase', party: 'Delhi Suppliers', description: 'Purchase → Raw Material', amount: '₹62,400', isCredit: true, syncStatus: 'synced', isMine: true },
-  { id: 'm5', ref: 'RV-0062', date: '15 May', month: 'May 25', type: 'Receipt', party: 'XYZ Retail', description: 'Receipt → Payment Received', amount: '₹33,200', isCredit: false, syncStatus: 'synced', isMine: true },
-  { id: 'm6', ref: 'INV-0912', date: '01 Jun', month: 'Jun 25', type: 'Sales', party: 'Kumar & Sons', description: 'Sales → Export Invoice', amount: '₹28,000', isCredit: false, syncStatus: 'synced', isMine: true },
-  { id: 'm7', ref: 'PV-0089', date: '04 Jun', month: 'Jun 25', type: 'Payment', party: 'Indian Export House', description: 'HDFC → Salary', amount: '₹44,000', isCredit: true, syncStatus: 'pending', isMine: true },
-  { id: 'm8', ref: 'CV-0012', date: '08 Jun', month: 'Jun 25', type: 'Contra', party: 'HDFC → SBI', description: 'Fund Transfer', amount: '₹1,00,000', isCredit: false, syncStatus: 'synced', isMine: true },
-  { id: 'm9', ref: 'DN-0034', date: '10 Jun', month: 'Jun 25', type: 'Debit Note', party: 'Sharma Electronics', description: 'Return Debit Note', amount: '₹18,750', isCredit: false, syncStatus: 'failed', isMine: true },
+  { id: 'm1', ref: 'RV-23',   date: '20 Aug', month: 'Aug 26', type: 'Receipt',        docType: 'receipt_voucher',  party: 'Bhagirath Ramaji Khalwala', description: 'Receipt → Cash', amount: '₹30,000', isCredit: false, syncStatus: 'pending', isMine: true },
+  { id: 'm2', ref: 'CV-3',    date: '20 Aug', month: 'Aug 26', type: 'Contra',         docType: 'contra_voucher',   party: 'Cash → HDFC Bank Rajgarh', description: 'Contra → Bank Deposit', amount: '₹50,000', isCredit: false, syncStatus: 'synced', isMine: true },
+  { id: 'm3', ref: 'PV-9',    date: '20 Aug', month: 'Aug 26', type: 'Payment',        docType: 'payment_voucher',  party: 'Mahaveer Trading Company', description: 'Payment → Cash', amount: '₹2,50,000', isCredit: true, syncStatus: 'pending', isMine: true },
+  { id: 'm4', ref: 'JV-2',    date: '20 Aug', month: 'Aug 26', type: 'Journal',        docType: 'journal_voucher',  party: 'Shree Rajendra Suri Bank', description: 'Journal → Adjustment', amount: '₹2,000', isCredit: false, syncStatus: 'failed', isMine: true },
+  { id: 'm5', ref: 'EV-5',    date: '20 Aug', month: 'Aug 26', type: 'Expense',        docType: 'expense_voucher',  party: 'Shop Rent & Electricity', description: 'Expense → Cash', amount: '₹25,000', isCredit: true, syncStatus: 'synced', isMine: true },
+  { id: 'm6', ref: 'PO-2',    date: '20 Aug', month: 'Aug 26', type: 'Purchase Order', docType: 'purchase_order',   party: 'Malhar Drip Fertigation', description: 'Purchase Order → Agri Inputs', amount: '₹39,400', isCredit: true, syncStatus: 'synced', isMine: true },
+  { id: 'm7', ref: 'PI-1',    date: '20 Aug', month: 'Aug 26', type: 'Purchase',       docType: 'purchase_invoice', party: 'Barrix Agro Sciences Pvt. Ltd.', description: 'Purchase → GST Invoice', amount: '₹20,69,000', isCredit: true, syncStatus: 'pending', isMine: true },
+  { id: 'm8', ref: 'PF-0002', date: '20 Aug', month: 'Aug 26', type: 'Proforma',       docType: 'proforma_invoice', party: 'Pawan Sales Services', description: 'Proforma → Quotation', amount: '₹2,72,278', isCredit: false, syncStatus: 'synced', isMine: true },
+  { id: 'm9', ref: 'SI-000',  date: '20 Aug', month: 'Aug 26', type: 'Sales',          docType: 'sales_invoice',    party: 'Bharti Computers Indore', description: 'Sales → Tax Invoice', amount: '₹1,40,125', isCredit: false, syncStatus: 'synced', isMine: true },
+  { id: 'm10', ref: 'DN-1',   date: '20 Aug', month: 'Aug 26', type: 'Delivery Note',  docType: 'delivery_note',    party: 'Bharti Computers Indore', description: 'Delivery Note → Dispatch', amount: '₹1,25,000', isCredit: false, syncStatus: 'pending', isMine: true },
+  { id: 'm11', ref: 'CN-1',   date: '22 Aug', month: 'Aug 26', type: 'Credit Note',    docType: 'credit_note',      party: 'Bharti Computers Indore', description: 'Credit Note → Sales Return', amount: '₹14,750', isCredit: true, syncStatus: 'synced', isMine: true },
 ];
 
 // ─── Mock Data — Day Book ─────────────────────────────────────────────────────
@@ -91,9 +97,10 @@ const BAR_DATA_DB = genBars(13);
 
 // ─── Color Maps ───────────────────────────────────────────────────────────────
 const TYPE_COLORS: Record<string, string> = {
-  'Sales': '#2D7D46', 'Purchase': '#2563EB', 'Payment': '#C0392B',
-  'Receipt': '#2D7D46', 'Journal': '#D97706', 'Contra': '#7C3AED',
-  'Debit Note': '#C0392B', 'Credit Note': '#2D7D46', 'Delivery Note': '#0891B2',
+  'Sales': '#2D7D46', 'Purchase': '#2563EB', 'Purchase Order': '#1B5E20',
+  'Proforma': '#7C3AED', 'Payment': '#C0392B', 'Receipt': '#2D7D46',
+  'Journal': '#D97706', 'Contra': '#37474F', 'Expense': '#B71C1C',
+  'Debit Note': '#C0392B', 'Credit Note': '#EF6C00', 'Delivery Note': '#0891B2',
 };
 const ACTION_COLORS: Record<string, string> = {
   Created: '#2D7D46', Edited: '#D97706', Deleted: '#C0392B',
@@ -535,7 +542,9 @@ export default function AuditTrailScreen() {
                           if (multiSelect) {
                             toggleSelect(entry.id);
                           } else {
-                            router.push(`/document/${entry.ref}` as any);
+                            router.push(
+                              `/document/${entry.ref}${entry.docType ? `?type=${entry.docType}` : ''}` as any
+                            );
                           }
                         }}
                         onLongPress={() => { setMultiSelect(true); toggleSelect(entry.id); }}
