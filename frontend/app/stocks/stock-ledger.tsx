@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, ActivityIndicator,
+  TextInput, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +27,7 @@ import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { getStockLedger } from '../../src/services/api';
 import { LoadingState, ErrorState } from '../../src/components/ApiStateViews';
 import { useTranslation } from 'react-i18next';
+import { shareStockRegisterPdf, companyFromAuth } from '../../src/utils/multiShare';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ViewMode = 'chronological' | 'byItem' | 'byDocument';
@@ -266,6 +267,7 @@ export default function StockLedgerScreen() {
   const [viewMode,    setViewMode]    = useState<ViewMode>('chronological');
   const [expanded,    setExpanded]    = useState<Set<string>>(new Set());
   const [selected,    setSelected]    = useState<Set<string>>(new Set());
+  const [isSharing,   setIsSharing]   = useState(false);
 
   // Filters & search
   const [showFilter,   setShowFilter]   = useState(false);
@@ -283,6 +285,38 @@ export default function StockLedgerScreen() {
 
   const toggleSelect = (id: string) => {
     setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+
+  const handleShareSelected = async () => {
+    if (selected.size === 0 || isSharing) return;
+    const allTx = viewMode === 'chronological'
+      ? chronoData
+      : viewMode === 'byItem'
+        ? byItemGroups.flatMap(g => g.items)
+        : byDocGroups.flatMap(g => g.items);
+    const rows = allTx.filter(t => selected.has(t.id));
+    if (!rows.length) return;
+    setIsSharing(true);
+    try {
+      await shareStockRegisterPdf({
+        company: companyFromAuth(company),
+        title: 'Stock Ledger',
+        period: `${dateFrom} – ${dateTo}`,
+        rows: rows.map(tx => ({
+          date: tx.date,
+          particulars: tx.item || tx.docRef,
+          vchType: tx.docType || tx.type,
+          vchNo: tx.docRef,
+          inwardsQty: tx.qty > 0 ? String(Math.abs(tx.qty)) : '',
+          outwardsQty: tx.qty < 0 ? String(Math.abs(tx.qty)) : '',
+        })),
+      }, { onBeforeShare: () => setIsSharing(false) });
+      setSelected(new Set());
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not share PDF.');
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   // ── Auth ────────────────────────────────────────────────────────────────
@@ -724,9 +758,17 @@ export default function StockLedgerScreen() {
             <Ionicons name="close" size={18} color={COLORS.textPrimary} />
             <Text style={s.selCancelTxt}>{selected.size} selected</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.selShare} activeOpacity={0.8}>
-            <Ionicons name="share-social-outline" size={16} color="#fff" />
-            <Text style={s.selShareTxt}>Share PDF</Text>
+          <TouchableOpacity
+            style={[s.selShare, isSharing && { opacity: 0.6 }]}
+            activeOpacity={0.8}
+            onPress={handleShareSelected}
+            disabled={isSharing}
+          >
+            {isSharing
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Ionicons name="share-social-outline" size={16} color="#fff" />
+            }
+            <Text style={s.selShareTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
           </TouchableOpacity>
         </View>
       )}

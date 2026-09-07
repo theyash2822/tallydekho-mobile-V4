@@ -495,7 +495,7 @@ export default function PaymentsScreen() {
                   subtitle={`${p.party_name || '—'} · ${fmtDate(p.date)}`}
                   amount={formatAmount(Math.round(p.amount))}
                   showBorder={idx < filtered.length - 1}
-                  onPress={() => p.guid && router.push(`/document/${p.guid}?type=payment` as any)}
+                  onPress={() => p.guid && router.push(`/document/${p.guid}?type=payment_voucher` as any)}
                 />
               ))}
             </View>

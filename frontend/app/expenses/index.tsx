@@ -21,6 +21,7 @@ import { EntityListTile } from '../../src/components/EntityListTile';
 import { ListTileShell } from '../../src/components/ListTileShell';
 import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { ViewAllButton } from '../../src/components/ViewAllButton';
+import { expenseRowToRouteType } from '../../src/components/voucherHomeFilters';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -35,6 +36,7 @@ type ExpenseRow = {
   status: string;
   expenseGroup?: string;
   expenseType?: string;
+  voucherType?: string;
 };
 
 function mapExpenseRow(r: any, formatAmount: (n: number) => string, i = 0): ExpenseRow {
@@ -50,6 +52,7 @@ function mapExpenseRow(r: any, formatAmount: (n: number) => string, i = 0): Expe
     status: 'paid',
     expenseGroup: r.expense_group || '',
     expenseType: r.expense_type || '',
+    voucherType: r.voucher_type || '',
   };
 }
 
@@ -225,7 +228,10 @@ export default function ExpenseScreen() {
                   recent.map((exp, index) => (
                     <ListTileShell
                       key={exp.guid || `expense-${index}`}
-                      onPress={() => router.push(`/document/${exp.guid || exp.id}?type=expense` as any)}
+                      onPress={() => {
+                        const routeType = expenseRowToRouteType(exp.voucherType);
+                        router.push(`/document/${exp.guid || exp.id}?type=${routeType}` as any);
+                      }}
                     >
                       <VoucherListTile
                         party={exp.party}

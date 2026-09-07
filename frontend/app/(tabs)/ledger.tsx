@@ -1008,47 +1008,24 @@ export default function LedgerScreen() {
       {apiError && <ErrorBanner message={apiError} onRetry={loadLedgers} />}
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>
-          {selectMode ? t('ledger.selectedCount', { count: selected.length }) : t('ledger.title')}
-        </Text>
+        <Text style={styles.headerTitle}>{t('ledger.title')}</Text>
         <View style={styles.headerActions}>
-          {selectMode ? (
-            <>
-              <TouchableOpacity
-                style={styles.headerTextBtn}
-                onPress={selectAll}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.headerTextBtnPrimary}>{t('ledger.selectAll')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.headerTextBtn}
-                onPress={cancelSelectMode}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.headerTextBtnCancel}>{t('common.cancel')}</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <TouchableOpacity
-                testID="add-ledger-btn"
-                style={styles.headerIconBtn}
-                onPress={() => setShowCreate(true)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="add" size={22} color={COLORS.textPrimary} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                testID="ledger-filter-btn"
-                style={styles.headerIconBtn}
-                onPress={() => setShowFilter(true)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="filter" size={20} color={COLORS.textPrimary} />
-              </TouchableOpacity>
-            </>
-          )}
+          <TouchableOpacity
+            testID="add-ledger-btn"
+            style={styles.headerIconBtn}
+            onPress={() => setShowCreate(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="add" size={22} color={COLORS.textPrimary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            testID="ledger-filter-btn"
+            style={styles.headerIconBtn}
+            onPress={() => setShowFilter(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="filter" size={20} color={COLORS.textPrimary} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -1397,6 +1374,13 @@ export default function LedgerScreen() {
         <View style={[styles.shareBar, { bottom: TAB_BAR_CLEARANCE }]}>
           <View style={styles.shareLeft}>
             <Text style={styles.shareCount}>{selected.length} selected</Text>
+            <TouchableOpacity
+              onPress={selectAll}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.shareCancelTxt}>{t('ledger.selectAll')}</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               onPress={cancelSelectMode}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

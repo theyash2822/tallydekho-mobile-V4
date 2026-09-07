@@ -1604,7 +1604,8 @@ export default function CreateSalesInvoiceScreen() {
               activeOpacity={0.85}
               onPress={() => {
                 if (!submitResult.tdkRef) return;
-                router.push(`/sales/invoice-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}` as any);
+                const typeQ = isProforma ? '&type=proforma_invoice' : '&type=sales_invoice';
+                router.push(`/sales/invoice-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}${typeQ}` as any);
               }}
             >
               <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />

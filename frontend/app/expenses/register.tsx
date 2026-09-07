@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Dimensions, Share, Alert, ActivityIndicator,
+  Dimensions, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
 import SearchBar from '../../src/components/SearchBar';
@@ -18,10 +19,18 @@ import {
   FilterIconWithBadge,
   ActiveFilterChips,
   ExpenseRegisterFilterModal,
+  expenseRowToRouteType,
   type ExpenseTypeId,
 } from '../../src/components/voucherHomeFilters';
 import { VoucherListTile, ExpenseTypeBadge } from '../../src/components/VoucherListTile';
 import { FilterPillRow, FilterDatePill, FilterDropdownPill } from '../../src/components/FilterPillRow';
+import {
+  promptShareMode,
+  shareDayBookPdf,
+  shareVouchersAsMultiPagePdf,
+  companyFromAuth,
+  dayBookRowFromListItem,
+} from '../../src/utils/multiShare';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -34,6 +43,7 @@ const STATUS_LABEL: Record<string, string> = {
 type ExpenseItem = {
   id: string; voucher?: string; party: string; date: string;
   time: string; amount: string; status: string; type: 'direct' | 'indirect';
+  voucherType?: string;
 };
 type MonthGroup = { id: string; label: string; items: ExpenseItem[] };
 
@@ -100,6 +110,7 @@ export default function ExpenseRegisterScreen() {
       amount: formatAmount(Math.abs(parseFloat(r.expense_amount ?? r.amount) || 0)),
       status: 'paid',
       type: kind,
+      voucherType: r.voucher_type || '',
     };
   };
 
@@ -167,30 +178,13 @@ export default function ExpenseRegisterScreen() {
       return next;
     });
 
-  // Multi-select
+  // Multi-select (footer only)
   const [selected, setSelected] = useState<string[]>([]);
+  const [isSharing, setIsSharing] = useState(false);
   const isSelecting = selected.length > 0;
   const toggleSelect = (id: string) =>
     setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
-  const allItems   = liveItems;
-  const selectAll  = () => setSelected(allItems.map(i => i.id));
   const clearSelect = () => setSelected([]);
-
-  const handleShare = async () => {
-    const items = allItems.filter(i => selected.includes(i.id));
-    const lines = items.map(i => `${i.id}  ${i.party}  ${i.amount}  ${STATUS_LABEL[i.status] ?? i.status}`);
-    try {
-      await Share.share({ message: `TallyDekho — Expense Register\n${lines.join('\n')}`, title: 'Share Expenses' });
-    } catch {
-      Alert.alert('Share', `${selected.length} expense(s) ready to share.`);
-    }
-    clearSelect();
-  };
-
-  const handleExport = () => {
-    Alert.alert('Export', `Exporting ${selected.length} expense(s) as Excel/PDF.`);
-    clearSelect();
-  };
 
   // Search/status only — type/category applied server-side (no client includes('direct') trap)
   const filterItems = (items: ExpenseItem[]) =>
@@ -203,6 +197,58 @@ export default function ExpenseRegisterScreen() {
     });
 
   const allFiltered = filterItems(liveItems);
+  const selectAll = () => setSelected(allFiltered.map(i => i.id));
+
+  const runShare = async (mode: 'individual' | 'combined') => {
+    if (!companyGuid || selected.length === 0 || isSharing) return;
+    const items = allFiltered.filter(i => selected.includes(i.id));
+    if (!items.length) return;
+    setIsSharing(true);
+    try {
+      if (mode === 'combined') {
+        await shareDayBookPdf({
+          company: companyFromAuth(company),
+          title: 'Expense Register',
+          period: `${fromDate} – ${toDate}`,
+          rows: items.map(item => dayBookRowFromListItem({
+            date: item.date,
+            party: item.party,
+            voucherType: item.voucherType || 'Expense',
+            number: item.voucher,
+            amount: item.amount,
+            isDebit: true,
+          })),
+        }, { onBeforeShare: () => setIsSharing(false) });
+      } else {
+        const { shared, failed } = await shareVouchersAsMultiPagePdf(
+          companyGuid,
+          items.map(item => ({
+            guid: item.id,
+            documentType: expenseRowToRouteType(item.voucherType),
+            label: `Expense-${item.voucher || item.id}.pdf`,
+          })),
+          {
+            fileName: `Expense-Register (${items.length}).pdf`,
+            onBeforeShare: () => setIsSharing(false),
+          }
+        );
+        if (failed > 0) {
+          Toast.show({ type: 'info', text1: `Shared ${shared} of ${items.length}`, text2: `${failed} could not be loaded` });
+        }
+      }
+      clearSelect();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not share PDFs.');
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const handleShare = () => {
+    if (!companyGuid || selected.length === 0 || isSharing) return;
+    promptShareMode({ onChoose: (mode) => { void runShare(mode); } });
+  };
+
   const totalAmt = allFiltered.reduce((sum, i) => {
     const n = parseFloat(i.amount.replace(/[₹,]/g, ''));
     return sum + (isNaN(n) ? 0 : n);
@@ -218,30 +264,18 @@ export default function ExpenseRegisterScreen() {
   return (
     <SafeAreaView style={s.safe}>
 
-      {/* ── Header ───────────────────────────────────────────── */}
-      {isSelecting ? (
-        <View style={s.header}>
-          <TouchableOpacity onPress={clearSelect} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="close" size={22} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-          <Text style={s.headerTitle}>{selected.length} Selected</Text>
-          <TouchableOpacity onPress={selectAll} activeOpacity={0.7}>
-            <Text style={s.selectAllTxt}>Select All</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={s.header}>
-          <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-          <Text style={s.headerTitle}>{t('expenses.register')}</Text>
-          <FilterIconWithBadge
-            testID="expense-register-filter-btn"
-            count={filterBadgeCount}
-            onPress={() => setShowFilter(true)}
-          />
-        </View>
-      )}
+      {/* ── Header (footer owns multi-select) ── */}
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
+        </TouchableOpacity>
+        <Text style={s.headerTitle}>{t('expenses.register')}</Text>
+        <FilterIconWithBadge
+          testID="expense-register-filter-btn"
+          count={filterBadgeCount}
+          onPress={() => setShowFilter(true)}
+        />
+      </View>
 
       <FilterPillRow>
         <FilterDatePill
@@ -352,7 +386,10 @@ export default function ExpenseRegisterScreen() {
                           activeOpacity={0.7}
                           onPress={() => {
                             if (isSelecting) toggleSelect(item.id);
-                            else router.push(`/document/${item.id}?type=expense` as any);
+                            else {
+                              const routeType = expenseRowToRouteType(item.voucherType);
+                              router.push(`/document/${item.id}?type=${routeType}` as any);
+                            }
                           }}
                           onLongPress={() => toggleSelect(item.id)}
                           delayLongPress={500}
@@ -401,20 +438,25 @@ export default function ExpenseRegisterScreen() {
         <View style={[s.actionBar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 16 }]}>
           <View style={s.actionBarLeft}>
             <Text style={s.actionCount}>{selected.length} selected</Text>
-            <TouchableOpacity onPress={clearSelect}>
+            <TouchableOpacity onPress={selectAll} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={s.cancelTxt}>Select All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={clearSelect} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Text style={s.cancelTxt}>Cancel</Text>
             </TouchableOpacity>
           </View>
-          <View style={s.actionBtns}>
-            <TouchableOpacity style={[s.actionBtn, s.actionBtnOutline]} onPress={handleExport} activeOpacity={0.8}>
-              <Ionicons name="download-outline" size={16} color={COLORS.textPrimary} />
-              <Text style={s.actionBtnOutlineTxt}>Export</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.actionBtn} onPress={handleShare} activeOpacity={0.8}>
-              <Ionicons name="share-outline" size={16} color={COLORS.white} />
-              <Text style={s.actionBtnTxt}>Share</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={[s.actionBtn, (selected.length === 0 || isSharing) && { opacity: 0.5 }]}
+            onPress={handleShare}
+            activeOpacity={0.8}
+            disabled={selected.length === 0 || isSharing}
+          >
+            {isSharing
+              ? <ActivityIndicator size="small" color={COLORS.white} />
+              : <Ionicons name="share-outline" size={16} color={COLORS.white} />
+            }
+            <Text style={s.actionBtnTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -494,15 +536,12 @@ const s = StyleSheet.create({
   selectCircle:       { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: COLORS.borderDefault, alignItems: 'center', justifyContent: 'center' },
   selectCircleActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
 
-  actionBar:     { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, paddingHorizontal: SPACING.md, paddingTop: 14, shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 10 },
-  actionBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 12 },
+  actionBar:     { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, paddingHorizontal: SPACING.md, paddingTop: 14, shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 10 },
+  actionBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flexShrink: 1 },
   actionCount:   { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  cancelTxt:     { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
-  actionBtns:    { flexDirection: 'row', gap: 10 },
-  actionBtn:     { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 13 },
+  cancelTxt:     { fontSize: TYPOGRAPHY.sm, color: COLORS.brandPrimary, fontWeight: '600' },
+  actionBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 12, paddingHorizontal: 16 },
   actionBtnTxt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
-  actionBtnOutline:    { backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault },
-  actionBtnOutlineTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   loadMoreBtn: { margin:16,padding:14,borderRadius:10,backgroundColor:COLORS.cardBg,borderWidth:1,borderColor:COLORS.borderDefault,alignItems:'center',justifyContent:'center' },
   loadMoreTxt: { fontSize:14,fontWeight:'600',color:COLORS.brandPrimary },
   endTxt:      { textAlign:'center',fontSize:12,color:COLORS.textTertiary,padding:16 },

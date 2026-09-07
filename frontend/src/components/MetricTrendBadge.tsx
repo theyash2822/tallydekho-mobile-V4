@@ -89,6 +89,7 @@ const s = StyleSheet.create({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     gap: 3,
     paddingHorizontal: 7,
     paddingVertical: 3,

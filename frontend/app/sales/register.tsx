@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Dimensions, Share, Alert, ActivityIndicator,
+  Dimensions, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 import { useAuth } from '../../src/context/AuthContext';
@@ -26,6 +27,13 @@ import {
 } from '../../src/components/voucherHomeFilters';
 import { VoucherListTile } from '../../src/components/VoucherListTile';
 import { FilterPillRow, FilterDatePill, FilterDropdownPill } from '../../src/components/FilterPillRow';
+import {
+  promptShareMode,
+  shareDayBookPdf,
+  shareVouchersAsMultiPagePdf,
+  companyFromAuth,
+  dayBookRowFromListItem,
+} from '../../src/utils/multiShare';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -88,7 +96,7 @@ export default function SalesRegisterScreen() {
     id: r.guid || `sale-${r.voucher_number || 'x'}-${r.id ?? i}`,
     guid: r.guid,
     number: r.voucher_number || String(r.id || ''),
-    party: r.party_name || '',
+    party: r.party_name || r.primary_ledger || '',
     date: r.date || '',
     time: '',
     amount: formatAmount(Math.abs(+r.amount||0)),
@@ -171,30 +179,62 @@ export default function SalesRegisterScreen() {
       return next;
     });
 
-  // Multi-select
+  // Multi-select (footer only — header stays "Sales Register")
   const [selected, setSelected] = useState<string[]>([]);
+  const [isSharing, setIsSharing] = useState(false);
   const isSelecting = selected.length > 0;
   const toggleSelect = (id: string) =>
     setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
-  // allInvoices computed after displayGroups (declared below)
-  const selectAll   = () => setSelected(displayGroups.flatMap(g => g.invoices).map(inv => inv.id));
+  const selectAll   = () => setSelected(allFiltered.map(inv => inv.id));
   const clearSelect = () => setSelected([]);
 
-  const handleShare = async () => {
-    const allInvoices = displayGroups.flatMap(g => g.invoices);
-    const items = allInvoices.filter(inv => selected.includes(inv.id));
-    const lines = items.map(inv => `${inv.number || inv.id}  ${inv.party}  ${inv.amount}  ${STATUS_LABEL[inv.status] ?? inv.status}`);
+  const runShare = async (mode: 'individual' | 'combined') => {
+    if (!companyGuid || selected.length === 0 || isSharing) return;
+    const items = allFiltered.filter(inv => selected.includes(inv.id));
+    if (!items.length) return;
+    setIsSharing(true);
     try {
-      await Share.share({ message: `TallyDekho — Sales Register\n${lines.join('\n')}`, title: 'Share Invoices' });
-    } catch {
-      Alert.alert('Share', `${selected.length} invoice(s) ready to share.`);
+      if (mode === 'combined') {
+        await shareDayBookPdf({
+          company: companyFromAuth(company),
+          title: 'Sales Register',
+          period: `${fromDate} – ${toDate}`,
+          rows: items.map(inv => dayBookRowFromListItem({
+            date: inv.date,
+            party: inv.party,
+            voucherType: inv.voucherType || inv.docType,
+            number: inv.number,
+            amount: inv.amount,
+          })),
+        }, { onBeforeShare: () => setIsSharing(false) });
+      } else {
+        const { shared, failed } = await shareVouchersAsMultiPagePdf(
+          companyGuid,
+          items.map(inv => ({
+            guid: inv.guid || inv.id,
+            documentType: docTypeToRouteType(inv.docType || 'invoice', 'sales'),
+            label: `${inv.voucherType || 'Sales'}-${inv.number || inv.id}.pdf`,
+          })),
+          {
+            fileName: `Sales-Register (${items.length}).pdf`,
+            onBeforeShare: () => setIsSharing(false),
+          }
+        );
+        if (failed > 0) {
+          Toast.show({ type: 'info', text1: `Shared ${shared} of ${items.length}`, text2: `${failed} could not be loaded` });
+        }
+      }
+      clearSelect();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not share PDFs.');
+    } finally {
+      setIsSharing(false);
     }
-    clearSelect();
   };
 
-  const handleExport = () => {
-    Alert.alert('Export', `Exporting ${selected.length} invoice(s) as Excel/PDF.`);
-    clearSelect();
+  const handleShare = () => {
+    if (!companyGuid || selected.length === 0 || isSharing) return;
+    promptShareMode({ onChoose: (mode) => { void runShare(mode); } });
   };
 
   // Filter helper
@@ -237,30 +277,18 @@ export default function SalesRegisterScreen() {
   return (
     <SafeAreaView style={s.safe}>
 
-      {/* ── Header ────────────────────────────────────────────── */}
-      {isSelecting ? (
-        <View style={s.header}>
-          <TouchableOpacity onPress={clearSelect} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="close" size={22} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-          <Text style={s.headerTitle}>{selected.length} Selected</Text>
-          <TouchableOpacity onPress={selectAll} activeOpacity={0.7}>
-            <Text style={s.selectAllTxt}>Select All</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={s.header}>
-          <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-          <Text style={s.headerTitle}>{t('sales.register')}</Text>
-          <FilterIconWithBadge
-            testID="sales-register-filter-btn"
-            count={docTypes.length + partyGroups.length}
-            onPress={() => setShowTypeFilter(true)}
-          />
-        </View>
-      )}
+      {/* ── Header (never switches to "N selected" — footer owns multi-select) ── */}
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
+        </TouchableOpacity>
+        <Text style={s.headerTitle}>{t('sales.register')}</Text>
+        <FilterIconWithBadge
+          testID="sales-register-filter-btn"
+          count={docTypes.length + partyGroups.length}
+          onPress={() => setShowTypeFilter(true)}
+        />
+      </View>
 
       <FilterPillRow>
         <FilterDatePill
@@ -421,20 +449,25 @@ export default function SalesRegisterScreen() {
         <View style={[s.actionBar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 16 }]}>
           <View style={s.actionBarLeft}>
             <Text style={s.actionCount}>{selected.length} selected</Text>
-            <TouchableOpacity onPress={clearSelect}>
+            <TouchableOpacity onPress={selectAll} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={s.cancelTxt}>Select All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={clearSelect} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Text style={s.cancelTxt}>Cancel</Text>
             </TouchableOpacity>
           </View>
-          <View style={s.actionBtns}>
-            <TouchableOpacity style={[s.actionBtn, s.actionBtnOutline]} onPress={handleExport} activeOpacity={0.8}>
-              <Ionicons name="download-outline" size={16} color={COLORS.textPrimary} />
-              <Text style={s.actionBtnOutlineTxt}>Export</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.actionBtn} onPress={handleShare} activeOpacity={0.8}>
-              <Ionicons name="share-outline" size={16} color={COLORS.white} />
-              <Text style={s.actionBtnTxt}>Share</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={[s.actionBtn, (selected.length === 0 || isSharing) && { opacity: 0.5 }]}
+            onPress={handleShare}
+            activeOpacity={0.8}
+            disabled={selected.length === 0 || isSharing}
+          >
+            {isSharing
+              ? <ActivityIndicator size="small" color={COLORS.white} />
+              : <Ionicons name="share-outline" size={16} color={COLORS.white} />
+            }
+            <Text style={s.actionBtnTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -507,15 +540,12 @@ const s = StyleSheet.create({
   selectCircle:       { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: COLORS.borderDefault, alignItems: 'center', justifyContent: 'center' },
   selectCircleActive: { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
 
-  actionBar:     { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, paddingHorizontal: SPACING.md, paddingTop: 14, shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 10 },
-  actionBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 12 },
+  actionBar:     { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, paddingHorizontal: SPACING.md, paddingTop: 14, shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 10 },
+  actionBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flexShrink: 1 },
   actionCount:   { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
-  cancelTxt:     { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, fontWeight: '600' },
-  actionBtns:    { flexDirection: 'row', gap: 10 },
-  actionBtn:     { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 13 },
+  cancelTxt:     { fontSize: TYPOGRAPHY.sm, color: COLORS.brandPrimary, fontWeight: '600' },
+  actionBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 12, paddingHorizontal: 16 },
   actionBtnTxt:  { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
-  actionBtnOutline:    { backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault },
-  actionBtnOutlineTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
   loadMoreBtn: { margin:16,padding:14,borderRadius:10,backgroundColor:COLORS.cardBg,borderWidth:1,borderColor:COLORS.borderDefault,alignItems:'center',justifyContent:'center' },
   loadMoreTxt: { fontSize:14,fontWeight:'600',color:COLORS.brandPrimary },
   endTxt:      { textAlign:'center',fontSize:12,color:COLORS.textTertiary,padding:16 },

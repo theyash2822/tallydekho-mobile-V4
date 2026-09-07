@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,6 +13,7 @@ import { fyInfoToParam } from '../../src/context/AuthContext';
 import { getGSTDetail, getGSTSummary } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
+import { shareSummaryTablePdf, companyFromAuth } from '../../src/utils/multiShare';
 
 // ── GSTR Tabs ─────────────────────────────────────────────────────────────────
 const GSTR_TABS = [
@@ -110,6 +111,7 @@ export default function GSTScreen() {
   const [toDate,         setToDate]         = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selected,       setSelected]       = useState<string[]>([]);
+  const [isSharing,      setIsSharing]      = useState(false);
 
   // ── Collapsible months ────────────────────────────────────────────────────
   const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
@@ -255,6 +257,40 @@ export default function GSTScreen() {
 
   const toggleSelect = (id: string) => {
     setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const handleShareSelected = async () => {
+    if (selected.length === 0 || isSharing) return;
+    const items = filteredInvoices.filter(inv => selected.includes(inv.id));
+    setIsSharing(true);
+    try {
+      const metrics = [
+        { label: 'GST Collected', value: gstSummaryData ? formatAmount(gstSummaryData.gstCollected) : '—' },
+        { label: 'ITC Balance', value: gstSummaryData ? formatAmount(gstSummaryData.itcBalance) : '—' },
+        { label: 'Net Payable', value: gstSummaryData ? formatAmount(gstSummaryData.netPayable) : '—' },
+        { label: 'Tab', value: activeTab },
+      ];
+      await shareSummaryTablePdf({
+        company: companyFromAuth(company),
+        title: `GST — ${activeTab}`,
+        period: fromDate && toDate ? `${fromDate} → ${toDate}` : undefined,
+        metrics,
+        columns: ['Invoice', 'Type', 'Party', 'Date', 'Amount', 'Section'],
+        rows: items.map(inv => [
+          inv.invoiceNo,
+          inv.type,
+          inv.party,
+          inv.date,
+          inv.amount,
+          inv.gstSection || inv.gstr3bSection || '',
+        ]),
+      }, { onBeforeShare: () => setIsSharing(false) });
+      setSelected([]);
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not share PDF.');
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   const handleTabChange = (tab: string) => {
@@ -493,9 +529,17 @@ export default function GSTScreen() {
               <Text style={s.shareCancelTxt}>Cancel</Text>
             </TouchableOpacity>
           </View>
-          <TouchableOpacity style={s.shareActionBtn} activeOpacity={0.85}>
-            <Ionicons name="share-outline" size={16} color={COLORS.white} />
-            <Text style={s.shareActionTxt}>Share PDF / XLS</Text>
+          <TouchableOpacity
+            style={[s.shareActionBtn, isSharing && { opacity: 0.6 }]}
+            activeOpacity={0.85}
+            onPress={handleShareSelected}
+            disabled={isSharing}
+          >
+            {isSharing
+              ? <ActivityIndicator size="small" color={COLORS.white} />
+              : <Ionicons name="share-outline" size={16} color={COLORS.white} />
+            }
+            <Text style={s.shareActionTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
           </TouchableOpacity>
         </View>
       )}

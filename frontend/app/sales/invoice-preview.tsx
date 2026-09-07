@@ -28,11 +28,15 @@ import {
   proformaPrefillStorageKey,
 } from '../../src/utils/proformaToInvoicePrefill';
 import { toVoucherDocument } from '../../src/utils/voucherDocumentAdapter';
+import { DocumentType } from '../../src/types/document';
+import { resolveDocTypeFromParam } from '../../src/utils/documentHelpers';
+import { isCommercialDocumentType } from '../../src/utils/commercial-print';
 
 export default function InvoicePreviewScreen() {
-  const { tdkRef } = useLocalSearchParams<{ tdkRef: string }>();
+  const { tdkRef, type } = useLocalSearchParams<{ tdkRef: string; type?: string }>();
   const { company } = useAuth();
   const router = useRouter();
+  const routeType = resolveDocTypeFromParam(type);
 
   const [loading, setLoading] = useState(true);
   const [doc, setDoc] = useState<VoucherDocument | null>(null);
@@ -50,7 +54,9 @@ export default function InvoicePreviewScreen() {
       setError(null);
       const res = await getInvoicePreview(tdkRef, company.guid);
       if (res?.status && res?.data) {
-        setDoc(toVoucherDocument(res.data));
+        const forcedType: DocumentType | undefined =
+          routeType && isCommercialDocumentType(routeType) ? routeType : undefined;
+        setDoc(toVoucherDocument(res.data, forcedType ? { documentType: forcedType } : {}));
         setRawData(res.data);
         setIsProvisional(res.data.isProvisional ?? false);
         setPostingTag(res.data.postingTag || 'Not Posted');
@@ -63,7 +69,7 @@ export default function InvoicePreviewScreen() {
     } finally {
       setLoading(false);
     }
-  }, [tdkRef, company?.guid]);
+  }, [tdkRef, company?.guid, routeType]);
 
   const handleConvertProforma = useCallback(async () => {
     if (!tdkRef || !company?.guid || !rawData) return;

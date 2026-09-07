@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,7 @@ import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import ShimmerPlaceholder, { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { useTranslation } from 'react-i18next';
+import { shareSummaryTablePdf, companyFromAuth } from '../../src/utils/multiShare';
 
 const SLICE_COLORS = ['#A89060', '#3A3A3A', '#7C5C3A', '#1A1A1A', '#5A7A5A', '#5A5A9A', '#9A5A5A', '#5A8A9A'];
 
@@ -41,6 +42,7 @@ export default function ValuationSummaryScreen() {
   const [selectedSlice, setSelectedSlice] = useState<number | null>(null);
   const [selectedIds,   setSelectedIds]   = useState<Set<string>>(new Set());
   const [isSelMode,     setIsSelMode]     = useState(false);
+  const [isSharing,     setIsSharing]     = useState(false);
 
   useEffect(() => {
     if (!companyGuid) return;
@@ -102,6 +104,26 @@ export default function ValuationSummaryScreen() {
     });
   };
   const cancelSelection = () => { setSelectedIds(new Set()); setIsSelMode(false); };
+
+  const handleShareSelected = async () => {
+    const selected = groups.filter(g => selectedIds.has(g.id));
+    if (!selected.length || isSharing) return;
+    setIsSharing(true);
+    try {
+      await shareSummaryTablePdf({
+        company: companyFromAuth(company),
+        title: 'Valuation Summary',
+        metrics: [{ label: 'Total Value', value: formatAmountCompact(totalValue) }],
+        columns: ['Group', 'SKUs', 'Value'],
+        rows: selected.map(g => [g.name, g.skus, formatAmountCompact(g.value)]),
+      }, { onBeforeShare: () => setIsSharing(false) });
+      cancelSelection();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not share PDF.');
+    } finally {
+      setIsSharing(false);
+    }
+  };
   const selectAll = () => { setSelectedIds(new Set(groups.map(g => g.id))); setIsSelMode(true); };
 
   return (
@@ -279,9 +301,17 @@ export default function ValuationSummaryScreen() {
             <Text style={s.cancelSelFooterTxt}>Deselect</Text>
           </TouchableOpacity>
           <Text style={s.shareBarCount}>{selectedIds.size} group{selectedIds.size !== 1 ? 's' : ''}</Text>
-          <TouchableOpacity style={s.shareBtn} activeOpacity={0.8}>
-            <Ionicons name="share-social-outline" size={18} color="#fff" />
-            <Text style={s.shareTxt}>Share</Text>
+          <TouchableOpacity
+            style={[s.shareBtn, isSharing && { opacity: 0.6 }]}
+            activeOpacity={0.8}
+            onPress={handleShareSelected}
+            disabled={isSharing}
+          >
+            {isSharing
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Ionicons name="share-social-outline" size={18} color="#fff" />
+            }
+            <Text style={s.shareTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
           </TouchableOpacity>
         </View>
       )}

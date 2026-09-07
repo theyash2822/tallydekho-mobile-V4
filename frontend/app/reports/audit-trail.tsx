@@ -14,6 +14,14 @@ import { getVouchers, getMyEntries, retryMyEntry } from '../../src/services/api'
 import { useSettings } from '../../src/context/SettingsContext';
 import { socketService } from '../../src/services/socketService';
 import { useTranslation } from 'react-i18next';
+import { TX_TO_DOC_TYPE, resolveDocTypeFromParam } from '../../src/utils/documentHelpers';
+import {
+  promptShareMode,
+  shareDayBookPdf,
+  shareVouchersAsMultiPagePdf,
+  companyFromAuth,
+  dayBookRowFromListItem,
+} from '../../src/utils/multiShare';
 
 const SCREEN_W = Dimensions.get('window').width;
 const AMBER = '#A89060';
@@ -43,6 +51,7 @@ const LIFECYCLE_FILTERS: { key: LifecycleFilter; label: string }[] = [
 
 interface VoucherEntry {
   id: string;
+  guid?: string;
   ref: string;
   date: string;
   month: string;
@@ -149,6 +158,7 @@ const mapApiRow = (r: any, fmt: (n: number) => string = (n) => String(n)): Vouch
     r.av_id != null ? String(r.av_id) : '',
     r._queue_id != null ? `wq${r._queue_id}` : '',
   ].filter(Boolean).join('_') || `row_${Math.random().toString(36).slice(2, 9)}`,
+  guid: r.guid || '',
   ref: r.voucher_number || '',
   date: r.date || '',
   month: formatMonth(r.date),
@@ -462,6 +472,7 @@ export default function AuditTrailScreen() {
   const [showCr,         setShowCr]         = useState(true);
   const [multiSelect,    setMultiSelect]    = useState(false);
   const [selected,       setSelected]       = useState<string[]>([]);
+  const [isSharing,      setIsSharing]      = useState(false);
   const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
   const [lifecycleFilter, setLifecycleFilter] = useState<LifecycleFilter>('all');
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
@@ -899,6 +910,12 @@ export default function AuditTrailScreen() {
           route = `/sales/delivery-note-preview?tdkRef=${encodeURIComponent(ref)}`;
         } else if (/TDK-(?:OPT-)?POR-/i.test(ref)) {
           route = `/purchase/order-preview?tdkRef=${encodeURIComponent(ref)}`;
+        } else if (/TDK-(?:OPT-)?PUR-/i.test(ref) || entry.type === 'Purchase') {
+          route = `/sales/invoice-preview?tdkRef=${encodeURIComponent(ref)}&type=purchase_invoice`;
+        } else if (/TDK-(?:OPT-)?PRF-/i.test(ref) || entry.type === 'Proforma Invoice') {
+          route = `/sales/invoice-preview?tdkRef=${encodeURIComponent(ref)}&type=proforma_invoice`;
+        } else if (/TDK-(?:OPT-)?QTN-/i.test(ref) || /quotation/i.test(entry.type || '')) {
+          route = `/sales/invoice-preview?tdkRef=${encodeURIComponent(ref)}&type=quotation`;
         }
         router.push(route as any);
       } else {
@@ -910,52 +927,83 @@ export default function AuditTrailScreen() {
       }
       return;
     }
-    router.push(`/document/${docId}` as any);
+    const routeType = TX_TO_DOC_TYPE[entry.type] || resolveDocTypeFromParam(entry.type);
+    router.push(
+      (routeType
+        ? `/document/${docId}?type=${routeType}`
+        : `/document/${docId}`) as any
+    );
   };
 
-  const handleShare = () =>
-    Alert.alert('Export', `Export ${selected.length > 0 ? selected.length : 'all'} entries?`, [
-      { text: 'Cancel',     style: 'cancel' },
-      { text: 'Share PDF',  onPress: () => clearSelection() },
-      { text: 'Export CSV', onPress: () => clearSelection() },
-    ]);
+  const runShare = async (mode: 'individual' | 'combined') => {
+    if (!companyGuid || selected.length === 0 || isSharing) return;
+    const items = filtered.filter(e => selected.includes(e.id));
+    if (!items.length) return;
+    const title = activeTab === 'myentries' ? 'My Entries' : 'Day Book';
+    setIsSharing(true);
+    try {
+      if (mode === 'combined') {
+        await shareDayBookPdf({
+          company: companyFromAuth(company),
+          title,
+          period: `${fromDate} – ${toDate}`,
+          rows: items.map(e => dayBookRowFromListItem({
+            date: e.date,
+            party: e.party,
+            voucherType: e.type,
+            number: e.ref || e.tallyVoucherNo || e.tdkRef,
+            amount: e.rawAmount ?? e.amount,
+            isDebit: !e.isCredit,
+          })),
+        }, { onBeforeShare: () => setIsSharing(false) });
+      } else {
+        const refs = items
+          .filter(e => e.guid || e.tdkRef)
+          .map(e => ({
+            guid: e.guid || undefined,
+            tdkRef: e.tdkRef || undefined,
+            documentType: TX_TO_DOC_TYPE[e.type] || undefined,
+            label: `${e.type}-${e.ref || e.tdkRef || e.id}.pdf`,
+          }));
+        if (!refs.length) throw new Error('Selected entries have no voucher reference to share.');
+        const { shared, failed } = await shareVouchersAsMultiPagePdf(companyGuid, refs, {
+          fileName: `${title} (${refs.length}).pdf`,
+          onBeforeShare: () => setIsSharing(false),
+        });
+        if (failed > 0) {
+          Toast.show({ type: 'info', text1: `Shared ${shared} of ${refs.length}`, text2: `${failed} could not be loaded` });
+        }
+      }
+      clearSelection();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not share PDFs.');
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const handleShare = () => {
+    if (!companyGuid || selected.length === 0 || isSharing) return;
+    promptShareMode({ onChoose: (mode) => { void runShare(mode); } });
+  };
 
   const showBottomBar = multiSelect && selected.length > 0;
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
 
-      {/* ── Header ─────────────────────────────────────────────────────── */}
+      {/* ── Header (footer owns multi-select chrome) ── */}
       <View style={s.header}>
         <TouchableOpacity style={s.iconBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-
-        {multiSelect ? (
-          <View style={s.selectHeaderInner}>
-            <Text style={s.selectCountTxt}>{selected.length} Selected</Text>
-            <TouchableOpacity onPress={selected.length === filtered.length ? clearSelection : selectAll}>
-              <Text style={s.selectAllTxt}>
-                {selected.length === filtered.length ? 'Deselect All' : 'Select All'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <Text style={s.headerTitle}>{t('reports.auditTrail')}</Text>
-        )}
-
-        {multiSelect ? (
-          <TouchableOpacity style={s.iconBtn} onPress={clearSelection} activeOpacity={0.7}>
-            <Ionicons name="close" size={22} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={s.iconBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
-            <Ionicons
-              name="calendar-outline" size={20}
-              color={isDateActive ? COLORS.brandPrimary : COLORS.textSecondary}
-            />
-          </TouchableOpacity>
-        )}
+        <Text style={s.headerTitle}>{t('reports.auditTrail')}</Text>
+        <TouchableOpacity style={s.iconBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
+          <Ionicons
+            name="calendar-outline" size={20}
+            color={isDateActive ? COLORS.brandPrimary : COLORS.textSecondary}
+          />
+        </TouchableOpacity>
       </View>
 
       {/* ── Tab Toggle ─────────────────────────────────────────────────── */}
@@ -1270,37 +1318,35 @@ export default function AuditTrailScreen() {
       {/* ── Bottom Action Bar ──────────────────────────────────────────── */}
       {showBottomBar && (
         <View style={[s.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-          {activeTab === 'myentries' ? (
-            <View style={s.bottomBtnPair}>
-              <TouchableOpacity style={s.bottomBtnFull} onPress={handleBulkPush} activeOpacity={0.85}>
-                <Ionicons name="cloud-upload-outline" size={18} color={COLORS.white} />
-                <Text style={s.bottomBtnTxt}>Push {selected.length} to Tally</Text>
+          <View style={s.actionBarLeft}>
+            <Text style={s.actionCount}>{selected.length} selected</Text>
+            <TouchableOpacity onPress={selectAll} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={s.footerLink}>Select All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={clearSelection} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={s.footerLink}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={s.bottomBtnPair}>
+            {activeTab === 'myentries' && (
+              <TouchableOpacity style={[s.bottomBtnFull, s.bottomBtnOutline]} onPress={handleBulkPush} activeOpacity={0.85}>
+                <Ionicons name="cloud-upload-outline" size={18} color={COLORS.textPrimary} />
+                <Text style={[s.bottomBtnTxt, { color: COLORS.textPrimary }]}>Push</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.bottomBtnFull, s.bottomBtnOutline]}
-                onPress={handleShare}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="share-outline" size={18} color={COLORS.textPrimary} />
-                <Text style={[s.bottomBtnTxt, { color: COLORS.textPrimary }]}>Share</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={s.bottomBtnPair}>
-              <TouchableOpacity style={s.bottomBtnFull} onPress={handleShare} activeOpacity={0.85}>
-                <Ionicons name="share-outline" size={18} color={COLORS.white} />
-                <Text style={s.bottomBtnTxt}>Share PDF</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.bottomBtnFull, s.bottomBtnOutline]}
-                onPress={handleShare}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="download-outline" size={18} color={COLORS.textPrimary} />
-                <Text style={[s.bottomBtnTxt, { color: COLORS.textPrimary }]}>Export CSV</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+            )}
+            <TouchableOpacity
+              style={[s.bottomBtnFull, (isSharing) && { opacity: 0.6 }]}
+              onPress={handleShare}
+              activeOpacity={0.85}
+              disabled={isSharing}
+            >
+              {isSharing
+                ? <ActivityIndicator size="small" color={COLORS.white} />
+                : <Ionicons name="share-outline" size={18} color={COLORS.white} />
+              }
+              <Text style={s.bottomBtnTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -1501,7 +1547,11 @@ const s = StyleSheet.create({
     paddingHorizontal: SPACING.md, paddingTop: 12,
     shadowColor: '#000', shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.08, shadowRadius: 8, elevation: 8,
+    gap: 10,
   },
+  actionBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  actionCount: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  footerLink: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.brandPrimary },
   bottomBtnPair: { flexDirection: 'row', gap: 10 },
   bottomBtnFull: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,

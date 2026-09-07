@@ -35,6 +35,7 @@ import { useSettings } from '../../src/context/SettingsContext';
 
 import { getStockListCache, clearStockListCache } from '../../src/utils/stockCache';
 import { useTranslation } from 'react-i18next';
+import { shareStockRegisterPdf, companyFromAuth } from '../../src/utils/multiShare';
 export { clearStockListCache };
 
 // ─── SWIPEABLE STOCK CARD ─────────────────────────────────────────────────────
@@ -334,6 +335,10 @@ function mapStockRows(items: any[], formatAmount: (n: number) => string): StockI
     warehouseId: r.primary_warehouse || r.warehouse_name || 'WH01',
     reorderLevel: +(r.reorder_level || 0),
     status: +r.closing_qty <= 0 ? 'out_of_stock' : +r.closing_qty <= +(r.reorder_level || 0) ? 'low_stock' : 'in_stock',
+    // UI uses a fixed cube icon; keep StockItem type satisfied for multi-select/share paths.
+    icon: 'cube-outline',
+    iconColor: '#1A1A1A',
+    iconBg: '#E8E7E1',
   }));
 }
 
@@ -445,6 +450,7 @@ export default function TotalStockScreen() {
   // Multi-select
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedIds,     setSelectedIds]     = useState<string[]>([]);
+  const [isSharing,       setIsSharing]       = useState(false);
 
   // Modals
   const [addItemOpen,   setAddItemOpen]   = useState(false);
@@ -510,11 +516,35 @@ export default function TotalStockScreen() {
 
   const exitMultiSelect = useCallback(() => { setMultiSelectMode(false); setSelectedIds([]); }, []);
 
-  const handleSharePDF = useCallback(() => {
-    if (!selectedIds.length) { Toast.show({ type: 'error', text1: 'No Items', text2: 'Select items first.' }); return; }
-    Toast.show({ type: 'success', text1: 'PDF Exported', text2: `${selectedIds.length} items exported as PDF.` });
-    exitMultiSelect();
-  }, [selectedIds.length, exitMultiSelect]);
+  const handleSharePDF = useCallback(async () => {
+    if (!selectedIds.length) {
+      Toast.show({ type: 'error', text1: 'No Items', text2: 'Select items first.' });
+      return;
+    }
+    if (isSharing) return;
+    const items = sourceItems.filter(i => selectedIds.includes(i.id));
+    setIsSharing(true);
+    try {
+      await shareStockRegisterPdf({
+        company: companyFromAuth(company),
+        title: 'Total Stock',
+        period: undefined,
+        rows: items.map(item => ({
+          date: '',
+          particulars: item.name,
+          vchType: item.sku || item.category || '',
+          vchNo: item.unit || '',
+          inwardsQty: String(item.qty ?? ''),
+          outwardsQty: item.value || '',
+        })),
+      }, { onBeforeShare: () => setIsSharing(false) });
+      exitMultiSelect();
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Share failed', text2: err?.message || 'Could not generate PDF.' });
+    } finally {
+      setIsSharing(false);
+    }
+  }, [selectedIds, sourceItems, company, isSharing, exitMultiSelect]);
 
   const openBulkFromMultiselect = useCallback(() => {
     if (!selectedIds.length) return;
@@ -549,9 +579,9 @@ export default function TotalStockScreen() {
           </TouchableOpacity>
           <Text style={styles.multiCount}>{selectedIds.length} selected</Text>
           <View style={styles.multiActions}>
-            <TouchableOpacity style={[styles.multiBtn, styles.multiBtnAmber]} onPress={handleSharePDF} activeOpacity={0.8}>
+            <TouchableOpacity style={[styles.multiBtn, styles.multiBtnAmber]} onPress={handleSharePDF} activeOpacity={0.8} disabled={isSharing}>
               <Ionicons name="share-outline" size={15} color={COLORS.white} />
-              <Text style={styles.multiBtnTxt}>PDF</Text>
+              <Text style={styles.multiBtnTxt}>{isSharing ? '…' : 'Share PDF'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.multiBtn, styles.multiBtnGray]} onPress={openBulkFromMultiselect} activeOpacity={0.8}>
               <Ionicons name="swap-horizontal-outline" size={15} color={COLORS.white} />

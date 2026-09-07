@@ -34,12 +34,16 @@ export const SALES_DOC_TYPES = [
   { id: 'delivery_note', label: 'Delivery Note' },
   { id: 'proforma', label: 'Proforma' },
   { id: 'quotation', label: 'Quotation' },
+  { id: 'receipt', label: 'Receipt' },
+  { id: 'journal', label: 'Journal' },
 ] as const;
 
 export const PURCHASE_DOC_TYPES = [
   { id: 'invoice', label: 'Invoice' },
   { id: 'order', label: 'Order' },
   { id: 'debit_note', label: 'Debit Note' },
+  { id: 'payment', label: 'Payment' },
+  { id: 'contra', label: 'Contra' },
 ] as const;
 
 export type SalesDocTypeId = (typeof SALES_DOC_TYPES)[number]['id'];
@@ -58,6 +62,10 @@ export const DOC_TYPE_LABEL: Record<string, string> = {
   proforma: 'Proforma',
   quotation: 'Quotation',
   debit_note: 'Debit Note',
+  receipt: 'Receipt',
+  journal: 'Journal',
+  payment: 'Payment',
+  contra: 'Contra',
 };
 
 /** Map API doc_type → document preview `type` query param. */
@@ -75,6 +83,14 @@ export function docTypeToRouteType(docType: string, module: 'sales' | 'purchase'
       return 'proforma_invoice';
     case 'quotation':
       return 'quotation';
+    case 'receipt':
+      return 'receipt_voucher';
+    case 'journal':
+      return 'journal_voucher';
+    case 'payment':
+      return 'payment_voucher';
+    case 'contra':
+      return 'contra_voucher';
     case 'invoice':
     default:
       return module === 'purchase' ? 'purchase_invoice' : 'sales_invoice';
@@ -91,14 +107,32 @@ export function classifyVoucherDocType(
   if (module === 'purchase') {
     if (/debit\s*note/i.test(vt)) return 'debit_note';
     if (/purchase\s*order/i.test(vt)) return 'order';
+    if (/payment/i.test(vt)) return 'payment';
+    if (/contra/i.test(vt)) return 'contra';
     return 'invoice';
   }
   if (/quotation/i.test(vt)) return 'quotation';
   if (/credit\s*note/i.test(vt)) return 'credit_note';
   if (/delivery\s*note/i.test(vt)) return 'delivery_note';
   if (/sales\s*order/i.test(vt)) return 'order';
+  if (/receipt\s*note/i.test(vt)) return 'invoice';
+  if (/receipt/i.test(vt)) return 'receipt';
+  if (/journal/i.test(vt)) return 'journal';
   if (row.is_optional) return 'proforma';
   return 'invoice';
+}
+
+/**
+ * Expense register rows are Payment / Journal / Contra (etc.) that debit an
+ * expense ledger. Open the matching accounting preview when possible.
+ */
+export function expenseRowToRouteType(voucherType?: string | null): string {
+  const vt = String(voucherType || '');
+  if (/journal/i.test(vt)) return 'journal_voucher';
+  if (/contra/i.test(vt)) return 'contra_voucher';
+  if (/payment/i.test(vt)) return 'payment_voucher';
+  if (/receipt/i.test(vt) && !/receipt\s*note/i.test(vt)) return 'receipt_voucher';
+  return 'expense_voucher';
 }
 
 /** List-row badge colors — theme-aligned; no red / green / black-white; blues ≠ purples. */
@@ -121,6 +155,11 @@ const VOUCHER_TYPE_BADGE: Record<string, { label: string; color: string; bg: str
   proforma_invoice: { label: 'Proforma',         color: '#A78BFA', bg: '#F5F3FF' },
   // Soft peach — distinct from blue/purple/amber warning
   quotation:        { label: 'Quotation',        color: '#C97B4A', bg: '#FBF0E8' },
+  // Money vouchers in Sales / Purchase registers
+  receipt_voucher:  { label: 'Receipt',          color: '#2D7D46', bg: '#E8F5E9' },
+  journal_voucher:  { label: 'Journal',          color: '#6D4C41', bg: '#EFEBE9' },
+  payment_voucher:  { label: 'Payment',          color: '#E65100', bg: '#FFF3E0' },
+  contra_voucher:   { label: 'Contra',           color: '#546E7A', bg: '#ECEFF1' },
 };
 
 export type VoucherTypeBadgeInfo = { label: string; color: string; bg: string; docType: string };

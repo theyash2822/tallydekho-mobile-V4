@@ -13,6 +13,23 @@ import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { COLORS, TYPOGRAPHY, RADIUS } from '../constants/colors';
 import { VoucherTypeBadge } from './voucherHomeFilters';
 
+/** Flatten Tally multi-party JSON ledger labels for list tiles. */
+export function formatPartyLabel(raw?: string | null): string {
+  if (raw == null) return '';
+  const t = String(raw).trim();
+  if (!t) return '';
+  if (t.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(t);
+      if (Array.isArray(parsed)) {
+        return parsed.map((x) => String(x ?? '').trim()).filter(Boolean).join(', ');
+      }
+    } catch { /* ignore */ }
+    return t.replace(/^\[|\]$/g, '').replace(/"/g, '').split(',').map((s) => s.trim()).filter(Boolean).join(', ');
+  }
+  return t;
+}
+
 export const PAYMENT_STATUS_COLOR: Record<string, string> = {
   paid:   '#2D7D46',
   unpaid: '#DC2626',
@@ -100,7 +117,7 @@ export function VoucherListTile({
   return (
     <View style={[st.row, style]}>
       <View style={st.left}>
-        <Text style={st.party} numberOfLines={1}>{party || '—'}</Text>
+        <Text style={st.party} numberOfLines={1}>{formatPartyLabel(party) || '—'}</Text>
         <Text style={st.id} numberOfLines={1}>{voucherNo || '—'}</Text>
         <Text style={st.date} numberOfLines={1}>{date || ''}</Text>
       </View>

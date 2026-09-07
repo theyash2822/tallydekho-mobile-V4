@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { getStockSnapshot } from '../../src/services/api';
+import { shareSummaryTablePdf, companyFromAuth } from '../../src/utils/multiShare';
 
 const AMBER    = '#A89060';
 const AMBER_BG = '#A8906018';
@@ -56,6 +57,7 @@ export default function StockSnapshotScreen() {
   const [showValDrop,  setShowValDrop]  = useState(false);
   const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set());
   const [isSelMode,    setIsSelMode]    = useState(false);
+  const [isSharing,    setIsSharing]    = useState(false);
 
   // API state
   const [apiWarehouses, setApiWarehouses] = useState<ApiWarehouse[]>([]);
@@ -122,6 +124,29 @@ export default function StockSnapshotScreen() {
   };
 
   const cancelSelection = () => { setSelectedIds(new Set()); setIsSelMode(false); };
+
+  const handleShareSelected = async () => {
+    const rows = (data?.rows || []).filter(r => selectedIds.has(r.id));
+    if (!rows.length || isSharing) return;
+    setIsSharing(true);
+    try {
+      await shareSummaryTablePdf({
+        company: companyFromAuth(company),
+        title: `Stock Snapshot — ${valuation}`,
+        metrics: [
+          { label: 'Grand Value', value: data?.grandValue || '—' },
+          { label: 'Grand %', value: data?.grandPct || '—' },
+        ],
+        columns: ['#', 'Warehouse', 'Value', '%'],
+        rows: rows.map(r => [r.rank, r.warehouse, r.value, r.pct]),
+      }, { onBeforeShare: () => setIsSharing(false) });
+      cancelSelection();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not share PDF.');
+    } finally {
+      setIsSharing(false);
+    }
+  };
   const selectAll       = () => { setSelectedIds(new Set(data.rows.map(r => r.id))); setIsSelMode(true); };
 
 
@@ -286,9 +311,17 @@ export default function StockSnapshotScreen() {
           <Text style={s.shareBarCount}>
             {selectedIds.size} row{selectedIds.size !== 1 ? 's' : ''}
           </Text>
-          <TouchableOpacity style={s.shareBtnView} activeOpacity={0.8}>
-            <Ionicons name="share-social-outline" size={18} color="#fff" />
-            <Text style={s.shareTxt}>Share</Text>
+          <TouchableOpacity
+            style={[s.shareBtnView, isSharing && { opacity: 0.6 }]}
+            activeOpacity={0.8}
+            onPress={handleShareSelected}
+            disabled={isSharing}
+          >
+            {isSharing
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Ionicons name="share-social-outline" size={18} color="#fff" />
+            }
+            <Text style={s.shareTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
           </TouchableOpacity>
         </View>
       )}

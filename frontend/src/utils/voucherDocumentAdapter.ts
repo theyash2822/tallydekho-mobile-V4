@@ -38,11 +38,18 @@ const DOCUMENT_TYPE_MAP: Record<string, DocumentType> = {
   receipt_note: 'receipt_note',
   quotation: 'quotation',
   receipt: 'receipt_voucher',
+  receipt_voucher: 'receipt_voucher',
   payment: 'payment_voucher',
+  payment_voucher: 'payment_voucher',
+  expense: 'expense_voucher',
+  expense_voucher: 'expense_voucher',
   contra: 'contra_voucher',
+  contra_voucher: 'contra_voucher',
   journal: 'journal_voucher',
+  journal_voucher: 'journal_voucher',
   stock_transfer: 'stock_journal',
   stock_adjustment: 'stock_journal',
+  stock_journal: 'stock_journal',
 };
 
 const TITLE_KIND: Record<DocumentType, string> = {
@@ -58,6 +65,7 @@ const TITLE_KIND: Record<DocumentType, string> = {
   quotation: 'Quotation',
   payment_voucher: 'Payment',
   receipt_voucher: 'Receipt',
+  expense_voucher: 'Expense',
   contra_voucher: 'Contra',
   journal_voucher: 'Journal',
   stock_journal: 'Stock Journal',
@@ -138,13 +146,17 @@ function mapLedgerEntries(raw: any, documentType: DocumentType): LedgerEntry[] {
   const entries: LedgerEntry[] = [];
   const push = (e: Omit<LedgerEntry, 'id'>) => entries.push({ id: String(entries.length), ...e });
 
-  if (documentType === 'receipt_voucher' || documentType === 'payment_voucher') {
-    const block = raw.receipt || raw.payment || {};
+  if (
+    documentType === 'receipt_voucher' ||
+    documentType === 'payment_voucher' ||
+    documentType === 'expense_voucher'
+  ) {
+    const block = raw.receipt || raw.payment || raw.expense || {};
     const amount = num(block.amount, num(raw.totals?.grandTotal));
     const isReceipt = documentType === 'receipt_voucher';
-    // A receipt credits the party and debits the bank; a payment is the mirror.
+    // A receipt credits the party and debits the bank; payment/expense is the mirror.
     push({
-      particulars: raw.party?.name || '',
+      particulars: raw.party?.name || block.partyLedger || block.expenseLedger || '',
       reference: 'Account',
       ...(isReceipt ? { credit: amount } : { debit: amount }),
     });
@@ -186,7 +198,7 @@ function mapLedgerEntries(raw: any, documentType: DocumentType): LedgerEntry[] {
 }
 
 function mapPaymentDetails(raw: any, documentType: DocumentType) {
-  const block = raw.receipt || raw.payment;
+  const block = raw.receipt || raw.payment || raw.expense;
   if (block) {
     return {
       mode: block.paymentMethod || 'Cash',
@@ -370,7 +382,7 @@ export function deriveLayout(documentType: DocumentType): DocumentLayout {
     return { family: 'stock', title: 'Stock Journal', showSignatory: true };
   }
   if (!INVOICE_FAMILY.includes(documentType)) {
-    const isMoney = documentType === 'receipt_voucher' || documentType === 'payment_voucher';
+    const isMoney = documentType === 'receipt_voucher' || documentType === 'payment_voucher' || documentType === 'expense_voucher';
     return {
       family: 'voucher',
       title: TITLE_KIND[documentType] + ' Voucher',
@@ -398,6 +410,76 @@ export function deriveLayout(documentType: DocumentType): DocumentLayout {
   };
 }
 
+/**
+ * Map GET /vouchers/:guid `ledger_entries` into preview/PDF rows.
+ * Tags Account / Through on money vouchers so Classic PDF + sheet UI stay consistent.
+ */
+function mapSyncedLedgerEntries(
+  data: any,
+  documentType: DocumentType,
+  partyName?: string,
+  totalAmount?: number
+): LedgerEntry[] {
+  const raw: any[] = data.ledger_entries || data.ledgerEntries || [];
+  const entries: LedgerEntry[] = raw.map((e: any, i: number) => {
+    const amt = Math.abs(num(e.amount));
+    const drCr = String(e.dr_cr || e.drCr || '').toLowerCase();
+    const isDr = drCr === 'dr' || drCr === 'debit' || (!drCr && num(e.amount) > 0);
+    return {
+      id: String(i),
+      particulars: e.ledger_name || e.ledgerName || e.particulars || '—',
+      ...(isDr ? { debit: amt } : { credit: amt }),
+    };
+  });
+
+  const isMoney =
+    documentType === 'receipt_voucher' ||
+    documentType === 'payment_voucher' ||
+    documentType === 'expense_voucher';
+
+  if (isMoney && entries.length) {
+    const partyLower = (partyName || '').toLowerCase();
+    let accountIdx = partyLower
+      ? entries.findIndex((e) => e.particulars.toLowerCase() === partyLower)
+      : -1;
+    if (accountIdx < 0) {
+      accountIdx = documentType === 'receipt_voucher'
+        ? entries.findIndex((e) => !!e.credit)
+        : entries.findIndex((e) => !!e.debit);
+    }
+    let throughIdx = entries.findIndex((_, i) => i !== accountIdx);
+    if (documentType === 'receipt_voucher') {
+      throughIdx = entries.findIndex((e, i) => i !== accountIdx && !!e.debit);
+    } else {
+      throughIdx = entries.findIndex((e, i) => i !== accountIdx && !!e.credit);
+    }
+    if (throughIdx < 0) throughIdx = entries.findIndex((_, i) => i !== accountIdx);
+
+    return entries.map((e, i) => ({
+      ...e,
+      reference:
+        i === accountIdx ? 'Account' : i === throughIdx ? 'Through' : e.reference,
+    }));
+  }
+
+  if (isMoney && !entries.length && (partyName || totalAmount)) {
+    const amount = totalAmount || 0;
+    const isReceipt = documentType === 'receipt_voucher';
+    const out: LedgerEntry[] = [];
+    if (partyName) {
+      out.push({
+        id: '0',
+        particulars: partyName,
+        reference: 'Account',
+        ...(isReceipt ? { credit: amount } : { debit: amount }),
+      });
+    }
+    return out;
+  }
+
+  return entries;
+}
+
 /** Maps the Tally-synced voucher payload from GET /vouchers/:guid. */
 export function fromTallyVoucher(
   data: any,
@@ -418,6 +500,15 @@ export function fromTallyVoucher(
   // party_amount is the per-party ledger entry; v.amount is wrong on
   // multi-party vouchers.
   const totalAmount = num(v.party_amount ?? v.amount);
+  const ledgerEntries = mapSyncedLedgerEntries(
+    data,
+    documentType,
+    v.party_name,
+    totalAmount
+  );
+  const drTotal = ledgerEntries.reduce((s, e) => s + num(e.debit), 0);
+  const crTotal = ledgerEntries.reduce((s, e) => s + num(e.credit), 0);
+  const throughEntry = ledgerEntries.find((e) => e.reference === 'Through');
 
   const items: ItemLine[] = (data.items || []).map((item: any, i: number) => ({
     id: String(item.id || i),
@@ -503,14 +594,19 @@ export function fromTallyVoucher(
     tallyMeta,
     items: items.length ? items : undefined,
     taxes: taxes.length ? taxes : undefined,
+    ledgerEntries: ledgerEntries.length ? ledgerEntries : undefined,
     narration: v.narration || data.app_narration || undefined,
     reference: v.reference || undefined,
     dispatchDetails: dd || undefined,
     paymentDetails: collectPayment ? {
       mode: collectPayment.mode || '',
-      ledgerName: collectPayment.ledgerName || '',
-      amount: num(collectPayment.amount),
+      ledgerName: collectPayment.ledgerName || throughEntry?.particulars || '',
+      amount: num(collectPayment.amount, totalAmount),
       reference: collectPayment.reference || '',
+    } : throughEntry ? {
+      mode: throughEntry.particulars,
+      ledgerName: throughEntry.particulars,
+      amount: totalAmount,
     } : undefined,
     totals: {
       subtotal: taxableAmount > 0 ? taxableAmount : totalAmount,
@@ -522,6 +618,8 @@ export function fromTallyVoucher(
       total: totalAmount,
       totalQty: items.reduce((s, i) => s + i.qty, 0) || undefined,
       totalInWords: toWords(totalAmount),
+      drTotal: drTotal || undefined,
+      crTotal: crTotal || undefined,
     },
     layout,
     footerInfo: {

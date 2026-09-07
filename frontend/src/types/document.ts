@@ -7,7 +7,7 @@ export type DocumentType =
   | 'delivery_note'  | 'credit_note'  | 'debit_note'
   | 'purchase_invoice' | 'purchase_order' | 'receipt_note'
   | 'payment_voucher' | 'receipt_voucher' | 'contra_voucher'
-  | 'journal_voucher' | 'stock_journal' | 'quotation';
+  | 'journal_voucher' | 'expense_voucher' | 'stock_journal' | 'quotation';
 
 // ── Sub-interfaces ────────────────────────────────────────────────────────────
 export interface CompanyInfo {

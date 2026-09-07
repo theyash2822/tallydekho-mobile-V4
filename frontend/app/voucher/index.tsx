@@ -18,6 +18,7 @@ const VOUCHER_TYPES = [
 const CREATE_OPTIONS = [
   { label: 'Payment Voucher', icon: 'arrow-up-circle-outline', color: '#C0392B', bg: '#FDECEA', type: 'payment' },
   { label: 'Receipt Voucher', icon: 'arrow-down-circle-outline', color: '#2D7D46', bg: '#F0FBF4', type: 'receipt' },
+  { label: 'Expense Voucher', icon: 'wallet-outline', color: '#D97706', bg: '#FFFBEB', type: 'expense', route: '/voucher/create-expense' },
   { label: 'Journal Entry', icon: 'book-outline', color: '#2563EB', bg: '#EFF6FF', type: 'journal' },
   { label: 'Contra Voucher', icon: 'swap-horizontal-outline', color: '#7C3AED', bg: '#F5F3FF', type: 'contra' },
 ];
@@ -112,7 +113,11 @@ export default function VouchersHubScreen() {
             <TouchableOpacity
               key={opt.type}
               style={s.createOpt}
-              onPress={() => { setShowCreate(false); router.push(`/voucher/create?type=${opt.type}` as any); }}
+              onPress={() => {
+                setShowCreate(false);
+                const dest = (opt as any).route || `/voucher/create?type=${opt.type}`;
+                router.push(dest as any);
+              }}
               activeOpacity={0.7}
             >
               <View style={[s.createOptIcon, { backgroundColor: opt.bg }]}>

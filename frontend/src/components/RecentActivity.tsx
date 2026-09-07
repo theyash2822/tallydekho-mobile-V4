@@ -110,7 +110,18 @@ const RecentActivity: React.FC<RecentActivityProps> = ({
       return;
     }
     if (!item.guid) return;
-    router.push(`/document/${item.guid}` as any);
+    // Prefer API-provided voucher_type / docType when present so commercial
+    // docs open the print-sheet (invoice / CN / PO) instead of a mis-typed view.
+    const typeHint =
+      (item as any).docType ||
+      (item as any).documentType ||
+      (item as any).voucher_type ||
+      (item as any).voucherType;
+    router.push(
+      (typeHint
+        ? `/document/${item.guid}?type=${encodeURIComponent(String(typeHint))}`
+        : `/document/${item.guid}`) as any
+    );
   };
 
   return (

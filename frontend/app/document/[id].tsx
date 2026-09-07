@@ -7,8 +7,15 @@ import { DocumentType, VoucherDocument } from '../../src/types/document';
 import DocumentPreviewPage from '../../src/components/document/DocumentPreviewPage';
 import { getVoucherById } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
-import { TX_TO_DOC_TYPE, DOC_TYPE_CONFIG, amountInWords } from '../../src/utils/documentHelpers';
+import {
+  TX_TO_DOC_TYPE,
+  DOC_TYPE_CONFIG,
+  amountInWords,
+  resolveDocTypeFromParam,
+} from '../../src/utils/documentHelpers';
 import { fromTallyVoucher } from '../../src/utils/voucherDocumentAdapter';
+import { isAccountingVoucherType } from '../../src/utils/voucher-print';
+import { isCommercialDocumentType } from '../../src/utils/commercial-print';
 import { COLORS } from '../../src/constants/colors';
 
 // Convert ISO '2025-04-04' → '04 Apr 2025'
@@ -37,20 +44,40 @@ function resolveTallyDocType(rawType: string): DocumentType {
   if (lower.includes('receipt note')) return 'receipt_note';
   if (lower.includes('receipt')) return 'receipt_voucher';
   if (lower.includes('payment')) return 'payment_voucher';
+  if (lower.includes('expense')) return 'expense_voucher';
   if (lower.includes('journal')) return 'journal_voucher';
   if (lower.includes('contra')) return 'contra_voucher';
   if (lower.includes('stock')) return 'stock_journal';
   return 'sales_invoice';
 }
 
-function apiVoucherToDoc(data: any, companyName: string): VoucherDocument {
+function apiVoucherToDoc(
+  data: any,
+  companyName: string,
+  routeType?: DocumentType
+): VoucherDocument {
   const rawType = data.voucher?.voucher_type || 'Sales GST';
-  const docType = resolveTallyDocType(rawType);
+  let docType = resolveTallyDocType(rawType);
+  // Route `?type=` wins for accounting + commercial docs so list/KPI deep-links
+  // open the correct print-sheet (e.g. CN, PO, Purchase Invoice, Proforma).
+  if (
+    routeType &&
+    (isAccountingVoucherType(routeType) ||
+      isCommercialDocumentType(routeType) ||
+      !isAccountingVoucherType(docType))
+  ) {
+    docType = routeType;
+  }
+  const title =
+    DOC_TYPE_CONFIG[docType]?.label ||
+    (isAccountingVoucherType(docType)
+      ? `${DOC_TYPE_CONFIG[docType]?.label || 'Voucher'}`
+      : rawType);
   return fromTallyVoucher(
     data,
     companyName,
     docType,
-    DOC_TYPE_CONFIG[docType]?.label || rawType,
+    title,
     isoToDocDate,
     amountInWords
   );
@@ -62,6 +89,7 @@ export default function DocumentPage() {
   const companyGuid = company?.guid;
   const companyName = company?.name || '';
   const router = useRouter();
+  const routeType = resolveDocTypeFromParam(params.type);
 
   const [doc, setDoc] = useState<VoucherDocument | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,7 +104,7 @@ export default function DocumentPage() {
       .then((res: any) => {
         if (res?.data?.voucher) {
           try {
-            setDoc(apiVoucherToDoc(res.data, companyName));
+            setDoc(apiVoucherToDoc(res.data, companyName, routeType));
           } catch (e: any) {
             setError('Failed to parse document: ' + (e?.message || 'unknown error'));
           }
@@ -88,7 +116,7 @@ export default function DocumentPage() {
         setError(err?.message || 'Failed to load document');
       })
       .finally(() => setLoading(false));
-  }, [params.id, companyGuid]);
+  }, [params.id, companyGuid, companyName, routeType]);
 
   if (loading) {
     return (

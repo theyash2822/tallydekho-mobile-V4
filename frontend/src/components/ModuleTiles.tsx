@@ -130,6 +130,8 @@ const s = StyleSheet.create({
     paddingVertical: 14,
     gap: 8,
     overflow: 'hidden',
+    // Keep trend pill content-sized (default stretch made 0% full-width).
+    alignItems: 'flex-start',
   },
   accent: {
     position: 'absolute',

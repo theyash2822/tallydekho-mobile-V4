@@ -1,5 +1,293 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-07 — Thermal replaces Ledger (PDF template)
+
+### Why
+Master Spec v1: middle layout is Thermal (80mm default / 58mm compact), not Ledger. Cream on-screen sheets stay; Settings PDF Preview uses thermal page size when Thermal is selected.
+
+### Change
+- Template IDs: `td_thermal_v1` / `td_thermal_commercial_v1` (legacy `td_ledger_*` / `modern_a` map → Thermal).
+- Renderers: `tdThermal.ts`, `tdThermalCommercial.ts` + `thermalShared.ts` (true narrow reflow).
+- Settings: Thermal format + 80/58 paper chips; PDF Preview uses thermal page size.
+- `voucherPdf` / `multiShare`: non-A4 print size when Thermal.
+- Offline: `qaThermalSmoke` PASS; `qaSpecCheck` PASS; `qaRegisterSheets` PASS.
+
+### Not in this pass
+- ESC/POS direct print
+- Commit / push
+
+---
+
+## 2026-09-07 — Multi-select: ZIP → multi-page PDF (ledger style)
+
+### Why
+Device ZIP share failed. Match multi-ledger: one PDF, page-break per voucher, one share sheet.
+
+### Change
+- `shareVouchersAsMultiPagePdf` / `shareCompliancePdfsAsMultiPage` stitch Spec/compliance HTML with page breaks.
+- Chooser: “Each voucher (one PDF)” (no ZIP).
+- Call sites: ledger detail, registers, audit, cash, e-invoice/ewb.
+
+---
+
+## 2026-09-07 — QA: Total Stock mapStockRows StockItem icons
+
+### Why
+Testing Agent typecheck: `mapStockRows` omitted required `icon` / `iconColor` / `iconBg` on `StockItem`.
+
+### Change
+- `stocks/total-stock.tsx`: default cube icon fields (UI already hardcodes cube).
+
+---
+
+## 2026-09-07 — Waves C–E: multi-select PDF sharing
+
+### Why
+Wire real multi-select Share PDF across registers, audit trail, cash, compliance lists, stock screens, GST, and AI insights (footer-only UI; no Export/XLS).
+
+### Change
+- Helpers: `shareSummaryTablePdf`, `shareCompliancePdfsAsZip`, `buildCompliancePdfFile`.
+- Sales / Purchase / Expense registers: footer multi-select (N selected, Select All, Cancel, Share PDF); `promptShareMode` → ZIP Spec PDFs or combined Day Book register PDF; Export removed; header no longer “N Selected”.
+- Audit Trail + Cash Register: real share via chooser; titles Day Book / My Entries / Cash Register.
+- E-Invoice + E-Way Bill: footer “Share PDF” zips individual compliance PDFs; header fixed.
+- Stock Ledger / Total Stock + fast-slow, negative, expiry, valuation, snapshot: real stock/summary PDFs.
+- GST + AI Insights: print-style summary table PDFs.
+
+### Not in this pass
+- No push / no merge to main
+
+---
+
+## 2026-09-07 — Phases 1–2: polish + preview-only stock/masters
+
+### Why
+Finish voucher polish/parity; stock journals + masters get cream printable preview only (no PDF share). Multi-select deferred.
+
+### Change
+- Accounting create success: Share PDF on payment/receipt/journal/contra/expense.
+- Classic commercial PDF: all 9 types use Tally Prime core layout (type-specific meta; DN qty-only).
+- `StockJournalPreview`: cream sheet for transfer/adjustment; wired from `DocumentPreviewPage`; **no Share PDF**.
+- `masters/preview`: cream print theme for ledger/item/warehouse; **Share PDF removed**.
+- Stock edit: no create-edit voucher flow in app — N/A this pass.
+
+### Not in this pass
+- Multi-select (Phase 4)
+- Stock/master PDF generation
+
+---
+
+## 2026-09-07 — Share PDF on accounting voucher create success
+
+### Why
+Match sales create success: share voucher PDF from payment/receipt/journal/contra/expense create overlays.
+
+### Change
+- `create-payment|receipt|journal|contra|expense.tsx`: Share PDF after Preview via `shareVoucherPdfByRef` + filled brand `pdfBtn`.
+
+---
+
+## 2026-09-04 — Commercial Spec completion pass (preview + PDF)
+
+### Why
+Close Spec gaps: field loss, type rules, Ledger/Executive depth, RN sheet parity; then QA.
+
+### Change
+- Adapter: locked titles (Proforma≠TAX INVOICE), tax words NIL, secondary qty totals, DN non-valued, Quotation validity, CN/DN original+reason, non-posting flag, logo passthrough.
+- Classic/Ledger/Executive: print CSS (thead/closing), richer meta, HSN+cess, hide DN amounts, accounting summary (Ledger), amount summary (Executive).
+- `CommercialDocumentPreview`: HSN summary, tax words, type meta labels, DN qty-only.
+- Offline Spec check: `qaSpecCheck.ts` — 9×3 PASS.
+
+### Not in this pass
+- Server-side PDF engine (Spec §32) — still client `expo-print`.
+- Device visual smoke / golden PNG snapshots.
+
+---
+
+## 2026-09-04 — Rollback Option B: restore RN print-sheet previews
+
+### Why
+WYSIWYG WebView preview (preview === PDF layout) was wrong. Restore polished RN print-sheets for vouchers + commercial docs; PDF still uses Settings templates.
+
+### Change
+- Restored `AccountingVoucherPreview` + `CommercialDocumentPreview` RN sheets.
+- Removed `DocumentTemplatePreview`.
+- Settings layout preview back to Share PDF sample (no WebView modal).
+- Kept SplashScreen `.catch()` fix.
+
+---
+
+## 2026-09-04 — Option B: preview === PDF layout + SplashScreen fix
+
+### Why
+User chose WYSIWYG: on-screen preview must match Settings layout (Classic / Ledger / Executive); Share PDF uses the same HTML. SplashScreen hide was throwing uncaught promises on reload.
+
+### Change
+- `DocumentTemplatePreview` — WebView of `generateDocumentHTML` from Settings format; same chrome + Share button.
+- Commercial + accounting previews re-export that component.
+- Settings: selecting a layout / Preview layout opens HTML modal; Share as PDF from there.
+- SplashScreen `preventAutoHideAsync` / `hideAsync` swallow errors.
+
+### Files
+- `DocumentTemplatePreview.tsx`, `CommercialDocumentPreview.tsx`, `AccountingVoucherPreview.tsx`
+- `settings/voucher-config.tsx`, `app/_layout.tsx`
+
+---
+
+## 2026-09-04 — Commercial preview app-wide (all open paths)
+
+### Why
+Commercial print-sheet must open everywhere — Sales/Purchase lists, Audit Trail, create success, KPI, ledger, GST, Recent Activity — not only one preview route.
+
+### Change
+- `?type=sales_invoice` etc. now resolve (snake_case aliases in `TX_TO_DOC_TYPE`).
+- `/document/[id]` prefers route type for commercial + accounting.
+- Invoice preview accepts `?type=` (purchase / proforma / quotation).
+- Audit Trail passes type on synced opens; provisional TDK routes for PUR/PRF/QTN.
+- Sales Order success Share uses `shareVoucherPdfSafely` (Spec commercial PDF).
+- Recent Activity forwards type hints when present.
+
+### Files
+- `documentHelpers.ts`, `document/[id].tsx`, `invoice-preview.tsx`
+- `audit-trail.tsx`, `create-invoice.tsx`, `create-order.tsx`, `purchase/create-invoice.tsx`
+- `RecentActivity.tsx`, `voucherPdf.ts`, `voucherDocumentAdapter.ts`
+
+---
+
+## 2026-09-04 — Commercial docs: polished preview + Spec PDF engine
+
+### Why
+Commercial documents (Tax Invoice, Proforma, Purchase Invoice, PO/SO, CN/DN, Delivery Note, Quotation) needed the same split as accounting vouchers: on-screen print-sheet from product screenshots, PDF from Spec v1 3-template engine, Share button matching vouchers.
+
+### Change
+- New `commercial-print/` module: print model, adapter, validator, Classic / Ledger / Executive HTML templates.
+- `CommercialDocumentPreview` — cream print-sheet + compact **Share as PDF** (same chrome as vouchers).
+- `DocumentPreviewPage` early-routes commercial types → that preview.
+- `generateDocumentHTML` routes commercial → `renderCommercialDocumentHtml` (Settings format maps to commercial template IDs).
+- Audit Trail / registers / create previews already hit `/document/[id]` or `DocumentPreviewPage` — inherit the path.
+
+### Files
+- `frontend/src/utils/commercial-print/**`
+- `frontend/src/components/document/CommercialDocumentPreview.tsx`
+- `frontend/src/components/document/DocumentPreviewPage.tsx`
+- `frontend/src/utils/documentHelpers.ts`
+
+---
+
+## 2026-09-04 — Fix blank party on Journal / Sales Order / Proforma tiles
+
+### Why
+Those vouchers often have NULL `party_name`; the ledger lives in `voucher_ledger_entries` (sometimes as a JSON multi-party array).
+
+### Change
+- List APIs resolve `party_name` from primary ledger (+ flatten `["A","B"]` → `A, B`).
+- Ingest fills party from ledger when Tally omits PartyName.
+- Tile + sales/purchase mappers harden display.
+
+---
+
+## 2026-09-04 — Registers include money vouchers + amount column wrap fix
+
+### Why
+Receipt/Journal/Payment/Contra only appeared in Ledger. Large INR amounts wrapped the trailing digit in Debit/Credit cells.
+
+### Change
+- Sales register (+ API): Receipt, Journal
+- Purchase register (+ API): Payment, Contra
+- Expense rows open the real voucher type (Payment/Journal/Contra/Expense)
+- Preview amount columns wider + single-line `adjustsFontSizeToFit`
+
+### Files
+- `td-backend/src/routes/api-v1.js`
+- `voucherHomeFilters.tsx`, `AccountingVoucherPreview.tsx`
+- `expenses/index.tsx`, `expenses/register.tsx`
+
+---
+
+### Why
+Payment / Receipt / Contra / Journal / Expense must open the polished print-sheet and Share as PDF must use the format selected in Settings, from every entry point.
+
+### Change
+- `/document/[id]` honors `?type=` (incl. short aliases) and maps Expense; builds ledger rows from `ledger_entries`.
+- New `/voucher/expense-preview`; create-expense opens it after submit.
+- KPI / expenses lists use `*_voucher` type params.
+- `AccountingVoucherPreview` Share uses `shareVoucherPdfSafely` (Settings format).
+- `DocumentPreviewPage` early-routes all five accounting types to that preview.
+
+### Files
+- `app/document/[id].tsx`, `app/voucher/expense-preview.tsx`, `create-expense.tsx`
+- `app/kpi/payments.tsx`, `receipts.tsx`, `expenses/*`, `reports/audit-trail.tsx`
+- `AccountingVoucherPreview.tsx`, `DocumentPreviewPage.tsx`
+- `voucherDocumentAdapter.ts`, `documentHelpers.ts`
+
+### QA
+Open Payment/Receipt/Contra/Journal/Expense from create success, list, KPI, ledger, My Entries → same sheet. Share PDF matches Settings template for that type.
+
+---
+
+### Why
+On-screen preview must match the dense `4--sep-2026` print-sheet (title ribbon, letterhead, ruled table). Share PDF stays Tally Classic from Spec / real Tally PDFs (preview ≠ PDF layout OK).
+
+### Change
+- `AccountingVoucherPreview` rewritten as native RN print-sheet (no Classic WebView).
+- Receipt/Payment/Expense: collapse bill allocations under party; Through/Cash ordering matches sheet mock.
+- **Share as PDF** still uses `renderAccountingVoucherHtml` (Settings template, default `tally_classic_v1`).
+- Expense maps into `paymentDetails` for Through line.
+
+### Files
+- `frontend/src/components/document/AccountingVoucherPreview.tsx`
+- `frontend/src/utils/voucherDocumentAdapter.ts`
+
+### QA
+Open Receipt/Payment/Journal/Contra/Expense → cream sheet with ribbon + GSTIN/PAN/phone; dense Particulars/Dr/Cr. Share as PDF → Classic Account/Through amount layout.
+
+---
+
+## 2026-09-04 — Accounting voucher 3-template print engine (Spec v2)
+
+### Why
+Preview/PDF for Payment, Receipt, Journal, Contra, Expense must match Tally print truth with no field loss, and Settings needs three locked templates.
+
+### Change
+- Canonical `VoucherPrintModel` + adapter + validator under `src/utils/voucher-print/`.
+- Three HTML templates: `tally_classic_v1` (default), `td_ledger_v1`, `td_executive_v1`.
+- Legacy Settings formats `tally`/`modern_a`/`modern_b` map to the new IDs.
+- Accounting voucher PDF engine + Settings wiring; preview chrome later rewritten as print-sheet (see entry above).
+- Invoice/stock previews unchanged for now.
+- `expense_voucher` document type added.
+
+### Files
+- `frontend/src/utils/voucher-print/**` (new)
+- `frontend/src/components/document/AccountingVoucherPreview.tsx` (new)
+- `frontend/src/components/document/DocumentPreviewPage.tsx`
+- `frontend/src/utils/documentHelpers.ts`, `voucherPdf.ts`, `voucherDocumentAdapter.ts`, `types/document.ts`
+- `frontend/app/settings/voucher-config.tsx`
+
+### QA
+Open Payment/Receipt/Journal/Contra/Expense preview → sheet looks Tally-classic → Share as PDF opens system share. Settings → Voucher Config shows three named templates; Classic is default.
+
+---
+
+## 2026-09-03 — Expense voucher in Quick Actions (Web Portal parity)
+
+### Why
+Web Portal 4.0 Create → Voucher → Expense records a simplified payment against expense ledgers. Mobile data-entry modal lacked this.
+
+### Change
+- New `/voucher/create-expense` screen: expense ledger + paid-from (cash/bank) + amount/date/narration → `POST /voucher/payment`.
+- Expense ledgers: all ledgers whose parent contains “Expense”, plus Direct/Indirect Expenses from `/parties?type=expense`.
+- Quick Actions Voucher section + Vouchers hub create sheet include **Expense Voucher**.
+
+### Files
+- `frontend/app/voucher/create-expense.tsx` (new)
+- `frontend/src/components/QuickActionsModal.tsx`
+- `frontend/app/voucher/index.tsx`
+- `frontend/src/i18n/locales/en.json`, `hi.json`
+
+### QA
+FAB → Voucher → Expense Voucher → pick expense ledger + cash/bank → submit. Preview opens payment preview.
+
+---
+
 ## 2026-09-01 — 0% KPI trend is grey + black
 
 ### Why

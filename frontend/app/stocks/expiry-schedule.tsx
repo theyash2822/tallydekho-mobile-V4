@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput,
+  TextInput, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,6 +26,7 @@ import FilterBottomSheet, {
 } from '../../src/components/FilterBottomSheet';
 import { FilterIconWithBadge, ActiveFilterChips } from '../../src/components/voucherHomeFilters';
 import { useTranslation } from 'react-i18next';
+import { shareStockRegisterPdf, companyFromAuth } from '../../src/utils/multiShare';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type DayTab = '0-30' | '31-60' | '>60' | 'expired';
@@ -191,6 +192,7 @@ export default function ExpiryScheduleScreen() {
   // ── Multi-select ──────────────────────────────────────────────────────────
   const [selectedIds,     setSelectedIds]     = useState<Set<string>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [isSharing,       setIsSharing]       = useState(false);
 
   const activeFilterCount = (selWh.length > 0 ? selWh.length : 0) + (selGrp.length > 0 ? selGrp.length : 0);
 
@@ -225,6 +227,31 @@ export default function ExpiryScheduleScreen() {
   const cancelSelection = () => {
     setSelectedIds(new Set());
     setIsSelectionMode(false);
+  };
+
+  const handleShareSelected = async () => {
+    const selected = items.filter(i => selectedIds.has(i.id));
+    if (!selected.length || isSharing) return;
+    setIsSharing(true);
+    try {
+      await shareStockRegisterPdf({
+        company: companyFromAuth(company),
+        title: 'Expiry Schedule',
+        rows: selected.map(item => ({
+          date: item.expiryDate,
+          particulars: item.item,
+          vchType: item.warehouse,
+          vchNo: item.batch || item.code,
+          inwardsQty: String(item.qty),
+          outwardsQty: item.value,
+        })),
+      }, { onBeforeShare: () => setIsSharing(false) });
+      cancelSelection();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not share PDF.');
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   const selectAll = () => {
@@ -416,9 +443,17 @@ export default function ExpiryScheduleScreen() {
             <Text style={s.cancelSelFooterTxt}>Deselect</Text>
           </TouchableOpacity>
           <Text style={s.shareBarCount}>{selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''}</Text>
-          <TouchableOpacity style={s.shareBtn} activeOpacity={0.8}>
-            <Ionicons name="share-social-outline" size={18} color="#fff" />
-            <Text style={s.shareTxt}>Share</Text>
+          <TouchableOpacity
+            style={[s.shareBtn, isSharing && { opacity: 0.6 }]}
+            activeOpacity={0.8}
+            onPress={handleShareSelected}
+            disabled={isSharing}
+          >
+            {isSharing
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Ionicons name="share-social-outline" size={18} color="#fff" />
+            }
+            <Text style={s.shareTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
           </TouchableOpacity>
         </View>
       )}

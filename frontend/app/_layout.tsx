@@ -22,7 +22,7 @@ import { COLORS } from '../src/constants/colors';
 import '../src/i18n';
 
 // Prevent splash screen from auto-hiding while fonts load
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function StatusBarCover() {
   const insets = useSafeAreaInsets();
@@ -102,7 +102,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
+      SplashScreen.hideAsync().catch(() => {});
     }
   }, [fontsLoaded, fontError]);
 

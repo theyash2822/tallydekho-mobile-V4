@@ -1,5 +1,7 @@
 import { DocumentType, VoucherDocument } from '../types/document';
 import { renderTallyHTML } from './pdf/tallyLayout';
+import { renderAccountingVoucherHtml, isAccountingVoucherType } from './voucher-print';
+import { renderCommercialDocumentHtml, isCommercialDocumentType } from './commercial-print';
 
 import { amountInWords, tallyWords } from './pdf/words';
 
@@ -46,6 +48,7 @@ export const DOC_TYPE_CONFIG: Record<DocumentType, { label: string; color: strin
   receipt_voucher:  { label: 'Receipt Voucher',   color: '#2D7D46', bg: '#E8F5E9' },
   contra_voucher:   { label: 'Contra Voucher',    color: '#37474F', bg: '#ECEFF1' },
   journal_voucher:  { label: 'Journal Voucher',   color: '#4E342E', bg: '#EFEBE9' },
+  expense_voucher:  { label: 'Expense Voucher',   color: '#B71C1C', bg: '#FFEBEE' },
   stock_journal:    { label: 'Stock Journal',     color: '#558B2F', bg: '#F1F8E9' },
 };
 
@@ -53,23 +56,68 @@ export const DOC_TYPE_CONFIG: Record<DocumentType, { label: string; color: strin
 export interface PDFBankInfo { bankName?: string | null; accountNo?: string | null; ifsc?: string | null; upiId?: string | null; }
 
 /**
- * `tally` replicates the Tally Prime print layout and is the default.
- * `modern_a` / `modern_b` are the two house styles, selectable in Settings.
+ * Legacy format keys (still accepted). Prefer VoucherTemplateId from
+ * `voucher-print/templateIds` for accounting vouchers.
+ * `tally` / `modern_a` / `modern_b` map → Classic / Thermal / Executive.
+ * Former Ledger (`td_ledger_v1` / `modern_a`) normalizes to Thermal.
  */
-export type DocumentFormat = 'tally' | 'modern_a' | 'modern_b';
+export type DocumentFormat =
+  | 'tally' | 'modern_a' | 'modern_b'
+  | 'tally_classic_v1' | 'td_thermal_v1' | 'td_executive_v1'
+  | 'td_ledger_v1'; // legacy — resolveDocumentFormat maps to td_thermal_v1
 
 /** Older saved configs stored the format as 1/2/3. */
-const LEGACY_FORMAT_MAP: Record<number, DocumentFormat> = { 1: 'tally', 2: 'modern_a', 3: 'modern_b' };
+const LEGACY_FORMAT_MAP: Record<number, DocumentFormat> = {
+  1: 'tally_classic_v1',
+  2: 'td_thermal_v1',
+  3: 'td_executive_v1',
+};
 
 export function resolveDocumentFormat(format?: DocumentFormat | number | null): DocumentFormat {
-  if (typeof format === 'number') return LEGACY_FORMAT_MAP[format] ?? 'tally';
-  return format === 'modern_a' || format === 'modern_b' ? format : 'tally';
+  if (typeof format === 'number') return LEGACY_FORMAT_MAP[format] ?? 'tally_classic_v1';
+  if (format === 'modern_a' || format === 'td_ledger_v1' || format === 'td_thermal_v1') {
+    return 'td_thermal_v1';
+  }
+  if (format === 'modern_b' || format === 'td_executive_v1') return 'td_executive_v1';
+  if (format === 'tally' || format === 'tally_classic_v1') return 'tally_classic_v1';
+  return 'tally_classic_v1';
 }
 
-export function generateDocumentHTML(doc: VoucherDocument, logoUri?: string | null, format: DocumentFormat | 1 | 2 | 3 = 'tally', terms?: string[], qrImage?: string | null, bankInfo?: PDFBankInfo | null): string {
+export function generateDocumentHTML(
+  doc: VoucherDocument,
+  logoUri?: string | null,
+  format: DocumentFormat | 1 | 2 | 3 = 'tally',
+  terms?: string[],
+  qrImage?: string | null,
+  bankInfo?: PDFBankInfo | null,
+  opts?: { thermalPaperWidth?: 80 | 58 }
+): string {
   const resolved = resolveDocumentFormat(format);
-  if (resolved === 'modern_a') return _generateFormat2HTML(doc, logoUri, terms, qrImage, bankInfo);
-  if (resolved === 'modern_b') return _generateFormat3HTML(doc, logoUri, terms, qrImage, bankInfo);
+  const paperWidth = opts?.thermalPaperWidth;
+
+  // Accounting vouchers use the Spec 3-template engine.
+  if (isAccountingVoucherType(doc.documentType)) {
+    return renderAccountingVoucherHtml(doc, { templateId: resolved, paperWidth });
+  }
+
+  // Commercial docs use Spec commercial templates (Settings format maps 1:1).
+  if (isCommercialDocumentType(doc.documentType)) {
+    return renderCommercialDocumentHtml(doc, {
+      templateId: resolved,
+      logoUri,
+      terms,
+      qrImage,
+      bankInfo,
+      paperWidth,
+    });
+  }
+
+  if (resolved === 'td_thermal_v1' || resolved === 'td_ledger_v1' || resolved === 'modern_a') {
+    return _generateFormat2HTML(doc, logoUri, terms, qrImage, bankInfo);
+  }
+  if (resolved === 'td_executive_v1' || resolved === 'modern_b') {
+    return _generateFormat3HTML(doc, logoUri, terms, qrImage, bankInfo);
+  }
   return renderTallyHTML(doc, { logoUri, terms, qrImage, bankInfo });
 }
 
@@ -79,7 +127,7 @@ function _generateFormat2HTML(doc: VoucherDocument, logoUri?: string | null, ter
   const t = doc.totals;
   const hasItems = !!(doc.items && doc.items.length > 0);
   const hasEntries = !!(doc.ledgerEntries && doc.ledgerEntries.length > 0);
-  const isVoucher = ['payment_voucher','receipt_voucher','contra_voucher','journal_voucher'].includes(doc.documentType);
+  const isVoucher = ['payment_voucher','receipt_voucher','contra_voucher','journal_voucher','expense_voucher'].includes(doc.documentType);
   const isProforma = doc.documentType === 'proforma_invoice';
   const footerKind = isVoucher ? 'Voucher' : (isProforma ? 'Proforma Invoice' : 'Invoice');
   const fmt = (n: number) => '₹' + Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -247,7 +295,7 @@ function _generateFormat3HTML(doc: VoucherDocument, logoUri?: string | null, ter
   const t = doc.totals;
   const hasItems = !!(doc.items && doc.items.length > 0);
   const hasEntries = !!(doc.ledgerEntries && doc.ledgerEntries.length > 0);
-  const isVoucher = ['payment_voucher','receipt_voucher','contra_voucher','journal_voucher'].includes(doc.documentType);
+  const isVoucher = ['payment_voucher','receipt_voucher','contra_voucher','journal_voucher','expense_voucher'].includes(doc.documentType);
   const isOrder = ['sales_order','purchase_order'].includes(doc.documentType);
   const isProforma = doc.documentType === 'proforma_invoice';
   const numberLabel = isProforma ? 'Proforma No.' : 'Invoice No.';
@@ -424,8 +472,9 @@ ${mainTable}
 
 // ── Map transaction type strings to DocumentType ──────────────────────────────
 export const TX_TO_DOC_TYPE: Record<string, DocumentType> = {
-  // Standard types
+  // Standard display labels
   'Sales Invoice':    'sales_invoice',
+  'Tax Invoice':      'sales_invoice',
   'Proforma Invoice': 'proforma_invoice',
   'Sales Order':      'sales_order',
   'Delivery Note':    'delivery_note',
@@ -441,6 +490,32 @@ export const TX_TO_DOC_TYPE: Record<string, DocumentType> = {
   'Receipt Voucher':  'receipt_voucher',
   'Contra':           'contra_voucher',
   'Journal':          'journal_voucher',
+  'Journal Voucher':  'journal_voucher',
+  'Expense':          'expense_voucher',
+  'Expense Voucher':  'expense_voucher',
+  // Snake_case DocumentType ids (Sales/Purchase registers, KPI deep-links)
+  'sales_invoice':    'sales_invoice',
+  'proforma_invoice': 'proforma_invoice',
+  'proforma':         'proforma_invoice',
+  'sales_order':      'sales_order',
+  'delivery_note':    'delivery_note',
+  'credit_note':      'credit_note',
+  'debit_note':       'debit_note',
+  'purchase_invoice': 'purchase_invoice',
+  'purchase_order':   'purchase_order',
+  'receipt_note':     'receipt_note',
+  'quotation':        'quotation',
+  // Short / route query aliases (KPI, expenses list, ledger deep-links)
+  'payment':          'payment_voucher',
+  'payment_voucher':  'payment_voucher',
+  'receipt':          'receipt_voucher',
+  'receipt_voucher':  'receipt_voucher',
+  'contra':           'contra_voucher',
+  'contra_voucher':   'contra_voucher',
+  'journal':          'journal_voucher',
+  'journal_voucher':  'journal_voucher',
+  'expense':          'expense_voucher',
+  'expense_voucher':  'expense_voucher',
   // Tally-specific voucher type names
   'Sales GST':         'sales_invoice',
   'Sales':             'sales_invoice',
@@ -449,4 +524,16 @@ export const TX_TO_DOC_TYPE: Record<string, DocumentType> = {
   'Debit Note GST':    'debit_note',
   'Credit Note GST':   'credit_note',
   'Sales Order GST':   'sales_order',
+  'Purchase Order GST':'purchase_order',
 };
+
+/** Resolve DocumentType from a route `?type=` param or Tally voucher_type string. */
+export function resolveDocTypeFromParam(type?: string | null): DocumentType | undefined {
+  if (!type) return undefined;
+  const exact = TX_TO_DOC_TYPE[type] as DocumentType | undefined;
+  if (exact) return exact;
+  const lower = String(type).toLowerCase().replace(/-/g, '_').trim();
+  const aliased = TX_TO_DOC_TYPE[lower] as DocumentType | undefined;
+  if (aliased) return aliased;
+  return undefined;
+}

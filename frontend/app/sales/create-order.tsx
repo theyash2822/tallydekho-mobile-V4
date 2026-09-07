@@ -16,9 +16,7 @@ import {
   getSalesLedgerAccounts, getTaxLedgers, getChargeLedgers, getStockGodowns,
   getCompanyProfile,
 } from '../../src/services/api';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
-import { generateDocumentHTML } from '../../src/utils/documentHelpers';
+import { shareVoucherPdfSafely } from '../../src/utils/voucherPdf';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
 import FormField from '../../src/components/forms/FormField';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
@@ -715,6 +713,7 @@ export default function CreateSalesOrderScreen() {
       documentTitle: `Sales Order - ${submitResult?.voucherNumber || orderNo || 'Draft'}`,
       documentType: 'sales_order',
       documentNumber: submitResult?.voucherNumber || 'Pending from TallyPrime',
+      date: date ? dmyToISO(date) : '',
       documentDate: date ? dmyToISO(date) : '',
       company: {
         name: company?.name || '',
@@ -899,22 +898,11 @@ export default function CreateSalesOrderScreen() {
                 setSharePdfLoading(true);
                 try {
                   const pdfDoc = buildLocalDoc();
-                  const html = generateDocumentHTML(
-                    pdfDoc as any,
-                    null,
-                    1,
-                    termsText ? [termsText] : [],
-                    null,
-                    null
-                  );
-                  const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
-                  const canShare = await Sharing.isAvailableAsync();
-                  const fileName = `SalesOrder-${submitResult.voucherNumber || submitResult.tdkRef || Date.now()}.pdf`;
-                  if (canShare) {
-                    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: fileName, UTI: 'com.adobe.pdf' });
-                  } else {
-                    Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
-                  }
+                  await shareVoucherPdfSafely(pdfDoc as any, {
+                    companyGuid: company?.guid,
+                    dialogTitle: `SalesOrder-${submitResult.voucherNumber || submitResult.tdkRef || Date.now()}.pdf`,
+                    onBeforeShare: () => setSharePdfLoading(false),
+                  });
                 } catch (err: any) {
                   Toast.show({ type: 'error', text1: 'PDF Error', text2: err?.message || 'Could not generate PDF' });
                 } finally {

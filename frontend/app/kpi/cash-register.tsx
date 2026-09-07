@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
-  View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, StyleSheet, ActivityIndicator,
+  View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
@@ -18,6 +19,14 @@ import { ScreenHeader } from '../../src/components/ScreenHeader';
 import FilterBottomSheet, { FilterCheckRow, filterSheetContentStyles as fm } from '../../src/components/FilterBottomSheet';
 import { FilterIconWithBadge, ActiveFilterChips } from '../../src/components/voucherHomeFilters';
 import { useTranslation } from 'react-i18next';
+import {
+  promptShareMode,
+  shareDayBookPdf,
+  shareVouchersAsMultiPagePdf,
+  companyFromAuth,
+  dayBookRowFromListItem,
+} from '../../src/utils/multiShare';
+import { TX_TO_DOC_TYPE } from '../../src/utils/documentHelpers';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 type TxType = 'payment' | 'receipt' | 'contra';
@@ -122,6 +131,7 @@ export default function CashRegisterScreen() {
   const [dateFrom, setDateFrom] = useState(() => (fyFrom ? isoToDMY(fyFrom) : ''));
   const [dateTo, setDateTo] = useState(() => (fyTo ? isoToDMY(fyTo) : ''));
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [isSharing, setIsSharing] = useState(false);
 
   useEffect(() => {
     if (fyFrom && fyTo) {
@@ -211,6 +221,63 @@ export default function CashRegisterScreen() {
 
   const toggleSelect = (id: string) => {
     setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+  const clearSelect = () => setSelected(new Set());
+  const selectAllVisible = () => {
+    const ids = filteredGroups.flatMap(g => g.items.map(i => i.id));
+    setSelected(new Set(ids));
+  };
+
+  const runShare = async (mode: 'individual' | 'combined') => {
+    if (!companyGuid || selected.size === 0 || isSharing) return;
+    const items = liveItems.filter(i => selected.has(i.id));
+    if (!items.length) return;
+    setIsSharing(true);
+    try {
+      if (mode === 'combined') {
+        await shareDayBookPdf({
+          company: companyFromAuth(company),
+          title: 'Cash Register',
+          period: `${dateFrom} – ${dateTo}`,
+          rows: items.map(item => dayBookRowFromListItem({
+            date: item.date,
+            particulars: item.desc,
+            voucherType: item.type,
+            number: item.voucher,
+            amount: item.amount,
+            isDebit: !item.positive,
+          })),
+        }, { onBeforeShare: () => setIsSharing(false) });
+      } else {
+        const typeLabel = (t: TxType) =>
+          t === 'payment' ? 'Payment' : t === 'receipt' ? 'Receipt' : 'Contra';
+        const { shared, failed } = await shareVouchersAsMultiPagePdf(
+          companyGuid,
+          items.map(item => ({
+            guid: item.id,
+            documentType: TX_TO_DOC_TYPE[typeLabel(item.type)] || undefined,
+            label: `${typeLabel(item.type)}-${item.voucher || item.id}.pdf`,
+          })),
+          {
+            fileName: `Cash-Register (${items.length}).pdf`,
+            onBeforeShare: () => setIsSharing(false),
+          }
+        );
+        if (failed > 0) {
+          Toast.show({ type: 'info', text1: `Shared ${shared} of ${items.length}`, text2: `${failed} could not be loaded` });
+        }
+      }
+      clearSelect();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not share PDFs.');
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const handleShare = () => {
+    if (!companyGuid || selected.size === 0 || isSharing) return;
+    promptShareMode({ onChoose: (mode) => { void runShare(mode); } });
   };
 
   const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
@@ -379,13 +446,26 @@ export default function CashRegisterScreen() {
 
       {selected.size > 0 && (
         <View style={s.shareBtnWrap}>
+          <View style={s.shareLeft}>
+            <Text style={s.shareCount}>{selected.size} selected</Text>
+            <TouchableOpacity onPress={selectAllVisible} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={s.shareLink}>Select All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={clearSelect} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={s.shareLink}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity
-            style={s.shareBtn}
-            onPress={() => setSelected(new Set())}
+            style={[s.shareBtn, isSharing && { opacity: 0.6 }]}
+            onPress={handleShare}
             activeOpacity={0.8}
+            disabled={isSharing}
           >
-            <Ionicons name="share-social-outline" size={18} color="#fff" />
-            <Text style={s.shareBtnTxt}>Share ({selected.size} selected)</Text>
+            {isSharing
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Ionicons name="share-social-outline" size={18} color="#fff" />
+            }
+            <Text style={s.shareBtnTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -443,8 +523,11 @@ const s = StyleSheet.create({
   crDrBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: RADIUS.full },
   crDrTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
 
-  shareBtnWrap: { paddingHorizontal: SPACING.md, paddingVertical: 12, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
-  shareBtn: { backgroundColor: '#1A1A1A', borderRadius: RADIUS.lg, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  shareBtnWrap: { paddingHorizontal: SPACING.md, paddingVertical: 12, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault, gap: 10 },
+  shareLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  shareCount: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  shareLink: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.brandPrimary },
+  shareBtn: { backgroundColor: '#1A1A1A', borderRadius: RADIUS.lg, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   shareBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: '#fff' },
   loadMoreBtn: { margin: 16, padding: 14, borderRadius: 10, backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.borderDefault, alignItems: 'center', justifyContent: 'center' },
   loadMoreTxt: { fontSize: 14, fontWeight: '600', color: COLORS.brandPrimary },

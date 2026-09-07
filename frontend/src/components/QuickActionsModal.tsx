@@ -53,6 +53,7 @@ const SECTION_DEFS = [
     items: [
       { id: 'vou-receipt', labelKey: 'quickActions.receiptVoucher', route: '/voucher/create-receipt', icon: 'cash-outline' as const },
       { id: 'vou-payment', labelKey: 'quickActions.paymentVoucher', route: '/voucher/create-payment', icon: 'send-outline' as const },
+      { id: 'vou-expense', labelKey: 'quickActions.expenseVoucher', route: '/voucher/create-expense', icon: 'wallet-outline' as const },
       { id: 'vou-journal', labelKey: 'quickActions.journalEntry',   route: '/voucher/create-journal', icon: 'journal-outline' as const },
       { id: 'vou-contra',  labelKey: 'quickActions.contraEntry',    route: '/voucher/create-contra',  icon: 'swap-horizontal-outline' as const },
     ],

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Dimensions, ActivityIndicator,
+  Dimensions, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +14,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { getAIInsights, getAIInsightsHistory } from '../../src/services/api';
 import { fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
+import { shareSummaryTablePdf, companyFromAuth } from '../../src/utils/multiShare';
 
 const AMBER       = '#A89060';
 const AMBER_LIGHT = '#D4BC94';
@@ -358,6 +359,7 @@ export default function AIInsightsScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [refreshing,     setRefreshing]     = useState(false);
   const [aiData,         setAiData]         = useState<any>(null);
+  const [isSharing,      setIsSharing]      = useState(false);
 
   // Cache disclaimer helpers
   const fmtDate = (iso: string) => {
@@ -459,13 +461,42 @@ export default function AIInsightsScreen() {
 
   const handleRefresh = () => fetchInsights();
 
-  const handleShare = () => {
-    Toast.show({
-      type: 'info',
-      text1: 'Generating PDF…',
-      text2: 'Preparing AI Insights report',
-      visibilityTime: 2000,
-    });
+  const handleShare = async () => {
+    if (isSharing) return;
+    setIsSharing(true);
+    try {
+      const metrics = [
+        { label: 'Total Revenue', value: formatAmountCompact(summaryData.totalRevenue || 0) },
+        { label: 'Total Expense', value: formatAmountCompact(summaryData.totalExpense || 0) },
+        { label: 'Net', value: formatAmountCompact((summaryData.totalRevenue || 0) - (summaryData.totalExpense || 0)) },
+        ...(cashflowData || []).map((r: any) => ({ label: r.label, value: r.value })),
+      ];
+      const rows: (string | number)[][] = [];
+      topCustomers.slice(0, 10).forEach((c: any) => {
+        rows.push(['Customer', c.name || c.party || '', formatAmountCompact(c.amount || c.value || 0)]);
+      });
+      topSuppliers.slice(0, 10).forEach((c: any) => {
+        rows.push(['Supplier', c.name || c.party || '', formatAmountCompact(c.amount || c.value || 0)]);
+      });
+      stockoutData.slice(0, 10).forEach((c: any) => {
+        rows.push(['Stock-out risk', c.name || c.item || '', String(c.days_remaining ?? c.qty ?? '')]);
+      });
+      recommendations.slice(0, 8).forEach((r: any) => {
+        rows.push(['Recommendation', r.title || r.text || String(r), '']);
+      });
+      await shareSummaryTablePdf({
+        company: companyFromAuth(company),
+        title: isCurrFY || isDateActive ? 'AI Insights' : 'FY Summary',
+        period: isDateActive ? `${fromDate} → ${toDate}` : (selectedFY?.label || undefined),
+        metrics,
+        columns: ['Section', 'Detail', 'Value'],
+        rows,
+      }, { onBeforeShare: () => setIsSharing(false) });
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not share PDF.');
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   return (
@@ -753,9 +784,12 @@ export default function AIInsightsScreen() {
 
       {/* ── Share PDF Button ── */}
       <View style={[s.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <TouchableOpacity style={s.shareBtn} onPress={handleShare} activeOpacity={0.85}>
-          <Ionicons name="share-outline" size={18} color={COLORS.white} />
-          <Text style={s.shareBtnTxt}>Share PDF</Text>
+        <TouchableOpacity style={[s.shareBtn, isSharing && { opacity: 0.7 }]} onPress={handleShare} activeOpacity={0.85} disabled={isSharing}>
+          {isSharing
+            ? <ActivityIndicator size="small" color={COLORS.white} />
+            : <Ionicons name="share-outline" size={18} color={COLORS.white} />
+          }
+          <Text style={s.shareBtnTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
         </TouchableOpacity>
       </View>
 

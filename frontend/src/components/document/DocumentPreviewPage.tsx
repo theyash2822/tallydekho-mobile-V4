@@ -12,6 +12,11 @@ import { formatCurrency, amountInWords, DOC_TYPE_CONFIG } from '../../utils/docu
 import { shareVoucherPdfSafely } from '../../utils/voucherPdf';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from 'react-i18next';
+import { isAccountingVoucherType } from '../../utils/voucher-print';
+import { isCommercialDocumentType } from '../../utils/commercial-print';
+import AccountingVoucherPreview from './AccountingVoucherPreview';
+import CommercialDocumentPreview from './CommercialDocumentPreview';
+import StockJournalPreview from './StockJournalPreview';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utility Components
@@ -328,76 +333,6 @@ function ItemsTable({ doc }: { doc: VoucherDocument }) {
         </View>
       </ScrollView>
       {/* Swipe hint */}
-      <View style={ds.scrollHintRow}>
-        <Ionicons name="swap-horizontal-outline" size={11} color={COLORS.textTertiary} />
-        <Text style={ds.scrollHintText}>Swipe table to see all columns</Text>
-      </View>
-    </View>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// StockTable — Stock Journal (Source/Destination) and Physical Stock
-// ─────────────────────────────────────────────────────────────────────────────
-function StockTable({ doc }: { doc: VoucherDocument }) {
-  const items = doc.items || [];
-  if (items.length === 0) return null;
-
-  const source = items.filter(i => i.direction === 'out');
-  const destination = items.filter(i => i.direction === 'in');
-  // A Stock Journal moves goods between godowns; Physical Stock just records a
-  // counted quantity, so it prints one undirected table.
-  const isJournal = source.length > 0 || destination.length > 0;
-  const W = { name: 150, godown: 120, qty: 82, rate: 82, amt: 92 };
-
-  const Table = ({ label, rows }: { label?: string; rows: typeof items }) => (
-    <View style={{ marginBottom: label ? 14 : 0 }}>
-      {label && <Text style={ds.stockGroupLabel}>{label}</Text>}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled>
-        <View>
-          <View style={ds.tblHeader}>
-            <Text style={[ds.th, { width: W.name }]}>ITEM</Text>
-            <Text style={[ds.th, { width: W.godown }]}>GODOWN</Text>
-            <Text style={[ds.th, ds.thR, { width: W.qty }]}>QUANTITY</Text>
-            <Text style={[ds.th, ds.thR, { width: W.rate }]}>RATE</Text>
-            <Text style={[ds.th, ds.thR, { width: W.amt }]}>AMOUNT</Text>
-          </View>
-          {rows.map((item, idx) => (
-            <View
-              key={item.id}
-              style={[
-                ds.tblRow,
-                idx % 2 === 0 ? ds.tblRowEven : ds.tblRowOdd,
-                idx === rows.length - 1 && ds.tblRowLast,
-              ]}
-            >
-              <Text style={[ds.tdBold, { width: W.name }]} numberOfLines={2}>{item.name}</Text>
-              <Text style={[ds.td, { width: W.godown }]} numberOfLines={2}>{item.godown || '—'}</Text>
-              <Text style={[ds.td, ds.tdR, { width: W.qty }]}>{item.qty} {item.unit}</Text>
-              <Text style={[ds.td, ds.tdR, { width: W.rate }]}>
-                {item.rate ? formatCurrency(item.rate) : '—'}
-              </Text>
-              <Text style={[ds.td, ds.tdR, ds.tdBoldR, { width: W.amt }]}>
-                {item.amount ? formatCurrency(item.amount) : '—'}
-              </Text>
-            </View>
-          ))}
-        </View>
-      </ScrollView>
-    </View>
-  );
-
-  return (
-    <View style={ds.card}>
-      <SectionLabel title={isJournal ? 'STOCK MOVEMENT' : 'PHYSICAL STOCK'} />
-      {isJournal ? (
-        <>
-          <Table label="Source (Consumption)" rows={source} />
-          <Table label="Destination (Production)" rows={destination} />
-        </>
-      ) : (
-        <Table rows={items} />
-      )}
       <View style={ds.scrollHintRow}>
         <Ionicons name="swap-horizontal-outline" size={11} color={COLORS.textTertiary} />
         <Text style={ds.scrollHintText}>Swipe table to see all columns</Text>
@@ -844,6 +779,23 @@ export default function DocumentPreviewPage({
 }) {
   const router = useRouter();
 
+  // Accounting vouchers (Payment / Receipt / Contra / Journal / Expense) always
+  // use the polished print-sheet + Settings-driven Share as PDF.
+  if (isAccountingVoucherType(doc.documentType)) {
+    return <AccountingVoucherPreview document={doc} />;
+  }
+
+  // Commercial docs (invoices, orders, notes, quotation) — screenshot print-sheet
+  // + Spec commercial PDF templates via Settings.
+  if (isCommercialDocumentType(doc.documentType)) {
+    return <CommercialDocumentPreview document={doc} />;
+  }
+
+  // Stock transfer / physical adjustment — cream print-sheet, preview only (no PDF).
+  if (doc.documentType === 'stock_journal' || doc.layout?.family === 'stock') {
+    return <StockJournalPreview document={doc} />;
+  }
+
   return (
     <SafeAreaView style={ds.safe} edges={['top', 'left', 'right']}>
       <DocNavBar title={doc.documentTitle || 'Invoice'} onBack={() => router.back()} />
@@ -857,10 +809,8 @@ export default function DocumentPreviewPage({
         <PartySection doc={doc} />
         <MetaGrid doc={doc} />
 
-        {/* Stock docs print godown in/out columns instead of rate/tax columns */}
-        {doc.items && doc.items.length > 0 && (
-          doc.layout?.family === 'stock' ? <StockTable doc={doc} /> : <ItemsTable doc={doc} />
-        )}
+        {/* Stock docs are handled by StockJournalPreview above; fallback is item lines. */}
+        {doc.items && doc.items.length > 0 && <ItemsTable doc={doc} />}
 
         {/* Tax breakdown only if items exist */}
         {doc.taxes && doc.taxes.length > 0 && <TaxBreakdown doc={doc} />}
@@ -1006,10 +956,6 @@ const ds = StyleSheet.create({
   tdR:     { textAlign: 'right' },
   tdBoldR: { fontWeight: '700', textAlign: 'right' },
 
-  stockGroupLabel: {
-    fontSize: TYPOGRAPHY.xs, fontWeight: '800', color: COLORS.textSecondary,
-    marginBottom: 6,
-  },
   scrollHintRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 8 },
   scrollHintText: { fontSize: 10, color: COLORS.textTertiary, fontStyle: 'italic' },
 

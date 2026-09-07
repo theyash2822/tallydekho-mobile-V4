@@ -1,3 +1,9 @@
+## 2026-09-07 — Thermal replaces Ledger
+
+Mobile PDF middle template is now Thermal (80/58). See `frontend/CHANGELOG_AGENT.md`. Ready for device test; not pushed.
+
+---
+
 ## 2026-09-01 — 0% KPI trend is grey + black
 
 Home + KPI carousels: flat **0%** is grey background and black text (not green/red). See `frontend/CHANGELOG_AGENT.md`. Not pushed.

@@ -1,23 +1,24 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal,
-  Dimensions, Alert, Keyboard, Pressable,
+  Dimensions, Alert, Keyboard, Pressable, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 import { TX_TO_DOC_TYPE } from '../../src/utils/documentHelpers';
 import { shareStatementPdf } from '../../src/utils/voucherPdf';
+import { shareVouchersAsMultiPagePdf } from '../../src/utils/multiShare';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { getLedgerDetail, getLedgerStatement, sendPaymentReminder } from '../../src/services/api';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import DateRangePickerModal, { parseDMY } from '../../src/components/DateRangePickerModal';
 import SearchBar from '../../src/components/SearchBar';
-
 const SCREEN_W = Dimensions.get('window').width;
 
 // ── Chart colours — lighter theme-matched shades ─────────────────────────────
@@ -290,6 +291,7 @@ export default function LedgerDetailScreen() {
 
   // ── Multi-select state ─────────────────────────────────────────────────────
   const [selectedTxns, setSelectedTxns] = useState<string[]>([]);
+  const [txnSharing, setTxnSharing] = useState(false);
   const txnSelectMode = selectedTxns.length > 0;
 
   const toggleTxnSelect = (id: string) => {
@@ -299,12 +301,9 @@ export default function LedgerDetailScreen() {
   };
   const cancelTxnSelect = () => setSelectedTxns([]);
 
-  const handleTxnShare = async () => {
-    const shareTxns = selectedTxns.length > 0
-      ? txns.filter(t => selectedTxns.includes(t.id))
-      : txns; // share all if none selected
+  /** Footer Share PDF — full ledger statement (unchanged). */
+  const handleStatementShare = async () => {
     try {
-      // Family C statement layout, shared with the rest of the PDF engine.
       await shareStatementPdf({
         company: {
           name: company?.name,
@@ -319,7 +318,7 @@ export default function LedgerDetailScreen() {
         openingLabel: 'Opening Balance',
         openingAmount: Math.round(openingBal),
         openingSide: openingType === 'Cr' ? 'Cr' : 'Dr',
-        rows: shareTxns.map((t: any) => ({
+        rows: txns.map((t: any) => ({
           date: t.date,
           particulars: t.particulars || t.type || '',
           vchType: t.type,
@@ -333,10 +332,43 @@ export default function LedgerDetailScreen() {
       }, {
         fileName: `${ledger?.name || 'Ledger'} — Statement.pdf`,
       });
-    } catch (err) {
+    } catch {
       Alert.alert('Error', 'Could not generate PDF. Please try again.');
     }
-    cancelTxnSelect();
+  };
+
+  /** Multi-select vouchers → each Spec PDF packed in one ZIP (single share sheet). */
+  const handleTxnShare = async () => {
+    if (!companyGuid || txnSharing) return;
+    const shareTxns = selectedTxns.length > 0
+      ? txns.filter((t: any) => selectedTxns.includes(t.id))
+      : [];
+    if (!shareTxns.length) return;
+
+    setTxnSharing(true);
+    try {
+      const refs = shareTxns.map((t: any) => ({
+        guid: t.guid || t.id,
+        documentType: TX_TO_DOC_TYPE[t.type] || undefined,
+        label: `${t.type || 'Voucher'}-${t.voucher || t.id}.pdf`,
+      }));
+      const { shared, failed } = await shareVouchersAsMultiPagePdf(companyGuid, refs, {
+        fileName: `${ledger?.name || 'Ledger'} — Vouchers (${shareTxns.length}).pdf`,
+        onBeforeShare: () => setTxnSharing(false),
+      });
+      if (failed > 0) {
+        Toast.show({
+          type: 'info',
+          text1: `Shared ${shared} of ${shareTxns.length}`,
+          text2: `${failed} voucher(s) could not be loaded`,
+        });
+      }
+      cancelTxnSelect();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not generate voucher PDFs.');
+    } finally {
+      setTxnSharing(false);
+    }
   };
 
   // Send WhatsApp payment reminder to the ledger party
@@ -678,7 +710,7 @@ export default function LedgerDetailScreen() {
       {!txnSelectMode && (
         <View style={styles.actionFooter}>
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            <TouchableOpacity style={[styles.shareBtn, { flex: 1 }]} activeOpacity={0.8} onPress={handleTxnShare}>
+            <TouchableOpacity style={[styles.shareBtn, { flex: 1 }]} activeOpacity={0.8} onPress={handleStatementShare}>
               <Ionicons name="share-outline" size={16} color={COLORS.white} />
               <Text style={styles.shareBtnText}>Share PDF</Text>
             </TouchableOpacity>
@@ -712,6 +744,13 @@ export default function LedgerDetailScreen() {
           <View style={styles.txnShareLeft}>
             <Text style={styles.txnShareCount}>{selectedTxns.length} selected</Text>
             <TouchableOpacity
+              onPress={() => setSelectedTxns(txns.map((t: any) => t.id))}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.txnShareCancelTxt}>Select All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               onPress={cancelTxnSelect}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.7}
@@ -720,12 +759,15 @@ export default function LedgerDetailScreen() {
             </TouchableOpacity>
           </View>
           <TouchableOpacity
-            style={styles.txnShareActionBtn}
+            style={[styles.txnShareActionBtn, txnSharing && { opacity: 0.7 }]}
             onPress={handleTxnShare}
             activeOpacity={0.85}
+            disabled={txnSharing}
           >
-            <Ionicons name="share-outline" size={16} color={COLORS.white} />
-            <Text style={styles.txnShareActionTxt}>Share PDF / XLS</Text>
+            {txnSharing
+              ? <ActivityIndicator size="small" color={COLORS.white} />
+              : <Ionicons name="share-outline" size={16} color={COLORS.white} />}
+            <Text style={styles.txnShareActionTxt}>{txnSharing ? 'Preparing…' : 'Share PDF'}</Text>
           </TouchableOpacity>
         </View>
       )}

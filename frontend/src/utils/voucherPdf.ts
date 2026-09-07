@@ -23,6 +23,12 @@ import {
   ComplianceVoucher, ComplianceCompany,
 } from './pdf/complianceSheet';
 import { getUserSettings, getInvoicePreview } from '../services/api';
+import {
+  ThermalPaperWidth,
+  DEFAULT_THERMAL_PAPER_WIDTH,
+  isThermalTemplateId,
+  thermalPageSize,
+} from './pdf/thermalShared';
 
 const VOUCHER_CONFIG_KEY = 'voucherConfig';
 
@@ -40,6 +46,8 @@ export const DOC_TYPE_TO_CONFIG_ID: Record<string, string> = {
   payment_voucher: 'payment',
   journal_voucher: 'journal',
   contra_voucher: 'contra',
+  expense_voucher: 'expense',
+  quotation: 'sales_inv',
   stock_journal: 'stock_journal',
 };
 
@@ -49,10 +57,24 @@ export interface PdfRenderOptions {
   terms?: string[];
   qrImage?: string | null;
   bankInfo?: PDFBankInfo | null;
+  /** 80 (default) or 58 — only used when format is Thermal. */
+  thermalPaperWidth?: ThermalPaperWidth;
 }
 
-/** A4 at 72dpi — the size every Tally print template assumes. */
+/** A4 at 72dpi — Classic / Executive. Thermal uses thermalPageSize(). */
 const A4 = { width: 595, height: 842 };
+
+function resolvePrintPageSize(options: PdfRenderOptions): { width: number; height: number } {
+  const format = resolveDocumentFormat(options.format);
+  if (isThermalTemplateId(format)) {
+    return thermalPageSize(options.thermalPaperWidth ?? DEFAULT_THERMAL_PAPER_WIDTH);
+  }
+  return A4;
+}
+
+function normalizeThermalWidth(v: unknown): ThermalPaperWidth {
+  return v === 58 || v === '58' ? 58 : DEFAULT_THERMAL_PAPER_WIDTH;
+}
 
 let voucherConfigCache: Record<string, any> | null = null;
 
@@ -120,6 +142,7 @@ export async function resolvePdfOptions(
     terms: (cfg?.terms ?? []) as string[],
     qrImage: cfg?.qrEnabled && cfg?.qrImage ? cfg.qrImage : null,
     bankInfo,
+    thermalPaperWidth: normalizeThermalWidth(cfg?.thermalPaperWidth),
   };
 }
 
@@ -134,9 +157,11 @@ export async function buildVoucherPdf(
     options.format ?? 'tally',
     options.terms ?? [],
     options.qrImage ?? null,
-    options.bankInfo ?? null
+    options.bankInfo ?? null,
+    { thermalPaperWidth: options.thermalPaperWidth }
   );
-  const { uri } = await Print.printToFileAsync({ html, base64: false, ...A4 });
+  const page = resolvePrintPageSize(options);
+  const { uri } = await Print.printToFileAsync({ html, base64: false, ...page });
   return uri;
 }
 
@@ -290,25 +315,35 @@ export async function shareMasterPdf(
  * Neither is a Tally voucher, so they have no `VoucherDocument`; the compliance
  * list rows carry everything the sheet prints.
  */
+/** Build a local compliance PDF file without opening the share sheet. */
+export async function buildCompliancePdfFile(
+  kind: 'einvoice' | 'ewaybill',
+  voucher: ComplianceVoucher,
+  company: ComplianceCompany = {},
+): Promise<{ uri: string; name: string }> {
+  const html = kind === 'einvoice'
+    ? renderEInvoiceSheetHTML(voucher, company)
+    : renderEWayBillSheetHTML(voucher, company);
+  const { uri } = await Print.printToFileAsync({ html, base64: false, ...A4 });
+  const label = kind === 'einvoice' ? 'e-Invoice' : 'e-Way Bill';
+  const name = `${label} ${voucher.voucherNumber || voucher.irn || voucher.ewbNo || 'doc'}`.trim() + '.pdf';
+  return { uri, name };
+}
+
 export async function shareCompliancePdf(
   kind: 'einvoice' | 'ewaybill',
   voucher: ComplianceVoucher,
   company: ComplianceCompany = {},
   opts: { onBeforeShare?: () => void } = {}
 ): Promise<void> {
-  const html = kind === 'einvoice'
-    ? renderEInvoiceSheetHTML(voucher, company)
-    : renderEWayBillSheetHTML(voucher, company);
-  const { uri } = await Print.printToFileAsync({ html, base64: false, ...A4 });
+  const { uri, name } = await buildCompliancePdfFile(kind, voucher, company);
   opts.onBeforeShare?.();
 
-  const label = kind === 'einvoice' ? 'e-Invoice' : 'e-Way Bill';
-  const dialogTitle = `${label} ${voucher.voucherNumber || ''}`.trim() + '.pdf';
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle, UTI: 'com.adobe.pdf' });
+    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: name, UTI: 'com.adobe.pdf' });
     return;
   }
-  await Share.share({ url: uri, title: dialogTitle });
+  await Share.share({ url: uri, title: name });
 }
 
 /** shareCompliancePdf with the standard error toast, for button handlers. */

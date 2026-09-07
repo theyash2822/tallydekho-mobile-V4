@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Share, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
@@ -10,6 +11,7 @@ import { fyInfoToParam } from '../../src/context/AuthContext';
 import { getEWBList, getEWBPending } from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 import { shareCompliancePdfSafely } from '../../src/utils/voucherPdf';
+import { shareCompliancePdfsAsMultiPage, companyFromAuth } from '../../src/utils/multiShare';
 
 // Data loaded from API
 
@@ -33,6 +35,7 @@ export default function EWBListScreen() {
   const [fromDate, setFromDate] = useState(selectedFY?.startDate || '');
   const [toDate,   setToDate]   = useState(selectedFY?.endDate   || '');
   const [sharingId, setSharingId] = useState<string | null>(null);
+  const [isSharing, setIsSharing] = useState(false);
 
   // Always sync dates when selectedFY changes
   useEffect(() => {
@@ -110,39 +113,59 @@ export default function EWBListScreen() {
   };
 
   const handleShare = async () => {
-    const lines = ewbData
-      .filter(i => selected.includes(i.id))
-      .map(i => `${i.ewbNo}  ${i.party}  ${i.route}  ₹${i.amount}  ${i.status}`);
-    try {
-      await Share.share({ message: `TallyDekho — E-Way Bills\n${lines.join('\n')}`, title: 'Share E-Way Bills' });
-    } catch {
-      Alert.alert('Share', `${selected.length} E-Way Bill(s) ready to share as PDF.`);
+    const items = ewbData.filter(i => selected.includes(i.id) && !!i.ewbNo);
+    if (!items.length) {
+      Toast.show({ type: 'info', text1: 'Nothing to share', text2: 'Select e-Way Bills with a bill number.' });
+      return;
     }
-    cancelSelect();
+    if (isSharing) return;
+    setIsSharing(true);
+    try {
+      const { shared, failed } = await shareCompliancePdfsAsMultiPage(
+        'ewaybill',
+        items.map(item => ({
+          ewbNo: item.ewbNo,
+          ewbDate: item.ewbDate || item.date,
+          validTill: item.validTill,
+          vehicleNo: item.vehicleNo,
+          transporterId: item.transporterId,
+          distanceKm: item.distanceKm,
+          supplyType: item.supplyType,
+          subSupplyType: item.subSupplyType,
+          voucherNumber: item.voucherNumber,
+          voucherType: item.type,
+          date: item.date,
+          partyName: item.party,
+          shipTo: item.route,
+          amount: item.amountValue,
+        })),
+        companyFromAuth(company),
+        {
+          fileName: `E-Way-Bills (${items.length}).pdf`,
+          onBeforeShare: () => setIsSharing(false),
+        }
+      );
+      if (failed > 0) {
+        Toast.show({ type: 'info', text1: `Shared ${shared} of ${items.length}`, text2: `${failed} could not be built` });
+      }
+      cancelSelect();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not share PDFs.');
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   return (
     <SafeAreaView style={s.safe}>
 
-      {/* Header */}
+      {/* Header — title stays fixed */}
       <View style={s.header}>
         <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>
-          {selectMode ? `${selected.length} Selected` : 'E-Way Bills'}
-        </Text>
-        {selectMode ? (
-          <TouchableOpacity
-            style={s.headerTextBtn}
-            onPress={() => setSelected(ewbData.map(i => i.id))}
-            activeOpacity={0.7}
-          >
-            <Text style={s.headerTextBtnTxt}>Select All</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={{ width: 44 }} />
-        )}
+        <Text style={s.headerTitle}>E-Way Bills</Text>
+        <View style={{ width: 44 }} />
       </View>
 
       {/* Date Filter Row */}
@@ -236,13 +259,24 @@ export default function EWBListScreen() {
         <View style={[s.shareBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={s.shareLeft}>
             <Text style={s.shareCount}>{selected.length} selected</Text>
+            <TouchableOpacity onPress={() => setSelected(ewbData.map(i => i.id))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
+              <Text style={s.shareCancelTxt}>Select All</Text>
+            </TouchableOpacity>
             <TouchableOpacity onPress={cancelSelect} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
               <Text style={s.shareCancelTxt}>Cancel</Text>
             </TouchableOpacity>
           </View>
-          <TouchableOpacity style={s.shareActionBtn} onPress={handleShare} activeOpacity={0.85}>
-            <Ionicons name="share-outline" size={16} color={COLORS.white} />
-            <Text style={s.shareActionTxt}>Share PDF / XLS</Text>
+          <TouchableOpacity
+            style={[s.shareActionBtn, isSharing && { opacity: 0.6 }]}
+            onPress={handleShare}
+            activeOpacity={0.85}
+            disabled={isSharing}
+          >
+            {isSharing
+              ? <ActivityIndicator size="small" color={COLORS.white} />
+              : <Ionicons name="share-outline" size={16} color={COLORS.white} />
+            }
+            <Text style={s.shareActionTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
           </TouchableOpacity>
         </View>
       )}

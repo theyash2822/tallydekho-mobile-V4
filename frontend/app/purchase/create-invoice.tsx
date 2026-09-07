@@ -1211,7 +1211,7 @@ export default function CreatePurchaseInvoiceScreen() {
               activeOpacity={0.85}
               onPress={() => {
                 if (!submitResult.tdkRef) return;
-                router.push(`/sales/invoice-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}` as any);
+                router.push(`/sales/invoice-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}&type=purchase_invoice` as any);
               }}
             >
               <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />

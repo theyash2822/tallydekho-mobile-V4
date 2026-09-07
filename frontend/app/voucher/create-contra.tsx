@@ -24,6 +24,7 @@ import {
 } from '../../src/services/api';
 import { sumDenomCounts } from '../../src/constants/cashDenominations';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
+import { shareVoucherPdfByRef } from '../../src/utils/voucherPdf';
 import { useTranslation } from 'react-i18next';
 
 const todayStr = () => {
@@ -88,6 +89,7 @@ export default function CreateContraVoucher() {
   const [submitResult, setSubmitResult] = useState<{
     tdkRef: string; isQueued: boolean; voucherNumber?: string;
   } | null>(null);
+  const [sharePdfLoading, setSharePdfLoading] = useState(false);
 
   const [cashCount, setCashCount] = useState<CashCountResult | null>(null);
   const [showCashSheet, setShowCashSheet] = useState(false);
@@ -512,6 +514,33 @@ export default function CreateContraVoucher() {
             >
               <Text style={s.btnPriTxt}>View Preview</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.pdfBtn, sharePdfLoading && { opacity: 0.7 }]}
+              activeOpacity={0.85}
+              disabled={sharePdfLoading}
+              onPress={async () => {
+                if (!submitResult.tdkRef || !company?.guid) return;
+                setSharePdfLoading(true);
+                try {
+                  await shareVoucherPdfByRef(submitResult.tdkRef, company.guid, {
+                    documentType: 'contra_voucher',
+                    onBeforeShare: () => setSharePdfLoading(false),
+                    fallback: async () => {
+                      Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
+                    },
+                  });
+                } catch (err: any) {
+                  Toast.show({ type: 'error', text1: 'PDF Error', text2: err?.message || 'Could not generate PDF' });
+                } finally {
+                  setSharePdfLoading(false);
+                }
+              }}
+            >
+              {sharePdfLoading
+                ? <ActivityIndicator size="small" color={COLORS.white} />
+                : <Ionicons name="document-outline" size={18} color={COLORS.white} />}
+              <Text style={s.pdfBtnTxt}>{sharePdfLoading ? 'PDF is creating...' : 'Share PDF'}</Text>
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => { setShowSuccess(false); router.back(); }} style={{ paddingVertical: 10 }}>
               <Text style={{ color: COLORS.textSecondary, fontWeight: '600' }}>Done</Text>
             </TouchableOpacity>
@@ -602,6 +631,8 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.lg, paddingVertical: 16, marginTop: 8,
   },
   btnPriTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
+  pdfBtn: { flexDirection: 'row', gap: 8, backgroundColor: COLORS.brandPrimary, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, width: '100%', justifyContent: 'center', alignItems: 'center' },
+  pdfBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
   successOverlay: {
     ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 50,

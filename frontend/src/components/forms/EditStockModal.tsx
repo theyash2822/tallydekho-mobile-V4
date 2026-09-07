@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Keyboard } from 'react-native';
 import Toast from 'react-native-toast-message';
+import { useRouter } from 'expo-router';
 import { StockItem, ALL_TAX_RATES } from '../../data/stockData';
 import { alterStockItem, getStockGroups } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -11,12 +12,14 @@ import {
 } from './StockFormHelpers';
 import { BottomModalShell } from './BottomModalShell';
 
-// EditStockModal — Stock Master Alteration (NOT a voucher)
+// EditStockModal — Stock Master Alteration (NOT a voucher).
+// After save → cream masters preview only (no Share PDF), same as create item.
 export function EditStockModal({
   visible, item, onClose,
 }: {
   visible: boolean; item: StockItem | null; onClose: () => void;
 }) {
+  const router = useRouter();
   const { company } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -84,15 +87,25 @@ export function EditStockModal({
       });
 
       Keyboard.dismiss();
-      reset(); onClose();
+      reset();
+      onClose();
+
       const queued = res?.queued;
-      setTimeout(() => Toast.show({
-        type: 'success',
-        text1: queued ? 'Update Queued ⏳' : 'Item Updated ✅',
-        text2: queued
-          ? 'Saved. Will update in Tally when desktop connects.'
-          : `${item.name} updated in Tally`,
-      }), 300);
+      const queueId = res?.queueId ?? res?.data?.queueId;
+
+      setTimeout(() => {
+        Toast.show({
+          type: 'success',
+          text1: queued ? 'Update Queued ⏳' : 'Item Updated ✅',
+          text2: queued
+            ? 'Saved. Will update in Tally when desktop connects.'
+            : `${item.name} updated in Tally`,
+        });
+        // Cream printable preview (no PDF share) — parity with create item
+        if (queueId) {
+          router.push(`/masters/preview?queueId=${encodeURIComponent(String(queueId))}` as any);
+        }
+      }, 300);
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Update Failed', text2: err?.message || 'Please try again.' });
     } finally {

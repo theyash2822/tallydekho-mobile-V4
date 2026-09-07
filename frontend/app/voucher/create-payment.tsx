@@ -27,6 +27,7 @@ import {
   createPaymentVoucher, getParties, getBankLedgers, getPartyOutstandingBills,
 } from '../../src/services/api';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
+import { shareVoucherPdfByRef } from '../../src/utils/voucherPdf';
 import { useTranslation } from 'react-i18next';
 
 // ── Helpers (mirrors create-invoice.tsx) ─────────────────────────────────────
@@ -254,6 +255,7 @@ export default function CreatePaymentVoucher() {
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState<{ tdkRef: string; isQueued: boolean; voucherNumber?: string; numberingPolicy?: string } | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [sharePdfLoading, setSharePdfLoading] = useState(false);
 
   const canSubmit = useMemo(() => {
     if (!party) return 'Select a party';
@@ -711,6 +713,33 @@ export default function CreatePaymentVoucher() {
               <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
               <Text style={ss.previewBtnTxt}>Preview</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[ss.pdfBtn, sharePdfLoading && { opacity: 0.7 }]}
+              activeOpacity={0.85}
+              disabled={sharePdfLoading}
+              onPress={async () => {
+                if (!submitResult.tdkRef || !company?.guid) return;
+                setSharePdfLoading(true);
+                try {
+                  await shareVoucherPdfByRef(submitResult.tdkRef, company.guid, {
+                    documentType: 'payment_voucher',
+                    onBeforeShare: () => setSharePdfLoading(false),
+                    fallback: async () => {
+                      Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
+                    },
+                  });
+                } catch (err: any) {
+                  Toast.show({ type: 'error', text1: 'PDF Error', text2: err?.message || 'Could not generate PDF' });
+                } finally {
+                  setSharePdfLoading(false);
+                }
+              }}
+            >
+              {sharePdfLoading
+                ? <ActivityIndicator size="small" color={COLORS.white} />
+                : <Ionicons name="document-outline" size={18} color={COLORS.white} />}
+              <Text style={ss.pdfBtnTxt}>{sharePdfLoading ? 'PDF is creating...' : 'Share PDF'}</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={ss.closeBtn} activeOpacity={0.85} onPress={() => { setShowSuccess(false); router.back(); }}>
               <Text style={ss.closeBtnTxt}>Close</Text>
             </TouchableOpacity>
@@ -814,6 +843,8 @@ const ss = StyleSheet.create({
   refVal: { fontSize: TYPOGRAPHY.md, color: COLORS.textPrimary, fontWeight: '800', marginTop: 3 },
   previewBtn: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, paddingHorizontal: 20, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.brandPrimary, minWidth: 220 },
   previewBtnTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.brandPrimary, fontWeight: '800' },
+  pdfBtn: { flexDirection: 'row', gap: 8, backgroundColor: COLORS.brandPrimary, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, minWidth: 220, justifyContent: 'center', alignItems: 'center' },
+  pdfBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
   closeBtn: { paddingVertical: 10, paddingHorizontal: 16 },
   closeBtnTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary, fontWeight: '700' },
 });

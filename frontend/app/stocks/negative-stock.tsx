@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +14,7 @@ import SearchBar from '../../src/components/SearchBar';
 import { EntityListTile } from '../../src/components/EntityListTile';
 import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { useTranslation } from 'react-i18next';
+import { shareStockRegisterPdf, companyFromAuth } from '../../src/utils/multiShare';
 
 const AMBER = '#A89060';
 
@@ -45,6 +46,7 @@ export default function NegativeStockScreen() {
   const [search,      setSearch]      = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isSelMode,   setIsSelMode]   = useState(false);
+  const [isSharing,   setIsSharing]   = useState(false);
   const [isLoading,   setIsLoading]   = useState(false);
   const [apiError,    setApiError]    = useState<string | null>(null);
   const [items,       setItems]       = useState<NegStockItem[]>([]);
@@ -95,6 +97,31 @@ export default function NegativeStockScreen() {
     });
   };
   const cancelSelection = () => { setSelectedIds(new Set()); setIsSelMode(false); };
+
+  const handleShareSelected = async () => {
+    const selected = items.filter(i => selectedIds.has(i.id));
+    if (!selected.length || isSharing) return;
+    setIsSharing(true);
+    try {
+      await shareStockRegisterPdf({
+        company: companyFromAuth(company),
+        title: 'Negative Stock',
+        rows: selected.map(item => ({
+          date: '',
+          particulars: item.displayName || item.name,
+          vchType: item.group,
+          vchNo: item.sku,
+          inwardsQty: '',
+          outwardsQty: String(item.total_qty),
+        })),
+      }, { onBeforeShare: () => setIsSharing(false) });
+      cancelSelection();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not share PDF.');
+    } finally {
+      setIsSharing(false);
+    }
+  };
   const selectAll       = () => { setSelectedIds(new Set(visibleItems.map(i => i.id))); setIsSelMode(true); };
 
   const fmtQty  = (q: number) => `${q}`;
@@ -227,9 +254,17 @@ export default function NegativeStockScreen() {
           <Text style={s.shareBarCount}>
             {selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''}
           </Text>
-          <TouchableOpacity style={s.shareBtnView} activeOpacity={0.8}>
-            <Ionicons name="share-social-outline" size={18} color="#fff" />
-            <Text style={s.shareTxt}>Share</Text>
+          <TouchableOpacity
+            style={[s.shareBtnView, isSharing && { opacity: 0.6 }]}
+            activeOpacity={0.8}
+            onPress={handleShareSelected}
+            disabled={isSharing}
+          >
+            {isSharing
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Ionicons name="share-social-outline" size={18} color="#fff" />
+            }
+            <Text style={s.shareTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
           </TouchableOpacity>
         </View>
       )}

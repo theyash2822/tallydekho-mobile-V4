@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Dimensions,
+  Dimensions, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +16,7 @@ import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPla
 import { EntityListTile } from '../../src/components/EntityListTile';
 import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { useTranslation } from 'react-i18next';
+import { shareStockRegisterPdf, companyFromAuth } from '../../src/utils/multiShare';
 
 const { width: SW } = Dimensions.get('window');
 const PAGE_SIZE = 20;
@@ -68,6 +69,33 @@ export default function FastSlowMovingScreen() {
   // Multi-select
   const [selectedIds,     setSelectedIds]     = useState<Set<string>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [isSharing,       setIsSharing]       = useState(false);
+
+  const handleShareSelected = async () => {
+    const pool = [...fastItems, ...slowItems];
+    const items = pool.filter(i => selectedIds.has(i.id));
+    if (!items.length || isSharing) return;
+    setIsSharing(true);
+    try {
+      await shareStockRegisterPdf({
+        company: companyFromAuth(company),
+        title: 'Fast / Slow Moving',
+        rows: items.map(item => ({
+          date: '',
+          particulars: item.displayName || item.name,
+          vchType: item.group || item.tab,
+          vchNo: item.sku,
+          inwardsQty: String(item.total_inward_qty ?? ''),
+          outwardsQty: String(item.total_outward_qty ?? ''),
+        })),
+      }, { onBeforeShare: () => setIsSharing(false) });
+      cancelSelection();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not share PDF.');
+    } finally {
+      setIsSharing(false);
+    }
+  };
 
   const loadData = async () => {
     if (!companyGuid) return;
@@ -426,9 +454,17 @@ export default function FastSlowMovingScreen() {
             <Text style={s.cancelSelTxt}>Deselect</Text>
           </TouchableOpacity>
           <Text style={s.shareBarCount}>{selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''}</Text>
-          <TouchableOpacity style={s.shareBtn} activeOpacity={0.8}>
-            <Ionicons name="share-social-outline" size={18} color="#fff" />
-            <Text style={s.shareTxt}>Share</Text>
+          <TouchableOpacity
+            style={[s.shareBtn, isSharing && { opacity: 0.6 }]}
+            activeOpacity={0.8}
+            onPress={handleShareSelected}
+            disabled={isSharing}
+          >
+            {isSharing
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Ionicons name="share-social-outline" size={18} color="#fff" />
+            }
+            <Text style={s.shareTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
           </TouchableOpacity>
         </View>
       )}

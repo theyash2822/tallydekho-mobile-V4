@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Share, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -11,6 +11,7 @@ import { getEInvoiceGenerated, getEInvoicePending, generateEInvoice } from '../.
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useSettings } from '../../src/context/SettingsContext';
 import { shareCompliancePdfSafely } from '../../src/utils/voucherPdf';
+import { shareCompliancePdfsAsMultiPage, companyFromAuth } from '../../src/utils/multiShare';
 
 // Data loaded from API
 
@@ -35,6 +36,7 @@ export default function EInvoiceListScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [generatingIds,  setGeneratingIds]  = useState<string[]>([]);
   const [sharingId,      setSharingId]      = useState<string | null>(null);
+  const [isSharing,      setIsSharing]      = useState(false);
 
   // Always sync dates when selectedFY changes (user may switch FY from home screen)
   useEffect(() => {
@@ -154,43 +156,58 @@ export default function EInvoiceListScreen() {
   };
 
   const handleShare = async () => {
-    const lines = invoiceData
-      .filter(i => selected.includes(i.id))
-      .map(i => `${i.invoiceNo}  ${i.irn}  ${i.party}  \u20b9${i.amount}  ${i.status}`);
-    try {
-      await Share.share({ message: `TallyDekho \u2014 E-Invoices\n${lines.join('\n')}`, title: 'Share E-Invoices' });
-    } catch {
-      Alert.alert('Share', `${selected.length} E-Invoice(s) ready to share as PDF.`);
+    const items = invoiceData.filter(i => selected.includes(i.id) && i.status === 'Generated' && !!i.irn);
+    if (!items.length) {
+      Toast.show({ type: 'info', text1: 'Nothing to share', text2: 'Select generated e-Invoices with an IRN.' });
+      return;
     }
-    cancelSelect();
+    if (isSharing) return;
+    setIsSharing(true);
+    try {
+      const { shared, failed } = await shareCompliancePdfsAsMultiPage(
+        'einvoice',
+        items.map(item => ({
+          irn: item.irn,
+          ackNo: item.ackNo,
+          ackDate: item.ackDate,
+          qrImage: item.qrCode,
+          voucherNumber: item.invoiceNo,
+          voucherType: item.voucherType,
+          date: item.date,
+          partyName: item.party,
+          amount: item.amountValue,
+        })),
+        companyFromAuth(company),
+        {
+          fileName: `E-Invoices (${items.length}).pdf`,
+          onBeforeShare: () => setIsSharing(false),
+        }
+      );
+      if (failed > 0) {
+        Toast.show({ type: 'info', text1: `Shared ${shared} of ${items.length}`, text2: `${failed} could not be built` });
+      }
+      cancelSelect();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not share PDFs.');
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   return (
     <SafeAreaView style={s.safe}>
 
-      {/* Header */}
+      {/* Header — title stays fixed; multi-select lives in footer */}
       <View style={s.header}>
         <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>
-          {selectMode ? `${selected.length} Selected` : 'E-Invoices'}
-        </Text>
-        {selectMode ? (
-          <TouchableOpacity
-            style={s.headerTextBtn}
-            onPress={() => setSelected(invoiceData.map(i => i.id))}
-            activeOpacity={0.7}
-          >
-            <Text style={s.headerTextBtnTxt}>Select All</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={s.backBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
-            <Ionicons name="calendar-outline" size={20}
-              color={fromDate ? COLORS.brandPrimary : COLORS.textSecondary}
-            />
-          </TouchableOpacity>
-        )}
+        <Text style={s.headerTitle}>E-Invoices</Text>
+        <TouchableOpacity style={s.backBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
+          <Ionicons name="calendar-outline" size={20}
+            color={fromDate ? COLORS.brandPrimary : COLORS.textSecondary}
+          />
+        </TouchableOpacity>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listContent}>
@@ -288,13 +305,24 @@ export default function EInvoiceListScreen() {
         <View style={[s.shareBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={s.shareLeft}>
             <Text style={s.shareCount}>{selected.length} selected</Text>
+            <TouchableOpacity onPress={() => setSelected(invoiceData.map(i => i.id))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
+              <Text style={s.shareCancelTxt}>Select All</Text>
+            </TouchableOpacity>
             <TouchableOpacity onPress={cancelSelect} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7}>
               <Text style={s.shareCancelTxt}>Cancel</Text>
             </TouchableOpacity>
           </View>
-          <TouchableOpacity style={s.shareActionBtn} onPress={handleShare} activeOpacity={0.85}>
-            <Ionicons name="share-outline" size={16} color={COLORS.white} />
-            <Text style={s.shareActionTxt}>Share PDF / XLS</Text>
+          <TouchableOpacity
+            style={[s.shareActionBtn, isSharing && { opacity: 0.6 }]}
+            onPress={handleShare}
+            activeOpacity={0.85}
+            disabled={isSharing}
+          >
+            {isSharing
+              ? <ActivityIndicator size="small" color={COLORS.white} />
+              : <Ionicons name="share-outline" size={16} color={COLORS.white} />
+            }
+            <Text style={s.shareActionTxt}>{isSharing ? 'Preparing…' : 'Share PDF'}</Text>
           </TouchableOpacity>
         </View>
       )}

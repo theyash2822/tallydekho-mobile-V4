@@ -16,6 +16,12 @@ import { useAuth } from '../../src/context/AuthContext';
 import { getUserSettings, updateUserSettings, getBankLedgers, getCompanyLogo, getComplianceConfig, saveComplianceConfig } from '../../src/services/api';
 import { generateDocumentHTML, PDFBankInfo, DocumentFormat, resolveDocumentFormat } from '../../src/utils/documentHelpers';
 import { clearVoucherConfigCache } from '../../src/utils/voucherPdf';
+import {
+  ThermalPaperWidth,
+  DEFAULT_THERMAL_PAPER_WIDTH,
+  isThermalTemplateId,
+  thermalPageSize,
+} from '../../src/utils/pdf/thermalShared';
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 // Bank options are fetched from Tally (see useEffect in component)
@@ -31,6 +37,11 @@ const VOUCHER_TYPES = [
   { id: 'credit_note',    label: 'Credit Note',       icon: 'arrow-undo-outline'       },
   { id: 'debit_note',     label: 'Debit Note',        icon: 'arrow-redo-outline'       },
   { id: 'delivery_note',  label: 'Delivery Note',     icon: 'bicycle-outline'          },
+  { id: 'payment',        label: 'Payment Voucher',   icon: 'arrow-up-circle-outline'  },
+  { id: 'receipt',        label: 'Receipt Voucher',   icon: 'arrow-down-circle-outline'},
+  { id: 'expense',        label: 'Expense Voucher',   icon: 'wallet-outline'           },
+  { id: 'journal',        label: 'Journal Voucher',   icon: 'book-outline'             },
+  { id: 'contra',         label: 'Contra Voucher',    icon: 'swap-horizontal-outline'  },
 ];
 
 const DEFAULT_TERMS: Record<string, string[]> = {
@@ -45,6 +56,8 @@ const DEFAULT_TERMS: Record<string, string[]> = {
 
 interface VConfig {
   format:    DocumentFormat;
+  /** Only used when format is Thermal — 80 default / 58 compact. */
+  thermalPaperWidth: ThermalPaperWidth;
   bank:      string;
   qrEnabled: boolean;
   qrImage:   string | null;
@@ -57,7 +70,9 @@ interface VConfig {
 }
 
 const makeDefault = (id: string): VConfig => ({
-  format: 'tally', bank: 'Cash', qrEnabled: false, qrImage: null,
+  format: 'tally_classic_v1',
+  thermalPaperWidth: DEFAULT_THERMAL_PAPER_WIDTH,
+  bank: 'Cash', qrEnabled: false, qrImage: null,
   terms: DEFAULT_TERMS[id] ?? [],
   qrType: 'upi', qrUpiId: '', qrUrl: '', qrIfsc: '', qrAccount: '',
 });
@@ -65,10 +80,14 @@ const makeDefault = (id: string): VConfig => ({
 const VOUCHER_CONFIG_KEY = 'voucherConfig';
 
 const FORMAT_OPTIONS: Array<{ id: DocumentFormat; label: string }> = [
-  { id: 'tally',    label: 'Tally' },
-  { id: 'modern_a', label: 'Modern A' },
-  { id: 'modern_b', label: 'Modern B' },
+  { id: 'tally_classic_v1', label: 'Tally Classic' },
+  { id: 'td_thermal_v1',    label: 'TallyDekho Thermal' },
+  { id: 'td_executive_v1',  label: 'TallyDekho Executive' },
 ];
+
+function normalizeThermalWidth(v: unknown): ThermalPaperWidth {
+  return v === 58 || v === '58' ? 58 : DEFAULT_THERMAL_PAPER_WIDTH;
+}
 
 // ── Format Thumbnail (mini PDF preview) ───────────────────────────────────────
 function FormatThumb({ type }: { type: DocumentFormat }) {
@@ -82,10 +101,16 @@ function FormatThumb({ type }: { type: DocumentFormat }) {
     circ:  { width: 16, height: 16, borderRadius: 8, borderWidth: 1, borderColor: '#D4D4D4' },
   });
 
-  if (type === 'tally') return (
+  const resolved = resolveDocumentFormat(type);
+
+  if (resolved === 'tally_classic_v1') return (
     <View style={L.doc}>
-      {/* Tally replica: ruled grid, no colour */}
-      <View style={L.row}><View style={L.sq} /><View style={{ flex: 1, marginLeft: 4, gap: 2 }}><View style={[L.ln, { width: '90%' }]} /><View style={[L.ln, { width: '65%' }]} /></View></View>
+      {/* Tally Classic: centered letterhead + ruled grid */}
+      <View style={{ alignItems: 'center', gap: 2, marginBottom: 3 }}>
+        <View style={[L.ln, { width: '70%', height: 3 }]} />
+        <View style={[L.ln, { width: '55%' }]} />
+        <View style={[L.ln, { width: '40%' }]} />
+      </View>
       <View style={L.div} />
       <View style={L.row}><View style={[L.ln, { width: '38%' }]} /><View style={[L.ln, { width: '30%' }]} /></View>
       <View style={L.div} />
@@ -95,22 +120,29 @@ function FormatThumb({ type }: { type: DocumentFormat }) {
     </View>
   );
 
-  if (type === 'modern_a') return (
-    <View style={L.doc}>
-      {/* Modern: full-width dark header */}
-      <View style={{ height: 14, backgroundColor: '#1A1A1A', borderRadius: 1, marginBottom: 4 }} />
-      <View style={{ alignItems: 'center', marginBottom: 3 }}><View style={[L.ln, { width: '55%' }]} /></View>
-      <View style={L.div} />
-      <View style={L.row}><View style={{ gap: 2 }}><View style={[L.ln, { width: 38 }]} /><View style={[L.ln, { width: 28 }]} /></View><View style={{ gap: 2 }}><View style={[L.ln, { width: 38 }]} /><View style={[L.ln, { width: 28 }]} /></View></View>
-      <View style={L.div} />
-      {[0,1,2].map(i => <View key={i} style={L.row}><View style={[L.ln, { width: '6%' }]} /><View style={[L.ln, { width: '48%' }]} /><View style={[L.ln, { width: '18%' }]} /></View>)}
-      <View style={{ alignItems: 'flex-end', marginTop: 2 }}><View style={[L.ln, { width: '30%', height: 3 }]} /></View>
+  if (resolved === 'td_thermal_v1') return (
+    <View style={[L.doc, { alignItems: 'center', paddingHorizontal: 14 }]}>
+      {/* Thermal: narrow receipt strip */}
+      <View style={{ width: '55%', gap: 2, alignItems: 'center' }}>
+        <View style={[L.ln, { width: '90%', height: 3 }]} />
+        <View style={[L.ln, { width: '70%' }]} />
+        <View style={[L.ln, { width: '100%', height: 1, marginVertical: 3 }]} />
+        <View style={[L.ln, { width: '80%' }]} />
+        {[0,1,2].map(i => (
+          <View key={i} style={{ width: '100%', marginVertical: 1.5 }}>
+            <View style={[L.ln, { width: '100%' }]} />
+            <View style={[L.ln, { width: '55%', marginTop: 2, alignSelf: 'flex-end' }]} />
+          </View>
+        ))}
+        <View style={[L.ln, { width: '100%', height: 1, marginVertical: 3 }]} />
+        <View style={[L.ln, { width: '60%', height: 3, alignSelf: 'flex-end' }]} />
+      </View>
     </View>
   );
 
   return (
     <View style={L.doc}>
-      {/* Detailed: split header, table, footer stamp */}
+      {/* Executive: compact metadata strip */}
       <View style={{ flexDirection: 'row', marginBottom: 3 }}>
         <View style={{ flex: 1, paddingRight: 3 }}><View style={L.smSq} /><View style={[L.ln, { width: '80%', marginTop: 3 }]} /><View style={[L.ln, { width: '60%', marginTop: 2 }]} /></View>
         <View style={{ width: 1, backgroundColor: '#E8E8E8' }} />
@@ -257,6 +289,9 @@ export default function VoucherConfigScreen() {
             ...merged[k],
             ...parsed[k],
             format: resolveDocumentFormat(parsed[k]?.format),
+            thermalPaperWidth: normalizeThermalWidth(
+              parsed[k]?.thermalPaperWidth ?? merged[k].thermalPaperWidth
+            ),
           };
         });
         return merged;
@@ -377,16 +412,23 @@ export default function VoucherConfigScreen() {
     setPreviewLoading(id);
     try {
       const cfg = configs[id];
-      // Build a realistic sample document for preview
       const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      const documentType =
+        id === 'purchase_inv' ? 'purchase_invoice'
+        : id === 'sales_order' ? 'sales_order'
+        : id === 'purchase_order' ? 'purchase_order'
+        : id === 'credit_note' ? 'credit_note'
+        : id === 'debit_note' ? 'debit_note'
+        : id === 'delivery_note' ? 'delivery_note'
+        : id === 'payment' ? 'payment_voucher'
+        : id === 'receipt' ? 'receipt_voucher'
+        : id === 'expense' ? 'expense_voucher'
+        : id === 'journal' ? 'journal_voucher'
+        : id === 'contra' ? 'contra_voucher'
+        : 'sales_invoice';
+      const isMoney = ['payment_voucher', 'receipt_voucher', 'expense_voucher', 'contra_voucher', 'journal_voucher'].includes(documentType);
       const sampleDoc: any = {
-        documentType: id === 'purchase_inv' ? 'purchase_invoice'
-          : id === 'sales_order' ? 'sales_order'
-          : id === 'purchase_order' ? 'purchase_order'
-          : id === 'credit_note' ? 'credit_note'
-          : id === 'debit_note' ? 'debit_note'
-          : id === 'delivery_note' ? 'delivery_note'
-          : 'sales_invoice',
+        documentType,
         documentNumber: 'SMPL/2425/001',
         date: today,
         reference: '',
@@ -404,17 +446,25 @@ export default function VoucherConfigScreen() {
           name: 'Sample Customer', address: 'Delhi, India',
           gstin: '07AABCD1234E1ZP', state: 'Delhi', stateCode: '07',
         },
-        items: [
+        items: isMoney ? [] : [
           { name: 'Sample Product A', hsn: '8471', qty: 10, unit: 'PCS', rate: 500, discount: 0, amount: 5000, taxableAmount: 5000 },
           { name: 'Sample Product B', hsn: '8517', qty: 5,  unit: 'PCS', rate: 1200, discount: 0, amount: 6000, taxableAmount: 6000 },
         ],
-        ledgerEntries: [],
-        totals: { subtotal: 11000, discount: 0, taxableAmount: 11000, cgstTotal: 990, sgstTotal: 990, igstTotal: 0, taxTotal: 1980, roundOff: 0, total: 12980, balanceDue: 12980 },
-        taxes: [
+        ledgerEntries: isMoney ? [
+          { id: '1', particulars: 'Sample Customer', debit: 12980, reference: 'Account' },
+          { id: '2', particulars: cfg.bank || 'Cash', credit: 12980, reference: 'Through' },
+        ] : [],
+        totals: {
+          subtotal: 11000, discount: 0, taxableAmount: 11000,
+          cgstTotal: isMoney ? 0 : 990, sgstTotal: isMoney ? 0 : 990, igstTotal: 0,
+          taxTotal: isMoney ? 0 : 1980, roundOff: 0, total: 12980, balanceDue: 12980,
+          drTotal: 12980, crTotal: 12980,
+        },
+        taxes: isMoney ? [] : [
           { label: 'CGST', name: 'CGST', kind: 'cgst', rate: 9, amount: 990 },
           { label: 'SGST', name: 'SGST', kind: 'sgst', rate: 9, amount: 990 },
         ],
-        hsnSummary: [
+        hsnSummary: isMoney ? [] : [
           { hsn: '8471', taxableValue: 5000, cgstRate: 9, cgstAmount: 450, sgstRate: 9, sgstAmount: 450, totalTax: 900 },
           { hsn: '8517', taxableValue: 6000, cgstRate: 9, cgstAmount: 540, sgstRate: 9, sgstAmount: 540, totalTax: 1080 },
         ],
@@ -436,8 +486,13 @@ export default function VoucherConfigScreen() {
         cfg.terms,
         cfg.qrEnabled ? cfg.qrImage : null,
         bankInfo,
+        { thermalPaperWidth: normalizeThermalWidth(cfg.thermalPaperWidth) },
       );
-      const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
+      const format = resolveDocumentFormat(cfg.format);
+      const page = isThermalTemplateId(format)
+        ? thermalPageSize(normalizeThermalWidth(cfg.thermalPaperWidth))
+        : { width: 595, height: 842 };
+      const { uri } = await Print.printToFileAsync({ html, base64: false, ...page });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
         await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `${label} Preview` });
@@ -635,26 +690,57 @@ export default function VoucherConfigScreen() {
                   <View style={s.block}>
                     <Text style={s.blockLabel}>PDF FORMAT</Text>
                     <View style={s.formatRow}>
-                      {FORMAT_OPTIONS.map(opt => (
+                      {FORMAT_OPTIONS.map(opt => {
+                        const active = resolveDocumentFormat(cfg.format) === opt.id;
+                        return (
                         <TouchableOpacity
                           key={opt.id}
-                          style={[s.formatCard, cfg.format === opt.id && s.formatCardActive]}
-                          onPress={() => update(vt.id, 'format', opt.id)}
+                          style={[s.formatCard, active && s.formatCardActive]}
+                          onPress={() => { update(vt.id, 'format', opt.id); markDirty(); }}
                           activeOpacity={0.8}
                         >
-                          {cfg.format === opt.id && (
+                          {active && (
                             <View style={s.formatBadge}>
                               <Ionicons name="checkmark" size={10} color={COLORS.white} />
                             </View>
                           )}
                           <FormatThumb type={opt.id} />
-                          <Text style={[s.formatLbl, cfg.format === opt.id && s.formatLblActive]}>
-                            {opt.label}{opt.id === 'tally' ? ' (Default)' : ''}
+                          <Text style={[s.formatLbl, active && s.formatLblActive]}>
+                            {opt.label}{opt.id === 'tally_classic_v1' ? ' (Default)' : ''}
                           </Text>
                         </TouchableOpacity>
-                      ))}
+                        );
+                      })}
                     </View>
                   </View>
+
+                  {/* Thermal paper width — only when Thermal selected */}
+                  {isThermalTemplateId(resolveDocumentFormat(cfg.format)) && (
+                    <View style={s.block}>
+                      <Text style={s.blockLabel}>THERMAL PAPER</Text>
+                      <View style={s.qrTypeRow}>
+                        {([
+                          { v: 80 as ThermalPaperWidth, l: '80mm — Recommended' },
+                          { v: 58 as ThermalPaperWidth, l: '58mm — Compact' },
+                        ]).map(opt => {
+                          const active = normalizeThermalWidth(cfg.thermalPaperWidth) === opt.v;
+                          return (
+                            <TouchableOpacity
+                              key={opt.v}
+                              style={[s.qrTypeChip, active && s.qrTypeChipActive]}
+                              onPress={() => { update(vt.id, 'thermalPaperWidth', opt.v); markDirty(); }}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={[s.qrTypeChipTxt, active && s.qrTypeChipTxtActive]}>{opt.l}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                      <Text style={s.qrSub}>
+                        PDF Preview uses this roll width. On-screen cream sheets stay unchanged.
+                      </Text>
+                    </View>
+                  )}
 
                   {/* ② Default Bank Account */}
                   <View style={s.block}>
@@ -803,8 +889,10 @@ export default function VoucherConfigScreen() {
                       disabled={previewLoading === vt.id}
                       activeOpacity={0.85}
                     >
-                      <Ionicons name="document-outline" size={16} color={COLORS.brandPrimary} />
-                      <Text style={s.previewBtnTxt}>{previewLoading === vt.id ? 'Generating...' : 'PDF Preview'}</Text>
+                      <Ionicons name="document-outline" size={15} color={COLORS.brandPrimary} />
+                      <Text style={s.previewBtnTxt} numberOfLines={1}>
+                        {previewLoading === vt.id ? 'Generating…' : 'PDF Preview'}
+                      </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[s.useBtn, { flex: 1 }, isSaving && s.useBtnSaving]}
@@ -830,6 +918,7 @@ export default function VoucherConfigScreen() {
         <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
 
       {/* Bank Picker — single instance at root level */}
       <PickerSheet
@@ -914,8 +1003,9 @@ const s = StyleSheet.create({
   qrTypeChipTxtActive: { color: COLORS.white, fontWeight: '700' },
 
   // PDF Preview button
-  previewBtn:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, flex: 1, borderWidth: 1.5, borderColor: COLORS.brandPrimary, borderRadius: RADIUS.lg, paddingVertical: 14, backgroundColor: COLORS.cardBg },
-  previewBtnTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.brandPrimary },
+  previewBtn:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, flex: 1, minWidth: 0, borderWidth: 1.5, borderColor: COLORS.brandPrimary, borderRadius: RADIUS.lg, paddingVertical: 14, paddingHorizontal: 10, backgroundColor: COLORS.cardBg, overflow: 'hidden' },
+  previewBtnTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.brandPrimary, flexShrink: 1 },
+
 
   // Use this format / Save All
   useBtn:        { backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.lg, paddingVertical: 14, alignItems: 'center' },
