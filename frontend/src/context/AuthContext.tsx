@@ -103,7 +103,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [company, setCompanyState] = useState<Company | null>(null);
   const [user, setUserState] = useState<UserInfo | null>(null);
 
-  const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.241:3001';
+  const BASE_URL =
+    process.env.EXPO_PUBLIC_BACKEND_URL ||
+    (__DEV__ ? 'http://192.168.29.241:3001' : 'https://api.tallydekho.com');
 
   // Restore persisted state on mount
   useEffect(() => {

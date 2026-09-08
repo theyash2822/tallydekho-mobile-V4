@@ -474,7 +474,7 @@ export default function CashRegisterScreen() {
         visible={showFilter}
         onClose={() => setShowFilter(false)}
         typeFilter={typeFilter}
-        onApply={(next) => setTypeFilter(next)}
+        onApply={(next) => { setTypeFilter(next); setShowFilter(false); }}
       />
 
       <DateRangePickerModal

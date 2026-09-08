@@ -32,7 +32,7 @@ export default function TallySyncScreen() {
     try {
       // Ensure token is in AsyncStorage before making the call
       const storedToken = await AsyncStorage.getItem('auth_token');
-      console.log('[TallySync] Token present:', !!storedToken, storedToken?.slice(0,20));
+      if (__DEV__) console.log('[TallySync] Token present:', !!storedToken);
       if (!storedToken) {
         setStep('input');
         setError('Session expired. Please login again.');

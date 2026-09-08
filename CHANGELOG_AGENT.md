@@ -1,3 +1,9 @@
+## 2026-09-08 — Publish hardening
+
+Ledger share/pagination, multiShare page sizes, About URLs, token logs, `__DEV__`-only LAN API. Testing Agent YELLOW. Pushing `cursor`.
+
+---
+
 ## 2026-09-08 — P0/P1 publish prep
 
 Receipt Note → commercial cream/PDF; orphan Ledger/ZIP removed; tsc clean. See `frontend/CHANGELOG_AGENT.md`. Pushing `cursor`.

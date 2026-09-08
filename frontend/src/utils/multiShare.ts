@@ -78,6 +78,33 @@ export async function shareMultiPageHtmlPdf(
     return;
   }
 
+  const pages = htmlDocuments.map((html) => ({ html, page: pageSizeFromHtml(html) }));
+  const pageKey = (p: { width: number; height: number }) => `${p.width}x${p.height}`;
+  const firstKey = pageKey(pages[0].page);
+  const mixed = pages.some((p) => pageKey(p.page) !== firstKey);
+
+  // Mixed Thermal + A4 cannot share one print size without clipping — share one-by-one.
+  if (mixed) {
+    opts.onBeforeShare?.();
+    for (let i = 0; i < pages.length; i++) {
+      const { html, page } = pages[i];
+      const { uri } = await Print.printToFileAsync({ html, base64: false, ...page });
+      const name = opts.fileName
+        ? opts.fileName.replace(/\.pdf$/i, '') + ` (${i + 1} of ${pages.length}).pdf`
+        : `Document (${i + 1} of ${pages.length}).pdf`;
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: name,
+          UTI: 'com.adobe.pdf',
+        });
+      } else {
+        await Share.share({ url: uri, title: name });
+      }
+    }
+    return;
+  }
+
   const sections = htmlDocuments
     .map((full, idx) => {
       const body = extractBody(full);
@@ -86,6 +113,8 @@ export async function shareMultiPageHtmlPdf(
     })
     .join('\n');
 
+  // Body extract can drop thermal width markers — keep the detected page size.
+  const page = pages[0].page;
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
@@ -93,7 +122,14 @@ export async function shareMultiPageHtmlPdf(
   table{width:100%;border-collapse:collapse}
 </style></head><body>${sections}</body></html>`;
 
-  await shareHtmlPdf(html, opts.fileName || `Documents (${htmlDocuments.length}).pdf`, opts.onBeforeShare);
+  const fileName = opts.fileName || `Documents (${htmlDocuments.length}).pdf`;
+  const { uri } = await Print.printToFileAsync({ html, base64: false, ...page });
+  opts.onBeforeShare?.();
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: fileName, UTI: 'com.adobe.pdf' });
+    return;
+  }
+  await Share.share({ url: uri, title: fileName });
 }
 
 async function shareHtmlPdf(html: string, fileName: string, onBeforeShare?: () => void): Promise<void> {

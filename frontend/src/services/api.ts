@@ -24,7 +24,9 @@ export {
   type ApiErrorKind,
 } from './apiErrors';
 
-const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.168.29.241:3001';
+const BASE_URL =
+  process.env.EXPO_PUBLIC_BACKEND_URL ||
+  (__DEV__ ? 'http://192.168.29.241:3001' : 'https://api.tallydekho.com');
 /** Request timeout (ms) — soft upper bound for hung sockets */
 const REQUEST_TIMEOUT_MS = 25_000;
 

@@ -652,28 +652,40 @@ export default function LedgerScreen() {
               closingSide,
             };
           } catch {
-            // Fallback: balance-only sheet from list data if statement API fails
-            const amt = parseInt(String(item.balance).replace(/[^0-9]/g, ''), 10) || 0;
-            return {
-              company: companyBlock,
-              title: 'Ledger Account',
-              partyName: item.name,
-              period,
-              openingLabel: 'Opening Balance',
-              openingAmount: 0,
-              openingSide: 'Dr',
-              rows: [],
-              closingLabel: 'Closing Balance',
-              closingAmount: amt,
-              closingSide: item.type === 'credit' ? 'Cr' : 'Dr',
-            };
+            // Never invent a balance-only "statement" — incomplete PDFs mislead recipients.
+            return null;
           }
         })
       );
 
       const inputs = results.filter((x): x is StatementInput => x != null);
+      const failed = ledgers.length - inputs.length;
       if (!inputs.length) {
-        Alert.alert('Error', 'Could not load ledger data for PDF.');
+        Alert.alert('Error', 'Could not load ledger statements for PDF. Please try again.');
+        return;
+      }
+      if (failed > 0) {
+        Alert.alert(
+          'Partial export',
+          `${failed} of ${ledgers.length} ledger(s) could not be loaded and were skipped. Share the remaining ${inputs.length}?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Share partial',
+              onPress: async () => {
+                try {
+                  const fileName = inputs.length === 1
+                    ? `${inputs[0].partyName || 'Ledger'} — Statement.pdf`
+                    : `Ledgers (${inputs.length}) — Statements.pdf`;
+                  await shareMultiStatementPdf(inputs, { fileName });
+                  cancelSelectMode();
+                } catch (err: any) {
+                  Alert.alert('Error', err?.message || 'Could not generate PDF. Please try again.');
+                }
+              },
+            },
+          ]
+        );
         return;
       }
 
@@ -864,6 +876,13 @@ export default function LedgerScreen() {
       const rows = res?.data ?? (Array.isArray(res) ? res : []);
       if (Array.isArray(rows)) {
         const mapped = rows.map(mapLedger);
+        const seenIds = new Set(data.map(p => p.id));
+        const uniqueAdded = mapped.filter(r => {
+          if (!r.id || seenIds.has(r.id)) return false;
+          seenIds.add(r.id);
+          return true;
+        });
+        const nextLength = data.length + uniqueAdded.length;
         setData(prev => {
           const seen = new Set(prev.map(p => p.id));
           const added = mapped.filter(r => {
@@ -883,9 +902,8 @@ export default function LedgerScreen() {
             return Array.from(merged).sort((a, b) => a.localeCompare(b));
           });
         }
-        const _loadedSoFar = (data?.length ?? 0) + rows.length;
         const _metaTotal = res?.meta?.total ?? res?.total ?? 0;
-        setHasMore(_metaTotal > 0 ? _loadedSoFar < _metaTotal : rows.length === PAGE_SIZE);
+        setHasMore(_metaTotal > 0 ? nextLength < _metaTotal : rows.length === PAGE_SIZE);
         setPage(nextPage);
       }
     } catch (err: any) {
@@ -1279,16 +1297,17 @@ export default function LedgerScreen() {
           </View>
         )}
         onEndReached={() => {
-          // Short search/filter results fill less than a screen → FlatList fires end-reached
-          // immediately and used to flash footer skeletons under real rows.
+          // Avoid false end-reach flicker on short *server* pages (e.g. search hits).
+          // Do NOT gate on `filtered.length` — Hide ₹0 / Dr/Cr can shrink the visible
+          // list while more pages still exist on the server.
           if (isLoading || isLoadingMore || !hasMore) return;
-          if (filtered.length < 12) return;
+          if (data.length < PAGE_SIZE && !!debouncedSearch.trim()) return;
           loadMoreLedgers();
         }}
         onEndReachedThreshold={0.3}
         ListFooterComponent={() => (
           <>
-            {isLoadingMore && hasMore && filtered.length >= 12 && (
+            {isLoadingMore && hasMore && (
               <View style={{ paddingVertical: 8 }}>
                 <LedgerRowSkeleton />
                 <LedgerRowSkeleton />

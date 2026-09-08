@@ -1,5 +1,23 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-08 — Publish hardening (audit fixes)
+
+### Why
+Pre-publish audit: silent ledger PDF fallback, pagination under filters, mixed Thermal+A4 stitch, token logs, broken About URLs, LAN API in release builds.
+
+### Change
+- Ledger multi-share: no balance-only invent; partial-export confirm; load-more not gated on `filtered.length`; `hasMore` uses unique append length.
+- `multiShare`: mixed page sizes → sequential shares; same-size stitch keeps detected page size.
+- Cash Register filter Apply closes sheet.
+- Stop logging raw push/auth tokens (boolean/`__DEV__` only).
+- About: live Privacy + Terms PDF URLs.
+- API/Auth: LAN fallback `__DEV__` only; prod → `https://api.tallydekho.com`.
+
+### QA
+Testing Agent **YELLOW** (static + tsc; device manual list below). Pushing `cursor`.
+
+---
+
 ## 2026-09-08 — P0/P1 publish prep (universal print + cleanup)
 
 ### Why

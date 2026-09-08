@@ -81,7 +81,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
     const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData.data;
-    console.log('[Push] Expo push token:', token);
+    if (__DEV__) console.log('[Push] Expo push token registered');
 
     // Save to backend
     await registerPushToken(token, Platform.OS);
