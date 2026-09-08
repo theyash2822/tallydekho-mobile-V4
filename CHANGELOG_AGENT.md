@@ -1,3 +1,9 @@
+## 2026-09-08 — P0/P1 publish prep
+
+Receipt Note → commercial cream/PDF; orphan Ledger/ZIP removed; tsc clean. See `frontend/CHANGELOG_AGENT.md`. Pushing `cursor`.
+
+---
+
 ## 2026-09-07 — Thermal replaces Ledger
 
 Mobile PDF middle template is now Thermal (80/58). See `frontend/CHANGELOG_AGENT.md`. Ready for device test; not pushed.

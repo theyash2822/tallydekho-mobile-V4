@@ -744,6 +744,8 @@ export default function LedgerScreen() {
     setApiError(null);
     setPage(1);
     setHasMore(false);
+    // Stop footer shimmer if a prior load-more is in flight (common on search)
+    setIsLoadingMore(false);
 
     const soft = opts?.soft ?? hasListRef.current;
     if (!soft) setIsLoading(true);
@@ -834,8 +836,14 @@ export default function LedgerScreen() {
   };
 
   const loadMoreLedgers = async () => {
-    if (authLoading || !isAuthenticated || !companyGuid || isLoadingMore || !hasMore) return;
+    if (authLoading || !isAuthenticated || !companyGuid || isLoadingMore || !hasMore || isLoading) return;
+    // Short filtered/search lists often fire onEndReached immediately — avoid footer flicker
+    if (data.length < PAGE_SIZE && !!debouncedSearch.trim()) {
+      setHasMore(false);
+      return;
+    }
     const nextPage = page + 1;
+    const genAtStart = requestGenRef.current;
     setIsLoadingMore(true);
     try {
       const fyParams = selectedFY?.startDate && selectedFY?.endDate
@@ -851,6 +859,8 @@ export default function LedgerScreen() {
         ...fyParams,
         ...filterParams,
       }) as any;
+      // Search/filter reload superseded this page request
+      if (genAtStart !== requestGenRef.current) return;
       const rows = res?.data ?? (Array.isArray(res) ? res : []);
       if (Array.isArray(rows)) {
         const mapped = rows.map(mapLedger);
@@ -884,7 +894,8 @@ export default function LedgerScreen() {
         console.error('[Ledgers loadMore]', msg);
       }
     } finally {
-      setIsLoadingMore(false);
+      if (genAtStart === requestGenRef.current) setIsLoadingMore(false);
+      else setIsLoadingMore(false);
     }
   };
 
@@ -1267,17 +1278,23 @@ export default function LedgerScreen() {
             <Text style={styles.emptyText}>{data.length === 0 ? t('ledger.noLedgers') : t('ledger.noMatch')}</Text>
           </View>
         )}
-        onEndReached={loadMoreLedgers}
+        onEndReached={() => {
+          // Short search/filter results fill less than a screen → FlatList fires end-reached
+          // immediately and used to flash footer skeletons under real rows.
+          if (isLoading || isLoadingMore || !hasMore) return;
+          if (filtered.length < 12) return;
+          loadMoreLedgers();
+        }}
         onEndReachedThreshold={0.3}
         ListFooterComponent={() => (
           <>
-            {isLoadingMore && (
+            {isLoadingMore && hasMore && filtered.length >= 12 && (
               <View style={{ paddingVertical: 8 }}>
                 <LedgerRowSkeleton />
                 <LedgerRowSkeleton />
               </View>
             )}
-            {!isLoading && !hasMore && data.length > 0 && (
+            {!isLoading && !isLoadingMore && !hasMore && data.length > 0 && (
               <Text style={styles.endTxt}>All {data.length} ledgers loaded</Text>
             )}
             <View style={{ height: selectMode ? TAB_BAR_CLEARANCE + 90 : 80 }} />

@@ -1,5 +1,22 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-08 — P0/P1 publish prep (universal print + cleanup)
+
+### Why
+Close Spec holes before cursor push: Receipt Note on commercial cream/PDF; remove orphan Ledger/ZIP; clean tsc.
+
+### Change
+- `receipt_note` → commercial-print (qty-note hide amounts; purchase parties); cream + Settings PDF via `delivery_note` format.
+- Deleted unused `tdLedger*`, `shareZip.ts`; scrubbed ZIP comments.
+- `cash-in-hand.tsx` tsc fix; ledger Summary A + search shimmer (prior).
+- Offline: thermal smoke / Spec (10 types) / register sheets / `tsc --noEmit` PASS.
+
+### Not in this pass
+- Quotation create screen
+- ESC/POS; device Thermal smoke still founder-side
+
+---
+
 ## 2026-09-07 — Thermal replaces Ledger (PDF template)
 
 ### Why

@@ -42,13 +42,15 @@ export const DOC_TYPE_TO_CONFIG_ID: Record<string, string> = {
   credit_note: 'credit_note',
   debit_note: 'debit_note',
   delivery_note: 'delivery_note',
+  /** Inventory inbound — reuse Delivery Note print format settings. */
+  receipt_note: 'delivery_note',
   receipt_voucher: 'receipt',
   payment_voucher: 'payment',
   journal_voucher: 'journal',
   contra_voucher: 'contra',
   expense_voucher: 'expense',
   quotation: 'sales_inv',
-  stock_journal: 'stock_journal',
+  // stock_journal: cream preview only — no Settings PDF row
 };
 
 export interface PdfRenderOptions {

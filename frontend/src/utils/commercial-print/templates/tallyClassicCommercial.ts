@@ -294,7 +294,7 @@ export function renderAmountInWords(model: CommercialPrintModel): string {
   if (model.flags?.hideItemAmounts) {
     return `
   <div style="padding:6px;border:1px solid #000;border-top:none;font-size:9px">
-    <div style="font-style:italic">Quantity delivery note — amounts not applicable.</div>
+    <div style="font-style:italic">Quantity note — amounts not applicable.</div>
   </div>`;
   }
   return `
@@ -474,7 +474,7 @@ function renderQuoteProformaMeta(model: CommercialPrintModel): string {
   return renderMetaPairsTable(pairs, { spacer: true });
 }
 
-/** Delivery Note — shorter logistics meta. */
+/** Delivery / Receipt Note — shorter logistics meta. */
 function renderDeliveryNoteMeta(model: CommercialPrintModel): string {
   const r = model.references;
   const id = model.identity;
@@ -502,6 +502,7 @@ function renderTallyPrimeMeta(model: CommercialPrintModel): string {
     case 'Quotation':
       return renderQuoteProformaMeta(model);
     case 'DeliveryNote':
+    case 'ReceiptNote':
       return renderDeliveryNoteMeta(model);
     default:
       return renderSalesLogisticsMeta(model);
@@ -660,7 +661,7 @@ function renderTallyPrimeWords(model: CommercialPrintModel): string {
   <table style="width:100%">
     <tr>
       <td style="${CELL}">
-        <div style="font-size:9px;font-style:italic">Quantity delivery note — amounts not applicable.</div>
+        <div style="font-size:9px;font-style:italic">Quantity note — amounts not applicable.</div>
       </td>
     </tr>
   </table>`;

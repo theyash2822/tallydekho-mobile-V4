@@ -338,7 +338,7 @@ export default function CommercialDocumentPreview({
                 <Text style={p.eoe}>E. & O.E</Text>
               </>
             ) : (
-              <Text style={p.softTextItalic}>Quantity delivery note — amounts not applicable.</Text>
+              <Text style={p.softTextItalic}>Quantity note — amounts not applicable.</Text>
             )}
           </View>
 

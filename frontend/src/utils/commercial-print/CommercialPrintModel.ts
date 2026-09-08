@@ -23,6 +23,7 @@ export type CommercialDocumentType =
   | 'CreditNote'
   | 'DebitNote'
   | 'DeliveryNote'
+  | 'ReceiptNote'
   | 'Quotation';
 
 export type CommercialPrintModel = {

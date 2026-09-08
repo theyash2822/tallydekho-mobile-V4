@@ -18,6 +18,7 @@ const TYPES: { docType: DocumentType; printTitle: string }[] = [
   { docType: 'credit_note', printTitle: 'CREDIT NOTE' },
   { docType: 'debit_note', printTitle: 'DEBIT NOTE' },
   { docType: 'delivery_note', printTitle: 'DELIVERY NOTE' },
+  { docType: 'receipt_note', printTitle: 'RECEIPT NOTE' },
   { docType: 'quotation', printTitle: 'QUOTATION' },
 ];
 
@@ -109,7 +110,7 @@ let failures = 0;
 const results: string[] = [];
 
 for (const { docType, printTitle } of TYPES) {
-  const zero = docType === 'delivery_note';
+  const zero = docType === 'delivery_note' || docType === 'receipt_note';
   const doc = sampleDoc(docType, { zeroAmounts: zero });
   try {
     const model = toCommercialPrintModel(doc, { companyGuid: 'qa-co' });
@@ -119,7 +120,7 @@ for (const { docType, printTitle } of TYPES) {
     if (docType === 'proforma_invoice' || docType === 'quotation') {
       assert(!!model.flags?.nonPostingDocument, `${docType}: nonPosting`);
     }
-    if (docType === 'delivery_note') {
+    if (docType === 'delivery_note' || docType === 'receipt_note') {
       assert(!!model.flags?.hideItemAmounts, `${docType}: hide amounts`);
     }
     if (docType === 'credit_note' || docType === 'debit_note') {
@@ -192,6 +193,19 @@ for (const { docType, printTitle } of TYPES) {
         model.legal.authorisedFor === 'Yash Ki Company',
         `${docType}: signatory for own company`
       );
+    } else if (docType === 'receipt_note') {
+      assert(
+        model.parties.some((p) => p.role === 'consignee'),
+        `${docType}: Consignee party`
+      );
+      assert(
+        model.parties.some((p) => p.role === 'supplier'),
+        `${docType}: Supplier party`
+      );
+      assert(
+        model.legal.authorisedFor === 'Sample Buyer',
+        `${docType}: signatory for supplier`
+      );
     }
 
     for (const tid of COMMERCIAL_TEMPLATE_IDS) {
@@ -205,7 +219,7 @@ for (const { docType, printTitle } of TYPES) {
         assert(html.includes('width:72mm'), `${docType}/thermal: 80mm css width`);
         assert(html.includes('Authorised Signatory'), `${docType}/thermal: signatory`);
         assert(html.includes('HSN/SAC') || html.includes('HSN'), `${docType}/thermal: HSN`);
-        if (docType === 'delivery_note') {
+        if (docType === 'delivery_note' || docType === 'receipt_note') {
           assert(html.includes('amounts not applicable'), `${docType}/thermal: hide amounts`);
         }
         if (docType === 'credit_note' || docType === 'debit_note') {
@@ -237,6 +251,10 @@ for (const { docType, printTitle } of TYPES) {
           assert(html.includes('Buyer'), `${docType}/classic: Buyer label`);
           assert(html.includes('for <b>Yash Ki Company</b>'), `${docType}/classic: for own co`);
           assert(!html.includes('Supplier (Bill from)'), `${docType}/classic: no Supplier`);
+        } else if (docType === 'receipt_note') {
+          assert(html.includes('Consignee'), `${docType}/classic: Consignee label`);
+          assert(html.includes('Supplier'), `${docType}/classic: Supplier label`);
+          assert(html.includes('for <b>Sample Buyer</b>'), `${docType}/classic: for supplier`);
         }
         if (docType === 'credit_note' || docType === 'debit_note') {
           assert(html.includes('Reason for Note'), `${docType}/classic: note reason meta`);
@@ -245,7 +263,7 @@ for (const { docType, printTitle } of TYPES) {
         if (docType === 'quotation' || docType === 'proforma_invoice') {
           assert(html.includes('Valid Until'), `${docType}/classic: valid until meta`);
         }
-        if (docType === 'delivery_note') {
+        if (docType === 'delivery_note' || docType === 'receipt_note') {
           assert(html.includes('Dispatch Doc'), `${docType}/classic: dispatch meta`);
           assert(
             html.includes('amounts not applicable'),

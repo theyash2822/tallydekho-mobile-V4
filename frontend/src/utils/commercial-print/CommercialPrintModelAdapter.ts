@@ -24,10 +24,15 @@ const COMMERCIAL_DOC_TYPES = new Set<DocumentType>([
   'credit_note',
   'debit_note',
   'delivery_note',
+  'receipt_note',
   'quotation',
 ]);
 
-const PURCHASE_DOC_TYPES = new Set<DocumentType>(['purchase_invoice', 'purchase_order']);
+const PURCHASE_DOC_TYPES = new Set<DocumentType>([
+  'purchase_invoice',
+  'purchase_order',
+  'receipt_note',
+]);
 
 const DOC_TO_PRINT: Record<string, CommercialDocumentType> = {
   sales_invoice: 'SalesInvoice',
@@ -38,6 +43,7 @@ const DOC_TO_PRINT: Record<string, CommercialDocumentType> = {
   credit_note: 'CreditNote',
   debit_note: 'DebitNote',
   delivery_note: 'DeliveryNote',
+  receipt_note: 'ReceiptNote',
   quotation: 'Quotation',
 };
 
@@ -50,6 +56,7 @@ const DEFAULT_TITLE: Record<CommercialDocumentType, string> = {
   CreditNote: 'CREDIT NOTE',
   DebitNote: 'DEBIT NOTE',
   DeliveryNote: 'DELIVERY NOTE',
+  ReceiptNote: 'RECEIPT NOTE',
   Quotation: 'QUOTATION',
 };
 
@@ -62,6 +69,7 @@ const DOC_NUMBER_LABEL: Record<CommercialDocumentType, string> = {
   CreditNote: 'Credit Note No.',
   DebitNote: 'Debit Note No.',
   DeliveryNote: 'Delivery Note No.',
+  ReceiptNote: 'Receipt Note No.',
   Quotation: 'Quotation No.',
 };
 
@@ -358,7 +366,8 @@ function resolveTitle(doc: VoucherDocument, printType: CommercialDocumentType): 
     printType === 'Quotation' ||
     printType === 'CreditNote' ||
     printType === 'DebitNote' ||
-    printType === 'DeliveryNote'
+    printType === 'DeliveryNote' ||
+    printType === 'ReceiptNote'
   ) {
     return DEFAULT_TITLE[printType];
   }
@@ -385,12 +394,12 @@ function resolveTaxAmountInWords(totals: VoucherDocument['totals']): string {
   return tallyWords(tax);
 }
 
-function isNonValuedDeliveryNote(
+function isNonValuedQtyNote(
   printType: CommercialDocumentType,
   items: ItemLine[],
   grandTotal: number
 ): boolean {
-  if (printType !== 'DeliveryNote') return false;
+  if (printType !== 'DeliveryNote' && printType !== 'ReceiptNote') return false;
   if (Math.abs(grandTotal) < 0.005) return true;
   if (!items.length) return true;
   return items.every((i) => !(i.rate > 0) && !(i.amount > 0));
@@ -421,7 +430,7 @@ export function toCommercialPrintModel(
   const grandTotal = totals.total ?? 0;
   const buyerParty = doc.party;
   const items = doc.items || [];
-  const hideItemAmounts = isNonValuedDeliveryNote(printType, items, grandTotal);
+  const hideItemAmounts = isNonValuedQtyNote(printType, items, grandTotal);
   const nonPosting =
     printType === 'ProformaInvoice' || printType === 'Quotation';
 

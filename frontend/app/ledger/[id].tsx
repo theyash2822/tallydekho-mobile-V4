@@ -52,51 +52,85 @@ function donutArc(
   ].join(' ');
 }
 
+/** Compact amount for the 96px donut hole — full value stays in the legend. */
+function compactDonutLabel(raw: string): string {
+  const n = parseFloat(String(raw).replace(/,/g, '').replace(/[^0-9.]/g, ''));
+  if (!Number.isFinite(n) || n === 0) {
+    return raw.length > 9 ? `${raw.slice(0, 8)}…` : raw;
+  }
+  const abs = Math.abs(n);
+  if (abs >= 1e7) return `₹${(abs / 1e7).toFixed(2)} Cr`;
+  if (abs >= 1e5) return `₹${(abs / 1e5).toFixed(2)} L`;
+  if (abs >= 1e3) return `₹${(abs / 1e3).toFixed(1)}K`;
+  return `₹${Math.round(abs).toLocaleString('en-IN')}`;
+}
+
 // ── Donut Chart ───────────────────────────────────────────────────────────────
 function DrCrDonutChart({
-  drPct, drAmt, crAmt,
+  drPct, drAmt, crAmt, size = 160,
 }: {
-  drPct: number; drAmt: string; crAmt: string;
+  drPct: number; drAmt: string; crAmt: string; size?: number;
 }) {
   const [sel, setSel] = useState<'dr' | 'cr' | null>(null);
-  const S = 160, cx = 80, cy = 80, rO = 70, rI = 44;
+  const S = size;
+  const cx = S / 2;
+  const cy = S / 2;
+  const rO = S * 0.44;
+  const rI = S * 0.275;
   const drEnd = drPct * 3.6; // degrees
+  const topFs = size <= 100 ? 11 : 16;
+  const botFs = size <= 100 ? 8 : 10;
 
   const drPath = donutArc(cx, cy, rO, rI, 0, drEnd);
   const crPath = donutArc(cx, cy, rO, rI, drEnd, 360);
 
-  // Centre text changes when a segment is selected
-  const topText  = sel === 'dr' ? drAmt  : sel === 'cr' ? crAmt  : `${drPct}%`;
+  // Centre: % by default; on tap show compact amount so it fits the hole
+  const topText  = sel === 'dr' ? compactDonutLabel(drAmt)
+    : sel === 'cr' ? compactDonutLabel(crAmt)
+    : `${drPct}%`;
   const botText  = sel === 'dr' ? 'Debit' : sel === 'cr' ? 'Credit' : 'Debit';
   const topColor = sel === 'dr' ? CHART_DR : sel === 'cr' ? CHART_CR : COLORS.textPrimary;
 
   return (
     <Svg width={S} height={S} viewBox={`0 0 ${S} ${S}`}>
-      {/* Cr segment */}
       <Path
         d={crPath}
         fill={CHART_CR}
         opacity={sel === 'dr' ? 0.35 : 1}
         onPress={() => setSel(p => (p === 'cr' ? null : 'cr'))}
       />
-      {/* Dr segment */}
       <Path
         d={drPath}
         fill={CHART_DR}
         opacity={sel === 'cr' ? 0.35 : 1}
         onPress={() => setSel(p => (p === 'dr' ? null : 'dr'))}
       />
-      {/* Centre white fill — creates the donut hole */}
-      <Circle cx={cx} cy={cy} r={rI - 2} fill={COLORS.cardBg} />
-      {/* Centre labels */}
-      <SvgText x={cx} y={cy - 6} textAnchor="middle" fontSize="16" fontWeight="700" fill={topColor}>
-        {topText}
+      <Circle cx={cx} cy={cy} r={Math.max(rI - 2, 1)} fill={COLORS.cardBg} />
+      <SvgText
+        x={cx}
+        y={cy - 4}
+        textAnchor="middle"
+        fontSize={topFs}
+        fontWeight="700"
+        fill={topColor}
+        lengthAdjust="spacingAndGlyphs"
+      >
+        {topText.length > 10 ? topText.slice(0, 9) + '…' : topText}
       </SvgText>
-      <SvgText x={cx} y={cy + 11} textAnchor="middle" fontSize="10" fill={COLORS.textTertiary}>
+      <SvgText x={cx} y={cy + 10} textAnchor="middle" fontSize={botFs} fill={COLORS.textTertiary}>
         {botText}
       </SvgText>
     </Svg>
   );
+}
+
+/** Shorten "01 Apr 2025–30 Jun 2025" → "01 Apr – 30 Jun" when year is trailing. */
+function formatDateRangeLabel(from: string, to: string): string {
+  const stripYear = (s: string) => s.replace(/\s+\d{4}\s*$/, '').trim();
+  const a = stripYear(from);
+  const b = stripYear(to);
+  if (a && b) return `${a} – ${b}`;
+  return `${from}–${to}`;
 }
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
@@ -123,14 +157,6 @@ function isDebitVoucher(voucherType: string): boolean {
 }
 
 // Transaction data from API only
-
-const KPI_CHIPS = [
-  { label: 'Opening',      value: '₹0',        color: COLORS.textSecondary },
-  { label: 'Closing',      value: '₹37.5K Dr', color: COLORS.negative      },
-  { label: 'Total Credit', value: '₹87.7K',    color: COLORS.positive      },
-  { label: 'Total Debit',  value: '₹17.9K',    color: COLORS.negative      },
-  { label: 'Vouchers',     value: '6',          color: COLORS.brandPrimary  },
-];
 
 const MONTHS_ORDER = [
   'Jan','Feb','Mar','Apr','May','Jun',
@@ -288,6 +314,8 @@ export default function LedgerDetailScreen() {
   const [fromDate,     setFromDate]     = useState('');
   const [toDate,       setToDate]       = useState('');
   const [showDateRange, setShowDateRange] = useState(false);
+  /** Analytics Summary — open by default; user can collapse for more list space. */
+  const [summaryExpanded, setSummaryExpanded] = useState(true);
 
   // ── Multi-select state ─────────────────────────────────────────────────────
   const [selectedTxns, setSelectedTxns] = useState<string[]>([]);
@@ -337,7 +365,7 @@ export default function LedgerDetailScreen() {
     }
   };
 
-  /** Multi-select vouchers → each Spec PDF packed in one ZIP (single share sheet). */
+  /** Multi-select vouchers → Spec PDFs in one multi-page share sheet. */
   const handleTxnShare = async () => {
     if (!companyGuid || txnSharing) return;
     const shareTxns = selectedTxns.length > 0
@@ -463,9 +491,6 @@ export default function LedgerDetailScreen() {
     setExpandedMonths(prev => (prev.has(mon) ? new Set() : new Set([mon])));
   };
 
-  const ROW_H = 56;
-  const VISIBLE_ROWS = 5;
-
   // When searching, auto-expand all months that have results
   const effectiveExpanded = searchQuery.trim()
     ? new Set(sortedMonths)   // all months visible while searching
@@ -475,21 +500,28 @@ export default function LedgerDetailScreen() {
   const totalDr = SOURCE_TXNS.filter((t: any) => t.isDebit).reduce((s: number, t: any) => s + (t.amount_raw || 0), 0);
   const totalCr = SOURCE_TXNS.filter((t: any) => !t.isDebit).reduce((s: number, t: any) => s + (t.amount_raw || 0), 0);
   const drPctComputed = (totalDr + totalCr) > 0 ? Math.round((totalDr / (totalDr + totalCr)) * 100) : 50;
-  const { formatAmount } = useSettings();
+  const { formatAmount, formatAmountCompact } = useSettings();
   const fmtAmt = (v: number) => formatAmount(Math.round(v));
+  const fmtCompact = (v: number) => formatAmountCompact(Math.round(v));
 
   // Use FY-specific computed balances (from statement API) — NOT static ledger table values
   const openingBal = fyOpening?.balance ?? (liveLedger?.opening_balance != null ? parseFloat(liveLedger.opening_balance) : 0);
   const openingType = fyOpening?.type ?? liveLedger?.balance_type ?? 'Dr';
   const closingBal = fyClosing?.balance ?? (liveLedger?.closing_balance != null ? parseFloat(liveLedger.closing_balance) : 0);
   const closingType = fyClosing?.type ?? liveLedger?.balance_type ?? 'Dr';
-  const balType = liveLedger?.balance_type || 'Dr';
-  const liveKpiChips = [
-    { label: 'Opening', value: openingBal > 0 ? `${formatAmount(Math.round(openingBal))} ${openingType}` : formatAmount(0), color: openingType === 'Dr' ? COLORS.negative : COLORS.positive },
-    { label: 'Closing', value: closingBal > 0 ? `${formatAmount(Math.round(closingBal))} ${closingType}` : formatAmount(0), color: closingType === 'Dr' ? COLORS.negative : COLORS.positive },
-    { label: 'Total Debit', value: fmtAmt(totalDr), color: COLORS.negative },
-    { label: 'Total Credit', value: fmtAmt(totalCr), color: COLORS.positive },
-    { label: 'Transactions', value: String(SOURCE_TXNS.length), color: COLORS.textSecondary },
+  const summaryCells = [
+    {
+      label: 'Opening',
+      value: openingBal > 0 ? `${fmtCompact(openingBal)} ${openingType}` : formatAmount(0),
+      color: openingType === 'Dr' ? COLORS.negative : COLORS.positive,
+    },
+    {
+      label: 'Closing',
+      value: closingBal > 0 ? `${fmtCompact(closingBal)} ${closingType}` : formatAmount(0),
+      color: closingType === 'Dr' ? COLORS.negative : COLORS.positive,
+    },
+    { label: 'Debit', value: fmtCompact(totalDr), color: COLORS.negative },
+    { label: 'Credit', value: fmtCompact(totalCr), color: COLORS.positive },
   ];
 
   return (
@@ -513,42 +545,62 @@ export default function LedgerDetailScreen() {
         inputProps={{ selectionColor: COLORS.brandPrimary, autoCorrect: false, autoCapitalize: 'none' }}
       />
 
-      {/* ── Fixed top section (chart + controls) — does NOT scroll ── */}
+      {/* ── Fixed top: Summary + 4 cells + Dates/Dr/Cr — does NOT scroll ── */}
       <Pressable style={styles.stickyTop} onPress={() => Keyboard.dismiss()}>
 
-        {/* ── Donut + Legend ── */}
-        <View style={styles.chartSection}>
-          <DrCrDonutChart drPct={drPctComputed} drAmt={fmtAmt(totalDr)} crAmt={fmtAmt(totalCr)} />
-          <View style={styles.chartLegend}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: CHART_DR }]} />
-              <Text style={styles.legendText}>Dr {fmtAmt(totalDr)}</Text>
+        <View style={styles.summaryCard}>
+          <TouchableOpacity
+            style={styles.summaryHeader}
+            onPress={() => setSummaryExpanded(v => !v)}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.summaryHeaderTitle}>Summary</Text>
+            <Ionicons
+              name={summaryExpanded ? 'chevron-up' : 'chevron-down'}
+              size={16}
+              color={COLORS.textTertiary}
+            />
+          </TouchableOpacity>
+
+          {summaryExpanded && (
+            <View style={styles.chartSectionInner}>
+              <DrCrDonutChart
+                drPct={drPctComputed}
+                drAmt={fmtAmt(totalDr)}
+                crAmt={fmtAmt(totalCr)}
+                size={96}
+              />
+              <View style={styles.chartLegend}>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: CHART_DR }]} />
+                  <Text style={styles.legendText}>Dr {fmtAmt(totalDr)}</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: CHART_CR }]} />
+                  <Text style={styles.legendText}>Cr {fmtAmt(totalCr)}</Text>
+                </View>
+                <Text style={styles.tapHint}>Tap segment to inspect</Text>
+              </View>
             </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: CHART_CR }]} />
-              <Text style={styles.legendText}>Cr {fmtAmt(totalCr)}</Text>
-            </View>
-            <Text style={styles.tapHint}>Tap segment to inspect</Text>
+          )}
+
+          <View style={styles.miniKpiRow}>
+            {summaryCells.map((cell, i) => (
+              <View
+                key={cell.label}
+                style={[styles.miniKpiCell, i === summaryCells.length - 1 && { borderRightWidth: 0 }]}
+              >
+                <Text style={styles.miniKpiLabel}>{cell.label}</Text>
+                <Text style={[styles.miniKpiValue, { color: cell.color }]} numberOfLines={1}>
+                  {cell.value}
+                </Text>
+              </View>
+            ))}
           </View>
         </View>
 
-        {/* ── KPI chips (horizontal scroll) ── */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.kpiRow}
-        >
-          {liveKpiChips.map(chip => (
-            <View key={chip.label} style={styles.kpiChip}>
-              <Text style={styles.kpiLabel}>{chip.label}</Text>
-              <Text style={[styles.kpiValue, { color: chip.color }]}>{chip.value}</Text>
-            </View>
-          ))}
-        </ScrollView>
-
-        {/* ── Single-line: Date Range | Search | Dr Cr ── */}
+        {/* Dates (compact, left) · spacer · Dr/Cr (right corners) */}
         <View style={styles.controlRow}>
-          {/* Date Range pill */}
           <TouchableOpacity
             style={[styles.dateRangePill, isDateActive && styles.dateRangePillActive]}
             onPress={() => setShowDateRange(true)}
@@ -560,7 +612,7 @@ export default function LedgerDetailScreen() {
               color={isDateActive ? COLORS.brandPrimary : COLORS.textTertiary}
             />
             <Text style={[styles.dateRangePillText, isDateActive && styles.dateRangePillTextActive]} numberOfLines={1}>
-              {isDateActive ? `${fromDate}–${toDate}` : 'Dates'}
+              {isDateActive ? formatDateRangeLabel(fromDate, toDate) : 'Dates'}
             </Text>
             {isDateActive ? (
               <TouchableOpacity
@@ -576,7 +628,6 @@ export default function LedgerDetailScreen() {
 
           <View style={{ flex: 1 }} />
 
-          {/* Dr / Cr filter pills */}
           <TouchableOpacity
             style={[styles.filterPill, showDrOnly && styles.filterPillActive]}
             onPress={() => { setShowDrOnly(!showDrOnly); setShowCrOnly(false); }}
@@ -593,9 +644,9 @@ export default function LedgerDetailScreen() {
           </TouchableOpacity>
         </View>
 
-      </Pressable>{/* end stickyTop */}
+      </Pressable>
 
-      {/* ── Scrollable transaction list only ── */}
+      {/* ── Single scrollable voucher list (no nested month cages) ── */}
       <ScrollView style={styles.txnScroll} contentContainerStyle={{ paddingHorizontal: SPACING.md, paddingBottom: txnSelectMode ? 100 : 120 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" onScrollBeginDrag={() => Keyboard.dismiss()}>
           {isLoading ? (
             <View style={{ paddingTop: 8 }}>
@@ -612,7 +663,6 @@ export default function LedgerDetailScreen() {
               const monTxns = monthGroups[mon];
               return (
                 <View key={mon} style={styles.monthGroup}>
-                  {/* Month header — tappable accordion toggle */}
                   <TouchableOpacity
                     style={styles.monthHeader}
                     onPress={() => toggleMonth(mon)}
@@ -626,17 +676,7 @@ export default function LedgerDetailScreen() {
                     />
                   </TouchableOpacity>
 
-                  {/* Rows — scroll within the expanded month group */}
-                  {isOpen && (
-                    <ScrollView
-                      style={{ height: Math.min(monTxns.length, VISIBLE_ROWS) * ROW_H }}
-                      contentContainerStyle={{ paddingBottom: 2 }}
-                      nestedScrollEnabled
-                      showsVerticalScrollIndicator
-                      keyboardShouldPersistTaps="handled"
-                      onScrollBeginDrag={() => Keyboard.dismiss()}
-                    >
-                  {monTxns.map((txn, idx) => {
+                  {isOpen && monTxns.map((txn, idx) => {
                     const isTxnSelected = selectedTxns.includes(txn.id);
                     return (
                     <TouchableOpacity
@@ -652,7 +692,6 @@ export default function LedgerDetailScreen() {
                           toggleTxnSelect(txn.id);
                         } else {
                           const docType = TX_TO_DOC_TYPE[txn.type];
-                          // Use GUID (txn.id) for reliable API lookup; fall back to voucher number
                           const docId = txn.id || txn.voucher;
                           router.push(
                             docType
@@ -664,19 +703,16 @@ export default function LedgerDetailScreen() {
                       onLongPress={() => toggleTxnSelect(txn.id)}
                       delayLongPress={500}
                     >
-                      {/* Date column — two lines */}
                       <View style={styles.txnDateCol}>
                         <Text style={styles.txnDay}>{txn.date.split(' ')[0]}</Text>
                         <Text style={styles.txnMon}>{txn.date.split(' ')[1]}</Text>
                       </View>
 
-                      {/* Voucher info */}
                       <View style={styles.txnInfo}>
                         <Text style={styles.txnVoucher}>{txn.voucher}</Text>
                         <Text style={styles.txnType}>{txn.type}</Text>
                       </View>
 
-                      {/* Amount + balance */}
                       <View style={styles.txnAmounts}>
                         <Text style={[
                           styles.txnAmt,
@@ -687,7 +723,6 @@ export default function LedgerDetailScreen() {
                         <Text style={styles.txnBalance}>{txn.balance}</Text>
                       </View>
 
-                      {/* Checkmark / chevron */}
                       {txnSelectMode ? (
                         <View style={[styles.txnCheckbox, isTxnSelected && styles.txnCheckboxOn]}>
                           {isTxnSelected && <Ionicons name="checkmark" size={12} color={COLORS.white} />}
@@ -698,8 +733,6 @@ export default function LedgerDetailScreen() {
                     </TouchableOpacity>
                     );
                   })}
-                    </ScrollView>
-                  )}
                 </View>
               );
             })
@@ -796,42 +829,76 @@ const styles = StyleSheet.create({
   infoBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   scroll:  { flex: 1 },
 
-  // ── Fixed top (chart + controls) — does NOT scroll ──
+  // ── Fixed top (summary + controls) — does NOT scroll ──
   stickyTop: { backgroundColor: COLORS.pageBg },
 
-  // ── Single-row: Date | Search | Dr | Cr ──────────────────────────────────
+  // ── Dates (compact) + Dr / Cr ────────────────────────────────────────────
   controlRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingHorizontal: SPACING.md, paddingBottom: SPACING.sm,
+    justifyContent: 'flex-start',
   },
 
   // ── Scrollable transactions area ─────────────────────────────────────────
   txnScroll: { flex: 1 },
 
-  // Donut + legend card
-  chartSection: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'center', gap: 24,
+  // Collapsible Summary card
+  summaryCard: {
     backgroundColor: COLORS.cardBg,
-    margin: SPACING.md, borderRadius: RADIUS.lg,
-    padding: 16, borderWidth: 1, borderColor: COLORS.borderDefault,
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.borderDefault,
+    overflow: 'hidden',
   },
-  chartLegend: { gap: 10, alignItems: 'flex-start' },
+  summaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 12,
+  },
+  summaryHeaderTitle: {
+    fontSize: TYPOGRAPHY.sm,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  chartSectionInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 20,
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderDefault,
+    paddingTop: SPACING.sm,
+  },
+  chartLegend: { gap: 8, alignItems: 'flex-start' },
   legendItem:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  legendDot:   { width: 11, height: 11, borderRadius: 6 },
+  legendDot:   { width: 10, height: 10, borderRadius: 5 },
   legendText:  { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  tapHint:     { fontSize: 10, color: COLORS.textTertiary, marginTop: 6, fontStyle: 'italic' },
+  tapHint:     { fontSize: 10, color: COLORS.textTertiary, marginTop: 4, fontStyle: 'italic' },
 
-  // KPI chips
-  kpiRow: { paddingHorizontal: SPACING.md, gap: 8, paddingBottom: SPACING.md },
-  kpiChip: {
-    paddingHorizontal: 14, paddingVertical: 10,
-    backgroundColor: COLORS.cardBg, borderRadius: 20,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
-    alignItems: 'center', gap: 2,
+  // 4 equal mini cells — Opening | Closing | Debit | Credit
+  miniKpiRow: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderDefault,
   },
-  kpiLabel: { fontSize: 10, color: COLORS.textTertiary, fontWeight: '500' },
-  kpiValue: { fontSize: TYPOGRAPHY.sm, fontWeight: '700' },
+  miniKpiCell: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    gap: 2,
+    borderRightWidth: 1,
+    borderRightColor: COLORS.borderDefault,
+  },
+  miniKpiLabel: { fontSize: 10, color: COLORS.textTertiary, fontWeight: '500' },
+  miniKpiValue: { fontSize: 11, fontWeight: '700', textAlign: 'center' },
 
   // Search + filter row
   filterRow: {
@@ -914,17 +981,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md, paddingBottom: SPACING.sm, gap: 8,
   },
   dateRangePill: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 12, paddingVertical: 9,
-    backgroundColor: COLORS.cardBg, borderRadius: RADIUS.full,
-    borderWidth: 1, borderColor: COLORS.borderDefault,
+    flexGrow: 0,
+    flexShrink: 1,
+    maxWidth: '52%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    minWidth: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.borderDefault,
   },
   dateRangePillActive: {
     borderColor: COLORS.brandPrimary, borderWidth: 1.5,
     backgroundColor: COLORS.activeBg,
   },
   dateRangePillText: {
-    flex: 1, fontSize: TYPOGRAPHY.xs, fontWeight: '500', color: COLORS.textTertiary,
+    flexShrink: 1, fontSize: TYPOGRAPHY.xs, fontWeight: '500', color: COLORS.textTertiary,
   },
   dateRangePillTextActive: {
     color: COLORS.brandPrimary, fontWeight: '700',

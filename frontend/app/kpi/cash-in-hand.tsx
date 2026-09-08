@@ -632,7 +632,7 @@ export default function CashInHandScreen() {
               </View>
               {txs.length === 0 ? (
                 <View style={s.empty}><Text style={s.emptyTxt}>{t('kpi.noCashMovements')}</Text></View>
-              ) : txs.slice(0, 5).map((txn: any, idx: number, arr) => (
+              ) : txs.slice(0, 5).map((txn: any, idx: number, arr: any[]) => (
                 <TouchableOpacity
                   key={`tx-${idx}-${txn.guid || txn.voucher_number || 'x'}`}
                   style={[s.txRow, idx < arr.length - 1 && s.txBorder]}
