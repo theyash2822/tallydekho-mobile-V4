@@ -6,7 +6,6 @@ import {
   renderTaxSummaryTable,
   renderTotalsBlock,
   renderAmountInWords,
-  renderLegalFooter,
   wrapCommercialHtmlDocument,
 } from './tallyClassicCommercial';
 
@@ -138,6 +137,63 @@ function executiveAmountSummary(model: CommercialPrintModel): string {
   </div>`;
 }
 
+/**
+ * Closing block — bank + QR parity with Classic / Thermal
+ * (from voucher-config Default Bank + QR settings).
+ */
+function executiveClosing(model: CommercialPrintModel): string {
+  const l = model.legal;
+  const bank = (model as any)._bankInfo as
+    | { bankName?: string | null; accountNo?: string | null; ifsc?: string | null; upiId?: string | null }
+    | null
+    | undefined;
+  const qrImage = (model as any)._qrImage as string | null | undefined;
+
+  const bankLines = bank
+    ? [
+        bank.bankName ? `Bank: ${esc(bank.bankName)}` : '',
+        bank.accountNo ? `A/C: ${esc(bank.accountNo)}` : '',
+        bank.ifsc ? `IFSC: ${esc(bank.ifsc)}` : '',
+        bank.upiId ? `UPI: ${esc(bank.upiId)}` : '',
+      ].filter(Boolean)
+    : [];
+
+  const panGst = [
+    l.companyPan ? `Company's PAN : ${esc(l.companyPan)}` : '',
+    l.companyGstin ? `Company's GSTIN/UIN : ${esc(l.companyGstin)}` : '',
+    l.buyerPan ? `Buyer's PAN : ${esc(l.buyerPan)}` : '',
+  ]
+    .filter(Boolean)
+    .join('<br/>');
+
+  const nonPostingNote = model.flags?.nonPostingDocument
+    ? `<div style="margin-bottom:4px;font-style:italic">This document does not create an accounting posting by itself.</div>`
+    : '';
+
+  return `
+  <div class="closing" style="margin-top:12px;padding:10px 0 0;border-top:1px solid #000;font-size:9px">
+    ${panGst ? `<div style="margin-bottom:6px;color:#444">${panGst}</div>` : ''}
+    ${model.narration ? `<div style="margin-bottom:4px"><b>Narration:</b> ${esc(model.narration)}</div>` : ''}
+    ${model.terms ? `<div style="margin-bottom:4px"><b>Terms:</b> ${esc(model.terms)}</div>` : ''}
+    ${l.declaration ? `<div style="margin-bottom:4px"><b>Declaration</b><br/>${esc(l.declaration)}</div>` : ''}
+    ${nonPostingNote}
+    ${l.jurisdiction ? `<div style="margin-bottom:4px;font-weight:bold">${esc(l.jurisdiction)}</div>` : ''}
+    ${l.computerGeneratedText ? `<div style="margin-bottom:4px;font-style:italic;color:#555">${esc(l.computerGeneratedText)}</div>` : ''}
+    <table style="width:100%;margin-top:14px">
+      <tr>
+        <td style="vertical-align:bottom;font-size:9px;width:50%;padding-right:12px">
+          ${bankLines.length ? bankLines.map((x) => `<div style="margin-bottom:2px">${x}</div>`).join('') : ''}
+          ${qrImage ? `<img src="${esc(qrImage)}" style="width:64px;height:64px;margin-top:8px;object-fit:contain"/>` : ''}
+        </td>
+        <td style="vertical-align:bottom;text-align:right;font-size:9px;width:50%">
+          <div style="margin-bottom:28px">for <b>${esc(l.authorisedFor || model.company.name)}</b></div>
+          <div style="border-top:1px solid #000;width:160px;margin-left:auto;padding-top:4px">${esc(l.authorisedSignatoryLabel || 'Authorised Signatory')}</div>
+        </td>
+      </tr>
+    </table>
+  </div>`;
+}
+
 /** TallyDekho Executive — Spec §14. Premium spacing, metadata strip. */
 export function renderTdExecutiveCommercial(model: CommercialPrintModel): string {
   const body = `
@@ -158,7 +214,7 @@ ${executiveAmountSummary(model)}
   </tr>
 </table>
 ${renderTaxSummaryTable(model)}
-${renderLegalFooter(model)}
+${executiveClosing(model)}
 <div class="page-footer">TallyDekho Executive</div>`;
 
   return wrapCommercialHtmlDocument(body);

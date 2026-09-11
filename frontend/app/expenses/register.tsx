@@ -6,9 +6,10 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
+import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import SearchBar from '../../src/components/SearchBar';
 import { useAuth } from '../../src/context/AuthContext';
 import { getExpenses, getExpenseCounts } from '../../src/services/api';
@@ -79,15 +80,14 @@ export default function ExpenseRegisterScreen() {
   const [categoryCounts, setCategoryCounts] = useState<{ name: string; count: number }[]>([]);
 
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [fromDate, setFromDate] = useState(() => fyFrom ? isoToDMY(fyFrom) : '01/04/24');
-  const [toDate,   setToDate]   = useState(() => fyTo   ? isoToDMY(fyTo)   : '31/03/25');
+  const [fromDate, setFromDate] = useState(fyFrom);
+  const [toDate,   setToDate]   = useState(fyTo);
 
   // When FY loads/changes, reset date range to full FY (same as Sales/Purchase registers).
-  // Without this, async Auth leaves stale 01/04/24–31/03/25 → 0 expenses for current FY.
   useEffect(() => {
     if (fyFrom && fyTo) {
-      setFromDate(isoToDMY(fyFrom));
-      setToDate(isoToDMY(fyTo));
+      setFromDate(fyFrom);
+      setToDate(fyTo);
     }
   }, [fyFrom, fyTo]);
 
@@ -116,8 +116,8 @@ export default function ExpenseRegisterScreen() {
 
   const loadPage = (pageNum: number, append = false) => {
     if (!companyGuid) return Promise.resolve();
-    const from = dmyToISO(fromDate) || fyFrom;
-    const to   = dmyToISO(toDate)   || fyTo;
+    const from = fromDate || fyFrom;
+    const to   = toDate   || fyTo;
     const rangeParams = from && to ? { from, to } : {};
     // Radio Type: 0 or 1 value. Send both `types` (multi API) and legacy `type`.
     const typeParam = typeFilters.length
@@ -137,8 +137,8 @@ export default function ExpenseRegisterScreen() {
 
   const loadCounts = () => {
     if (!companyGuid) return;
-    const from = dmyToISO(fromDate) || fyFrom;
-    const to   = dmyToISO(toDate)   || fyTo;
+    const from = fromDate || fyFrom;
+    const to   = toDate   || fyTo;
     const rangeParams = from && to ? { from, to } : {};
     getExpenseCounts(companyGuid, rangeParams as any).then((res: any) => {
       const d = res?.data ?? {};
@@ -209,7 +209,7 @@ export default function ExpenseRegisterScreen() {
         await shareDayBookPdf({
           company: companyFromAuth(company),
           title: 'Expense Register',
-          period: `${fromDate} – ${toDate}`,
+          period: fromDate && toDate ? `${formatDate(fromDate)} – ${formatDate(toDate)}` : undefined,
           rows: items.map(item => dayBookRowFromListItem({
             date: item.date,
             party: item.party,
@@ -279,7 +279,7 @@ export default function ExpenseRegisterScreen() {
 
       <FilterPillRow>
         <FilterDatePill
-          label={`${fromDate} – ${toDate}`}
+          label={fromDate && toDate ? `${formatDate(fromDate)} – ${formatDate(toDate)}` : 'Dates'}
           onPress={() => { setStatusOpen(false); setShowDatePicker(true); }}
         />
         <FilterDropdownPill
@@ -388,7 +388,7 @@ export default function ExpenseRegisterScreen() {
                             if (isSelecting) toggleSelect(item.id);
                             else {
                               const routeType = expenseRowToRouteType(item.voucherType);
-                              router.push(`/document/${item.id}?type=${routeType}` as any);
+                              safePush(router, `/document/${item.id}?type=${routeType}` as any);
                             }
                           }}
                           onLongPress={() => toggleSelect(item.id)}
@@ -463,8 +463,8 @@ export default function ExpenseRegisterScreen() {
       {/* ── Date Picker ────────────────────────────────────────── */}
       <DateRangePickerModal
         visible={showDatePicker}
-        fromDate={fromDate}
-        toDate={toDate}
+        fromDate={fromDate || fyFrom}
+        toDate={toDate || fyTo}
         minDate={fyFrom || undefined}
         maxDate={fyTo || undefined}
         onApply={(from, to) => { setFromDate(from); setToDate(to); setShowDatePicker(false); }}

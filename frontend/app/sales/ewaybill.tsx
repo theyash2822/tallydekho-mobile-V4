@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import Toast from 'react-native-toast-message';
 
@@ -105,7 +106,7 @@ export default function EWayBillScreen() {
         if (msg.includes('not provisioned') || msg.includes('credentials') || msg.includes('not configured')) {
           Alert.alert('Not Configured', msg, [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Go to Settings', onPress: () => router.push('/settings/voucher-config' as any) },
+            { text: 'Go to Settings', onPress: () => safePush(router, '/settings/voucher-config' as any) },
           ]);
         } else {
           Toast.show({ type: 'error', text1: 'EWB Failed', text2: msg });
@@ -116,7 +117,7 @@ export default function EWayBillScreen() {
       if (msg.includes('not provisioned') || msg.includes('credentials')) {
         Alert.alert('Not Configured', 'Configure NIC EWB credentials in Settings', [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Configure', onPress: () => router.push('/settings/voucher-config' as any) },
+          { text: 'Configure', onPress: () => safePush(router, '/settings/voucher-config' as any) },
         ]);
       } else {
         Toast.show({ type: 'error', text1: 'EWB Failed', text2: msg });

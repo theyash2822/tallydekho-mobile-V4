@@ -4,6 +4,7 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useSettings } from '../../src/context/SettingsContext';
 
@@ -58,7 +59,7 @@ export default function VouchersHubScreen() {
         <View style={s.secRow}><Text style={s.secTitle}>Voucher Types</Text></View>
         <View style={s.grid}>
           {VOUCHER_TYPES.map(vt => (
-            <TouchableOpacity key={vt.label} style={s.vCard} onPress={() => router.push(vt.route as any)} activeOpacity={0.75}>
+            <TouchableOpacity key={vt.label} style={s.vCard} onPress={() => safePush(router, vt.route as any)} activeOpacity={0.75}>
               <View style={[s.vIconBox, { backgroundColor: vt.bg }]}>
                 <Ionicons name={vt.icon as any} size={26} color={vt.color} />
               </View>
@@ -77,7 +78,7 @@ export default function VouchersHubScreen() {
               <TouchableOpacity
                 style={s.listRow}
                 activeOpacity={0.7}
-                onPress={() => router.push(
+                onPress={() => safePush(router, 
                   `/document/${item.id}?type=${item.type === 'Payment' ? 'payment_voucher' : 'receipt_voucher'}` as any
                 )}
               >
@@ -116,7 +117,7 @@ export default function VouchersHubScreen() {
               onPress={() => {
                 setShowCreate(false);
                 const dest = (opt as any).route || `/voucher/create?type=${opt.type}`;
-                router.push(dest as any);
+                safePush(router, dest as any);
               }}
               activeOpacity={0.7}
             >

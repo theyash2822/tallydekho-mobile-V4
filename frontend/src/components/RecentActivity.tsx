@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 import { useSettings } from '../context/SettingsContext';
+import { safePush } from '../utils/safeNavigation';
 
 // Supports both the legacy mock shape AND the new API shape
 interface Activity {
@@ -106,7 +107,7 @@ const RecentActivity: React.FC<RecentActivityProps> = ({
 
   const handlePress = (item: Activity) => {
     if (item.route) {
-      router.push(item.route as any);
+      safePush(router, item.route as any);
       return;
     }
     if (!item.guid) return;
@@ -117,7 +118,8 @@ const RecentActivity: React.FC<RecentActivityProps> = ({
       (item as any).documentType ||
       (item as any).voucher_type ||
       (item as any).voucherType;
-    router.push(
+    safePush(
+      router,
       (typeHint
         ? `/document/${item.guid}?type=${encodeURIComponent(String(typeHint))}`
         : `/document/${item.guid}`) as any

@@ -7,6 +7,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 import { useAuth } from '../../src/context/AuthContext';
@@ -172,7 +173,7 @@ export default function SalesScreen() {
         right={(
           <TouchableOpacity
             style={s.ewbBtn}
-            onPress={() => router.push('/reports/ewb-list' as any)}
+            onPress={() => safePush(router, '/reports/ewb-list' as any)}
             activeOpacity={0.7}
           >
             <Text style={s.ewbTxt}>{t('sales.ewayBill')}</Text>
@@ -252,7 +253,7 @@ export default function SalesScreen() {
                   key={inv.id}
                   onPress={() => {
                     const routeType = docTypeToRouteType(inv.docType || 'invoice', 'sales');
-                    router.push(`/document/${inv.id}?type=${routeType}` as any);
+                    safePush(router, `/document/${inv.id}?type=${routeType}` as any);
                   }}
                 >
                   <VoucherListTile
@@ -271,7 +272,7 @@ export default function SalesScreen() {
             )}
             <ViewAllButton
               label={t('sales.viewAll')}
-              onPress={() => router.push('/sales/register' as any)}
+              onPress={() => safePush(router, '/sales/register' as any)}
             />
           </View>
         )}
@@ -294,7 +295,7 @@ export default function SalesScreen() {
             ))}
             <ViewAllButton
               label={t('sales.viewAll')}
-              onPress={() => router.push('/ledger' as any)}
+              onPress={() => safePush(router, '/ledger' as any)}
             />
           </View>
         )}

@@ -18,6 +18,7 @@ import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import {
@@ -1071,7 +1072,7 @@ export default function CreateDeliveryNoteScreen() {
                 <TouchableOpacity
                   style={[ss.previewBtn, { flex: 1 }]}
                   activeOpacity={0.85}
-                  onPress={() => router.push(`/sales/delivery-note-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef!)}` as any)}
+                  onPress={() => safePush(router, `/sales/delivery-note-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef!)}` as any)}
                 >
                   <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
                   <Text style={ss.previewBtnTxt}>Preview</Text>

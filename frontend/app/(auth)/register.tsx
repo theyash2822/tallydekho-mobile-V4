@@ -6,6 +6,7 @@ import {
   ScrollView, ActivityIndicator
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect } from 'react';
@@ -135,7 +136,7 @@ export default function RegisterScreen() {
               </View>
               <Text style={styles.termsText}>
                 Accept{' '}
-                <Text style={styles.link} onPress={() => router.push('/(auth)/terms' as any)}>
+                <Text style={styles.link} onPress={() => safePush(router, '/(auth)/terms' as any)}>
                   Terms and Conditions &amp; Privacy Policy
                 </Text>
               </Text>

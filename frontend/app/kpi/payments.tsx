@@ -8,6 +8,7 @@ import Svg, { Path, Line, Circle, Defs, LinearGradient as SvgGrad, Stop, Text as
 import { PieChart } from 'react-native-gifted-charts';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
@@ -495,7 +496,7 @@ export default function PaymentsScreen() {
                   subtitle={`${p.party_name || '—'} · ${fmtDate(p.date)}`}
                   amount={formatAmount(Math.round(p.amount))}
                   showBorder={idx < filtered.length - 1}
-                  onPress={() => p.guid && router.push(`/document/${p.guid}?type=payment_voucher` as any)}
+                  onPress={() => p.guid && safePush(router, `/document/${p.guid}?type=payment_voucher` as any)}
                 />
               ))}
             </View>

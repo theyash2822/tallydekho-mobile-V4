@@ -107,8 +107,11 @@ export default function ItemDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { company, selectedFY } = useAuth();
+  const { formatDate } = useSettings();
   const companyGuid = company?.guid;
   const fyParam = fyInfoToParam(selectedFY);
+  const fyFrom = selectedFY?.startDate ?? '';
+  const fyTo = selectedFY?.endDate ?? '';
 
   const [liveItem,   setLiveItem]   = useState<any>(null);
   const [itemLoading, setItemLoading] = useState(true);
@@ -120,6 +123,10 @@ export default function ItemDetailScreen() {
   const [calOpen,    setCalOpen]    = useState(false);
   const [dateFrom,   setDateFrom]   = useState('');
   const [dateTo,     setDateTo]     = useState('');
+  useEffect(() => {
+    setDateFrom('');
+    setDateTo('');
+  }, [selectedFY?.startDate, selectedFY?.endDate]);
   const [itemBarcode,       setItemBarcode]       = useState<string | null>(null);
   const [barcodeGenerating, setBarcodeGenerating] = useState(false);
 
@@ -156,13 +163,21 @@ export default function ItemDetailScreen() {
   useEffect(() => {
     if (!companyGuid || !id) return;
     setMovLoading(true);
-    getStockMovements(companyGuid, id as string, { limit: '20', ...(fyParam ? { fy: fyParam } : {}) })
+    const params: Record<string, string> = { limit: '20' };
+    if (dateFrom && dateTo) {
+      params.from = dateFrom;
+      params.to = dateTo;
+      params.limit = '200';
+    } else if (fyParam) {
+      params.fy = fyParam;
+    }
+    getStockMovements(companyGuid, id as string, params)
       .then((res: any) => {
         if (res?.data) { setMovements(res.data.movements || []); setRateData(res.data); }
       })
       .catch(() => {})
       .finally(() => setMovLoading(false));
-  }, [companyGuid, id, selectedFY]);
+  }, [companyGuid, id, selectedFY, dateFrom, dateTo, fyParam]);
 
   // All data from real API — STRICT PRODUCTION DATA RULE
   const itemName     = liveItem?.name || (itemLoading ? 'Loading…' : '—');
@@ -184,7 +199,7 @@ export default function ItemDetailScreen() {
     : reorderLevel != null && totalQty < reorderLevel ? COLORS.warning
     : COLORS.positive;
 
-  const dateLabel = dateFrom && dateTo ? `${dateFrom} – ${dateTo}` : 'Last 20';
+  const dateLabel = dateFrom && dateTo ? `${formatDate(dateFrom)} – ${formatDate(dateTo)}` : 'Last 20';
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -380,12 +395,12 @@ export default function ItemDetailScreen() {
 
       <DateRangePickerModal
         visible={calOpen}
-        fromDate={dateFrom}
-        toDate={dateTo}
+        fromDate={dateFrom || fyFrom}
+        toDate={dateTo || fyTo}
         onClose={() => setCalOpen(false)}
         onApply={(from, to) => { setDateFrom(from); setDateTo(to); }}
-        minDate={selectedFY?.startDate}
-        maxDate={selectedFY?.endDate}
+        minDate={fyFrom || undefined}
+        maxDate={fyTo || undefined}
       />
     </SafeAreaView>
   );

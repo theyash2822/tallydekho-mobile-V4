@@ -8,6 +8,7 @@ import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, usePathname } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { barcodePicker } from '../../src/utils/barcodePicker';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
@@ -1605,7 +1606,7 @@ export default function CreateSalesInvoiceScreen() {
               onPress={() => {
                 if (!submitResult.tdkRef) return;
                 const typeQ = isProforma ? '&type=proforma_invoice' : '&type=sales_invoice';
-                router.push(`/sales/invoice-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}${typeQ}` as any);
+                safePush(router, `/sales/invoice-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}${typeQ}` as any);
               }}
             >
               <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
@@ -1824,7 +1825,7 @@ export default function CreateSalesInvoiceScreen() {
                         return { ...i, product: result.productName, unit: result.unit || si?.unit || i.unit, rate: si?.rate != null ? String(si.rate) : i.rate };
                       }));
                     });
-                    router.push(`/sales/product-scanner?companyGuid=${company?.guid}` as any);
+                    safePush(router, `/sales/product-scanner?companyGuid=${company?.guid}` as any);
                   }}
                   onAddTaxEntry={addTaxEntry}
                   onUpdateTaxEntry={updateTaxEntry}

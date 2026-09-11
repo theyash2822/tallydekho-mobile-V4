@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Dimensions, Activ
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import Svg, { Path, Circle, G, Line } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
@@ -280,7 +281,7 @@ export default function StockReportsScreen() {
           <View style={s.listCard}>
             {REPORTS.map((item, idx) => (
               <View key={item.id}>
-                <TouchableOpacity style={s.row} onPress={() => router.push(item.route as any)} activeOpacity={0.7}>
+                <TouchableOpacity style={s.row} onPress={() => safePush(router, item.route as any)} activeOpacity={0.7}>
                   <View style={s.iconBox}>
                     <Ionicons name={item.icon as any} size={20} color={COLORS.textSecondary} />
                   </View>

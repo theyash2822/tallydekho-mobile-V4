@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getBarcodeList } from '../../src/services/api';
@@ -55,7 +56,7 @@ export default function PrintBarcodesScreen() {
   const handlePrint = () => {
     const selected = queue.filter(q => q.selected);
     if (!selected.length) return;
-    router.push({
+    safePush(router, {
       pathname: '/stocks/print-settings',
       params: { ids: selected.map(i => i.stockGuid).join(',') },
     } as any);

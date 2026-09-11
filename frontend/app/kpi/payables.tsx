@@ -7,8 +7,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
+import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { getKPIPayables } from '../../src/services/api';
@@ -44,21 +45,31 @@ export default function PayablesScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { company, selectedFY, lastSyncAt } = useAuth();
-  const { formatAmountCompact, formatAmount } = useSettings();
+  const { formatAmountCompact, formatAmount, formatDate } = useSettings();
   const companyGuid = company?.guid;
+
+  const fyFrom = selectedFY?.startDate ?? '';
+  const fyTo = selectedFY?.endDate ?? '';
 
   const agingRef = useRef<FlatList>(null);
   const [agingIdx, setAgingIdx] = useState(0);
   const [activeTab, setActiveTab] = useState<'recent' | 'overdue'>('recent');
   const [showDatePick, setShowDatePick] = useState(false);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [dateFrom, setDateFrom] = useState(fyFrom);
+  const [dateTo, setDateTo] = useState(fyTo);
   const [activeChips, setActiveChips] = useState<Set<string>>(new Set());
   const [apiData, setApiData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
   const hasDataRef = useRef(false);
   const dataAsOfRef = useRef<Date | null>(null);
+
+  useEffect(() => {
+    if (fyFrom && fyTo) {
+      setDateFrom(fyFrom);
+      setDateTo(fyTo);
+    }
+  }, [fyFrom, fyTo]);
 
   const overdueOn = activeChips.has('overdue');
   const paymentsOn = activeChips.has('payments');
@@ -71,8 +82,8 @@ export default function PayablesScreen() {
     if (!soft) setApiError(null);
     try {
       const params: Record<string, string> = {};
-      const fromIso = dateFrom ? dmyToISO(dateFrom) : '';
-      const toIso = dateTo ? dmyToISO(dateTo) : '';
+      const fromIso = dateFrom || fyFrom;
+      const toIso = dateTo || fyTo;
       if (fromIso) params.from = fromIso;
       if (toIso) params.to = toIso;
       if (overdueOn) params.overdue = '1';
@@ -93,7 +104,7 @@ export default function PayablesScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [companyGuid, dateFrom, dateTo, overdueOn, lastSyncAt]);
+  }, [companyGuid, dateFrom, dateTo, fyFrom, fyTo, overdueOn, lastSyncAt]);
 
   useEffect(() => { load({ soft: hasDataRef.current }); }, [load]);
 
@@ -192,15 +203,9 @@ export default function PayablesScreen() {
   };
 
   const fmtRange = () => {
-    const fmt = (s: string) => {
-      const parts = s.split('/');
-      if (parts.length < 3) return s;
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return `${parseInt(parts[0], 10)} ${months[parseInt(parts[1], 10) - 1]}`;
-    };
     if (!dateFrom && !dateTo) return 'All dates';
-    if (dateFrom && !dateTo) return fmt(dateFrom);
-    return `${fmt(dateFrom)} – ${fmt(dateTo)}`;
+    if (dateFrom && dateTo) return `${formatDate(dateFrom)} – ${formatDate(dateTo)}`;
+    return formatDate(dateFrom || dateTo);
   };
 
   return (
@@ -282,7 +287,7 @@ export default function PayablesScreen() {
                       key={item.id}
                       style={[s.listRow, idx < payments.length - 1 && s.listRowBorder]}
                       activeOpacity={0.7}
-                      onPress={() => item.guid && router.push(`/document/${item.guid}` as any)}
+                      onPress={() => item.guid && safePush(router, `/document/${item.guid}` as any)}
                     >
                       <View style={s.partyIconBox}>
                         <Ionicons name="arrow-up-outline" size={18} color={COLORS.negative} />
@@ -329,7 +334,7 @@ export default function PayablesScreen() {
                           disabled={!item.voucherGuid}
                           onPress={() => {
                             if (!item.voucherGuid) return;
-                            router.push(`/document/${item.voucherGuid}?type=purchase_invoice` as any);
+                            safePush(router, `/document/${item.voucherGuid}?type=purchase_invoice` as any);
                           }}
                         >
                           <View style={s.partyIconBox}>
@@ -392,12 +397,12 @@ export default function PayablesScreen() {
 
       <DateRangePickerModal
         visible={showDatePick}
-        fromDate={dateFrom || isoToDMY(selectedFY?.startDate || '')}
-        toDate={dateTo || isoToDMY(selectedFY?.endDate || '')}
+        fromDate={dateFrom || fyFrom}
+        toDate={dateTo || fyTo}
         onApply={(f, t) => { setDateFrom(f); setDateTo(t); }}
         onClose={() => setShowDatePick(false)}
-        minDate={selectedFY?.startDate}
-        maxDate={selectedFY?.endDate}
+        minDate={fyFrom || undefined}
+        maxDate={fyTo || undefined}
       />
     </SafeAreaView>
   );

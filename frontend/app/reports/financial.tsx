@@ -6,9 +6,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import DateRangePickerModal, { fmtDMY } from '../../src/components/DateRangePickerModal';
+import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { getFullFinancialReport } from '../../src/services/api';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
+import { useSettings } from '../../src/context/SettingsContext';
 import { CardSkeleton } from '../../src/components/ShimmerPlaceholder';
 
 // ── Mock Data (Tally Prime format) — shown when no real data available ───────
@@ -462,6 +463,7 @@ const tbg = StyleSheet.create({
 export default function FinancialReportScreen() {
   const router = useRouter();
   const { company: selectedCompany, selectedFY, lastSyncAt } = useAuth();
+  const { formatDate } = useSettings();
 
   const [openSection, setOpenSection] = useState<SectionKey | null>('pl');
   const toggleSection = (k: SectionKey) =>
@@ -484,9 +486,8 @@ export default function FinancialReportScreen() {
   const [customFrom, setCustomFrom] = useState<string | null>(null);
   const [customTo,   setCustomTo]   = useState<string | null>(null);
 
-  // Display dates for the date strip (DD/MM/YY format)
-  const fromDate = fmtDMY(new Date((customFrom ?? fyStartISO) + 'T00:00:00'));
-  const toDate   = fmtDMY(new Date((customTo   ?? fyEndISO)   + 'T00:00:00'));
+  const fromDate = customFrom ?? fyStartISO;
+  const toDate   = customTo   ?? fyEndISO;
 
   const [showDateSheet, setShowDateSheet] = useState(false);
 
@@ -503,13 +504,6 @@ export default function FinancialReportScreen() {
   const [error,  setError]    = useState<string | null>(null);
   const hasReportRef = useRef(false);
   const requestGenRef = useRef(0);
-
-  // Convert DD/MM/YY display to ISO for API (only used for custom range)
-  const toISO = (dmy: string): string => {
-    const [d, m, y] = dmy.split('/');
-    const fullYear = parseInt(y) < 50 ? `20${y}` : `19${y}`;
-    return `${fullYear}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
-  };
 
   // Resolve FY param — finYear (e.g. '2025-2026') or derived from startDate
   const fyParam = fyInfoToParam(selectedFY) ?? selectedFY?.finYear;
@@ -565,7 +559,7 @@ export default function FinancialReportScreen() {
       {/* ── Date range strip ── */}
       <TouchableOpacity style={s.dateStrip} onPress={() => setShowDateSheet(true)} activeOpacity={0.8}>
         <Ionicons name="calendar-outline" size={13} color={COLORS.textTertiary} />
-        <Text style={s.dateStripTxt}>{fromDate}{'  →  '}{toDate}</Text>
+        <Text style={s.dateStripTxt}>{formatDate(fromDate)}{'  →  '}{formatDate(toDate)}</Text>
         <Ionicons name="chevron-down" size={13} color={COLORS.textTertiary} />
       </TouchableOpacity>
 
@@ -622,18 +616,12 @@ export default function FinancialReportScreen() {
         visible={showDateSheet}
         fromDate={fromDate}
         toDate={toDate}
-        minDate={fyStartISO}  // constrain calendar to FY start
-        maxDate={fyEndISO}    // constrain calendar to FY end
+        minDate={fyStartISO}
+        maxDate={fyEndISO}
         onApply={(from, to) => {
           if (from && to) {
-            // from/to from the picker are DD/MM/YY — convert to ISO for state
-            const conv = (dmy: string) => {
-              const [d, m, y] = dmy.split('/');
-              const fullYear = parseInt(y) < 50 ? `20${y}` : `19${y}`;
-              return `${fullYear}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
-            };
-            setCustomFrom(conv(from));
-            setCustomTo(conv(to));
+            setCustomFrom(from);
+            setCustomTo(to);
           }
         }}
         onClose={() => setShowDateSheet(false)}

@@ -6,10 +6,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import Svg, { Path, Circle, Rect, Line, Text as SvgText, G } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
+import { useSettings } from '../../src/context/SettingsContext';
 import { getEInvoiceStatus } from '../../src/services/api';
 import { fyInfoToParam } from '../../src/context/AuthContext';
 
@@ -106,20 +108,37 @@ function EInvBarChart({ data }: { data: number[] }) {
 export default function EInvoiceComplianceScreen() {
   const router = useRouter();
   const { company, selectedFY } = useAuth();
-  const [fromDate,       setFromDate]       = useState('');
-  const [toDate,         setToDate]         = useState('');
+  const { formatDate } = useSettings();
+  const fyFrom = selectedFY?.startDate ?? '';
+  const fyTo = selectedFY?.endDate ?? '';
+  const [fromDate,       setFromDate]       = useState(fyFrom);
+  const [toDate,         setToDate]         = useState(fyTo);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [einvStatus,     setEinvStatus]     = useState<any>(null);
 
-  const isDateActive = fromDate.length > 0 && toDate.length > 0;
+  useEffect(() => {
+    if (fyFrom && fyTo) {
+      setFromDate(fyFrom);
+      setToDate(fyTo);
+    }
+  }, [fyFrom, fyTo]);
+
+  const isDateActive = !!(fromDate && toDate) && (fromDate !== fyFrom || toDate !== fyTo);
 
   useEffect(() => {
     if (!company?.guid) return;
     const fyParam = fyInfoToParam(selectedFY);
-    getEInvoiceStatus(company.guid, fyParam ? { fy: fyParam } : {})
+    const params: Record<string, string> = {};
+    if (fromDate && toDate) {
+      params.from = fromDate;
+      params.to = toDate;
+    } else if (fyParam) {
+      params.fy = fyParam;
+    }
+    getEInvoiceStatus(company.guid, params)
       .then((res: any) => { if (res?.data) setEinvStatus(res.data); })
       .catch(() => {});
-  }, [company?.guid, selectedFY]);
+  }, [company?.guid, selectedFY, fromDate, toDate]);
 
   const generatedCount = einvStatus?.generated_count  ?? 0;
   const pendingCount   = einvStatus?.pending_count    ?? 0;
@@ -153,11 +172,11 @@ export default function EInvoiceComplianceScreen() {
       <TouchableOpacity style={s.dateStrip} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
         <Ionicons name="calendar-outline" size={13} color={isDateActive ? COLORS.brandPrimary : COLORS.textTertiary} />
         <Text style={[s.dateStripTxt, isDateActive && s.dateStripActive]}>
-          {isDateActive ? `${fromDate}  →  ${toDate}` : 'All Dates'}
+          {fromDate && toDate ? `${formatDate(fromDate)}  →  ${formatDate(toDate)}` : 'All Dates'}
         </Text>
         {!isDateActive && <Ionicons name="chevron-down" size={11} color={COLORS.textTertiary} />}
         {isDateActive && (
-          <TouchableOpacity onPress={() => { setFromDate(''); setToDate(''); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <TouchableOpacity onPress={() => { setFromDate(fyFrom); setToDate(fyTo); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="close-circle" size={16} color={COLORS.brandPrimary} />
           </TouchableOpacity>
         )}
@@ -195,7 +214,7 @@ export default function EInvoiceComplianceScreen() {
         {/* ── Generated CTA ──────────────────────────────────────────────── */}
         <TouchableOpacity
           style={s.generatedBtn}
-          onPress={() => router.push('/reports/einvoice-list' as any)}
+          onPress={() => safePush(router, '/reports/einvoice-list' as any)}
           activeOpacity={0.85}
         >
           <Text style={s.generatedBtnTxt}>Generated  {generatedCount}</Text>
@@ -249,10 +268,10 @@ export default function EInvoiceComplianceScreen() {
 
       <DateRangePickerModal
         visible={showDatePicker}
-        fromDate={fromDate}
-        toDate={toDate}
-        minDate={selectedFY?.startDate}
-        maxDate={selectedFY?.endDate}
+        fromDate={fromDate || fyFrom}
+        toDate={toDate || fyTo}
+        minDate={fyFrom || undefined}
+        maxDate={fyTo || undefined}
         onApply={(f, t) => { if (f && t) { setFromDate(f); setToDate(t); } }}
         onClose={() => setShowDatePicker(false)}
       />

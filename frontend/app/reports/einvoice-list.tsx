@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIn
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
@@ -124,7 +125,7 @@ export default function EInvoiceListScreen() {
           'IRP credentials not set up. Go to Settings > E-Invoice to configure.',
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Go to Settings', onPress: () => router.push('/settings/einvoice' as any) },
+            { text: 'Go to Settings', onPress: () => safePush(router, '/settings/einvoice' as any) },
           ]
         );
       } else {
@@ -228,7 +229,7 @@ export default function EInvoiceListScreen() {
               style={[s.card, isSelected && s.cardSelected]}
               onPress={() => {
                 if (selectMode) { toggleSelect(item.id); }
-                else { router.push(`/document/${item.id}` as any); }
+                else { safePush(router, `/document/${item.id}` as any); }
               }}
               onLongPress={() => toggleSelect(item.id)}
               delayLongPress={500}
@@ -328,8 +329,8 @@ export default function EInvoiceListScreen() {
       )}
       <DateRangePickerModal
         visible={showDatePicker}
-        fromDate={fromDate}
-        toDate={toDate}
+        fromDate={fromDate || selectedFY?.startDate || ''}
+        toDate={toDate || selectedFY?.endDate || ''}
         minDate={selectedFY?.startDate}
         maxDate={selectedFY?.endDate}
         onApply={(f, t) => { setFromDate(f); setToDate(t); setShowDatePicker(false); }}

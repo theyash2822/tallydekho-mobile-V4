@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getAlerts } from '../../src/services/api';
@@ -276,7 +277,7 @@ export default function ComplianceHubScreen() {
 
         {/* ── 1. GST ────────────────────────────────────────────────────── */}
         <View style={s.card}>
-          <CardHeader icon="document-text-outline" title="GST" onPress={() => router.push('/reports/gst' as any)} />
+          <CardHeader icon="document-text-outline" title="GST" onPress={() => safePush(router, '/reports/gst' as any)} />
           <Divider />
 
           <View style={s.gstOuter}>
@@ -301,7 +302,7 @@ export default function ComplianceHubScreen() {
               {/* Unmatched + 7 — tap to open unmatched list */}
               <Pressable
                 style={[s.gstCell, s.unmatchedGroup]}
-                onPress={() => router.push('/reports/unmatched-list' as any)}
+                onPress={() => safePush(router, '/reports/unmatched-list' as any)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Text style={s.gstMuted}>Unmatched</Text>
@@ -311,7 +312,7 @@ export default function ComplianceHubScreen() {
 
               <Pressable
                 style={s.gstCell}
-                onPress={() => router.push('/reports/unmatched-list' as any)}
+                onPress={() => safePush(router, '/reports/unmatched-list' as any)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Text style={s.gstBigNum}>{unmatchedGST}</Text>
@@ -329,7 +330,7 @@ export default function ComplianceHubScreen() {
 
         {/* ── 2. E-Way Bill ─────────────────────────────────────────────── */}
         <View style={s.card}>
-          <CardHeader icon="car-outline" title="E-Way Bill" onPress={() => router.push('/reports/ewb-compliance' as any)} />
+          <CardHeader icon="car-outline" title="E-Way Bill" onPress={() => safePush(router, '/reports/ewb-compliance' as any)} />
           <Divider />
 
           <View style={s.ewbBody}>
@@ -365,7 +366,7 @@ export default function ComplianceHubScreen() {
 
         {/* ── 3. E-Invoicing ────────────────────────────────────────────── */}
         <View style={s.card}>
-          <CardHeader icon="receipt-outline" title="E-Invoicing" onPress={() => router.push('/reports/einvoice-compliance' as any)} />
+          <CardHeader icon="receipt-outline" title="E-Invoicing" onPress={() => safePush(router, '/reports/einvoice-compliance' as any)} />
           <Divider />
 
           <View style={s.progressBody}>
@@ -392,7 +393,7 @@ export default function ComplianceHubScreen() {
 
         {/* ── 4. Other Taxes ────────────────────────────────────────────── */}
         <View style={s.card}>
-          <CardHeader icon="calculator-outline" title="Other Taxes" onPress={() => router.push('/reports/other-taxes' as any)} />
+          <CardHeader icon="calculator-outline" title="Other Taxes" onPress={() => safePush(router, '/reports/other-taxes' as any)} />
           <Divider />
 
           <View style={s.progressBody}>

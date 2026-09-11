@@ -6,11 +6,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import Svg, {
   Path, Circle, Rect, Line, G, Text as SvgText, Defs, LinearGradient, Stop,
 } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
+import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { getKPICashInHand } from '../../src/services/api';
@@ -394,20 +395,30 @@ export default function CashInHandScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { company, selectedFY, lastSyncAt } = useAuth();
-  const { formatAmountCompact, formatAmount } = useSettings();
+  const { formatAmountCompact, formatAmount, formatDate } = useSettings();
   const companyGuid = company?.guid;
+
+  const fyFrom = selectedFY?.startDate ?? '';
+  const fyTo = selectedFY?.endDate ?? '';
 
   const sumRef = useRef<FlatList>(null);
   const [sumIdx, setSumIdx] = useState(0);
   const [chartDayIdx, setChartDayIdx] = useState<number | null>(null);
   const [showDatePick, setShowDatePick] = useState(false);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [dateFrom, setDateFrom] = useState(fyFrom);
+  const [dateTo, setDateTo] = useState(fyTo);
   const [apiData, setApiData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
   const hasDataRef = useRef(false);
   const dataAsOfRef = useRef<Date | null>(null);
+
+  useEffect(() => {
+    if (fyFrom && fyTo) {
+      setDateFrom(fyFrom);
+      setDateTo(fyTo);
+    }
+  }, [fyFrom, fyTo]);
 
   const load = useCallback(async (opts?: { soft?: boolean }) => {
     if (!companyGuid) return;
@@ -416,8 +427,8 @@ export default function CashInHandScreen() {
     // Soft refresh: keep stale data + banner until success (no wipe, no toast)
     if (!soft) setApiError(null);
     try {
-      const from = dateFrom ? dmyToISO(dateFrom) : (selectedFY?.startDate || undefined);
-      const to = dateTo ? dmyToISO(dateTo) : (selectedFY?.endDate || undefined);
+      const from = dateFrom || fyFrom || undefined;
+      const to = dateTo || fyTo || undefined;
       const res: any = await getKPICashInHand(companyGuid, { from, to });
       setApiData(res?.data ?? res);
       hasDataRef.current = true;
@@ -435,7 +446,7 @@ export default function CashInHandScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [companyGuid, dateFrom, dateTo, selectedFY?.startDate, selectedFY?.endDate, lastSyncAt]);
+  }, [companyGuid, dateFrom, dateTo, fyFrom, fyTo, lastSyncAt]);
 
   useEffect(() => { load({ soft: hasDataRef.current }); }, [load]);
 
@@ -511,16 +522,11 @@ export default function CashInHandScreen() {
   }, [apiData]);
 
   const fmtRange = () => {
-    const fmt = (s: string) => {
-      const p = s.split('/');
-      if (p.length < 3) return s;
-      const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return `${parseInt(p[0], 10)} ${m[parseInt(p[1], 10) - 1]}`;
-    };
-    const f = dateFrom || isoToDMY(selectedFY?.startDate || '');
-    const t = dateTo || isoToDMY(selectedFY?.endDate || '');
+    const f = dateFrom || fyFrom;
+    const t = dateTo || fyTo;
     if (!f && !t) return 'Select Range';
-    return `${fmt(f)} – ${fmt(t)}`;
+    if (f && t) return `${formatDate(f)} – ${formatDate(t)}`;
+    return formatDate(f || t);
   };
 
   return (
@@ -627,7 +633,7 @@ export default function CashInHandScreen() {
                 <ViewAllButton
                   variant="inline"
                   label="View All"
-                  onPress={() => router.push('/kpi/cash-register' as any)}
+                  onPress={() => safePush(router, '/kpi/cash-register' as any)}
                 />
               </View>
               {txs.length === 0 ? (
@@ -637,7 +643,7 @@ export default function CashInHandScreen() {
                   key={`tx-${idx}-${txn.guid || txn.voucher_number || 'x'}`}
                   style={[s.txRow, idx < arr.length - 1 && s.txBorder]}
                   activeOpacity={0.7}
-                  onPress={() => txn.guid && router.push(`/document/${txn.guid}` as any)}
+                  onPress={() => txn.guid && safePush(router, `/document/${txn.guid}` as any)}
                 >
                   <View style={[s.txIconBox, { backgroundColor: COLORS.pageBg }]}>
                     <Ionicons
@@ -663,12 +669,12 @@ export default function CashInHandScreen() {
 
       <DateRangePickerModal
         visible={showDatePick}
-        fromDate={dateFrom || isoToDMY(selectedFY?.startDate || '')}
-        toDate={dateTo || isoToDMY(selectedFY?.endDate || '')}
+        fromDate={dateFrom || fyFrom}
+        toDate={dateTo || fyTo}
         onApply={(f, t) => { setDateFrom(f); setDateTo(t); }}
         onClose={() => setShowDatePick(false)}
-        minDate={selectedFY?.startDate}
-        maxDate={selectedFY?.endDate}
+        minDate={fyFrom || undefined}
+        maxDate={fyTo || undefined}
       />
     </SafeAreaView>
   );

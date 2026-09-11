@@ -541,11 +541,14 @@ export const changeEmail = (body: { step: number; currentEmail?: string; otp?: s
 // ── Bank Feeds ─────────────────────────────────────────────────────────
 export const createBankLedger = (payload: {
   companyGuid: string;
+  companyName?: string;
   bankName: string;
   accountNumber?: string;
   ifsc?: string;
+  branch?: string;
   accountType?: string;
   openingBalance?: number;
+  accountHolderName?: string;
 }) => request<any>('POST', '/master/bank', payload, true, 'tally');
 
 export const verifyPin   = (pin: string, preAuthToken: string) =>

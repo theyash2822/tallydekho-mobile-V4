@@ -5,6 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getWarehouseDetail, getStocks } from '../../src/services/api';
@@ -121,7 +122,7 @@ export default function WarehouseDetailScreen() {
             <TouchableOpacity
               style={s.tile}
               activeOpacity={0.85}
-              onPress={() => router.push(`/stocks/total-stock?warehouse=${encodeURIComponent(wh.name)}` as any)}
+              onPress={() => safePush(router, `/stocks/total-stock?warehouse=${encodeURIComponent(wh.name)}` as any)}
             >
               <View style={s.tileIconRow}>
                 <View style={[s.tileIcon, { backgroundColor: '#E8F4FF' }]}>
@@ -148,7 +149,7 @@ export default function WarehouseDetailScreen() {
             <TouchableOpacity
               style={[s.tile, { borderColor: COLORS.positiveBg }]}
               activeOpacity={0.85}
-              onPress={() => router.push(`/stocks/total-stock?warehouse=${encodeURIComponent(wh.name)}&onhand=true` as any)}
+              onPress={() => safePush(router, `/stocks/total-stock?warehouse=${encodeURIComponent(wh.name)}&onhand=true` as any)}
             >
               <View style={s.tileIconRow}>
                 <View style={[s.tileIcon, { backgroundColor: COLORS.positiveBg }]}>
@@ -194,7 +195,7 @@ export default function WarehouseDetailScreen() {
                       style={s.actRow}
                       activeOpacity={0.7}
                       disabled={!a.guid}
-                      onPress={() => a.guid ? router.push(`/document/${a.guid}` as any) : undefined}
+                      onPress={() => a.guid ? safePush(router, `/document/${a.guid}` as any) : undefined}
                     >
                       <View style={[s.actIcon, { backgroundColor: cfg.bg }]}>
                         <Ionicons name={cfg.icon as any} size={16} color={cfg.color} />

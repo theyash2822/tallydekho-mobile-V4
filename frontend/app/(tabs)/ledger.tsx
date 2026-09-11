@@ -10,6 +10,7 @@ import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeabl
 import { Ionicons } from '@expo/vector-icons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getLedgers, createLedger, getLedgerStatement } from '../../src/services/api';
 import { shareMultiStatementPdf } from '../../src/utils/voucherPdf';
@@ -1085,7 +1086,7 @@ export default function LedgerScreen() {
               <TouchableOpacity
                 style={lp.chip}
                 activeOpacity={0.75}
-                onPress={() => router.push(`/ledger/${position.topDebtor.id}` as any)}
+                onPress={() => safePush(router, `/ledger/${position.topDebtor.id}` as any)}
               >
                 <Ionicons name="arrow-down-circle" size={16} color={COLORS.positive} />
                 <View style={{ flex: 1 }}>
@@ -1099,7 +1100,7 @@ export default function LedgerScreen() {
               <TouchableOpacity
                 style={lp.chip}
                 activeOpacity={0.75}
-                onPress={() => router.push(`/ledger/${position.topCreditor.id}` as any)}
+                onPress={() => safePush(router, `/ledger/${position.topCreditor.id}` as any)}
               >
                 <Ionicons name="arrow-up-circle" size={16} color={COLORS.negative} />
                 <View style={{ flex: 1 }}>
@@ -1366,7 +1367,7 @@ export default function LedgerScreen() {
               selected={isSelected}
               onPress={() => {
                 if (selectMode) { toggleSelect(item.id); }
-                else { router.push(`/ledger/${item.id}` as any); }
+                else { safePush(router, `/ledger/${item.id}` as any); }
               }}
               onLongPress={() => enterSelectMode(item.id)}
               delayLongPress={500}
@@ -1474,7 +1475,7 @@ export default function LedgerScreen() {
               { type: 'duties_taxes', label: 'Duties and Taxes', icon: 'receipt-outline', color: COLORS.warning, desc: 'GST, TDS and duty accounts' },
               { type: 'custom', label: 'Custom Groups', icon: 'settings-outline', color: COLORS.textSecondary, desc: 'Custom ledger under any group' },
             ].map(opt => (
-              <TouchableOpacity key={opt.type} style={fm.tsOption} onPress={() => { setShowTypeSheet(false); router.push(`/ledger/create?type=${opt.type}` as any); }} activeOpacity={0.7}>
+              <TouchableOpacity key={opt.type} style={fm.tsOption} onPress={() => { setShowTypeSheet(false); safePush(router, `/ledger/create?type=${opt.type}` as any); }} activeOpacity={0.7}>
                 <View style={[fm.tsIconWrap, { backgroundColor: opt.color + '18' }]}>
                   <Ionicons name={opt.icon as any} size={22} color={opt.color} />
                 </View>

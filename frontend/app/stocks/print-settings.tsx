@@ -5,6 +5,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
@@ -61,7 +62,7 @@ export default function PrintSettingsScreen() {
 
   const handlePreview = () => {
     if (queuedItems.length === 0) return;
-    router.push({
+    safePush(router, {
       pathname: '/stocks/label-preview',
       params: {
         ids:       queueIds.join(','),

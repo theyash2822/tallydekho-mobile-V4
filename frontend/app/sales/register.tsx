@@ -7,12 +7,13 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getSalesVouchers, getSalesVoucherCounts } from '../../src/services/api';
-import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
+import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import SearchBar from '../../src/components/SearchBar';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useTranslation } from 'react-i18next';
@@ -69,11 +70,11 @@ export default function SalesRegisterScreen() {
   const [showTypeFilter, setShowTypeFilter] = useState(false);
   const [typeCounts, setTypeCounts] = useState<Record<string, number>>({});
   const [partyGroupOptions, setPartyGroupOptions] = useState<{ name: string; count: number }[]>([]);
-  // Init date range from selected FY; update when FY changes
+  // Init date range from selected FY; update when FY changes (ISO YYYY-MM-DD)
   const fyFrom = selectedFY?.startDate ?? '';
   const fyTo   = selectedFY?.endDate   ?? '';
-  const [fromDate, setFromDate] = useState(() => fyFrom ? isoToDMY(fyFrom) : '01/04/24');
-  const [toDate,   setToDate]   = useState(() => fyTo   ? isoToDMY(fyTo)   : '31/03/25');
+  const [fromDate, setFromDate] = useState(fyFrom);
+  const [toDate,   setToDate]   = useState(fyTo);
   const [liveInvoices, setLiveInvoices]     = useState<Invoice[]>([]);
   const [loadingData, setLoadingData]       = useState(false);
   const [apiError, setApiError]              = useState<string | null>(null);
@@ -86,8 +87,8 @@ export default function SalesRegisterScreen() {
   // When FY changes, reset date range to full FY
   useEffect(() => {
     if (fyFrom && fyTo) {
-      setFromDate(isoToDMY(fyFrom));
-      setToDate(isoToDMY(fyTo));
+      setFromDate(fyFrom);
+      setToDate(fyTo);
     }
   }, [fyFrom, fyTo]);
 
@@ -116,8 +117,8 @@ export default function SalesRegisterScreen() {
     setLoadingData(true);
     setPage(1);
     setHasMore(false);
-    const from = dmyToISO(fromDate) || fyFrom;
-    const to   = dmyToISO(toDate)   || fyTo;
+    const from = fromDate || fyFrom;
+    const to   = toDate   || fyTo;
     const range = from && to ? { from, to } : {};
     setApiError(null);
     Promise.all([
@@ -146,8 +147,8 @@ export default function SalesRegisterScreen() {
     if (!companyGuid || isLoadingMore || !hasMore) return;
     const nextPage = page + 1;
     setIsLoadingMore(true);
-    const from = dmyToISO(fromDate) || fyFrom;
-    const to   = dmyToISO(toDate)   || fyTo;
+    const from = fromDate || fyFrom;
+    const to   = toDate   || fyTo;
     getSalesVouchers(companyGuid, {
       search,
       ...(from && to ? { from, to } : {}),
@@ -198,7 +199,7 @@ export default function SalesRegisterScreen() {
         await shareDayBookPdf({
           company: companyFromAuth(company),
           title: 'Sales Register',
-          period: `${fromDate} – ${toDate}`,
+          period: fromDate && toDate ? `${formatDate(fromDate)} – ${formatDate(toDate)}` : undefined,
           rows: items.map(inv => dayBookRowFromListItem({
             date: inv.date,
             party: inv.party,
@@ -292,7 +293,7 @@ export default function SalesRegisterScreen() {
 
       <FilterPillRow>
         <FilterDatePill
-          label={`${fromDate} – ${toDate}`}
+          label={fromDate && toDate ? `${formatDate(fromDate)} – ${formatDate(toDate)}` : 'Dates'}
           onPress={() => setShowDatePicker(true)}
         />
         <FilterDropdownPill
@@ -397,7 +398,7 @@ export default function SalesRegisterScreen() {
                             if (isSelecting) { toggleSelect(inv.id); }
                             else {
                               const routeType = docTypeToRouteType(inv.docType || 'invoice', 'sales');
-                              router.push(`/document/${inv.guid || inv.id}?type=${routeType}` as any);
+                              safePush(router, `/document/${inv.guid || inv.id}?type=${routeType}` as any);
                             }
                           }}
                           onLongPress={() => toggleSelect(inv.id)}
@@ -474,8 +475,8 @@ export default function SalesRegisterScreen() {
       {/* ── Date Picker ────────────────────────────────────────── */}
       <DateRangePickerModal
         visible={showDatePicker}
-        fromDate={fromDate}
-        toDate={toDate}
+        fromDate={fromDate || fyFrom}
+        toDate={toDate || fyTo}
         minDate={fyFrom || undefined}
         maxDate={fyTo || undefined}
         onApply={(from, to) => { setFromDate(from); setToDate(to); setShowDatePicker(false); }}

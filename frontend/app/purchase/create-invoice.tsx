@@ -8,6 +8,7 @@ import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { barcodePicker } from '../../src/utils/barcodePicker';
@@ -1211,7 +1212,7 @@ export default function CreatePurchaseInvoiceScreen() {
               activeOpacity={0.85}
               onPress={() => {
                 if (!submitResult.tdkRef) return;
-                router.push(`/sales/invoice-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}&type=purchase_invoice` as any);
+                safePush(router, `/sales/invoice-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}&type=purchase_invoice` as any);
               }}
             >
               <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
@@ -1446,7 +1447,7 @@ export default function CreatePurchaseInvoiceScreen() {
                     barcodePicker.set((result) => {
                       handleProductSelect(itemId, { label: result.productName, value: result.productName });
                     });
-                    router.push(`/sales/product-scanner?companyGuid=${company?.guid}` as any);
+                    safePush(router, `/sales/product-scanner?companyGuid=${company?.guid}` as any);
                   }}
                   onAddTaxEntry={addTaxEntry}
                   onUpdateTaxEntry={updateTaxEntry}

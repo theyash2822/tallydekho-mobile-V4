@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 
 /**
@@ -15,7 +16,7 @@ export const PairingBanner: React.FC = () => {
   return (
     <TouchableOpacity
       style={s.banner}
-      onPress={() => router.push('/settings/tally-sync' as any)}
+      onPress={() => safePush(router, '/settings/tally-sync' as any)}
       activeOpacity={0.82}
       accessibilityRole="button"
       accessibilityLabel="Connect Tally Prime to see real data"

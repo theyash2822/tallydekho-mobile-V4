@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/ApiStateViews';
@@ -116,7 +117,7 @@ export default function CreditNotesScreen() {
                   <TouchableOpacity
                     style={s.row}
                     activeOpacity={0.75}
-                    onPress={() => router.push(`/document/${encodeURIComponent(note.id)}?type=credit_note` as any)}
+                    onPress={() => safePush(router, `/document/${encodeURIComponent(note.id)}?type=credit_note` as any)}
                   >
                     <View style={[s.dot, { backgroundColor: statusColor[note.status] }]} />
                     <View style={{ flex: 1 }}>

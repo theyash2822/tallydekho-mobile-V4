@@ -6,6 +6,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
@@ -278,7 +279,7 @@ export default function PurchaseScreen() {
                   key={inv.guid || `purchase-${index}`}
                   onPress={() => {
                     const routeType = docTypeToRouteType(inv.docType || 'invoice', 'purchase');
-                    router.push(`/document/${inv.guid || inv.id}?type=${routeType}` as any);
+                    safePush(router, `/document/${inv.guid || inv.id}?type=${routeType}` as any);
                   }}
                 >
                   <VoucherListTile
@@ -297,7 +298,7 @@ export default function PurchaseScreen() {
             )}
             <ViewAllButton
               label={t('purchase.viewAll')}
-              onPress={() => router.push('/purchase/register' as any)}
+              onPress={() => safePush(router, '/purchase/register' as any)}
             />
           </View>
         )}
@@ -325,7 +326,7 @@ export default function PurchaseScreen() {
             )}
             <ViewAllButton
               label={t('purchase.viewAll')}
-              onPress={() => router.push('/ledger' as any)}
+              onPress={() => safePush(router, '/ledger' as any)}
             />
           </View>
         )}
@@ -337,7 +338,7 @@ export default function PurchaseScreen() {
         <AlertBannerCarousel
           banners={liveBanners.map(b => ({
             ...b,
-            onAction: () => router.push('/purchase/register' as any),
+            onAction: () => safePush(router, '/purchase/register' as any),
           }))}
           bottomInset={insets.bottom > 0 ? insets.bottom : 8}
         />

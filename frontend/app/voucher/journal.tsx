@@ -7,6 +7,7 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getVouchers } from '../../src/services/api';
@@ -84,7 +85,7 @@ export default function JournalVouchersScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.hdrTitle}>Journal Vouchers</Text>
-        <TouchableOpacity style={s.hdrAct} onPress={() => router.push('/voucher/create-journal' as any)} activeOpacity={0.8}>
+        <TouchableOpacity style={s.hdrAct} onPress={() => safePush(router, '/voucher/create-journal' as any)} activeOpacity={0.8}>
           <Ionicons name="add" size={22} color={COLORS.brandPrimary} />
         </TouchableOpacity>
       </View>
@@ -117,7 +118,7 @@ export default function JournalVouchersScreen() {
           <View style={s.empty}>
             <Ionicons name="book-outline" size={36} color={COLORS.textTertiary} />
             <Text style={s.emptyTxt}>No journal vouchers yet</Text>
-            <TouchableOpacity style={s.emptyBtn} onPress={() => router.push('/voucher/create-journal' as any)}>
+            <TouchableOpacity style={s.emptyBtn} onPress={() => safePush(router, '/voucher/create-journal' as any)}>
               <Text style={s.emptyBtnTxt}>Create Journal</Text>
             </TouchableOpacity>
           </View>
@@ -130,7 +131,7 @@ export default function JournalVouchersScreen() {
                   activeOpacity={0.7}
                   onPress={() => {
                     if (item.tdkRef) {
-                      router.push(`/voucher/journal-preview?tdkRef=${encodeURIComponent(item.tdkRef)}` as any);
+                      safePush(router, `/voucher/journal-preview?tdkRef=${encodeURIComponent(item.tdkRef)}` as any);
                     }
                   }}
                 >

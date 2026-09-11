@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -425,7 +426,7 @@ export default function OtherTaxesScreen() {
                         activeOpacity={0.8}
                         onPress={() => {
                           if (selected.size > 0) { toggleSelect(String(txn.id)); }
-                          else { router.push(`/document/${txn.voucher_guid}` as any); }
+                          else { safePush(router, `/document/${txn.voucher_guid}` as any); }
                         }}
                         onLongPress={() => toggleSelect(String(txn.id))}
                         delayLongPress={500}

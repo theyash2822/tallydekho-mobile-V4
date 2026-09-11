@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../utils/safeNavigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
@@ -109,7 +110,7 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose,
   const handleItemPress = (item: { id: string; label: string; route: string }) => {
     onItemPress?.({ id: item.id, label: item.label, route: item.route });
     onClose();
-    router.push(item.route as any);
+    safePush(router, item.route as any);
   };
 
   const sheetBottomPad = Math.max(insets.bottom, 8) + 12;

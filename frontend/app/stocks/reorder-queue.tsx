@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getStocks } from '../../src/services/api';
@@ -193,7 +194,7 @@ export default function ReorderQueueScreen() {
                     <TouchableOpacity
                       style={styles.reorderBtn}
                       activeOpacity={0.8}
-                      onPress={() => router.push('/purchase/create-order')}
+                      onPress={() => safePush(router, '/purchase/create-order')}
                     >
                       <Ionicons name="cart-outline" size={13} color={COLORS.white} />
                       <Text style={styles.reorderBtnText}>Add to PO</Text>

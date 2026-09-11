@@ -6,8 +6,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import DateRangePickerModal, { parseDMY } from '../../src/components/DateRangePickerModal';
+import DateRangePickerModal from '../../src/components/DateRangePickerModal';
+import { parseISODate } from '../../src/utils/dateRange';
 import { useAuth } from '../../src/context/AuthContext';
 import { fyInfoToParam } from '../../src/context/AuthContext';
 import { getGSTDetail, getGSTSummary } from '../../src/services/api';
@@ -92,11 +94,14 @@ function getSectionBadgeStyle(section: string) {
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function GSTScreen() {
-  const { formatAmount } = useSettings();
+  const { formatAmount, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
   const companyGuid = company?.guid;
+
+  const fyFrom = selectedFY?.startDate ?? '';
+  const fyTo = selectedFY?.endDate ?? '';
 
   const [isGSTApplicable, setIsGSTApplicable] = useState(true);
   const [gstNotApplicableMsg, setGstNotApplicableMsg] = useState('');
@@ -107,11 +112,18 @@ export default function GSTScreen() {
   const [loading, setLoading] = useState(false);
 
   const [activeTab,      setActiveTab]      = useState('GSTR-1');
-  const [fromDate,       setFromDate]       = useState('');
-  const [toDate,         setToDate]         = useState('');
+  const [fromDate,       setFromDate]       = useState(fyFrom);
+  const [toDate,         setToDate]         = useState(fyTo);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selected,       setSelected]       = useState<string[]>([]);
   const [isSharing,      setIsSharing]      = useState(false);
+
+  useEffect(() => {
+    if (fyFrom && fyTo) {
+      setFromDate(fyFrom);
+      setToDate(fyTo);
+    }
+  }, [fyFrom, fyTo]);
 
   // ── Collapsible months ────────────────────────────────────────────────────
   const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
@@ -187,15 +199,18 @@ export default function GSTScreen() {
     }).catch(() => { setLoading(false); });
   }, [companyGuid, activeTab, selectedFY]);
 
-  const isDateActive = fromDate.length > 0 && toDate.length > 0;
+  const isDateActive = !!(fromDate && toDate) && (fromDate !== fyFrom || toDate !== fyTo);
 
   // ── Filter by date range ──────────────────────────────────────────────────
   const filteredInvoices = useMemo(() => {
     return liveInvoices.filter((inv) => {
       if (!isDateActive) return true;
-      const from = parseDMY(fromDate);
-      const to   = parseDMY(toDate);
-      if (from && to && !(inv.dateObj >= from && inv.dateObj <= to)) return false;
+      const from = parseISODate(fromDate);
+      const to   = parseISODate(toDate);
+      if (from && to) {
+        to.setHours(23, 59, 59, 999);
+        if (!(inv.dateObj >= from && inv.dateObj <= to)) return false;
+      }
       return true;
     });
   }, [liveInvoices, isDateActive, fromDate, toDate]);
@@ -273,7 +288,7 @@ export default function GSTScreen() {
       await shareSummaryTablePdf({
         company: companyFromAuth(company),
         title: `GST — ${activeTab}`,
-        period: fromDate && toDate ? `${fromDate} → ${toDate}` : undefined,
+        period: fromDate && toDate ? `${formatDate(fromDate)} → ${formatDate(toDate)}` : undefined,
         metrics,
         columns: ['Invoice', 'Type', 'Party', 'Date', 'Amount', 'Section'],
         rows: items.map(inv => [
@@ -312,7 +327,7 @@ export default function GSTScreen() {
           if (selected.length > 0) {
             toggleSelect(inv.id);
           } else {
-            router.push(`/document/${inv.id}?type=${encodeURIComponent(inv.type)}` as any);
+            safePush(router, `/document/${inv.id}?type=${encodeURIComponent(inv.type)}` as any);
           }
         }}
         onLongPress={() => toggleSelect(inv.id)}
@@ -369,11 +384,11 @@ export default function GSTScreen() {
       <TouchableOpacity style={s.dateStrip} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
         <Ionicons name="calendar-outline" size={13} color={isDateActive ? COLORS.brandPrimary : COLORS.textTertiary} />
         <Text style={[s.dateStripTxt, isDateActive && s.dateStripActive]}>
-          {isDateActive ? `${fromDate}  →  ${toDate}` : 'All Dates'}
+          {fromDate && toDate ? `${formatDate(fromDate)}  →  ${formatDate(toDate)}` : 'All Dates'}
         </Text>
         {!isDateActive && <Ionicons name="chevron-down" size={11} color={COLORS.textTertiary} />}
         {isDateActive && (
-          <TouchableOpacity onPress={() => { setFromDate(''); setToDate(''); }} hitSlop={{top:8,bottom:8,left:8,right:8}}>
+          <TouchableOpacity onPress={() => { setFromDate(fyFrom); setToDate(fyTo); }} hitSlop={{top:8,bottom:8,left:8,right:8}}>
             <Ionicons name="close-circle" size={16} color={COLORS.brandPrimary} />
           </TouchableOpacity>
         )}
@@ -403,7 +418,7 @@ export default function GSTScreen() {
         {unmatchedCount > 0 && (
           <TouchableOpacity
             style={s.unmatchedBtn}
-            onPress={() => router.push('/reports/unmatched-list' as any)}
+            onPress={() => safePush(router, '/reports/unmatched-list' as any)}
             activeOpacity={0.85}
           >
             <Text style={s.unmatchedBtnTxt}>Unmatched {unmatchedCount} Invoices</Text>
@@ -547,10 +562,10 @@ export default function GSTScreen() {
       {/* ── Date Range Modal ─────────────────────────────────────────────── */}
       <DateRangePickerModal
         visible={showDatePicker}
-        fromDate={fromDate}
-        toDate={toDate}
-        minDate={selectedFY?.startDate}
-        maxDate={selectedFY?.endDate}
+        fromDate={fromDate || fyFrom}
+        toDate={toDate || fyTo}
+        minDate={fyFrom || undefined}
+        maxDate={fyTo || undefined}
         onApply={(from, to) => {
           if (from && to) { setFromDate(from); setToDate(to); }
         }}

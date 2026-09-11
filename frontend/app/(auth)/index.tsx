@@ -6,6 +6,7 @@ import {
   Modal, FlatList, StatusBar,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { sendOTP } from '../../src/services/api';
@@ -71,7 +72,7 @@ export default function LoginScreen() {
     try {
       const fullPhone = `${selectedCountry.code}${digits}`;
       await sendOTP(fullPhone);
-      router.push({
+      safePush(router, {
         pathname: '/(auth)/otp',
         params: { phone: fullPhone },
       });
@@ -185,7 +186,7 @@ export default function LoginScreen() {
 
             <Text style={styles.disclaimer}>
               {t('auth.disclaimer')}{' '}
-              <Text style={styles.link} onPress={() => router.push('/(auth)/terms' as any)}>
+              <Text style={styles.link} onPress={() => safePush(router, '/(auth)/terms' as any)}>
                 {t('auth.termsLink')}
               </Text>
             </Text>

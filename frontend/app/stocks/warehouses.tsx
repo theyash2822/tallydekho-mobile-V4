@@ -5,6 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getWarehouses } from '../../src/services/api';
@@ -123,7 +124,7 @@ export default function WarehousesScreen() {
         <Text style={styles.headerTitle}>{t('stocks.warehouses')}</Text>
         <TouchableOpacity
           style={styles.addBtn}
-          onPress={() => router.push('/stocks/create-warehouse' as any)}
+          onPress={() => safePush(router, '/stocks/create-warehouse' as any)}
           activeOpacity={0.7}
         >
           <Ionicons name="add" size={22} color={COLORS.brandPrimary} />
@@ -180,7 +181,7 @@ export default function WarehousesScreen() {
               key={wh.id}
               style={styles.whCard}
               activeOpacity={0.8}
-              onPress={() => router.push(`/stocks/warehouse-detail?id=${wh.id}&name=${encodeURIComponent(wh.name)}` as any)}
+              onPress={() => safePush(router, `/stocks/warehouse-detail?id=${wh.id}&name=${encodeURIComponent(wh.name)}` as any)}
             >
               {/* Main row */}
               <View style={styles.cardMain}>

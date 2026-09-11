@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
@@ -309,7 +310,7 @@ export default function SettingsScreen() {
                           style={[styles.subItem, idx < section.subItems.length - 1 && styles.subItemBorder]}
                           onPress={() => {
                             if (isToggleItem && sub.toggleKey) handleToggle(sub.toggleKey, !toggleVal);
-                            else if (sub.route) router.push(sub.route as any);
+                            else if (sub.route) safePush(router, sub.route as any);
                           }}
                           activeOpacity={isToggleItem ? 1 : 0.75}
                         >

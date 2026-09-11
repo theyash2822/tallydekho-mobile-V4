@@ -354,12 +354,21 @@ export default function AIInsightsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
-  const [fromDate,       setFromDate]       = useState('');
-  const [toDate,         setToDate]         = useState('');
+  const fyFrom = selectedFY?.startDate ?? '';
+  const fyTo = selectedFY?.endDate ?? '';
+  const [fromDate,       setFromDate]       = useState(fyFrom);
+  const [toDate,         setToDate]         = useState(fyTo);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [refreshing,     setRefreshing]     = useState(false);
   const [aiData,         setAiData]         = useState<any>(null);
   const [isSharing,      setIsSharing]      = useState(false);
+
+  useEffect(() => {
+    if (fyFrom && fyTo) {
+      setFromDate(fyFrom);
+      setToDate(fyTo);
+    }
+  }, [fyFrom, fyTo]);
 
   // Cache disclaimer helpers
   const fmtDate = (iso: string) => {
@@ -370,7 +379,7 @@ export default function AIInsightsScreen() {
   const generatedAt  = aiData?._cacheGeneratedAt ? fmtDate(aiData._cacheGeneratedAt) : null;
   const nextUpdateAt = aiData?._cacheValidUntil  ? fmtDate(aiData._cacheValidUntil)  : null;
 
-  const isDateActive = fromDate.length > 0 && toDate.length > 0;
+  const isDateActive = !!(fromDate && toDate) && (fromDate !== fyFrom || toDate !== fyTo);
 
   // Detect if selectedFY is the current (active) financial year
   const isCurrFY = useMemo(() => {
@@ -440,8 +449,8 @@ export default function AIInsightsScreen() {
       let res: any;
       if (isCurrFY || isDateActive) {
         // Current FY or custom date range — use main endpoint
-        const from = fromDate || selectedFY?.startDate || undefined;
-        const to   = toDate   || selectedFY?.endDate   || undefined;
+        const from = fromDate || fyFrom || undefined;
+        const to   = toDate   || fyTo   || undefined;
         res = await getAIInsights(company.guid, from, to);
       } else {
         // Historical FY — use dedicated deterministic endpoint (no LLM, no forecast)
@@ -455,9 +464,9 @@ export default function AIInsightsScreen() {
     } finally {
       setRefreshing(false);
     }
-  }, [company?.guid, fromDate, toDate, selectedFY?.startDate, isCurrFY, isDateActive]);
+  }, [company?.guid, fromDate, toDate, fyFrom, fyTo, selectedFY, isCurrFY, isDateActive]);
 
-  useEffect(() => { fetchInsights(); }, [company?.guid, selectedFY?.startDate]);
+  useEffect(() => { fetchInsights(); }, [fetchInsights]);
 
   const handleRefresh = () => fetchInsights();
 
@@ -487,7 +496,7 @@ export default function AIInsightsScreen() {
       await shareSummaryTablePdf({
         company: companyFromAuth(company),
         title: isCurrFY || isDateActive ? 'AI Insights' : 'FY Summary',
-        period: isDateActive ? `${fromDate} → ${toDate}` : (selectedFY?.label || undefined),
+        period: isDateActive ? `${formatDate(fromDate)} → ${formatDate(toDate)}` : (selectedFY?.label || undefined),
         metrics,
         columns: ['Section', 'Detail', 'Value'],
         rows,
@@ -525,12 +534,12 @@ export default function AIInsightsScreen() {
       <TouchableOpacity style={s.dateStrip} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
         <Ionicons name="calendar-outline" size={13} color={isDateActive ? AMBER : COLORS.textTertiary} />
         <Text style={[s.dateStripTxt, isDateActive ? s.dateStripActive : null]}>
-          {isDateActive ? `${fromDate}  →  ${toDate}` : 'All Dates'}
+          {fromDate && toDate ? `${formatDate(fromDate)}  →  ${formatDate(toDate)}` : 'All Dates'}
         </Text>
         {isDateActive ? null : <Ionicons name="chevron-down" size={11} color={COLORS.textTertiary} />}
         {isDateActive ? (
           <TouchableOpacity
-            onPress={() => { setFromDate(''); setToDate(''); }}
+            onPress={() => { setFromDate(fyFrom); setToDate(fyTo); }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Ionicons name="close-circle" size={16} color={AMBER} />
@@ -561,7 +570,7 @@ export default function AIInsightsScreen() {
           <Ionicons name="time-outline" size={12} color={COLORS.textTertiary} />
           <Text style={s.updatedTxt}>
             {isDateActive
-              ? `Custom range: ${fromDate} → ${toDate}`
+              ? `Custom range: ${formatDate(fromDate)} → ${formatDate(toDate)}`
               : !isCurrFY
                 ? `Historical highlights — ${selectedFY?.label ?? 'Past FY'} · Deterministic analysis`
                 : generatedAt
@@ -795,12 +804,12 @@ export default function AIInsightsScreen() {
 
       <DateRangePickerModal
         visible={showDatePicker}
-        fromDate={fromDate}
-        toDate={toDate}
+        fromDate={fromDate || fyFrom}
+        toDate={toDate || fyTo}
         onApply={(f, t) => { if (f && t) { setFromDate(f); setToDate(t); } }}
         onClose={() => setShowDatePicker(false)}
-        minDate={selectedFY?.startDate}
-        maxDate={selectedFY?.endDate}
+        minDate={fyFrom || undefined}
+        maxDate={fyTo || undefined}
       />
     </SafeAreaView>
   );

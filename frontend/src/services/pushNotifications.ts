@@ -5,6 +5,7 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { registerPushToken } from './api';
+import { safePush } from '../utils/safeNavigation';
 
 // SDK 53+: executionEnvironment is 'storeClient' in Expo Go, 'standalone'/'bare' in dev/prod builds
 // appOwnership is deprecated since SDK 46 — do NOT use it
@@ -113,17 +114,17 @@ export function setupNotificationHandlers(router: any) {
     switch (data.type) {
       case 'payment_reminder':
         if (data.companyGuid) {
-          router.push('/ledger');
+          safePush(router, '/ledger');
         }
         break;
       case 'low_stock':
-        router.push('/stocks');
+        safePush(router, '/stocks');
         break;
       case 'compliance':
-        router.push('/reports/compliance');
+        safePush(router, '/reports/compliance');
         break;
       default:
-        router.push('/');
+        safePush(router, '/');
     }
   });
 

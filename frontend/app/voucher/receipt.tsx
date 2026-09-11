@@ -4,6 +4,7 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 import { useAuth } from '../../src/context/AuthContext';
@@ -78,7 +79,7 @@ export default function ReceiptVouchersScreen() {
               <TouchableOpacity
                 style={s.row}
                 activeOpacity={0.7}
-                onPress={() => router.push(`/document/${item.id}?type=receipt_voucher` as any)}
+                onPress={() => safePush(router, `/document/${item.id}?type=receipt_voucher` as any)}
               >
                 <View style={s.rowL}>
                   <View style={[s.dot, { backgroundColor: SC[item.status] || '#9CA3AF' }]} />

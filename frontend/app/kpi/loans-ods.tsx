@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
@@ -541,7 +542,7 @@ export default function LoansODsScreen() {
                         key={t.guid || idx}
                         style={[s.dataRow, idx < txns.length - 1 && s.dataRowBorder]}
                         activeOpacity={0.7}
-                        onPress={() => t.guid && router.push(`/document/${t.guid}` as any)}
+                        onPress={() => t.guid && safePush(router, `/document/${t.guid}` as any)}
                       >
                         <View style={s.dataIcon}>
                           <Ionicons name="document-text-outline" size={18} color={COLORS.textSecondary} />

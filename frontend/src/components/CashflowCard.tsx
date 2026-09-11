@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { safePush } from '../utils/safeNavigation';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
@@ -90,7 +91,7 @@ export default function CashflowCard({
           testID="cashflow-expand-btn"
           style={s.expandBtn}
           activeOpacity={0.7}
-          onPress={() => router.push('/cashflow-report' as any)}
+          onPress={() => safePush(router, '/cashflow-report' as any)}
         >
           <Ionicons name="expand-outline" size={16} color={COLORS.textSecondary} />
         </TouchableOpacity>

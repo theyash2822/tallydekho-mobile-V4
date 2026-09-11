@@ -1,7 +1,7 @@
 /**
  * Shared DateRangePickerModal
- * Full calendar grid with quick presets and FROM → TO range selection.
- * Used by: ledger/[id].tsx, reports/financial.tsx
+ * Wire in/out: ISO YYYY-MM-DD. Display: Settings date_format.
+ * Bounds: Home FY (minDate/maxDate). Clear → full FY when bounds exist.
  */
 import React, { useState, useMemo, useEffect } from 'react';
 import {
@@ -9,92 +9,125 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
+import { useSettings } from '../context/SettingsContext';
+import { formatDate } from '../utils/format';
+import {
+  dateToISO,
+  parseISODate,
+  resolveFyPreset,
+  isISODate,
+} from '../utils/dateRange';
 
-// ── Date helpers ──────────────────────────────────────────────────────────────
+// ── Legacy helpers (create-forms / older call sites) ───────────────────────────
+/** @deprecated Prefer ISO state + formatDate. Kept for create-* screens. */
 export function parseDMY(str: string): Date | null {
   if (!str) return null;
+  if (isISODate(str.slice(0, 10))) return parseISODate(str);
   const p = str.split('/');
   if (p.length < 3) return null;
-  const year = parseInt(p[2]) < 100 ? 2000 + parseInt(p[2]) : parseInt(p[2]);
-  return new Date(year, parseInt(p[1]) - 1, parseInt(p[0]));
+  const year = parseInt(p[2], 10) < 100 ? 2000 + parseInt(p[2], 10) : parseInt(p[2], 10);
+  return new Date(year, parseInt(p[1], 10) - 1, parseInt(p[0], 10));
 }
 
+/** @deprecated Prefer formatDate(iso, settings). */
 export function fmtDMY(d: Date): string {
   return (
     String(d.getDate()).padStart(2, '0') + '/' +
     String(d.getMonth() + 1).padStart(2, '0') + '/' +
-    String(d.getFullYear()).slice(-2)
+    String(d.getFullYear())
   );
 }
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-const MONTHS_CAL   = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const DAY_LABELS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
-
-const QUICK_PRESETS = [
-  { key: 'this_month', label: 'This Month'    },
-  { key: 'last_1',     label: 'Last 1 Month'  },
-  { key: 'last_3',     label: 'Last 3 Months' },
-];
-
-// Convert ISO 'YYYY-MM-DD' to 'DD/MM/YY'
+/** @deprecated Prefer keeping ISO in state. */
 export function isoToDMY(iso: string): string {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
   if (!y || !m || !d) return '';
-  return `${d.padStart(2,'0')}/${m.padStart(2,'0')}/${y.slice(-2)}`;
+  return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
 }
 
-// Convert 'DD/MM/YY' to ISO 'YYYY-MM-DD'
+/** @deprecated Prefer ISO from modal Apply. Also accepts ISO passthrough. */
 export function dmyToISO(dmy: string): string {
   if (!dmy) return '';
+  if (isISODate(dmy.slice(0, 10))) return dmy.slice(0, 10);
   const p = dmy.split('/');
   if (p.length < 3) return '';
-  const year = parseInt(p[2]) < 100 ? 2000 + parseInt(p[2]) : parseInt(p[2]);
-  return `${year}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+  const year = parseInt(p[2], 10) < 100 ? 2000 + parseInt(p[2], 10) : parseInt(p[2], 10);
+  return `${year}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}`;
 }
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+const MONTHS_CAL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAY_LABELS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+const QUICK_PRESETS = [
+  { key: 'this_month' as const, label: 'This Month' },
+  { key: 'last_1' as const, label: 'Last 1 Month' },
+  { key: 'last_3' as const, label: 'Last 3 Months' },
+];
 
 // ── Component ─────────────────────────────────────────────────────────────────
 interface Props {
-  visible:   boolean;
-  fromDate:  string;
-  toDate:    string;
-  minDate?:  string; // ISO 'YYYY-MM-DD' — earliest selectable date (FY start)
-  maxDate?:  string; // ISO 'YYYY-MM-DD' — latest selectable date (FY end)
-  onApply:   (from: string, to: string) => void;
-  onClose:   () => void;
+  visible: boolean;
+  /** ISO YYYY-MM-DD */
+  fromDate: string;
+  /** ISO YYYY-MM-DD */
+  toDate: string;
+  /** ISO — FY start (Home) */
+  minDate?: string;
+  /** ISO — FY end (Home) */
+  maxDate?: string;
+  /** onApply receives ISO from/to. Clear with FY bounds → full FY. */
+  onApply: (from: string, to: string) => void;
+  onClose: () => void;
 }
 
 export default function DateRangePickerModal({
   visible, fromDate, toDate, onApply, onClose, minDate, maxDate,
 }: Props) {
+  const { settings } = useSettings();
+  const fmtSettings = {
+    currency: settings.currency,
+    number_format: settings.number_format,
+    decimal_places: settings.decimal_places,
+    date_format: settings.date_format,
+  };
+  const display = (d: Date) => formatDate(dateToISO(d), fmtSettings);
+  const placeholder =
+    settings.date_format === 'YYYY-MM-DD' ? '----/--/--' :
+    settings.date_format === 'DD-MM-YYYY' ? '--/--/----' :
+    '--/--/----';
+  // Use hyphen separators when the Settings style uses hyphens
+  const emptyLabel = (settings.date_format === 'DD-MM-YYYY' || settings.date_format === 'YYYY-MM-DD')
+    ? placeholder.replace(/\//g, '-')
+    : placeholder;
+
   const today = new Date();
-  const minD = minDate ? new Date(minDate + 'T00:00:00') : null;
-  const maxD = maxDate ? new Date(maxDate + 'T00:00:00') : null;
+  today.setHours(12, 0, 0, 0);
+  const minD = minDate ? parseISODate(minDate) : null;
+  const maxD = maxDate ? parseISODate(maxDate) : null;
 
-  const [viewYear,  setViewYear]  = useState(today.getFullYear());
+  const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
-  const [selFrom,   setSelFrom]   = useState<Date | null>(null);
-  const [selTo,     setSelTo]     = useState<Date | null>(null);
-  const [step,      setStep]      = useState<'from' | 'to'>('from');
+  const [selFrom, setSelFrom] = useState<Date | null>(null);
+  const [selTo, setSelTo] = useState<Date | null>(null);
+  const [step, setStep] = useState<'from' | 'to'>('from');
 
-  // Sync selection when sheet opens
   useEffect(() => {
-    if (visible) {
-      const f = parseDMY(fromDate);
-      const t = parseDMY(toDate);
-      setSelFrom(f);
-      setSelTo(t);
-      setStep(f && !t ? 'to' : 'from');
-      const ref = f || today;
-      setViewYear(ref.getFullYear());
-      setViewMonth(ref.getMonth());
-    }
+    if (!visible) return;
+    // Accept ISO (preferred) or legacy DMY from unmigrated callers
+    const f = parseISODate(fromDate) || parseDMY(fromDate);
+    const t = parseISODate(toDate) || parseDMY(toDate);
+    setSelFrom(f);
+    setSelTo(t);
+    setStep(f && !t ? 'to' : 'from');
+    const ref = f || (maxD && maxD < today ? maxD : today);
+    setViewYear(ref.getFullYear());
+    setViewMonth(ref.getMonth());
   }, [visible]);
 
-  // Build calendar grid for current view month
   const calDays = useMemo(() => {
-    const firstDay    = new Date(viewYear, viewMonth, 1).getDay();
+    const firstDay = new Date(viewYear, viewMonth, 1).getDay();
     const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
     const days: (number | null)[] = [];
     for (let i = 0; i < firstDay; i++) days.push(null);
@@ -111,15 +144,17 @@ export default function DateRangePickerModal({
     else setViewMonth(m => m + 1);
   };
 
-  const cellDate   = (d: number) => new Date(viewYear, viewMonth, d);
-  const isStart    = (d: number) => !!selFrom && cellDate(d).getTime() === selFrom.getTime();
-  const isEnd      = (d: number) => !!selTo   && cellDate(d).getTime() === selTo.getTime();
-  const isInRange  = (d: number) => {
+  const cellDate = (d: number) => new Date(viewYear, viewMonth, d, 12);
+  const sameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  const isStart = (d: number) => !!selFrom && sameDay(cellDate(d), selFrom);
+  const isEnd = (d: number) => !!selTo && sameDay(cellDate(d), selTo);
+  const isInRange = (d: number) => {
     if (!selFrom || !selTo) return false;
-    const dt = cellDate(d); return dt > selFrom && dt < selTo;
+    const dt = cellDate(d);
+    return dt > selFrom && dt < selTo;
   };
-  const isTodayD   = (d: number) =>
-    today.getDate() === d && today.getMonth() === viewMonth && today.getFullYear() === viewYear;
+  const isTodayD = (d: number) => sameDay(cellDate(d), today);
   const isDisabled = (d: number) => {
     const dt = cellDate(d);
     if (minD && dt < minD) return true;
@@ -128,7 +163,7 @@ export default function DateRangePickerModal({
   };
 
   const handleDayPress = (day: number) => {
-    if (isDisabled(day)) return; // block out-of-FY dates
+    if (isDisabled(day)) return;
     const pressed = cellDate(day);
     if (step === 'from' || (selFrom && selTo)) {
       setSelFrom(pressed); setSelTo(null); setStep('to');
@@ -142,28 +177,11 @@ export default function DateRangePickerModal({
     }
   };
 
-  // Quick presets — clamp to FY bounds when minDate/maxDate are provided
-  const clampToFY = (d: Date): Date => {
-    if (minD && d < minD) return new Date(minD);
-    if (maxD && d > maxD) return new Date(maxD);
-    return d;
-  };
-  const setPreset = (key: string) => {
-    const m = today.getMonth(), y = today.getFullYear();
-    let f: Date, t: Date = new Date(today);
-    if (key === 'this_month') {
-      f = new Date(y, m, 1);
-      t = new Date(y, m + 1, 0);
-    } else if (key === 'last_1') {
-      f = new Date(today); f.setDate(f.getDate() - 30);
-      t = new Date(today);
-    } else {
-      f = new Date(y, m - 2, 1);
-      t = new Date(y, m + 1, 0);
-    }
-    // Clamp to selected FY bounds
-    f = clampToFY(f);
-    t = clampToFY(t);
+  const setPreset = (key: 'this_month' | 'last_1' | 'last_3') => {
+    const { from, to } = resolveFyPreset(key, { from: minDate, to: maxDate });
+    const f = parseISODate(from);
+    const t = parseISODate(to);
+    if (!f || !t) return;
     setSelFrom(f); setSelTo(t); setStep('from');
     setViewYear(f.getFullYear()); setViewMonth(f.getMonth());
   };
@@ -171,29 +189,38 @@ export default function DateRangePickerModal({
   const canApply = !!selFrom && !!selTo;
 
   const handleApply = () => {
-    if (canApply) { onApply(fmtDMY(selFrom!), fmtDMY(selTo!)); onClose(); }
+    if (!canApply || !selFrom || !selTo) return;
+    onApply(dateToISO(selFrom), dateToISO(selTo));
+    onClose();
   };
+
+  /** Clear → full Home FY (product rule), not “all time”. */
   const handleClear = () => {
-    setSelFrom(null); setSelTo(null); setStep('from');
-    onApply('', ''); onClose();
+    if (minDate && maxDate) {
+      const f = parseISODate(minDate);
+      const t = parseISODate(maxDate);
+      setSelFrom(f); setSelTo(t); setStep('from');
+      onApply(minDate, maxDate);
+    } else {
+      setSelFrom(null); setSelTo(null); setStep('from');
+      onApply('', '');
+    }
+    onClose();
   };
 
   const stepHint =
-    !selFrom      ? 'Tap any date to set the start'      :
-    step === 'to' ? 'Now tap to set the end date'        :
-    selTo         ? 'Tap a date to start a new range'    : '';
+    !selFrom ? 'Tap any date to set the start' :
+    step === 'to' ? 'Now tap to set the end date' :
+    selTo ? 'Tap a date to start a new range' : '';
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={s.overlay}>
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
         <View style={s.sheet}>
-
-          {/* Handle + Title */}
           <View style={s.handle} />
           <Text style={s.title}>Select Date Range</Text>
 
-          {/* Quick Presets */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -211,7 +238,6 @@ export default function DateRangePickerModal({
             ))}
           </ScrollView>
 
-          {/* FROM → TO display */}
           <View style={s.rangeDisplay}>
             <View style={[
               s.rangeDate,
@@ -221,8 +247,8 @@ export default function DateRangePickerModal({
               <Text style={s.rangeDateLabel}>FROM</Text>
               <View style={s.rangeDateRow}>
                 <Ionicons name="calendar-outline" size={12} color={selFrom ? COLORS.brandPrimary : COLORS.textTertiary} />
-                <Text style={[s.rangeDateVal, !selFrom && s.rangeDateEmpty]}>
-                  {selFrom ? fmtDMY(selFrom) : '--/--/--'}
+                <Text style={[s.rangeDateVal, !selFrom && s.rangeDateEmpty]} numberOfLines={1}>
+                  {selFrom ? display(selFrom) : emptyLabel}
                 </Text>
               </View>
             </View>
@@ -237,17 +263,15 @@ export default function DateRangePickerModal({
               <Text style={s.rangeDateLabel}>TO</Text>
               <View style={s.rangeDateRow}>
                 <Ionicons name="calendar-outline" size={12} color={selTo ? COLORS.brandPrimary : COLORS.textTertiary} />
-                <Text style={[s.rangeDateVal, !selTo && s.rangeDateEmpty]}>
-                  {selTo ? fmtDMY(selTo) : '--/--/--'}
+                <Text style={[s.rangeDateVal, !selTo && s.rangeDateEmpty]} numberOfLines={1}>
+                  {selTo ? display(selTo) : emptyLabel}
                 </Text>
               </View>
             </View>
           </View>
 
-          {/* Step hint */}
           <Text style={s.stepHint}>{stepHint}</Text>
 
-          {/* Month navigation */}
           <View style={s.navRow}>
             <TouchableOpacity style={s.navBtn} onPress={prevMonth} activeOpacity={0.7}>
               <Ionicons name="chevron-back" size={20} color={COLORS.textPrimary} />
@@ -258,19 +282,17 @@ export default function DateRangePickerModal({
             </TouchableOpacity>
           </View>
 
-          {/* Day headers */}
           <View style={s.dayHeaders}>
             {DAY_LABELS.map(d => <Text key={d} style={s.dayHeader}>{d}</Text>)}
           </View>
 
-          {/* Calendar grid */}
           <View style={s.calGrid}>
             {calDays.map((day, idx) => {
               if (day === null) return <View key={idx} style={s.calCell} />;
-              const start   = isStart(day);
-              const end     = isEnd(day);
+              const start = isStart(day);
+              const end = isEnd(day);
               const inRange = isInRange(day);
-              const td      = isTodayD(day);
+              const td = isTodayD(day);
               return (
                 <TouchableOpacity
                   key={idx}
@@ -298,10 +320,9 @@ export default function DateRangePickerModal({
             })}
           </View>
 
-          {/* Action buttons */}
           <View style={s.btnRow}>
             <TouchableOpacity style={s.clearBtn} onPress={handleClear} activeOpacity={0.7}>
-              <Text style={s.clearTxt}>Clear All</Text>
+              <Text style={s.clearTxt}>Reset to FY</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.applyBtn, !canApply && s.applyBtnDis]}
@@ -321,7 +342,6 @@ export default function DateRangePickerModal({
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.48)' },
   sheet: {
@@ -337,8 +357,6 @@ const s = StyleSheet.create({
     fontSize: TYPOGRAPHY.md, fontWeight: '800', color: COLORS.textPrimary,
     textAlign: 'center', marginBottom: 14,
   },
-
-  // Quick presets
   presetsRow: { gap: 8, paddingBottom: 14 },
   presetChip: {
     paddingHorizontal: 14, paddingVertical: 7,
@@ -346,8 +364,6 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: COLORS.borderDefault,
   },
   presetChipText: { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary },
-
-  // FROM → TO display
   rangeDisplay: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   rangeDate: {
     flex: 1, paddingVertical: 10, paddingHorizontal: 12,
@@ -360,18 +376,14 @@ const s = StyleSheet.create({
     fontSize: 9, fontWeight: '800', color: COLORS.textTertiary,
     letterSpacing: 1.1, marginBottom: 4, textTransform: 'uppercase',
   },
-  rangeDateRow:   { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  rangeDateVal:   { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary },
+  rangeDateRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  rangeDateVal: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, flexShrink: 1 },
   rangeDateEmpty: { color: COLORS.textTertiary, fontWeight: '400' },
-  rangeArrow:     { width: 24, alignItems: 'center' },
-
-  // Step hint
+  rangeArrow: { width: 24, alignItems: 'center' },
   stepHint: {
     fontSize: 11, color: COLORS.textTertiary, textAlign: 'center',
     fontStyle: 'italic', marginBottom: 10, minHeight: 16,
   },
-
-  // Month navigation
   navRow: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between', marginBottom: 10,
@@ -382,37 +394,31 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: COLORS.borderDefault,
   },
   monthYear: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
-
-  // Day headers
   dayHeaders: { flexDirection: 'row', marginBottom: 4 },
-  dayHeader:  { flex: 1, textAlign: 'center', fontSize: 10, fontWeight: '700', color: COLORS.textTertiary },
-
-  // Calendar grid
-  calGrid:        { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 },
-  calCell:        { width: `${100 / 7}%` as any, alignItems: 'center', paddingVertical: 2 },
+  dayHeader: { flex: 1, textAlign: 'center', fontSize: 10, fontWeight: '700', color: COLORS.textTertiary },
+  calGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 },
+  calCell: { width: `${100 / 7}%` as any, alignItems: 'center', paddingVertical: 2 },
   calCellInRange: { backgroundColor: 'rgba(26,26,26,0.07)', width: `${100 / 7}%` as any, alignItems: 'center', paddingVertical: 2 },
-  calDay:         { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  calDaySel:      { backgroundColor: COLORS.brandPrimary },
-  calDayToday:    { borderWidth: 1.5, borderColor: COLORS.brandPrimary },
-  calDayTxt:      { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textPrimary },
-  calDayTxtSel:   { color: COLORS.white, fontWeight: '700' },
+  calDay: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  calDaySel: { backgroundColor: COLORS.brandPrimary },
+  calDayToday: { borderWidth: 1.5, borderColor: COLORS.brandPrimary },
+  calDayTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textPrimary },
+  calDayTxtSel: { color: COLORS.white, fontWeight: '700' },
   calDayTxtToday: { color: COLORS.brandPrimary, fontWeight: '700' },
-  calDayTxtRange:    { color: COLORS.textPrimary, fontWeight: '600' },
-  calDayDisabled:    { opacity: 0.25 },
+  calDayTxtRange: { color: COLORS.textPrimary, fontWeight: '600' },
+  calDayDisabled: { opacity: 0.25 },
   calDayTxtDisabled: { color: COLORS.textTertiary },
-
-  // Action buttons
-  btnRow:    { flexDirection: 'row', gap: 10 },
-  clearBtn:  {
+  btnRow: { flexDirection: 'row', gap: 10 },
+  clearBtn: {
     flex: 1, paddingVertical: 14, borderRadius: RADIUS.md,
     borderWidth: 1.5, borderColor: COLORS.borderDefault, alignItems: 'center',
   },
-  clearTxt:  { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textSecondary },
-  applyBtn:  {
+  clearTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textSecondary },
+  applyBtn: {
     flex: 2, flexDirection: 'row', gap: 6, paddingVertical: 14,
     borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary,
     alignItems: 'center', justifyContent: 'center',
   },
   applyBtnDis: { backgroundColor: COLORS.borderStrong },
-  applyTxt:    { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
+  applyTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
 });

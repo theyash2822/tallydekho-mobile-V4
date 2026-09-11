@@ -5,6 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
@@ -12,7 +13,7 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { getVouchers } from '../../src/services/api';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { CardSkeleton, LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
-import DateRangePickerModal, { isoToDMY, dmyToISO } from '../../src/components/DateRangePickerModal';
+import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import SearchBar from '../../src/components/SearchBar';
 import { EntityListTile } from '../../src/components/EntityListTile';
 import { ScreenHeader } from '../../src/components/ScreenHeader';
@@ -109,7 +110,7 @@ export default function CashRegisterScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { company, selectedFY } = useAuth();
-  const { formatAmount } = useSettings();
+  const { formatAmount, formatDate } = useSettings();
   const companyGuid = company?.guid;
 
   const fyFrom = selectedFY?.startDate ?? '';
@@ -128,15 +129,15 @@ export default function CashRegisterScreen() {
   const [typeFilter, setTypeFilter] = useState<FilterType>('all');
   const [showFilter, setShowFilter] = useState(false);
   const [showDatePick, setShowDatePick] = useState(false);
-  const [dateFrom, setDateFrom] = useState(() => (fyFrom ? isoToDMY(fyFrom) : ''));
-  const [dateTo, setDateTo] = useState(() => (fyTo ? isoToDMY(fyTo) : ''));
+  const [dateFrom, setDateFrom] = useState(fyFrom);
+  const [dateTo, setDateTo] = useState(fyTo);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isSharing, setIsSharing] = useState(false);
 
   useEffect(() => {
     if (fyFrom && fyTo) {
-      setDateFrom(isoToDMY(fyFrom));
-      setDateTo(isoToDMY(fyTo));
+      setDateFrom(fyFrom);
+      setDateTo(fyTo);
     }
   }, [fyFrom, fyTo]);
 
@@ -153,8 +154,8 @@ export default function CashRegisterScreen() {
   }), [formatAmount]);
 
   const fetchParams = useCallback((pageNum: number) => {
-    const from = dmyToISO(dateFrom) || fyFrom;
-    const to = dmyToISO(dateTo) || fyTo;
+    const from = dateFrom || fyFrom;
+    const to = dateTo || fyTo;
     const apiType = typeFilter === 'inflow' ? 'receipt' : undefined;
     return {
       apiType,
@@ -238,7 +239,7 @@ export default function CashRegisterScreen() {
         await shareDayBookPdf({
           company: companyFromAuth(company),
           title: 'Cash Register',
-          period: `${dateFrom} – ${dateTo}`,
+          period: dateFrom && dateTo ? `${formatDate(dateFrom)} – ${formatDate(dateTo)}` : undefined,
           rows: items.map(item => dayBookRowFromListItem({
             date: item.date,
             particulars: item.desc,
@@ -406,7 +407,7 @@ export default function CashRegisterScreen() {
                           if (selected.size > 0) {
                             toggleSelect(item.id);
                           } else {
-                            router.push(`/document/${item.id}` as any);
+                            safePush(router, `/document/${item.id}` as any);
                           }
                         }}
                         onLongPress={() => toggleSelect(item.id)}
@@ -479,12 +480,12 @@ export default function CashRegisterScreen() {
 
       <DateRangePickerModal
         visible={showDatePick}
-        fromDate={dateFrom}
-        toDate={dateTo}
+        fromDate={dateFrom || fyFrom}
+        toDate={dateTo || fyTo}
         onApply={(f, t) => { setDateFrom(f); setDateTo(t); }}
         onClose={() => setShowDatePick(false)}
-        minDate={selectedFY?.startDate}
-        maxDate={selectedFY?.endDate}
+        minDate={fyFrom || undefined}
+        maxDate={fyTo || undefined}
       />
     </SafeAreaView>
   );

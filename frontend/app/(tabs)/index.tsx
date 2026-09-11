@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
@@ -464,7 +465,7 @@ export default function HomeScreen() {
           amount={amount}
           trend_pct={item.trend_pct}
           trend_positive={item.trend_positive != null ? item.trend_positive : item.positive}
-          onPress={() => item.route && router.push(item.route as any)}
+          onPress={() => item.route && safePush(router, item.route as any)}
         />
       </KPICarouselPage>
     );
@@ -483,7 +484,7 @@ export default function HomeScreen() {
           userName={user?.name || t('home.user')}
           lastSyncTime={lastSyncTime ?? undefined}
           onFYChange={handleFYChange}
-          onSettingsPress={() => router.push('/settings' as any)}
+          onSettingsPress={() => safePush(router, '/settings' as any)}
         />
         <ErrorState
           message={fatalError}
@@ -503,7 +504,7 @@ export default function HomeScreen() {
         userName={user?.name || t('home.user')}
         lastSyncTime={lastSyncTime ?? undefined}
         onFYChange={handleFYChange}
-        onSettingsPress={() => router.push('/settings' as any)}
+        onSettingsPress={() => safePush(router, '/settings' as any)}
       />
 
       {/* ── Real Search Bar ── */}

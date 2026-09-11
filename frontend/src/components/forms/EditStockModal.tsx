@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Keyboard } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../utils/safeNavigation';
 import { StockItem, ALL_TAX_RATES } from '../../data/stockData';
 import { alterStockItem, getStockGroups } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -103,7 +104,7 @@ export function EditStockModal({
         });
         // Cream printable preview (no PDF share) — parity with create item
         if (queueId) {
-          router.push(`/masters/preview?queueId=${encodeURIComponent(String(queueId))}` as any);
+          safePush(router, `/masters/preview?queueId=${encodeURIComponent(String(queueId))}` as any);
         }
       }, 300);
     } catch (err: any) {

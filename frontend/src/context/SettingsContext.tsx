@@ -14,7 +14,7 @@ export interface UserSettings {
   language: string;        // 'English' | 'Hindi' | 'Gujarati' | 'Marathi' | 'Tamil' | ...
   currency: string;        // 'INR' | 'USD' | 'EUR' | etc.
   number_format: string;   // 'Indian' | 'International'
-  date_format: string;     // 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD'
+  date_format: string;     // 'DD/MM/YYYY' | 'DD-MM-YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD'
   theme: string;           // 'light' | 'dark' | 'auto'
   kpi_autoscroll: boolean;
   decimal_places: number;

@@ -9,7 +9,7 @@ export interface FormatSettings {
   currency: string;       // 'INR' | 'USD' | 'EUR' | 'AED' | etc.
   number_format: string;  // 'Indian' | 'International'
   decimal_places: number;
-  date_format: string;    // 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD'
+  date_format: string;    // 'DD/MM/YYYY' | 'DD-MM-YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD'
 }
 
 export const DEFAULT_FORMAT_SETTINGS: FormatSettings = {
@@ -115,6 +115,7 @@ export function formatDate(iso: string, settings: FormatSettings): string {
   switch (settings.date_format) {
     case 'MM/DD/YYYY': return `${m}/${d}/${y}`;
     case 'YYYY-MM-DD': return `${y}-${m}-${d}`;
+    case 'DD-MM-YYYY': return `${d}-${m}-${y}`;
     default:           return `${d}/${m}/${y}`; // DD/MM/YYYY
   }
 }

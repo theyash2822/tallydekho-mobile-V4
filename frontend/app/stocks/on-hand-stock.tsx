@@ -5,6 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import SearchBar from '../../src/components/SearchBar';
@@ -58,7 +59,10 @@ export default function OnHandStockScreen() {
   const { selectedFY, company, lastSyncAt } = useAuth();
   const companyGuid = company?.guid;
   const router = useRouter();
-  const { formatAmount } = useSettings();
+  const { formatAmount, formatDate } = useSettings();
+
+  const fyFrom = selectedFY?.startDate ?? '';
+  const fyTo = selectedFY?.endDate ?? '';
 
   const [items, setItems] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -108,7 +112,7 @@ export default function OnHandStockScreen() {
 
   const totalQty = items.reduce((s: number, i: any) => s + (i.qty || 0), 0);
   const lowStock = items.filter((i: any) => (i.qty || 0) <= 10).length;
-  const dateLabel = dateFrom && dateTo ? `${dateFrom} – ${dateTo}` : 'All Time';
+  const dateLabel = dateFrom && dateTo ? `${formatDate(dateFrom)} – ${formatDate(dateTo)}` : 'All Time';
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -168,7 +172,7 @@ export default function OnHandStockScreen() {
           <OnHandCard
             key={item.id}
             item={item}
-            onPress={() => router.push(`/stocks/item-detail?id=${item.id}` as any)}
+            onPress={() => safePush(router, `/stocks/item-detail?id=${item.id}` as any)}
           />
         ))}
         <View style={{ height: 80 }} />
@@ -176,12 +180,12 @@ export default function OnHandStockScreen() {
 
       <DateRangePickerModal
         visible={calOpen}
-        fromDate={dateFrom}
-        toDate={dateTo}
+        fromDate={dateFrom || fyFrom}
+        toDate={dateTo || fyTo}
         onClose={() => setCalOpen(false)}
         onApply={(from, to) => { setDateFrom(from); setDateTo(to); }}
-        minDate={selectedFY?.startDate}
-        maxDate={selectedFY?.endDate}
+        minDate={fyFrom || undefined}
+        maxDate={fyTo || undefined}
       />
     </SafeAreaView>
   );

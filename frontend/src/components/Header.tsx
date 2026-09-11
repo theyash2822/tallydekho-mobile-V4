@@ -9,6 +9,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 // No mock data imports — real data only (V2 rule)
 import { useAuth } from '../context/AuthContext';
 import { getCompanies, getCompanyYears } from '../services/api';
+import { safePush } from '../utils/safeNavigation';
 
 const FY_YEARS = [
   'FY 2025-26', 'FY 2024-25', 'FY 2023-24', 'FY 2022-23', 'FY 2021-22',
@@ -116,12 +117,12 @@ const Header: React.FC<HeaderProps> = ({
 
   const handleNotification = () => {
     onNotificationPress?.();
-    router.push('/notifications' as any);
+    safePush(router, '/notifications' as any);
   };
 
   const handleSettings = () => {
     if (onSettingsPress) onSettingsPress();
-    else router.push('/settings' as any);
+    else safePush(router, '/settings' as any);
   };
 
   const handleFYSelect = (fy: string) => {

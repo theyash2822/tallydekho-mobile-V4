@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { KPICardSkeleton, CardSkeleton } from '../../src/components/ShimmerPlaceholder';
@@ -194,7 +195,7 @@ export default function StocksDashboard() {
               key={a.id}
               style={s.actionBtn}
               activeOpacity={0.7}
-              onPress={() => router.push(a.route as any)}
+              onPress={() => safePush(router, a.route as any)}
             >
               <Ionicons name={a.icon as any} size={18} color={COLORS.textSecondary} />
             </TouchableOpacity>
@@ -232,7 +233,7 @@ export default function StocksDashboard() {
             <TouchableOpacity
               style={s.hero}
               activeOpacity={0.85}
-              onPress={() => router.push('/stocks/total-stock' as any)}
+              onPress={() => safePush(router, '/stocks/total-stock' as any)}
             >
               <View style={s.heroTopRow}>
                 <View style={s.heroIcon}>
@@ -265,7 +266,7 @@ export default function StocksDashboard() {
                   key={tile.id}
                   style={s.tile}
                   activeOpacity={0.8}
-                  onPress={() => router.push(tile.route as any)}
+                  onPress={() => safePush(router, tile.route as any)}
                 >
                   <View style={[s.tileIcon, { backgroundColor: tile.tint }]}>
                     <Ionicons name={tile.icon as any} size={16} color={tile.accent} />
@@ -280,7 +281,7 @@ export default function StocksDashboard() {
             <TouchableOpacity
               style={s.card}
               activeOpacity={0.85}
-              onPress={() => router.push('/stocks/on-hand-stock' as any)}
+              onPress={() => safePush(router, '/stocks/on-hand-stock' as any)}
             >
               <View style={s.cardHead}>
                 <Text style={s.cardTitle}>{t('stocks.stockHealth', { defaultValue: 'Stock Health' })}</Text>
@@ -296,7 +297,7 @@ export default function StocksDashboard() {
             <TouchableOpacity
               style={s.reorder}
               activeOpacity={0.85}
-              onPress={() => router.push('/stocks/reorder-queue' as any)}
+              onPress={() => safePush(router, '/stocks/reorder-queue' as any)}
             >
               <View style={s.reorderIcon}>
                 <Ionicons name="repeat" size={18} color={(d.reorderQueueCount ?? 0) > 0 ? COLORS.negative : COLORS.textSecondary} />
@@ -315,7 +316,7 @@ export default function StocksDashboard() {
             <TouchableOpacity
               style={s.linkRow}
               activeOpacity={0.85}
-              onPress={() => router.push('/stocks/reports' as any)}
+              onPress={() => safePush(router, '/stocks/reports' as any)}
             >
               <View style={s.linkIcon}>
                 <Ionicons name="bar-chart-outline" size={17} color={COLORS.textSecondary} />
@@ -330,7 +331,7 @@ export default function StocksDashboard() {
             <TouchableOpacity
               style={s.linkRow}
               activeOpacity={0.85}
-              onPress={() => router.push('/stocks/warehouses' as any)}
+              onPress={() => safePush(router, '/stocks/warehouses' as any)}
             >
               <View style={s.linkIcon}>
                 <Ionicons name="business-outline" size={17} color={COLORS.textSecondary} />
@@ -345,7 +346,7 @@ export default function StocksDashboard() {
             <View style={s.card}>
               <View style={s.cardHead}>
                 <Text style={s.cardTitle}>{t('stocks.valueByCategory')}</Text>
-                <TouchableOpacity onPress={() => router.push('/stocks/valuation-summary' as any)} activeOpacity={0.7}>
+                <TouchableOpacity onPress={() => safePush(router, '/stocks/valuation-summary' as any)} activeOpacity={0.7}>
                   <Text style={s.cardLink}>{t('stocks.report')}</Text>
                 </TouchableOpacity>
               </View>

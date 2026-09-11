@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Linking } 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 const CHANGELOG = [
@@ -50,7 +51,7 @@ export default function AboutScreen() {
           {/* Free Plan badge — tappable → License/Plans screen */}
           <TouchableOpacity
             style={s.planBadge}
-            onPress={()=>router.push('/settings/license' as any)}
+            onPress={()=>safePush(router, '/settings/license' as any)}
             activeOpacity={0.75}
           >
             <Text style={s.planTxt}>Free Plan</Text>

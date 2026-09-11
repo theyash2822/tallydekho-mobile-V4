@@ -11,6 +11,7 @@ import { encodeCode128B } from '../../src/utils/barcode';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -834,7 +835,7 @@ export default function BarcodesScreen() {
       } catch { /* non-fatal — print continues */ }
       finally { setGeneratingAll(false); }
     }
-    router.push(`/stocks/print-settings?ids=${Array.from(selectedIds).join(',')}` as any);
+    safePush(router, `/stocks/print-settings?ids=${Array.from(selectedIds).join(',')}` as any);
   };
 
   // ── Link barcode (scan or manual field) to stock item ──────────────────────
@@ -1253,7 +1254,7 @@ export default function BarcodesScreen() {
                       activeOpacity={0.85}
                       onPress={() => {
                         closeScanner();
-                        router.push(`/stocks/item-detail?id=${scanResult.item!.stockGuid}` as any);
+                        safePush(router, `/stocks/item-detail?id=${scanResult.item!.stockGuid}` as any);
                       }}
                     >
                       <Ionicons name="open-outline" size={16} color="#fff" />
@@ -1659,7 +1660,7 @@ export default function BarcodesScreen() {
                 style={s.bcActionBtnPrimary}
                 onPress={() => {
                   setViewBarcodeItem(null);
-                  if (viewBarcodeItem) router.push(`/stocks/item-detail?id=${viewBarcodeItem.stockGuid}` as any);
+                  if (viewBarcodeItem) safePush(router, `/stocks/item-detail?id=${viewBarcodeItem.stockGuid}` as any);
                 }}
                 activeOpacity={0.85}
               >

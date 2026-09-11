@@ -5,6 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getVouchers } from '../../src/services/api';
@@ -138,7 +139,7 @@ export default function OtherTaxesRegisterScreen() {
               style={[s.card, isSelected && s.cardSelected]}
               onPress={() => {
                 if (selectMode) { toggleSelect(item.id); }
-                else { router.push(`/document/${item.id}` as any); }
+                else { safePush(router, `/document/${item.id}` as any); }
               }}
               onLongPress={() => toggleSelect(item.id)}
               delayLongPress={500}

@@ -6,6 +6,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import * as ImagePicker from 'expo-image-picker';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -14,7 +15,7 @@ import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getUserSettings, updateUserSettings, getBankLedgers, getCompanyLogo, getComplianceConfig, saveComplianceConfig } from '../../src/services/api';
-import { generateDocumentHTML, PDFBankInfo, DocumentFormat, resolveDocumentFormat } from '../../src/utils/documentHelpers';
+import { generateDocumentHTML, DocumentFormat, resolveDocumentFormat } from '../../src/utils/documentHelpers';
 import { clearVoucherConfigCache } from '../../src/utils/voucherPdf';
 import {
   ThermalPaperWidth,
@@ -22,8 +23,19 @@ import {
   isThermalTemplateId,
   thermalPageSize,
 } from '../../src/utils/pdf/thermalShared';
+import { sanitizeImageSrc } from '../../src/utils/sanitizeImageSrc';
+import {
+  normalizeThermalWidth,
+  writeLocalVoucherConfig,
+  readLocalVoucherConfig,
+  bankInfoFromConfig,
+  qrDataUrlFromConfig,
+  getQrPayloadFromConfig,
+  toSafePdfImageSrc,
+  BankLedgerRow,
+} from '../../src/utils/voucherPdfConfig';
+import QRCodeSvg from 'react-native-qrcode-svg';
 
-// ── Data ──────────────────────────────────────────────────────────────────────
 // Bank options are fetched from Tally (see useEffect in component)
 const FALLBACK_BANK_OPTS = [
   { value: 'Cash', label: 'Cash' },
@@ -60,24 +72,45 @@ interface VConfig {
   thermalPaperWidth: ThermalPaperWidth;
   bank:      string;
   qrEnabled: boolean;
+  /** Upload image vs generate QR from UPI ID. */
+  qrMode:    'upload' | 'generate';
   qrImage:   string | null;
   terms:     string[];
-  qrType:    'upi' | 'url' | 'bank'; // UPI ID, website URL, or bank details
   qrUpiId:   string;
-  qrUrl:     string;
-  qrIfsc:    string;
-  qrAccount: string;
+}
+
+/** Infer qrMode for configs saved before this field existed. */
+function resolveQrMode(cfg: Partial<VConfig> & Record<string, any> | null | undefined): 'upload' | 'generate' {
+  if (cfg?.qrMode === 'upload' || cfg?.qrMode === 'generate') return cfg.qrMode;
+  if (cfg?.qrImage) return 'upload';
+  return 'generate';
+}
+
+/** Drop removed Website / Bank Details QR fields from saved configs. */
+function sanitizeVConfig(raw: any, fallback: VConfig): VConfig {
+  const merged = { ...fallback, ...(raw && typeof raw === 'object' ? raw : {}) };
+  return {
+    format: resolveDocumentFormat(merged.format),
+    thermalPaperWidth: normalizeThermalWidth(merged.thermalPaperWidth ?? fallback.thermalPaperWidth),
+    bank: typeof merged.bank === 'string' && merged.bank ? merged.bank : 'Cash',
+    qrEnabled: !!merged.qrEnabled,
+    qrMode: resolveQrMode(merged),
+    qrImage: merged.qrImage || null,
+    terms: Array.isArray(merged.terms) ? merged.terms : fallback.terms,
+    qrUpiId: typeof merged.qrUpiId === 'string' ? merged.qrUpiId : '',
+  };
 }
 
 const makeDefault = (id: string): VConfig => ({
   format: 'tally_classic_v1',
   thermalPaperWidth: DEFAULT_THERMAL_PAPER_WIDTH,
-  bank: 'Cash', qrEnabled: false, qrImage: null,
+  bank: 'Cash',
+  qrEnabled: false,
+  qrMode: 'generate',
+  qrImage: null,
   terms: DEFAULT_TERMS[id] ?? [],
-  qrType: 'upi', qrUpiId: '', qrUrl: '', qrIfsc: '', qrAccount: '',
+  qrUpiId: '',
 });
-
-const VOUCHER_CONFIG_KEY = 'voucherConfig';
 
 const FORMAT_OPTIONS: Array<{ id: DocumentFormat; label: string }> = [
   { id: 'tally_classic_v1', label: 'Tally Classic' },
@@ -85,8 +118,31 @@ const FORMAT_OPTIONS: Array<{ id: DocumentFormat; label: string }> = [
   { id: 'td_executive_v1',  label: 'TallyDekho Executive' },
 ];
 
-function normalizeThermalWidth(v: unknown): ThermalPaperWidth {
-  return v === 58 || v === '58' ? 58 : DEFAULT_THERMAL_PAPER_WIDTH;
+/** Live QR preview when Generate from UPI is selected and UPI ID is filled. */
+function GeneratedQrPreview({ cfg }: { cfg: VConfig }) {
+  if (!cfg.qrEnabled || resolveQrMode(cfg) !== 'generate') return null;
+
+  const payload = getQrPayloadFromConfig({
+    ...cfg,
+    qrMode: 'generate',
+    qrImage: null,
+    qrEnabled: true,
+  } as any);
+  if (!payload) return null;
+
+  return (
+    <View style={s.qrPreviewCard}>
+      <View style={s.qrGeneratedWrap}>
+        <QRCodeSvg value={payload} size={160} backgroundColor={COLORS.cardBg} color="#111111" />
+      </View>
+      <View style={s.qrPreviewFooter}>
+        <View style={s.qrPreviewStatus}>
+          <Ionicons name="checkmark-circle" size={14} color={COLORS.brandPrimary} />
+          <Text style={s.qrPreviewStatusTxt}>Generated from UPI · ready for PDF</Text>
+        </View>
+      </View>
+    </View>
+  );
 }
 
 // ── Format Thumbnail (mini PDF preview) ───────────────────────────────────────
@@ -237,6 +293,7 @@ export default function VoucherConfigScreen() {
     Object.fromEntries(VOUCHER_TYPES.map(v => [v.id, makeDefault(v.id)]))
   );
   const [bankOpts, setBankOpts] = useState<{ value: string; label: string }[]>(FALLBACK_BANK_OPTS);
+  const [bankRows, setBankRows] = useState<BankLedgerRow[]>([]);
   const [bankPickerFor, setBankPickerFor] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
@@ -249,6 +306,7 @@ export default function VoucherConfigScreen() {
   const [eWayBillApplicable, setEWayBillApplicable] = useState<'not_applicable'|'applicable_not_configured'|'applicable_configured'>('not_applicable');
   const [eWayBillMode, setEWayBillMode]             = useState<'manual'|'auto'|'ask_after_irn'>('manual');
   const [complianceDirty, setComplianceDirty]       = useState(false);
+  const [complianceOpen, setComplianceOpen]         = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState<string | null>(null);
   const companyLogoRef = useRef<string | null>(null);
 
@@ -257,7 +315,11 @@ export default function VoucherConfigScreen() {
     if (!company?.guid) return;
     getBankLedgers(company.guid, 'bank').then((res: any) => {
       if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
-        const opts = res.data.map((b: any) => ({ value: b.name, label: b.name }));
+        setBankRows(res.data);
+        const opts = [
+          ...FALLBACK_BANK_OPTS,
+          ...res.data.map((b: any) => ({ value: b.name, label: b.name })),
+        ];
         setBankOpts(opts);
       }
     }).catch(() => {});
@@ -267,56 +329,49 @@ export default function VoucherConfigScreen() {
   useEffect(() => {
     if (!company?.guid) return;
     const key = `company_logo_${company.guid}`;
-    getCompanyLogo(company.guid).then((res: any) => {
+    getCompanyLogo(company.guid).then(async (res: any) => {
       const url = res?.data?.logo_url;
-      if (url) { companyLogoRef.current = url; }
-      else {
-        AsyncStorage.getItem(key).then(uri => { if (uri) companyLogoRef.current = uri; }).catch(() => {});
+      if (url) {
+        companyLogoRef.current = await toSafePdfImageSrc(url);
+      } else {
+        const uri = await AsyncStorage.getItem(key);
+        companyLogoRef.current = await toSafePdfImageSrc(uri);
       }
-    }).catch(() => {
-      AsyncStorage.getItem(key).then(uri => { if (uri) companyLogoRef.current = uri; }).catch(() => {});
+    }).catch(async () => {
+      const uri = await AsyncStorage.getItem(key);
+      companyLogoRef.current = await toSafePdfImageSrc(uri);
     });
   }, [company?.guid]);
 
-  // Load persisted config: backend first, AsyncStorage fallback
+  // Load persisted config: backend first (full), local = format + thermal only
   useEffect(() => {
     const applyParsed = (parsed: any) => {
       setConfigs(prev => {
         const merged: Record<string, VConfig> = { ...prev };
         Object.keys(parsed).forEach(k => {
           if (!merged[k]) return;
-          merged[k] = {
-            ...merged[k],
-            ...parsed[k],
-            format: resolveDocumentFormat(parsed[k]?.format),
-            thermalPaperWidth: normalizeThermalWidth(
-              parsed[k]?.thermalPaperWidth ?? merged[k].thermalPaperWidth
-            ),
-          };
+          // Strips legacy qrType / qrUrl / qrIfsc / qrAccount
+          merged[k] = sanitizeVConfig(parsed[k], merged[k]);
         });
         return merged;
       });
     };
 
-    getUserSettings().then((res: any) => {
+    getUserSettings().then(async (res: any) => {
       const serverConfig = res?.data?.voucher_config;
       if (serverConfig) {
         try {
           const parsed = typeof serverConfig === 'string' ? JSON.parse(serverConfig) : serverConfig;
           applyParsed(parsed);
-          AsyncStorage.setItem(VOUCHER_CONFIG_KEY, JSON.stringify(parsed)).catch(() => {});
+          writeLocalVoucherConfig(parsed).catch(() => {});
         } catch {}
       } else {
-        // No server config yet — try AsyncStorage cache
-        AsyncStorage.getItem(VOUCHER_CONFIG_KEY).then(stored => {
-          if (stored) { try { applyParsed(JSON.parse(stored)); } catch {} }
-        }).catch(() => {});
+        const local = await readLocalVoucherConfig();
+        if (local) applyParsed(local);
       }
-    }).catch(() => {
-      // Backend failed — fallback to AsyncStorage
-      AsyncStorage.getItem(VOUCHER_CONFIG_KEY).then(stored => {
-        if (stored) { try { applyParsed(JSON.parse(stored)); } catch {} }
-      }).catch(() => {});
+    }).catch(async () => {
+      const local = await readLocalVoucherConfig();
+      if (local) applyParsed(local);
     });
   }, []);
 
@@ -352,8 +407,10 @@ export default function VoucherConfigScreen() {
     }
   };
 
-  const update = (id: string, key: keyof VConfig, val: any) =>
+  const update = (id: string, key: keyof VConfig, val: any) => {
     setConfigs(prev => ({ ...prev, [id]: { ...prev[id], [key]: val } }));
+    setIsDirty(true);
+  };
 
   const updateTerm = (id: string, idx: number, text: string) =>
     setConfigs(prev => ({ ...prev, [id]: { ...prev[id], terms: prev[id].terms.map((t, i) => i === idx ? text : t) } }));
@@ -364,30 +421,68 @@ export default function VoucherConfigScreen() {
   const addTerm = (id: string) =>
     setConfigs(prev => ({ ...prev, [id]: { ...prev[id], terms: [...prev[id].terms, ''] } }));
 
+  const pickQrBusyRef = useRef(false);
+
   const handlePickQR = async (id: string) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Toast.show({ type: 'error', text1: 'Permission Required', text2: 'Please allow photo library access.' });
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true, aspect: [1, 1], quality: 0.8, base64: true,
-    });
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
-      update(id, 'qrImage', uri);
+    if (pickQrBusyRef.current) return;
+    pickQrBusyRef.current = true;
+    try {
+      // Prefer existing grant; requesting again can swallow the next launch on iOS.
+      let perm = await ImagePicker.getMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        if (!perm.canAskAgain) {
+          Toast.show({
+            type: 'error',
+            text1: 'Permission Required',
+            text2: 'Allow photo library access in Settings to upload a QR.',
+          });
+          return;
+        }
+        perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          Toast.show({
+            type: 'error',
+            text1: 'Permission Required',
+            text2: 'Please allow photo library access.',
+          });
+          return;
+        }
+        // Let the system permission sheet dismiss before opening the gallery
+        // (otherwise the first tap appears to do nothing).
+        await new Promise<void>((r) => setTimeout(r, 350));
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+        setConfigs((prev) => ({
+          ...prev,
+          [id]: { ...prev[id], qrImage: uri, qrMode: 'upload' },
+        }));
+        setIsDirty(true);
+      }
+    } finally {
+      pickQrBusyRef.current = false;
     }
   };
 
   const handleUseFormat = async (id: string, label: string, format: DocumentFormat) => {
     setSaving(id);
     try {
-      const updated = { ...configs, [id]: { ...configs[id], format } };
+      const stamped = {
+        ...sanitizeVConfig({ ...configs[id], format }, makeDefault(id)),
+        _updatedAt: Date.now(),
+      };
+      const updated = { ...configs, [id]: stamped };
       setConfigs(updated);
-      await AsyncStorage.setItem(VOUCHER_CONFIG_KEY, JSON.stringify(updated));
-      // Sync to backend
+      await writeLocalVoucherConfig(updated);
       await updateUserSettings({ voucher_config: updated }).catch(() => {});
       clearVoucherConfigCache();
       const formatLabel = FORMAT_OPTIONS.find(f => f.id === format)?.label || format;
@@ -400,9 +495,15 @@ export default function VoucherConfigScreen() {
   };
 
   const handleSaveAll = async () => {
-    await AsyncStorage.setItem(VOUCHER_CONFIG_KEY, JSON.stringify(configs));
-    // Sync to backend
-    await updateUserSettings({ voucher_config: configs }).catch(() => {});
+    const stamped = Object.fromEntries(
+      Object.entries(configs).map(([k, v]) => [
+        k,
+        { ...sanitizeVConfig(v, makeDefault(k)), _updatedAt: Date.now() },
+      ])
+    );
+    setConfigs(stamped as Record<string, VConfig>);
+    await writeLocalVoucherConfig(stamped);
+    await updateUserSettings({ voucher_config: stamped }).catch(() => {});
     clearVoucherConfigCache();
     setIsDirty(false);
     Toast.show({ type: 'success', text1: 'All Configurations Saved', text2: 'Voucher settings updated for all types.' });
@@ -473,18 +574,39 @@ export default function VoucherConfigScreen() {
         terms: cfg.terms.join('\n'),
         bankDetails: null,
       };
-      const bankInfo = cfg.bank ? {
-        bankName: cfg.bank !== 'Cash' ? cfg.bank : null,
-        accountNo: cfg.qrEnabled && cfg.qrType === 'bank' ? cfg.qrAccount || null : null,
-        ifsc:      cfg.qrEnabled && cfg.qrType === 'bank' ? cfg.qrIfsc || null : null,
-        upiId:     cfg.qrEnabled && cfg.qrType === 'upi'  ? cfg.qrUpiId || null : null,
-      } : null;
+      const bankInfo = bankInfoFromConfig(cfg as any, bankRows);
+      const mode = resolveQrMode(cfg);
+      const qrCfg = {
+        ...cfg,
+        qrMode: mode,
+        qrImage: mode === 'generate' ? null : cfg.qrImage,
+      };
+      let qrImage: string | null = null;
+      if (cfg.qrEnabled) {
+        qrImage = await qrDataUrlFromConfig(qrCfg as any);
+        qrImage = sanitizeImageSrc(qrImage) || qrImage;
+        if (!qrImage) {
+          if (mode === 'generate' && String(cfg.qrUpiId || '').trim()) {
+            Toast.show({
+              type: 'error',
+              text1: 'QR generate failed',
+              text2: 'Could not build QR for PDF. Check UPI ID and try again.',
+            });
+          } else if (mode === 'upload') {
+            Toast.show({
+              type: 'info',
+              text1: 'No QR image',
+              text2: 'Upload a QR image, or switch to Generate from UPI.',
+            });
+          }
+        }
+      }
       const html = generateDocumentHTML(
         sampleDoc,
         companyLogoRef.current,
         cfg.format,
         cfg.terms,
-        cfg.qrEnabled ? cfg.qrImage : null,
+        qrImage,
         bankInfo,
         { thermalPaperWidth: normalizeThermalWidth(cfg.thermalPaperWidth) },
       );
@@ -508,6 +630,12 @@ export default function VoucherConfigScreen() {
 
   const bankLabel = (id: string) => bankOpts.find(b => b.value === configs[id].bank)?.label || configs[id].bank || 'Select Bank';
 
+  const applicabilityStatus = (v: 'not_applicable' | 'applicable_not_configured' | 'applicable_configured') => {
+    if (v === 'not_applicable') return { label: 'Not Applicable', bg: COLORS.activeBg, fg: COLORS.textSecondary };
+    if (v === 'applicable_configured') return { label: 'Configured', bg: COLORS.positiveBg, fg: COLORS.positive };
+    return { label: 'Not Configured', bg: COLORS.warningBg, fg: COLORS.warning };
+  };
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       {/* Header */}
@@ -524,137 +652,191 @@ export default function VoucherConfigScreen() {
         <Text style={s.subtitle}>Configure PDF format and settings for each voucher type</Text>
 
         {/* ── Section 1: Voucher Numbering Policy ── */}
-        <View style={cs.sectionCard}>
-          <Text style={cs.sectionTitle}>Voucher Numbering Policy</Text>
-          <Text style={cs.sectionSub}>Controls how invoice/voucher numbers are assigned</Text>
+        <View style={s.section}>
+          <TouchableOpacity
+            style={s.sectionHdr}
+            onPress={() => setComplianceOpen(complianceOpen === 'numbering' ? null : 'numbering')}
+            activeOpacity={0.7}
+          >
+            <View style={s.typeIcon}>
+              <Ionicons name="pricetags-outline" size={18} color={COLORS.textSecondary} />
+            </View>
+            <Text style={s.sectionTitle} numberOfLines={1} ellipsizeMode="tail">Voucher Numbering Policy</Text>
+            <View style={[cs.statusPill, { backgroundColor: COLORS.activeBg }]}>
+              <Text style={[cs.statusPillTxt, { color: COLORS.textPrimary }]}>
+                {numberingPolicy === 'tally_prime_series' ? 'TallyPrime Series' : 'TallyDekho Series'}
+              </Text>
+            </View>
+            <Ionicons name={complianceOpen === 'numbering' ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textTertiary} />
+          </TouchableOpacity>
 
-          {[
-            { value: 'tally_prime_series', label: 'Follow TallyPrime Series', sub: 'TallyPrime assigns the final number (recommended)' },
-            { value: 'tallydekho_series',  label: 'TallyDekho Series',        sub: 'TallyDekho generates number, pushes to Tally' },
-          ].map(opt => (
-            <TouchableOpacity
-              key={opt.value}
-              style={[cs.optRow, numberingPolicy === opt.value && cs.optRowActive]}
-              onPress={() => { setNumberingPolicy(opt.value as any); setComplianceDirty(true); }}
-              activeOpacity={0.7}
-            >
-              <View style={cs.optRadio}>
-                {numberingPolicy === opt.value && <View style={cs.optRadioDot} />}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={cs.optLabel}>{opt.label}</Text>
-                <Text style={cs.optSub}>{opt.sub}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+          {complianceOpen === 'numbering' && (
+            <View style={s.sectionBody}>
+              <Text style={cs.sectionSub}>Controls how invoice/voucher numbers are assigned</Text>
 
-          {numberingPolicy === 'tallydekho_series' && (
-            <View style={cs.warningBox}>
-              <Ionicons name="warning-outline" size={14} color="#D97706" />
-              <Text style={cs.warningTxt}>Only use if TallyDekho series is reserved exclusively for this app. E-Invoice & E-Way Bill always use TallyPrime series.</Text>
+              {[
+                { value: 'tally_prime_series', label: 'Follow TallyPrime Series', sub: 'TallyPrime assigns the final number (recommended)' },
+                { value: 'tallydekho_series',  label: 'TallyDekho Series',        sub: 'TallyDekho generates number, pushes to Tally' },
+              ].map(opt => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[cs.optRow, numberingPolicy === opt.value && cs.optRowActive]}
+                  onPress={() => { setNumberingPolicy(opt.value as any); setComplianceDirty(true); }}
+                  activeOpacity={0.7}
+                >
+                  <View style={cs.optRadio}>
+                    {numberingPolicy === opt.value && <View style={cs.optRadioDot} />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={cs.optLabel}>{opt.label}</Text>
+                    <Text style={cs.optSub}>{opt.sub}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+
+              {numberingPolicy === 'tallydekho_series' && (
+                <View style={cs.warningBox}>
+                  <Ionicons name="warning-outline" size={14} color="#D97706" />
+                  <Text style={cs.warningTxt}>Only use if TallyDekho series is reserved exclusively for this app. E-Invoice & E-Way Bill always use TallyPrime series.</Text>
+                </View>
+              )}
             </View>
           )}
         </View>
 
         {/* ── Section 2: E-Invoice Configuration ── */}
-        <View style={cs.sectionCard}>
-          <View style={cs.sectionHdr}>
-            <Ionicons name="document-attach-outline" size={18} color={COLORS.brandPrimary} />
-            <Text style={cs.sectionTitle}>E-Invoice (IRN)</Text>
-          </View>
-          <Text style={cs.sectionSub}>For businesses with annual turnover ≥ ₹5 Cr</Text>
-
-          {[
-            { value: 'not_applicable',            label: 'Not Applicable',            sub: 'E-Invoice not required for this business' },
-            { value: 'applicable_not_configured', label: 'Applicable — Not Configured', sub: 'Required but IRP credentials not set up yet' },
-            { value: 'applicable_configured',     label: 'Applicable — Configured',    sub: 'IRP integrated, IRN generation enabled' },
-          ].map(opt => (
-            <TouchableOpacity
-              key={opt.value}
-              style={[cs.optRow, eInvoiceApplicable === opt.value && cs.optRowActive]}
-              onPress={() => { setEInvoiceApplicable(opt.value as any); setComplianceDirty(true); }}
-              activeOpacity={0.7}
-            >
-              <View style={cs.optRadio}>
-                {eInvoiceApplicable === opt.value && <View style={cs.optRadioDot} />}
+        <View style={s.section}>
+          <TouchableOpacity
+            style={s.sectionHdr}
+            onPress={() => setComplianceOpen(complianceOpen === 'einvoice' ? null : 'einvoice')}
+            activeOpacity={0.7}
+          >
+            <View style={s.typeIcon}>
+              <Ionicons name="document-attach-outline" size={18} color={COLORS.textSecondary} />
+            </View>
+            <Text style={s.sectionTitle} numberOfLines={1} ellipsizeMode="tail">E-Invoice (IRN)</Text>
+            {(() => { const st = applicabilityStatus(eInvoiceApplicable); return (
+              <View style={[cs.statusPill, { backgroundColor: st.bg }]}>
+                <Text style={[cs.statusPillTxt, { color: st.fg }]}>{st.label}</Text>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={cs.optLabel}>{opt.label}</Text>
-                <Text style={cs.optSub}>{opt.sub}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+            ); })()}
+            <Ionicons name={complianceOpen === 'einvoice' ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textTertiary} />
+          </TouchableOpacity>
 
-          {eInvoiceApplicable === 'applicable_configured' && (
-            <View style={cs.modeRow}>
-              <Text style={cs.modeLabel}>IRN Generation Mode</Text>
-              <View style={cs.modeChips}>
-                {[{v:'manual',l:'Manual'},{v:'auto',l:'Auto after Tally sync'}].map(m => (
-                  <TouchableOpacity key={m.v}
-                    style={[cs.modeChip, eInvoiceMode === m.v && cs.modeChipActive]}
-                    onPress={() => { setEInvoiceMode(m.v as any); setComplianceDirty(true); }}
+          {complianceOpen === 'einvoice' && (
+            <View style={s.sectionBody}>
+              <Text style={cs.sectionSub}>For businesses with annual turnover ≥ ₹5 Cr</Text>
+
+              {[
+                { value: 'not_applicable',            label: 'Not Applicable',            sub: 'E-Invoice not required for this business' },
+                { value: 'applicable_not_configured', label: 'Applicable — Not Configured', sub: 'Required but IRP credentials not set up yet' },
+                { value: 'applicable_configured',     label: 'Applicable — Configured',    sub: 'IRP integrated, IRN generation enabled' },
+              ].map(opt => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[cs.optRow, eInvoiceApplicable === opt.value && cs.optRowActive]}
+                  onPress={() => { setEInvoiceApplicable(opt.value as any); setComplianceDirty(true); }}
+                  activeOpacity={0.7}
+                >
+                  <View style={cs.optRadio}>
+                    {eInvoiceApplicable === opt.value && <View style={cs.optRadioDot} />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={cs.optLabel}>{opt.label}</Text>
+                    <Text style={cs.optSub}>{opt.sub}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+
+              {eInvoiceApplicable === 'applicable_configured' && (
+                <View style={cs.modeRow}>
+                  <Text style={cs.modeLabel}>IRN Generation Mode</Text>
+                  <View style={cs.modeChips}>
+                    {[{v:'manual',l:'Manual'},{v:'auto',l:'Auto after Tally sync'}].map(m => (
+                      <TouchableOpacity key={m.v}
+                        style={[cs.modeChip, eInvoiceMode === m.v && cs.modeChipActive]}
+                        onPress={() => { setEInvoiceMode(m.v as any); setComplianceDirty(true); }}
+                        activeOpacity={0.7}>
+                        <Text style={[cs.modeChipTxt, eInvoiceMode === m.v && cs.modeChipTxtActive]}>{m.l}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TouchableOpacity
+                    style={cs.configLink}
+                    onPress={() => safePush(router, '/settings/einvoice' as any)}
                     activeOpacity={0.7}>
-                    <Text style={[cs.modeChipTxt, eInvoiceMode === m.v && cs.modeChipTxtActive]}>{m.l}</Text>
+                    <Ionicons name="settings-outline" size={14} color={COLORS.brandPrimary} />
+                    <Text style={cs.configLinkTxt}>Configure IRP Credentials →</Text>
                   </TouchableOpacity>
-                ))}
-              </View>
-              <TouchableOpacity
-                style={cs.configLink}
-                onPress={() => router.push('/settings/einvoice' as any)}
-                activeOpacity={0.7}>
-                <Ionicons name="settings-outline" size={14} color={COLORS.brandPrimary} />
-                <Text style={cs.configLinkTxt}>Configure IRP Credentials →</Text>
-              </TouchableOpacity>
+                </View>
+              )}
             </View>
           )}
         </View>
 
         {/* ── Section 3: E-Way Bill Configuration ── */}
-        <View style={cs.sectionCard}>
-          <View style={cs.sectionHdr}>
-            <Ionicons name="car-outline" size={18} color={COLORS.brandPrimary} />
-            <Text style={cs.sectionTitle}>E-Way Bill</Text>
-          </View>
-          <Text style={cs.sectionSub}>For goods movement where consignment value exceeds ₹50,000</Text>
+        <View style={s.section}>
+          <TouchableOpacity
+            style={s.sectionHdr}
+            onPress={() => setComplianceOpen(complianceOpen === 'ewaybill' ? null : 'ewaybill')}
+            activeOpacity={0.7}
+          >
+            <View style={s.typeIcon}>
+              <Ionicons name="car-outline" size={18} color={COLORS.textSecondary} />
+            </View>
+            <Text style={s.sectionTitle} numberOfLines={1} ellipsizeMode="tail">E-Way Bill</Text>
+            {(() => { const st = applicabilityStatus(eWayBillApplicable); return (
+              <View style={[cs.statusPill, { backgroundColor: st.bg }]}>
+                <Text style={[cs.statusPillTxt, { color: st.fg }]}>{st.label}</Text>
+              </View>
+            ); })()}
+            <Ionicons name={complianceOpen === 'ewaybill' ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textTertiary} />
+          </TouchableOpacity>
 
-          {[
-            { value: 'not_applicable',            label: 'Not Applicable',            sub: 'No goods movement or below threshold' },
-            { value: 'applicable_not_configured', label: 'Applicable — Not Configured', sub: 'Required but NIC EWB credentials not set up yet' },
-            { value: 'applicable_configured',     label: 'Applicable — Configured',    sub: 'EWB portal integrated, generation enabled' },
-          ].map(opt => (
-            <TouchableOpacity
-              key={opt.value}
-              style={[cs.optRow, eWayBillApplicable === opt.value && cs.optRowActive]}
-              onPress={() => { setEWayBillApplicable(opt.value as any); setComplianceDirty(true); }}
-              activeOpacity={0.7}
-            >
-              <View style={cs.optRadio}>
-                {eWayBillApplicable === opt.value && <View style={cs.optRadioDot} />}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={cs.optLabel}>{opt.label}</Text>
-                <Text style={cs.optSub}>{opt.sub}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+          {complianceOpen === 'ewaybill' && (
+            <View style={s.sectionBody}>
+              <Text style={cs.sectionSub}>For goods movement where consignment value exceeds ₹50,000</Text>
 
-          {eWayBillApplicable === 'applicable_configured' && (
-            <View style={cs.modeRow}>
-              <Text style={cs.modeLabel}>E-Way Bill Mode</Text>
-              <View style={cs.modeChips}>
-                {[
-                  {v:'manual',l:'Manual'},
-                  {v:'auto',l:'Auto when details ready'},
-                  {v:'ask_after_irn',l:'Ask after IRN'},
-                ].map(m => (
-                  <TouchableOpacity key={m.v}
-                    style={[cs.modeChip, eWayBillMode === m.v && cs.modeChipActive]}
-                    onPress={() => { setEWayBillMode(m.v as any); setComplianceDirty(true); }}
-                    activeOpacity={0.7}>
-                    <Text style={[cs.modeChipTxt, eWayBillMode === m.v && cs.modeChipTxtActive]}>{m.l}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              {[
+                { value: 'not_applicable',            label: 'Not Applicable',            sub: 'No goods movement or below threshold' },
+                { value: 'applicable_not_configured', label: 'Applicable — Not Configured', sub: 'Required but NIC EWB credentials not set up yet' },
+                { value: 'applicable_configured',     label: 'Applicable — Configured',    sub: 'EWB portal integrated, generation enabled' },
+              ].map(opt => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[cs.optRow, eWayBillApplicable === opt.value && cs.optRowActive]}
+                  onPress={() => { setEWayBillApplicable(opt.value as any); setComplianceDirty(true); }}
+                  activeOpacity={0.7}
+                >
+                  <View style={cs.optRadio}>
+                    {eWayBillApplicable === opt.value && <View style={cs.optRadioDot} />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={cs.optLabel}>{opt.label}</Text>
+                    <Text style={cs.optSub}>{opt.sub}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+
+              {eWayBillApplicable === 'applicable_configured' && (
+                <View style={cs.modeRow}>
+                  <Text style={cs.modeLabel}>E-Way Bill Mode</Text>
+                  <View style={cs.modeChips}>
+                    {[
+                      {v:'manual',l:'Manual'},
+                      {v:'auto',l:'Auto when details ready'},
+                      {v:'ask_after_irn',l:'Ask after IRN'},
+                    ].map(m => (
+                      <TouchableOpacity key={m.v}
+                        style={[cs.modeChip, eWayBillMode === m.v && cs.modeChipActive]}
+                        onPress={() => { setEWayBillMode(m.v as any); setComplianceDirty(true); }}
+                        activeOpacity={0.7}>
+                        <Text style={[cs.modeChipTxt, eWayBillMode === m.v && cs.modeChipTxtActive]}>{m.l}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
             </View>
           )}
         </View>
@@ -764,94 +946,130 @@ export default function VoucherConfigScreen() {
                       <CustomToggle value={cfg.qrEnabled} onChange={v => update(vt.id, 'qrEnabled', v)} />
                     </View>
 
-                    {/* QR Type Selector */}
                     {cfg.qrEnabled && (
-                      <View style={s.qrTypeRow}>
-                        {([{ v: 'upi', l: 'UPI ID' }, { v: 'url', l: 'Website' }, { v: 'bank', l: 'Bank Details' }] as const).map(opt => (
-                          <TouchableOpacity
-                            key={opt.v}
-                            style={[s.qrTypeChip, cfg.qrType === opt.v && s.qrTypeChipActive]}
-                            onPress={() => update(vt.id, 'qrType', opt.v)}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={[s.qrTypeChipTxt, cfg.qrType === opt.v && s.qrTypeChipTxtActive]}>{opt.l}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    )}
-
-                    {cfg.qrEnabled && cfg.qrType === 'upi' && (
-                      <TextInput
-                        style={s.termInput}
-                        value={cfg.qrUpiId}
-                        onChangeText={t => update(vt.id, 'qrUpiId', t)}
-                        placeholder="Enter UPI ID (e.g. business@upi)"
-                        placeholderTextColor={COLORS.textTertiary}
-                        autoCapitalize="none"
-                        keyboardType="email-address"
-                      />
-                    )}
-                    {cfg.qrEnabled && cfg.qrType === 'url' && (
-                      <TextInput
-                        style={s.termInput}
-                        value={cfg.qrUrl}
-                        onChangeText={t => update(vt.id, 'qrUrl', t)}
-                        placeholder="Enter website URL (e.g. https://yoursite.com)"
-                        placeholderTextColor={COLORS.textTertiary}
-                        autoCapitalize="none"
-                        keyboardType="url"
-                      />
-                    )}
-                    {cfg.qrEnabled && cfg.qrType === 'bank' && (
-                      <View style={{ gap: 8 }}>
-                        <TextInput
-                          style={s.termInput}
-                          value={cfg.qrIfsc}
-                          onChangeText={t => update(vt.id, 'qrIfsc', t.toUpperCase())}
-                          placeholder="IFSC Code (e.g. HDFC0001234)"
-                          placeholderTextColor={COLORS.textTertiary}
-                          autoCapitalize="characters"
-                        />
-                        <TextInput
-                          style={s.termInput}
-                          value={cfg.qrAccount}
-                          onChangeText={t => update(vt.id, 'qrAccount', t)}
-                          placeholder="Account Number"
-                          placeholderTextColor={COLORS.textTertiary}
-                          keyboardType="numeric"
-                        />
-                      </View>
-                    )}
-
-                    {cfg.qrEnabled && (
-                      cfg.qrImage ? (
-                        /* QR Preview Card */
-                        <View style={s.qrPreviewCard}>
-                          <Image source={{ uri: cfg.qrImage }} style={s.qrPreviewImg} resizeMode="contain" />
-                          <View style={s.qrPreviewFooter}>
-                            <View style={s.qrPreviewStatus}>
-                              <Ionicons name="checkmark-circle" size={14} color={COLORS.brandPrimary} />
-                              <Text style={s.qrPreviewStatusTxt}>QR code ready for PDF</Text>
-                            </View>
-                            <TouchableOpacity onPress={() => update(vt.id, 'qrImage', null)} activeOpacity={0.7} style={s.qrRemoveBtn}>
-                              <Ionicons name="trash-outline" size={13} color={COLORS.negative} />
-                              <Text style={s.qrRemoveTxt}>Remove</Text>
-                            </TouchableOpacity>
-                          </View>
-                          {/* Re-upload option */}
-                          <TouchableOpacity style={s.qrReuploadBtn} onPress={() => handlePickQR(vt.id)} activeOpacity={0.7}>
-                            <Ionicons name="refresh-outline" size={14} color={COLORS.textSecondary} />
-                            <Text style={s.qrReuploadTxt}>Replace QR</Text>
-                          </TouchableOpacity>
+                      <>
+                        <Text style={s.fieldHint}>Choose how the QR is added to the PDF</Text>
+                        <View style={s.qrTypeRow}>
+                          {([
+                            { v: 'upload' as const, l: 'Upload QR', icon: 'cloud-upload-outline' as const },
+                            { v: 'generate' as const, l: 'Generate from UPI', icon: 'qr-code-outline' as const },
+                          ]).map(opt => {
+                            const active = resolveQrMode(cfg) === opt.v;
+                            return (
+                              <TouchableOpacity
+                                key={opt.v}
+                                style={[s.qrModeChip, active && s.qrModeChipActive]}
+                                onPress={() => {
+                                  if (opt.v === 'generate') {
+                                    setConfigs(prev => ({
+                                      ...prev,
+                                      [vt.id]: {
+                                        ...prev[vt.id],
+                                        qrMode: 'generate',
+                                        qrImage: null,
+                                      },
+                                    }));
+                                    setIsDirty(true);
+                                    return;
+                                  }
+                                  // Upload: switch mode and open gallery on the same tap
+                                  // (avoid "first tap selects mode, second tap uploads").
+                                  setConfigs(prev => ({
+                                    ...prev,
+                                    [vt.id]: { ...prev[vt.id], qrMode: 'upload' },
+                                  }));
+                                  setIsDirty(true);
+                                  if (!cfg.qrImage) {
+                                    setTimeout(() => { void handlePickQR(vt.id); }, 0);
+                                  }
+                                }}
+                                activeOpacity={0.7}
+                              >
+                                <Ionicons
+                                  name={opt.icon}
+                                  size={16}
+                                  color={active ? COLORS.white : COLORS.textSecondary}
+                                />
+                                <Text style={[s.qrModeChipTxt, active && s.qrModeChipTxtActive]}>{opt.l}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
                         </View>
-                      ) : (
-                        /* Upload Zone */
-                        <TouchableOpacity style={s.uploadZone} onPress={() => handlePickQR(vt.id)} activeOpacity={0.7}>
-                          <Ionicons name="cloud-upload-outline" size={28} color={COLORS.textTertiary} />
-                          <Text style={s.uploadMainTxt}>Upload QR Code Image</Text>
-                          <Text style={s.uploadSubTxt}>Tap to select from gallery · PNG or JPG</Text>
-                        </TouchableOpacity>
-                      )
+
+                        {resolveQrMode(cfg) === 'generate' ? (
+                          <>
+                            <Text style={s.fieldHint}>
+                              Enter UPI ID — QR is generated on this device (not sent to any third party).
+                            </Text>
+                            <TextInput
+                              style={s.termInput}
+                              value={cfg.qrUpiId}
+                              onChangeText={t => {
+                                setConfigs(prev => ({
+                                  ...prev,
+                                  [vt.id]: {
+                                    ...prev[vt.id],
+                                    qrUpiId: t,
+                                    qrMode: 'generate',
+                                    qrImage: null,
+                                  },
+                                }));
+                                setIsDirty(true);
+                              }}
+                              placeholder="e.g. business@upi / shop@oksbi"
+                              placeholderTextColor={COLORS.textTertiary}
+                              autoCapitalize="none"
+                              keyboardType="email-address"
+                              autoCorrect={false}
+                            />
+                            <GeneratedQrPreview cfg={{ ...cfg, qrMode: 'generate', qrImage: null }} />
+                            {!String(cfg.qrUpiId || '').trim() && (
+                              <View style={s.qrEmptyHint}>
+                                <Ionicons name="qr-code-outline" size={22} color={COLORS.textTertiary} />
+                                <Text style={s.qrEmptyHintTxt}>QR preview appears here after you enter a UPI ID</Text>
+                              </View>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <Text style={s.fieldHint}>Upload a QR image from your gallery to print on the PDF.</Text>
+                            {cfg.qrImage ? (
+                              <View style={s.qrPreviewCard}>
+                                <Image source={{ uri: cfg.qrImage }} style={s.qrPreviewImg} resizeMode="contain" />
+                                <View style={s.qrPreviewFooter}>
+                                  <View style={s.qrPreviewStatus}>
+                                    <Ionicons name="checkmark-circle" size={14} color={COLORS.brandPrimary} />
+                                    <Text style={s.qrPreviewStatusTxt}>Uploaded QR · ready for PDF</Text>
+                                  </View>
+                                  <TouchableOpacity
+                                    onPress={() => update(vt.id, 'qrImage', null)}
+                                    activeOpacity={0.7}
+                                    style={s.qrRemoveBtn}
+                                  >
+                                    <Ionicons name="trash-outline" size={13} color={COLORS.negative} />
+                                    <Text style={s.qrRemoveTxt}>Remove</Text>
+                                  </TouchableOpacity>
+                                </View>
+                                <TouchableOpacity style={s.qrReuploadBtn} onPress={() => handlePickQR(vt.id)} activeOpacity={0.7}>
+                                  <Ionicons name="refresh-outline" size={14} color={COLORS.textSecondary} />
+                                  <Text style={s.qrReuploadTxt}>Replace QR</Text>
+                                </TouchableOpacity>
+                              </View>
+                            ) : (
+                              <TouchableOpacity
+                                style={s.uploadZone}
+                                onPress={() => { void handlePickQR(vt.id); }}
+                                activeOpacity={0.7}
+                                delayPressIn={0}
+                              >
+                                <Ionicons name="cloud-upload-outline" size={28} color={COLORS.textTertiary} />
+                                <Text style={s.uploadMainTxt}>Upload QR Code Image</Text>
+                                <Text style={s.uploadSubTxt}>Tap to select from gallery · PNG or JPG</Text>
+                              </TouchableOpacity>
+                            )}
+                          </>
+                        )}
+                      </>
                     )}
                   </View>
 
@@ -973,6 +1191,7 @@ const s = StyleSheet.create({
 
   // QR Preview Card
   qrPreviewCard:   { backgroundColor: COLORS.pageBg, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.borderDefault, overflow: 'hidden' },
+  qrGeneratedWrap: { alignItems: 'center', justifyContent: 'center', marginVertical: 16 },
   qrPreviewImg:    { width: 160, height: 160, alignSelf: 'center', marginVertical: 16 },
   qrPreviewFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingBottom: 12 },
   qrPreviewStatus: { flexDirection: 'row', alignItems: 'center', gap: 5 },
@@ -995,12 +1214,28 @@ const s = StyleSheet.create({
   addTermBtn:    { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 2 },
   addTermTxt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.brandPrimary },
 
-  // QR type chips
+  // QR type / mode chips
   qrTypeRow:        { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   qrTypeChip:       { paddingHorizontal: 14, paddingVertical: 7, borderRadius: RADIUS.full, borderWidth: 1.5, borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg },
   qrTypeChipActive: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary },
   qrTypeChipTxt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '500', color: COLORS.textSecondary },
   qrTypeChipTxtActive: { color: COLORS.white, fontWeight: '700' },
+  qrModeChip: {
+    flex: 1, minWidth: '42%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 12, borderRadius: RADIUS.md,
+    borderWidth: 1.5, borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg,
+  },
+  qrModeChipActive: { borderColor: COLORS.brandPrimary, backgroundColor: COLORS.brandPrimary },
+  qrModeChipTxt:    { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
+  qrModeChipTxtActive: { color: COLORS.white, fontWeight: '700' },
+  fieldHint: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginBottom: 8, marginTop: 4, lineHeight: 16 },
+  qrEmptyHint: {
+    alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 20, marginBottom: 4,
+    borderRadius: RADIUS.md, borderWidth: 1, borderStyle: 'dashed', borderColor: COLORS.borderDefault,
+    backgroundColor: COLORS.pageBg,
+  },
+  qrEmptyHintTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, textAlign: 'center', paddingHorizontal: 16 },
 
   // PDF Preview button
   previewBtn:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, flex: 1, minWidth: 0, borderWidth: 1.5, borderColor: COLORS.brandPrimary, borderRadius: RADIUS.lg, paddingVertical: 14, paddingHorizontal: 10, backgroundColor: COLORS.cardBg, overflow: 'hidden' },
@@ -1017,9 +1252,8 @@ const s = StyleSheet.create({
 
 // ── Compliance Sections Styles ─────────────────────────────────────────────────
 const cs = StyleSheet.create({
-  sectionCard:    { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.borderDefault, padding: SPACING.md, marginBottom: SPACING.md },
-  sectionHdr:     { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  sectionTitle:   { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 4 },
+  statusPill:     { flexShrink: 0, paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.full },
+  statusPillTxt:  { fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
   sectionSub:     { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginBottom: 12 },
   optRow:         { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 10, paddingHorizontal: 4, borderRadius: RADIUS.md, marginBottom: 4 },
   optRowActive:   { backgroundColor: COLORS.activeBg },

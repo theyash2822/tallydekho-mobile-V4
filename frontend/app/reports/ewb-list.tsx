@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIn
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
@@ -172,7 +173,7 @@ export default function EWBListScreen() {
       <View style={s.filterRow}>
         <TouchableOpacity style={s.datePill} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
           <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
-          <Text style={s.dateTxt}>{fromDate} – {toDate}</Text>
+          <Text style={s.dateTxt}>{fromDate && toDate ? `${formatDate(fromDate)} – ${formatDate(toDate)}` : 'Dates'}</Text>
           <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
@@ -194,7 +195,7 @@ export default function EWBListScreen() {
               style={[s.card, isSelected && s.cardSelected]}
               onPress={() => {
                 if (selectMode) { toggleSelect(item.id); }
-                else { router.push(`/document/${item.id}` as any); }
+                else { safePush(router, `/document/${item.id}` as any); }
               }}
               onLongPress={() => toggleSelect(item.id)}
               delayLongPress={500}
@@ -283,8 +284,8 @@ export default function EWBListScreen() {
       {/* Date Range Modal */}
       <DateRangePickerModal
         visible={showDatePicker}
-        fromDate={fromDate}
-        toDate={toDate}
+        fromDate={fromDate || selectedFY?.startDate || ''}
+        toDate={toDate || selectedFY?.endDate || ''}
         minDate={selectedFY?.startDate}
         maxDate={selectedFY?.endDate}
         onApply={(from, to) => { setFromDate(from); setToDate(to); setShowDatePicker(false); }}

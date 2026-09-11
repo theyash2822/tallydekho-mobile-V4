@@ -8,6 +8,7 @@ import { useSettings } from '../context/SettingsContext';
 import { tMetricLabel } from '../i18n/labelMap';
 import { MetricTrendBadge } from './MetricTrendBadge';
 import ShimmerPlaceholder from './ShimmerPlaceholder';
+import { safePush } from '../utils/safeNavigation';
 
 // ── Compact large amounts so they never clip in the narrow tile ──────────────
 const compactAmount = (raw: string): string => {
@@ -80,7 +81,7 @@ export default function ModuleTiles({ metrics, isLoading }: Props) {
             testID={`module-tile-${item.id}`}
             style={s.tile}
             activeOpacity={0.75}
-            onPress={() => item.route && router.push(item.route as any)}
+            onPress={() => item.route && safePush(router, item.route as any)}
           >
             {/* thin colored accent line for identity */}
             <View style={[s.accent, { backgroundColor: id.accent }]} />

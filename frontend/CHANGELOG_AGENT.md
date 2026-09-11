@@ -1,5 +1,69 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-11 — safePush, date ISO, multi PDF, audit refresh; bottom-sheet rollback
+
+### Why
+Double-tap nav stacked screens; date filters empty/wrong under Settings formats; Thermal multi-share opened N sheets; Audit Trail stale on back; attempted global Gorhom bottom-sheet migration broke sheet open (Profile / Daybook voucher type) — rolled back to RN Modal.
+
+### Change
+- `safeNavigation.ts` + `safePush` across high-traffic screens/tiles/`openLedger`.
+- `dateRange.ts` + `DateRangePickerModal` ISO wire/state; Settings-aware display; FY-safe presets.
+- `multiShare` + `pdf-lib`: always one share sheet (Thermal/Classic/mixed).
+- Audit Trail soft refresh with `fetchGenRef`.
+- Voucher Config QR/UPI helpers (`voucherPdfConfig`, `sanitizeImageSrc`).
+- Bottom sheets: keep `FilterBottomSheet` / `BottomModalShell` as RN Modal (no `BottomSheetShell`).
+
+### Manual test (QA YELLOW)
+Filters/modals open; double-tap no stack; date range Apply/Reset FY; multi-share one sheet; Audit Trail leave/return; Payment Reminders party sheet; Voucher Config QR print.
+
+---
+
+## 2026-09-09 — Mobile UI keyboard / party create fixes
+
+### Why
+Filter search covered by keyboard; bank/profile sheets gapped on Android KAV `height` when closed; contact edit autofocus; AddPartyModal not on shared shell; sales customer create missing Tally parent.
+
+### Change
+- `FilterBottomSheet`: keyboard-height `paddingBottom` (iOS will / Android did show-hide); still RN Modal.
+- `bank-feeds` BankFormSheet + `profile` OTPVerifySheet: KAV only while keyboard open; Android `behavior` undefined; contact `autoFocus={false}`.
+- `AddPartyModal` → `BottomModalShell`.
+- Sales `createTallyParty`: `parent: 'Sundry Debtors'`.
+
+### Manual test
+Filter search with keyboard; bank/profile sheets flush when keyboard closed; profile contact edit no autofocus; Add Party sheet; create customer under Sundry Debtors.
+
+---
+
+## 2026-09-09 — Thermal multi-select Share = one PDF (Classic parity)
+
+### Why
+Classic multi-voucher Share produced one multi-page PDF; Thermal opened N share sheets (mixed page-size loop).
+
+### Change
+- `shareMultiPageHtmlPdf`: all A4 → existing HTML stitch; all Thermal → normalize width + `wrapThermalHtml` stitch; mixed / stitch fail → `pdf-lib` merge → **always one share sheet**.
+- Added `pdf-lib` dependency.
+
+### Manual test
+Multi-select Thermal vouchers → one share; Classic unchanged; mixed Thermal+Classic → one merged PDF.
+
+---
+
+## 2026-09-08 — Date filters: ISO + Settings style + Home FY
+
+### Why
+Date range filters returned empty / ignored Settings Date Style; presets collapsed on closed FY; modal spoke DD/MM/YY only.
+
+### Change
+- Wire/state/API: always ISO `YYYY-MM-DD`. Display: `settings.date_format` (incl. real `DD-MM-YYYY`).
+- `DateRangePickerModal`: ISO Apply; FY-safe presets; Clear → Reset to FY; Settings-aware labels.
+- Migrated registers, Day Book/Audit, ledger detail (re-fetch + year-aware dates), KPI dates, EWB/e-Inv, financial/GST/AI, stock ledger/transfer/on-hand.
+- Home FY remains the only year switcher; ranges cannot escape FY.
+
+### QA next
+Founder device: Last 3 Months / manual dates / Date Style switch / FY switch on Home.
+
+---
+
 ## 2026-09-08 — Publish hardening (audit fixes)
 
 ### Why

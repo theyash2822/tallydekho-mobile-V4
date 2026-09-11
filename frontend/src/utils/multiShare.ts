@@ -2,10 +2,17 @@
  * Multi-select share helpers — Day Book / stock register / multi-page voucher PDF
  * (same pattern as shareMultiStatementPdf — one PDF, page breaks, one share sheet).
  * ZIP is intentionally not used (unreliable on device share sheets).
+ *
+ * Multi-page policy (Classic + Thermal parity — always ONE share sheet):
+ * - All A4 (Classic/Executive): HTML stitch (unchanged working path)
+ * - All Thermal: normalize paper width + wrapThermalHtml stitch (A+B)
+ * - Mixed sizes / stitch failure: print each silently → pdf-lib merge (C)
  */
 import { Alert, Share } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
+import { PDFDocument } from 'pdf-lib';
 import { DocumentType, VoucherDocument } from '../types/document';
 import { toVoucherDocument } from './voucherDocumentAdapter';
 import { getVoucherById, getInvoicePreview } from '../services/api';
@@ -20,14 +27,31 @@ import {
   renderEWayBillSheetHTML,
 } from './pdf/complianceSheet';
 import { TX_TO_DOC_TYPE } from './documentHelpers';
-import { thermalPageSize } from './pdf/thermalShared';
+import {
+  thermalPageSize,
+  wrapThermalHtml,
+  type ThermalPaperWidth,
+} from './pdf/thermalShared';
 
 const A4 = { width: 595, height: 842 };
 
+type PageKind = 'a4' | 'thermal58' | 'thermal80';
+
+function pageKindFromHtml(html: string): PageKind {
+  if (html.includes('width:48mm')) return 'thermal58';
+  if (html.includes('width:72mm')) return 'thermal80';
+  return 'a4';
+}
+
 function pageSizeFromHtml(html: string): { width: number; height: number } {
-  if (html.includes('width:48mm')) return thermalPageSize(58);
-  if (html.includes('width:72mm')) return thermalPageSize(80);
+  const kind = pageKindFromHtml(html);
+  if (kind === 'thermal58') return thermalPageSize(58);
+  if (kind === 'thermal80') return thermalPageSize(80);
   return A4;
+}
+
+function isThermalKind(k: PageKind): boolean {
+  return k === 'thermal58' || k === 'thermal80';
 }
 
 export type ShareMode = 'individual' | 'combined';
@@ -67,44 +91,57 @@ function extractBody(html: string): string {
   return match ? match[1] : html;
 }
 
-/** Stitch full HTML documents into one multi-page PDF (ledger multi-select style). */
-export async function shareMultiPageHtmlPdf(
-  htmlDocuments: string[],
-  opts: { fileName?: string; onBeforeShare?: () => void } = {}
+async function presentPdfUri(
+  uri: string,
+  fileName: string,
+  onBeforeShare?: () => void
 ): Promise<void> {
-  if (!htmlDocuments.length) throw new Error('No documents to share.');
-  if (htmlDocuments.length === 1) {
-    await shareHtmlPdf(htmlDocuments[0], opts.fileName || 'Document.pdf', opts.onBeforeShare);
+  onBeforeShare?.();
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(uri, {
+      mimeType: 'application/pdf',
+      dialogTitle: fileName,
+      UTI: 'com.adobe.pdf',
+    });
     return;
   }
+  await Share.share({ url: uri, title: fileName });
+}
 
-  const pages = htmlDocuments.map((html) => ({ html, page: pageSizeFromHtml(html) }));
-  const pageKey = (p: { width: number; height: number }) => `${p.width}x${p.height}`;
-  const firstKey = pageKey(pages[0].page);
-  const mixed = pages.some((p) => pageKey(p.page) !== firstKey);
-
-  // Mixed Thermal + A4 cannot share one print size without clipping — share one-by-one.
-  if (mixed) {
-    opts.onBeforeShare?.();
-    for (let i = 0; i < pages.length; i++) {
-      const { html, page } = pages[i];
-      const { uri } = await Print.printToFileAsync({ html, base64: false, ...page });
-      const name = opts.fileName
-        ? opts.fileName.replace(/\.pdf$/i, '') + ` (${i + 1} of ${pages.length}).pdf`
-        : `Document (${i + 1} of ${pages.length}).pdf`;
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, {
-          mimeType: 'application/pdf',
-          dialogTitle: name,
-          UTI: 'com.adobe.pdf',
-        });
-      } else {
-        await Share.share({ url: uri, title: name });
-      }
-    }
-    return;
+/** Option C — print each HTML at its native page size, merge with pdf-lib, one share. */
+async function mergeHtmlDocsToOnePdf(
+  htmlDocuments: string[],
+  fileName: string,
+  onBeforeShare?: () => void
+): Promise<void> {
+  const uris: string[] = [];
+  for (const html of htmlDocuments) {
+    const page = pageSizeFromHtml(html);
+    const { uri } = await Print.printToFileAsync({ html, base64: false, ...page });
+    uris.push(uri);
   }
 
+  const merged = await PDFDocument.create();
+  for (const uri of uris) {
+    const b64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    const donor = await PDFDocument.load(b64);
+    const copied = await merged.copyPages(donor, donor.getPageIndices());
+    copied.forEach((p) => merged.addPage(p));
+  }
+
+  const outB64 = await merged.saveAsBase64({ dataUri: false });
+  const outPath =
+    (FileSystem.cacheDirectory || FileSystem.documentDirectory || '') +
+    `td-multi-${Date.now()}.pdf`;
+  await FileSystem.writeAsStringAsync(outPath, outB64, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  await presentPdfUri(outPath, fileName, onBeforeShare);
+}
+
+function stitchA4HtmlDocs(htmlDocuments: string[]): string {
   const sections = htmlDocuments
     .map((full, idx) => {
       const body = extractBody(full);
@@ -113,34 +150,89 @@ export async function shareMultiPageHtmlPdf(
     })
     .join('\n');
 
-  // Body extract can drop thermal width markers — keep the detected page size.
-  const page = pages[0].page;
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:Arial,Helvetica,sans-serif;color:#000;background:#fff}
   table{width:100%;border-collapse:collapse}
 </style></head><body>${sections}</body></html>`;
+}
 
+/** Options A+B — normalize Thermal width, re-wrap once, page-break between vouchers. */
+function stitchThermalHtmlDocs(
+  htmlDocuments: string[],
+  paperWidth: ThermalPaperWidth
+): string {
+  const sections = htmlDocuments
+    .map((full, idx) => {
+      const body = extractBody(full);
+      const breakStyle = idx === 0 ? '' : 'page-break-before:always;';
+      return `<div style="${breakStyle}">${body}</div>`;
+    })
+    .join('\n');
+  return wrapThermalHtml(sections, { paperWidth });
+}
+
+function pickThermalWidth(kinds: PageKind[]): ThermalPaperWidth {
+  const n80 = kinds.filter((k) => k === 'thermal80').length;
+  const n58 = kinds.filter((k) => k === 'thermal58').length;
+  return n58 > n80 ? 58 : 80;
+}
+
+/**
+ * Stitch / merge HTML documents into one multi-page PDF → one share sheet.
+ * Classic path unchanged; Thermal + mixed never open N sequential share sheets.
+ */
+export async function shareMultiPageHtmlPdf(
+  htmlDocuments: string[],
+  opts: { fileName?: string; onBeforeShare?: () => void } = {}
+): Promise<void> {
+  if (!htmlDocuments.length) throw new Error('No documents to share.');
   const fileName = opts.fileName || `Documents (${htmlDocuments.length}).pdf`;
-  const { uri } = await Print.printToFileAsync({ html, base64: false, ...page });
-  opts.onBeforeShare?.();
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: fileName, UTI: 'com.adobe.pdf' });
+
+  if (htmlDocuments.length === 1) {
+    await shareHtmlPdf(htmlDocuments[0], fileName, opts.onBeforeShare);
     return;
   }
-  await Share.share({ url: uri, title: fileName });
+
+  const kinds = htmlDocuments.map(pageKindFromHtml);
+  const allA4 = kinds.every((k) => k === 'a4');
+  const allThermal = kinds.every(isThermalKind);
+
+  // Classic / Executive (all A4): keep working HTML stitch
+  if (allA4) {
+    try {
+      const html = stitchA4HtmlDocs(htmlDocuments);
+      const { uri } = await Print.printToFileAsync({ html, base64: false, ...A4 });
+      await presentPdfUri(uri, fileName, opts.onBeforeShare);
+      return;
+    } catch {
+      // Fall through to merge (C)
+    }
+  }
+
+  // All Thermal: A+B normalize + wrapThermalHtml stitch
+  if (allThermal) {
+    try {
+      const paperWidth = pickThermalWidth(kinds);
+      const html = stitchThermalHtmlDocs(htmlDocuments, paperWidth);
+      const page = thermalPageSize(paperWidth);
+      const { uri } = await Print.printToFileAsync({ html, base64: false, ...page });
+      await presentPdfUri(uri, fileName, opts.onBeforeShare);
+      return;
+    } catch {
+      // Fall through to merge (C)
+    }
+  }
+
+  // Mixed A4+Thermal, or stitch failed: pdf-lib merge — still one share
+  await mergeHtmlDocsToOnePdf(htmlDocuments, fileName, opts.onBeforeShare);
 }
 
 async function shareHtmlPdf(html: string, fileName: string, onBeforeShare?: () => void): Promise<void> {
   const page = pageSizeFromHtml(html);
   const { uri } = await Print.printToFileAsync({ html, base64: false, ...page });
-  onBeforeShare?.();
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: fileName, UTI: 'com.adobe.pdf' });
-    return;
-  }
-  await Share.share({ url: uri, title: fileName });
+  await presentPdfUri(uri, fileName, onBeforeShare);
 }
 
 export async function shareDayBookPdf(

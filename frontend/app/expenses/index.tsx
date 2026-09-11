@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { getExpenses, getExpensesHomeMetrics } from '../../src/services/api';
@@ -230,7 +231,7 @@ export default function ExpenseScreen() {
                       key={exp.guid || `expense-${index}`}
                       onPress={() => {
                         const routeType = expenseRowToRouteType(exp.voucherType);
-                        router.push(`/document/${exp.guid || exp.id}?type=${routeType}` as any);
+                        safePush(router, `/document/${exp.guid || exp.id}?type=${routeType}` as any);
                       }}
                     >
                       <VoucherListTile
@@ -246,7 +247,7 @@ export default function ExpenseScreen() {
                 )}
                 <ViewAllButton
                   label={t('expenses.viewAll')}
-                  onPress={() => router.push('/expenses/register' as any)}
+                  onPress={() => safePush(router, '/expenses/register' as any)}
                 />
               </View>
             )}
@@ -270,7 +271,7 @@ export default function ExpenseScreen() {
                 )}
                 <ViewAllButton
                   label={t('expenses.viewAll')}
-                  onPress={() => router.push('/ledger' as any)}
+                  onPress={() => safePush(router, '/ledger' as any)}
                 />
               </View>
             )}

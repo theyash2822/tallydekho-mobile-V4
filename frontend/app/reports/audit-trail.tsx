@@ -1,12 +1,24 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Dimensions, Modal, Alert, ActivityIndicator, TextInput, Pressable, KeyboardAvoidingView, Platform,
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  Dimensions,
+  Alert,
+  ActivityIndicator,
+  Platform,
+  KeyboardAvoidingView,
+  Pressable,
+  Modal,
+  TextInput,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
@@ -453,15 +465,13 @@ export default function AuditTrailScreen() {
   const [fromDate,       setFromDate]       = useState(defaultFrom);
   const [toDate,         setToDate]         = useState(defaultTo);
 
-  // Sync dates when selectedFY loads asynchronously (prevents stale initial state)
-  const fySynced = React.useRef(false);
+  // When FY changes, reset date range to full FY
   useEffect(() => {
-    if (selectedFY?.startDate && !fySynced.current) {
-      fySynced.current = true;
+    if (selectedFY?.startDate && selectedFY?.endDate) {
       setFromDate(selectedFY.startDate);
-      setToDate(selectedFY.endDate || new Date().toISOString().split('T')[0]);
+      setToDate(selectedFY.endDate);
     }
-  }, [selectedFY?.startDate]);
+  }, [selectedFY?.startDate, selectedFY?.endDate]);
   useEffect(() => {
     if (tab === 'daybook') setActiveTab('daybook');
   }, [tab]);
@@ -488,22 +498,11 @@ export default function AuditTrailScreen() {
   const [page,          setPage]          = useState(1);
   const [hasMore,       setHasMore]       = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [refreshKey,    setRefreshKey]    = useState(0);
 
-  // ── Refresh on screen focus (catches Optional→Regular conversions + Tally syncs) ──
-  useFocusEffect(
-    useCallback(() => {
-      setRefreshKey(k => k + 1);
-    }, [])
-  );
-
-  // ── Auto-refresh when backend reconciles a TDK voucher number after Tally sync ──
-  useEffect(() => {
-    socketService.setOnVoucherSynced(() => {
-      setRefreshKey(k => k + 1);
-    });
-    return () => { socketService.setOnVoucherSynced(null); };
-  }, []);
+  const entriesLenRef = useRef(0);
+  const fetchGenRef = useRef(0);
+  const isFirstFocusRef = useRef(true);
+  useEffect(() => { entriesLenRef.current = apiEntries.length; }, [apiEntries.length]);
 
   // ── write_queue entry_type → display label ─────────────────
   const WQ_ENTRY_LABEL: Record<string, string> = {
@@ -533,13 +532,12 @@ export default function AuditTrailScreen() {
     } catch { return ''; }
   };
 
-  const mapQueueRow = (p: any): VoucherEntry => ({
+  const mapQueueRow = useCallback((p: any): VoucherEntry => ({
     id: 'wq_' + String(p._queue_id),
     ref:  p.voucher_number || '',
     date: p.date || '',
     month: formatMonth(p.date),
     type: isConvertedProformaRow(p) ? 'Sales' : mapVoucherType(WQ_ENTRY_LABEL[p.app_voucher_type || p.voucher_type || ''] || p.app_voucher_type || p.voucher_type || 'Journal'),
-    // For stock edits: show item name as party, changes as description
     party: p.voucher_type === 'alter_stock_item'
       ? (p.party_name || '')
       : (p.party_name || ''),
@@ -551,8 +549,6 @@ export default function AuditTrailScreen() {
     rawDate: p.date || '',
     rawParty: p.party_name || '',
     rawPayload: p._payload,
-    // Phase D11(b): use the same Sales=Cr/Receipt=Cr/Payment=Dr classifier as posted rows
-    // so a queue+posted pair of the same voucher render with matching Dr/Cr semantics.
     isCredit: isCreditVoucher(p.voucher_type || ''),
     syncStatus: p._queue_status === 'success' ? 'synced'
       : p._queue_status === 'failed' ? 'failed'
@@ -562,8 +558,6 @@ export default function AuditTrailScreen() {
     isMaster: !!(p._is_master || isMasterEntryType(p.voucher_type)),
     queueId: p._queue_id ?? null,
     tdkRef: p.tdk_reference_no || '',
-    // av_tally_voucher_no = app_vouchers.tally_voucher_no (populated by ingestProcessor reconciliation).
-    // p.voucher_number = wq.tally_voucher_number which is often empty (Tally ImportData doesn't return it).
     tallyVoucherNo: p.av_tally_voucher_no || p.voucher_number || '',
     originalEntryType: p.original_entry_type,
     currentEntryType: p.current_entry_type,
@@ -575,22 +569,25 @@ export default function AuditTrailScreen() {
     parentInvoiceUuid: p.parent_invoice_uuid || null,
     parentTdkRef: p.parent_tdk_reference_no || null,
     parentTallyVoucherNo: p.parent_tally_voucher_no || null,
-  });
+  }), [formatAmount]);
 
-  // ── Fetch data ────────────────────────────────────────────
-  useEffect(() => {
+  /** hard = full-screen loader; soft = keep list visible (focus / socket / retry). */
+  const loadEntries = useCallback((mode: 'hard' | 'soft' = 'hard') => {
     if (!companyGuid) return;
-    setIsLoading(true);
+    const gen = ++fetchGenRef.current;
+    const showLoader = mode === 'hard' || entriesLenRef.current === 0;
+    if (showLoader) {
+      setIsLoading(true);
+      setPage(1);
+      setHasMore(false);
+    }
     setApiError(null);
-    setPage(1);
-    setHasMore(false);
 
     if (activeTab === 'myentries') {
-      // My Entries: merge posted vouchers (res.data) + ALL write_queue entries (res.pending)
       getMyEntries(companyGuid, { from: fromDate, to: toDate, limit: String(PAGE_SIZE), page: 1, lifecycleFilter })
         .then((res: any) => {
+          if (gen !== fetchGenRef.current) return;
           const postedRows = (res?.data ?? []).map((r: any) => ({ ...mapApiRow(r, formatAmount), isMine: true }));
-          // Collapse JOIN fan-out duplicates (same TDK ref / same guid+amount) before render.
           const postedDeduped: VoucherEntry[] = [];
           const seenPosted = new Set<string>();
           for (const p of postedRows) {
@@ -599,52 +596,71 @@ export default function AuditTrailScreen() {
             seenPosted.add(k);
             postedDeduped.push(p);
           }
-          const queueRows  = (res?.pending ?? []).map(mapQueueRow);
-          // Phase D11(a): dedupe by tdkRef (always populated on both sides) instead of
-          // ref/voucher_number which is empty on queue rows (Tally doesn't return it on
-          // ImportData). Prefer the POSTED version since it has the real Tally voucher
-          // number for display — drop the queue duplicate when a posted row exists for
-          // the same TDK reference.
+          const queueRows = (res?.pending ?? []).map(mapQueueRow);
           const queueFiltered = queueRows.filter((q: VoucherEntry) =>
             !q.tdkRef || !postedDeduped.some((p: VoucherEntry) => p.tdkRef && p.tdkRef === q.tdkRef)
           );
-          // 2026-07-01 R4: Merge queue + posted, then sort the WHOLE combined list by
-          // rawDate DESC (business date, YYYY-MM-DD text so lexicographic works) with
-          // stable tiebreak preserving each group's own order for same-date entries.
-          // Why the re-sort: stale/failed queue rows can be months old (May/June leftovers
-          // from earlier debugging). Previous naive `[...queue, ...posted]` prepended ALL
-          // pending above ALL posted — which pushed old-month failed rows above current-
-          // month posted rows in Audit Trail, breaking chronological display.
-          // Backend already sorts posted rows by v.date DESC + av.created_at DESC + av.id ASC,
-          // so JS Array.sort's stability preserves that intra-day order.
           const combined = [...queueFiltered, ...postedDeduped];
           const allMerged = combined.slice().sort((a, b) => {
             const da = a.rawDate || '';
             const db = b.rawDate || '';
-            if (da === db) return 0; // stable — keeps original relative order within same date
-            return db.localeCompare(da); // DESC (newest date first)
+            if (da === db) return 0;
+            return db.localeCompare(da);
           });
-
-          // 2026-07-01 UX decision: Receipt tiles render as normal receipt entries — no explicit
-          // "Linked to Sales" subtitle. Sales + Receipt appear sequentially in the same date group,
-          // so the linkage is visually implied. Parent linkage data (parentTdkRef / parentTallyVoucherNo)
-          // still flows through the model in case a future drill-down surface uses it.
           setApiEntries(allMerged);
           setHasMore(false);
         })
-        .catch((err: any) => setApiError(err?.message || 'Failed to load entries'))
-        .finally(() => setIsLoading(false));
+        .catch((err: any) => {
+          if (gen !== fetchGenRef.current) return;
+          setApiError(err?.message || 'Failed to load entries');
+        })
+        .finally(() => {
+          if (gen !== fetchGenRef.current) return;
+          setIsLoading(false);
+        });
     } else {
       getVouchers(companyGuid, undefined, { from: fromDate, to: toDate, limit: PAGE_SIZE, page: 1 })
         .then((res: any) => {
+          if (gen !== fetchGenRef.current) return;
           const rows = res?.data ?? [];
           setApiEntries(rows.map((r: any) => ({ ...mapApiRow(r, formatAmount), isMine: false })));
           setHasMore(rows.length === PAGE_SIZE);
+          setPage(1);
         })
-        .catch((err: any) => setApiError(err?.message || 'Failed to load vouchers'))
-        .finally(() => setIsLoading(false));
+        .catch((err: any) => {
+          if (gen !== fetchGenRef.current) return;
+          setApiError(err?.message || 'Failed to load vouchers');
+        })
+        .finally(() => {
+          if (gen !== fetchGenRef.current) return;
+          setIsLoading(false);
+        });
     }
-  }, [companyGuid, fromDate, toDate, activeTab, refreshKey]);
+  }, [companyGuid, fromDate, toDate, activeTab, lifecycleFilter, formatAmount, mapQueueRow]);
+
+  // Hard reload when company / dates / tab change
+  useEffect(() => {
+    loadEntries('hard');
+  }, [companyGuid, fromDate, toDate, activeTab]); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: hard only on filter axes
+
+  // Soft refresh on return from voucher detail (keep list + scroll; no full-screen loader)
+  useFocusEffect(
+    useCallback(() => {
+      if (isFirstFocusRef.current) {
+        isFirstFocusRef.current = false;
+        return; // initial load handled by hard useEffect above
+      }
+      loadEntries(entriesLenRef.current === 0 ? 'hard' : 'soft');
+    }, [loadEntries])
+  );
+
+  // Soft refresh when Tally sync reconciles a voucher number
+  useEffect(() => {
+    socketService.setOnVoucherSynced(() => {
+      loadEntries('soft');
+    });
+    return () => { socketService.setOnVoucherSynced(null); };
+  }, [loadEntries]);
 
   const loadMore = () => {
     if (!companyGuid || isLoadingMore || !hasMore || activeTab === 'myentries') return;
@@ -660,7 +676,9 @@ export default function AuditTrailScreen() {
       .finally(() => setIsLoadingMore(false));
   };
 
-  const isDateActive = fromDate.length > 0 && toDate.length > 0;
+  const isDateActive = !!(fromDate && toDate) && (
+    fromDate !== (selectedFY?.startDate || '') || toDate !== (selectedFY?.endDate || '')
+  );
   // Both tabs use the same live data
   const allSource = apiEntries;
 
@@ -823,7 +841,7 @@ export default function AuditTrailScreen() {
           visibilityTime: 2500,
         });
       }
-      setRefreshKey(k => k + 1);
+      loadEntries('soft');
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Retry failed', text2: err?.message || 'Please try again.', visibilityTime: 2500 });
     } finally {
@@ -870,7 +888,7 @@ export default function AuditTrailScreen() {
     } else {
       Toast.show({ type: 'error', text1: `${failed} failed`, text2: `${count - failed} handled, ${failed} errored.`, visibilityTime: 3000 });
     }
-    setRefreshKey(k => k + 1);
+    loadEntries('soft');
     clearSelection();
   };
 
@@ -879,7 +897,7 @@ export default function AuditTrailScreen() {
       const qid = entry.queueId
         || (String(entry.id).startsWith('wq_') ? String(entry.id).replace(/^wq_/, '') : null);
       if (qid && (entry.isMaster || ['New Ledger', 'New Warehouse', 'New Item', 'Stock Edit'].includes(entry.type))) {
-        router.push(`/masters/preview?queueId=${encodeURIComponent(String(qid))}` as any);
+        safePush(router, `/masters/preview?queueId=${encodeURIComponent(String(qid))}` as any);
         return;
       }
     }
@@ -917,7 +935,7 @@ export default function AuditTrailScreen() {
         } else if (/TDK-(?:OPT-)?QTN-/i.test(ref) || /quotation/i.test(entry.type || '')) {
           route = `/sales/invoice-preview?tdkRef=${encodeURIComponent(ref)}&type=quotation`;
         }
-        router.push(route as any);
+        safePush(router, route as any);
       } else {
         Alert.alert(
           'Not yet synced',
@@ -928,7 +946,7 @@ export default function AuditTrailScreen() {
       return;
     }
     const routeType = TX_TO_DOC_TYPE[entry.type] || resolveDocTypeFromParam(entry.type);
-    router.push(
+    safePush(router, 
       (routeType
         ? `/document/${docId}?type=${routeType}`
         : `/document/${docId}`) as any
@@ -946,7 +964,7 @@ export default function AuditTrailScreen() {
         await shareDayBookPdf({
           company: companyFromAuth(company),
           title,
-          period: `${fromDate} – ${toDate}`,
+          period: fromDate && toDate ? `${formatDate(fromDate)} – ${formatDate(toDate)}` : undefined,
           rows: items.map(e => dayBookRowFromListItem({
             date: e.date,
             party: e.party,
@@ -1353,8 +1371,8 @@ export default function AuditTrailScreen() {
       {/* ── Modals ─────────────────────────────────────────────────────── */}
       <DateRangePickerModal
         visible={showDatePicker}
-        fromDate={fromDate}
-        toDate={toDate}
+        fromDate={fromDate || selectedFY?.startDate || ''}
+        toDate={toDate || selectedFY?.endDate || ''}
         minDate={selectedFY?.startDate}
         maxDate={selectedFY?.endDate}
         onApply={(f, t) => { if (f && t) { setFromDate(f); setToDate(t); } }}

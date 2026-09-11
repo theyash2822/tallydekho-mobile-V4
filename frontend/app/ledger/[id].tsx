@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
@@ -17,7 +18,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { getLedgerDetail, getLedgerStatement, sendPaymentReminder } from '../../src/services/api';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
-import DateRangePickerModal, { parseDMY } from '../../src/components/DateRangePickerModal';
+import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import SearchBar from '../../src/components/SearchBar';
 const SCREEN_W = Dimensions.get('window').width;
 
@@ -124,29 +125,29 @@ function DrCrDonutChart({
   );
 }
 
-/** Shorten "01 Apr 2025–30 Jun 2025" → "01 Apr – 30 Jun" when year is trailing. */
-function formatDateRangeLabel(from: string, to: string): string {
+/** Shorten display range for the date pill when both ends share a year. */
+function formatDateRangeLabel(fromDisp: string, toDisp: string): string {
   const stripYear = (s: string) => s.replace(/\s+\d{4}\s*$/, '').trim();
-  const a = stripYear(from);
-  const b = stripYear(to);
+  const a = stripYear(fromDisp);
+  const b = stripYear(toDisp);
   if (a && b) return `${a} – ${b}`;
-  return `${from}–${to}`;
+  return `${fromDisp}–${toDisp}`;
 }
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
-const MONTH_ABBR: Record<string,number> = {
-  Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11,
-};
-function parseTxnDate(dateStr: string): Date {
-  const [dd, mon] = dateStr.split(' ');
-  return new Date(2025, MONTH_ABBR[mon] ?? 0, parseInt(dd));
-}
-// Convert ISO '2024-04-01' → '01 Apr' for grouping
+const MONTHS_ORDER = [
+  'Jan','Feb','Mar','Apr','May','Jun',
+  'Jul','Aug','Sep','Oct','Nov','Dec',
+];
+// Convert ISO '2024-04-01' → '01 Apr 2024' for grouping/display (year-aware)
 function isoToDisplay(iso: string): string {
   if (!iso || !iso.includes('-')) return iso || '';
   const parts = iso.split('-');
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${parseInt(parts[2])} ${months[parseInt(parts[1]) - 1] || ''}`;
+  const day = parseInt(parts[2], 10);
+  const mon = months[parseInt(parts[1], 10) - 1] || '';
+  const year = parts[0] || '';
+  return year ? `${day} ${mon} ${year}` : `${day} ${mon}`;
 }
 // Determine Dr/Cr from voucher type (Sales Invoice = DEBIT confirmed)
 function isDebitVoucher(voucherType: string): boolean {
@@ -157,11 +158,6 @@ function isDebitVoucher(voucherType: string): boolean {
 }
 
 // Transaction data from API only
-
-const MONTHS_ORDER = [
-  'Jan','Feb','Mar','Apr','May','Jun',
-  'Jul','Aug','Sep','Oct','Nov','Dec',
-];
 
 // ── Info Modal ────────────────────────────────────────────────────────────────
 function LedgerInfoModal({ visible, onClose, ledger, fyOpening, fyClosing }: { visible: boolean; onClose: () => void; ledger: any; fyOpening?: { balance: number; type: string } | null; fyClosing?: { balance: number; type: string } | null }) {
@@ -248,6 +244,7 @@ export default function LedgerDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { company, selectedFY } = useAuth();
+  const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const companyGuid = company?.guid;
   const [liveLedger, setLiveLedger] = useState<any>(null);
   const [liveTxns, setLiveTxns] = useState<any[]>([]);
@@ -255,11 +252,27 @@ export default function LedgerDetailScreen() {
   const [fyClosing, setFyClosing] = useState<{ balance: number; type: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const fyFrom = selectedFY?.startDate ?? '';
+  const fyTo = selectedFY?.endDate ?? '';
+  const [fromDate, setFromDate] = useState(fyFrom);
+  const [toDate, setToDate] = useState(fyTo);
+  const [showDateRange, setShowDateRange] = useState(false);
+
+  useEffect(() => {
+    if (fyFrom && fyTo) {
+      setFromDate(fyFrom);
+      setToDate(fyTo);
+    }
+  }, [fyFrom, fyTo]);
+
   useEffect(() => {
     if (!companyGuid || !id) return;
-    const params = selectedFY?.startDate && selectedFY?.endDate
-      ? { from: selectedFY.startDate, to: selectedFY.endDate }
+    const rangeFrom = fromDate || fyFrom;
+    const rangeTo = toDate || fyTo;
+    const params = rangeFrom && rangeTo
+      ? { from: rangeFrom, to: rangeTo }
       : undefined;
+    setIsLoading(true);
     // Try statement API first (uses voucher_ledger_entries for accurate Dr/Cr)
     // Falls back to getLedgerDetail (party_name match) if statement has no entries
     getLedgerStatement(companyGuid, id as string, undefined, params).then((res: any) => {
@@ -273,47 +286,52 @@ export default function LedgerDetailScreen() {
       }
       const txns = res?.data?.transactions || [];
       if (txns.length > 0) {
-        setLiveTxns(txns.map((t: any, i: number) => ({
-          id: String(t.guid || i),
-          guid: t.guid || '',
-          date: isoToDisplay(t.date || ''),
-          voucher: t.voucher_number || '',
-          type: t.voucher_type || '',
-          amount: formatAmount(Math.abs(t.debit || t.credit || 0)),
-          amount_raw: Math.abs(t.debit || t.credit || 0),
-          isDebit: t.dr_cr === 'Dr',  // EXACT from Tally ledger entries, not guessed
-          particulars: t.party_name || t.voucher_type || '',
-          balance: t.balance,
-          balance_type: t.balance_type,
-        })));
+        setLiveTxns(txns.map((t: any, i: number) => {
+          const dateIso = (t.date || '').slice(0, 10);
+          return {
+            id: String(t.guid || i),
+            guid: t.guid || '',
+            dateIso,
+            date: isoToDisplay(dateIso),
+            voucher: t.voucher_number || '',
+            type: t.voucher_type || '',
+            amount: formatAmount(Math.abs(t.debit || t.credit || 0)),
+            amount_raw: Math.abs(t.debit || t.credit || 0),
+            isDebit: t.dr_cr === 'Dr',  // EXACT from Tally ledger entries, not guessed
+            particulars: t.party_name || t.voucher_type || '',
+            balance: t.balance,
+            balance_type: t.balance_type,
+          };
+        }));
       } else {
         // Fallback: use party_name match if no ledger entries yet
         getLedgerDetail(companyGuid, id as string, params).then((r2: any) => {
           if (r2?.data?.ledger && !res?.data?.ledger) setLiveLedger(r2.data.ledger);
           if (r2?.data?.transactions) {
-            setLiveTxns(r2.data.transactions.map((t: any, i: number) => ({
-              id: String(t.guid || t.id || i),
-              guid: t.guid || '',
-              date: isoToDisplay(t.date || ''),
-              voucher: t.voucher_number || '',
-              type: t.voucher_type || '',
-              amount: formatAmount(Math.abs(+t.amount||0)),
-              amount_raw: Math.abs(+t.amount || 0),
-              isDebit: isDebitVoucher(t.voucher_type || ''),
-            })));
+            setLiveTxns(r2.data.transactions.map((t: any, i: number) => {
+              const dateIso = (t.date || '').slice(0, 10);
+              return {
+                id: String(t.guid || t.id || i),
+                guid: t.guid || '',
+                dateIso,
+                date: isoToDisplay(dateIso),
+                voucher: t.voucher_number || '',
+                type: t.voucher_type || '',
+                amount: formatAmount(Math.abs(+t.amount||0)),
+                amount_raw: Math.abs(+t.amount || 0),
+                isDebit: isDebitVoucher(t.voucher_type || ''),
+              };
+            }));
           }
         }).catch(() => {});
       }
     }).catch(() => {}).finally(() => setIsLoading(false));
-  }, [companyGuid, id, selectedFY?.startDate]);
+  }, [companyGuid, id, fromDate, toDate, fyFrom, fyTo, formatAmount]);
 
   const [showDrOnly, setShowDrOnly] = useState(false);
   const [showCrOnly, setShowCrOnly] = useState(false);
   const [showInfo,   setShowInfo]   = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [fromDate,     setFromDate]     = useState('');
-  const [toDate,       setToDate]       = useState('');
-  const [showDateRange, setShowDateRange] = useState(false);
   /** Analytics Summary — open by default; user can collapse for more list space. */
   const [summaryExpanded, setSummaryExpanded] = useState(true);
 
@@ -342,7 +360,7 @@ export default function LedgerDetailScreen() {
         title: 'Ledger Account',
         partyName: ledger?.name,
         partyAddress: ledger?.address,
-        period: fromDate && toDate ? `${fromDate} to ${toDate}` : undefined,
+        period: fromDate && toDate ? `${formatDate(fromDate)} to ${formatDate(toDate)}` : undefined,
         openingLabel: 'Opening Balance',
         openingAmount: Math.round(openingBal),
         openingSide: openingType === 'Cr' ? 'Cr' : 'Dr',
@@ -436,9 +454,9 @@ export default function LedgerDetailScreen() {
   // Use real ledger data only — no mock fallback
   const ledger = liveLedger || { id: id || '', name: 'Loading…', group: '', balance: '' };
 
-  const isDateActive = fromDate.length > 0 && toDate.length > 0;
+  const isDateActive = !!(fromDate && toDate) && (fromDate !== fyFrom || toDate !== fyTo);
 
-  // Apply Dr/Cr + search + date range filters
+  // Apply Dr/Cr + search filters (date range applied via API re-fetch)
   // Use real data only — never show mock transactions for real ledgers
   const SOURCE_TXNS = liveTxns;
   const txns = SOURCE_TXNS.filter((t: any) => {
@@ -453,22 +471,15 @@ export default function LedgerDetailScreen() {
         t.amount.toLowerCase().includes(q);
       if (!match) return false;
     }
-    if (isDateActive) {
-      const txnD = parseTxnDate(t.date);
-      const fD   = parseDMY(fromDate);
-      const tD   = parseDMY(toDate);
-      if (fD && tD) {
-        tD.setHours(23, 59, 59, 999);
-        if (txnD < fD || txnD > tD) return false;
-      }
-    }
     return true;
   });
 
-  // Group filtered transactions by month
+  // Group filtered transactions by month (from ISO when available)
   const monthGroups: Record<string, any[]> = {};
   txns.forEach(t => {
-    const mon = t.date.split(' ')[1];
+    const mon = t.dateIso
+      ? (['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(String(t.dateIso).slice(5, 7), 10) - 1] || '')
+      : t.date.split(' ')[1];
     if (!monthGroups[mon]) monthGroups[mon] = [];
     monthGroups[mon].push(t);
   });
@@ -500,7 +511,6 @@ export default function LedgerDetailScreen() {
   const totalDr = SOURCE_TXNS.filter((t: any) => t.isDebit).reduce((s: number, t: any) => s + (t.amount_raw || 0), 0);
   const totalCr = SOURCE_TXNS.filter((t: any) => !t.isDebit).reduce((s: number, t: any) => s + (t.amount_raw || 0), 0);
   const drPctComputed = (totalDr + totalCr) > 0 ? Math.round((totalDr / (totalDr + totalCr)) * 100) : 50;
-  const { formatAmount, formatAmountCompact } = useSettings();
   const fmtAmt = (v: number) => formatAmount(Math.round(v));
   const fmtCompact = (v: number) => formatAmountCompact(Math.round(v));
 
@@ -612,11 +622,13 @@ export default function LedgerDetailScreen() {
               color={isDateActive ? COLORS.brandPrimary : COLORS.textTertiary}
             />
             <Text style={[styles.dateRangePillText, isDateActive && styles.dateRangePillTextActive]} numberOfLines={1}>
-              {isDateActive ? formatDateRangeLabel(fromDate, toDate) : 'Dates'}
+              {fromDate && toDate
+                ? formatDateRangeLabel(formatDate(fromDate), formatDate(toDate))
+                : 'Dates'}
             </Text>
             {isDateActive ? (
               <TouchableOpacity
-                onPress={(e) => { e.stopPropagation?.(); setFromDate(''); setToDate(''); }}
+                onPress={(e) => { e.stopPropagation?.(); setFromDate(fyFrom); setToDate(fyTo); }}
                 hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
               >
                 <Ionicons name="close-circle" size={13} color={COLORS.brandPrimary} />
@@ -693,7 +705,7 @@ export default function LedgerDetailScreen() {
                         } else {
                           const docType = TX_TO_DOC_TYPE[txn.type];
                           const docId = txn.id || txn.voucher;
-                          router.push(
+                          safePush(router, 
                             docType
                               ? `/document/${docId}?type=${docType}`
                               : `/document/${docId}`
@@ -763,12 +775,12 @@ export default function LedgerDetailScreen() {
       {/* ── Date Range Picker ── */}
       <DateRangePickerModal
         visible={showDateRange}
-        fromDate={fromDate}
-        toDate={toDate}
+        fromDate={fromDate || fyFrom}
+        toDate={toDate || fyTo}
         onApply={(f, t) => { setFromDate(f); setToDate(t); }}
         onClose={() => setShowDateRange(false)}
-        minDate={selectedFY?.startDate}
-        maxDate={selectedFY?.endDate}
+        minDate={fyFrom || undefined}
+        maxDate={fyTo || undefined}
       />
 
       {/* ── Transaction Multi-select Share Bar ── */}

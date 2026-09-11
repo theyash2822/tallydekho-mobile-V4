@@ -5,6 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
@@ -510,7 +511,7 @@ export default function TotalStockScreen() {
     if (multiSelectMode) {
       setSelectedIds(prev => prev.includes(item.id) ? prev.filter(x => x !== item.id) : [...prev, item.id]);
     } else {
-      router.push(`/stocks/item-detail?id=${item.id}` as any);
+      safePush(router, `/stocks/item-detail?id=${item.id}` as any);
     }
   }, [multiSelectMode, router]);
 

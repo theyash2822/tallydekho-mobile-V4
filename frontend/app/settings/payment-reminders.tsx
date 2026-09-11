@@ -1,10 +1,16 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Modal, FlatList, Animated, Alert,
-  KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  BottomSheetModal,
+  BottomSheetFlatList,
+  BottomSheetTextInput,
+  BottomSheetBackdrop,
+} from '@gorhom/bottom-sheet';
+import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
@@ -206,97 +212,191 @@ const tp = StyleSheet.create({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. PartySelectorSheet — multi-select party ledger
+// 4. PartySelectorSheet — Gorhom bottom sheet (keyboard-safe, like BottomSheetSearch)
 // ─────────────────────────────────────────────────────────────────────────────
-function PartySelectorSheet({ visible, currentSelection, onClose, onConfirm }: {
-  visible: boolean; currentSelection: string[];
+type PartySelectorHandle = { present: (selection: string[]) => void; dismiss: () => void };
+
+const PartySelectorSheet = React.forwardRef<PartySelectorHandle, {
   onClose: () => void; onConfirm: (sel: string[]) => void;
-}) {
+}>(function PartySelectorSheet({ onClose, onConfirm }, ref) {
   const { company } = useAuth();
-  const [search,  setSearch]  = useState('');
-  const [checked, setChecked] = useState<Set<string>>(new Set(currentSelection));
+  const insets = useSafeAreaInsets();
+  const sheetRef = useRef<BottomSheetModal>(null);
+  const [search, setSearch] = useState('');
+  const [checked, setChecked] = useState<Set<string>>(new Set());
   const [parties, setParties] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [opened, setOpened] = useState(false);
+
+  const snapPoints = useMemo(() => ['90%'], []);
+
+  React.useImperativeHandle(ref, () => ({
+    present: (selection: string[]) => {
+      setSearch('');
+      setChecked(new Set(selection));
+      setOpened(true);
+      // Defer one frame so BottomSheetModal has attached its ref/portal
+      requestAnimationFrame(() => sheetRef.current?.present());
+    },
+    dismiss: () => sheetRef.current?.dismiss(),
+  }), []);
+
   useEffect(() => {
-    if (visible) { setSearch(''); setChecked(new Set(currentSelection)); }
-  }, [visible]);
-  useEffect(() => {
-    if (!visible || !company?.guid) return;
-    getLedgers(company.guid, { parent: 'Sundry Debtors', limit: 200 } as any)
-      .then((res: any) => {
-        const rows = res?.data ?? [];
-        setParties(rows.map((r: any) => r.name).filter(Boolean));
+    if (!opened || !company?.guid) return;
+    setLoading(true);
+    // Exception parties = Sundry Debtors / Creditors (API filter key is `group`, not `parent`)
+    Promise.all([
+      getLedgers(company.guid, { group: 'Sundry Debtors', limit: '200' }),
+      getLedgers(company.guid, { group: 'Sundry Creditors', limit: '200' }),
+    ])
+      .then(([debtors, creditors]: any[]) => {
+        const names = new Set<string>();
+        for (const res of [debtors, creditors]) {
+          const rows = res?.data ?? (Array.isArray(res) ? res : []);
+          rows.forEach((r: any) => {
+            const n = String(r.name || '').trim();
+            if (n) names.add(n);
+          });
+        }
+        setParties(Array.from(names).sort((a, b) => a.localeCompare(b)));
       })
-      .catch(() => setParties([]));
-  }, [visible, company?.guid]);
-  const filtered = parties.filter(p => p.toLowerCase().includes(search.toLowerCase()));
-  const toggle = (name: string) =>
-    setChecked(prev => { const n = new Set(prev); n.has(name) ? n.delete(name) : n.add(name); return n; });
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={ps.overlay}>
-        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
-        <View style={ps.sheet}>
-          <View style={ps.handle} />
-          <Text style={ps.title}>Select Exception Parties</Text>
-          <View style={ps.searchWrap}>
-            <Ionicons name="search-outline" size={16} color={COLORS.textTertiary} />
-            <TextInput
-              style={ps.searchInput} value={search} onChangeText={setSearch}
-              placeholder="Search parties…" placeholderTextColor={COLORS.textTertiary}
-              selectionColor={COLORS.brandPrimary} autoFocus
-            />
-            {search.length > 0 && (
-              <TouchableOpacity onPress={() => setSearch('')}>
-                <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
-              </TouchableOpacity>
-            )}
-          </View>
-          {checked.size > 0 && (
-            <View style={ps.countPill}>
-              <Text style={ps.countTxt}>{checked.size} selected</Text>
-            </View>
-          )}
-          <FlatList
-            data={filtered} keyExtractor={i => i} style={ps.list}
-            showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled"
-            renderItem={({ item }) => {
-              const isChecked = checked.has(item);
-              return (
-                <TouchableOpacity style={ps.row} onPress={() => toggle(item)} activeOpacity={0.7}>
-                  <View style={[ps.box, isChecked && ps.boxChecked]}>
-                    {isChecked && <Ionicons name="checkmark" size={13} color={COLORS.white} />}
-                  </View>
-                  <Text style={[ps.rowTxt, isChecked && ps.rowTxtActive]}>{item}</Text>
-                </TouchableOpacity>
-              );
-            }}
-            ListEmptyComponent={
-              <View style={ps.empty}>
-                <Ionicons name="search-outline" size={28} color={COLORS.textTertiary} />
-                <Text style={ps.emptyTxt}>No parties found</Text>
-              </View>
-            }
-          />
-          <View style={ps.footer}>
-            <TouchableOpacity style={ps.cancelBtn} onPress={onClose} activeOpacity={0.7}>
-              <Text style={ps.cancelTxt}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={ps.doneBtn} onPress={() => { onConfirm(Array.from(checked)); onClose(); }} activeOpacity={0.85}>
-              <Text style={ps.doneTxt}>Done {checked.size > 0 ? `(${checked.size})` : ''}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
+      .catch(() => setParties([]))
+      .finally(() => setLoading(false));
+  }, [opened, company?.guid]);
+
+  const filtered = useMemo(
+    () =>
+      search.trim()
+        ? parties.filter((p) => p.toLowerCase().includes(search.toLowerCase()))
+        : parties,
+    [parties, search]
   );
-}
+
+  const toggle = useCallback((name: string) => {
+    setChecked((prev) => {
+      const n = new Set(prev);
+      if (n.has(name)) n.delete(name);
+      else n.add(name);
+      return n;
+    });
+  }, []);
+
+  const handleDismiss = useCallback(() => {
+    setSearch('');
+    setOpened(false);
+    onClose();
+  }, [onClose]);
+
+  const handleDone = useCallback(() => {
+    onConfirm(Array.from(checked));
+    sheetRef.current?.dismiss();
+  }, [checked, onConfirm]);
+
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        disappearsOnIndex={-1}
+        appearsOnIndex={0}
+        opacity={0.45}
+        pressBehavior="close"
+      />
+    ),
+    []
+  );
+
+  return (
+    <BottomSheetModal
+      ref={sheetRef}
+      snapPoints={snapPoints}
+      enablePanDownToClose
+      enableDynamicSizing={false}
+      backdropComponent={renderBackdrop}
+      keyboardBehavior="extend"
+      keyboardBlurBehavior="restore"
+      android_keyboardInputMode="adjustResize"
+      backgroundStyle={ps.sheetBg}
+      handleIndicatorStyle={ps.handle}
+      topInset={insets.top + 16}
+      onDismiss={handleDismiss}
+    >
+      <View style={ps.sheetHdr}>
+        <Text style={ps.title}>Select Exception Parties</Text>
+        <TouchableOpacity onPress={() => sheetRef.current?.dismiss()} style={ps.closeBtn} activeOpacity={0.7}>
+          <Ionicons name="close" size={22} color={COLORS.textPrimary} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={ps.searchWrap}>
+        <Ionicons name="search-outline" size={16} color={COLORS.textTertiary} />
+        <BottomSheetTextInput
+          style={ps.searchInput as any}
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search parties…"
+          placeholderTextColor={COLORS.textTertiary}
+          selectionColor={COLORS.brandPrimary}
+          autoFocus={false}
+          returnKeyType="search"
+          autoCorrect={false}
+          autoCapitalize="none"
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+            <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {checked.size > 0 && (
+        <View style={ps.countPill}>
+          <Text style={ps.countTxt}>{checked.size} selected</Text>
+        </View>
+      )}
+
+      <BottomSheetFlatList
+        data={filtered}
+        keyExtractor={(item: string) => item}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: insets.bottom + 88, flexGrow: 1 }}
+        ListEmptyComponent={
+          <View style={ps.empty}>
+            <Ionicons name="search-outline" size={28} color={COLORS.textTertiary} />
+            <Text style={ps.emptyTxt}>
+              {loading ? 'Loading parties…' : search ? `No parties for "${search}"` : 'No parties found'}
+            </Text>
+          </View>
+        }
+        renderItem={({ item }: { item: string }) => {
+          const isChecked = checked.has(item);
+          return (
+            <TouchableOpacity style={ps.row} onPress={() => toggle(item)} activeOpacity={0.7}>
+              <View style={[ps.box, isChecked && ps.boxChecked]}>
+                {isChecked && <Ionicons name="checkmark" size={13} color={COLORS.white} />}
+              </View>
+              <Text style={[ps.rowTxt, isChecked && ps.rowTxtActive]} numberOfLines={1}>{item}</Text>
+            </TouchableOpacity>
+          );
+        }}
+      />
+
+      <View style={[ps.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        <TouchableOpacity style={ps.cancelBtn} onPress={() => sheetRef.current?.dismiss()} activeOpacity={0.7}>
+          <Text style={ps.cancelTxt}>Cancel</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={ps.doneBtn} onPress={handleDone} activeOpacity={0.85}>
+          <Text style={ps.doneTxt}>Done{checked.size > 0 ? ` (${checked.size})` : ''}</Text>
+        </TouchableOpacity>
+      </View>
+    </BottomSheetModal>
+  );
+});
 const ps = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  sheet:   { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 12, maxHeight: '75%' },
-  handle:  { width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.borderStrong, alignSelf: 'center', marginBottom: 14 },
-  title:   { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, paddingHorizontal: SPACING.lg, marginBottom: 12 },
+  sheetBg: { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
+  handle:  { backgroundColor: COLORS.borderStrong, width: 40 },
+  sheetHdr:{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.lg, marginBottom: 8 },
+  title:   { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, flex: 1 },
+  closeBtn:{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   searchWrap: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     marginHorizontal: SPACING.lg, marginBottom: 8,
@@ -307,7 +407,6 @@ const ps = StyleSheet.create({
   searchInput: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, padding: 0 },
   countPill:   { alignSelf: 'flex-start', marginHorizontal: SPACING.lg, marginBottom: 6, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.full, paddingHorizontal: 12, paddingVertical: 4 },
   countTxt:    { fontSize: 11, color: COLORS.white, fontWeight: '700' },
-  list:  { maxHeight: 260 },
   row:   { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: SPACING.lg, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   box:   { width: 22, height: 22, borderRadius: 5, borderWidth: 2, borderColor: COLORS.borderStrong, backgroundColor: COLORS.cardBg, alignItems: 'center', justifyContent: 'center' },
   boxChecked:    { backgroundColor: COLORS.brandPrimary, borderColor: COLORS.brandPrimary },
@@ -315,7 +414,11 @@ const ps = StyleSheet.create({
   rowTxtActive:  { color: COLORS.textPrimary, fontWeight: '700' },
   empty:    { alignItems: 'center', padding: 28, gap: 8 },
   emptyTxt: { fontSize: TYPOGRAPHY.sm, color: COLORS.textTertiary },
-  footer:   { flexDirection: 'row', gap: 12, paddingHorizontal: SPACING.lg, paddingVertical: 14, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
+  footer:   {
+    position: 'absolute', left: 0, right: 0, bottom: 0,
+    flexDirection: 'row', gap: 12, paddingHorizontal: SPACING.lg, paddingTop: 12,
+    borderTopWidth: 1, borderTopColor: COLORS.borderDefault, backgroundColor: COLORS.cardBg,
+  },
   cancelBtn:{ flex: 1, paddingVertical: 13, borderRadius: RADIUS.md, backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault, alignItems: 'center' },
   cancelTxt:{ fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textSecondary },
   doneBtn:  { flex: 2, paddingVertical: 13, borderRadius: RADIUS.md, backgroundColor: COLORS.brandPrimary, alignItems: 'center' },
@@ -331,15 +434,16 @@ function ReminderCard({
   onUpdate,
   onRemove,
   canRemove,
+  onOpenPartyPicker,
 }: {
   reminder: Reminder;
   index: number;
   onUpdate: (r: Reminder) => void;
   onRemove: () => void;
   canRemove: boolean;
+  onOpenPartyPicker: (current: string[]) => void;
 }) {
-  const [showTimePicker,  setShowTimePicker]  = useState(false);
-  const [showPartyPicker, setShowPartyPicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   const upd = (patch: Partial<Reminder>) => onUpdate({ ...reminder, ...patch });
 
@@ -463,12 +567,11 @@ function ReminderCard({
           {/* Search / open selector */}
           <TouchableOpacity
             style={rc.exceptSearch}
-            onPress={() => setShowPartyPicker(true)}
+            onPress={() => onOpenPartyPicker(reminder.exceptions)}
             activeOpacity={0.7}
           >
             <Ionicons name="search-outline" size={15} color={COLORS.textTertiary} />
             <Text style={rc.exceptSearchTxt}>Search parties…</Text>
-            <Ionicons name="chevron-down" size={13} color={COLORS.textTertiary} />
           </TouchableOpacity>
 
           {/* Selected exception chips */}
@@ -502,12 +605,6 @@ function ReminderCard({
         initialTime={reminder.time || '10:00 AM'}
         onClose={() => setShowTimePicker(false)}
         onConfirm={t => { upd({ time: t }); setShowTimePicker(false); }}
-      />
-      <PartySelectorSheet
-        visible={showPartyPicker}
-        currentSelection={reminder.exceptions}
-        onClose={() => setShowPartyPicker(false)}
-        onConfirm={sel => { upd({ exceptions: sel }); setShowPartyPicker(false); }}
       />
     </View>
   );
@@ -659,12 +756,28 @@ export default function PaymentRemindersScreen() {
 
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
+  const partySheetRef = useRef<PartySelectorHandle>(null);
+  const [partyPickerReminderId, setPartyPickerReminderId] = useState<string | null>(null);
 
   const updateReminder = (updated: Reminder) =>
     setReminders(prev => prev.map(r => r.id === updated.id ? updated : r));
 
   const removeReminder = (id: string) =>
     setReminders(prev => prev.filter(r => r.id !== id));
+
+  const openPartyPicker = useCallback((reminderId: string, current: string[]) => {
+    setPartyPickerReminderId(reminderId);
+    partySheetRef.current?.present(current);
+  }, []);
+
+  const confirmPartyPicker = useCallback((sel: string[]) => {
+    if (!partyPickerReminderId) return;
+    setReminders(prev => prev.map(r =>
+      r.id === partyPickerReminderId ? { ...r, exceptions: sel } : r
+    ));
+    setPartyPickerReminderId(null);
+    markDirty();
+  }, [partyPickerReminderId]);
 
   const addReminder = () => {
     if (reminders.length >= 4) return;
@@ -731,6 +844,7 @@ export default function PaymentRemindersScreen() {
             onUpdate={updateReminder}
             onRemove={() => removeReminder(r.id)}
             canRemove={idx > 0}
+            onOpenPartyPicker={(current) => openPartyPicker(r.id, current)}
           />
         ))}
 
@@ -755,6 +869,12 @@ export default function PaymentRemindersScreen() {
           <Text style={s.saveTxt}>Save Settings</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <PartySelectorSheet
+        ref={partySheetRef}
+        onClose={() => setPartyPickerReminderId(null)}
+        onConfirm={confirmPartyPicker}
+      />
     </SafeAreaView>
   );
 }

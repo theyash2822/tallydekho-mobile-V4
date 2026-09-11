@@ -10,6 +10,7 @@ import Svg, {
 } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 
 import { getFinancialData, getGSTReport, getAuditTrail } from '../../src/services/api';
@@ -1015,7 +1016,7 @@ export default function ReportsScreen() {
           iconName="stats-chart-outline"
           title={t('reports.financial')}
           metric={finData ? t('reports.netMetric', { amount: formatAmountCompact(Math.round(netProfit)) }) : undefined}
-          onPress={() => router.push('/reports/financial' as any)}
+          onPress={() => safePush(router, '/reports/financial' as any)}
         >
           <InteractiveLineChart
             isLoading={finLoading}
@@ -1032,7 +1033,7 @@ export default function ReportsScreen() {
           iconName="shield-checkmark-outline"
           title={t('reports.compliance')}
           metric={t('reports.pendingMonths', { filed: gstFiledCount, pending: gstPending })}
-          onPress={() => router.push('/reports/compliance' as any)}
+          onPress={() => safePush(router, '/reports/compliance' as any)}
         >
           <GSTGauge filedCount={gstFiledCount} needleIndex={Math.max(gstFiledCount - 1, 0)} />
         </SectionCard>
@@ -1042,7 +1043,7 @@ export default function ReportsScreen() {
           iconName="git-branch-outline"
           title={t('reports.auditTrail')}
           metric={t('reports.unreconciled', { count: auditCount })}
-          onPress={() => router.push('/reports/audit-trail' as any)}
+          onPress={() => safePush(router, '/reports/audit-trail' as any)}
         >
           <AuditProgressBar
             label={t('reports.pendingFailed')}
@@ -1052,7 +1053,7 @@ export default function ReportsScreen() {
         </SectionCard>
 
         {/* ── 4. AI Insights ────────────────────────────────────────────── */}
-        <SectionCard iconName="sparkles-outline" title={t('reports.aiInsights')} onPress={() => router.push('/reports/ai-insights' as any)}>
+        <SectionCard iconName="sparkles-outline" title={t('reports.aiInsights')} onPress={() => safePush(router, '/reports/ai-insights' as any)}>
           <LogLineChart
             lines={[
               { values: AI_FORECAST, color: COLORS.brandPrimary, label: t('reports.salesForecast'), latestLabel: '₹460' },
@@ -1077,7 +1078,7 @@ export default function ReportsScreen() {
               key={m.label}
               style={[styles.moreTile, m.route.includes('daybook') && styles.moreTileWide]}
               activeOpacity={0.75}
-              onPress={() => router.push(m.route as any)}
+              onPress={() => safePush(router, m.route as any)}
             >
               <View style={styles.moreIcon}>
                 <Ionicons name={m.icon as any} size={18} color={COLORS.textSecondary} />

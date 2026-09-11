@@ -22,15 +22,24 @@ import {
   renderEInvoiceSheetHTML, renderEWayBillSheetHTML,
   ComplianceVoucher, ComplianceCompany,
 } from './pdf/complianceSheet';
-import { getUserSettings, getInvoicePreview } from '../services/api';
+import { getUserSettings, getInvoicePreview, getBankLedgers, getCompanyLogo } from '../services/api';
 import {
   ThermalPaperWidth,
   DEFAULT_THERMAL_PAPER_WIDTH,
   isThermalTemplateId,
   thermalPageSize,
 } from './pdf/thermalShared';
-
-const VOUCHER_CONFIG_KEY = 'voucherConfig';
+import { sanitizeImageSrc } from './sanitizeImageSrc';
+import {
+  normalizeThermalWidth,
+  writeLocalVoucherConfig,
+  readLocalVoucherConfig,
+  resolveVoucherConfigSource,
+  bankInfoFromConfig,
+  qrDataUrlFromConfig,
+  toSafePdfImageSrc,
+  BankLedgerRow,
+} from './voucherPdfConfig';
 
 /** Voucher-config entry id per document type (mirrors settings/voucher-config.tsx). */
 export const DOC_TYPE_TO_CONFIG_ID: Record<string, string> = {
@@ -74,36 +83,28 @@ function resolvePrintPageSize(options: PdfRenderOptions): { width: number; heigh
   return A4;
 }
 
-function normalizeThermalWidth(v: unknown): ThermalPaperWidth {
-  return v === 58 || v === '58' ? 58 : DEFAULT_THERMAL_PAPER_WIDTH;
-}
-
 let voucherConfigCache: Record<string, any> | null = null;
 
 /**
- * Loads the saved voucher config. Backend first so the choice follows the user
- * across devices, then the AsyncStorage copy as an offline fallback.
+ * Loads the saved voucher config. Backend first (full config in memory);
+ * AsyncStorage only keeps format + thermal width (no bank/UPI/QR).
  */
 export async function loadVoucherConfig(): Promise<Record<string, any> | null> {
   if (voucherConfigCache) return voucherConfigCache;
+  let serverParsed: Record<string, any> | null = null;
   try {
     const res: any = await getUserSettings();
     const serverConfig = res?.data?.voucher_config;
     if (serverConfig) {
-      const parsed = typeof serverConfig === 'string' ? JSON.parse(serverConfig) : serverConfig;
-      voucherConfigCache = parsed;
-      AsyncStorage.setItem(VOUCHER_CONFIG_KEY, JSON.stringify(parsed)).catch(() => {});
-      return parsed;
+      serverParsed = typeof serverConfig === 'string' ? JSON.parse(serverConfig) : serverConfig;
     }
   } catch {
-    // fall through to the local copy
+    // fall through — merge with local layout prefs
   }
-  try {
-    const json = await AsyncStorage.getItem(VOUCHER_CONFIG_KEY);
-    voucherConfigCache = json ? JSON.parse(json) : null;
-  } catch {
-    voucherConfigCache = null;
-  }
+  const local = await readLocalVoucherConfig();
+  const merged = resolveVoucherConfigSource(serverParsed, local);
+  voucherConfigCache = merged;
+  if (merged) writeLocalVoucherConfig(merged).catch(() => {});
   return voucherConfigCache;
 }
 
@@ -115,9 +116,31 @@ export function clearVoucherConfigCache() {
 export async function loadCompanyLogo(companyGuid?: string | null): Promise<string | null> {
   if (!companyGuid) return null;
   try {
-    return await AsyncStorage.getItem(`company_logo_${companyGuid}`);
+    const res: any = await getCompanyLogo(companyGuid);
+    const url = res?.data?.logo_url;
+    if (url) {
+      const safe = await toSafePdfImageSrc(url);
+      if (safe) return safe;
+    }
+  } catch {
+    /* fall through to cache */
+  }
+  try {
+    const cached = await AsyncStorage.getItem(`company_logo_${companyGuid}`);
+    return await toSafePdfImageSrc(cached);
   } catch {
     return null;
+  }
+}
+
+async function loadBankRows(companyGuid?: string | null): Promise<BankLedgerRow[]> {
+  if (!companyGuid) return [];
+  try {
+    const res: any = await getBankLedgers(companyGuid, 'bank');
+    const rows = res?.data;
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
   }
 }
 
@@ -126,39 +149,37 @@ export async function resolvePdfOptions(
   doc: VoucherDocument,
   companyGuid?: string | null
 ): Promise<PdfRenderOptions> {
-  const [config, logoUri] = await Promise.all([
+  const [config, logoUri, bankRows] = await Promise.all([
     loadVoucherConfig(),
     loadCompanyLogo(companyGuid),
+    loadBankRows(companyGuid),
   ]);
   const cfg = config?.[DOC_TYPE_TO_CONFIG_ID[doc.documentType] || ''];
-  const bankInfo: PDFBankInfo | null = cfg?.bank ? {
-    bankName: cfg.bank !== 'Cash' ? cfg.bank : null,
-    accountNo: cfg.qrEnabled && cfg.qrType === 'bank' ? cfg.qrAccount || null : null,
-    ifsc: cfg.qrEnabled && cfg.qrType === 'bank' ? cfg.qrIfsc || null : null,
-    upiId: cfg.qrEnabled && cfg.qrType === 'upi' ? cfg.qrUpiId || null : null,
-  } : null;
+  const bankInfo = bankInfoFromConfig(cfg, bankRows);
+  const qrRaw = cfg?.qrEnabled ? await qrDataUrlFromConfig(cfg) : null;
 
   return {
-    logoUri,
+    logoUri: logoUri ?? null,
     format: resolveDocumentFormat(cfg?.format),
     terms: (cfg?.terms ?? []) as string[],
-    qrImage: cfg?.qrEnabled && cfg?.qrImage ? cfg.qrImage : null,
+    qrImage: sanitizeImageSrc(qrRaw),
     bankInfo,
     thermalPaperWidth: normalizeThermalWidth(cfg?.thermalPaperWidth),
   };
 }
-
 /** Renders the document to a local PDF file and returns its URI. */
 export async function buildVoucherPdf(
   doc: VoucherDocument,
   options: PdfRenderOptions = {}
 ): Promise<string> {
+  const safeLogo = await toSafePdfImageSrc(options.logoUri ?? null);
+  const safeQr = sanitizeImageSrc(options.qrImage ?? null);
   const html = generateDocumentHTML(
     doc,
-    options.logoUri ?? null,
+    safeLogo,
     options.format ?? 'tally',
     options.terms ?? [],
-    options.qrImage ?? null,
+    safeQr,
     options.bankInfo ?? null,
     { thermalPaperWidth: options.thermalPaperWidth }
   );

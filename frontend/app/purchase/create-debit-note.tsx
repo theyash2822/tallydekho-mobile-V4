@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 
@@ -1282,7 +1283,7 @@ export default function CreateDebitNoteScreen() {
                 disabled={!submitResult.tdkRef}
                 onPress={() => {
                   Keyboard.dismiss();
-                  router.push(`/purchase/debit-note-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef!)}` as any);
+                  safePush(router, `/purchase/debit-note-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef!)}` as any);
                 }}
               >
                 <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />

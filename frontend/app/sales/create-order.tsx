@@ -8,6 +8,7 @@ import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../../src/utils/safeNavigation';
 import { barcodePicker } from '../../src/utils/barcodePicker';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
@@ -882,7 +883,7 @@ export default function CreateSalesOrderScreen() {
               activeOpacity={0.85}
               onPress={() => {
                 if (!submitResult.tdkRef) return;
-                router.push(`/sales/order-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}` as any);
+                safePush(router, `/sales/order-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}` as any);
               }}
             >
               <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
@@ -1066,7 +1067,7 @@ export default function CreateSalesOrderScreen() {
                         return { ...i, product: result.productName, unit: result.unit || si2?.unit || i.unit, rate: si2?.rate != null ? String(si2.rate) : i.rate };
                       }));
                     });
-                    router.push(`/sales/product-scanner?companyGuid=${company?.guid}` as any);
+                    safePush(router, `/sales/product-scanner?companyGuid=${company?.guid}` as any);
                   }}
                   onAddTaxEntry={addTaxEntry}
                   onUpdateTaxEntry={updateTaxEntry}

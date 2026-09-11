@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getTransferHistory } from '../../src/services/api';
-import DateRangePickerModal, { dmyToISO } from '../../src/components/DateRangePickerModal';
+import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
@@ -130,9 +130,11 @@ export default function TransferHistoryScreen() {
   const router   = useRouter();
   const insets   = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
-  const { formatAmount } = useSettings();
+  const { formatAmount, formatDate } = useSettings();
   const companyGuid = company?.guid;
   const fyParam     = fyInfoToParam(selectedFY);
+  const fyFrom = selectedFY?.startDate ?? '';
+  const fyTo = selectedFY?.endDate ?? '';
 
   const [entries,     setEntries]     = useState<TransferEntry[]>([]);
   const [total,       setTotal]       = useState(0);
@@ -143,9 +145,14 @@ export default function TransferHistoryScreen() {
   const [search,      setSearch]      = useState('');
   const [dateFrom,    setDateFrom]    = useState('');
   const [dateTo,      setDateTo]      = useState('');
+  // Home FY change clears custom range (year switcher is Home only)
+  useEffect(() => {
+    setDateFrom('');
+    setDateTo('');
+  }, [selectedFY?.startDate, selectedFY?.endDate]);
   const [showDatePick,setShowDatePick]= useState(false);
 
-  const dateLabel = dateFrom && dateTo ? `${dateFrom} — ${dateTo}` : 'All Dates';
+  const dateLabel = dateFrom && dateTo ? `${formatDate(dateFrom)} — ${formatDate(dateTo)}` : 'All Dates';
   const hasCustomDate = !!(dateFrom && dateTo);
 
   const load = useCallback(async (pg = 1, reset = false) => {
@@ -157,8 +164,8 @@ export default function TransferHistoryScreen() {
       const params: Record<string, string> = { page: String(pg), limit: String(PAGE_LIMIT) };
       if (hasCustomDate) {
         // explicit date range overrides FY
-        params.from = dmyToISO(dateFrom);
-        params.to   = dmyToISO(dateTo);
+        params.from = dateFrom;
+        params.to   = dateTo;
       } else if (fyParam) {
         params.fy = fyParam;
       }
@@ -297,12 +304,12 @@ export default function TransferHistoryScreen() {
       {/* Date Range Picker */}
       <DateRangePickerModal
         visible={showDatePick}
-        fromDate={dateFrom}
-        toDate={dateTo}
+        fromDate={dateFrom || fyFrom}
+        toDate={dateTo || fyTo}
         onApply={(f, t) => { setDateFrom(f); setDateTo(t); setShowDatePick(false); }}
         onClose={() => setShowDatePick(false)}
-        minDate={selectedFY?.startDate}
-        maxDate={selectedFY?.endDate}
+        minDate={fyFrom || undefined}
+        maxDate={fyTo || undefined}
       />
     </SafeAreaView>
   );

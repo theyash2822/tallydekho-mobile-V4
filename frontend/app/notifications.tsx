@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { safePush } from '../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../src/constants/colors';
 import { ErrorBanner } from '../src/components/ApiStateViews';
 import { LedgerRowSkeleton } from '../src/components/ShimmerPlaceholder';
@@ -110,7 +111,7 @@ export default function NotificationsScreen() {
 
   const handlePress = (n: AppNotification) => {
     markRead(n.id);
-    if (n.route) router.push(n.route as any);
+    if (n.route) safePush(router, n.route as any);
   };
 
   const renderCard = (notif: AppNotification) => {
