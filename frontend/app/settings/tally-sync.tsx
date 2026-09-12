@@ -281,10 +281,16 @@ export default function TallySyncScreen() {
     } catch (err: any) {
       setPairState('idle');
       const code = err?.code || err?.error?.code;
-      const msg = code === 'DEVICE_ALREADY_PAIRED'
-        ? 'This Desktop is already paired to another Workspace.'
-        : (err?.message || 'Could not connect. Check your network.');
-      Toast.show({ type: 'error', text1: 'Error', text2: msg });
+      const backend = err?.message || err?.error?.message;
+      const msg =
+        code === 'DEVICE_ALREADY_PAIRED'
+          ? (backend && backend !== 'Device already paired'
+              ? backend
+              : 'This Tally Desktop is already connected to another workspace. Unpair it from that workspace first (Settings → Tally Sync → Unpair), then pair it here. One Desktop can belong to only one workspace.')
+          : code === 'WORKSPACE_ALREADY_HAS_DESKTOP'
+            ? (backend || 'This workspace already has a connected Tally Desktop. Unpair that machine first if you want to connect a different computer.')
+            : (backend || 'Could not connect. Check your network.');
+      Toast.show({ type: 'error', text1: 'Cannot pair this Desktop', text2: msg, visibilityTime: 6000 });
     }
   };
 
@@ -434,6 +440,13 @@ export default function TallySyncScreen() {
                 </Text>
               </View>
             )}
+            {isOwnerOrAdmin && (
+              <View style={[s.infoCard, { marginBottom: 12 }]}>
+                <Ionicons name="information-circle-outline" size={17} color={COLORS.textSecondary} />
+                <Text style={s.infoTxt}>
+                  One Desktop belongs to only one workspace. If this PC is already paired elsewhere, unpair it there first. If this workspace already has a Desktop, unpair that machine before connecting a new one.
+                </Text>
+              </View>
             )}
             <Text style={s.stepsHeader}>Follow the steps mentioned below</Text>
 

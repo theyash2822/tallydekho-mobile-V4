@@ -1,5 +1,32 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-12 — Create screens: useRbasCreate Entry Mode + scope filters
+
+### Why
+RBAS Entry Mode and scoped party/godown pickers must be consistent across all create flows (not only sales invoice).
+
+### Change
+- Wired `useRbasCreate` on sales order/credit note/delivery note, purchase invoice/order/debit note, expense/payment/receipt/journal/contra, and stock transfer.
+- `RegularOptionalToggle` gets `entryMode`; party/ledger lists use `scopeParties`; warehouses use `scopeGodowns`.
+- Sales `create-invoice.tsx` left unchanged (already done).
+
+### Manual test
+Open each create screen under a scoped RBAS role: toggle Regular/Optional follows Entry Mode; party and warehouse pickers only show scoped masters.
+
+---
+
+## 2026-09-12 — Already-paired copy
+
+### Why
+Cross-workspace pair failure was a one-liner.
+
+### Change
+- Tally Sync shows full unpair-elsewhere vs workspace-already-has-desktop copy.
+- `WORKSPACE_ALREADY_HAS_DESKTOP` in rbasErrors.
+
+---
+
+
 ## 2026-09-12 — Hard Sync / Restore approvals
 
 ### Why
