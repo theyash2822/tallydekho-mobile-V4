@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import { socketService } from '../services/socketService';
 import { clearVoucherConfigCache } from '../utils/voucherPdf';
 import { setAuthFailureHandler, getActiveWorkspaceId, getCompanies } from '../services/api';
+import { wsCompanyKey, wsFyKey } from '../utils/workspaceStorage';
 
 // ── Storage helpers ──────────────────────────────────────────
 const storeToken = async (token: string) => {
@@ -113,13 +114,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     (async () => {
       try {
-        const [token, companyJson, pairedStr, userJson] = await AsyncStorage.multiGet([
-          'auth_token', 'company_data', 'is_paired', 'user_info'
+        const [token, pairedStr, userJson, wsIdPair] = await AsyncStorage.multiGet([
+          'auth_token', 'is_paired', 'user_info', 'active_workspace_id',
         ]);
         const tok = token[1];
         if (tok) {
           setIsAuthenticated(true);
-          if (companyJson[1]) setCompanyState(JSON.parse(companyJson[1]));
+          const wsId = wsIdPair[1] || null;
+          const companyJson = await AsyncStorage.getItem(wsCompanyKey(wsId));
+          const legacyCompany = companyJson ? null : await AsyncStorage.getItem('company_data');
+          const rawCompany = companyJson || legacyCompany;
+          if (rawCompany) setCompanyState(JSON.parse(rawCompany));
+          const fyJson = await AsyncStorage.getItem(wsFyKey(wsId));
+          if (fyJson) {
+            try { setSelectedFY(JSON.parse(fyJson)); } catch { /* ignore */ }
+          }
           if (pairedStr[1] === 'true') setIsPairedState(true);
           if (userJson[1]) setUserState(JSON.parse(userJson[1]));
         }
@@ -172,12 +181,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const setCompany = async (c: Company | null) => {
     setCompanyState(c);
+    const wsId = getActiveWorkspaceId();
+    const key = wsCompanyKey(wsId);
     if (c) {
+      await AsyncStorage.setItem(key, JSON.stringify(c));
+      // Keep legacy key as last-used fallback for cold start before WS restore
       await AsyncStorage.setItem('company_data', JSON.stringify(c));
     } else {
+      await AsyncStorage.removeItem(key);
       await AsyncStorage.removeItem('company_data');
     }
   };
+
+  const setSelectedFYPersisted = useCallback(async (fy: FYInfo | null) => {
+    setSelectedFY(fy);
+    const wsId = getActiveWorkspaceId();
+    const key = wsFyKey(wsId);
+    if (fy) {
+      await AsyncStorage.setItem(key, JSON.stringify(fy));
+    } else {
+      await AsyncStorage.removeItem(key);
+    }
+  }, []);
 
   const setUser = (u: UserInfo) => {
     setUserState(u);
@@ -282,7 +307,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <AuthContext.Provider value={{
       isAuthenticated, isLoading, isPaired, isDesktopOnline, company, user, lastSyncAt,
-      selectedFY, setSelectedFY,
+      selectedFY, setSelectedFY: setSelectedFYPersisted,
       signIn, signOut, setIsPaired, setCompany, setUser,
     }}>
       {children}

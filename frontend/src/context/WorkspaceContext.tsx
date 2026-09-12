@@ -24,6 +24,9 @@ import {
 } from '../services/api';
 import { socketService } from '../services/socketService';
 import Toast from 'react-native-toast-message';
+import { wsCompanyKey, wsFyKey } from '../utils/workspaceStorage';
+import { normalizeScopes, filterByScopeGuidsOrNames, type ScopeBag } from '../utils/rbasScope';
+import { toastRbasError } from '../utils/rbasErrors';
 
 const STORAGE_KEY = 'active_workspace_id';
 
@@ -63,13 +66,17 @@ export interface WorkspaceContextValue {
   entryMode: EntryMode;
   invitations: any[];
   loading: boolean;
+  scopes: ScopeBag;
+  sensitivePolicies: Record<string, any> | null;
   refreshWorkspaces: () => Promise<void>;
   refreshContext: () => Promise<void>;
   switchWorkspace: (id: string) => Promise<void>;
   hasCapability: (key: string) => boolean;
+  filterScoped: <T extends Record<string, any>>(items: T[], kind: 'ledgers' | 'godowns' | 'companies') => T[];
   refreshInvitations: () => Promise<void>;
   acceptInvite: (id: string) => Promise<any>;
   declineInvite: (id: string) => Promise<void>;
+  isWorkspaceUnavailable: (w: WorkspaceSummary) => boolean;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue>({
@@ -84,14 +91,29 @@ const WorkspaceContext = createContext<WorkspaceContextValue>({
   entryMode: 'BOTH',
   invitations: [],
   loading: true,
+  scopes: {},
+  sensitivePolicies: null,
   refreshWorkspaces: async () => {},
   refreshContext: async () => {},
   switchWorkspace: async () => {},
   hasCapability: () => false,
+  filterScoped: (items) => items,
   refreshInvitations: async () => {},
   acceptInvite: async () => ({}),
   declineInvite: async () => {},
+  isWorkspaceUnavailable: () => false,
 });
+
+function isUnavailableSummary(w: WorkspaceSummary): boolean {
+  const life = String(w.lifecycleStatus || '').toUpperCase();
+  const mem = String(w.membershipStatus || '').toUpperCase();
+  return (
+    mem === 'SUSPENDED' ||
+    life === 'SUSPENDED' ||
+    life === 'CLOSED' ||
+    life === 'EXPIRED'
+  );
+}
 
 function normalizeList(raw: any): WorkspaceSummary[] {
   const list = raw?.data ?? raw ?? [];
@@ -110,13 +132,15 @@ function normalizeList(raw: any): WorkspaceSummary[] {
 }
 
 export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, isLoading: authLoading, company, setCompany } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, company, setCompany, setSelectedFY } = useAuth();
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [access, setAccess] = useState<WorkspaceAccess | null>(null);
   const [pairingStatus, setPairingStatus] = useState('UNPAIRED');
   const [invitations, setInvitations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const switchWorkspaceRef = React.useRef<((id: string) => Promise<void>) | null>(null);
 
   const refreshInvitations = useCallback(async () => {
     if (!isAuthenticated) {
@@ -169,11 +193,28 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
       }
     } catch (e) {
-      if (e instanceof ApiError && (e.code === 'MEMBERSHIP_SUSPENDED' || e.status === 403)) {
+      if (e instanceof ApiError && (
+        e.code === 'MEMBERSHIP_SUSPENDED' ||
+        e.code === 'WORKSPACE_ACCESS_DENIED' ||
+        e.code === 'WORKSPACE_SUSPENDED' ||
+        e.code === 'WORKSPACE_CLOSED' ||
+        e.status === 403
+      )) {
         setAccess(null);
+        toastRbasError(e);
+        // Fallback to Personal (base) workspace — never global logout
+        const base = workspaces.find((w) => w.isBase);
+        if (base && base.id !== workspaceId) {
+          Toast.show({
+            type: 'info',
+            text1: 'Access unavailable',
+            text2: 'Switched to your Personal Workspace',
+          });
+          await switchWorkspaceRef.current?.(base.id);
+        }
       }
     }
-  }, [isAuthenticated, workspaceId, company?.guid, setCompany]);
+  }, [isAuthenticated, workspaceId, company?.guid, setCompany, workspaces]);
 
   const refreshWorkspaces = useCallback(async () => {
     if (!isAuthenticated) {
@@ -194,8 +235,17 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         getActiveWorkspaceId() ||
         null;
       if (preferred && !list.some((w) => w.id === preferred)) preferred = null;
+      // If remembered WS is suspended/closed → Personal base
+      if (preferred) {
+        const pref = list.find((w) => w.id === preferred);
+        if (pref && isUnavailableSummary(pref)) preferred = null;
+      }
       if (!preferred && list.length) {
-        preferred = list.find((w) => w.isBase)?.id || list[0].id;
+        preferred =
+          list.find((w) => w.isBase && !isUnavailableSummary(w))?.id ||
+          list.find((w) => !isUnavailableSummary(w))?.id ||
+          list.find((w) => w.isBase)?.id ||
+          list[0].id;
       }
       if (preferred) {
         setWorkspaceId(preferred);
@@ -213,18 +263,32 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [isAuthenticated]);
 
   const switchWorkspace = useCallback(async (id: string) => {
-    // Safe switch (§10): clear stale company so context re-picks for new workspace
-    try {
-      await AsyncStorage.removeItem('company_data');
-    } catch { /* ignore */ }
+    // Safe switch (§10): clear in-memory company, restore per-workspace cache if any
     await setCompany(null);
+    try {
+      await setSelectedFY?.(null);
+    } catch { /* ignore */ }
     setAccess(null);
     setPairingStatus('UNPAIRED');
     setWorkspaceId(id);
     setActiveWorkspaceId(id);
     await AsyncStorage.setItem(STORAGE_KEY, id);
     socketService.setWorkspaceContext?.(id);
-  }, [setCompany]);
+
+    try {
+      const companyJson = await AsyncStorage.getItem(wsCompanyKey(id));
+      if (companyJson) {
+        const c = JSON.parse(companyJson);
+        if (c?.guid) await setCompany(c);
+      }
+      const fyJson = await AsyncStorage.getItem(wsFyKey(id));
+      if (fyJson) {
+        try { await setSelectedFY?.(JSON.parse(fyJson)); } catch { /* ignore */ }
+      }
+    } catch { /* ignore */ }
+  }, [setCompany, setSelectedFY]);
+
+  switchWorkspaceRef.current = switchWorkspace;
 
   useEffect(() => {
     if (authLoading) return;
@@ -308,6 +372,21 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     [caps, membershipType, isOwnerOrAdmin]
   );
 
+  const scopes = useMemo(() => normalizeScopes(access?.scopes), [access]);
+  const sensitivePolicies = access?.sensitivePolicies || null;
+
+  const filterScoped = useCallback(
+    <T extends Record<string, any>>(items: T[], kind: 'ledgers' | 'godowns' | 'companies') => {
+      if (membershipType === 'OWNER') return items;
+      const allow =
+        kind === 'ledgers' ? scopes.ledgers :
+        kind === 'godowns' ? scopes.godowns :
+        scopes.companies;
+      return filterByScopeGuidsOrNames(items, allow);
+    },
+    [scopes, membershipType]
+  );
+
   const acceptInvite = useCallback(
     async (id: string) => {
       const res: any = await acceptInvitation(id);
@@ -338,13 +417,17 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     entryMode,
     invitations,
     loading,
+    scopes,
+    sensitivePolicies,
     refreshWorkspaces,
     refreshContext,
     switchWorkspace,
     hasCapability,
+    filterScoped,
     refreshInvitations,
     acceptInvite,
     declineInvite,
+    isWorkspaceUnavailable: isUnavailableSummary,
   };
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
