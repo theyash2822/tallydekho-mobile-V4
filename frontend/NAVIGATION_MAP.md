@@ -1,7 +1,7 @@
 # NAVIGATION_MAP.md — tallydekho-mobile-V4
 
 ## Root Layout: app/_layout.tsx
-Wraps entire app in: AuthProvider → SettingsProvider → GestureHandlerRootView → SafeAreaProvider
+Wraps entire app in: AuthProvider → WorkspaceProvider → SettingsProvider → GestureHandlerRootView → SafeAreaProvider
 Auth guard redirects: unauthenticated → (auth)/index, authenticated → (tabs)
 
 ## Auth Stack: app/(auth)/
@@ -149,6 +149,8 @@ Auth guard redirects: unauthenticated → (auth)/index, authenticated → (tabs)
 | profile.tsx | User profile |
 | company.tsx | Company info |
 | tally-sync.tsx | Tally sync settings |
+| approvals.tsx | Owner/Admin Hard Sync + restore approval |
+| invitations.tsx | Workspace invitations |
 | payment-reminders.tsx | Payment reminders |
 | bank-feeds.tsx | Bank feeds |
 | security.tsx | Security / PIN / Biometric |

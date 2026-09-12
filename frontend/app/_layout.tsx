@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { SettingsProvider } from '../src/context/SettingsContext';
+import { WorkspaceProvider } from '../src/context/WorkspaceContext';
 import { getMe } from '../src/services/api';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
@@ -116,9 +117,11 @@ export default function RootLayout() {
         <BottomSheetModalProvider>
           <SettingsProvider>
             <AuthProvider>
-              <StatusBar style="dark" />
-              <RootNavigation />
-              <StatusBarCover />
+              <WorkspaceProvider>
+                <StatusBar style="dark" />
+                <RootNavigation />
+                <StatusBarCover />
+              </WorkspaceProvider>
             </AuthProvider>
           </SettingsProvider>
         </BottomSheetModalProvider>

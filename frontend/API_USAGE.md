@@ -116,6 +116,13 @@ getUserSettings, updateUserSettings, getNotificationSettings, updateNotification
 getAlertSettings, updateAlertSettings, getIntegrationSettings, updateIntegrationSettings
 sendPaymentReminder — POST /api/reminders/send
 
+## Workspace approvals (Owner/Admin)
+getWorkspaceApprovals(workspaceId) — GET /api/workspaces/:id/approvals
+approveHardSyncRequest(id) — POST /api/hard-sync-requests/:id/approve
+rejectHardSyncRequest(id) — POST /api/hard-sync-requests/:id/reject
+approveWorkspaceRestoreByCode({ code, backupId }) — POST /api/workspace/restore/approve
+rejectRestoreSession(id) — POST /api/restore-sessions/:id/reject
+
 ## Strict Rule
 No mock/fallback data. If API fails → throw error → caller shows ErrorView.
 Never substitute mock data for failed API responses.

@@ -1,5 +1,20 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-12 — Hard Sync / Restore approvals
+
+### Why
+Owner/Admin must approve Desktop Hard Sync and new-computer restore from Mobile.
+
+### Change
+- Settings → Approvals: live poll, restore by Desktop code + backup, already-approved Hard Sync copy.
+- Tally Sync: link to Approvals; toast on `hard_sync_request` / restore events.
+- `approveWorkspaceRestoreByCode` → `POST /api/workspace/restore/approve`.
+
+### Manual test
+Owner: Settings → Approvals. Desktop Request restore → enter code + Approve. Desktop Hard Sync (multi-user) → Approve/Reject.
+
+---
+
 ## 2026-09-11 — safePush, date ISO, multi PDF, audit refresh; bottom-sheet rollback
 
 ### Why

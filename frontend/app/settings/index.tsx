@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
 
 type SectionId = 'account' | 'preferences' | 'notifications' | 'integrations' | 'contact';
 
@@ -43,7 +44,9 @@ const SECTIONS: Section[] = [
     subItems: [
       { id: 'profile', label: 'Profile', icon: 'person-outline', route: '/settings/profile' },
       { id: 'company', label: 'Company Information', icon: 'business-outline', route: '/settings/company' },
-      { id: 'license', label: 'License & Credits', icon: 'card-outline', route: '/settings/license', badge: 'Free', badgeColor: '#2D7D46' },
+      { id: 'license', label: 'License & Credits', icon: 'card-outline', route: '/settings/license' },
+      { id: 'approvals', label: 'Approvals', icon: 'shield-checkmark-outline', route: '/settings/approvals' },
+      { id: 'invitations', label: 'Invitations', icon: 'mail-outline', route: '/settings/invitations' },
     ],
   },
   {
@@ -93,6 +96,8 @@ const SUBITEM_KEY: Record<string, string> = {
   profile:      'settings.profile',
   company:      'settings.companyInfo',
   license:      'settings.license',
+  approvals:    'settings.approvals',
+  invitations:  'settings.invitations',
   language:     'settings.language',
   currency:     'settings.currency',
   voucher:      'settings.voucher',
@@ -217,9 +222,19 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { signOut, user, company, isPaired } = useAuth();
   const { settings, updateSettings } = useSettings();
+  const {
+    workspaces,
+    workspace,
+    workspaceId,
+    switchWorkspace,
+    demoMode,
+    pairingStatus,
+    invitations,
+  } = useWorkspace();
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState<SectionId | null>('account');
   const [showLogoutSheet, setShowLogoutSheet] = useState(false);
+  const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
   // Stores all toggle values keyed by toggleKey
   const [toggles, setToggles] = useState<Record<string, boolean>>({});
 
@@ -270,6 +285,26 @@ export default function SettingsScreen() {
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>{user?.name || t('common.yourName')}</Text>
             <Text style={styles.profilePhone}>{user?.phone || ''}</Text>
+            {/* Workspace picker — under Name/phone per Mobile handoff */}
+            <TouchableOpacity
+              style={styles.workspaceRow}
+              onPress={() => setShowWorkspacePicker(true)}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="briefcase-outline" size={14} color={COLORS.brandPrimary} />
+              <Text style={styles.workspaceName} numberOfLines={1}>
+                {workspace?.name || 'Workspace'}
+              </Text>
+              <Ionicons name="chevron-down" size={14} color={COLORS.textTertiary} />
+            </TouchableOpacity>
+            {demoMode ? (
+              <Text style={styles.demoHint}>Demo Mode · Tally {pairingStatus === 'UNPAIRED' ? 'not paired' : 'reconnecting'}</Text>
+            ) : null}
+            {invitations.length > 0 ? (
+              <TouchableOpacity onPress={() => safePush(router, '/settings/invitations' as any)}>
+                <Text style={styles.inviteHint}>{invitations.length} pending invitation{invitations.length > 1 ? 's' : ''}</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         </View>
 
@@ -378,6 +413,39 @@ export default function SettingsScreen() {
         onClose={() => setShowLogoutSheet(false)}
         onConfirm={() => { setShowLogoutSheet(false); signOut(); }}
       />
+
+      <Modal visible={showWorkspacePicker} transparent animationType="slide" onRequestClose={() => setShowWorkspacePicker(false)}>
+        <TouchableOpacity style={styles.wsOverlay} activeOpacity={1} onPress={() => setShowWorkspacePicker(false)}>
+          <View style={styles.wsSheet}>
+            <Text style={styles.wsTitle}>Switch Workspace</Text>
+            {workspaces.map((w) => {
+              const selected = w.id === workspaceId;
+              return (
+                <TouchableOpacity
+                  key={w.id}
+                  style={[styles.wsItem, selected && styles.wsItemSelected]}
+                  onPress={async () => {
+                    setShowWorkspacePicker(false);
+                    if (w.id !== workspaceId) await switchWorkspace(w.id);
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.wsItemName}>{w.name}</Text>
+                    <Text style={styles.wsItemMeta}>
+                      {(w.membershipType || 'MEMBER')}
+                      {w.tallyConnection ? ` · ${w.tallyConnection}` : ''}
+                    </Text>
+                  </View>
+                  {selected ? <Ionicons name="checkmark-circle" size={20} color={COLORS.brandPrimary} /> : null}
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity style={styles.wsCancel} onPress={() => setShowWorkspacePicker(false)}>
+              <Text style={styles.wsCancelTxt}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -408,6 +476,28 @@ const styles = StyleSheet.create({
   profileInfo: { flex: 1 },
   profileName:  { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
   profilePhone: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, marginTop: 2 },
+  workspaceRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8,
+    paddingVertical: 4,
+  },
+  workspaceName: { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.brandPrimary },
+  demoHint: { fontSize: 11, color: '#D97706', marginTop: 4, fontWeight: '600' },
+  inviteHint: { fontSize: 11, color: COLORS.brandPrimary, marginTop: 4, fontWeight: '600' },
+  wsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  wsSheet: {
+    backgroundColor: COLORS.cardBg, borderTopLeftRadius: 16, borderTopRightRadius: 16,
+    padding: 20, paddingBottom: 32, maxHeight: '70%',
+  },
+  wsTitle: { fontSize: TYPOGRAPHY.lg, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 12 },
+  wsItem: {
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault,
+  },
+  wsItemSelected: { backgroundColor: COLORS.pageBg, marginHorizontal: -8, paddingHorizontal: 8, borderRadius: 8 },
+  wsItemName: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
+  wsItemMeta: { fontSize: 11, color: COLORS.textTertiary, marginTop: 2 },
+  wsCancel: { marginTop: 16, alignItems: 'center', paddingVertical: 12, backgroundColor: COLORS.pageBg, borderRadius: 12 },
+  wsCancelTxt: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary },
 
   // Accordion
   accordionContainer: {

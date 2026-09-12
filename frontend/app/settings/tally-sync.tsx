@@ -10,8 +10,9 @@ import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { ShimmerBox } from '../../src/components/Skeleton';
-import { pairWithTally, unpairDevice, getTallySyncStatus } from '../../src/services/api';
+import { pairWorkspaceTally, unpairWorkspaceTally, getTallySyncStatus } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
 
 // Mock data
 const MOCK_LAST_SYNCED = '15 Jun 2025, 11:42 AM';
@@ -206,16 +207,17 @@ const ci = StyleSheet.create({
 export default function TallySyncScreen() {
   const router = useRouter();
   const { isPaired, setIsPaired, setCompany } = useAuth();
+  const { workspaceId, isOwnerOrAdmin, pairingStatus, refreshContext } = useWorkspace();
   // Derive initial pairState from AuthContext so it persists across screen visits
   const [pairState, setPairState] = useState<'idle' | 'awaiting' | 'paired'>(
-    isPaired ? 'paired' : 'idle'
+    isPaired || pairingStatus === 'CONNECTED' ? 'paired' : 'idle'
   );
   const [deviceInfo, setDeviceInfo] = useState<{ name: string; lastSync: string } | null>(null);
 
   // Keep pairState in sync if isPaired changes externally (e.g. desktop unpairs)
   useEffect(() => {
-    setPairState(isPaired ? 'paired' : 'idle');
-  }, [isPaired]);
+    setPairState(isPaired || pairingStatus === 'CONNECTED' ? 'paired' : 'idle');
+  }, [isPaired, pairingStatus]);
 
   // Fetch real device info when paired
   useEffect(() => {
@@ -244,15 +246,22 @@ export default function TallySyncScreen() {
   const isComplete = codeStr.length === 6;
 
   const handlePair = async () => {
+    if (!isOwnerOrAdmin) {
+      Toast.show({ type: 'error', text1: 'Owner/Admin only', text2: 'Ask the Workspace Owner or Admin to pair Tally.' });
+      return;
+    }
+    if (!workspaceId) {
+      Toast.show({ type: 'error', text1: 'No Workspace', text2: 'Select a Workspace first.' });
+      return;
+    }
     if (!isComplete) {
       Toast.show({ type: 'error', text1: 'Incomplete Code', text2: 'Please enter all 6 digits.' });
       return;
     }
     setPairState('awaiting');
     try {
-      const res = await pairWithTally(codeStr);
-      if (res?.success && res?.data?.is_paired) {
-        // Update AuthContext with real paired state
+      const res = await pairWorkspaceTally(workspaceId, codeStr);
+      if (res?.success && (res?.data?.is_paired || res?.data?.workspace_id)) {
         setIsPaired(true);
         if (res.data.company) {
           await setCompany({
@@ -261,8 +270,9 @@ export default function TallySyncScreen() {
             gstin: res.data.company.gstin ?? undefined,
           });
         }
+        await refreshContext();
         setPairState('paired');
-        Toast.show({ type: 'success', text1: 'Tally Paired!', text2: 'TallyDekho is now connected to your desktop.' });
+        Toast.show({ type: 'success', text1: 'Tally Paired!', text2: 'Workspace is now connected to Desktop.' });
       } else {
         setPairState('idle');
         const msg = (res as any)?.error?.message || 'Invalid or expired code. Try again.';
@@ -270,7 +280,11 @@ export default function TallySyncScreen() {
       }
     } catch (err: any) {
       setPairState('idle');
-      Toast.show({ type: 'error', text1: 'Error', text2: err?.message || 'Could not connect. Check your network.' });
+      const code = err?.code || err?.error?.code;
+      const msg = code === 'DEVICE_ALREADY_PAIRED'
+        ? 'This Desktop is already paired to another Workspace.'
+        : (err?.message || 'Could not connect. Check your network.');
+      Toast.show({ type: 'error', text1: 'Error', text2: msg });
     }
   };
 
@@ -281,13 +295,18 @@ export default function TallySyncScreen() {
   };
 
   const handleDisconnect = async () => {
+    if (!isOwnerOrAdmin) {
+      Toast.show({ type: 'error', text1: 'Owner/Admin only', text2: 'Ask the Workspace Owner or Admin to unpair.' });
+      return;
+    }
     try {
-      await unpairDevice();
+      if (workspaceId) await unpairWorkspaceTally(workspaceId);
     } catch (_) { /* best-effort */ }
     setIsPaired(false);
     setPairState('idle');
     setCode(Array(6).fill(''));
     setShowDisconnect(false);
+    await refreshContext();
     Toast.show({ type: 'info', text1: 'Disconnected', text2: 'Tally sync has been removed.' });
   };
 
@@ -371,6 +390,20 @@ export default function TallySyncScreen() {
                 Make sure TallyPrime is open and TallyDekho Desktop Agent is running to enable sync.
               </Text>
             </View>
+            {isOwnerOrAdmin && (
+              <TouchableOpacity
+                style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}
+                onPress={() => router.push('/settings/approvals')}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.brandPrimary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.deviceName}>Hard Sync & Restore approvals</Text>
+                  <Text style={s.deviceSub}>Approve a full rebuild or a new-computer restore.</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
+              </TouchableOpacity>
+            )}
           </>
         )}
 
@@ -379,6 +412,29 @@ export default function TallySyncScreen() {
         ════════════════════════════════════════════ */}
         {(pairState === 'idle' || pairState === 'awaiting') && (
           <>
+                {isOwnerOrAdmin && (
+                  <TouchableOpacity
+                    style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}
+                    onPress={() => router.push('/settings/approvals')}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.brandPrimary} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.deviceName}>Hard Sync & Restore approvals</Text>
+                      <Text style={s.deviceSub}>Approve a full rebuild or a new-computer restore.</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
+                  </TouchableOpacity>
+                )}
+            {!isOwnerOrAdmin && (
+              <View style={[s.infoCard, { marginBottom: 12 }]}>
+                <Ionicons name="lock-closed-outline" size={17} color={COLORS.textSecondary} />
+                <Text style={s.infoTxt}>
+                  Only the Workspace Owner or Admin can pair or unpair Tally Desktop.
+                </Text>
+              </View>
+            )}
+            )}
             <Text style={s.stepsHeader}>Follow the steps mentioned below</Text>
 
             {/* ── Step 1: Download ── */}
@@ -419,7 +475,7 @@ export default function TallySyncScreen() {
                   <SixDigitInput code={code} onChange={setCode} />
                   <Text style={s.codeHint}>Enter 6-digit code from the TallyDekho Desktop Agent</Text>
 
-                  {isComplete && (
+                  {isComplete && isOwnerOrAdmin && (
                   <TouchableOpacity
                     style={s.primaryBtn}
                     onPress={handlePair}

@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { socketService } from '../services/socketService';
 import { clearVoucherConfigCache } from '../utils/voucherPdf';
-import { setAuthFailureHandler } from '../services/api';
+import { setAuthFailureHandler, getActiveWorkspaceId, getCompanies } from '../services/api';
 
 // ── Storage helpers ──────────────────────────────────────────
 const storeToken = async (token: string) => {
@@ -15,7 +15,7 @@ const removeToken = async () => {
   if (Platform.OS === 'web') {
     try { window.localStorage.removeItem('auth_token'); window.localStorage.removeItem('user_data'); } catch {}
   }
-  await AsyncStorage.multiRemove(['auth_token', 'user_data', 'company_data', 'is_paired', 'user_info']);
+  await AsyncStorage.multiRemove(['auth_token', 'user_data', 'company_data', 'is_paired', 'user_info', 'active_workspace_id']);
 };
 
 const getToken = async (): Promise<string | null> => {
@@ -72,7 +72,7 @@ interface AuthContextType {
   signIn: (token: string, userInfo?: UserInfo) => Promise<void>;
   signOut: () => Promise<void>;
   setIsPaired: (v: boolean) => void;
-  setCompany: (c: Company) => Promise<void>;
+  setCompany: (c: Company | null) => Promise<void>;
   setUser: (u: UserInfo) => void;
 }
 
@@ -170,9 +170,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     AsyncStorage.setItem('is_paired', v ? 'true' : 'false').catch(() => {});
   };
 
-  const setCompany = async (c: Company) => {
+  const setCompany = async (c: Company | null) => {
     setCompanyState(c);
-    await AsyncStorage.setItem('company_data', JSON.stringify(c)).catch(() => {});
+    if (c) {
+      await AsyncStorage.setItem('company_data', JSON.stringify(c));
+    } else {
+      await AsyncStorage.removeItem('company_data');
+    }
   };
 
   const setUser = (u: UserInfo) => {
@@ -204,9 +208,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const token = await getToken();
         if (!token) return;
-        const res = await fetch(`${BASE_URL}/api/tally-sync/status`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+        const wsId = getActiveWorkspaceId();
+        if (wsId) headers['X-Workspace-Id'] = wsId;
+        const res = await fetch(`${BASE_URL}/api/tally-sync/status`, { headers });
         if (res.status === 401) {
           // Token expired — sign out cleanly
           await removeToken();
@@ -243,22 +248,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // marked is_active=false). Drop inactive cached company and adopt active one.
         if (is_paired && statusCompany?.guid) {
           try {
-            const cosRes = await fetch(`${BASE_URL}/api/companies`, {
-              headers: { Authorization: `Bearer ${token}` },
+            const cosRes: any = await getCompanies();
+            const list: { id: string; name: string; gstin?: string | null }[] = cosRes?.data || [];
+            setCompanyState(cur => {
+              const stillActive = !!(cur?.guid && list.some(c => c.id === cur.guid));
+              if (stillActive) return cur;
+              const pick = list.find(c => c.id === statusCompany.guid) || list[0];
+              if (!pick) return cur;
+              const c = { guid: pick.id, name: pick.name, gstin: pick.gstin || null };
+              AsyncStorage.setItem('company_data', JSON.stringify(c)).catch(() => {});
+              return c;
             });
-            if (cosRes.ok) {
-              const cosJson = await cosRes.json();
-              const list: { id: string; name: string; gstin?: string | null }[] = cosJson?.data || [];
-              setCompanyState(cur => {
-                const stillActive = !!(cur?.guid && list.some(c => c.id === cur.guid));
-                if (stillActive) return cur;
-                const pick = list.find(c => c.id === statusCompany.guid) || list[0];
-                if (!pick) return cur;
-                const c = { guid: pick.id, name: pick.name, gstin: pick.gstin || null };
-                AsyncStorage.setItem('company_data', JSON.stringify(c)).catch(() => {});
-                return c;
-              });
-            }
           } catch { /* keep cached */ }
         }
 

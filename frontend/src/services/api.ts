@@ -13,6 +13,7 @@ import {
   notifyAuthFailure,
   setDeviceOnline,
 } from './apiErrors';
+import { toastRbasError } from '../utils/rbasErrors';
 
 export {
   ApiError,
@@ -27,8 +28,18 @@ export {
 const BASE_URL =
   process.env.EXPO_PUBLIC_BACKEND_URL ||
   (__DEV__ ? 'http://192.168.29.241:3001' : 'https://api.tallydekho.com');
-/** Request timeout (ms) — soft upper bound for hung sockets */
 const REQUEST_TIMEOUT_MS = 25_000;
+
+/** Active Workspace for X-Workspace-Id — set by WorkspaceContext. */
+let _activeWorkspaceId: string | null = null;
+
+export function setActiveWorkspaceId(id: string | null) {
+  _activeWorkspaceId = id ? String(id) : null;
+}
+
+export function getActiveWorkspaceId(): string | null {
+  return _activeWorkspaceId;
+}
 
 // ── Token helpers (must match AuthContext storage keys) ──────
 const getToken = async (): Promise<string | null> => {
@@ -85,6 +96,10 @@ async function request<T>(
   }
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  // Workspace is never in JWT — attach header for all authenticated business calls.
+  if (requiresAuth && _activeWorkspaceId) {
+    headers['X-Workspace-Id'] = _activeWorkspaceId;
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -107,9 +122,11 @@ async function request<T>(
         message || `HTTP ${res.status}`,
         { status: res.status, code, kind, raw: data },
       );
-      // Genuine protected 401 → central sign-out. Never logout on 403.
+      // Genuine protected 401 → central sign-out. Never logout on 403 / RBAS codes.
       if (res.status === 401) {
         notifyAuthFailure(err);
+      } else if (res.status === 403 || res.status === 402 || res.status === 409) {
+        toastRbasError(err);
       }
       throw err;
     }
@@ -468,6 +485,20 @@ export const getDaybook  = (companyGuid?: string, date?: string) => get<any>(wit
 export const getCompanyCapabilities = (companyGuid?: string) => get<any>(withCompany('/company/capabilities', companyGuid));
 
 // ══════════════════════════════════════════════════════════════
+// BILLING / RAZORPAY RECHARGE (Owner — Checkout on Web/Mobile later)
+// ══════════════════════════════════════════════════════════════
+
+export const getBillingOverview = () => get<any>('/billing/overview');
+export const getBillingRechargeStatus = () => get<any>('/billing/recharge/status');
+export const createBillingRecharge = (credits: number, workspaceId?: string) =>
+  post<any>('/billing/recharge/create', { credits, workspaceId });
+export const verifyBillingRecharge = (payload: {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+}) => post<any>('/billing/recharge/verify', payload);
+
+// ══════════════════════════════════════════════════════════════
 // AUDIT TRAIL
 // ══════════════════════════════════════════════════════════════
 
@@ -759,3 +790,42 @@ export const invoiceSharePdf = (
 // Sales Order Preview — reuses the same /tally/invoice/:tdkRef/preview endpoint
 // (backend serves the app_vouchers snapshot for any voucher type keyed by tdkRef).
 export const getOrderPreview = (tdkRef: string, companyGuid: string) => getInvoicePreview(tdkRef, companyGuid);
+
+// ── Workspace / RBAS (Mobile) ─────────────────────────────────────────────────
+export const listMyWorkspaces = () => get<any>('/me/workspaces');
+export const getWorkspaceContext = (workspaceId: string) =>
+  get<any>(`/workspaces/${encodeURIComponent(workspaceId)}/context`);
+export const listWorkspaceCompanies = (workspaceId: string) =>
+  get<any>(`/workspaces/${encodeURIComponent(workspaceId)}/companies`);
+export const listWorkspaceCompanyYears = (workspaceId: string, companyGuid: string) =>
+  get<any>(
+    `/workspaces/${encodeURIComponent(workspaceId)}/company-years?companyGuid=${encodeURIComponent(companyGuid)}`
+  );
+export const listMyInvitations = () => get<any>('/me/invitations');
+export const acceptInvitation = (id: string) => post<any>(`/invitations/${encodeURIComponent(id)}/accept`);
+export const declineInvitation = (id: string) => post<any>(`/invitations/${encodeURIComponent(id)}/decline`);
+export const getWorkspaceTallyStatus = (workspaceId: string) =>
+  get<any>(`/workspaces/${encodeURIComponent(workspaceId)}/tally/status`);
+export const pairWorkspaceTally = (workspaceId: string, pairing_code: string) =>
+  post<any>(`/workspaces/${encodeURIComponent(workspaceId)}/tally/pair`, { pairing_code });
+export const unpairWorkspaceTally = (workspaceId: string) =>
+  post<any>(`/workspaces/${encodeURIComponent(workspaceId)}/tally/unpair`);
+export const getWorkspaceApprovals = (workspaceId: string) =>
+  get<any>(`/workspaces/${encodeURIComponent(workspaceId)}/approvals`);
+export const approveHardSyncRequest = (requestId: string) =>
+  post<any>(`/hard-sync-requests/${encodeURIComponent(requestId)}/approve`);
+export const rejectHardSyncRequest = (requestId: string) =>
+  post<any>(`/hard-sync-requests/${encodeURIComponent(requestId)}/reject`);
+export const approveRestoreSession = (sessionId: string, body: { code: string; backupId: string }) =>
+  post<any>(`/restore-sessions/${encodeURIComponent(sessionId)}/approve`, body);
+export const approveWorkspaceRestoreByCode = (body: { code: string; backupId: string }) =>
+  post<any>('/workspace/restore/approve', body);
+export const rejectRestoreSession = (sessionId: string) =>
+  post<any>(`/restore-sessions/${encodeURIComponent(sessionId)}/reject`);
+export const getWorkspaceIntegration = (workspaceId: string, domain: string) =>
+  get<any>(`/workspaces/${encodeURIComponent(workspaceId)}/integrations/${encodeURIComponent(domain)}`);
+export const saveWorkspaceIntegration = (workspaceId: string, domain: string, config: object) =>
+  post<any>(`/workspaces/${encodeURIComponent(workspaceId)}/integrations/${encodeURIComponent(domain)}`, config);
+export const activateWorkspaceIntegration = (workspaceId: string, domain: string) =>
+  post<any>(`/workspaces/${encodeURIComponent(workspaceId)}/integrations/${encodeURIComponent(domain)}/activate`);
+
