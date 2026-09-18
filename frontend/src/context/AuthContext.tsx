@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { socketService } from '../services/socketService';
 import { clearVoucherConfigCache } from '../utils/voucherPdf';
 import { setAuthFailureHandler, getActiveWorkspaceId, getCompanies } from '../services/api';
 import { wsCompanyKey, wsFyKey } from '../utils/workspaceStorage';
+import { BACKEND_URL } from '../config/backend';
 
 // ── Storage helpers ──────────────────────────────────────────
 const storeToken = async (token: string) => {
@@ -102,11 +103,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [lastSyncAt, setLastSyncAt] = useState(0);
   const [selectedFY, setSelectedFY] = useState<FYInfo | null>(null);
   const [company, setCompanyState] = useState<Company | null>(null);
+  const companyRef = useRef<Company | null>(null);
+  const lastWsStatusRef = useRef('');
   const [user, setUserState] = useState<UserInfo | null>(null);
 
-  const BASE_URL =
-    process.env.EXPO_PUBLIC_BACKEND_URL ||
-    (__DEV__ ? 'http://192.168.29.241:3001' : 'https://api.tallydekho.com');
+  // Keep ref in sync for functional setCompany without double-setState hacks
+  useEffect(() => {
+    companyRef.current = company;
+  }, [company]);
+
+  const BASE_URL = BACKEND_URL;
 
   // Restore persisted state on mount
   useEffect(() => {

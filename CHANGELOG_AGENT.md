@@ -1,3 +1,21 @@
+## 2026-09-18 — Staging EAS profile + centralized backend config
+
+Added `frontend/src/config/backend.ts` as the single source for backend URL
+resolution; `services/api.ts` and `context/AuthContext.tsx` now import from it
+instead of each duplicating the logic (and the hardcoded URLs).
+
+Added a `staging` EAS profile (`EXPO_PUBLIC_APP_ENV=staging`,
+`EXPO_PUBLIC_BACKEND_URL=https://staging-api.tallydekho.com`) and made the
+`production` profile state its environment explicitly. A staging build refuses to
+fall back to `api.tallydekho.com`.
+
+Added `npm run verify:config` (`frontend/scripts/verify-backend-config.mjs`) and
+wired it as the default `test` script. All checks PASS.
+
+Risks: no staging EAS build has been produced; guards are verified statically.
+
+---
+
 ## 2026-09-08 — Publish hardening
 
 Ledger share/pagination, multiShare page sizes, About URLs, token logs, `__DEV__`-only LAN API. Testing Agent YELLOW. Pushing `cursor`.

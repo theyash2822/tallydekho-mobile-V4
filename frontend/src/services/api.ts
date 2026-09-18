@@ -14,6 +14,7 @@ import {
   setDeviceOnline,
 } from './apiErrors';
 import { toastRbasError } from '../utils/rbasErrors';
+import { BACKEND_URL } from '../config/backend';
 
 export {
   ApiError,
@@ -25,9 +26,7 @@ export {
   type ApiErrorKind,
 } from './apiErrors';
 
-const BASE_URL =
-  process.env.EXPO_PUBLIC_BACKEND_URL ||
-  (__DEV__ ? 'http://192.168.29.241:3001' : 'https://api.tallydekho.com');
+const BASE_URL = BACKEND_URL;
 const REQUEST_TIMEOUT_MS = 25_000;
 
 /** Active Workspace for X-Workspace-Id — set by WorkspaceContext. */
