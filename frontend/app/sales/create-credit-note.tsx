@@ -21,12 +21,13 @@ import Toast from 'react-native-toast-message';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
-import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import RegularOptionalToggle from '../../src/components/forms/RegularOptionalToggle';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useApiData } from '../../src/hooks/useApiData';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
+import { useRbasCreate } from '../../src/hooks/useRbasCreate';
 import {
   createCreditNote,
   getParties,
@@ -37,6 +38,7 @@ import {
 } from '../../src/services/api';
 import { shareVoucherPdfByRef } from '../../src/utils/voucherPdf';
 import { useTranslation } from 'react-i18next';
+import { useRequireCapability } from '../../src/components/RequireCapability';
 
 type InvoiceChoice = {
   id: string;
@@ -495,6 +497,7 @@ function normalizeContext(raw: any, selected: InvoiceChoice): CreditNoteContext 
 }
 
 export default function CreateCreditNoteScreen() {
+  const allowed = useRequireCapability('credit_note.create');
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -509,7 +512,7 @@ export default function CreateCreditNoteScreen() {
   const fyEnd = selectedFY?.endDate || `${new Date().getFullYear() + 1}-03-31`;
 
   const [step, setStep] = useState<1 | 2>(1);
-  const [entryType, setEntryType] = useState<EntryType>('regular');
+  const {entryMode, entryType, setEntryType, scopeParties, scopeGodowns, assertCanCreate} = useRbasCreate();
   const [date, setDate] = useState(todayDMY());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [party, setParty] = useState('');
@@ -601,12 +604,12 @@ export default function CreateCreditNoteScreen() {
     setStep(2);
   }, [contextState.data]);
 
-  const partyOptions: BSSOption[] = useMemo(() => (partiesState.data || []).map((row: any) => ({
+  const partyOptions: BSSOption[] = useMemo(() => scopeParties(partiesState.data || []).map((row: any) => ({
     label: row.name,
     value: row.name,
     subtitle: row.gstin ? `GSTIN: ${row.gstin}` : undefined,
     data: row,
-  })).filter(option => !!option.value), [partiesState.data]);
+  })).filter(option => !!option.value), [partiesState.data, scopeParties]);
 
   const invoiceOptions: BSSOption[] = useMemo(() => (invoicesState.data || []).map(invoice => ({
     label: `#${invoice.voucherNumber}`,
@@ -631,13 +634,13 @@ export default function CreateCreditNoteScreen() {
 
   const warehouseOptions: BSSOption[] = useMemo(() => {
     const names = new Set<string>();
-    (warehousesState.data || []).forEach((row: any) => {
+    scopeGodowns(warehousesState.data || []).forEach((row: any) => {
       const name = first(row.name, row.godown_name);
       if (name) names.add(String(name));
     });
     items.forEach(item => item.godown && names.add(item.godown));
     return [...names].map(name => ({ label: name, value: name }));
-  }, [warehousesState.data, items]);
+  }, [warehousesState.data, items, scopeGodowns]);
 
   const selectedItems = useMemo(() => items.filter(item => item.selected), [items]);
   const subtotal = useMemo(() => selectedItems.reduce(
@@ -804,10 +807,7 @@ export default function CreateCreditNoteScreen() {
       return;
     }
     if (!selectedInvoice) return;
-    if (!isPaired) {
-      Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Pair with Tally Desktop first.' });
-      return;
-    }
+    if (!assertCanCreate('credit_note.create')) return;
     if (submittingRef.current) return;
 
     setSubmitting(true);
@@ -1167,6 +1167,8 @@ export default function CreateCreditNoteScreen() {
     </>
   );
 
+  if (!allowed) return null;
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       <View style={s.header}>
@@ -1181,7 +1183,7 @@ export default function CreateCreditNoteScreen() {
           <Text style={s.headerTitle}>{t('sales.createCreditNote')}</Text>
           <Text style={s.headerSub}>Step {step} of 2</Text>
         </View>
-        <RegularOptionalToggle value={entryType} onChange={setEntryType} />
+        <RegularOptionalToggle value={entryType} onChange={setEntryType} entryMode={entryMode} />
       </View>
 
       <View style={s.progressTrack}>

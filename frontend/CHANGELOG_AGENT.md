@@ -1,5 +1,111 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-17 — Desktop 409 when already paired + ledger JSON names
+
+### Desktop
+- Startup called `/desktop/pairing-code` before checking paired → **409** while CONNECTED.
+- Fix: check `pairedDevice` first; surface `DEVICE_ALREADY_PAIRED`; PairingPanel won't refresh while paired.
+
+### Mobile / Backend
+- One ledger stored as `["Motu Halve Wala","Chaurha Wala"]` (processMasters used raw NAME array).
+- Fix: `processMasters` uses `tallyName`; repaired DB row; ledger list normalizes JSON-ish names.
+
+---
+
+## 2026-09-17 — Android local build/runtime speed (ABI + Metro)
+
+### Why
+Android `expo run:android` / Gradle was much slower than iOS. Root causes: native build for **4 ABIs**, Metro capped at **2 workers**, network inspector on.
+
+### Change
+- `android/gradle.properties`: `reactNativeArchitectures=arm64-v8a` only; Gradle cache/parallel; JVM 4G; `EX_DEV_CLIENT_NETWORK_INSPECTOR=false`
+- `metro.config.js`: workers = min(6, cpus-1) instead of hard 2
+- `expo-build-properties` + `app.json` plugin so prebuild keeps single ABI
+
+### How to re-test
+1. Stop Expo, clear Android build once: `cd android && ./gradlew clean`
+2. Restart: `npx expo start -c` then `npx expo run:android`
+3. Emulator on Mac needing x86_64: set `reactNativeArchitectures=arm64-v8a,x86_64`
+
+---
+
+## 2026-09-14 — Phase E: onboarding canonical pair + CONNECTED write gates
+
+### Why
+Onboarding still called legacy `/tally-sync/pair`; some creates gated on `isPaired`.
+
+### Change
+- `(auth)/tally-sync` → `pairWorkspaceTally` via Personal Workspace id
+- Legacy `pairWithTally` / `unpairDevice` reject with WORKSPACE_REQUIRED
+- Ledger/warehouse create require `pairingStatus === CONNECTED`
+- Settings Restore/Replace conflict copy
+
+### Manual test
+1. Fresh signup → pair with Desktop code → awaiting first sync
+2. Create warehouse while RECONNECTING → blocked
+3. Settings Pair conflict messages match locked copy
+
+---
+
+## 2026-09-14 — Header: lock Demo company switch; restore FY dropdown
+
+### Why
+Demo Mode still felt switchable; FY opened a full page instead of the old compact dropdown.
+
+### Change
+- Header: company tap disabled in Demo (no chevron); CONNECTED + 2+ companies still opens switch screen
+- Header: FY back to transparent Modal dropdown (previous UX)
+- switch-company: auto-back if opened in Demo Mode
+
+### Manual test
+1. UNPAIRED/RECONNECTING: company name not tappable; FY opens dropdown under header
+2. CONNECTED with 2+ companies: company opens Switch Company screen; FY still dropdown
+
+---
+
+
+
+### Why
+Owner saw “paired, syncing started” but never left Demo. Tally Sync treated only CONNECTED as paired.
+
+### Change
+- Socket: `tally_connection` / `unpaired` / `paired` → refreshContext; CONNECTED bumps lastSyncAt
+- Auth poll: adopt live company when workspace_status flips to CONNECTED (not inside isPaired setter)
+- Tally Sync: RECONNECTING counts as paired UI; pending refresh if context fetch in-flight
+
+### Manual test
+1. Pair → Tally Sync shows paired, Home still Demo until first sync.
+2. Desktop init-sync → Owner company becomes live Tally books.
+3. Unpair → Demo Company only.
+
+---
+
+
+
+### Why
+Product decisions Waves 2–4: missing view/create caps must hide **and** deep-link fail closed; finish ungated stock/ledger creates; company/FY/CC scopes in pickers; sensitiveDisplay on money/qty surfaces (BE authoritative). No Mobile checkout.
+
+### Change
+- Added `RequireCapability` / `useRequireCapability` (deny while caps loading; toast + back/home when denied).
+- Module hubs (sales/purchase/expenses/voucher) + tabs ledger/stocks/reports: require `*.view`; tabs `_layout` uses `href: null` when missing.
+- Mount-time create guards on all create screens; wired `assertCanCreate` + CONNECTED on stock transfer/adjustment/item/warehouse, ledger create, StockTransfer/BulkTransfer/AddParty modals.
+- QuickActions expense cap → `expense.create`; Settings Approvals Owner/Admin only; License Web portal CTA Owner only (`isOwner`).
+- `filterScoped` extended for companies / fys / costCentres; Header company + FY pickers scoped; `useRbasCreate` exposes `scopeCostCentres`.
+- `sensitiveDisplay` on Home KPI cash/bank, ModuleTiles purchase values, CashflowCard, stocks inventory valuation, bank-balance / cash-in-hand KPI screens.
+
+### Manual test
+1. Member without `sales.view`: deep-link `/sales` → toast + redirect; tile hidden.
+2. Member without create cap: open create URL → redirect; FAB item hidden; submit gated.
+3. Scoped company/FY: Header pickers only show allow-list.
+4. Role with `cash_balance` / `bank_balance` masked: Home KPI + KPI detail show `••••` / hidden.
+5. Non-Owner: License shows ask-Owner copy (no Web portal CTA). Non-Owner/Admin: Approvals row hidden.
+
+### Risks
+- Mobile has no cost-centre pickers on create forms yet — `scopeCostCentres` ready when fields appear.
+- Pre-existing `StyleSheet.absoluteFillObject` tsc noise unchanged.
+
+---
+
 ## 2026-09-12 — Create screens: useRbasCreate Entry Mode + scope filters
 
 ### Why

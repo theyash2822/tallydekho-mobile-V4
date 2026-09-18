@@ -40,6 +40,7 @@ import {
   toSafePdfImageSrc,
   BankLedgerRow,
 } from './voucherPdfConfig';
+import { assertCanSharePdf } from './rbasGate';
 
 /** Voucher-config entry id per document type (mirrors settings/voucher-config.tsx). */
 export const DOC_TYPE_TO_CONFIG_ID: Record<string, string> = {
@@ -206,6 +207,7 @@ export async function shareVoucherPdf(
     fallback?: () => Promise<void>;
   } = {}
 ): Promise<void> {
+  if (!assertCanSharePdf()) return;
   const renderOptions = opts.options ?? await resolvePdfOptions(doc, opts.companyGuid);
   const uri = await buildVoucherPdf(doc, renderOptions);
   opts.onBeforeShare?.();
@@ -258,6 +260,7 @@ export async function shareStatementPdf(
   input: StatementInput,
   opts: { fileName?: string; onBeforeShare?: () => void } = {}
 ): Promise<void> {
+  if (!assertCanSharePdf()) return;
   const html = renderTallyStatementHTML(input);
   const { uri } = await Print.printToFileAsync({ html, base64: false, ...A4 });
   opts.onBeforeShare?.();
@@ -278,6 +281,7 @@ export async function shareMultiStatementPdf(
   inputs: StatementInput[],
   opts: { fileName?: string; onBeforeShare?: () => void } = {}
 ): Promise<void> {
+  if (!assertCanSharePdf()) return;
   if (!inputs.length) throw new Error('No ledgers to share');
   if (inputs.length === 1) {
     await shareStatementPdf(inputs[0], opts);
@@ -320,6 +324,7 @@ export async function shareMasterPdf(
   company: MasterSheetCompany = {},
   opts: { onBeforeShare?: () => void } = {}
 ): Promise<void> {
+  if (!assertCanSharePdf()) return;
   const html = renderMasterSheetHTML(master, company);
   const { uri } = await Print.printToFileAsync({ html, base64: false, ...A4 });
   opts.onBeforeShare?.();
@@ -359,6 +364,7 @@ export async function shareCompliancePdf(
   company: ComplianceCompany = {},
   opts: { onBeforeShare?: () => void } = {}
 ): Promise<void> {
+  if (!assertCanSharePdf()) return;
   const { uri, name } = await buildCompliancePdfFile(kind, voucher, company);
   opts.onBeforeShare?.();
 

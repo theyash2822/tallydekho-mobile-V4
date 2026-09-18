@@ -9,6 +9,8 @@ import { tMetricLabel } from '../i18n/labelMap';
 import { MetricTrendBadge } from './MetricTrendBadge';
 import ShimmerPlaceholder from './ShimmerPlaceholder';
 import { safePush } from '../utils/safeNavigation';
+import { useWorkspace } from '../context/WorkspaceContext';
+import { formatSensitive } from '../utils/sensitiveDisplay';
 
 // ── Compact large amounts so they never clip in the narrow tile ──────────────
 const compactAmount = (raw: string): string => {
@@ -24,6 +26,17 @@ const IDENTITY: Record<string, { accent: string; tint: string }> = {
   sales:     { accent: COLORS.positive, tint: COLORS.positiveBg },
   purchases: { accent: COLORS.info,     tint: COLORS.infoBg },
   expenses:  { accent: COLORS.negative, tint: COLORS.negativeBg },
+};
+
+const METRIC_CAPS: Record<string, string> = {
+  sales: 'sales.view',
+  purchases: 'purchase.view',
+  expenses: 'expenses.view',
+};
+
+/** Map module tile → sensitive policy key (BE masking authoritative). */
+const METRIC_SENSITIVE: Record<string, string> = {
+  purchases: 'purchase_values',
 };
 
 interface Metric {
@@ -46,14 +59,31 @@ export default function ModuleTiles({ metrics, isLoading }: Props) {
   const router = useRouter();
   const { t } = useTranslation();
   const { formatAmountCompact } = useSettings();
+  const { hasCapability, sensitivePolicies } = useWorkspace();
 
   const displayAmount = (item: Metric): string => {
-    if (item.amount_raw != null && Number.isFinite(item.amount_raw)) {
-      return formatAmountCompact(Math.round(item.amount_raw));
-    }
-    if (item.amount) return compactAmount(item.amount);
-    return '—';
+    const policyKey = METRIC_SENSITIVE[item.id];
+    const visible = () => {
+      if (item.amount_raw != null && Number.isFinite(item.amount_raw)) {
+        return formatAmountCompact(Math.round(item.amount_raw));
+      }
+      if (item.amount) return compactAmount(item.amount);
+      return '—';
+    };
+    if (!policyKey) return visible();
+    const formatted = formatSensitive(
+      sensitivePolicies,
+      policyKey,
+      item.amount_raw ?? item.amount,
+      () => visible(),
+    );
+    return formatted ?? '—';
   };
+
+  const visible = (metrics || []).filter((item) => {
+    const cap = METRIC_CAPS[item.id];
+    return !cap || hasCapability(cap);
+  });
 
   if (isLoading) {
     return (
@@ -72,7 +102,7 @@ export default function ModuleTiles({ metrics, isLoading }: Props) {
 
   return (
     <View style={s.row}>
-      {metrics.map(item => {
+      {visible.map(item => {
         const id = IDENTITY[item.id] || { accent: COLORS.textSecondary, tint: COLORS.pageBg };
         const isFlat = Number(item.change) === 0;
         return (

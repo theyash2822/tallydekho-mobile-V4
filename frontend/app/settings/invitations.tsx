@@ -30,11 +30,13 @@ export default function InvitationsScreen() {
           <Text style={s.empty}>No pending invitations.</Text>
         ) : (
           invitations.map((inv: any) => {
-            const id = inv.id;
-            const wsName = inv.workspace_name || inv.workspaceName || inv.workspace?.name || 'Workspace';
-            const roleName =
+            const id = String(inv?.id || '');
+            if (!id) return null;
+            const wsName = String(inv.workspace_name || inv.workspaceName || inv.workspace?.name || 'Workspace');
+            const roleName = String(
               inv.role_display_name || inv.role_name || inv.roleName
-              || inv.role?.display_name || inv.role?.displayName || 'Member';
+              || inv.role?.display_name || inv.role?.displayName || 'Member'
+            );
             return (
               <View key={id} style={s.card}>
                 <Text style={s.title}>{wsName} invited you</Text>

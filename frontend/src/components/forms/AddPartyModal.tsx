@@ -7,6 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 import FormField from './FormField';
+import { useRbasCreate } from '../../hooks/useRbasCreate';
+import Toast from 'react-native-toast-message';
 
 export interface PartyData {
   name: string;
@@ -33,11 +35,21 @@ const empty = (): PartyData => ({
 
 export default function AddPartyModal({ visible, type, onSave, onClose }: Props) {
   const insets = useSafeAreaInsets();
+  const { assertCanCreate } = useRbasCreate();
   const [form, setForm] = useState<PartyData>(empty());
   const label = type === 'customer' ? 'Customer' : 'Vendor';
   const upd = (f: keyof PartyData, v: any) => setForm(p => ({ ...p, [f]: v }));
 
-  const handleSave = () => { onSave(form); setForm(empty()); onClose(); };
+  const handleSave = () => {
+    if (!assertCanCreate('ledger_master.create')) return;
+    if (!form.name.trim()) {
+      Toast.show({ type: 'error', text1: 'Required', text2: `${label} name is required.` });
+      return;
+    }
+    onSave(form);
+    setForm(empty());
+    onClose();
+  };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>

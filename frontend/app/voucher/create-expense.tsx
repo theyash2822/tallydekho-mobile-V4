@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import RegularOptionalToggle from '../../src/components/forms/RegularOptionalToggle';
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import { useAuth } from '../../src/context/AuthContext';
@@ -21,8 +21,10 @@ import {
   createPaymentVoucher, getLedgers, getBankLedgers, getParties,
 } from '../../src/services/api';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
+import { useRbasCreate } from '../../src/hooks/useRbasCreate';
 import { shareVoucherPdfByRef } from '../../src/utils/voucherPdf';
 import { useTranslation } from 'react-i18next';
+import { useRequireCapability } from '../../src/components/RequireCapability';
 
 const todayStr = () => {
   const d = new Date();
@@ -49,6 +51,7 @@ function parentContainsCash(row: any): boolean {
 }
 
 export default function CreateExpenseVoucher() {
+  const allowed = useRequireCapability('expense.create');
   const { t } = useTranslation();
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
@@ -57,7 +60,7 @@ export default function CreateExpenseVoucher() {
   const { currencySymbol } = useSettings();
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
 
-  const [entryType, setEntryType] = useState<EntryType>('regular');
+  const {entryMode, entryType, setEntryType, scopeParties, assertCanCreate} = useRbasCreate();
   const [date, setDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);
   useEffect(() => {
@@ -99,14 +102,14 @@ export default function CreateExpenseVoucher() {
           data: l,
         });
       };
-      const ledgerRows = ledgersRes?.data || ledgersRes?.ledgers || [];
+      const ledgerRows = scopeParties(ledgersRes?.data || ledgersRes?.ledgers || []);
       (Array.isArray(ledgerRows) ? ledgerRows : []).filter(parentContainsExpense).forEach(addRow);
-      (partiesRes?.data || []).forEach(addRow);
+      scopeParties(partiesRes?.data || []).forEach(addRow);
       setExpenseLedgers(
         Array.from(byName.values()).sort((a, b) => a.label.localeCompare(b.label)),
       );
 
-      const bankRows = banksRes?.data || [];
+      const bankRows = scopeParties(banksRes?.data || []);
       setPaidFromOptions(
         (bankRows || []).map((l: any) => ({
           label: l.name,
@@ -121,7 +124,7 @@ export default function CreateExpenseVoucher() {
     } finally {
       setLoading(false);
     }
-  }, [company?.guid]);
+  }, [company?.guid, scopeParties]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -137,10 +140,7 @@ export default function CreateExpenseVoucher() {
 
   const handleSubmit = async () => {
     if (canSubmit) { Alert.alert(t('voucher.required'), canSubmit); return; }
-    if (!isPaired) {
-      Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Pair with Tally Desktop first.' });
-      return;
-    }
+    if (!assertCanCreate('expense.create')) return;
     setSubmitting(true);
     try {
       const paymentMethod = parentContainsCash(paidFromData) ? 'Cash' : 'Bank';
@@ -173,6 +173,8 @@ export default function CreateExpenseVoucher() {
     }
   };
 
+  if (!allowed) return null;
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       <View style={s.hdr}>
@@ -180,7 +182,7 @@ export default function CreateExpenseVoucher() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.hdrTitle}>{t('voucher.expenseTitle')}</Text>
-        <RegularOptionalToggle value={entryType} onChange={setEntryType} />
+        <RegularOptionalToggle value={entryType} onChange={setEntryType} entryMode={entryMode} />
       </View>
 
       <KeyboardAvoidingView

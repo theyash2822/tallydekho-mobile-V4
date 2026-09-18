@@ -10,10 +10,24 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { pairWithTally } from '../../src/services/api';
+import { listMyWorkspaces, pairWorkspaceTally } from '../../src/services/api';
 import { navigateAfterAuth } from '../../src/utils/onboardingNav';
 
 type SyncStep = 'prompt' | 'input' | 'syncing' | 'done';
+
+async function resolvePersonalWorkspaceId(): Promise<string | null> {
+  const res = await listMyWorkspaces();
+  const list = res?.data?.workspaces || res?.data || res?.workspaces || [];
+  const rows = Array.isArray(list) ? list : [];
+  const mt = (w: any) => String(w.membershipType || w.membership_type || '').toUpperCase();
+  const isBase = (w: any) => !!(w.isBase ?? w.is_base);
+  const personal =
+    rows.find((w: any) => isBase(w) && mt(w) === 'OWNER')
+    || rows.find((w: any) => mt(w) === 'OWNER')
+    || rows.find((w: any) => isBase(w))
+    || rows[0];
+  return personal?.id || personal?.workspaceId || null;
+}
 
 export default function TallySyncScreen() {
   const router = useRouter();
@@ -38,9 +52,16 @@ export default function TallySyncScreen() {
         setError('Session expired. Please login again.');
         return;
       }
-      const res = await pairWithTally(pairKey.trim());
+      const workspaceId = await resolvePersonalWorkspaceId();
+      if (!workspaceId) {
+        setStep('input');
+        setError('No Workspace found. Please restart signup.');
+        return;
+      }
+      const res = await pairWorkspaceTally(workspaceId, pairKey.trim());
       setProgress(80);
-      if (res?.success && res?.data?.is_paired) {
+      const ok = res?.success && (res?.data?.is_paired || res?.data?.awaiting_desktop_claim || res?.data?.workspace_id);
+      if (ok) {
         setIsPaired(true);
         if (res.data.company) {
           await setCompany({ guid: res.data.company.guid, name: res.data.company.name, gstin: res.data.company.gstin ?? undefined });
@@ -53,11 +74,18 @@ export default function TallySyncScreen() {
         await navigateAfterAuth(router);
       } else {
         setStep('input');
-        setError('Pairing failed. Please check the code and try again.');
+        setError(res?.error?.message || 'Pairing failed. Please check the code and try again.');
       }
     } catch (err: any) {
       setStep('input');
-      setError(err?.message || 'Could not connect to Tally. Check your code.');
+      const code = err?.code || err?.error?.code;
+      if (code === 'WORKSPACE_ALREADY_HAS_DESKTOP') {
+        setError(err?.message || 'This Workspace already has a connected Tally Desktop. If the old computer is unavailable, use Restore / Replace Computer.');
+      } else if (code === 'DEVICE_ALREADY_PAIRED') {
+        setError(err?.message || 'This Tally Desktop is already connected to another TallyDekho workspace.');
+      } else {
+        setError(err?.message || 'Could not connect to Tally. Check your code.');
+      }
     }
   };
 

@@ -5,13 +5,16 @@ import {
   Platform, Alert, TextInput, Modal, TextInputProps, ActivityIndicator, Keyboard, KeyboardAvoidingView,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
+import { useRequireCapability } from '../../src/components/RequireCapability';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, usePathname } from 'expo-router';
 import { safePush } from '../../src/utils/safeNavigation';
 import { barcodePicker } from '../../src/utils/barcodePicker';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { useRbasCreate } from '../../src/hooks/useRbasCreate';
 import { useAuth } from '../../src/context/AuthContext';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
 import {
   getParties, createSalesInvoice, createProformaInvoice, convertProformaInvoice, getStocks, getWarehouses,
   getSalesLedgerAccounts, getTaxLedgers, createTallyParty, lookupBarcode,
@@ -29,7 +32,7 @@ import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import PartyForm, { PartyFormRef } from '../../src/components/forms/PartyForm';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
-import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import RegularOptionalToggle, { EntryType, defaultEntryTypeForMode } from '../../src/components/forms/RegularOptionalToggle';
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
 import DatePickerModal, { formatDMY, parseDMY } from '../../src/components/forms/DatePickerModal';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
@@ -742,6 +745,7 @@ function ItemRow({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CreateSalesInvoiceScreen() {
+  const allowed = useRequireCapability('sales_invoice.create');
   const { t } = useTranslation();
   const router = useRouter();
   const scrollRef = useRef<any>(null);
@@ -761,13 +765,22 @@ export default function CreateSalesInvoiceScreen() {
   };
   const insets = useSafeAreaInsets();
   const { company, selectedFY } = useAuth();
+  const { assertCanCreate } = useRbasCreate();
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
   const pathname = usePathname();
   const isProforma = (pathname || '').includes('create-proforma');
   const draftPrefix = isProforma ? 'tdproforma_draft' : 'tdinvoice_draft';
 
   // ── Core state ───────────────────────────────────────────────────────────────
-  const [entryType, setEntryType] = useState<EntryType>(isProforma ? 'optional' : 'regular');
+  const { entryMode, filterScoped, hasCapability } = useWorkspace();
+  const canSharePdf = hasCapability('document.pdf.generate');
+  const [entryType, setEntryType] = useState<EntryType>(
+    isProforma ? 'optional' : defaultEntryTypeForMode(entryMode)
+  );
+  useEffect(() => {
+    if (isProforma) return;
+    setEntryType(defaultEntryTypeForMode(entryMode));
+  }, [entryMode, isProforma]);
   const [ledger, setLedger] = useState('');
   const [invoiceNo] = useState('');
   const [date, setDate] = useState(todayStr());
@@ -868,7 +881,7 @@ export default function CreateSalesInvoiceScreen() {
   useEffect(() => {
     if (!company?.guid) return;
     getParties(company.guid).then((res: any) => {
-      const list = res?.data || [];
+      const list = filterScoped(res?.data || [], 'ledgers');
       if (list.length > 0) setParties(list.map((p: any) => ({
         label: p.name,
         value: p.name,
@@ -883,7 +896,7 @@ export default function CreateSalesInvoiceScreen() {
         },
       })));
     }).catch(() => {});
-  }, [company?.guid]);
+  }, [company?.guid, filterScoped]);
 
   // Load company profile once — used to prefill Dispatch From address/pincode
   useEffect(() => {
@@ -905,11 +918,11 @@ export default function CreateSalesInvoiceScreen() {
   useEffect(() => {
     if (!company?.guid) return;
     getWarehouses(company.guid).then((res: any) => {
-      const list: Warehouse[] = res?.data || res?.warehouses || [];
+      const list: Warehouse[] = filterScoped(res?.data || res?.warehouses || [], 'godowns');
       setWarehouses(list);
       if (list.length === 1) setItems(prev => prev.map(i => ({ ...i, warehouse: list[0].name })));
     }).catch(() => {});
-  }, [company?.guid]);
+  }, [company?.guid, filterScoped]);
 
   useEffect(() => {
     if (!company?.guid) return;
@@ -1397,6 +1410,7 @@ export default function CreateSalesInvoiceScreen() {
 
   // ── Submit ────────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
+    if (!assertCanCreate('sales_invoice.create')) return;
     // Dismiss any open keyboard before validation / submit — prevents the keyboard from
     // hovering over the success modal when user submits with a text field still focused.
     Keyboard.dismiss();
@@ -1566,6 +1580,8 @@ export default function CreateSalesInvoiceScreen() {
   }, [company?.guid, submitResult, party, ledger, date, refNo, narration, termsText, items, logEntries, roundOffLedger, roundOffAmount, dueDate, router]);
 
   // ── Render ────────────────────────────────────────────────────────────────────
+  if (!allowed) return null;
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       {/* Success Overlay */}
@@ -1614,6 +1630,7 @@ export default function CreateSalesInvoiceScreen() {
             </TouchableOpacity>
 
             {/* Share PDF — waits up to 10s for Tally number (TALLY_PRIME_SERIES) */}
+            {canSharePdf ? (
             <TouchableOpacity
               style={[ss.pdfBtn, sharePdfLoading && { opacity: 0.7 }]}
               activeOpacity={0.85}
@@ -1652,6 +1669,7 @@ export default function CreateSalesInvoiceScreen() {
                 : <Ionicons name="document-outline" size={18} color={COLORS.white} />}
               <Text style={ss.pdfBtnTxt}>{sharePdfLoading ? 'PDF is creating...' : 'Share PDF'}</Text>
             </TouchableOpacity>
+            ) : null}
 
             {isProforma && !convertProformaTdkRef && (
               <TouchableOpacity
@@ -1704,7 +1722,7 @@ export default function CreateSalesInvoiceScreen() {
                 : (invoiceNo || 'INV-Auto'))}
           </Text>
         </View>
-        {!isProforma && !convertProformaTdkRef && <RegularOptionalToggle value={entryType} onChange={setEntryType} />}
+        {!isProforma && !convertProformaTdkRef && <RegularOptionalToggle value={entryType} onChange={setEntryType} entryMode={entryMode} />}
       </View>
 
       <StepIndicator step={step} />

@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import RegularOptionalToggle from '../../src/components/forms/RegularOptionalToggle';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
@@ -23,12 +23,14 @@ import {
   createJournalVoucher, getLedgers,
 } from '../../src/services/api';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
+import { useRbasCreate } from '../../src/hooks/useRbasCreate';
 import { shareVoucherPdfByRef } from '../../src/utils/voucherPdf';
 import { useTranslation } from 'react-i18next';
 import {
   indiaIncomeTaxDepreciationRates,
   IndiaDepreciationRate,
 } from '../../src/constants/indiaDepreciationRates';
+import { useRequireCapability } from '../../src/components/RequireCapability';
 
 const todayStr = () => {
   const d = new Date();
@@ -45,6 +47,7 @@ const dmyToISO = (dmy: string): string => {
 const fmtINR = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
 
 export default function CreateJournalVoucher() {
+  const allowed = useRequireCapability('journal.create');
   const { t } = useTranslation();
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
@@ -52,7 +55,7 @@ export default function CreateJournalVoucher() {
   const { company, isPaired, selectedFY } = useAuth();
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
 
-  const [entryType, setEntryType] = useState<EntryType>('regular');
+  const {entryMode, entryType, setEntryType, scopeParties, assertCanCreate} = useRbasCreate();
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
 
   const [date, setDate] = useState(todayStr());
@@ -92,7 +95,7 @@ export default function CreateJournalVoucher() {
         : {};
       const res: any = await getLedgers(company.guid, { limit: '2000', page: '1', ...fyParams });
       const raw = res?.data ?? res?.rows ?? (Array.isArray(res) ? res : []);
-      const list = (Array.isArray(raw) ? raw : []).map((l: any) => {
+      const list = scopeParties(Array.isArray(raw) ? raw : []).map((l: any) => {
         const close = parseFloat(l.closing_balance);
         const hasClose = Number.isFinite(close);
         const balHint = hasClose
@@ -110,7 +113,7 @@ export default function CreateJournalVoucher() {
     } catch {
       setLedgers([]);
     }
-  }, [company?.guid, selectedFY?.startDate, selectedFY?.endDate]);
+  }, [company?.guid, selectedFY?.startDate, selectedFY?.endDate, scopeParties]);
 
   useEffect(() => { loadLedgers(); }, [loadLedgers]);
 
@@ -183,10 +186,7 @@ export default function CreateJournalVoucher() {
 
   const handleSubmit = async () => {
     if (canSubmit) { Alert.alert(t('voucher.required'), canSubmit); return; }
-    if (!isPaired) {
-      Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Pair with Tally Desktop first.' });
-      return;
-    }
+    if (!assertCanCreate('journal.create')) return;
     setSubmitting(true);
     try {
       const payload: any = {
@@ -243,6 +243,8 @@ export default function CreateJournalVoucher() {
     setCrLedger(drLedger);
   };
 
+  if (!allowed) return null;
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       <View style={s.hdr}>
@@ -250,7 +252,7 @@ export default function CreateJournalVoucher() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.hdrTitle}>{t('voucher.journalTitle')}</Text>
-        <RegularOptionalToggle value={entryType} onChange={setEntryType} />
+        <RegularOptionalToggle value={entryType} onChange={setEntryType} entryMode={entryMode} />
       </View>
 
       <KeyboardAvoidingView

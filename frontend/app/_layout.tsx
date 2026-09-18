@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View } from 'react-native';
+import { View, LogBox } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +21,15 @@ import { ONBOARDING_COMPLETED_KEY } from '../src/utils/onboardingNav';
 import { COLORS } from '../src/constants/colors';
 // Initialize i18n before anything renders
 import '../src/i18n';
+
+// Dev-only noise: Expo CLI tunnel + transient socket reconnects must not block HR UX
+if (__DEV__) {
+  LogBox.ignoreLogs([
+    'Cannot connect to Expo CLI',
+    '[Socket] connect error',
+    'websocket error',
+  ]);
+}
 
 // Prevent splash screen from auto-hiding while fonts load
 SplashScreen.preventAutoHideAsync().catch(() => {});

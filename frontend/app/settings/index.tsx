@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Modal, Animated, Switch,
+  Modal, Animated, Switch, TextInput, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,6 +43,7 @@ const SECTIONS: Section[] = [
     icon: 'person-circle-outline', iconColor: '#7C3AED', iconBg: '#F5F3FF',
     subItems: [
       { id: 'profile', label: 'Profile', icon: 'person-outline', route: '/settings/profile' },
+      { id: 'my_access', label: 'My Access', icon: 'key-outline', route: '/settings/my-access' },
       { id: 'company', label: 'Company Information', icon: 'business-outline', route: '/settings/company' },
       { id: 'license', label: 'License & Credits', icon: 'card-outline', route: '/settings/license' },
       { id: 'approvals', label: 'Approvals', icon: 'shield-checkmark-outline', route: '/settings/approvals' },
@@ -94,6 +95,7 @@ const SECTIONS: Section[] = [
 // ── Sub-item translation key map ─────────────────────────────────────────────
 const SUBITEM_KEY: Record<string, string> = {
   profile:      'settings.profile',
+  my_access:    'My Access',
   company:      'settings.companyInfo',
   license:      'settings.license',
   approvals:    'settings.approvals',
@@ -227,14 +229,21 @@ export default function SettingsScreen() {
     workspace,
     workspaceId,
     switchWorkspace,
+    renameWorkspace,
     demoMode,
     pairingStatus,
     invitations,
+    isWorkspaceUnavailable,
+    isOwnerOrAdmin,
+    isOwner,
   } = useWorkspace();
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState<SectionId | null>('account');
   const [showLogoutSheet, setShowLogoutSheet] = useState(false);
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameText, setRenameText] = useState('');
+  const [renameBusy, setRenameBusy] = useState(false);
   // Stores all toggle values keyed by toggleKey
   const [toggles, setToggles] = useState<Record<string, boolean>>({});
 
@@ -298,9 +307,13 @@ export default function SettingsScreen() {
               <Ionicons name="chevron-down" size={14} color={COLORS.textTertiary} />
             </TouchableOpacity>
             {demoMode ? (
-              <Text style={styles.demoHint}>Demo Mode · Tally {pairingStatus === 'UNPAIRED' ? 'not paired' : 'reconnecting'}</Text>
+              <Text style={styles.demoHint}>
+                {pairingStatus === 'RECONNECTING'
+                  ? 'Paired · waiting for first sync'
+                  : 'Demo Mode · Tally not paired'}
+              </Text>
             ) : null}
-            {invitations.length > 0 ? (
+            {invitations?.length > 0 ? (
               <TouchableOpacity onPress={() => safePush(router, '/settings/invitations' as any)}>
                 <Text style={styles.inviteHint}>{invitations.length} pending invitation{invitations.length > 1 ? 's' : ''}</Text>
               </TouchableOpacity>
@@ -334,7 +347,13 @@ export default function SettingsScreen() {
                 {/* Sub-items */}
                 {isOpen && (
                   <View style={styles.subItems}>
-                    {section.subItems.map((sub, idx) => {
+                    {section.subItems
+                      .filter((sub) => {
+                        if ((sub.id === 'ewaybill' || sub.id === 'einvoice') && !isOwnerOrAdmin) return false;
+                        if (sub.id === 'approvals' && !isOwnerOrAdmin) return false;
+                        return true;
+                      })
+                      .map((sub, idx, arr) => {
                       const isToggleItem = !!sub.toggleKey;
                       const toggleVal = sub.toggleKey === 'kpi_autoscroll'
                         ? settings.kpi_autoscroll
@@ -342,7 +361,7 @@ export default function SettingsScreen() {
                       return (
                         <TouchableOpacity
                           key={sub.id}
-                          style={[styles.subItem, idx < section.subItems.length - 1 && styles.subItemBorder]}
+                          style={[styles.subItem, idx < arr.length - 1 && styles.subItemBorder]}
                           onPress={() => {
                             if (isToggleItem && sub.toggleKey) handleToggle(sub.toggleKey, !toggleVal);
                             else if (sub.route) safePush(router, sub.route as any);
@@ -357,12 +376,21 @@ export default function SettingsScreen() {
                           </View>
                           <View style={styles.subRight}>
                             {sub.badge && (() => {
-                              // Resolve dynamic tally status badge
+                              // Resolve dynamic tally status badge from Workspace pairingStatus
+                              const ps = String(pairingStatus || '').toUpperCase();
                               const badgeText  = sub.badge === '__TALLY_STATUS__'
-                                ? (isPaired ? 'Paired' : 'Unpaired')
+                                ? (ps === 'CONNECTED'
+                                  ? 'Connected'
+                                  : ps === 'RECONNECTING'
+                                    ? 'Waiting for sync'
+                                    : 'Unpaired')
                                 : sub.badge;
                               const badgeColor = sub.badgeColor === '__TALLY_COLOR__'
-                                ? (isPaired ? '#2D7D46' : '#C0392B')
+                                ? (ps === 'CONNECTED'
+                                  ? '#2D7D46'
+                                  : ps === 'RECONNECTING'
+                                    ? '#D97706'
+                                    : '#C0392B')
                                 : (sub.badgeColor ?? '#2D7D46');
                               return (
                                 <View style={[styles.badge, { backgroundColor: badgeColor + '20' }]}>
@@ -416,31 +444,98 @@ export default function SettingsScreen() {
 
       <Modal visible={showWorkspacePicker} transparent animationType="slide" onRequestClose={() => setShowWorkspacePicker(false)}>
         <TouchableOpacity style={styles.wsOverlay} activeOpacity={1} onPress={() => setShowWorkspacePicker(false)}>
-          <View style={styles.wsSheet}>
+          <View style={styles.wsSheet} onStartShouldSetResponder={() => true}>
             <Text style={styles.wsTitle}>Switch Workspace</Text>
             {workspaces.map((w) => {
               const selected = w.id === workspaceId;
+              const unavailable = isWorkspaceUnavailable(w);
+              const canRename = String(w.membershipType || '').toUpperCase() === 'OWNER';
+              const editing = renamingId === w.id;
               return (
-                <TouchableOpacity
+                <View
                   key={w.id}
-                  style={[styles.wsItem, selected && styles.wsItemSelected]}
-                  onPress={async () => {
-                    setShowWorkspacePicker(false);
-                    if (w.id !== workspaceId) await switchWorkspace(w.id);
-                  }}
+                  style={[styles.wsItem, selected && styles.wsItemSelected, unavailable && { opacity: 0.55 }]}
                 >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.wsItemName}>{w.name}</Text>
-                    <Text style={styles.wsItemMeta}>
-                      {(w.membershipType || 'MEMBER')}
-                      {w.tallyConnection ? ` · ${w.tallyConnection}` : ''}
-                    </Text>
-                  </View>
-                  {selected ? <Ionicons name="checkmark-circle" size={20} color={COLORS.brandPrimary} /> : null}
-                </TouchableOpacity>
+                  {editing ? (
+                    <View style={{ flex: 1, gap: 8 }}>
+                      <TextInput
+                        value={renameText}
+                        onChangeText={setRenameText}
+                        autoFocus
+                        style={styles.wsRenameInput}
+                        placeholder="Workspace name"
+                        placeholderTextColor={COLORS.textTertiary}
+                      />
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity
+                          style={styles.wsRenameBtn}
+                          disabled={renameBusy}
+                          onPress={async () => {
+                            setRenameBusy(true);
+                            try {
+                              await renameWorkspace(w.id, renameText);
+                              setRenamingId(null);
+                              Alert.alert('Renamed', 'Workspace name updated');
+                            } catch (e: any) {
+                              Alert.alert('Rename failed', e?.message || 'Try again');
+                            } finally {
+                              setRenameBusy(false);
+                            }
+                          }}
+                        >
+                          {renameBusy ? <ActivityIndicator size="small" color="#fff" /> : (
+                            <Text style={styles.wsRenameBtnTxt}>Save</Text>
+                          )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.wsRenameBtn, styles.wsRenameBtnGhost]}
+                          onPress={() => setRenamingId(null)}
+                        >
+                          <Text style={[styles.wsRenameBtnTxt, { color: COLORS.textPrimary }]}>Cancel</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : (
+                    <>
+                      <TouchableOpacity
+                        style={{ flex: 1 }}
+                        disabled={unavailable}
+                        onPress={async () => {
+                          setShowWorkspacePicker(false);
+                          if (w.id !== workspaceId) await switchWorkspace(w.id);
+                        }}
+                      >
+                        <Text style={styles.wsItemName}>{w.name}</Text>
+                        <Text style={styles.wsItemMeta}>
+                          {unavailable
+                            ? 'Access unavailable — Contact your administrator'
+                            : `${
+                                String(w.membershipType || '').toUpperCase() === 'OWNER'
+                                  ? 'Owner'
+                                  : (w.roleDisplayName || w.role_display_name || w.roleSystemKey || w.role_system_key || 'Member')
+                              }${w.tallyConnection ? ` · ${w.tallyConnection}` : ''}`}
+                        </Text>
+                      </TouchableOpacity>
+                      {canRename && !unavailable ? (
+                        <TouchableOpacity
+                          hitSlop={10}
+                          onPress={() => {
+                            setRenamingId(w.id);
+                            setRenameText(w.name);
+                          }}
+                          style={{ padding: 6 }}
+                        >
+                          <Ionicons name="pencil-outline" size={18} color={COLORS.brandPrimary} />
+                        </TouchableOpacity>
+                      ) : null}
+                      {selected && !unavailable ? <Ionicons name="checkmark-circle" size={20} color={COLORS.brandPrimary} /> : null}
+                      {unavailable ? <Ionicons name="lock-closed-outline" size={18} color={COLORS.textTertiary} /> : null}
+                    </>
+                  )}
+                </View>
               );
             })}
-            <TouchableOpacity style={styles.wsCancel} onPress={() => setShowWorkspacePicker(false)}>
+            <TouchableOpacity style={styles.wsCancel} onPress={() => { setRenamingId(null); setShowWorkspacePicker(false); }}>
               <Text style={styles.wsCancelTxt}>Cancel</Text>
             </TouchableOpacity>
           </View>
@@ -496,6 +591,17 @@ const styles = StyleSheet.create({
   wsItemSelected: { backgroundColor: COLORS.pageBg, marginHorizontal: -8, paddingHorizontal: 8, borderRadius: 8 },
   wsItemName: { fontSize: TYPOGRAPHY.base, fontWeight: '600', color: COLORS.textPrimary },
   wsItemMeta: { fontSize: 11, color: COLORS.textTertiary, marginTop: 2 },
+  wsRenameInput: {
+    borderWidth: 1, borderColor: COLORS.borderStrong, borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 10,
+    fontSize: TYPOGRAPHY.sm, color: COLORS.textPrimary, backgroundColor: COLORS.pageBg,
+  },
+  wsRenameBtn: {
+    backgroundColor: COLORS.brandPrimary, borderRadius: 8,
+    paddingHorizontal: 14, paddingVertical: 8, minWidth: 72, alignItems: 'center',
+  },
+  wsRenameBtnGhost: { backgroundColor: COLORS.pageBg, borderWidth: 1, borderColor: COLORS.borderDefault },
+  wsRenameBtnTxt: { color: '#fff', fontWeight: '700', fontSize: 13 },
   wsCancel: { marginTop: 16, alignItems: 'center', paddingVertical: 12, backgroundColor: COLORS.pageBg, borderRadius: 12 },
   wsCancelTxt: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary },
 

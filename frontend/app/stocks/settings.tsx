@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, KeyboardAvoidingView, TouchableOpacity, StyleSheet,
   TextInput, ActivityIndicator,
-  LayoutAnimation, UIManager, Platform,
+  LayoutAnimation, Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,10 +14,8 @@ import { useAuth } from '../../src/context/AuthContext';
 import { getInventorySettings, saveInventorySettings } from '../../src/services/api';
 import { useTranslation } from 'react-i18next';
 
-// Enable LayoutAnimation on Android
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+// LayoutAnimation works without UIManager.setLayoutAnimationEnabledExperimental
+// on New Architecture (Expo SDK 53+); that API is a no-op and only logs a warning.
 
 const AMBER = '#A89060';
 

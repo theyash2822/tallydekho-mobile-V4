@@ -23,6 +23,8 @@ import {
   resolvePeriodDates,
   type DashboardPeriod,
 } from '../../src/utils/periodDates';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
+import { formatSensitive } from '../../src/utils/sensitiveDisplay';
 
 const { width: SW } = Dimensions.get('window');
 const PERIOD_TABS = ['7D', '1M', '3M', '6M'] as const;
@@ -94,7 +96,14 @@ export default function BankBalanceScreen() {
   const router = useRouter();
   const { company, selectedFY, lastSyncAt } = useAuth();
   const { formatAmountCompact, formatAmount } = useSettings();
+  const { sensitivePolicies } = useWorkspace();
   const companyGuid = company?.guid;
+  const fmtBank = (n: number) =>
+    formatSensitive(sensitivePolicies, 'bank_balance', n, (v) => formatAmountCompact(Math.round(v as number)))
+    ?? '—';
+  const fmtBankFull = (n: number) =>
+    formatSensitive(sensitivePolicies, 'bank_balance', n, (v) => formatAmount(Math.round(v as number)))
+    ?? '—';
 
   const [period, setPeriod] = useState<(typeof PERIOD_TABS)[number]>('7D');
   const [apiData, setApiData] = useState<any>(null);
@@ -188,7 +197,7 @@ export default function BankBalanceScreen() {
         const positive = c.trend_positive != null ? !!c.trend_positive : Number(trend) >= 0;
         const amount = c.id === 'count'
           ? String(Math.round(Number(c.amount) || banks.length))
-          : formatAmountCompact(Math.round(Number(c.amount) || 0));
+          : fmtBank(Number(c.amount) || 0);
         return {
           id: String(c.id),
           icon: icons[c.id] || 'stats-chart-outline',
@@ -203,12 +212,12 @@ export default function BankBalanceScreen() {
     const inflow = Number(apiData?.today_inflow) || 0;
     const outflow = Number(apiData?.today_outflow) || 0;
     return [
-      { id: 'total', icon: 'wallet-outline', label: 'Book Balance (Tally)', amount: formatAmountCompact(Math.round(total)), trend: null, positive: true },
-      { id: 'in', icon: 'arrow-down-circle-outline', label: 'Inflow Today', amount: formatAmountCompact(Math.round(inflow)), trend: null, positive: true },
-      { id: 'out', icon: 'arrow-up-circle-outline', label: 'Outflow Today', amount: formatAmountCompact(Math.round(outflow)), trend: null, positive: true },
+      { id: 'total', icon: 'wallet-outline', label: 'Book Balance (Tally)', amount: fmtBank(total), trend: null, positive: true },
+      { id: 'in', icon: 'arrow-down-circle-outline', label: 'Inflow Today', amount: fmtBank(inflow), trend: null, positive: true },
+      { id: 'out', icon: 'arrow-up-circle-outline', label: 'Outflow Today', amount: fmtBank(outflow), trend: null, positive: true },
       { id: 'count', icon: 'business-outline', label: 'Bank Accounts', amount: String(banks.length), trend: null, positive: true },
     ];
-  }, [apiData, banks, formatAmountCompact]);
+  }, [apiData, banks, fmtBank]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -289,7 +298,7 @@ export default function BankBalanceScreen() {
                           <View>
                             <Text style={s.bankBalLabel}>Balance</Text>
                             <Text style={s.bankBal} numberOfLines={1} adjustsFontSizeToFit>
-                              {formatAmount(Math.round(bank.balance))}
+                              {fmtBankFull(bank.balance)}
                             </Text>
                           </View>
                           <View style={s.bankMetaCol}>
@@ -359,7 +368,7 @@ export default function BankBalanceScreen() {
                       </Text>
                     </View>
                     <Text style={[s.txAmt, { color: isInflow ? COLORS.positive : COLORS.negative }]}>
-                      {formatAmount(Math.round(t.amount))} {t.type}
+                      {fmtBankFull(t.amount)} {t.type}
                     </Text>
                   </TouchableOpacity>
                 );

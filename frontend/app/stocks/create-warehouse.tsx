@@ -9,9 +9,12 @@ import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
 import { createWarehouse, getWarehouses } from '../../src/services/api';
 import FormDropdown from '../../src/components/forms/FormDropdown';
 import { useTranslation } from 'react-i18next';
+import { useRequireCapability } from '../../src/components/RequireCapability';
+import { useRbasCreate } from '../../src/hooks/useRbasCreate';
 
 const WEB = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
 const TOP_LEVEL_VALUE = '';
@@ -32,10 +35,13 @@ function ThemedInput({
 }
 
 export default function CreateWarehouseScreen() {
+  const allowed = useRequireCapability('warehouse.create');
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { company, isPaired } = useAuth();
+  const { company } = useAuth();
+  const { pairingStatus } = useWorkspace();
+  const { scopeGodowns, assertCanCreate } = useRbasCreate();
   const [submitting, setSubmitting] = useState(false);
 
   const [name,    setName]    = useState('');
@@ -48,22 +54,24 @@ export default function CreateWarehouseScreen() {
   useEffect(() => {
     if (!company?.guid) return;
     getWarehouses(company.guid).then((res: any) => {
-      const names: string[] = (res?.data ?? []).map((w: any) => w.name).filter(Boolean);
+      const scoped = scopeGodowns(res?.data ?? []);
+      const names: string[] = scoped.map((w: any) => w.name).filter(Boolean);
       const unique = Array.from(new Set(names));
       setParentOptions([
         { label: 'None (top-level)', value: TOP_LEVEL_VALUE },
         ...unique.map(n => ({ label: n, value: n })),
       ]);
     }).catch(() => {});
-  }, [company?.guid]);
+  }, [company?.guid, scopeGodowns]);
 
   const handleSave = async () => {
     if (!name.trim()) {
       Toast.show({ type: 'error', text1: 'Name Required', text2: 'Please enter a warehouse name.' });
       return;
     }
-    if (!isPaired) {
-      Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' });
+    if (!assertCanCreate('warehouse.create')) return;
+    if (String(pairingStatus || '').toUpperCase() !== 'CONNECTED') {
+      Toast.show({ type: 'error', text1: 'Tally not connected', text2: 'Connect and sync Tally before creating warehouses.' });
       return;
     }
     try {
@@ -95,6 +103,8 @@ export default function CreateWarehouseScreen() {
       setSubmitting(false);
     }
   };
+
+  if (!allowed) return null;
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>

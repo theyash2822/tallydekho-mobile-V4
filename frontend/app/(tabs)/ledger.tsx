@@ -35,6 +35,7 @@ import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { EntityListTile } from '../../src/components/EntityListTile';
 import { inferNatureFromGroup } from '../../src/utils/ledgerNature';
 import Toast from 'react-native-toast-message';
+import { useRequireCapability } from '../../src/components/RequireCapability';
 
 type FilterType = 'All' | 'Debit' | 'Credit';
 const NATURE_FILTER_OPTIONS = ['Assets', 'Liabilities', 'Income', 'Expense'] as const;
@@ -545,6 +546,7 @@ function FilterModal({ visible, onClose, activeNatures, activeGroups, groups, on
 
 // ─── Main Ledger Screen ───────────────────────────────────────────────────────
 export default function LedgerScreen() {
+  const allowed = useRequireCapability('ledgers.view');
   const router = useRouter();
   const { t } = useTranslation();
   const { company, selectedFY, lastSyncAt, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -735,9 +737,20 @@ export default function LedgerScreen() {
     const rawParent = String(r.parent || r.group || '').trim();
     const group = rawParent || '—';
     const nature = inferNatureFromGroup(rawParent, r.nature);
+    let name = r.name;
+    if (Array.isArray(name)) name = name.find((x) => typeof x === 'string' && x.trim()) || name[0];
+    if (typeof name === 'string' && name.trim().startsWith('[')) {
+      try {
+        const parsed = JSON.parse(name);
+        if (Array.isArray(parsed)) {
+          name = parsed.filter((x) => typeof x === 'string' && x.trim()).join(' / ') || name;
+        }
+      } catch (_) { /* keep raw */ }
+    }
+    name = name == null ? '' : String(name);
     return {
       id: r.guid || r.id || String(r.id),
-      name: r.name,
+      name,
       group,
       balance: r.closing_balance != null ? formatAmount(Math.abs(+r.closing_balance)) : (r.balance || formatAmount(0)),
       type: (r.balance_type === 'Cr') ? 'credit' : 'debit',
@@ -1033,6 +1046,7 @@ export default function LedgerScreen() {
     };
   }, [data]);
 
+  if (!allowed) return null;
   return (
     <SafeAreaView testID="ledger-screen" style={styles.safe}>
       {apiError && <ErrorBanner message={apiError} onRetry={loadLedgers} />}

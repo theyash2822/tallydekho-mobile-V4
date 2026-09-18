@@ -207,21 +207,28 @@ const ci = StyleSheet.create({
 export default function TallySyncScreen() {
   const router = useRouter();
   const { isPaired, setIsPaired, setCompany } = useAuth();
-  const { workspaceId, isOwnerOrAdmin, pairingStatus, refreshContext } = useWorkspace();
+  const { workspaceId, isOwnerOrAdmin, pairingStatus, refreshContext, canPair, canUnpair } = useWorkspace();
+  // Prefer server action flags; fall back to membership only if flags missing
+  const allowPair = typeof canPair === 'boolean' ? canPair : isOwnerOrAdmin;
+  const allowUnpair = typeof canUnpair === 'boolean'
+    ? canUnpair
+    : (isOwnerOrAdmin && (pairingStatus === 'CONNECTED' || pairingStatus === 'RECONNECTING'));
   // Derive initial pairState from AuthContext so it persists across screen visits
   const [pairState, setPairState] = useState<'idle' | 'awaiting' | 'paired'>(
-    isPaired || pairingStatus === 'CONNECTED' ? 'paired' : 'idle'
+    isPaired || pairingStatus === 'CONNECTED' || pairingStatus === 'RECONNECTING' ? 'paired' : 'idle'
   );
   const [deviceInfo, setDeviceInfo] = useState<{ name: string; lastSync: string } | null>(null);
 
   // Keep pairState in sync if isPaired changes externally (e.g. desktop unpairs)
   useEffect(() => {
-    setPairState(isPaired || pairingStatus === 'CONNECTED' ? 'paired' : 'idle');
+    setPairState(
+      isPaired || pairingStatus === 'CONNECTED' || pairingStatus === 'RECONNECTING' ? 'paired' : 'idle'
+    );
   }, [isPaired, pairingStatus]);
 
-  // Fetch real device info when paired
+  // Fetch real device info when paired (CONNECTED or RECONNECTING)
   useEffect(() => {
-    if (!isPaired) return;
+    if (!isPaired && pairingStatus !== 'CONNECTED' && pairingStatus !== 'RECONNECTING') return;
     getTallySyncStatus()
       .then((res: any) => {
         const d = res?.data ?? res;
@@ -233,7 +240,7 @@ export default function TallySyncScreen() {
         }
       })
       .catch(() => {});
-  }, [isPaired]);
+  }, [isPaired, pairingStatus]);
 
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
@@ -246,8 +253,8 @@ export default function TallySyncScreen() {
   const isComplete = codeStr.length === 6;
 
   const handlePair = async () => {
-    if (!isOwnerOrAdmin) {
-      Toast.show({ type: 'error', text1: 'Owner/Admin only', text2: 'Ask the Workspace Owner or Admin to pair Tally.' });
+    if (!allowPair) {
+      Toast.show({ type: 'error', text1: 'Not allowed', text2: 'Ask the Workspace Owner or Admin to pair Tally.' });
       return;
     }
     if (!workspaceId) {
@@ -272,7 +279,7 @@ export default function TallySyncScreen() {
         }
         await refreshContext();
         setPairState('paired');
-        Toast.show({ type: 'success', text1: 'Tally Paired!', text2: 'Workspace is now connected to Desktop.' });
+        Toast.show({ type: 'success', text1: 'Tally Paired!', text2: 'Waiting for first Desktop sync to load live books.' });
       } else {
         setPairState('idle');
         const msg = (res as any)?.error?.message || 'Invalid or expired code. Try again.';
@@ -284,11 +291,9 @@ export default function TallySyncScreen() {
       const backend = err?.message || err?.error?.message;
       const msg =
         code === 'DEVICE_ALREADY_PAIRED'
-          ? (backend && backend !== 'Device already paired'
-              ? backend
-              : 'This Tally Desktop is already connected to another workspace. Unpair it from that workspace first (Settings → Tally Sync → Unpair), then pair it here. One Desktop can belong to only one workspace.')
+          ? (backend || 'This Tally Desktop is already connected to another TallyDekho workspace.')
           : code === 'WORKSPACE_ALREADY_HAS_DESKTOP'
-            ? (backend || 'This workspace already has a connected Tally Desktop. Unpair that machine first if you want to connect a different computer.')
+            ? (backend || 'This Workspace already has a connected Tally Desktop. If the old computer is unavailable, use Restore / Replace Computer.')
             : (backend || 'Could not connect. Check your network.');
       Toast.show({ type: 'error', text1: 'Cannot pair this Desktop', text2: msg, visibilityTime: 6000 });
     }
@@ -301,8 +306,8 @@ export default function TallySyncScreen() {
   };
 
   const handleDisconnect = async () => {
-    if (!isOwnerOrAdmin) {
-      Toast.show({ type: 'error', text1: 'Owner/Admin only', text2: 'Ask the Workspace Owner or Admin to unpair.' });
+    if (!allowUnpair) {
+      Toast.show({ type: 'error', text1: 'Not allowed', text2: 'Ask the Workspace Owner or Admin to unpair.' });
       return;
     }
     try {
@@ -365,6 +370,7 @@ export default function TallySyncScreen() {
 
               {/* Action buttons */}
               <View style={s.btnRow}>
+                {allowUnpair && (
                 <TouchableOpacity
                   style={s.disconnectBtn}
                   onPress={() => setShowDisconnect(true)}
@@ -373,6 +379,7 @@ export default function TallySyncScreen() {
                   <Ionicons name="unlink-outline" size={15} color={COLORS.negative} />
                   <Text style={s.disconnectTxt}>Disconnect</Text>
                 </TouchableOpacity>
+                )}
 
                 <TouchableOpacity
                   style={[s.syncNowBtn, syncing && s.syncNowBtnDisabled]}
@@ -432,7 +439,7 @@ export default function TallySyncScreen() {
                     <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
                   </TouchableOpacity>
                 )}
-            {!isOwnerOrAdmin && (
+            {!allowPair && (
               <View style={[s.infoCard, { marginBottom: 12 }]}>
                 <Ionicons name="lock-closed-outline" size={17} color={COLORS.textSecondary} />
                 <Text style={s.infoTxt}>
@@ -440,11 +447,11 @@ export default function TallySyncScreen() {
                 </Text>
               </View>
             )}
-            {isOwnerOrAdmin && (
+            {allowPair && (
               <View style={[s.infoCard, { marginBottom: 12 }]}>
                 <Ionicons name="information-circle-outline" size={17} color={COLORS.textSecondary} />
                 <Text style={s.infoTxt}>
-                  One Desktop belongs to only one workspace. If this PC is already paired elsewhere, unpair it there first. If this workspace already has a Desktop, unpair that machine before connecting a new one.
+                  One Desktop belongs to only one workspace. If this Workspace already has a Desktop, use Restore / Replace Computer — do not treat Unpair as normal recovery.
                 </Text>
               </View>
             )}
@@ -488,7 +495,7 @@ export default function TallySyncScreen() {
                   <SixDigitInput code={code} onChange={setCode} />
                   <Text style={s.codeHint}>Enter 6-digit code from the TallyDekho Desktop Agent</Text>
 
-                  {isComplete && isOwnerOrAdmin && (
+                  {isComplete && allowPair && (
                   <TouchableOpacity
                     style={s.primaryBtn}
                     onPress={handlePair}

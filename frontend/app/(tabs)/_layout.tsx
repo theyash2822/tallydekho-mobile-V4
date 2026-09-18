@@ -6,6 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { COLORS } from '../../src/constants/colors';
 import QuickActionsModal from '../../src/components/QuickActionsModal';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
+import Toast from 'react-native-toast-message';
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -14,13 +16,14 @@ interface TabDef {
   titleKey: string;
   icon: IoniconName;
   iconOutline: IoniconName;
+  capability?: string;
 }
 
 const TAB_DEFS: TabDef[] = [
-  { name: 'index',   titleKey: 'nav.home',    icon: 'home',      iconOutline: 'home-outline'      },
-  { name: 'ledger',  titleKey: 'nav.ledger',  icon: 'journal',   iconOutline: 'journal-outline'   },
-  { name: 'stocks',  titleKey: 'nav.stocks',  icon: 'cube',      iconOutline: 'cube-outline'      },
-  { name: 'reports', titleKey: 'nav.reports', icon: 'bar-chart', iconOutline: 'bar-chart-outline' },
+  { name: 'index',   titleKey: 'nav.home',    icon: 'home',      iconOutline: 'home-outline',      capability: 'dashboard.view' },
+  { name: 'ledger',  titleKey: 'nav.ledger',  icon: 'journal',   iconOutline: 'journal-outline',   capability: 'ledgers.view' },
+  { name: 'stocks',  titleKey: 'nav.stocks',  icon: 'cube',      iconOutline: 'cube-outline',      capability: 'inventory.view' },
+  { name: 'reports', titleKey: 'nav.reports', icon: 'bar-chart', iconOutline: 'bar-chart-outline', capability: 'financials.view' },
 ];
 
 interface Route {
@@ -38,6 +41,7 @@ interface CustomTabBarProps {
 function CustomTabBar({ state, navigation, onFabPress }: CustomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
+  const { hasCapability } = useWorkspace();
   const bottomPad = Math.max(insets.bottom, 4);
 
   const routes = state.routes;
@@ -45,6 +49,11 @@ function CustomTabBar({ state, navigation, onFabPress }: CustomTabBarProps) {
   const rightRoutes = routes.slice(2);
 
   const handleTabPress = (route: Route, idx: number) => {
+    const def = TAB_DEFS.find(tab => tab.name === route.name);
+    if (def?.capability && !hasCapability(def.capability)) {
+      Toast.show({ type: 'error', text1: 'Not allowed', text2: 'You do not have access to this module' });
+      return;
+    }
     const isFocused = state.index === idx;
     const event = navigation.emit({
       type: 'tabPress',
@@ -59,6 +68,8 @@ function CustomTabBar({ state, navigation, onFabPress }: CustomTabBarProps) {
   const renderTab = (route: Route, idx: number) => {
     const def = TAB_DEFS.find(tab => tab.name === route.name);
     if (!def) return null;
+    const allowed = !def.capability || hasCapability(def.capability);
+    if (!allowed) return <View key={route.key} style={styles.tabItem} />;
     const isFocused = state.index === idx;
     return (
       <TouchableOpacity
@@ -113,6 +124,7 @@ function CustomTabBar({ state, navigation, onFabPress }: CustomTabBarProps) {
 
 export default function TabsLayout() {
   const [showActions, setShowActions] = useState(false);
+  const { hasCapability, loading } = useWorkspace();
   const handleFabPress = useCallback(() => setShowActions(true), []);
   const handleModalClose = useCallback(() => setShowActions(false), []);
   // Memoize the tabBar renderer so React Navigation never sees a prop change
@@ -122,16 +134,23 @@ export default function TabsLayout() {
     [handleFabPress],
   );
 
+  const tabHref = (cap?: string) => {
+    if (!cap) return undefined;
+    // Fail closed while loading / missing view cap — hide from Expo Router tab list
+    if (loading || !hasCapability(cap)) return null;
+    return undefined;
+  };
+
   return (
     <View style={{ flex: 1 }}>
       <Tabs
         screenOptions={{ headerShown: false }}
         tabBar={renderTabBar}
       >
-        <Tabs.Screen name="index" />
-        <Tabs.Screen name="ledger" />
-        <Tabs.Screen name="stocks" />
-        <Tabs.Screen name="reports" />
+        <Tabs.Screen name="index" options={{ href: tabHref('dashboard.view') }} />
+        <Tabs.Screen name="ledger" options={{ href: tabHref('ledgers.view') }} />
+        <Tabs.Screen name="stocks" options={{ href: tabHref('inventory.view') }} />
+        <Tabs.Screen name="reports" options={{ href: tabHref('financials.view') }} />
       </Tabs>
       {/* Modal lives outside Tabs so navigation re-renders never affect it */}
       <QuickActionsModal visible={showActions} onClose={handleModalClose} />

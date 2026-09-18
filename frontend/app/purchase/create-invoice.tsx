@@ -27,7 +27,8 @@ import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import PartyForm, { PartyFormRef } from '../../src/components/forms/PartyForm';
 import FormField from '../../src/components/forms/FormField';
 import FormDropdown, { DropdownOption } from '../../src/components/forms/FormDropdown';
-import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import RegularOptionalToggle from '../../src/components/forms/RegularOptionalToggle';
+import { useRbasCreate } from '../../src/hooks/useRbasCreate';
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
@@ -40,6 +41,7 @@ import {
 } from '@gorhom/bottom-sheet';
 import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import { useTranslation } from 'react-i18next';
+import { useRequireCapability } from '../../src/components/RequireCapability';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const todayStr = () => {
@@ -632,6 +634,7 @@ function ItemRow({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CreatePurchaseInvoiceScreen() {
+  const allowed = useRequireCapability('purchase_invoice.create');
   const { t } = useTranslation();
   const router = useRouter();
   const scrollRef = useRef<any>(null);
@@ -649,7 +652,7 @@ export default function CreatePurchaseInvoiceScreen() {
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
 
   // ── Core state ───────────────────────────────────────────────────────────────
-  const [entryType, setEntryType] = useState<EntryType>('regular');
+  const {entryMode, entryType, setEntryType, scopeParties, scopeGodowns, assertCanCreate} = useRbasCreate();
   const [purchaseLedger, setPurchaseLedger] = useState('');
   const [date, setDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -750,7 +753,7 @@ export default function CreatePurchaseInvoiceScreen() {
   useEffect(() => {
     if (!company?.guid) return;
     getParties(company.guid, { type: 'vendor' }).then((res: any) => {
-      const list = res?.data || [];
+      const list = scopeParties(res?.data || []);
       setVendors(list.map((p: any) => ({
         label: p.name,
         value: p.name,
@@ -762,7 +765,7 @@ export default function CreatePurchaseInvoiceScreen() {
         },
       })));
     }).catch(() => {});
-  }, [company?.guid]);
+  }, [company?.guid, scopeParties]);
 
   useEffect(() => {
     if (!company?.guid) return;
@@ -775,11 +778,11 @@ export default function CreatePurchaseInvoiceScreen() {
   useEffect(() => {
     if (!company?.guid) return;
     getWarehouses(company.guid).then((res: any) => {
-      const list: Warehouse[] = res?.data || res?.warehouses || [];
+      const list: Warehouse[] = scopeGodowns(res?.data || res?.warehouses || []);
       setWarehouses(list);
       if (list.length === 1) setItems(prev => prev.map(i => ({ ...i, warehouse: list[0].name })));
     }).catch(() => {});
-  }, [company?.guid]);
+  }, [company?.guid, scopeGodowns]);
 
   useEffect(() => {
     if (!company?.guid) return;
@@ -1072,6 +1075,7 @@ export default function CreatePurchaseInvoiceScreen() {
 
   // ── Submit ────────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
+    if (!assertCanCreate('purchase_invoice.create')) return;
     Keyboard.dismiss();
     if (submittingRef.current) return;
     if (!vendor) { Toast.show({ type: 'error', text1: 'Vendor required' }); return; }
@@ -1175,6 +1179,8 @@ export default function CreatePurchaseInvoiceScreen() {
   ]);
 
   // ── Render ────────────────────────────────────────────────────────────────────
+  if (!allowed) return null;
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       {/* Success Overlay */}
@@ -1274,7 +1280,7 @@ export default function CreatePurchaseInvoiceScreen() {
           <Text style={s.headerTitle}>{t('purchase.createInvoice')}</Text>
           <Text style={s.headerSub}>PINV-Auto</Text>
         </View>
-        <RegularOptionalToggle value={entryType} onChange={setEntryType} />
+        <RegularOptionalToggle value={entryType} onChange={setEntryType} entryMode={entryMode} />
       </View>
 
       <StepIndicator step={step} />

@@ -14,6 +14,9 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { getStockDashboard } from '../../src/services/api';
 import { useTranslation } from 'react-i18next';
+import { useRequireCapability } from '../../src/components/RequireCapability';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
+import { formatSensitive } from '../../src/utils/sensitiveDisplay';
 
 const SEG_COUNT = 20;
 
@@ -74,11 +77,21 @@ const cat = StyleSheet.create({
 });
 
 export default function StocksDashboard() {
+  const allowed = useRequireCapability('inventory.view');
   const { t } = useTranslation();
   const router = useRouter();
   const { company, lastSyncAt } = useAuth();
   const companyGuid = company?.guid;
   const { formatAmount, formatAmountCompact } = useSettings();
+  const { sensitivePolicies } = useWorkspace();
+
+  const fmtInv = (v: number) =>
+    formatSensitive(
+      sensitivePolicies,
+      'inventory_valuation',
+      v,
+      (n) => formatAmountCompact(Math.round(n as number)),
+    ) ?? '—';
 
   const [data, setData] = useState<any>(null);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -172,15 +185,16 @@ export default function StocksDashboard() {
     },
     {
       id: 'aged', label: t('stocks.agedStock'),
-      value: formatAmountCompact(Math.round(Number(d.agedInventoryValue) || 0)),
+      value: fmtInv(Number(d.agedInventoryValue) || 0),
       sub: t('stocks.daysOld', { days: d.agedInventoryDays ?? 90 }),
       icon: 'time-outline', accent: NEUTRAL, tint: NEUTRAL_BG,
       route: '/stocks/aged-items?days=90',
     },
   ];
 
-  const fmtCat = (v: number) => formatAmountCompact(Math.round(v));
+  const fmtCat = (v: number) => fmtInv(v);
 
+  if (!allowed) return null;
   return (
     <SafeAreaView style={s.safe}>
       {apiError && <ErrorBanner message={apiError} onRetry={loadStock} />}
@@ -251,7 +265,14 @@ export default function StocksDashboard() {
                 </View>
               </View>
               <Text style={s.heroLabel}>{t('stocks.totalStockValue')}</Text>
-              <Text style={s.heroValue}>{formatAmount(Math.round(Number(d.totalValue) || 0))}</Text>
+              <Text style={s.heroValue}>{
+                formatSensitive(
+                  sensitivePolicies,
+                  'inventory_valuation',
+                  d.totalValue,
+                  (n) => formatAmount(Math.round(Number(n) || 0)),
+                ) ?? '—'
+              }</Text>
               <View style={s.heroMetaRow}>
                 <Ionicons name="layers-outline" size={13} color={COLORS.textTertiary} />
                 <Text style={s.heroMeta}>

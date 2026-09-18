@@ -25,11 +25,13 @@ import { ListTileShell } from '../../src/components/ListTileShell';
 import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { ViewAllButton } from '../../src/components/ViewAllButton';
 import { AlertBannerCarousel } from '../../src/components/AlertBannerCarousel';
+import { useRequireCapability } from '../../src/components/RequireCapability';
 
 const { width: SW } = Dimensions.get('window');
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function SalesScreen() {
+  const allowed = useRequireCapability('sales.view');
   const { t } = useTranslation();
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router  = useRouter();
@@ -162,6 +164,8 @@ export default function SalesScreen() {
   const recent = liveRecent.slice(0, 5);
   const displayTopParties = liveTopParties;
   const displayBanners = liveBanners;
+
+  if (!allowed) return null;
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>

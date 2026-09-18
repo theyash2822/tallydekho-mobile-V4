@@ -15,6 +15,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
+import { useRbasCreate } from '../../src/hooks/useRbasCreate';
 import { getStocks, createStockAdjustment, getStockGodowns } from '../../src/services/api';
 import { StockItem } from '../../src/data/stockData';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
@@ -22,6 +23,7 @@ import FormDropdown from '../../src/components/forms/FormDropdown';
 import { CompactQtyInput, SubmitButton } from '../../src/components/forms/StockFormHelpers';
 import { clearStockListCache } from '../../src/utils/stockCache';
 import { useTranslation } from 'react-i18next';
+import { useRequireCapability } from '../../src/components/RequireCapability';
 
 type GodownRow = { name: string; qty: number };
 
@@ -198,6 +200,7 @@ function AdjItemTile({
 }
 
 export default function CreateStockAdjustmentScreen() {
+  const allowed = useRequireCapability('stock_adjustment.create');
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -205,6 +208,7 @@ export default function CreateStockAdjustmentScreen() {
   const { company } = useAuth();
   const { formatAmount } = useSettings();
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
+  const { assertCanCreate } = useRbasCreate();
   const companyGuid = company?.guid;
 
   const [stocks, setStocks] = useState<StockItem[]>([]);
@@ -319,6 +323,7 @@ export default function CreateStockAdjustmentScreen() {
 
   const handleDone = async () => {
     if (!company?.guid) return;
+    if (!assertCanCreate('stock_adjustment.create')) return;
     let ok = 0;
     let fail = 0;
     let lastResult: any = null;
@@ -361,6 +366,8 @@ export default function CreateStockAdjustmentScreen() {
       Toast.show({ type: 'error', text1: 'Adjustment Failed', text2: 'Could not save adjustments.' });
     }
   };
+
+  if (!allowed) return null;
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>

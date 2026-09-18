@@ -24,6 +24,7 @@ import { ListTileShell } from '../../src/components/ListTileShell';
 import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { ViewAllButton } from '../../src/components/ViewAllButton';
 import { AlertBannerCarousel } from '../../src/components/AlertBannerCarousel';
+import { useRequireCapability } from '../../src/components/RequireCapability';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -56,6 +57,7 @@ function purchaseMetricCardsFromApi(data: any, formatAmountCompact: (n: number) 
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 export default function PurchaseScreen() {
+  const allowed = useRequireCapability('purchase.view');
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -208,6 +210,8 @@ export default function PurchaseScreen() {
   }, [displayMetrics.length]);
 
   const recent = liveRecent.slice(0, 5);
+
+  if (!allowed) return null;
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
