@@ -10,6 +10,7 @@ import { getWarehouses, createStockTransfer } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 import { clearStockListCache } from '../../utils/stockCache';
+import { useRbasCreate } from '../../hooks/useRbasCreate';
 
 import {
   InlineDropdownField, InlineField,
@@ -26,6 +27,7 @@ export function BulkTransferModal({
   visible: boolean; preselectedItems: StockItem[]; onClose: () => void;
 }) {
   const { company } = useAuth();
+  const { scopeGodowns, assertCanCreate } = useRbasCreate();
   const scrollRef = useRef<ScrollView>(null);
 
   const [rows,             setRows]             = useState<TransferRow[]>([]);
@@ -47,13 +49,13 @@ export function BulkTransferModal({
       if (company?.guid) {
         getWarehouses(company.guid)
           .then((res: any) => {
-            const wh = res?.data ?? (Array.isArray(res) ? res : []);
+            const wh = scopeGodowns(res?.data ?? (Array.isArray(res) ? res : []));
             setWarehouseOptions(wh.map((w: any) => ({ id: w.name, label: w.name })));
           })
           .catch(() => {});
       }
     }
-  }, [visible]);
+  }, [visible, preselectedItems, company?.guid, scopeGodowns]);
 
   const filteredRows = search.trim()
     ? rows.filter(r =>
@@ -66,6 +68,7 @@ export function BulkTransferModal({
   const updQty     = (id: string, q: number) => setRows(p => p.map(r => r.item.id === id ? { ...r, qty: q } : r));
 
   const validate = () => {
+    if (!assertCanCreate('stock_transfer.create')) return false;
     if (rows.length === 0) {
       Toast.show({ type: 'error', text1: 'No Items', text2: 'No items selected for transfer.' });
       return false;

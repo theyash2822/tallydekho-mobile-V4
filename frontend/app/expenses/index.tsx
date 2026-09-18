@@ -23,6 +23,7 @@ import { ListTileShell } from '../../src/components/ListTileShell';
 import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { ViewAllButton } from '../../src/components/ViewAllButton';
 import { expenseRowToRouteType } from '../../src/components/voucherHomeFilters';
+import { useRequireCapability } from '../../src/components/RequireCapability';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -59,6 +60,7 @@ function mapExpenseRow(r: any, formatAmount: (n: number) => string, i = 0): Expe
 
 // ─── Screen ─────────────────────────────────────────────────────────────────
 export default function ExpenseScreen() {
+  const allowed = useRequireCapability('expenses.view');
   const { t } = useTranslation();
   const { formatAmount, formatAmountCompact } = useSettings();
   const router = useRouter();
@@ -160,6 +162,8 @@ export default function ExpenseScreen() {
   }, [metricCards.length]);
 
   const recent = liveExpenses.slice(0, 5);
+
+  if (!allowed) return null;
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>

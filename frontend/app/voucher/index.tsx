@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useSettings } from '../../src/context/SettingsContext';
+import { useRequireCapability } from '../../src/components/RequireCapability';
 
 
 const VOUCHER_TYPES = [
@@ -17,18 +18,21 @@ const VOUCHER_TYPES = [
 ] as const;
 
 const CREATE_OPTIONS = [
-  { label: 'Payment Voucher', icon: 'arrow-up-circle-outline', color: '#C0392B', bg: '#FDECEA', type: 'payment' },
-  { label: 'Receipt Voucher', icon: 'arrow-down-circle-outline', color: '#2D7D46', bg: '#F0FBF4', type: 'receipt' },
+  { label: 'Payment Voucher', icon: 'arrow-up-circle-outline', color: '#C0392B', bg: '#FDECEA', type: 'payment', route: '/voucher/create-payment' },
+  { label: 'Receipt Voucher', icon: 'arrow-down-circle-outline', color: '#2D7D46', bg: '#F0FBF4', type: 'receipt', route: '/voucher/create-receipt' },
   { label: 'Expense Voucher', icon: 'wallet-outline', color: '#D97706', bg: '#FFFBEB', type: 'expense', route: '/voucher/create-expense' },
-  { label: 'Journal Entry', icon: 'book-outline', color: '#2563EB', bg: '#EFF6FF', type: 'journal' },
-  { label: 'Contra Voucher', icon: 'swap-horizontal-outline', color: '#7C3AED', bg: '#F5F3FF', type: 'contra' },
+  { label: 'Journal Entry', icon: 'book-outline', color: '#2563EB', bg: '#EFF6FF', type: 'journal', route: '/voucher/create-journal' },
+  { label: 'Contra Voucher', icon: 'swap-horizontal-outline', color: '#7C3AED', bg: '#F5F3FF', type: 'contra', route: '/voucher/create-contra' },
 ];
 
 export default function VouchersHubScreen() {
+  const allowed = useRequireCapability('vouchers.view');
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [showCreate, setShowCreate] = useState(false);
+
+  if (!allowed) return null;
 
   return (
     <SafeAreaView style={s.safe}>

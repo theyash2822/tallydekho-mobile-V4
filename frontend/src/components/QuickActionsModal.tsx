@@ -9,6 +9,7 @@ import { safePush } from '../utils/safeNavigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
+import { useWorkspace } from '../context/WorkspaceContext';
 
 const SECTION_COLORS: Record<string, { color: string; bg: string }> = {
   sales:     { color: COLORS.positive,     bg: COLORS.positiveBg },
@@ -83,21 +84,60 @@ const SECTION_DEFS = [
   },
 ];
 
+const ITEM_CAPS: Record<string, string> = {
+  'sale-invoice': 'sales_invoice.create',
+  'sale-proforma': 'sales_invoice.create',
+  'sale-order': 'sales_order.create',
+  'sale-delivery': 'delivery_note.create',
+  'sale-credit': 'credit_note.create',
+  'pur-invoice': 'purchase_invoice.create',
+  'pur-order': 'purchase_order.create',
+  'pur-debit': 'debit_note.create',
+  'vou-receipt': 'receipt.create',
+  'vou-payment': 'payment.create',
+  'vou-expense': 'expense.create',
+  'vou-journal': 'journal.create',
+  'vou-contra': 'contra.create',
+  'inv-adjust': 'stock_adjustment.create',
+  'inv-transfer': 'stock_transfer.create',
+  'inv-item': 'stock_item.create',
+  'inv-warehouse': 'warehouse.create',
+  'led-creditors': 'ledger_master.create',
+  'led-debtors': 'ledger_master.create',
+  'led-taxes': 'ledger_master.create',
+  'led-custom': 'ledger_master.create',
+};
+
 const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose, onItemPress }) => {
   const router = useRouter();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
+  const { hasCapability, entryMode } = useWorkspace();
 
-  const sections = useMemo(() => SECTION_DEFS.map(section => ({
-    ...section,
-    label: t(section.labelKey),
-    items: section.items.map(item => ({
-      ...item,
-      label: t(item.labelKey),
-    })),
-  })), [t]);
+  const sections = useMemo(() => {
+    return SECTION_DEFS.map((section) => {
+      const items = section.items
+        .filter((item) => {
+          const cap = ITEM_CAPS[item.id];
+          if (cap && !hasCapability(cap)) return false;
+          // Entry Mode: OPTIONAL_ONLY → Proforma only (not regular invoice); Quotation via order optional
+          if (item.id === 'sale-invoice' && entryMode === 'OPTIONAL_ONLY') return false;
+          if (item.id === 'sale-proforma' && entryMode === 'REGULAR_ONLY') return false;
+          return true;
+        })
+        .map((item) => ({
+          ...item,
+          label: t(item.labelKey),
+        }));
+      return {
+        ...section,
+        label: t(section.labelKey),
+        items,
+      };
+    }).filter((s) => s.items.length > 0);
+  }, [t, hasCapability, entryMode]);
 
   useEffect(() => {
     if (visible) setExpandedSection(null);

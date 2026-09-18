@@ -3,13 +3,40 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { COLORS, TYPOGRAPHY, RADIUS } from '../../constants/colors';
 
 export type EntryType = 'regular' | 'optional';
+export type WorkspaceEntryMode = 'OPTIONAL_ONLY' | 'REGULAR_ONLY' | 'BOTH';
 
 interface Props {
   value: EntryType;
   onChange: (v: EntryType) => void;
+  /** Workspace RBAS Entry Mode — locks/hides options when not BOTH */
+  entryMode?: WorkspaceEntryMode;
 }
 
-export default function RegularOptionalToggle({ value, onChange }: Props) {
+export function defaultEntryTypeForMode(mode?: WorkspaceEntryMode): EntryType {
+  if (mode === 'OPTIONAL_ONLY') return 'optional';
+  return 'regular';
+}
+
+export function entryTypeAllowed(mode: WorkspaceEntryMode | undefined, type: EntryType): boolean {
+  if (!mode || mode === 'BOTH') return true;
+  if (mode === 'OPTIONAL_ONLY') return type === 'optional';
+  if (mode === 'REGULAR_ONLY') return type === 'regular';
+  return true;
+}
+
+export default function RegularOptionalToggle({ value, onChange, entryMode = 'BOTH' }: Props) {
+  if (entryMode === 'OPTIONAL_ONLY' || entryMode === 'REGULAR_ONLY') {
+    // Locked to a single mode — show read-only chip
+    const locked: EntryType = entryMode === 'OPTIONAL_ONLY' ? 'optional' : 'regular';
+    return (
+      <View style={s.wrap}>
+        <View style={[s.btn, locked === 'regular' ? s.regActive : s.optActive]}>
+          <Text style={[s.txt, s.activeTxt]}>{locked === 'regular' ? 'REG' : 'OPT'}</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={s.wrap}>
       <TouchableOpacity

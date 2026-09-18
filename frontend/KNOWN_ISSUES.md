@@ -45,6 +45,11 @@ Pattern:
 
 ## Active / Open Issues
 
+### Android slower than iOS (mitigated 2026-09-17)
+- Was building 4 ABIs + Metro maxWorkers=2. Now arm64-v8a + more Metro workers.
+- If Android **runtime** (not build) still feels slow: ensure Remote JS Debugging is OFF, use a release-ish build for profiling, avoid Expo Go vs comparing to a different iOS path.
+- Emulator: may need `reactNativeArchitectures=arm64-v8a,x86_64`
+
 ### IP Changes on WiFi Reconnect
 - EXPO_PUBLIC_BACKEND_URL in .env = 192.168.29.243
 - If backend unreachable, check Mac IP with `ifconfig`

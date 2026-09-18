@@ -19,13 +19,15 @@ import {
 } from '../../src/services/api';
 import { shareVoucherPdfSafely } from '../../src/utils/voucherPdf';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
+import { useRbasCreate } from '../../src/hooks/useRbasCreate';
 import FormField from '../../src/components/forms/FormField';
-import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import RegularOptionalToggle from '../../src/components/forms/RegularOptionalToggle';
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
 import DatePickerModal, { parseDMY } from '../../src/components/forms/DatePickerModal';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import { taxFieldsFromLedgerSelect, resolveTaxLedgerRate } from '../../src/utils/taxLedgerHelpers';
 import { useTranslation } from 'react-i18next';
+import { useRequireCapability } from '../../src/components/RequireCapability';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const todayStr = () => {
@@ -444,6 +446,7 @@ function ItemRow({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CreateSalesOrderScreen() {
+  const allowed = useRequireCapability('sales_order.create');
   const { t } = useTranslation();
   const router = useRouter();
   const scrollRef = useRef<any>(null);
@@ -452,7 +455,7 @@ export default function CreateSalesOrderScreen() {
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
 
   // ── Core state ───────────────────────────────────────────────────────────────
-  const [entryType, setEntryType] = useState<EntryType>('regular');
+  const {entryMode, entryType, setEntryType, scopeParties, scopeGodowns, assertCanCreate} = useRbasCreate();
   const [orderNo] = useState('');
   const [date, setDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -504,7 +507,7 @@ export default function CreateSalesOrderScreen() {
   useEffect(() => {
     if (!company?.guid) return;
     getParties(company.guid).then((res: any) => {
-      const list = res?.data || [];
+      const list = scopeParties(res?.data || []);
       if (list.length > 0) setParties(list.map((p: any) => ({
         label: p.name,
         value: p.name,
@@ -519,7 +522,7 @@ export default function CreateSalesOrderScreen() {
         },
       })));
     }).catch(() => {});
-  }, [company?.guid]);
+  }, [company?.guid, scopeParties]);
 
   useEffect(() => {
     if (!company?.guid) return;
@@ -543,11 +546,11 @@ export default function CreateSalesOrderScreen() {
   useEffect(() => {
     if (!company?.guid) return;
     getWarehouses(company.guid).then((res: any) => {
-      const list: Warehouse[] = res?.data || res?.warehouses || [];
+      const list: Warehouse[] = scopeGodowns(res?.data || res?.warehouses || []);
       setWarehouses(list);
       if (list.length === 1) setItems(prev => prev.map(i => ({ ...i, warehouse: list[0].name })));
     }).catch(() => {});
-  }, [company?.guid]);
+  }, [company?.guid, scopeGodowns]);
 
   useEffect(() => {
     if (!company?.guid) return;
@@ -746,6 +749,7 @@ export default function CreateSalesOrderScreen() {
 
   // ── Submit ────────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
+    if (!assertCanCreate('sales_order.create')) return;
     Keyboard.dismiss();
     if (!ledger) { Toast.show({ type: 'error', text1: 'Sales Ledger required' }); return; }
     if (!party) { Toast.show({ type: 'error', text1: 'Customer required' }); return; }
@@ -845,6 +849,8 @@ export default function CreateSalesOrderScreen() {
   }, [company?.guid, party, ledger, date, refNo, narration, termsText, items, logEntries, roundOffLedger, roundOffAmount, submitResult, orderNo, dueDate, router]);
 
   // ── Render ────────────────────────────────────────────────────────────────────
+  if (!allowed) return null;
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       {/* Success Overlay */}
@@ -948,7 +954,7 @@ export default function CreateSalesOrderScreen() {
           <Text style={s.headerTitle}>{t('sales.createOrder')}</Text>
           <Text style={s.headerSub}>{orderNo || 'SO-Auto'}</Text>
         </View>
-        <RegularOptionalToggle value={entryType} onChange={setEntryType} />
+        <RegularOptionalToggle value={entryType} onChange={setEntryType} entryMode={entryMode} />
       </View>
 
       <StepIndicator step={step} />

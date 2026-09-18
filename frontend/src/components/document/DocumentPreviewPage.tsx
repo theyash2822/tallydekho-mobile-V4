@@ -11,7 +11,9 @@ import { VoucherDocument } from '../../types/document';
 import { formatCurrency, amountInWords, DOC_TYPE_CONFIG } from '../../utils/documentHelpers';
 import { shareVoucherPdfSafely } from '../../utils/voucherPdf';
 import { useAuth } from '../../context/AuthContext';
+import { useWorkspace } from '../../context/WorkspaceContext';
 import { useTranslation } from 'react-i18next';
+import Toast from 'react-native-toast-message';
 import { isAccountingVoucherType } from '../../utils/voucher-print';
 import { isCommercialDocumentType } from '../../utils/commercial-print';
 import AccountingVoucherPreview from './AccountingVoucherPreview';
@@ -725,6 +727,8 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
   const { company } = useAuth();
+  const { hasCapability } = useWorkspace();
+  const canSharePdf = hasCapability('document.pdf.generate');
 
   // Loading is reset before the share sheet opens — shareAsync blocks until the
   // sheet is dismissed and would otherwise leave the spinner running.
@@ -733,6 +737,10 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
     dialogTitle: string,
     fallback?: () => Promise<void>
   ) => {
+    if (!canSharePdf) {
+      Toast.show({ type: 'error', text1: 'Not allowed', text2: 'PDF share is not permitted for your role' });
+      return;
+    }
     setLoading(true);
     await shareVoucherPdfSafely(doc, {
       companyGuid: company?.guid,
@@ -744,6 +752,16 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
 
   const handleShare = () => generateAndSharePDF(setShareLoading, t('pdf.shareDoc', { number: doc.documentNumber }));
   const handlePDF   = () => generateAndSharePDF(setPdfLoading, `${doc.documentNumber}.pdf`);
+
+  if (!canSharePdf) {
+    return (
+      <View style={[ds.actionBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
+        <Text style={{ color: COLORS.white, opacity: 0.85, fontSize: 13, textAlign: 'center', flex: 1 }}>
+          PDF share not available for your role
+        </Text>
+      </View>
+    );
+  }
 
     return (
     <View style={[ds.actionBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>

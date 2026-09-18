@@ -31,7 +31,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import RegularOptionalToggle from '../../src/components/forms/RegularOptionalToggle';
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import { useAuth } from '../../src/context/AuthContext';
@@ -40,8 +40,10 @@ import {
   createReceiptVoucher, getParties, getBankLedgers, getPartyOutstandingBills,
 } from '../../src/services/api';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
+import { useRbasCreate } from '../../src/hooks/useRbasCreate';
 import { shareVoucherPdfByRef } from '../../src/utils/voucherPdf';
 import { useTranslation } from 'react-i18next';
+import { useRequireCapability } from '../../src/components/RequireCapability';
 
 // ── Helpers (mirrors create-invoice.tsx) ─────────────────────────────────────
 const todayStr = () => {
@@ -84,6 +86,7 @@ interface BillRow {
 }
 
 export default function CreateReceiptVoucher() {
+  const allowed = useRequireCapability('receipt.create');
   const { t } = useTranslation();
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
@@ -98,7 +101,7 @@ export default function CreateReceiptVoucher() {
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
 
   // ── Header state ──────────────────────────────────────────────────────────
-  const [entryType, setEntryType] = useState<EntryType>('regular');
+  const {entryMode, entryType, setEntryType, scopeParties, assertCanCreate} = useRbasCreate();
   // Universal numbering — Settings → Voucher Config only (no on-screen override)
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
 
@@ -136,7 +139,7 @@ export default function CreateReceiptVoucher() {
           : partyFilter === 'income' ? { type: 'income' }
             : undefined;
       const res: any = await getParties(company.guid, params);
-      const list = (res?.data || []).map((p: any) => ({
+      const list = scopeParties(res?.data || []).map((p: any) => ({
         label: p.name,
         value: p.name,
         subtitle: p.parent || undefined,
@@ -144,7 +147,7 @@ export default function CreateReceiptVoucher() {
       }));
       setParties(list);
     } catch (e) { /* silent */ }
-  }, [company?.guid, partyFilter]);
+  }, [company?.guid, partyFilter, scopeParties]);
   useEffect(() => { loadParties(); }, [loadParties]);
 
   // ── Outstanding bills for selected party ──────────────────────────────────
@@ -221,7 +224,7 @@ export default function CreateReceiptVoucher() {
     try {
       const type: 'cash' | 'bank' = paymentMethod === 'Cash' ? 'cash' : 'bank';
       const res: any = await getBankLedgers(company.guid, type);
-      const list = (res?.data || []).map((l: any) => ({
+      const list = scopeParties(res?.data || []).map((l: any) => ({
         label: l.closing_balance != null
           ? `${l.name} — ${fmtINR(Math.abs(parseFloat(l.closing_balance)))} ${parseFloat(l.closing_balance) < 0 ? 'Cr' : 'Dr'}`
           : l.name,
@@ -232,7 +235,7 @@ export default function CreateReceiptVoucher() {
     } catch (e) {
       setLedgerOptions([]);
     } finally { setLedgerLoading(false); }
-  }, [company?.guid, paymentMethod]);
+  }, [company?.guid, paymentMethod, scopeParties]);
   useEffect(() => { fetchLedgers(); }, [fetchLedgers]);
 
   // ── Leftover disposition ──────────────────────────────────────────────────
@@ -303,7 +306,7 @@ export default function CreateReceiptVoucher() {
 
   const handleSubmit = async () => {
     if (canSubmit) { Alert.alert(t('voucher.required'), canSubmit); return; }
-    if (!isPaired) { Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Pair with Tally Desktop first.' }); return; }
+    if (!assertCanCreate('receipt.create')) return;
     setSubmitting(true);
     try {
       const wantsInstrument = ['Cheque', 'NEFT', 'RTGS'].includes(paymentMethod);
@@ -341,6 +344,8 @@ export default function CreateReceiptVoucher() {
 
   const partyOutstandingLabel = partyData?.balance ? fmtINR(Math.abs(parseFloat(partyData.balance || 0))) : null;
 
+  if (!allowed) return null;
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       {/* ── Header ─────────────────────────────────────────────────────── */}
@@ -349,7 +354,7 @@ export default function CreateReceiptVoucher() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.hdrTitle}>{t('voucher.receiptTitle')}</Text>
-        <RegularOptionalToggle value={entryType} onChange={setEntryType} />
+        <RegularOptionalToggle value={entryType} onChange={setEntryType} entryMode={entryMode} />
       </View>
 
       <KeyboardAvoidingView

@@ -13,6 +13,8 @@ import { createStockItem, getStockGroups, getStockUnits, getWarehouses } from '.
 import { clearStockListCache } from '../../src/utils/stockCache';
 import FormDropdown from '../../src/components/forms/FormDropdown';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
+import { useRequireCapability } from '../../src/components/RequireCapability';
+import { useRbasCreate } from '../../src/hooks/useRbasCreate';
 
 const WEB = Platform.select({ web: { outlineWidth: 0, outlineStyle: 'none' } as any });
 const todayStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; };
@@ -76,9 +78,11 @@ function TaxRateInput({ value, onChange }: { value: string; onChange: (v: string
 }
 
 export default function CreateStockItemScreen() {
+  const allowed = useRequireCapability('stock_item.create');
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { company } = useAuth();
+  const { scopeGodowns, assertCanCreate } = useRbasCreate();
   const [submitting, setSubmitting] = useState(false);
   const [groupOptions,     setGroupOptions]     = useState<{label:string;value:string}[]>([]);
   const [warehouseOptions, setWarehouseOptions] = useState<{label:string;value:string}[]>([]);
@@ -97,11 +101,11 @@ export default function CreateStockItemScreen() {
     // Load real warehouses from Tally
     getWarehouses(company.guid)
       .then((res: any) => {
-        const wh = (res?.data ?? (Array.isArray(res) ? res : []));
+        const wh = scopeGodowns(res?.data ?? (Array.isArray(res) ? res : []));
         setWarehouseOptions(wh.map((w: any) => ({ label: w.name, value: w.name })));
       })
       .catch(() => {});
-  }, [company?.guid]);
+  }, [company?.guid, scopeGodowns]);
 
   const [group, setGroup] = useState('');
   const [productName, setProductName] = useState('');
@@ -135,6 +139,7 @@ export default function CreateStockItemScreen() {
       Toast.show({ type: 'error', text1: 'No Company', text2: 'Select a company first.' });
       return;
     }
+    if (!assertCanCreate('stock_item.create')) return;
     try {
       setSubmitting(true);
       const igst = parseFloat(String(taxRate).replace('%', '')) || 0;
@@ -218,6 +223,8 @@ export default function CreateStockItemScreen() {
       setSubmitting(false);
     }
   };
+
+  if (!allowed) return null;
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>

@@ -5,6 +5,7 @@ import { StockItem } from '../../data/stockData';
 import { getWarehouses, getStockGodowns, createStockTransfer } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { clearStockListCache } from '../../utils/stockCache';
+import { useRbasCreate } from '../../hooks/useRbasCreate';
 
 import {
   InlineDropdownField, InlineField, ReadonlyField,
@@ -29,6 +30,7 @@ export function StockTransferModal({
   visible: boolean; item: StockItem | null; onClose: () => void;
 }) {
   const { company } = useAuth();
+  const { scopeGodowns, assertCanCreate } = useRbasCreate();
   const scrollRef = useRef<ScrollView>(null);
 
   const [sourceWhName, setSourceWhName] = useState('');
@@ -50,14 +52,14 @@ export function StockTransferModal({
     if (!visible || !company?.guid || !item) return;
 
     getWarehouses(company.guid).then((res: any) => {
-      const wh: string[] = Array.isArray(res?.data)
-        ? res.data.map((w: any) => w.name).filter(Boolean)
-        : [];
-      setAllWarehouses(wh);
+      const wh = scopeGodowns(Array.isArray(res?.data) ? res.data : []);
+      setAllWarehouses(wh.map((w: any) => w.name).filter(Boolean));
     }).catch(() => {});
 
     getStockGodowns(company.guid, item.id).then((res: any) => {
-      const godowns = parseGodownNames(res);
+      const godowns = scopeGodowns(
+        parseGodownNames(res).map((name) => ({ name })),
+      ).map((g: any) => g.name);
       setItemGodowns(godowns);
       if (godowns.length === 1) {
         setSourceWhName(godowns[0]);
@@ -73,7 +75,7 @@ export function StockTransferModal({
     setDestWhName('');
     setTransferQty(1);
     setNarration('');
-  }, [visible, item?.id, company?.guid]);
+  }, [visible, item?.id, company?.guid, scopeGodowns]);
 
   const sourceOptions = itemGodowns.map(n => ({ id: n, label: n }));
   const destOptions   = allWarehouses
@@ -86,6 +88,7 @@ export function StockTransferModal({
   };
 
   const validate = () => {
+    if (!assertCanCreate('stock_transfer.create')) return false;
     if (!sourceWhName) {
       Toast.show({ type: 'error', text1: 'Required', text2: 'Select source warehouse.' });
       return false;

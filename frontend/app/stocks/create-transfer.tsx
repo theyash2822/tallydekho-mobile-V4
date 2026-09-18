@@ -15,12 +15,14 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
+import { useRbasCreate } from '../../src/hooks/useRbasCreate';
 import { getStocks, getWarehouses, getStockGodowns, createStockTransfer } from '../../src/services/api';
 import { StockItem } from '../../src/data/stockData';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import { CompactQtyInput, SubmitButton } from '../../src/components/forms/StockFormHelpers';
 import { clearStockListCache } from '../../src/utils/stockCache';
 import { useTranslation } from 'react-i18next';
+import { useRequireCapability } from '../../src/components/RequireCapability';
 
 type GodownRow = { name: string; qty: number };
 
@@ -167,6 +169,7 @@ function TransferItemTile({
 }
 
 export default function CreateStockTransferScreen() {
+  const allowed = useRequireCapability('stock_transfer.create');
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -174,6 +177,7 @@ export default function CreateStockTransferScreen() {
   const { company } = useAuth();
   const { formatAmount } = useSettings();
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
+  const { scopeGodowns, assertCanCreate } = useRbasCreate();
   const companyGuid = company?.guid;
 
   const [stocks, setStocks] = useState<StockItem[]>([]);
@@ -207,12 +211,12 @@ export default function CreateStockTransferScreen() {
       .then(([stockRes, whRes]: any[]) => {
         const items = stockRes?.data?.items ?? [];
         setStocks(items.map((r: any) => mapStockRow(r, formatAmount)));
-        const wh = whRes?.data ?? [];
+        const wh = scopeGodowns(whRes?.data ?? []);
         setAllWarehouses((Array.isArray(wh) ? wh : []).map((w: any) => w.name).filter(Boolean));
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [companyGuid, formatAmount]);
+  }, [companyGuid, formatAmount, scopeGodowns]);
 
   const selectedIds = useMemo(() => new Set(rows.map(r => r.item.id)), [rows]);
 
@@ -293,6 +297,7 @@ export default function CreateStockTransferScreen() {
 
   const handleDone = async () => {
     if (!company?.guid) return;
+    if (!assertCanCreate('stock_transfer.create')) return;
     try {
       const res: any = await createStockTransfer({
         companyGuid: company.guid,
@@ -323,6 +328,8 @@ export default function CreateStockTransferScreen() {
       Toast.show({ type: 'error', text1: 'Transfer Failed', text2: err?.message || 'Please try again.' });
     }
   };
+
+  if (!allowed) return null;
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>

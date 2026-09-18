@@ -18,6 +18,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { FinancialChartSkeleton } from '../../src/components/Skeleton';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useTranslation } from 'react-i18next';
+import { useRequireCapability } from '../../src/components/RequireCapability';
 
 const SCREEN_W = Dimensions.get('window').width;
 // Card width (screen - outer margins). Content area inside card (card - card padding).
@@ -854,6 +855,7 @@ const sc = StyleSheet.create({
 // Main Reports Screen
 // ══════════════════════════════════════════════════════════════════════════════
 export default function ReportsScreen() {
+  const allowed = useRequireCapability('financials.view');
   const { t } = useTranslation();
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
@@ -976,6 +978,7 @@ export default function ReportsScreen() {
   const netProfit = revenueTotal - expenseTotal;
   const gstPending = Math.max(0, 12 - gstFiledCount);
 
+  if (!allowed) return null;
   return (
     <SafeAreaView testID="reports-screen" style={styles.safe}>
       {apiError && <ErrorBanner message={apiError} onRetry={() => loadReports({ soft: hasFinDataRef.current })} />}

@@ -8,6 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../constants/colors';
 import { useSettings } from '../context/SettingsContext';
+import { useWorkspace } from '../context/WorkspaceContext';
+import { formatSensitive } from '../utils/sensitiveDisplay';
 
 const SEG_COUNT = 20;
 const SEG_GAP = 3;
@@ -70,8 +72,13 @@ export default function CashflowCard({
   const router = useRouter();
   const { t } = useTranslation();
   const { formatAmountCompact, formatAmount } = useSettings();
-  const fmt = (val: number) => formatAmountCompact(Math.round(val));
-  const fmtFull = (val: number) => formatAmount(Math.round(val));
+  const { sensitivePolicies } = useWorkspace();
+  const fmt = (val: number) =>
+    formatSensitive(sensitivePolicies, 'cash_balance', val, (v) => formatAmountCompact(Math.round(v as number)))
+    ?? '—';
+  const fmtFull = (val: number) =>
+    formatSensitive(sensitivePolicies, 'cash_balance', val, (v) => formatAmount(Math.round(v as number)))
+    ?? '—';
   const incomeVal = totalIncome ?? 0;
   const expenseVal = totalExpense ?? 0;
   const maxVal = Math.max(incomeVal, expenseVal, 1);

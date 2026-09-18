@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { safePush } from '../../src/utils/safeNavigation';
 import { useAuth } from '../../src/context/AuthContext';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import ShimmerPlaceholder, { KPICardSkeleton, MetricCardSkeleton, ActivityRowSkeleton, CardSkeleton } from '../../src/components/ShimmerPlaceholder';
@@ -39,10 +40,17 @@ import {
   type DashboardPeriod,
 } from '../../src/utils/periodDates';
 import { tKpiLabel } from '../../src/i18n/labelMap';
+import { formatSensitive } from '../../src/utils/sensitiveDisplay';
 // No mock data imports — real data only (V2 rule)
 
 const TIME_FILTERS = ['7D', '1M', '3M', '6M'] as const;
 type TimeFilter = typeof TIME_FILTERS[number];
+
+/** Home KPI strip id → sensitive policy key */
+const KPI_SENSITIVE: Record<string, string> = {
+  cash: 'cash_balance',
+  bank: 'bank_balance',
+};
 
 const MODULE_CARDS = [
   { id: 'sales',    labelKey: 'home.moduleSales',    icon: 'trending-up',   route: '/sales',    color: '#2D7D46', bg: '#F0FBF4' },
@@ -56,6 +64,14 @@ export default function HomeScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { isPaired, isDesktopOnline, company, user, selectedFY, lastSyncAt } = useAuth();
+  const { pairingStatus, invitations, demoMode, tallyConnected, sensitivePolicies } = useWorkspace();
+  // Live Tally link. Demo/unpaired still loads dashboard KPIs from Demo Company.
+  const livePaired =
+    isPaired || pairingStatus === 'CONNECTED' || pairingStatus === 'RECONNECTING';
+  // Product 1A: CONNECTED with no company → empty CTA (dataReady false until company exists)
+  const dataReady =
+    !!company?.guid &&
+    (tallyConnected || demoMode || pairingStatus === 'UNPAIRED' || pairingStatus === 'RECONNECTING');
   const deviceOnline = useDeviceOnline();
   const companyGuid = company?.guid;
   const [activeFY, setActiveFY] = useState('');
@@ -77,7 +93,7 @@ export default function HomeScreen() {
   const [notifCount, setNotifCount] = useState(0);
   const wasPaired = useRef(false); // track previous isPaired to detect change
   // isPaired comes from AuthContext — no local state needed
-  const isTallyPaired = isPaired;
+  const isTallyPaired = livePaired;
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -116,7 +132,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     const q = searchQuery.trim();
-    if (q.length < 2 || !isPaired || !companyGuid) {
+    if (q.length < 2 || !dataReady || !companyGuid) {
       setSearchResults([]);
       setSearchLoading(false);
       return;
@@ -129,7 +145,7 @@ export default function HomeScreen() {
         .finally(() => setSearchLoading(false));
     }, 350);
     return () => clearTimeout(timer);
-  }, [searchQuery, isPaired, companyGuid]);
+  }, [searchQuery, dataReady, companyGuid]);
 
   const searchActivities = useMemo(() => {
     if (searchResults.length === 0) return filteredActivity;
@@ -194,7 +210,7 @@ export default function HomeScreen() {
 
   const loadData = useCallback(async (opts?: LoadOpts) => {
     // ── DATA GATE ──────────────────────────────────────────────
-    if (!isPaired) {
+    if (!dataReady) {
       hasDashboardDataRef.current = false;
       setKpiData([]);
       setMetrics([]);
@@ -249,8 +265,13 @@ export default function HomeScreen() {
       if (kpiR.status === 'fulfilled') {
         const kpi = kpiR.value;
         const kpiArr = Array.isArray(kpi) ? kpi : (kpi as any)?.data ?? [];
-        setKpiData(kpiArr as any);
-        kpiOk = true;
+        if (Array.isArray(kpiArr) && kpiArr.length > 0) {
+          setKpiData(kpiArr as any);
+          kpiOk = true;
+        } else if (!soft) {
+          // Empty/304-parsed response — don't treat as success; keep showing retry
+          setKpiData([]);
+        }
       }
 
       if (metR.status === 'fulfilled') {
@@ -262,8 +283,22 @@ export default function HomeScreen() {
 
       if (cfR.status === 'fulfilled') {
         const cf = cfR.value;
-        const cfData = cf ? ((cf as any)?.data ?? cf) : null;
-        if (cfData && typeof cfData === 'object' && !('success' in cfData)) {
+        const raw = cf ? ((cf as any)?.data ?? cf) : null;
+        if (raw && typeof raw === 'object' && !('success' in raw)) {
+          // API is snake_case; CashflowCard expects camelCase
+          const cfData = {
+            netCash: raw.netCash ?? raw.net_cash ?? 0,
+            grossCash: raw.grossCash ?? raw.gross_cash ?? 0,
+            netRealisableBalance: raw.netRealisableBalance ?? raw.net_realisable_balance ?? 0,
+            grossProfit: raw.grossProfit ?? raw.gross_profit ?? 0,
+            netProfit: raw.netProfit ?? raw.net_profit ?? 0,
+            incomePercentage: raw.incomePercentage ?? raw.income_percentage ?? raw.gross_profit_vs_sales_pct ?? 0,
+            updatedAt: raw.updatedAt ?? raw.updated_at ?? 'just now',
+            totalIncome: raw.totalIncome ?? raw.total_income ?? 0,
+            totalExpense: raw.totalExpense ?? raw.total_expense ?? 0,
+            series: raw.series,
+            interval: raw.interval,
+          };
           setCashflow(cfData as any);
         } else {
           setCashflow(null);
@@ -338,7 +373,7 @@ export default function HomeScreen() {
       if (gen === requestGenRef.current) setIsLoading(false);
     }
   }, [
-    isPaired, activeFilter, companyGuid, selectedFY?.startDate, selectedFY?.endDate,
+    dataReady, activeFilter, companyGuid, selectedFY?.startDate, selectedFY?.endDate,
     t, formatAsOf,
   ]);
 
@@ -361,13 +396,13 @@ export default function HomeScreen() {
 
   // lastSyncAt → soft background refresh (debounce); never hard-wipe if data showing
   useEffect(() => {
-    if (!isPaired || !companyGuid || !lastSyncAt) return;
+    if (!dataReady || !companyGuid || !lastSyncAt) return;
     if (!hasDashboardDataRef.current) return;
     const timer = setTimeout(() => {
       loadData({ soft: true });
     }, 400);
     return () => clearTimeout(timer);
-  }, [lastSyncAt, isPaired, companyGuid, loadData]);
+  }, [lastSyncAt, dataReady, companyGuid, loadData]);
 
   const readStoredPeriod = useCallback(async () => {
     try {
@@ -393,10 +428,9 @@ export default function HomeScreen() {
     AsyncStorage.setItem(CASHFLOW_PERIOD_KEY, f).catch(() => {});
   }, []);
 
-  // ── Detect pairing state change ─────────────────────────────
-  // When device is paired: show toast + fetch last sync time + refresh notifications
+  // ── Detect live pairing state change (not demo/unpaired) ────
   useEffect(() => {
-    if (isPaired && !wasPaired.current) {
+    if (livePaired && !wasPaired.current) {
       Toast.show({
         type: 'success',
         text1: t('home.tallyConnected'),
@@ -414,16 +448,16 @@ export default function HomeScreen() {
         }
       }).catch(() => {});
     }
-    if (!isPaired && wasPaired.current) {
+    if (!livePaired && wasPaired.current) {
       Toast.show({ type: 'info', text1: t('home.tallyDisconnected'), text2: t('home.tallyDisconnectedSub'), visibilityTime: 3000 });
       setLastSyncTime(null);
     }
-    wasPaired.current = isPaired;
-  }, [isPaired]);
+    wasPaired.current = livePaired;
+  }, [livePaired, t]);
 
   // ── Update last sync timestamp whenever a sync fires ───────────
   useEffect(() => {
-    if (!isPaired || !lastSyncAt) return;
+    if (!dataReady || !lastSyncAt) return;
     getTallySyncStatus().then((res: any) => {
       const d = res?.data ?? res;
       if (d?.device?.last_seen) {
@@ -433,16 +467,16 @@ export default function HomeScreen() {
         }));
       }
     }).catch(() => {});
-  }, [isPaired, lastSyncAt]);
+  }, [dataReady, lastSyncAt]);
 
   // ── Fetch real notification count ─────────────────────────────
   useEffect(() => {
-    if (!isPaired || !companyGuid) return;
+    if (!dataReady || !companyGuid) return;
     getNotifications(companyGuid).then((res: any) => {
       const notifs = res?.data ?? res ?? [];
       setNotifCount(Array.isArray(notifs) ? notifs.length : 0);
     }).catch(() => {});
-  }, [isPaired, companyGuid]);
+  }, [dataReady, companyGuid]);
 
   const onRefresh = async () => {
     // PTR: native RefreshControl spinner only — soft load, no full-page shimmer
@@ -453,9 +487,18 @@ export default function HomeScreen() {
 
   // ── KPI row render ────────────────────────────────────────────────────────
   const renderKPI = ({ item }: any) => {
-    const amount = item.amount_raw != null
+    const policyKey = KPI_SENSITIVE[item.id];
+    const rawVisible = item.amount_raw != null
       ? formatAmountCompact(item.amount_raw)
       : item.amount;
+    const amount = policyKey
+      ? (formatSensitive(
+          sensitivePolicies,
+          policyKey,
+          item.amount_raw ?? item.amount,
+          () => rawVisible,
+        ) ?? '—')
+      : rawVisible;
     return (
       <KPICarouselPage>
         <KPICarouselCard
@@ -525,14 +568,30 @@ export default function HomeScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Status banners */}
-        {!isPaired && <PairingBanner />}
+        {invitations?.length > 0 && (
+          <TouchableOpacity
+            onPress={() => safePush(router, '/settings/invitations')}
+            style={{
+              marginHorizontal: SPACING.md, marginTop: 8, marginBottom: 4,
+              padding: 12, borderRadius: 10, backgroundColor: '#EFF6FF',
+              borderWidth: 1, borderColor: '#BFDBFE', flexDirection: 'row', alignItems: 'center', gap: 8,
+            }}
+          >
+            <Ionicons name="mail-unread-outline" size={18} color="#2563EB" />
+            <Text style={{ flex: 1, color: '#1E40AF', fontWeight: '600', fontSize: 13 }}>
+              {invitations.length} workspace invitation{invitations.length > 1 ? 's' : ''} — tap to accept
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color="#2563EB" />
+          </TouchableOpacity>
+        )}
+        {demoMode && <PairingBanner />}
         {!deviceOnline && (
           <OfflineBadge
             variant="device"
             onRetry={() => loadData({ soft: hasDashboardDataRef.current })}
           />
         )}
-        {deviceOnline && isPaired && !isDesktopOnline && <OfflineBadge variant="desktop" />}
+        {deviceOnline && livePaired && !isDesktopOnline && <OfflineBadge variant="desktop" />}
         {pageBanner && (
           <ErrorBanner
             message={pageBanner}
@@ -540,17 +599,39 @@ export default function HomeScreen() {
           />
         )}
 
-        {/* KPI Carousel */}
+        {/* KPI Carousel — explicit height: nested horizontal FlatList collapses to 0 inside ScrollView on web/some RN */}
         <View style={styles.kpiSection}>
           {isLoading ? (
-            <View style={{ flexDirection: 'row', paddingHorizontal: SPACING.md, gap: 12 }}>
+            <View style={{ flexDirection: 'row', paddingHorizontal: SPACING.md, gap: 12, height: 72 }}>
               {[0, 1, 2].map(i => <KPICardSkeleton key={i} />)}
+            </View>
+          ) : !companyGuid || !dataReady ? (
+            <View style={styles.kpiEmpty}>
+              <Text style={styles.kpiEmptyText}>
+                {tallyConnected
+                  ? t(
+                      'home.noCompanySynced',
+                      'No active Tally companies found. Check the company/FY selection in TallyDekho Desktop and sync again.'
+                    )
+                  : demoMode
+                    ? t('home.loadingDemo', 'Loading demo books…')
+                    : t('home.noCompanyKpi', 'No company synced yet')}
+              </Text>
+            </View>
+          ) : kpiData.length === 0 ? (
+            <View style={styles.kpiEmpty}>
+              <Text style={styles.kpiEmptyText}>{t('home.kpiUnavailable', 'KPI unavailable')}</Text>
+              <TouchableOpacity onPress={() => loadData({ soft: true })} hitSlop={8}>
+                <Text style={styles.kpiEmptyRetry}>{t('common.retry', 'Retry')}</Text>
+              </TouchableOpacity>
             </View>
           ) : (
             <FlatList
               ref={kpiRef}
               horizontal
               pagingEnabled
+              nestedScrollEnabled
+              style={styles.kpiListHost}
               data={kpiData}
               keyExtractor={i => i.id}
               renderItem={renderKPI}
@@ -565,7 +646,7 @@ export default function HomeScreen() {
             />
           )}
           {/* Dot Indicators */}
-          {!isLoading && Array.isArray(kpiData) && (
+          {!isLoading && Array.isArray(kpiData) && kpiData.length > 0 && (
             <KPICarouselDots count={kpiData.length} activeIndex={kpiIdx} />
           )}
         </View>
@@ -662,8 +743,23 @@ const styles = StyleSheet.create({
   },
   syncTitle: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.white },
   syncSubtitle: { fontSize: TYPOGRAPHY.xs, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
-  kpiSection: { marginTop: SPACING.md },
-  kpiList: { paddingHorizontal: 0 },
+  kpiSection: { marginTop: SPACING.md, minHeight: 72 },
+  kpiListHost: { height: 72, flexGrow: 0 },
+  kpiList: { paddingHorizontal: 0, alignItems: 'center' },
+  kpiEmpty: {
+    height: 72,
+    marginHorizontal: SPACING.md,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.borderDefault,
+    backgroundColor: COLORS.cardBg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  kpiEmptyText: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary },
+  kpiEmptyRetry: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.brandPrimary },
   filterWrap: { paddingHorizontal: SPACING.md, marginTop: SPACING.md },
   filterRow: {
     flexDirection: 'row', backgroundColor: COLORS.pageBg,

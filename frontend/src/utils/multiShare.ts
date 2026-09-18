@@ -26,6 +26,7 @@ import {
   renderEInvoiceSheetHTML,
   renderEWayBillSheetHTML,
 } from './pdf/complianceSheet';
+import { assertCanSharePdf } from './rbasGate';
 import { TX_TO_DOC_TYPE } from './documentHelpers';
 import {
   thermalPageSize,
@@ -187,6 +188,7 @@ export async function shareMultiPageHtmlPdf(
   htmlDocuments: string[],
   opts: { fileName?: string; onBeforeShare?: () => void } = {}
 ): Promise<void> {
+  if (!assertCanSharePdf()) return;
   if (!htmlDocuments.length) throw new Error('No documents to share.');
   const fileName = opts.fileName || `Documents (${htmlDocuments.length}).pdf`;
 

@@ -15,17 +15,19 @@ let onSyncedCallback: SyncedCallback | null = null;
 let onVoucherSyncedCallback: VoucherSyncedCallback | null = null;
 let onWorkspaceEventCallback: WorkspaceEventCallback | null = null;
 let currentBaseUrl: string = '';
+let currentToken: string = '';
 let _pendingWorkspaceId: string | null = null;
+let _lastConnectErrorAt = 0;
 
 function emitWorkspaceEvent(event: string, payload?: any) {
-  console.log(`[Socket] ${event}`);
+  if (__DEV__) console.log(`[Socket] ${event}`);
   onWorkspaceEventCallback?.(event, payload);
 }
 
 export const socketService = {
   connect(baseUrl: string, token: string) {
-    // Already connected to same server — skip
-    if (socket?.connected && currentBaseUrl === baseUrl) return;
+    // Already connected to same server with same token — skip
+    if (socket?.connected && currentBaseUrl === baseUrl && currentToken === token) return;
 
     // Disconnect any stale connection
     if (socket) {
@@ -34,22 +36,29 @@ export const socketService = {
     }
 
     currentBaseUrl = baseUrl;
+    currentToken = token;
     socket = io(baseUrl, {
-      transports: ['websocket'],
+      // RN often fails pure websocket on flaky LAN — allow polling fallback
+      transports: ['websocket', 'polling'],
+      path: '/socket.io',
+      auth: { token },
+      query: { token },
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 2000,
-      timeout: 10000,
+      reconnectionDelayMax: 15000,
+      timeout: 15000,
+      forceNew: true,
     });
 
     socket.on('connect', () => {
-      console.log('[Socket] connected:', socket?.id);
+      if (__DEV__) console.log('[Socket] connected:', socket?.id);
       // Register as mobile client with JWT token
       socket?.emit('register', { token, type: 'mobile' });
     });
 
     socket.on('registered', ({ status }: { status: boolean }) => {
-      console.log('[Socket] registered, status:', status);
+      if (__DEV__) console.log('[Socket] registered, status:', status);
       if (_pendingWorkspaceId) {
         socket?.emit('workspace:register', { workspaceId: _pendingWorkspaceId });
       }
@@ -60,6 +69,13 @@ export const socketService = {
     });
     socket.on('workspace_access_changed', (payload?: any) => {
       emitWorkspaceEvent('workspace_access_changed', payload);
+    });
+    // Suspend/remove also emit these (parity with web)
+    socket.on('membership_revoked', (payload?: any) => {
+      emitWorkspaceEvent('workspace_access_revoked', payload);
+    });
+    socket.on('access_revoked', (payload?: any) => {
+      emitWorkspaceEvent('workspace_access_revoked', payload);
     });
     socket.on('invitation_received', (payload?: any) => {
       emitWorkspaceEvent('invitation_received', payload);
@@ -79,8 +95,24 @@ export const socketService = {
 
     // 🔄 Key event: backend fires this after every sync
     socket.on('synced', ({ companyGuid }: { companyGuid: string; syncedAt: string }) => {
-      console.log('[Socket] synced event for company:', companyGuid);
+      if (__DEV__) console.log('[Socket] synced event for company:', companyGuid);
       onSyncedCallback?.(companyGuid);
+      emitWorkspaceEvent('synced', { companyGuid });
+    });
+
+    socket.on('tally_connection', (payload?: any) => {
+      emitWorkspaceEvent('tally_connection', payload);
+      if (String(payload?.status || '').toUpperCase() === 'CONNECTED') {
+        onSyncedCallback?.(payload?.companyGuid || '');
+      }
+    });
+
+    socket.on('unpaired', (payload?: any) => {
+      emitWorkspaceEvent('unpaired', payload);
+    });
+
+    socket.on('paired', (payload?: any) => {
+      emitWorkspaceEvent('paired', payload);
     });
 
     // 🧾 Voucher number reconciled: backend fires after ingestProcessor matches TDK ref
@@ -91,11 +123,16 @@ export const socketService = {
     });
 
     socket.on('disconnect', (reason) => {
-      console.log('[Socket] disconnected:', reason);
+      if (__DEV__) console.log('[Socket] disconnected:', reason);
     });
 
     socket.on('connect_error', (err) => {
-      console.warn('[Socket] connect error:', err.message);
+      // Throttle — never LogBox-spam; RN treats console.warn as yellow box
+      const now = Date.now();
+      if (__DEV__ && now - _lastConnectErrorAt > 30_000) {
+        _lastConnectErrorAt = now;
+        console.log('[Socket] connect retry:', err?.message || 'network');
+      }
     });
   },
 
@@ -107,6 +144,7 @@ export const socketService = {
     }
     onSyncedCallback = null;
     currentBaseUrl = '';
+    currentToken = '';
     _pendingWorkspaceId = null;
   },
 

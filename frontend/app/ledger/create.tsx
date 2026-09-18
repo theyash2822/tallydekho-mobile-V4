@@ -10,11 +10,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
 import { createLedger } from '../../src/services/api';
 import FormDropdown from '../../src/components/forms/FormDropdown';
 import BottomSheetSearch from '../../src/components/forms/BottomSheetSearch';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
 import PartyForm, { PartyFormRef } from '../../src/components/forms/PartyForm';
+import { useRequireCapability } from '../../src/components/RequireCapability';
+import { useRbasCreate } from '../../src/hooks/useRbasCreate';
 
 // ─── Themed TextInput ─────────────────────────────────────────────────────────
 function ThemedInput({ style, onFocus, onBlur, ...props }: TextInputProps) {
@@ -149,10 +152,13 @@ function BalanceRow({ value, onChange, isCr, onToggleCr }: {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CreateLedgerScreen() {
+  const allowed = useRequireCapability('ledger_master.create');
   const router      = useRouter();
   const insets      = useSafeAreaInsets();
   const params      = useLocalSearchParams<{ type?: string }>();
-  const { company, isPaired } = useAuth();
+  const { company } = useAuth();
+  const { pairingStatus } = useWorkspace();
+  const { assertCanCreate } = useRbasCreate();
 
   const lType = (
     ['sundry_creditor', 'sundry_debtor', 'duties_taxes', 'custom'].includes(params.type || '')
@@ -256,10 +262,11 @@ export default function CreateLedgerScreen() {
       Alert.alert('Required', 'Please select Type of Supply.');
       return;
     }
-    if (!isPaired) {
-      Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Please pair with Tally Desktop first.' });
+    if (String(pairingStatus || '').toUpperCase() !== 'CONNECTED') {
+      Toast.show({ type: 'error', text1: 'Tally not connected', text2: 'Connect and sync Tally before creating masters.' });
       return;
     }
+    if (!assertCanCreate('ledger_master.create')) return;
 
     try {
       setSubmitting(true);
@@ -394,6 +401,8 @@ export default function CreateLedgerScreen() {
       </SafeAreaView>
     );
   }
+
+  if (!allowed) return null;
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>

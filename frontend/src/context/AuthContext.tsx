@@ -16,7 +16,7 @@ const removeToken = async () => {
   if (Platform.OS === 'web') {
     try { window.localStorage.removeItem('auth_token'); window.localStorage.removeItem('user_data'); } catch {}
   }
-  await AsyncStorage.multiRemove(['auth_token', 'user_data', 'company_data', 'is_paired', 'user_info', 'active_workspace_id']);
+  await AsyncStorage.multiRemove(['auth_token', 'user_data', 'company_data', 'is_paired', 'user_info', 'active_workspace_id', 'active_workspace_manual_pin']);
 };
 
 const getToken = async (): Promise<string | null> => {
@@ -73,7 +73,7 @@ interface AuthContextType {
   signIn: (token: string, userInfo?: UserInfo) => Promise<void>;
   signOut: () => Promise<void>;
   setIsPaired: (v: boolean) => void;
-  setCompany: (c: Company | null) => Promise<void>;
+  setCompany: (c: Company | null | ((prev: Company | null) => Company | null)) => Promise<void>;
   setUser: (u: UserInfo) => void;
 }
 
@@ -124,7 +124,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const companyJson = await AsyncStorage.getItem(wsCompanyKey(wsId));
           const legacyCompany = companyJson ? null : await AsyncStorage.getItem('company_data');
           const rawCompany = companyJson || legacyCompany;
-          if (rawCompany) setCompanyState(JSON.parse(rawCompany));
+          if (rawCompany) {
+            const parsed = JSON.parse(rawCompany);
+            companyRef.current = parsed;
+            setCompanyState(parsed);
+          }
           const fyJson = await AsyncStorage.getItem(wsFyKey(wsId));
           if (fyJson) {
             try { setSelectedFY(JSON.parse(fyJson)); } catch { /* ignore */ }
@@ -140,7 +144,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => clearTimeout(timeout);
   }, []);
 
-  const signIn = async (token: string, userInfo?: UserInfo) => {
+  const signIn = useCallback(async (token: string, userInfo?: UserInfo) => {
     await storeToken(token);
     setIsAuthenticated(true);
     if (userInfo) {
@@ -152,7 +156,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     socketService.setOnSynced(() => {
       setLastSyncAt(Date.now()); // instant bump → all screens refetch
     });
-  };
+  }, [BASE_URL]);
 
   const signOut = useCallback(async () => {
     socketService.disconnect();
@@ -174,23 +178,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => setAuthFailureHandler(null);
   }, [signOut]);
 
-  const setIsPaired = (v: boolean) => {
+  const setIsPaired = useCallback((v: boolean) => {
     setIsPairedState(v);
     AsyncStorage.setItem('is_paired', v ? 'true' : 'false').catch(() => {});
-  };
+  }, []);
 
-  const setCompany = async (c: Company | null) => {
-    setCompanyState(c);
+  // Stable identity — WorkspaceContext refreshContext depends on this; a new
+  // function every render re-fired refresh → setAccess → filterScoped → Header loops.
+  const setCompany = useCallback(async (c: Company | null | ((prev: Company | null) => Company | null)) => {
+    const next = typeof c === 'function' ? c(companyRef.current) : c;
+    // No-op when identity unchanged (stops Demo↔null flicker loops)
+    if (!next && !companyRef.current) return;
+    if (next?.guid && next.guid === companyRef.current?.guid) return;
+    // Also no-op when functional updater returns the same object reference
+    if (next && next === companyRef.current) return;
+    companyRef.current = next;
+    setCompanyState(next);
     const wsId = getActiveWorkspaceId();
     const key = wsCompanyKey(wsId);
-    if (c) {
-      await AsyncStorage.setItem(key, JSON.stringify(c));
-      // Keep legacy key as last-used fallback for cold start before WS restore
-      await AsyncStorage.setItem('company_data', JSON.stringify(c));
+    if (next) {
+      await AsyncStorage.setItem(key, JSON.stringify(next));
+      await AsyncStorage.setItem('company_data', JSON.stringify(next));
     } else {
       await AsyncStorage.removeItem(key);
       await AsyncStorage.removeItem('company_data');
     }
+  }, []);
+
+  const isDemoCompany = (c: { guid?: string; name?: string; id?: string } | null | undefined) => {
+    if (!c) return false;
+    const name = String(c.name || '').toLowerCase();
+    const guid = String(c.guid || c.id || '');
+    return name.startsWith('demo') || guid.startsWith('dddddddd-dddd-4ddd-8ddd-') || guid.startsWith('DEMO');
   };
 
   const setSelectedFYPersisted = useCallback(async (fy: FYInfo | null) => {
@@ -204,10 +223,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const setUser = (u: UserInfo) => {
+  const setUser = useCallback((u: UserInfo) => {
     setUserState(u);
     AsyncStorage.setItem('user_info', JSON.stringify(u)).catch(() => {});
-  };
+  }, []);
 
   // ── Connect socket when already authenticated (app restart / token restore) ─
   useEffect(() => {
@@ -233,10 +252,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const token = await getToken();
         if (!token) return;
-        const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+        // Wait until WorkspaceContext has set X-Workspace-Id — otherwise we hit
+        // the legacy path (no workspace_status) and never purge Demo correctly.
         const wsId = getActiveWorkspaceId();
-        if (wsId) headers['X-Workspace-Id'] = wsId;
-        const res = await fetch(`${BASE_URL}/api/tally-sync/status`, { headers });
+        if (!wsId) return;
+        const headers: Record<string, string> = {
+          Authorization: `Bearer ${token}`,
+          'X-Workspace-Id': wsId,
+        };
+        const res = await fetch(`${BASE_URL}/api/tally-sync/status`, {
+          headers,
+          cache: 'no-store',
+        });
         if (res.status === 401) {
           // Token expired — sign out cleanly
           await removeToken();
@@ -249,39 +276,72 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!res.ok) return;
         const json = await res.json();
         if (!json?.success) return;
-        const { is_paired, desktop_online, company: statusCompany } = json.data ?? {};
+        const { is_paired, desktop_online, company: statusCompany, workspace_status } = json.data ?? {};
+        const wsStatus = String(workspace_status || '').toUpperCase();
+        // CONNECTED is the only state where Demo must be purged. RECONNECTING is still Demo Mode.
+        const liveConnected = wsStatus === 'CONNECTED';
+        const prevStatus = lastWsStatusRef.current;
+        if (wsStatus) lastWsStatusRef.current = wsStatus;
+
         if (typeof is_paired === 'boolean') {
-          setIsPairedState(prev => {
-            AsyncStorage.setItem('is_paired', is_paired ? 'true' : 'false').catch(() => {});
-            // Already paired with no company → adopt status company
-            if (is_paired && statusCompany?.guid) {
-              setCompanyState(cur => {
-                if (cur?.guid) return cur;
-                const c = { guid: statusCompany.guid, name: statusCompany.name, gstin: statusCompany.gstin || null };
-                AsyncStorage.setItem('company_data', JSON.stringify(c)).catch(() => {});
-                return c;
-              });
-            }
-            return is_paired;
-          });
+          AsyncStorage.setItem('is_paired', is_paired ? 'true' : 'false').catch(() => {});
+          setIsPairedState(is_paired);
         }
         if (typeof desktop_online === 'boolean') {
           setIsDesktopOnlineState(desktop_online);
         }
 
+        // Flip off Demo as soon as backend reports CONNECTED (don't wait for is_paired change).
+        if (liveConnected && prevStatus !== 'CONNECTED') {
+          setLastSyncAt(Date.now());
+        }
+
+        if (liveConnected && statusCompany?.guid && !isDemoCompany(statusCompany)) {
+          setCompanyState(cur => {
+            if (cur?.guid && !isDemoCompany(cur)) return cur;
+            const c = { guid: statusCompany.guid, name: statusCompany.name, gstin: statusCompany.gstin || null };
+            companyRef.current = c;
+            AsyncStorage.setItem('company_data', JSON.stringify(c)).catch(() => {});
+            AsyncStorage.setItem(wsCompanyKey(wsId), JSON.stringify(c)).catch(() => {});
+            return c;
+          });
+        }
+
         // After desktop syncs a different/new company, active set changes (old cos
         // marked is_active=false). Drop inactive cached company and adopt active one.
-        if (is_paired && statusCompany?.guid) {
+        // Only while CONNECTED — Demo Mode must keep Demo Company.
+        if (liveConnected) {
           try {
             const cosRes: any = await getCompanies();
-            const list: { id: string; name: string; gstin?: string | null }[] = cosRes?.data || [];
+            const list: { id: string; name: string; gstin?: string | null }[] = (cosRes?.data || [])
+              .filter((c: any) => !isDemoCompany(c));
             setCompanyState(cur => {
+              if (isDemoCompany(cur)) {
+                // Demo while CONNECTED is illegal — clear even if list empty
+                if (!list.length) {
+                  companyRef.current = null;
+                  AsyncStorage.removeItem('company_data').catch(() => {});
+                  return null;
+                }
+              }
               const stillActive = !!(cur?.guid && list.some(c => c.id === cur.guid));
               if (stillActive) return cur;
-              const pick = list.find(c => c.id === statusCompany.guid) || list[0];
+              if (!list.length) {
+                // Paired empty (only Demo filtered out) → stable null
+                if (!cur || isDemoCompany(cur)) {
+                  companyRef.current = null;
+                  AsyncStorage.removeItem('company_data').catch(() => {});
+                  return null;
+                }
+                return cur;
+              }
+              const liveGuid = statusCompany?.guid && !isDemoCompany(statusCompany) ? statusCompany.guid : null;
+              const pick = (liveGuid && list.find(c => c.id === liveGuid)) || list[0];
               if (!pick) return cur;
               const c = { guid: pick.id, name: pick.name, gstin: pick.gstin || null };
+              companyRef.current = c;
               AsyncStorage.setItem('company_data', JSON.stringify(c)).catch(() => {});
+              AsyncStorage.setItem(wsCompanyKey(wsId), JSON.stringify(c)).catch(() => {});
               return c;
             });
           } catch { /* keep cached */ }
@@ -304,12 +364,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => clearInterval(interval);
   }, [isAuthenticated, BASE_URL]);
 
+  const value = useMemo<AuthContextType>(() => ({
+    isAuthenticated, isLoading, isPaired, isDesktopOnline, company, user, lastSyncAt,
+    selectedFY, setSelectedFY: setSelectedFYPersisted,
+    signIn, signOut, setIsPaired, setCompany, setUser,
+  }), [
+    isAuthenticated, isLoading, isPaired, isDesktopOnline, company, user, lastSyncAt,
+    selectedFY, setSelectedFYPersisted, signIn, signOut, setIsPaired, setCompany, setUser,
+  ]);
+
   return (
-    <AuthContext.Provider value={{
-      isAuthenticated, isLoading, isPaired, isDesktopOnline, company, user, lastSyncAt,
-      selectedFY, setSelectedFY: setSelectedFYPersisted,
-      signIn, signOut, setIsPaired, setCompany, setUser,
-    }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

@@ -29,12 +29,14 @@ import {
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
 import FormField from '../../src/components/forms/FormField';
 import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import { useRbasCreate } from '../../src/hooks/useRbasCreate';
 import LogisticsSection, { LogEntry, calcLogisticsTotal } from '../../src/components/forms/LogisticsSection';
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import { taxFieldsFromLedgerSelect, resolveTaxLedgerRate } from '../../src/utils/taxLedgerHelpers';
 import { shareVoucherPdfByRef } from '../../src/utils/voucherPdf';
 import { useTranslation } from 'react-i18next';
+import { useRequireCapability } from '../../src/components/RequireCapability';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const todayStr = () => {
@@ -430,6 +432,7 @@ function ItemRow({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CreateDeliveryNoteScreen() {
+  const allowed = useRequireCapability('delivery_note.create');
   const { t } = useTranslation();
   const router = useRouter();
   const scrollRef = useRef<any>(null);
@@ -448,7 +451,7 @@ export default function CreateDeliveryNoteScreen() {
 
   // ── Core state ───────────────────────────────────────────────────────────────
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [entryType, setEntryType] = useState<EntryType>('regular');
+  const {entryMode, entryType, setEntryType, scopeParties, scopeGodowns, assertCanCreate} = useRbasCreate();
   const [date, setDate] = useState(todayStr());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [ledger, setLedger] = useState('');
@@ -530,7 +533,7 @@ export default function CreateDeliveryNoteScreen() {
   const handleEntryTypeChange = useCallback((next: EntryType) => {
     setEntryType(next);
     if (next === 'regular') setDate(todayStr());
-  }, []);
+  }, [setEntryType]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo?.({ y: 0, animated: false });
@@ -540,7 +543,7 @@ export default function CreateDeliveryNoteScreen() {
   useEffect(() => {
     if (!company?.guid) return;
     getParties(company.guid).then((res: any) => {
-      const list = res?.data || [];
+      const list = scopeParties(res?.data || []);
       if (list.length > 0) setParties(list.map((p: any) => ({
         label: p.name,
         value: p.name,
@@ -555,7 +558,7 @@ export default function CreateDeliveryNoteScreen() {
         },
       })));
     }).catch(() => {});
-  }, [company?.guid]);
+  }, [company?.guid, scopeParties]);
 
   useEffect(() => {
     if (!company?.guid) return;
@@ -568,11 +571,11 @@ export default function CreateDeliveryNoteScreen() {
   useEffect(() => {
     if (!company?.guid) return;
     getWarehouses(company.guid).then((res: any) => {
-      const list: Warehouse[] = res?.data || res?.warehouses || [];
+      const list: Warehouse[] = scopeGodowns(res?.data || res?.warehouses || []);
       setWarehouses(list);
       if (list.length === 1) setItems(prev => prev.map(i => ({ ...i, warehouse: list[0].name })));
     }).catch(() => {});
-  }, [company?.guid]);
+  }, [company?.guid, scopeGodowns]);
 
   useEffect(() => {
     if (!company?.guid) return;
@@ -919,7 +922,7 @@ export default function CreateDeliveryNoteScreen() {
   const handleSubmit = useCallback(async () => {
     Keyboard.dismiss();
     if (submittingRef.current) return;
-    if (!isPaired) { Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Pair with Tally Desktop before creating a delivery note.' }); return; }
+    if (!assertCanCreate('delivery_note.create')) return;
     if (!company?.guid) { Toast.show({ type: 'error', text1: 'No company selected' }); return; }
     if (!ledger) { Toast.show({ type: 'error', text1: 'Sales Ledger required' }); return; }
     if (!party) { Toast.show({ type: 'error', text1: 'Customer required' }); return; }
@@ -1035,6 +1038,8 @@ export default function CreateDeliveryNoteScreen() {
   ]);
 
   // ── Render ────────────────────────────────────────────────────────────────────
+  if (!allowed) return null;
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       {/* Success Overlay */}
@@ -1107,7 +1112,7 @@ export default function CreateDeliveryNoteScreen() {
           <Text style={s.headerTitle}>{t('sales.createDeliveryNote')}</Text>
           <Text style={s.headerSub}>{numberingDisplay}</Text>
         </View>
-        <RegularOptionalToggle value={entryType} onChange={handleEntryTypeChange} />
+        <RegularOptionalToggle value={entryType} onChange={handleEntryTypeChange} entryMode={entryMode} />
       </View>
 
       <StepIndicator step={step} />

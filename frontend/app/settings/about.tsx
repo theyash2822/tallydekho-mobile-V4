@@ -48,13 +48,12 @@ export default function AboutScreen() {
           </View>
           <Text style={s.appName}>TallyDekho</Text>
           <Text style={s.appVersion}>Version 3.7.2 (Build 257)</Text>
-          {/* Free Plan badge — tappable → License/Plans screen */}
           <TouchableOpacity
             style={s.planBadge}
             onPress={()=>safePush(router, '/settings/license' as any)}
             activeOpacity={0.75}
           >
-            <Text style={s.planTxt}>Free Plan</Text>
+            <Text style={s.planTxt}>License & Credits</Text>
             <Ionicons name="chevron-forward" size={12} color={COLORS.positive} />
           </TouchableOpacity>
         </View>

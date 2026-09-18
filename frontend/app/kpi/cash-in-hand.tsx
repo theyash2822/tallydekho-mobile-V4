@@ -23,6 +23,8 @@ import {
 import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { ViewAllButton } from '../../src/components/ViewAllButton';
 import { useTranslation } from 'react-i18next';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
+import { formatSensitive } from '../../src/utils/sensitiveDisplay';
 
 const { width: SW } = Dimensions.get('window');
 const YAXIS_W = 48;
@@ -396,7 +398,11 @@ export default function CashInHandScreen() {
   const router = useRouter();
   const { company, selectedFY, lastSyncAt } = useAuth();
   const { formatAmountCompact, formatAmount, formatDate } = useSettings();
+  const { sensitivePolicies } = useWorkspace();
   const companyGuid = company?.guid;
+  const fmtCash = (n: number) =>
+    formatSensitive(sensitivePolicies, 'cash_balance', n, (v) => formatAmountCompact(Math.round(v as number)))
+    ?? '—';
 
   const fyFrom = selectedFY?.startDate ?? '';
   const fyTo = selectedFY?.endDate ?? '';
@@ -467,7 +473,7 @@ export default function CashInHandScreen() {
           id: String(c.id),
           icon: icons[c.id] || 'stats-chart-outline',
           label: c.label || c.id,
-          amount: formatAmountCompact(Math.round(Number(c.amount) || 0)),
+          amount: fmtCash(Number(c.amount) || 0),
           trend: hasTrend ? `${Number(trend) >= 0 ? '+' : ''}${Number(trend)}%` : null,
           positive,
         };
@@ -478,12 +484,12 @@ export default function CashInHandScreen() {
     const outflow = Number(apiData?.today_outflow) || 0;
     const net = inflow - outflow;
     return [
-      { id: 'bal', icon: 'cash-outline', label: 'Cash on Hand', amount: formatAmountCompact(Math.round(bal)), trend: null, positive: true },
-      { id: 'in', icon: 'arrow-down-circle-outline', label: 'Inflow Today', amount: formatAmountCompact(Math.round(inflow)), trend: null, positive: true },
-      { id: 'out', icon: 'arrow-up-circle-outline', label: 'Outflow Today', amount: formatAmountCompact(Math.round(outflow)), trend: null, positive: true },
-      { id: 'net', icon: 'swap-vertical-outline', label: 'Net Today', amount: formatAmountCompact(Math.round(net)), trend: null, positive: true },
+      { id: 'bal', icon: 'cash-outline', label: 'Cash on Hand', amount: fmtCash(bal), trend: null, positive: true },
+      { id: 'in', icon: 'arrow-down-circle-outline', label: 'Inflow Today', amount: fmtCash(inflow), trend: null, positive: true },
+      { id: 'out', icon: 'arrow-up-circle-outline', label: 'Outflow Today', amount: fmtCash(outflow), trend: null, positive: true },
+      { id: 'net', icon: 'swap-vertical-outline', label: 'Net Today', amount: fmtCash(net), trend: null, positive: true },
     ];
-  }, [apiData, formatAmountCompact]);
+  }, [apiData, fmtCash]);
 
   const daily: DayPoint[] = useMemo(() => {
     const rows = Array.isArray(apiData?.daily_balance) ? apiData.daily_balance : [];

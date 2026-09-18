@@ -110,10 +110,21 @@ async function request<T>(
       headers,
       body: body ? JSON.stringify(body) : undefined,
       signal: controller.signal,
+      // Prevent HTTP 304 empty-body responses (Express etag) wiping KPI/dashboard JSON
+      cache: 'no-store',
     });
 
     setDeviceOnline(true);
     const data = await safeParseJson(res);
+
+    // 304 / empty body: browsers & RN may cache GETs; treat as failure so callers retry
+    if (res.status === 304 || (res.ok && data == null && method === 'GET')) {
+      throw new ApiError('Empty response from server. Please retry.', {
+        status: res.status,
+        kind: 'network',
+        code: 'EMPTY_RESPONSE',
+      });
+    }
 
     if (!res.ok) {
       const { message, code } = extractErrorMeta(data);
@@ -165,7 +176,6 @@ const post = <T>(endpoint: string, body: object, auth = true) => request<T>('POS
 const patch = <T>(endpoint: string, body: object) => request<T>('PATCH', endpoint, body);
 const del   = <T>(endpoint: string, body?: object) => request<T>('DELETE', endpoint, body);
 const tallyPost = <T>(endpoint: string, body: object) => request<T>('POST', endpoint, body, true, 'tally');
-const appPost   = <T>(endpoint: string, body: object) => request<T>('POST', endpoint, body, true, 'app');
 
 // Helper: append companyGuid + optional fy= param to query string
 // fy = financial year in backend format e.g. '2025-2026'
@@ -227,9 +237,13 @@ export const removePushToken = (token?: string) =>
 // TALLY SYNC / PAIRING
 // ══════════════════════════════════════════════════════════════
 
-export const pairWithTally    = (pairing_code: string) => post<any>('/tally-sync/pair', { pairing_code });
+/** @deprecated Use pairWorkspaceTally — legacy user-scoped pair removed in Phase E. */
+export const pairWithTally = (_pairing_code: string) =>
+  Promise.reject(new Error('WORKSPACE_REQUIRED: use pairWorkspaceTally(workspaceId, code)'));
+/** @deprecated Use unpairWorkspaceTally */
+export const unpairDevice = () =>
+  Promise.reject(new Error('WORKSPACE_REQUIRED: use unpairWorkspaceTally(workspaceId)'));
 export const getTallySyncStatus = () => get<any>('/tally-sync/status');
-export const unpairDevice     = () => post<any>('/tally-sync/unpair', {});
 export const getCompanies     = () => get<any>('/companies');
 export const getCompanyYears   = (companyGuid?: string) => get<any>(withCompany('/company/years', companyGuid));
 export const getCompanyProfile  = (companyGuid?: string) => get<any>(withCompany('/company/profile', companyGuid));
@@ -403,7 +417,8 @@ export const getAgedItems            = (companyGuid?: string, params?: any) => g
 export const getMovementAnalytics    = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/movement-analytics',        companyGuid, params));
 export const getMovementChart        = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/movement-analytics/chart',  companyGuid, params));
 export const getNegativeStock    = (companyGuid?: string, params?: any) => get<any>(withCompany('/stocks/negative-stock', companyGuid, params));
-export const getStockDashboard  = (companyGuid: string) => appPost<any>('/stock-dashboard', { companyGuid });
+export const getStockDashboard  = (companyGuid: string) =>
+  get<any>(withCompany('/stocks/dashboard', companyGuid));
 export const getStockItem    = (companyGuid?: string, id?: string, params?: any) => get<any>(withCompany(`/stocks/items/${id}`, companyGuid, params));
 export const getWarehouses       = (companyGuid?: string) => get<any>(withCompany('/stocks/warehouses', companyGuid));
 export const getWarehouseDetail  = (companyGuid?: string, id?: string) => get<any>(withCompany(`/stocks/warehouses/${id}`, companyGuid));
@@ -795,6 +810,8 @@ export const getOrderPreview = (tdkRef: string, companyGuid: string) => getInvoi
 export const listMyWorkspaces = () => get<any>('/me/workspaces');
 export const getWorkspaceContext = (workspaceId: string) =>
   get<any>(`/workspaces/${encodeURIComponent(workspaceId)}/context`);
+export const renameWorkspace = (workspaceId: string, name: string) =>
+  patch<any>(`/workspaces/${encodeURIComponent(workspaceId)}`, { name });
 export const listWorkspaceCompanies = (workspaceId: string) =>
   get<any>(`/workspaces/${encodeURIComponent(workspaceId)}/companies`);
 export const listWorkspaceCompanyYears = (workspaceId: string, companyGuid: string) =>

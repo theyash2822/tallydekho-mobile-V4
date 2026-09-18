@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import RegularOptionalToggle, { EntryType } from '../../src/components/forms/RegularOptionalToggle';
+import RegularOptionalToggle from '../../src/components/forms/RegularOptionalToggle';
 import DatePickerModal from '../../src/components/forms/DatePickerModal';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
 import CashCountSheet, { CashCountResult } from '../../src/components/forms/CashCountSheet';
@@ -24,8 +24,10 @@ import {
 } from '../../src/services/api';
 import { sumDenomCounts } from '../../src/constants/cashDenominations';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
+import { useRbasCreate } from '../../src/hooks/useRbasCreate';
 import { shareVoucherPdfByRef } from '../../src/utils/voucherPdf';
 import { useTranslation } from 'react-i18next';
+import { useRequireCapability } from '../../src/components/RequireCapability';
 
 const todayStr = () => {
   const d = new Date();
@@ -59,13 +61,14 @@ function txnTypeForKind(kind: ContraKind): string {
 }
 
 export default function CreateContraVoucher() {
+  const allowed = useRequireCapability('contra.create');
   const { t } = useTranslation();
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
   const { company, isPaired } = useAuth();
   const { settings, formatAmount, currencySymbol } = useSettings();
 
-  const [entryType, setEntryType] = useState<EntryType>('regular');
+  const {entryMode, entryType, setEntryType, scopeParties, assertCanCreate} = useRbasCreate();
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
   const narrationY = useRef(0);
 
@@ -118,13 +121,13 @@ export default function CreateContraVoucher() {
           sub: kind,
           data: l,
         })).sort((a: BSSOption, b: BSSOption) => a.label.localeCompare(b.label));
-      setCashLedgers(mapList(cashRes?.data || [], 'cash'));
-      setBankLedgers(mapList(bankRes?.data || [], 'bank'));
+      setCashLedgers(mapList(scopeParties(cashRes?.data || []), 'cash'));
+      setBankLedgers(mapList(scopeParties(bankRes?.data || []), 'bank'));
     } catch {
       setCashLedgers([]);
       setBankLedgers([]);
     }
-  }, [company?.guid]);
+  }, [company?.guid, scopeParties]);
 
   useEffect(() => { loadLedgers(); }, [loadLedgers]);
 
@@ -172,10 +175,7 @@ export default function CreateContraVoucher() {
 
   const handleSubmit = async () => {
     if (canSubmit) { Alert.alert(t('voucher.required'), canSubmit); return; }
-    if (!isPaired) {
-      Toast.show({ type: 'error', text1: 'Not Paired', text2: 'Pair with Tally Desktop first.' });
-      return;
-    }
+    if (!assertCanCreate('contra.create')) return;
     setSubmitting(true);
     try {
       const kind = contraKind;
@@ -227,6 +227,8 @@ export default function CreateContraVoucher() {
     }
   };
 
+  if (!allowed) return null;
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       <View style={s.hdr}>
@@ -234,7 +236,7 @@ export default function CreateContraVoucher() {
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={s.hdrTitle}>{t('voucher.contraTitle')}</Text>
-        <RegularOptionalToggle value={entryType} onChange={setEntryType} />
+        <RegularOptionalToggle value={entryType} onChange={setEntryType} entryMode={entryMode} />
       </View>
 
       <KeyboardAvoidingView
