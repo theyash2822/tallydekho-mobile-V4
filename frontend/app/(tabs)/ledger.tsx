@@ -12,7 +12,7 @@ import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useRouter } from 'expo-router';
 import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { getLedgers, createLedger, getLedgerStatement } from '../../src/services/api';
+import { getLedgers, createLedger, getLedgerStatement, getActiveWorkspaceId } from '../../src/services/api';
 import { shareMultiStatementPdf } from '../../src/utils/voucherPdf';
 import type { StatementInput } from '../../src/utils/pdf/tallyLayout';
 
@@ -784,7 +784,9 @@ export default function LedgerScreen() {
     const pageLimit = String(PAGE_SIZE);
 
     // Cache only unfiltered list loads
-    const cacheKey = `v2:${companyGuid}:${lastSyncAt}:${selectedFY?.startDate ?? ''}`;
+    // Workspace-qualified: the same Tally GUID can belong to two tenants, and a
+    // GUID-only key let them share this cache across a workspace switch.
+    const cacheKey = `v2:${getActiveWorkspaceId() ?? 'no-ws'}:${companyGuid}:${lastSyncAt}:${selectedFY?.startDate ?? ''}`;
     if (!hasSheetFilters && !debouncedSearch) {
       const cached = _ledgerCache[cacheKey];
       if (cached && Date.now() - cached.ts < 5 * 60 * 1000) {

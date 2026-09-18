@@ -34,7 +34,7 @@ import SearchBar from '../../src/components/SearchBar';
 import { StockItem } from '../../src/data/stockData';
 import { useSettings } from '../../src/context/SettingsContext';
 
-import { getStockListCache, clearStockListCache } from '../../src/utils/stockCache';
+import { getStockListCache, clearStockListCache, stockCacheKey } from '../../src/utils/stockCache';
 import { useTranslation } from 'react-i18next';
 import { shareStockRegisterPdf, companyFromAuth } from '../../src/utils/multiShare';
 export { clearStockListCache };
@@ -415,7 +415,7 @@ export default function TotalStockScreen() {
     if (!companyGuid) return;
 
     // ── Module-level cache: 5-min TTL, invalidated on every Tally sync ──
-    const cacheKey = `${companyGuid}:${lastSyncAt}`;
+    const cacheKey = stockCacheKey(companyGuid, lastSyncAt);
     const _stockCache = getStockListCache();
     const cached = _stockCache[cacheKey];
     if (cached && Date.now() - cached.ts < 5 * 60 * 1000) {

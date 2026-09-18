@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { socketService } from '../services/socketService';
 import { clearVoucherConfigCache } from '../utils/voucherPdf';
+import { clearStockListCache } from '../utils/stockCache';
 import { setAuthFailureHandler, getActiveWorkspaceId, getCompanies } from '../services/api';
 import { wsCompanyKey, wsFyKey } from '../utils/workspaceStorage';
 import { BACKEND_URL } from '../config/backend';
@@ -13,11 +14,51 @@ const storeToken = async (token: string) => {
   await AsyncStorage.setItem('auth_token', token);
 };
 
+/**
+ * Keys holding data that belongs to a user, workspace or company. Matched by
+ * pattern rather than listed literally: the previous fixed list named seven keys
+ * and had fallen behind the app, so a second user signing in on the same device
+ * inherited the first user's selected company, financial year, invoice drafts,
+ * cached logos and display preferences.
+ *
+ * Note the GUID-keyed entries. A Tally GUID is unique only within a workspace,
+ * so `company_logo_<guid>` can collide between two tenants that sync the same
+ * Tally company — they must go on logout regardless of who owns them.
+ */
+const TENANT_KEY_PATTERNS: RegExp[] = [
+  /^ws:/,                       // ws:<workspaceId>:company_data | :selected_fy
+  /^company_/,                  // company_data, company_logo_<guid>
+  /_prefill_/,                  // tdso_/tdpo_/tdprf_to_invoice_prefill_<guid>
+  /^draft_/,                    // in-progress vouchers
+  /^tdk_/,                      // cash patterns and similar per-company memory
+  /^userSettings$/,
+  /^voucherConfig$/,
+  /^cashflow_period$/,
+  /^td_help_chat_/,
+  /^selected_fy$/,
+];
+
+const ALWAYS_REMOVE = [
+  'auth_token',
+  'user_data',
+  'is_paired',
+  'user_info',
+  'active_workspace_id',
+  'active_workspace_manual_pin',
+];
+
 const removeToken = async () => {
   if (Platform.OS === 'web') {
     try { window.localStorage.removeItem('auth_token'); window.localStorage.removeItem('user_data'); } catch {}
   }
-  await AsyncStorage.multiRemove(['auth_token', 'user_data', 'company_data', 'is_paired', 'user_info', 'active_workspace_id', 'active_workspace_manual_pin']);
+  let scoped: string[] = [];
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    scoped = keys.filter((k) => TENANT_KEY_PATTERNS.some((re) => re.test(k)));
+  } catch {
+    // Enumeration failing must not leave the session token behind.
+  }
+  await AsyncStorage.multiRemove([...new Set([...ALWAYS_REMOVE, ...scoped])]);
 };
 
 const getToken = async (): Promise<string | null> => {
@@ -170,6 +211,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // The PDF format choice is user-level and cached in memory, so it has to go
     // or the next account inherits this one's layouts.
     clearVoucherConfigCache();
+    // Same reasoning for the stock list: it lives in a module-level map that
+    // outlives the React tree, so without this the next account can read the
+    // previous one's inventory until the five-minute TTL lapses.
+    clearStockListCache();
     setIsAuthenticated(false);
     setIsPairedState(false);
     setCompanyState(null);
