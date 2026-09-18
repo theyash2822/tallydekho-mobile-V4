@@ -5,6 +5,8 @@
  * Emits `synced` event → onSynced callback → screens auto-refresh.
  */
 import { io, Socket } from 'socket.io-client';
+import { getActiveWorkspaceId } from './api';
+import { isEventForWorkspace, workspaceIdFromPayload } from './workspaceEventScope';
 
 type SyncedCallback = (companyGuid: string) => void;
 type VoucherSyncedCallback = (data: { tdkRef: string; tallyVoucherNo: string }) => void;
@@ -19,7 +21,23 @@ let currentToken: string = '';
 let _pendingWorkspaceId: string | null = null;
 let _lastConnectErrorAt = 0;
 
+/**
+ * True when this event may be applied to the workspace the user currently has
+ * open. The active id is read here, at delivery time, rather than captured when
+ * the listener was installed — a captured id goes stale the moment the user
+ * switches workspace, which is the whole problem being fixed.
+ */
+export function isEventForActiveWorkspace(event: string, payload?: any): boolean {
+  return isEventForWorkspace(event, payload, getActiveWorkspaceId());
+}
+
 function emitWorkspaceEvent(event: string, payload?: any) {
+  if (!isEventForActiveWorkspace(event, payload)) {
+    if (__DEV__) {
+      console.log(`[Socket] ignored ${event} for workspace ${workspaceIdFromPayload(payload) ?? 'unknown'}`);
+    }
+    return;
+  }
   if (__DEV__) console.log(`[Socket] ${event}`);
   onWorkspaceEventCallback?.(event, payload);
 }
@@ -94,13 +112,17 @@ export const socketService = {
     });
 
     // 🔄 Key event: backend fires this after every sync
-    socket.on('synced', ({ companyGuid }: { companyGuid: string; syncedAt: string }) => {
-      if (__DEV__) console.log('[Socket] synced event for company:', companyGuid);
-      onSyncedCallback?.(companyGuid);
-      emitWorkspaceEvent('synced', { companyGuid });
+    socket.on('synced', (payload: { companyGuid: string; syncedAt: string; workspaceId?: string }) => {
+      // Gated here as well as in emitWorkspaceEvent: onSyncedCallback bumps
+      // lastSyncAt, which makes every open screen refetch.
+      if (!isEventForActiveWorkspace('synced', payload)) return;
+      if (__DEV__) console.log('[Socket] synced event for company:', payload?.companyGuid);
+      onSyncedCallback?.(payload?.companyGuid);
+      emitWorkspaceEvent('synced', payload);
     });
 
     socket.on('tally_connection', (payload?: any) => {
+      if (!isEventForActiveWorkspace('tally_connection', payload)) return;
       emitWorkspaceEvent('tally_connection', payload);
       if (String(payload?.status || '').toUpperCase() === 'CONNECTED') {
         onSyncedCallback?.(payload?.companyGuid || '');

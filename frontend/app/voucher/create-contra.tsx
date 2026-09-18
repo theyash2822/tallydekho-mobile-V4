@@ -65,7 +65,7 @@ export default function CreateContraVoucher() {
   const { t } = useTranslation();
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
-  const { company, isPaired } = useAuth();
+  const { company } = useAuth();
   const { settings, formatAmount, currencySymbol } = useSettings();
 
   const {entryMode, entryType, setEntryType, scopeParties, assertCanCreate} = useRbasCreate();

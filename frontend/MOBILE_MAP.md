@@ -15,7 +15,7 @@ All files here are screens. See NAVIGATION_MAP.md for full screen list.
 ### src/context/
 | File | Purpose |
 |------|---------|
-| AuthContext.tsx | Auth state, token, company, FY, isPaired. fyInfoToParam() helper |
+| AuthContext.tsx | Auth state, token, company, FY. fyInfoToParam() helper. Pairing lives in WorkspaceContext |
 | SettingsContext.tsx | Currency, language, app preferences |
 
 ### src/hooks/

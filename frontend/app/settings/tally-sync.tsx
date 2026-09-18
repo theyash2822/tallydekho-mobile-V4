@@ -206,29 +206,29 @@ const ci = StyleSheet.create({
 // ─────────────────────────────────────────────────────────────────────────────
 export default function TallySyncScreen() {
   const router = useRouter();
-  const { isPaired, setIsPaired, setCompany } = useAuth();
+  const { setCompany } = useAuth();
   const { workspaceId, isOwnerOrAdmin, pairingStatus, refreshContext, canPair, canUnpair } = useWorkspace();
+  // Pairing belongs to the selected workspace, never to the signed-in user.
+  const workspacePaired = pairingStatus === 'CONNECTED' || pairingStatus === 'RECONNECTING';
   // Prefer server action flags; fall back to membership only if flags missing
   const allowPair = typeof canPair === 'boolean' ? canPair : isOwnerOrAdmin;
   const allowUnpair = typeof canUnpair === 'boolean'
     ? canUnpair
     : (isOwnerOrAdmin && (pairingStatus === 'CONNECTED' || pairingStatus === 'RECONNECTING'));
-  // Derive initial pairState from AuthContext so it persists across screen visits
+  // Derive initial pairState from the workspace so it persists across screen visits
   const [pairState, setPairState] = useState<'idle' | 'awaiting' | 'paired'>(
-    isPaired || pairingStatus === 'CONNECTED' || pairingStatus === 'RECONNECTING' ? 'paired' : 'idle'
+    workspacePaired ? 'paired' : 'idle'
   );
   const [deviceInfo, setDeviceInfo] = useState<{ name: string; lastSync: string } | null>(null);
 
-  // Keep pairState in sync if isPaired changes externally (e.g. desktop unpairs)
+  // Keep pairState in sync if pairing changes externally (e.g. desktop unpairs)
   useEffect(() => {
-    setPairState(
-      isPaired || pairingStatus === 'CONNECTED' || pairingStatus === 'RECONNECTING' ? 'paired' : 'idle'
-    );
-  }, [isPaired, pairingStatus]);
+    setPairState(workspacePaired ? 'paired' : 'idle');
+  }, [workspacePaired]);
 
   // Fetch real device info when paired (CONNECTED or RECONNECTING)
   useEffect(() => {
-    if (!isPaired && pairingStatus !== 'CONNECTED' && pairingStatus !== 'RECONNECTING') return;
+    if (!workspacePaired) return;
     getTallySyncStatus()
       .then((res: any) => {
         const d = res?.data ?? res;
@@ -240,7 +240,7 @@ export default function TallySyncScreen() {
         }
       })
       .catch(() => {});
-  }, [isPaired, pairingStatus]);
+  }, [workspacePaired, workspaceId]);
 
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
@@ -269,7 +269,6 @@ export default function TallySyncScreen() {
     try {
       const res = await pairWorkspaceTally(workspaceId, codeStr);
       if (res?.success && (res?.data?.is_paired || res?.data?.workspace_id)) {
-        setIsPaired(true);
         if (res.data.company) {
           await setCompany({
             guid: res.data.company.guid,
@@ -313,7 +312,6 @@ export default function TallySyncScreen() {
     try {
       if (workspaceId) await unpairWorkspaceTally(workspaceId);
     } catch (_) { /* best-effort */ }
-    setIsPaired(false);
     setPairState('idle');
     setCode(Array(6).fill(''));
     setShowDisconnect(false);

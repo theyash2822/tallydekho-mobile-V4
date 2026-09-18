@@ -31,7 +31,7 @@ async function resolvePersonalWorkspaceId(): Promise<string | null> {
 
 export default function TallySyncScreen() {
   const router = useRouter();
-  const { signIn, setCompany, setIsPaired } = useAuth();
+  const { signIn, setCompany } = useAuth();
   const [step, setStep] = useState<SyncStep>('prompt');
   const [pairKey, setPairKey] = useState('');
   const [progress, setProgress] = useState(0);
@@ -62,7 +62,6 @@ export default function TallySyncScreen() {
       setProgress(80);
       const ok = res?.success && (res?.data?.is_paired || res?.data?.awaiting_desktop_claim || res?.data?.workspace_id);
       if (ok) {
-        setIsPaired(true);
         if (res.data.company) {
           await setCompany({ guid: res.data.company.guid, name: res.data.company.name, gstin: res.data.company.gstin ?? undefined });
         }
@@ -92,7 +91,7 @@ export default function TallySyncScreen() {
   const handleSkip = async () => {
     const token = await AsyncStorage.getItem('auth_token');
     if (token) await signIn(token);
-    setIsPaired(false); // explicit: skipped pairing → unpaired state
+    // Nothing to unset: the new workspace reports UNPAIRED on its own.
     await navigateAfterAuth(router);
   };
 

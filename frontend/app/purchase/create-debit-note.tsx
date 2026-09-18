@@ -504,7 +504,7 @@ export default function CreateDebitNoteScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const narrationY = useRef(0);
   const narrationInputRef = useRef<TextInput>(null);
-  const { company, selectedFY, isPaired } = useAuth();
+  const { company, selectedFY } = useAuth();
   const { formatAmount } = useSettings();
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
 

@@ -63,11 +63,8 @@ const MODULE_CARDS = [
 export default function HomeScreen() {
   const router = useRouter();
   const { t } = useTranslation();
-  const { isPaired, isDesktopOnline, company, user, selectedFY, lastSyncAt } = useAuth();
-  const { pairingStatus, invitations, demoMode, tallyConnected, sensitivePolicies } = useWorkspace();
-  // Live Tally link. Demo/unpaired still loads dashboard KPIs from Demo Company.
-  const livePaired =
-    isPaired || pairingStatus === 'CONNECTED' || pairingStatus === 'RECONNECTING';
+  const { isDesktopOnline, company, user, selectedFY, lastSyncAt } = useAuth();
+  const { workspaceId, pairingStatus, invitations, demoMode, tallyConnected, sensitivePolicies } = useWorkspace();
   // Product 1A: CONNECTED with no company → empty CTA (dataReady false until company exists)
   const dataReady =
     !!company?.guid &&
@@ -91,9 +88,10 @@ export default function HomeScreen() {
   const dataAsOfRef = useRef<Date | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [notifCount, setNotifCount] = useState(0);
-  const wasPaired = useRef(false); // track previous isPaired to detect change
-  // isPaired comes from AuthContext — no local state needed
-  const isTallyPaired = livePaired;
+  // Previous live state, remembered per workspace so switching tenants is not
+  // reported as this workspace connecting or disconnecting.
+  const wasPaired = useRef(false);
+  const toastedWsRef = useRef<string | null>(null);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -429,8 +427,17 @@ export default function HomeScreen() {
   }, []);
 
   // ── Detect live pairing state change (not demo/unpaired) ────
+  // Only CONNECTED is live: RECONNECTING still serves Demo books, so announcing
+  // "Tally connected" for it told the user the opposite of what they were seeing.
   useEffect(() => {
-    if (livePaired && !wasPaired.current) {
+    if (toastedWsRef.current !== workspaceId) {
+      // Fresh workspace — adopt its state silently instead of toasting.
+      toastedWsRef.current = workspaceId;
+      wasPaired.current = tallyConnected;
+      setLastSyncTime(null);
+      return;
+    }
+    if (tallyConnected && !wasPaired.current) {
       Toast.show({
         type: 'success',
         text1: t('home.tallyConnected'),
@@ -448,12 +455,12 @@ export default function HomeScreen() {
         }
       }).catch(() => {});
     }
-    if (!livePaired && wasPaired.current) {
+    if (!tallyConnected && wasPaired.current) {
       Toast.show({ type: 'info', text1: t('home.tallyDisconnected'), text2: t('home.tallyDisconnectedSub'), visibilityTime: 3000 });
       setLastSyncTime(null);
     }
-    wasPaired.current = livePaired;
-  }, [livePaired, t]);
+    wasPaired.current = tallyConnected;
+  }, [tallyConnected, workspaceId, t]);
 
   // ── Update last sync timestamp whenever a sync fires ───────────
   useEffect(() => {
@@ -591,7 +598,7 @@ export default function HomeScreen() {
             onRetry={() => loadData({ soft: hasDashboardDataRef.current })}
           />
         )}
-        {deviceOnline && livePaired && !isDesktopOnline && <OfflineBadge variant="desktop" />}
+        {deviceOnline && tallyConnected && !isDesktopOnline && <OfflineBadge variant="desktop" />}
         {pageBanner && (
           <ErrorBanner
             message={pageBanner}

@@ -445,7 +445,7 @@ export default function CreateDeliveryNoteScreen() {
     }, 250);
   };
   const insets = useSafeAreaInsets();
-  const { company, selectedFY, isPaired } = useAuth();
+  const { company, selectedFY } = useAuth();
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
   const fyEnd = selectedFY?.endDate || `${new Date().getFullYear() + 1}-03-31`;
 
@@ -1031,7 +1031,7 @@ export default function CreateDeliveryNoteScreen() {
       setSubmitting(false);
     }
   }, [
-    company, isPaired, ledger, party, date, items, itemGodowns, totals.grand, warehouses,
+    company, ledger, party, date, items, itemGodowns, totals.grand, warehouses,
     logEntries, roundOffLedger, roundOffAmount, narration, entryType, numberingPolicy,
     modeOfPayment, otherReferences, termsOfDelivery, dispatchDocNo, dispatchedThrough,
     shipToDestination, carrierName, billOfLadingNo, lrDate, vehicleNumber, trackingNumber, linkedOrder,

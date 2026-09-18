@@ -74,7 +74,7 @@ export default function OTPScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { phone } = useLocalSearchParams<{ phone: string }>();
-  const { signIn, setCompany, setIsPaired } = useAuth();
+  const { signIn, setCompany } = useAuth();
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [focusedIdx, setFocusedIdx] = useState<number>(0);
   const [loading, setLoading] = useState(false);
@@ -143,12 +143,15 @@ export default function OTPScreen() {
         }
 
         // ── No 2FA — normal login
-        const { access_token, is_new_user, user, is_paired, company } = data;
+        const { access_token, refresh_token, is_new_user, user, company } = data;
         if (is_new_user) {
           router.replace({ pathname: '/(auth)/register', params: { phone, token: access_token } });
         } else {
-          await signIn(access_token || '', user ? { id: user.id, name: user.name ?? undefined, phone: user.phone } : undefined);
-          setIsPaired(is_paired === true);
+          await signIn(
+            access_token || '',
+            user ? { id: user.id, name: user.name ?? undefined, phone: user.phone } : undefined,
+            refresh_token,
+          );
           if (company) await setCompany({ guid: company.guid, name: company.name, gstin: company.gstin ?? undefined });
           await navigateAfterAuth(router);
         }

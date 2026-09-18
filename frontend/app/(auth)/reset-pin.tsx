@@ -57,7 +57,7 @@ type Step = 'otp' | 'new_pin' | 'confirm_pin';
 export default function ResetPinScreen() {
   const router = useRouter();
   const { phone } = useLocalSearchParams<{ phone: string }>();
-  const { signIn, setCompany, setIsPaired } = useAuth();
+  const { signIn, setCompany } = useAuth();
 
   const [step, setStep]         = useState<Step>('otp');
   const [otp, setOtp]           = useState<string[]>(Array(BOX_LENGTH).fill(''));
@@ -131,9 +131,12 @@ export default function ResetPinScreen() {
         const res = await resetPin(newPin.join(''), token);
         if (res?.success) {
           await AsyncStorage.removeItem('pre_auth_token');
-          const { access_token, is_new_user, user, is_paired, company } = res.data;
-          await signIn(access_token, user ? { id: user.id, name: user.name ?? undefined, phone: user.phone } : undefined);
-          setIsPaired(is_paired === true);
+          const { access_token, refresh_token, user, company } = res.data;
+          await signIn(
+            access_token,
+            user ? { id: user.id, name: user.name ?? undefined, phone: user.phone } : undefined,
+            refresh_token,
+          );
           if (company) await setCompany({ guid: company.guid, name: company.name, gstin: company.gstin ?? undefined });
           await navigateAfterAuth(router);
         } else {

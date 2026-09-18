@@ -4,7 +4,14 @@ import { Platform } from 'react-native';
 import { socketService } from '../services/socketService';
 import { clearVoucherConfigCache } from '../utils/voucherPdf';
 import { clearStockListCache } from '../utils/stockCache';
-import { setAuthFailureHandler, getActiveWorkspaceId, getCompanies } from '../services/api';
+import {
+  setAuthFailureHandler,
+  getActiveWorkspaceId,
+  getCompanies,
+  setRefreshToken,
+  clearRefreshToken,
+  tryRefreshSession,
+} from '../services/api';
 import { wsCompanyKey, wsFyKey } from '../utils/workspaceStorage';
 import { BACKEND_URL } from '../config/backend';
 
@@ -41,6 +48,8 @@ const TENANT_KEY_PATTERNS: RegExp[] = [
 const ALWAYS_REMOVE = [
   'auth_token',
   'user_data',
+  // Legacy user-global pairing flag. Pairing is per-workspace now; the key is
+  // no longer written, only swept up from installs that predate the change.
   'is_paired',
   'user_info',
   'active_workspace_id',
@@ -59,6 +68,10 @@ const removeToken = async () => {
     // Enumeration failing must not leave the session token behind.
   }
   await AsyncStorage.multiRemove([...new Set([...ALWAYS_REMOVE, ...scoped])]);
+  // The refresh token is in the keychain, so the AsyncStorage sweep above cannot
+  // reach it — leaving it behind would let the next account on this device mint
+  // access tokens for the one that just logged out.
+  await clearRefreshToken();
 };
 
 const getToken = async (): Promise<string | null> => {
@@ -102,19 +115,22 @@ export function fyInfoToParam(fy: FYInfo | null): string | undefined {
   return undefined;
 }
 
+/**
+ * Auth is user identity only. Pairing is a property of a workspace, not of a
+ * user: the same person can own an unpaired workspace and be a member of a
+ * paired one, so read `pairingStatus` / `tallyConnected` from WorkspaceContext.
+ */
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
-  isPaired: boolean;
   isDesktopOnline: boolean;
   company: Company | null;
   user: UserInfo | null;
   lastSyncAt: number;
   selectedFY: FYInfo | null;
   setSelectedFY: (fy: FYInfo | null) => void;
-  signIn: (token: string, userInfo?: UserInfo) => Promise<void>;
+  signIn: (token: string, userInfo?: UserInfo, refreshToken?: string | null) => Promise<void>;
   signOut: () => Promise<void>;
-  setIsPaired: (v: boolean) => void;
   setCompany: (c: Company | null | ((prev: Company | null) => Company | null)) => Promise<void>;
   setUser: (u: UserInfo) => void;
 }
@@ -122,7 +138,6 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   isLoading: true,
-  isPaired: false,
   isDesktopOnline: false,
   company: null,
   user: null,
@@ -131,7 +146,6 @@ const AuthContext = createContext<AuthContextType>({
   setSelectedFY: () => {},
   signIn: async () => {},
   signOut: async () => {},
-  setIsPaired: () => {},
   setCompany: async () => {},
   setUser: () => {},
 });
@@ -139,13 +153,14 @@ const AuthContext = createContext<AuthContextType>({
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isPaired, setIsPairedState] = useState(false);
   const [isDesktopOnline, setIsDesktopOnlineState] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState(0);
   const [selectedFY, setSelectedFY] = useState<FYInfo | null>(null);
   const [company, setCompanyState] = useState<Company | null>(null);
   const companyRef = useRef<Company | null>(null);
   const lastWsStatusRef = useRef('');
+  /** Workspace the status poll last reported on — resets derived state on switch. */
+  const polledWsRef = useRef<string | null>(null);
   const [user, setUserState] = useState<UserInfo | null>(null);
 
   // Keep ref in sync for functional setCompany without double-setState hacks
@@ -161,8 +176,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     (async () => {
       try {
-        const [token, pairedStr, userJson, wsIdPair] = await AsyncStorage.multiGet([
-          'auth_token', 'is_paired', 'user_info', 'active_workspace_id',
+        const [token, userJson, wsIdPair] = await AsyncStorage.multiGet([
+          'auth_token', 'user_info', 'active_workspace_id',
         ]);
         const tok = token[1];
         if (tok) {
@@ -180,7 +195,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (fyJson) {
             try { setSelectedFY(JSON.parse(fyJson)); } catch { /* ignore */ }
           }
-          if (pairedStr[1] === 'true') setIsPairedState(true);
           if (userJson[1]) setUserState(JSON.parse(userJson[1]));
         }
       } catch {}
@@ -191,8 +205,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => clearTimeout(timeout);
   }, []);
 
-  const signIn = useCallback(async (token: string, userInfo?: UserInfo) => {
+  const signIn = useCallback(async (token: string, userInfo?: UserInfo, refreshToken?: string | null) => {
     await storeToken(token);
+    // Absent on re-entry paths that only re-assert an existing session — never
+    // overwrite a good refresh token with nothing.
+    if (refreshToken) await setRefreshToken(refreshToken);
     setIsAuthenticated(true);
     if (userInfo) {
       setUserState(userInfo);
@@ -216,7 +233,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // previous one's inventory until the five-minute TTL lapses.
     clearStockListCache();
     setIsAuthenticated(false);
-    setIsPairedState(false);
+    setIsDesktopOnlineState(false);
+    polledWsRef.current = null;
+    lastWsStatusRef.current = '';
     setCompanyState(null);
     setUserState(null);
   }, []);
@@ -228,11 +247,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     return () => setAuthFailureHandler(null);
   }, [signOut]);
-
-  const setIsPaired = useCallback((v: boolean) => {
-    setIsPairedState(v);
-    AsyncStorage.setItem('is_paired', v ? 'true' : 'false').catch(() => {});
-  }, []);
 
   // Stable identity — WorkspaceContext refreshContext depends on this; a new
   // function every render re-fired refresh → setAccess → filterScoped → Header loops.
@@ -293,20 +307,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => socketService.disconnect();
   }, [isAuthenticated, BASE_URL]);
 
-  // ── Poll pairing + desktop status every 10s ───────────────────────────────
-  // Keeps isPaired + isDesktopOnline in sync with server truth.
+  // ── Poll desktop presence + live company every 10s ────────────────────────
+  // Pairing truth itself is per-workspace and belongs to WorkspaceContext; this
+  // poll only keeps isDesktopOnline and the adopted company fresh, and every
+  // write is gated on the workspace still being the active one.
   // Uses /api/tally-sync/status (lightweight, no websocket needed).
   useEffect(() => {
     if (!isAuthenticated) return;
 
     const poll = async () => {
       try {
-        const token = await getToken();
-        if (!token) return;
         // Wait until WorkspaceContext has set X-Workspace-Id — otherwise we hit
         // the legacy path (no workspace_status) and never purge Demo correctly.
         const wsId = getActiveWorkspaceId();
         if (!wsId) return;
+        // A switch invalidates everything the previous workspace told us; not
+        // clearing here left the desktop badge of workspace ABC on top of XYZ.
+        if (polledWsRef.current !== wsId) {
+          polledWsRef.current = wsId;
+          lastWsStatusRef.current = '';
+          setIsDesktopOnlineState(false);
+        }
+        const token = await getToken();
+        if (!token) return;
+        if (getActiveWorkspaceId() !== wsId) return;
         const headers: Record<string, string> = {
           Authorization: `Bearer ${token}`,
           'X-Workspace-Id': wsId,
@@ -316,33 +340,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           cache: 'no-store',
         });
         if (res.status === 401) {
-          // Token expired — sign out cleanly
-          await removeToken();
-          setIsAuthenticated(false);
-          setIsPairedState(false);
-          setCompanyState(null);
-          setUserState(null);
+          // Access tokens last 15 minutes — renew before giving up the session.
+          const outcome = await tryRefreshSession();
+          // 'refreshed' → the next tick polls with the new token.
+          // 'unavailable' → transient; keep the session and retry next tick.
+          if (outcome === 'rejected') await signOut();
           return;
         }
         if (!res.ok) return;
         const json = await res.json();
         if (!json?.success) return;
-        const { is_paired, desktop_online, company: statusCompany, workspace_status } = json.data ?? {};
+        // This response describes wsId. If the user switched while it was in
+        // flight, applying it would write ABC's state onto XYZ.
+        if (getActiveWorkspaceId() !== wsId) return;
+        const { desktop_online, company: statusCompany, workspace_status } = json.data ?? {};
         const wsStatus = String(workspace_status || '').toUpperCase();
         // CONNECTED is the only state where Demo must be purged. RECONNECTING is still Demo Mode.
         const liveConnected = wsStatus === 'CONNECTED';
         const prevStatus = lastWsStatusRef.current;
         if (wsStatus) lastWsStatusRef.current = wsStatus;
 
-        if (typeof is_paired === 'boolean') {
-          AsyncStorage.setItem('is_paired', is_paired ? 'true' : 'false').catch(() => {});
-          setIsPairedState(is_paired);
-        }
         if (typeof desktop_online === 'boolean') {
           setIsDesktopOnlineState(desktop_online);
         }
 
-        // Flip off Demo as soon as backend reports CONNECTED (don't wait for is_paired change).
+        // Flip off Demo as soon as backend reports CONNECTED for this workspace.
         if (liveConnected && prevStatus !== 'CONNECTED') {
           setLastSyncAt(Date.now());
         }
@@ -364,6 +386,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (liveConnected) {
           try {
             const cosRes: any = await getCompanies();
+            // Company lists are workspace-scoped; a late reply must not adopt a
+            // company from the workspace the user just left.
+            if (getActiveWorkspaceId() !== wsId) return;
             const list: { id: string; name: string; gstin?: string | null }[] = (cosRes?.data || [])
               .filter((c: any) => !isDemoCompany(c));
             setCompanyState(cur => {
@@ -413,15 +438,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     poll(); // immediate check on mount / auth change
     const interval = setInterval(poll, 10_000);
     return () => clearInterval(interval);
-  }, [isAuthenticated, BASE_URL]);
+  }, [isAuthenticated, BASE_URL, signOut]);
 
   const value = useMemo<AuthContextType>(() => ({
-    isAuthenticated, isLoading, isPaired, isDesktopOnline, company, user, lastSyncAt,
+    isAuthenticated, isLoading, isDesktopOnline, company, user, lastSyncAt,
     selectedFY, setSelectedFY: setSelectedFYPersisted,
-    signIn, signOut, setIsPaired, setCompany, setUser,
+    signIn, signOut, setCompany, setUser,
   }), [
-    isAuthenticated, isLoading, isPaired, isDesktopOnline, company, user, lastSyncAt,
-    selectedFY, setSelectedFYPersisted, signIn, signOut, setIsPaired, setCompany, setUser,
+    isAuthenticated, isLoading, isDesktopOnline, company, user, lastSyncAt,
+    selectedFY, setSelectedFYPersisted, signIn, signOut, setCompany, setUser,
   ]);
 
   return (

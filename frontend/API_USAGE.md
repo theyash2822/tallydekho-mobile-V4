@@ -7,6 +7,13 @@ Prefix: `/api/*` for most calls, `/tally/*` for write-back, `/app/*` for legacy
 ## Auth Header
 Token from AsyncStorage `auth_token` → `Authorization: Bearer <token>`
 
+## Access Token Renewal
+Access tokens expire after 15 minutes. On a 401, `request()` calls
+`tryRefreshSession()` once — `POST /api/auth/refresh` with the SecureStore
+refresh token — and replays the original request. Concurrent 401s share the one
+in-flight refresh. Sign-out happens only when the refresh is rejected; a 403 or
+RBAC denial never signs the user out.
+
 ## Company + FY Pattern
 ```ts
 withCompany('/endpoint', company?.guid, { fy: fyInfoToParam(selectedFY) })
@@ -29,6 +36,7 @@ appPost('/endpoint', b)   // POST /app/endpoint
 |----------|------|------|
 | sendOTP | POST | /api/auth/send-otp |
 | verifyOTP | POST | /api/auth/verify-otp |
+| _(internal)_ tryRefreshSession | POST | /api/auth/refresh |
 | verifyPin | POST | /api/auth/verify-pin |
 | setPin | POST | /api/auth/set-pin |
 | resetPin | POST | /api/auth/reset-pin |

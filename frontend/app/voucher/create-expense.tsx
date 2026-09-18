@@ -56,7 +56,7 @@ export default function CreateExpenseVoucher() {
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
   const narrationY = useRef(0);
-  const { company, isPaired } = useAuth();
+  const { company } = useAuth();
   const { currencySymbol } = useSettings();
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
 

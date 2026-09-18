@@ -96,7 +96,7 @@ export default function CreateReceiptVoucher() {
       scrollRef.current?.scrollTo?.({ y: Math.max(0, narrationY.current - 100), animated: true });
     }, 250);
   };
-  const { company, isPaired, selectedFY } = useAuth();
+  const { company, selectedFY } = useAuth();
   const { } = useSettings();
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
 

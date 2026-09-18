@@ -58,7 +58,7 @@ export default function VerifyPinScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { phone, biometric } = useLocalSearchParams<{ phone: string; biometric: string }>();
-  const { signIn, setCompany, setIsPaired } = useAuth();
+  const { signIn, setCompany } = useAuth();
 
   const [pin, setPin]                 = useState<string[]>(Array(PIN_LENGTH).fill(''));
   const [focusedIdx, setFocused]       = useState(0);
@@ -147,9 +147,12 @@ export default function VerifyPinScreen() {
       const res = await verifyPin(enteredPin, preAuthToken);
       if (res?.success) {
         await AsyncStorage.removeItem('pre_auth_token');
-        const { access_token, is_new_user, user, is_paired, company } = res.data;
-        await signIn(access_token, user ? { id: user.id, name: user.name ?? undefined, phone: user.phone } : undefined);
-        setIsPaired(is_paired === true);
+        const { access_token, refresh_token, user, company } = res.data;
+        await signIn(
+          access_token,
+          user ? { id: user.id, name: user.name ?? undefined, phone: user.phone } : undefined,
+          refresh_token,
+        );
         if (company) await setCompany({ guid: company.guid, name: company.name, gstin: company.gstin ?? undefined });
         await navigateAfterAuth(router);
       } else {

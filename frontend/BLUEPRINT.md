@@ -24,11 +24,12 @@
 2. `app/(auth)/otp.tsx` — OTP verification
 3. `app/(auth)/verify-pin.tsx` — 2FA PIN (if enabled)
 4. On success → `src/context/AuthContext.tsx` stores token in AsyncStorage
-5. App bootstraps via `getMe()` → restores company + isPaired state
+5. App bootstraps via `getMe()` → restores company; pairing comes from the workspace
 
 ## State: AuthContext
 File: `src/context/AuthContext.tsx`
-Key values: `{ isAuthenticated, isLoading, token, user, company, isPaired, selectedFY }`
+Key values: `{ isAuthenticated, isLoading, user, company, isDesktopOnline, selectedFY }`
+Pairing: `useWorkspace().pairingStatus` / `tallyConnected` (per workspace)
 Key fn: `fyInfoToParam(fy)` — converts FYInfo to "2025-2026" format for API calls
 
 ## API Layer

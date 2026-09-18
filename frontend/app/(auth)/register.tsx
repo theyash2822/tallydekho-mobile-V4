@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect } from 'react';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import { registerUser } from '../../src/services/api';
+import { registerUser, setRefreshToken } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 
 const LANGUAGES = ['English', 'Hindi', 'Bengali', 'Arabic', 'French', 'German', 'Italian', 'Japanese', 'Korean'];
@@ -50,6 +50,9 @@ export default function RegisterScreen() {
         // before the user reaches tally-sync. Two conflicting navigations = iOS crash.
         // signIn() is called from tally-sync.tsx after pairing (or on skip).
         await AsyncStorage.setItem('auth_token', res.data.access_token);
+        // signIn() would normally do this; registration bypasses it, and without
+        // the refresh token a brand-new account's first session dies in 15 min.
+        await setRefreshToken(res.data.refresh_token);
         // Store user info under the correct key (user_info, not user_data)
         await AsyncStorage.setItem('user_info', JSON.stringify({
           id: res.data.user.id,

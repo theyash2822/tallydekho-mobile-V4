@@ -23,7 +23,7 @@ import {
   renameWorkspace as renameWorkspaceApi,
   ApiError,
 } from '../services/api';
-import { socketService } from '../services/socketService';
+import { socketService, isEventForActiveWorkspace } from '../services/socketService';
 import Toast from 'react-native-toast-message';
 import { wsCompanyKey, wsFyKey } from '../utils/workspaceStorage';
 import { normalizeScopes, filterByScopeGuidsOrNames, type ScopeBag } from '../utils/rbasScope';
@@ -205,7 +205,6 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setCompany,
     setSelectedFY,
     lastSyncAt,
-    setIsPaired,
   } = useAuth();
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
@@ -225,6 +224,23 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const refreshInFlightRef = React.useRef(false);
   const pendingRefreshRef = React.useRef(false);
   const liveSwitchToastRef = React.useRef(false);
+
+  /**
+   * Bumped on every workspace change. Each async read captures the counter (and
+   * the id it was reading for) before its first await and throws its result away
+   * if either moved on: pendingRefreshRef only coalesces concurrent calls, it
+   * cannot tell a reply for workspace ABC from one for XYZ.
+   */
+  const wsGenRef = React.useRef(0);
+  const isStale = React.useCallback(
+    (gen: number, id: string | null) => wsGenRef.current !== gen || getActiveWorkspaceId() !== id,
+    []
+  );
+  const applyActiveWorkspace = React.useCallback((id: string | null) => {
+    if (getActiveWorkspaceId() !== id) wsGenRef.current += 1;
+    setWorkspaceId(id);
+    setActiveWorkspaceId(id);
+  }, []);
 
   const refreshInvitations = useCallback(async () => {
     if (!isAuthenticated) {
@@ -271,8 +287,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return;
     }
     refreshInFlightRef.current = true;
+    const gen = wsGenRef.current;
+    const forWorkspaceId = workspaceId;
     try {
-      const res: any = await getWorkspaceContext(workspaceId);
+      const res: any = await getWorkspaceContext(forWorkspaceId);
+      if (isStale(gen, forWorkspaceId)) return;
       const d = res?.data ?? res;
       if (d?.denied) {
         setAccess(null);
@@ -291,9 +310,6 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const nextCanUnpair = d?.pairing?.canUnpair === true;
       setCanPair(nextCanPair);
       setCanUnpair(nextCanUnpair);
-      // Keep Auth isPaired in lockstep with Workspace SoT (banner/demo use Workspace)
-      const pairedNow = status === 'CONNECTED' || status === 'RECONNECTING';
-      try { setIsPaired(pairedNow); } catch { /* ignore */ }
 
       // CONNECTED → never Demo. UNPAIRED / RECONNECTING → Demo only.
       const cos: any[] = Array.isArray(d?.companies) ? d.companies : [];
@@ -307,6 +323,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         ? cos.filter((c) => !isDemo(c) && c.is_active !== false)
         : cos.filter((c) => isDemo(c) && c.is_active !== false);
 
+      if (isStale(gen, forWorkspaceId)) return;
       await setCompanyRef.current((cur: any) => {
         if (visible.length) {
           const currentIsDemo = cur && isDemo(cur);
@@ -340,6 +357,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         e.code === 'WORKSPACE_CLOSED' ||
         e.status === 403
       )) {
+        // A denial for a workspace the user already left is not their problem.
+        if (isStale(gen, forWorkspaceId)) return;
         setAccess(null);
         accessJsonRef.current = '';
         toastRbasError(e);
@@ -348,7 +367,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         ) || workspacesRef.current.find(
           (w) => String(w.membershipType || '').toUpperCase() === 'OWNER'
         );
-        if (base && base.id !== workspaceId) {
+        if (base && base.id !== forWorkspaceId) {
           Toast.show({
             type: 'info',
             text1: 'Access unavailable',
@@ -364,19 +383,22 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         refreshContext();
       }
     }
-  }, [isAuthenticated, workspaceId, setIsPaired]);
+  }, [isAuthenticated, workspaceId, isStale]);
 
   const refreshWorkspaces = useCallback(async () => {
     if (!isAuthenticated) {
       setWorkspaces([]);
-      setWorkspaceId(null);
-      setActiveWorkspaceId(null);
+      applyActiveWorkspace(null);
       setLoading(false);
       return;
     }
     setLoading(true);
+    // This runs on a 20s timer, so a switch can easily land mid-flight. The id
+    // it picked is only valid for the generation it was read in.
+    const gen = wsGenRef.current;
     try {
       const res: any = await listMyWorkspaces();
+      if (wsGenRef.current !== gen) return;
       const list = normalizeList(res);
       setWorkspaces(list);
 
@@ -384,6 +406,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         (await AsyncStorage.getItem(STORAGE_KEY)) ||
         getActiveWorkspaceId() ||
         null;
+      if (wsGenRef.current !== gen) return;
       if (sticky && !list.some((w) => w.id === sticky)) sticky = null;
       if (sticky) {
         const pref = list.find((w) => w.id === sticky);
@@ -391,6 +414,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
 
       const manualPin = (await AsyncStorage.getItem(MANUAL_PIN_KEY)) === '1';
+      if (wsGenRef.current !== gen) return;
       const stickyRow = sticky ? list.find((w) => w.id === sticky) : undefined;
       // Never stay stuck on Personal Demo while another WS is Tally-live
       const forceLivePrefer = !!stickyRow?.isBase;
@@ -429,27 +453,27 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             await setCompanyRef.current(null);
             await setSelectedFY?.(null);
           } catch { /* ignore */ }
+          if (wsGenRef.current !== gen) return;
           setAccess(null);
           accessJsonRef.current = '';
           setPairingStatus('UNPAIRED');
-      setCanPair(false);
-      setCanUnpair(false);
+          setCanPair(false);
+          setCanUnpair(false);
           await AsyncStorage.removeItem(MANUAL_PIN_KEY).catch(() => {});
+          if (wsGenRef.current !== gen) return;
         }
-        setWorkspaceId(preferred);
-        setActiveWorkspaceId(preferred);
+        applyActiveWorkspace(preferred);
         await AsyncStorage.setItem(STORAGE_KEY, preferred);
         socketService.setWorkspaceContext?.(preferred);
       } else {
-        setWorkspaceId(null);
-        setActiveWorkspaceId(null);
+        applyActiveWorkspace(null);
       }
     } catch {
       setWorkspaces([]);
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, setSelectedFY]);
+  }, [isAuthenticated, setSelectedFY, applyActiveWorkspace]);
 
   const switchWorkspace = useCallback(async (id: string) => {
     // Safe switch (§10): clear in-memory company, restore per-workspace cache if any
@@ -462,25 +486,30 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setPairingStatus('UNPAIRED');
     setCanPair(false);
     setCanUnpair(false);
-    setWorkspaceId(id);
-    setActiveWorkspaceId(id);
+    // From here on the active workspace is `id`; anything still in flight for
+    // the previous one is invalidated by the generation bump inside this call.
+    applyActiveWorkspace(id);
+    const gen = wsGenRef.current;
     await AsyncStorage.setItem(STORAGE_KEY, id);
     // User explicitly chose — don't auto-jump away on next list refresh
     await AsyncStorage.setItem(MANUAL_PIN_KEY, '1');
+    if (wsGenRef.current !== gen) return;
     socketService.setWorkspaceContext?.(id);
 
     try {
       const companyJson = await AsyncStorage.getItem(wsCompanyKey(id));
+      if (wsGenRef.current !== gen) return;
       if (companyJson) {
         const c = JSON.parse(companyJson);
         if (c?.guid) await setCompany(c);
       }
       const fyJson = await AsyncStorage.getItem(wsFyKey(id));
+      if (wsGenRef.current !== gen) return;
       if (fyJson) {
         try { await setSelectedFY?.(JSON.parse(fyJson)); } catch { /* ignore */ }
       }
     } catch { /* ignore */ }
-  }, [setCompany, setSelectedFY]);
+  }, [setCompany, setSelectedFY, applyActiveWorkspace]);
 
   switchWorkspaceRef.current = switchWorkspace;
 
@@ -499,15 +528,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (authLoading) return;
     if (!isAuthenticated) {
       setWorkspaces([]);
-      setWorkspaceId(null);
       setAccess(null);
-      setActiveWorkspaceId(null);
+      applyActiveWorkspace(null);
       setLoading(false);
       return;
     }
     refreshWorkspaces();
     refreshInvitations();
-  }, [isAuthenticated, authLoading, refreshWorkspaces, refreshInvitations]);
+  }, [isAuthenticated, authLoading, refreshWorkspaces, refreshInvitations, applyActiveWorkspace]);
 
   // After Desktop sync / pair advances lastSyncAt, re-list workspaces so we can
   // jump Personal → CONNECTED WS (Owner mobile Demo stickiness).
@@ -539,7 +567,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    const handler = (event: string) => {
+    const handler = (event: string, payload?: any) => {
+      // socketService already drops events for other workspaces; re-checked here
+      // because everything below this line mutates the active workspace's state.
+      if (!isEventForActiveWorkspace(event, payload)) return;
       if (event === 'invitation_received') {
         refreshInvitations()
           .then((list) => {

@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "verify:config": "node --experimental-strip-types --no-warnings scripts/verify-backend-config.mjs",
-    "test": "npm run verify:config"
+    "verify:isolation": "node --experimental-strip-types --no-warnings scripts/verify-workspace-isolation.mjs",
+    "test": "npm run verify:config && npm run verify:isolation"
   },
   "dependencies": {
     "@babel/runtime": "^7.20.6",

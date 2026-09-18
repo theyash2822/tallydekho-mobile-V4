@@ -54,7 +54,7 @@ function StatusBarCover() {
 }
 
 function RootNavigation() {
-  const { isAuthenticated, isLoading, company, setCompany, setIsPaired, setUser } = useAuth();
+  const { isAuthenticated, isLoading, company, setCompany, setUser } = useAuth();
   const router = useRouter();
   const segments = useSegments();
 
@@ -71,7 +71,8 @@ function RootNavigation() {
     getMe().then((res: any) => {
       const d = res?.data ?? res;
       if (d?.company?.guid) setCompany({ guid: d.company.guid, name: d.company.name, gstin: d.company.gstin });
-      if (typeof d?.is_paired === 'boolean') setIsPaired(d.is_paired);
+      // /auth/me also returns a user-level is_paired; it is deliberately ignored
+      // because pairing is per-workspace (WorkspaceContext owns it).
       if (d?.name || d?.phone) setUser({ id: d.id, name: d.name, phone: d.phone, email: d.email, language: d.language });
     }).catch(() => {});
   }, [isAuthenticated, company?.guid]);

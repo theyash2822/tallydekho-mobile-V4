@@ -52,7 +52,7 @@ export default function CreateJournalVoucher() {
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
   const narrationY = useRef(0);
-  const { company, isPaired, selectedFY } = useAuth();
+  const { company, selectedFY } = useAuth();
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
 
   const {entryMode, entryType, setEntryType, scopeParties, assertCanCreate} = useRbasCreate();

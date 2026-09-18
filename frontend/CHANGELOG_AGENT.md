@@ -1,5 +1,56 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-18 — Workspace isolation: no global pairing, scoped sockets, token refresh
+
+### Why
+A user who owns unpaired workspace ABC and is invited to paired workspace XYZ saw
+XYZ's pairing state, company cache and toasts leak onto ABC and back. Three causes:
+a user-global `is_paired` flag, socket events applied without checking which
+workspace sent them, and async reads that wrote their result after the user had
+already switched. Separately, mobile never stored the refresh token, so every
+session died 15 minutes after login.
+
+### Change — pairing is per workspace
+- `AuthContext`: removed `isPaired` / `setIsPaired` and the `is_paired` AsyncStorage
+  key. Auth is user identity only; `is_paired` is now swept on logout for old installs.
+- Home screen: `livePaired = isPaired || CONNECTED || RECONNECTING` → `tallyConnected`.
+  RECONNECTING still serves Demo books, so it no longer counts as a live link, and the
+  connect/disconnect toast re-baselines on workspace switch instead of firing.
+- `settings/tally-sync`, `_layout`, `(auth)/otp|verify-pin|reset-pin|tally-sync` and the
+  nine screens that only destructured `isPaired` all read the workspace instead.
+
+### Change — socket events are workspace-scoped
+- New `src/services/workspaceEventScope.ts` (pure, unit-tested): `synced`, `paired`,
+  `unpaired`, `tally_connection`, access/hard-sync/restore events are dropped unless
+  `payload.workspaceId` matches `getActiveWorkspaceId()` **at delivery time**. A payload
+  with no workspaceId is dropped as well. `invitation_received` stays user-scoped.
+
+### Change — late replies can no longer write to the wrong workspace
+- `WorkspaceContext`: generation counter bumped on every switch. `refreshContext`,
+  `refreshWorkspaces` (20s timer) and `switchWorkspace` re-check it after each await.
+- `AuthContext` status poll: re-checks the active workspace after each await and resets
+  desktop-online state on switch.
+
+### Change — access token refresh
+- `api.ts`: refresh token stored in **SecureStore** (`td_refresh_token`), never
+  AsyncStorage. A 401 triggers one refresh then one replay; concurrent 401s share the
+  single in-flight refresh. Sign-out only on a rejected refresh — an unreachable refresh
+  endpoint keeps the session, and 403/RBAC still never signs out. Cleared on logout.
+
+### Tests
+`npm test` now also runs `scripts/verify-workspace-isolation.mjs` (19 checks).
+
+### How to re-test
+1. Sign in as a user with an unpaired Personal workspace and a paired invited one.
+2. Switch between them repeatedly: pairing banner, Offline badge and toasts must follow
+   the selected workspace only, with no toast fired by the switch itself.
+3. Pair/unpair from Desktop on one workspace while the other is open — the idle one
+   must not react.
+4. Leave the app open past 15 minutes and pull to refresh: data loads, no logout.
+5. Hit an RBAC-denied screen as a restricted member: toast, still signed in.
+
+---
+
 ## 2026-09-17 — Desktop 409 when already paired + ledger JSON names
 
 ### Desktop

@@ -6,6 +6,7 @@
 // ============================================================
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import {
   ApiError,
@@ -56,6 +57,102 @@ const getToken = async (): Promise<string | null> => {
   }
 };
 
+const storeAccessToken = async (token: string) => {
+  if (Platform.OS === 'web') {
+    try { window.localStorage.setItem('auth_token', token); } catch { /* private mode */ }
+  }
+  await AsyncStorage.setItem('auth_token', token);
+};
+
+// ── Refresh token ────────────────────────────────────────────
+/**
+ * The access token lives 15 minutes; the refresh token that renews it is valid
+ * for far longer, so it goes in the device keychain (SecureStore — same store as
+ * the biometric PIN) and never in AsyncStorage, which is world-readable plain
+ * text on a rooted/jailbroken device.
+ */
+const REFRESH_TOKEN_KEY = 'td_refresh_token';
+
+export async function setRefreshToken(token: string | null | undefined): Promise<void> {
+  try {
+    if (!token) {
+      await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+      return;
+    }
+    await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, String(token));
+  } catch {
+    // No keychain (web fallback / locked device): the session simply ends when
+    // the access token expires instead of silently downgrading to AsyncStorage.
+  }
+}
+
+export async function getRefreshToken(): Promise<string | null> {
+  try {
+    return await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export async function clearRefreshToken(): Promise<void> {
+  await setRefreshToken(null);
+}
+
+/**
+ * 'refreshed'   — a new access token is stored, replay the request
+ * 'rejected'    — the session is gone (revoked / expired / never had a refresh
+ *                 token); the caller must sign out
+ * 'unavailable' — the refresh endpoint could not be reached; the session may
+ *                 still be valid, so surface the 401 but keep the user signed in
+ */
+export type RefreshOutcome = 'refreshed' | 'rejected' | 'unavailable';
+
+let _refreshPromise: Promise<RefreshOutcome> | null = null;
+
+async function performRefresh(): Promise<RefreshOutcome> {
+  const refreshToken = await getRefreshToken();
+  if (!refreshToken) return 'rejected';
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+      cache: 'no-store',
+    });
+  } catch {
+    // Offline / DNS / connection refused — do not destroy a session over a blip.
+    return 'unavailable';
+  }
+  const data = await safeParseJson(res);
+  const next = data?.data ?? data;
+  if (!res.ok || !next?.access_token) {
+    if (res.status >= 500) return 'unavailable';
+    await clearRefreshToken();
+    return 'rejected';
+  }
+  // Only the tokens are touched: the active workspace and the selected company
+  // are deliberately left alone so a mid-session refresh cannot move the user.
+  await storeAccessToken(String(next.access_token));
+  if (next.refresh_token) await setRefreshToken(String(next.refresh_token));
+  return 'refreshed';
+}
+
+/**
+ * Renew the access token, at most one request in flight. Without this guard a
+ * screen that fires eight parallel calls turns one expiry into eight refreshes,
+ * and with rotating refresh tokens all but one of them lose the race and would
+ * sign the user out.
+ */
+export function tryRefreshSession(): Promise<RefreshOutcome> {
+  if (_refreshPromise) return _refreshPromise;
+  const pending = performRefresh().finally(() => {
+    if (_refreshPromise === pending) _refreshPromise = null;
+  });
+  _refreshPromise = pending;
+  return pending;
+}
+
 async function safeParseJson(res: Response): Promise<any> {
   const text = await res.text();
   if (!text) return null;
@@ -86,7 +183,9 @@ async function request<T>(
   endpoint: string,
   body?: object,
   requiresAuth = true,
-  basePrefix: 'api' | 'tally' | 'app' = 'api'
+  basePrefix: 'api' | 'tally' | 'app' = 'api',
+  /** Internal: false on the replay so one expiry can never loop. */
+  allowRefresh = true
 ): Promise<T> {
   const token = requiresAuth ? await getToken() : null;
   // Fail client-side before hitting backend (avoids "No token provided" spam)
@@ -132,8 +231,18 @@ async function request<T>(
         message || `HTTP ${res.status}`,
         { status: res.status, code, kind, raw: data },
       );
-      // Genuine protected 401 → central sign-out. Never logout on 403 / RBAS codes.
+      // Genuine protected 401 → try the refresh token once, then replay the
+      // request. Only a dead session reaches the central sign-out.
+      // Never logout on 403 / RBAS codes.
       if (res.status === 401) {
+        if (requiresAuth && allowRefresh) {
+          const outcome = await tryRefreshSession();
+          if (outcome === 'refreshed') {
+            clearTimeout(timer);
+            return await request<T>(method, endpoint, body, requiresAuth, basePrefix, false);
+          }
+          if (outcome === 'unavailable') throw err;
+        }
         notifyAuthFailure(err);
       } else if (res.status === 403 || res.status === 402 || res.status === 409) {
         toastRbasError(err);
@@ -205,9 +314,12 @@ export interface VerifyOTPResponse {
     // Normal login flow
     is_new_user?: boolean;
     access_token?: string;
+    refresh_token?: string;
+    session_id?: string;
     expires_in?: number;
     user?: { id: number; name: string | null; phone: string; language: string };
-    is_paired?: boolean;
+    // Pairing is per-workspace (WorkspaceContext.pairingStatus) — the login
+    // response deliberately exposes no user-global paired flag.
     company?: { guid: string; name: string; gstin: string | null } | null;
   };
 }
@@ -217,6 +329,8 @@ export interface RegisterResponse {
   data: {
     user: { id: number; name: string; phone: string; email: string; language: string };
     access_token: string;
+    refresh_token?: string;
+    session_id?: string;
   };
 }
 
