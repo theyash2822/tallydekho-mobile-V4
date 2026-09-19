@@ -111,6 +111,7 @@ export default function CreateStockItemScreen() {
   const [productName, setProductName] = useState('');
   const [unit, setUnit] = useState('');
   const [taxRate, setTaxRate] = useState('');
+  const [hsnCode, setHsnCode] = useState('');
   const [purchasePrice, setPurchasePrice] = useState('');
   const [warehouse, setWarehouse] = useState('');
   const [quantity, setQuantity] = useState('');
@@ -157,7 +158,7 @@ export default function CreateStockItemScreen() {
         igstRate: igst,
         cgstRate: igst / 2,
         sgstRate: igst / 2,
-        hsnCode: '',
+        hsnCode: hsnCode.trim(),
         generateBarcode: !!generateBarcode,
         barcodeLabel: generateBarcode
           ? { itemName: !!bcItemName, sku: !!bcSku, salePrice: !!bcSalePrice }
@@ -255,6 +256,9 @@ export default function CreateStockItemScreen() {
           {/* Product Name */}
           <Text style={s.label}>Product name <Text style={s.star}>*</Text></Text>
           <ThemedInput placeholder="Enter product name" value={productName} onChangeText={setProductName} />
+
+          <Text style={s.label}>HSN</Text>
+          <ThemedInput placeholder="HSN / SAC" value={hsnCode} onChangeText={setHsnCode} keyboardType="numeric" />
 
           {/* Unit + Tax Rate — shared field geometry so labels/controls align */}
           <View style={s.row2}>

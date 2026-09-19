@@ -14,10 +14,6 @@ import { pairWorkspaceTally, unpairWorkspaceTally, getTallySyncStatus } from '..
 import { useAuth } from '../../src/context/AuthContext';
 import { useWorkspace } from '../../src/context/WorkspaceContext';
 
-// Mock data
-const MOCK_LAST_SYNCED = '15 Jun 2025, 11:42 AM';
-const MOCK_PC_NAME = 'ASHISH-PC \\ TallyPrime';
-
 // ─────────────────────────────────────────────────────────────────────────────
 // HelpSheet — "Where do I find the code?"
 // ─────────────────────────────────────────────────────────────────────────────

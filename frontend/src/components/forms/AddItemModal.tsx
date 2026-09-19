@@ -46,10 +46,11 @@ export function AddItemModal({
   const [warehouse,  setWarehouse]  = useState('');
   const [qty,        setQty]        = useState('');
   const [salePrice,  setSalePrice]  = useState('');
+  const [hsnCode,    setHsnCode]    = useState('');
 
   const reset = () => {
     setGroup(''); setName(''); setUnit(''); setTaxRate('');
-    setPurchPrice(''); setWarehouse(''); setQty(''); setSalePrice('');
+    setPurchPrice(''); setWarehouse(''); setQty(''); setSalePrice(''); setHsnCode('');
   };
 
   const validate = () => {
@@ -77,12 +78,11 @@ export function AddItemModal({
   };
 
   const handleDone = async () => {
-    if (!company?.guid || !name) return;
+    if (!company?.guid || !name) throw new Error('incomplete');
     const itemName = name;
     Keyboard.dismiss();
-    reset(); onClose();
+    const igst = parseFloat(taxRate) || 0;
     try {
-      const igst = parseFloat(taxRate) || 0;
       const res: any = await createStockItem({
         companyGuid: company.guid,
         companyName: company.name || '',
@@ -94,7 +94,7 @@ export function AddItemModal({
         igstRate:    igst,
         cgstRate:    igst / 2,
         sgstRate:    igst / 2,
-        hsnCode:     '',
+        hsnCode:     hsnCode.trim(),
       });
       const queued = res?.queued;
       Toast.show({
@@ -102,8 +102,15 @@ export function AddItemModal({
         text1: queued ? 'Item Queued ⏳' : 'Item Added ✅',
         text2: queued ? 'Will create in Tally when desktop connects.' : `"${itemName}" created in Tally`,
       });
-    } catch {
-      Toast.show({ type: 'info', text1: 'Item Saved', text2: 'Will create in Tally when desktop connects.' });
+      reset();
+      onClose();
+    } catch (e: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Could not save item',
+        text2: e?.message || 'Please try again.',
+      });
+      throw e;
     }
   };
 
@@ -139,6 +146,14 @@ export function AddItemModal({
         onChange={setName}
         placeholder="Enter product name"
         required
+      />
+
+      <InlineField
+        label="HSN"
+        value={hsnCode}
+        onChange={setHsnCode}
+        placeholder="HSN / SAC"
+        keyboardType="numeric"
       />
 
       <View style={ms.row}>

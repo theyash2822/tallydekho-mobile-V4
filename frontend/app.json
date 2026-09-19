@@ -16,7 +16,8 @@
         "NSMicrophoneUsageDescription": "Use the microphone for voice search on the dashboard",
         "NSSpeechRecognitionUsageDescription": "Convert your speech to text for dashboard search",
         "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": true
+          "NSAllowsArbitraryLoads": false,
+          "NSAllowsLocalNetworking": true
         }
       },
       "bundleIdentifier": "com.tallydekho.app"

@@ -214,18 +214,22 @@ export function SubmitButton({
   idleLabel, loadingLabel, successLabel, onValidate, onDone,
 }: {
   idleLabel: string; loadingLabel: string; successLabel: string;
-  onValidate: () => boolean; onDone: () => void;
+  onValidate: () => boolean;
+  onDone: () => void | Promise<void>;
 }) {
   const [phase, setPhase] = useState<BtnPhase>('idle');
 
-  const handlePress = () => {
+  const handlePress = async () => {
     if (phase !== 'idle') return;
     if (!onValidate()) return;
     setPhase('loading');
-    setTimeout(() => {
+    try {
+      await onDone();
       setPhase('success');
-      setTimeout(() => { onDone(); setPhase('idle'); }, 900);
-    }, 1300);
+      setTimeout(() => setPhase('idle'), 900);
+    } catch {
+      setPhase('idle');
+    }
   };
 
   return (

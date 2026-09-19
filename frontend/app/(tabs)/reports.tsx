@@ -15,6 +15,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { getFinancialData, getGSTReport, getAuditTrail } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
+import { useWorkspace } from '../../src/context/WorkspaceContext';
 import { FinancialChartSkeleton } from '../../src/components/Skeleton';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useTranslation } from 'react-i18next';
@@ -860,7 +861,10 @@ export default function ReportsScreen() {
   const { formatAmount, formatAmountCompact, formatDate } = useSettings();
   const router = useRouter();
   const { company, selectedFY, lastSyncAt } = useAuth();
+  const { workspaceId } = useWorkspace();
   const companyGuid = company?.guid;
+  const reportIdentity = `${workspaceId || ''}:${companyGuid || ''}:${selectedFY?.startDate || ''}`;
+  const identityRef = useRef(reportIdentity);
 
   // Financial chart data — fetched from API
   const [finData, setFinData] = useState<{
@@ -955,10 +959,21 @@ export default function ReportsScreen() {
     }
   }, [companyGuid, selectedFY?.startDate, selectedFY?.endDate]);
 
+  useEffect(() => {
+    if (identityRef.current !== reportIdentity) {
+      identityRef.current = reportIdentity;
+      hasFinDataRef.current = false;
+      setFinData(null);
+      setGstFiledCount(0);
+      setAuditCount(0);
+      requestGenRef.current += 1;
+    }
+  }, [reportIdentity]);
+
   // Single fetch path — no duplicate useFocusEffect (Phase 3 hygiene)
   useEffect(() => {
-    loadReports({ soft: hasFinDataRef.current });
-  }, [loadReports]);
+    loadReports({ soft: false });
+  }, [loadReports, reportIdentity]);
 
   // lastSyncAt → soft refresh
   useEffect(() => {

@@ -12,7 +12,7 @@ const SECURITY_SECTIONS = [
     icon:  'lock-closed-outline',
     items: [
       { label: 'Encrypt local database', badge: 'AES-256' },
-      { label: 'Clear cache on logout',  badge: undefined },
+      { label: 'Cache is cleared on logout',  badge: undefined },
     ],
   },
   {

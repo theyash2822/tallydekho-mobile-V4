@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { getLedgers, createLedger, getLedgerStatement, getActiveWorkspaceId } from '../../src/services/api';
+import { getLedgerListCache, ledgerCacheKey } from '../../src/utils/ledgerCache';
 import { shareMultiStatementPdf } from '../../src/utils/voucherPdf';
 import type { StatementInput } from '../../src/utils/pdf/tallyLayout';
 
@@ -54,8 +55,7 @@ interface LedgerItem {
   lastUpdated: string;
 }
 
-// Module-level ledger cache — persists across navigation, cleared on sync
-const _ledgerCache: Record<string, { data: LedgerItem[]; total: number; ts: number }> = {};
+const _ledgerCache = getLedgerListCache() as Record<string, { data: LedgerItem[]; total: number; ts: number }>;
 
 // ─── Ledger Creation Sheet ────────────────────────────────────────────────────
 interface SectionProps {
@@ -786,7 +786,7 @@ export default function LedgerScreen() {
     // Cache only unfiltered list loads
     // Workspace-qualified: the same Tally GUID can belong to two tenants, and a
     // GUID-only key let them share this cache across a workspace switch.
-    const cacheKey = `v2:${getActiveWorkspaceId() ?? 'no-ws'}:${companyGuid}:${lastSyncAt}:${selectedFY?.startDate ?? ''}`;
+    const cacheKey = ledgerCacheKey(getActiveWorkspaceId(), companyGuid, lastSyncAt, selectedFY?.startDate);
     if (!hasSheetFilters && !debouncedSearch) {
       const cached = _ledgerCache[cacheKey];
       if (cached && Date.now() - cached.ts < 5 * 60 * 1000) {
