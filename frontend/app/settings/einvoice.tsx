@@ -97,7 +97,7 @@ export default function EInvoiceScreen() {
       setStatus('ACTIVE');
       Alert.alert('Activated', 'E-Invoice is active for this Workspace.');
     } catch (e) {
-      if (e instanceof ApiError && (e.code === 'BILLING_INSUFFICIENT_CREDITS' || e.code === 'INSUFFICIENT_CREDITS' || e.code === 'MIXED_FUNDING_PRIORITY_UNDEFINED' || e.code === 'SPLIT_FUNDING_RULE_UNDEFINED')) {
+      if (e instanceof ApiError && (e.code === 'BILLING_INSUFFICIENT_CREDITS' || e.code === 'INSUFFICIENT_CREDITS')) {
         Alert.alert(
           'Insufficient credits',
           'This Workspace does not have enough credits. Please ask the Workspace Owner to recharge from the Web Portal.'

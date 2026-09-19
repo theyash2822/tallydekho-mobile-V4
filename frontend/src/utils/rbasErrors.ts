@@ -22,8 +22,6 @@ export const RBAS_ERROR_CODES = new Set([
   'INTEGRATION_NOT_CONFIGURED',
   'BILLING_INSUFFICIENT_CREDITS',
   'INSUFFICIENT_CREDITS',
-  'MIXED_FUNDING_PRIORITY_UNDEFINED',
-  'SPLIT_FUNDING_RULE_UNDEFINED',
 ]);
 
 const TITLES: Record<string, string> = {
@@ -44,8 +42,6 @@ const TITLES: Record<string, string> = {
   INTEGRATION_NOT_CONFIGURED: 'Integration not ready',
   BILLING_INSUFFICIENT_CREDITS: 'Insufficient credits',
   INSUFFICIENT_CREDITS: 'Insufficient credits',
-  MIXED_FUNDING_PRIORITY_UNDEFINED: 'Billing policy pending',
-  SPLIT_FUNDING_RULE_UNDEFINED: 'Billing policy pending',
 };
 
 export function isRbasError(err: unknown): boolean {
