@@ -1,3 +1,10 @@
+## 2026-09-19 — Snapshot branch `19-09-2026-final-code`
+
+Pushed local `cursor` tip (billing 402 = validation; mixed/split codes removed)
+as `19-09-2026-final-code`. LAN backend remains `http://192.168.29.243:3001`.
+
+---
+
 ## 2026-09-18 — Staging EAS profile + centralized backend config
 
 Added `frontend/src/config/backend.ts` as the single source for backend URL
