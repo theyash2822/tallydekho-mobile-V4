@@ -185,6 +185,17 @@ await check('422 is validation, 403 never logs out', () => {
   setAuthFailureHandler(null);
 });
 
+await check('insufficient credits is 402, not logout', () => {
+  const errors = read('src/utils/rbasErrors.ts');
+  assert.match(errors, /INSUFFICIENT_CREDITS/);
+  assert.equal(kindFromStatus(402, 'INSUFFICIENT_CREDITS'), 'validation');
+  let loggedOut = false;
+  setAuthFailureHandler(() => { loggedOut = true; });
+  notifyAuthFailure({ kind: 'validation', status: 402, message: 'credits' });
+  assert.equal(loggedOut, false);
+  setAuthFailureHandler(null);
+});
+
 await check('5 concurrent 401 → one refresh', async () => {
   let runs = 0;
   const holder = { current: null };

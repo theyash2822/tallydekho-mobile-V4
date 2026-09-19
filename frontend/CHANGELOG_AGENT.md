@@ -1,5 +1,12 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-19 — Insufficient credits is 402, not logout
+
+`kindFromStatus(402)` is validation. Existing `INSUFFICIENT_CREDITS` toast codes
+stay. No Billing screen added.
+
+---
+
 ## 2026-09-19 — Mobile production remediation (P0/P1 closure)
 
 Logout now calls `POST /api/auth/logout`, then always clears local tenant state
