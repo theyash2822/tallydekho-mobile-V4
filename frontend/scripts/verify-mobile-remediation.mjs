@@ -188,7 +188,10 @@ await check('422 is validation, 403 never logs out', () => {
 await check('insufficient credits is 402, not logout', () => {
   const errors = read('src/utils/rbasErrors.ts');
   assert.match(errors, /INSUFFICIENT_CREDITS/);
+  assert.match(errors, /MIXED_FUNDING_PRIORITY_UNDEFINED/);
+  assert.match(errors, /SPLIT_FUNDING_RULE_UNDEFINED/);
   assert.equal(kindFromStatus(402, 'INSUFFICIENT_CREDITS'), 'validation');
+  assert.equal(kindFromStatus(409, 'MIXED_FUNDING_PRIORITY_UNDEFINED'), 'validation');
   let loggedOut = false;
   setAuthFailureHandler(() => { loggedOut = true; });
   notifyAuthFailure({ kind: 'validation', status: 402, message: 'credits' });
