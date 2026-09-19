@@ -4,6 +4,12 @@ import { Platform } from 'react-native';
 import { socketService } from '../services/socketService';
 import { clearVoucherConfigCache } from '../utils/voucherPdf';
 import { clearStockListCache } from '../utils/stockCache';
+import { sweepTenantAsyncStorage } from '../utils/logoutCleanup';
+import { tenantKey, companySelectionFeature, fyFeature, setTenantKeyContext } from '../utils/tenantStorage';
+import { setWorkspaceGeneration } from '../utils/workspaceGeneration';
+import { companyInList, companyGuid, toAuthCompany, sameCompany } from '../utils/companyIdentity';
+import { isDemoCompany as companyIsDemo, isLiveBooksStatus } from '../utils/isDemoCompany';
+import { fyEquals, normalizeFy } from '../utils/fyIdentity';
 import {
   setAuthFailureHandler,
   getActiveWorkspaceId,
@@ -11,9 +17,13 @@ import {
   setRefreshToken,
   clearRefreshToken,
   tryRefreshSession,
+  logoutOnServer,
+  setWriteAsDemo,
 } from '../services/api';
+import { getLastPushToken } from '../services/pushNotifications';
 import { wsCompanyKey, wsFyKey } from '../utils/workspaceStorage';
 import { BACKEND_URL } from '../config/backend';
+import { clearPreAuthToken } from '../utils/preAuthToken';
 
 // ── Storage helpers ──────────────────────────────────────────
 const storeToken = async (token: string) => {
@@ -21,56 +31,9 @@ const storeToken = async (token: string) => {
   await AsyncStorage.setItem('auth_token', token);
 };
 
-/**
- * Keys holding data that belongs to a user, workspace or company. Matched by
- * pattern rather than listed literally: the previous fixed list named seven keys
- * and had fallen behind the app, so a second user signing in on the same device
- * inherited the first user's selected company, financial year, invoice drafts,
- * cached logos and display preferences.
- *
- * Note the GUID-keyed entries. A Tally GUID is unique only within a workspace,
- * so `company_logo_<guid>` can collide between two tenants that sync the same
- * Tally company — they must go on logout regardless of who owns them.
- */
-const TENANT_KEY_PATTERNS: RegExp[] = [
-  /^ws:/,                       // ws:<workspaceId>:company_data | :selected_fy
-  /^company_/,                  // company_data, company_logo_<guid>
-  /_prefill_/,                  // tdso_/tdpo_/tdprf_to_invoice_prefill_<guid>
-  /^draft_/,                    // in-progress vouchers
-  /^tdk_/,                      // cash patterns and similar per-company memory
-  /^userSettings$/,
-  /^voucherConfig$/,
-  /^cashflow_period$/,
-  /^td_help_chat_/,
-  /^selected_fy$/,
-];
-
-const ALWAYS_REMOVE = [
-  'auth_token',
-  'user_data',
-  // Legacy user-global pairing flag. Pairing is per-workspace now; the key is
-  // no longer written, only swept up from installs that predate the change.
-  'is_paired',
-  'user_info',
-  'active_workspace_id',
-  'active_workspace_manual_pin',
-];
-
 const removeToken = async () => {
-  if (Platform.OS === 'web') {
-    try { window.localStorage.removeItem('auth_token'); window.localStorage.removeItem('user_data'); } catch {}
-  }
-  let scoped: string[] = [];
-  try {
-    const keys = await AsyncStorage.getAllKeys();
-    scoped = keys.filter((k) => TENANT_KEY_PATTERNS.some((re) => re.test(k)));
-  } catch {
-    // Enumeration failing must not leave the session token behind.
-  }
-  await AsyncStorage.multiRemove([...new Set([...ALWAYS_REMOVE, ...scoped])]);
-  // The refresh token is in the keychain, so the AsyncStorage sweep above cannot
-  // reach it — leaving it behind would let the next account on this device mint
-  // access tokens for the one that just logged out.
+  await sweepTenantAsyncStorage();
+  await clearPreAuthToken();
   await clearRefreshToken();
 };
 
@@ -86,6 +49,7 @@ export interface Company {
   guid: string;
   name: string;
   gstin?: string | null;
+  is_demo?: boolean;
 }
 
 export interface UserInfo {
@@ -158,6 +122,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [selectedFY, setSelectedFY] = useState<FYInfo | null>(null);
   const [company, setCompanyState] = useState<Company | null>(null);
   const companyRef = useRef<Company | null>(null);
+  const selectedFYRef = useRef<FYInfo | null>(null);
+  const userRef = useRef<UserInfo | null>(null);
   const lastWsStatusRef = useRef('');
   /** Workspace the status poll last reported on — resets derived state on switch. */
   const polledWsRef = useRef<string | null>(null);
@@ -166,7 +132,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Keep ref in sync for functional setCompany without double-setState hacks
   useEffect(() => {
     companyRef.current = company;
+    setWriteAsDemo(companyIsDemo(company));
   }, [company]);
+  useEffect(() => {
+    selectedFYRef.current = selectedFY;
+  }, [selectedFY]);
+  useEffect(() => {
+    userRef.current = user;
+    setTenantKeyContext(user?.id ?? null, getActiveWorkspaceId());
+  }, [user]);
 
   const BASE_URL = BACKEND_URL;
 
@@ -183,17 +157,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (tok) {
           setIsAuthenticated(true);
           const wsId = wsIdPair[1] || null;
-          const companyJson = await AsyncStorage.getItem(wsCompanyKey(wsId));
-          const legacyCompany = companyJson ? null : await AsyncStorage.getItem('company_data');
-          const rawCompany = companyJson || legacyCompany;
-          if (rawCompany) {
-            const parsed = JSON.parse(rawCompany);
+          const userParsed = userJson[1] ? JSON.parse(userJson[1]) : null;
+          const scopedCompanyKey = tenantKey({
+            userId: userParsed?.id,
+            workspaceId: wsId,
+            feature: companySelectionFeature(),
+          });
+          const companyJson =
+            (await AsyncStorage.getItem(scopedCompanyKey)) ||
+            (wsId ? await AsyncStorage.getItem(wsCompanyKey(wsId)) : null);
+          await AsyncStorage.removeItem('company_data').catch(() => {});
+          if (companyJson) {
+            const parsed = JSON.parse(companyJson);
             companyRef.current = parsed;
             setCompanyState(parsed);
-          }
-          const fyJson = await AsyncStorage.getItem(wsFyKey(wsId));
-          if (fyJson) {
-            try { setSelectedFY(JSON.parse(fyJson)); } catch { /* ignore */ }
+            const fyKey = tenantKey({
+              userId: userParsed?.id,
+              workspaceId: wsId,
+              companyGuid: parsed?.guid,
+              feature: fyFeature(),
+            });
+            const fyJson = (await AsyncStorage.getItem(fyKey)) || (wsId ? await AsyncStorage.getItem(wsFyKey(wsId)) : null);
+            if (fyJson) {
+              try { setSelectedFY(JSON.parse(fyJson)); } catch { /* ignore */ }
+            }
           }
           if (userJson[1]) setUserState(JSON.parse(userJson[1]));
         }
@@ -222,22 +209,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, [BASE_URL]);
 
+  const signingOutRef = useRef(false);
   const signOut = useCallback(async () => {
-    socketService.disconnect();
-    await removeToken();
-    // The PDF format choice is user-level and cached in memory, so it has to go
-    // or the next account inherits this one's layouts.
-    clearVoucherConfigCache();
-    // Same reasoning for the stock list: it lives in a module-level map that
-    // outlives the React tree, so without this the next account can read the
-    // previous one's inventory until the five-minute TTL lapses.
-    clearStockListCache();
-    setIsAuthenticated(false);
-    setIsDesktopOnlineState(false);
-    polledWsRef.current = null;
-    lastWsStatusRef.current = '';
-    setCompanyState(null);
-    setUserState(null);
+    if (signingOutRef.current) return;
+    signingOutRef.current = true;
+    try {
+      const pushToken = getLastPushToken();
+      const serverLogout = await logoutOnServer(pushToken || undefined);
+      if (!serverLogout.ok && __DEV__) {
+        console.warn('[auth] server logout not revoked', serverLogout.reason || 'unknown');
+      }
+      socketService.disconnect();
+      setWriteAsDemo(false);
+      setTenantKeyContext(null, null);
+      setWorkspaceGeneration(null);
+      await removeToken();
+      clearVoucherConfigCache();
+      clearStockListCache();
+      setIsAuthenticated(false);
+      setIsDesktopOnlineState(false);
+      polledWsRef.current = null;
+      lastWsStatusRef.current = '';
+      setCompanyState(null);
+      companyRef.current = null;
+      setSelectedFY(null);
+      setUserState(null);
+    } finally {
+      signingOutRef.current = false;
+    }
   }, []);
 
   // Central 401 → invalidate session once (api layer). 403 never reaches here as auth.
@@ -250,42 +249,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Stable identity — WorkspaceContext refreshContext depends on this; a new
   // function every render re-fired refresh → setAccess → filterScoped → Header loops.
+  const persistCompany = useCallback(async (next: Company | null) => {
+    const wsId = getActiveWorkspaceId();
+    const userId = user?.id ?? userRef.current?.id;
+    if (!wsId) return;
+    const key = tenantKey({ userId, workspaceId: wsId, feature: companySelectionFeature() });
+    if (next) {
+      await AsyncStorage.setItem(key, JSON.stringify(next));
+    } else {
+      await AsyncStorage.removeItem(key);
+    }
+    await AsyncStorage.removeItem(wsCompanyKey(wsId)).catch(() => {});
+    await AsyncStorage.removeItem('company_data').catch(() => {});
+  }, [user?.id]);
+
   const setCompany = useCallback(async (c: Company | null | ((prev: Company | null) => Company | null)) => {
     const next = typeof c === 'function' ? c(companyRef.current) : c;
-    // No-op when identity unchanged (stops Demo↔null flicker loops)
     if (!next && !companyRef.current) return;
-    if (next?.guid && next.guid === companyRef.current?.guid) return;
-    // Also no-op when functional updater returns the same object reference
+    if (next && companyRef.current && sameCompany(next, companyRef.current)
+      && !!next.is_demo === !!companyRef.current.is_demo
+      && next.name === companyRef.current.name) {
+      return;
+    }
     if (next && next === companyRef.current) return;
     companyRef.current = next;
     setCompanyState(next);
-    const wsId = getActiveWorkspaceId();
-    const key = wsCompanyKey(wsId);
-    if (next) {
-      await AsyncStorage.setItem(key, JSON.stringify(next));
-      await AsyncStorage.setItem('company_data', JSON.stringify(next));
-    } else {
-      await AsyncStorage.removeItem(key);
-      await AsyncStorage.removeItem('company_data');
-    }
-  }, []);
-
-  const isDemoCompany = (c: { guid?: string; name?: string; id?: string } | null | undefined) => {
-    if (!c) return false;
-    const name = String(c.name || '').toLowerCase();
-    const guid = String(c.guid || c.id || '');
-    return name.startsWith('demo') || guid.startsWith('dddddddd-dddd-4ddd-8ddd-') || guid.startsWith('DEMO');
-  };
+    setWriteAsDemo(companyIsDemo(next));
+    await persistCompany(next);
+  }, [persistCompany]);
 
   const setSelectedFYPersisted = useCallback(async (fy: FYInfo | null) => {
-    setSelectedFY(fy);
+    const normalized = fy ? normalizeFy(fy) : null;
+    if (fyEquals(normalized, selectedFYRef.current)) return;
+    selectedFYRef.current = normalized;
+    setSelectedFY(normalized);
     const wsId = getActiveWorkspaceId();
-    const key = wsFyKey(wsId);
-    if (fy) {
-      await AsyncStorage.setItem(key, JSON.stringify(fy));
-    } else {
-      await AsyncStorage.removeItem(key);
-    }
+    const userId = userRef.current?.id;
+    const guid = companyGuid(companyRef.current);
+    if (!wsId) return;
+    const key = tenantKey({ userId, workspaceId: wsId, companyGuid: guid, feature: fyFeature() });
+    if (normalized) await AsyncStorage.setItem(key, JSON.stringify(normalized));
+    else await AsyncStorage.removeItem(key);
   }, []);
 
   const setUser = useCallback((u: UserInfo) => {
@@ -369,57 +373,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setLastSyncAt(Date.now());
         }
 
-        if (liveConnected && statusCompany?.guid && !isDemoCompany(statusCompany)) {
-          setCompanyState(cur => {
-            if (cur?.guid && !isDemoCompany(cur)) return cur;
-            const c = { guid: statusCompany.guid, name: statusCompany.name, gstin: statusCompany.gstin || null };
-            companyRef.current = c;
-            AsyncStorage.setItem('company_data', JSON.stringify(c)).catch(() => {});
-            AsyncStorage.setItem(wsCompanyKey(wsId), JSON.stringify(c)).catch(() => {});
-            return c;
-          });
+        const liveBooks = isLiveBooksStatus(wsStatus);
+        if (liveBooks && statusCompany && !companyIsDemo(statusCompany)) {
+          const adopted = toAuthCompany(statusCompany);
+          const cur = companyRef.current;
+          if (adopted && !companyGuid(cur)) {
+            await setCompany(adopted);
+          }
         }
 
-        // After desktop syncs a different/new company, active set changes (old cos
-        // marked is_active=false). Drop inactive cached company and adopt active one.
-        // Only while CONNECTED — Demo Mode must keep Demo Company.
-        if (liveConnected) {
+        if (liveBooks) {
           try {
             const cosRes: any = await getCompanies();
-            // Company lists are workspace-scoped; a late reply must not adopt a
-            // company from the workspace the user just left.
             if (getActiveWorkspaceId() !== wsId) return;
-            const list: { id: string; name: string; gstin?: string | null }[] = (cosRes?.data || [])
-              .filter((c: any) => !isDemoCompany(c));
-            setCompanyState(cur => {
-              if (isDemoCompany(cur)) {
-                // Demo while CONNECTED is illegal — clear even if list empty
-                if (!list.length) {
-                  companyRef.current = null;
-                  AsyncStorage.removeItem('company_data').catch(() => {});
-                  return null;
-                }
+            const list = ((cosRes?.data || []) as any[]).filter((c) => !companyIsDemo(c));
+            const cur = companyRef.current;
+            if (cur && !companyIsDemo(cur) && companyInList(cur, list)) {
+              // selection already valid — poll must not rewrite
+            } else if (companyIsDemo(cur) || !cur) {
+              if (!list.length) await setCompany(null);
+              else {
+                const live = statusCompany && !companyIsDemo(statusCompany) ? toAuthCompany(statusCompany) : null;
+                const pickRow = (live && list.find((c) => sameCompany(c, live))) || list[0];
+                const pick = toAuthCompany(pickRow);
+                if (pick) await setCompany(pick);
               }
-              const stillActive = !!(cur?.guid && list.some(c => c.id === cur.guid));
-              if (stillActive) return cur;
-              if (!list.length) {
-                // Paired empty (only Demo filtered out) → stable null
-                if (!cur || isDemoCompany(cur)) {
-                  companyRef.current = null;
-                  AsyncStorage.removeItem('company_data').catch(() => {});
-                  return null;
-                }
-                return cur;
-              }
-              const liveGuid = statusCompany?.guid && !isDemoCompany(statusCompany) ? statusCompany.guid : null;
-              const pick = (liveGuid && list.find(c => c.id === liveGuid)) || list[0];
-              if (!pick) return cur;
-              const c = { guid: pick.id, name: pick.name, gstin: pick.gstin || null };
-              companyRef.current = c;
-              AsyncStorage.setItem('company_data', JSON.stringify(c)).catch(() => {});
-              AsyncStorage.setItem(wsCompanyKey(wsId), JSON.stringify(c)).catch(() => {});
-              return c;
-            });
+            } else if (list.length) {
+              const live = statusCompany && !companyIsDemo(statusCompany) ? toAuthCompany(statusCompany) : null;
+              const pickRow = (live && list.find((c) => sameCompany(c, live))) || list[0];
+              const pick = toAuthCompany(pickRow);
+              if (pick && !sameCompany(cur, pick)) await setCompany(pick);
+            }
           } catch { /* keep cached */ }
         }
 
@@ -438,7 +422,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     poll(); // immediate check on mount / auth change
     const interval = setInterval(poll, 10_000);
     return () => clearInterval(interval);
-  }, [isAuthenticated, BASE_URL, signOut]);
+  }, [isAuthenticated, BASE_URL, signOut, setCompany]);
 
   const value = useMemo<AuthContextType>(() => ({
     isAuthenticated, isLoading, isDesktopOnline, company, user, lastSyncAt,

@@ -11,7 +11,7 @@ import { verifyOTP, sendOTP } from '../../src/services/api';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../src/context/AuthContext';
 import { navigateAfterAuth } from '../../src/utils/onboardingNav';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setPreAuthToken, clearPreAuthToken } from '../../src/utils/preAuthToken';
 
 const OTP_LENGTH = 4;
 
@@ -134,7 +134,7 @@ export default function OTPScreen() {
 
         // ── 2FA required — route to PIN screen
         if (data?.requires_2fa) {
-          await AsyncStorage.setItem('pre_auth_token', data.pre_auth_token || '');
+          await setPreAuthToken(data.pre_auth_token || '');
           router.replace({
             pathname: '/(auth)/verify-pin' as any,
             params: { phone, biometric: data.biometric_enabled ? '1' : '0' },
@@ -143,6 +143,7 @@ export default function OTPScreen() {
         }
 
         // ── No 2FA — normal login
+        await clearPreAuthToken();
         const { access_token, refresh_token, is_new_user, user, company } = data;
         if (is_new_user) {
           router.replace({ pathname: '/(auth)/register', params: { phone, token: access_token } });

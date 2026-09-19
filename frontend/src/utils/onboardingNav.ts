@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Router } from 'expo-router';
+type AppRouter = { replace: any };
 
 export const ONBOARDING_COMPLETED_KEY = 'onboarding_completed';
 
@@ -13,7 +13,7 @@ export async function markOnboardingCompleted(): Promise<void> {
 }
 
 /** After successful auth — tour first time, home otherwise. */
-export async function navigateAfterAuth(router: Router): Promise<void> {
+export async function navigateAfterAuth(router: AppRouter): Promise<void> {
   const done = await isOnboardingCompleted();
   router.replace(done ? '/(tabs)' : '/onboarding');
 }

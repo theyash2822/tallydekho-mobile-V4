@@ -11,11 +11,9 @@ import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { updateMe, get2FAStatus, setPin as apiSetPin, removePin, setBiometric as apiSetBiometric, changePhone, changeEmail } from '../../src/services/api';
-import * as SecureStore from 'expo-secure-store';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useTranslation } from 'react-i18next';
-
-const BIOMETRIC_PIN_KEY = 'td_biometric_pin';
+import { setBiometricPin, clearBiometricPin } from '../../src/utils/biometricPin';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -668,7 +666,7 @@ export default function ProfileScreen() {
       }
     } else {
       // Disabling biometric — clear stored PIN
-      await SecureStore.deleteItemAsync(BIOMETRIC_PIN_KEY).catch(() => {});
+      await clearBiometricPin(phone);
     }
     setBiometricState(val);
     try {
@@ -740,7 +738,7 @@ export default function ProfileScreen() {
       const hasHW = await LocalAuthentication.hasHardwareAsync();
       const enrolled = await LocalAuthentication.isEnrolledAsync();
       if (hasHW && enrolled) {
-        await SecureStore.setItemAsync(BIOMETRIC_PIN_KEY, pin);
+        await setBiometricPin(phone, pin);
         // Also enable biometric on server if not already enabled
         if (!biometric) {
           await apiSetBiometric(true).catch(() => {});
@@ -759,7 +757,7 @@ export default function ProfileScreen() {
       await removePin(pin);
       setTwoFA(false);
       // Clear stored biometric PIN
-      await SecureStore.deleteItemAsync(BIOMETRIC_PIN_KEY).catch(() => {});
+      await clearBiometricPin(phone);
       setBiometricState(false);
       Toast.show({ type: 'success', text1: '2FA Disabled', text2: 'Two-Factor Authentication has been turned off.' });
     } catch (err: any) {

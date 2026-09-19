@@ -6,16 +6,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as LocalAuthentication from 'expo-local-authentication';
-import * as SecureStore from 'expo-secure-store';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { verifyPin, sendOTP } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { navigateAfterAuth } from '../../src/utils/onboardingNav';
 import { useTranslation } from 'react-i18next';
-
-const BIOMETRIC_PIN_KEY = 'td_biometric_pin';
+import { getPreAuthToken, clearPreAuthToken } from '../../src/utils/preAuthToken';
+import { getBiometricPin } from '../../src/utils/biometricPin';
 
 const PIN_LENGTH = 4;
 
@@ -66,7 +64,8 @@ export default function VerifyPinScreen() {
   const [error, setError]              = useState('');
   const [mode, setMode]                = useState<'verify' | 'reset_otp' | 'reset_pin'>('verify');
   const [resetOtp, setResetOtp]        = useState('');
-  const [preAuthToken, setPreAuthToken] = useState('');
+  const [preAuthToken, setPreAuthTokenState] = useState('');
+  const preAuthTokenRef = useRef('');
   const [biometricAvail, setBioAvail]   = useState(false);
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
@@ -74,7 +73,12 @@ export default function VerifyPinScreen() {
 
   // Check biometric hardware + load pre_auth_token
   useEffect(() => {
-    AsyncStorage.getItem('pre_auth_token').then(t => { if (t) setPreAuthToken(t); });
+    getPreAuthToken().then(t => {
+      if (t) {
+        preAuthTokenRef.current = t;
+        setPreAuthTokenState(t);
+      }
+    });
 
     // Check if device supports biometrics
     LocalAuthentication.hasHardwareAsync().then(hasHW => {
@@ -102,8 +106,9 @@ export default function VerifyPinScreen() {
 
       if (result.success) {
         // Retrieve stored PIN from secure storage
-        const storedPin = await SecureStore.getItemAsync(BIOMETRIC_PIN_KEY);
-        if (storedPin && preAuthToken) {
+        const storedPin = await getBiometricPin(phone);
+        const token = preAuthTokenRef.current;
+        if (storedPin && token) {
           await doVerify(storedPin);
         } else if (!storedPin) {
           // No stored PIN — biometric enabled but no PIN stored yet
@@ -141,12 +146,13 @@ export default function VerifyPinScreen() {
   const doVerify = async (code?: string) => {
     const enteredPin = code || pin.join('');
     if (enteredPin.length < PIN_LENGTH) { setError('Enter your full PIN'); return; }
-    if (!preAuthToken) { setError('Session expired. Please log in again.'); return; }
+    const token = preAuthTokenRef.current || preAuthToken;
+    if (!token) { setError('Session expired. Please log in again.'); return; }
     setLoading(true); setError('');
     try {
-      const res = await verifyPin(enteredPin, preAuthToken);
+      const res = await verifyPin(enteredPin, token);
       if (res?.success) {
-        await AsyncStorage.removeItem('pre_auth_token');
+        await clearPreAuthToken();
         const { access_token, refresh_token, user, company } = res.data;
         await signIn(
           access_token,

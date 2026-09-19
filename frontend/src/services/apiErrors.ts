@@ -7,6 +7,7 @@ export type ApiErrorKind =
   | 'timeout'
   | 'auth'
   | 'forbidden'
+  | 'validation'
   | 'server'
   | 'unknown';
 
@@ -68,6 +69,7 @@ export function kindFromStatus(
 ): ApiErrorKind {
   if (status === 401) return 'auth';
   if (status === 403) return 'forbidden';
+  if (status === 422 || status === 400) return 'validation';
   if (status != null && status >= 500) return 'server';
   if (code === 'DEVICE_NOT_PAIRED' || code === 'COMPANY_NOT_SYNCED') return 'forbidden';
   return 'unknown';

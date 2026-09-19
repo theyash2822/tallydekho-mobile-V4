@@ -6,8 +6,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
+import { setPreAuthToken, getPreAuthToken, clearPreAuthToken } from '../../src/utils/preAuthToken';
 import { verifyOTP, resetPin, sendOTP } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { navigateAfterAuth } from '../../src/utils/onboardingNav';
@@ -107,7 +107,7 @@ export default function ResetPinScreen() {
         const token = r?.data?.pre_auth_token || r?.data?.access_token || '';
         if (!token) throw new Error('Could not verify OTP');
         setPreToken(token);
-        await AsyncStorage.setItem('pre_auth_token', token);
+        await setPreAuthToken(token);
         setStep('new_pin');
       } catch (err: any) {
         setError(err?.message || 'Invalid OTP. Try again.');
@@ -127,10 +127,10 @@ export default function ResetPinScreen() {
       }
       setLoading(true); setError('');
       try {
-        const token = preAuthToken || (await AsyncStorage.getItem('pre_auth_token')) || '';
+        const token = preAuthToken || (await getPreAuthToken()) || '';
         const res = await resetPin(newPin.join(''), token);
         if (res?.success) {
-          await AsyncStorage.removeItem('pre_auth_token');
+          await clearPreAuthToken();
           const { access_token, refresh_token, user, company } = res.data;
           await signIn(
             access_token,

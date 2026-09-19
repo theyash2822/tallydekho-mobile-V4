@@ -16,6 +16,7 @@ import {
 } from './apiErrors';
 import { toastRbasError } from '../utils/rbasErrors';
 import { BACKEND_URL } from '../config/backend';
+import { beginSingleFlight } from '../utils/singleFlight';
 
 export {
   ApiError,
@@ -107,7 +108,7 @@ export async function clearRefreshToken(): Promise<void> {
  */
 export type RefreshOutcome = 'refreshed' | 'rejected' | 'unavailable';
 
-let _refreshPromise: Promise<RefreshOutcome> | null = null;
+const _refreshSlot: { current: Promise<RefreshOutcome> | null } = { current: null };
 
 async function performRefresh(): Promise<RefreshOutcome> {
   const refreshToken = await getRefreshToken();
@@ -145,12 +146,7 @@ async function performRefresh(): Promise<RefreshOutcome> {
  * sign the user out.
  */
 export function tryRefreshSession(): Promise<RefreshOutcome> {
-  if (_refreshPromise) return _refreshPromise;
-  const pending = performRefresh().finally(() => {
-    if (_refreshPromise === pending) _refreshPromise = null;
-  });
-  _refreshPromise = pending;
-  return pending;
+  return beginSingleFlight(_refreshSlot, performRefresh);
 }
 
 async function safeParseJson(res: Response): Promise<any> {
@@ -183,9 +179,10 @@ async function request<T>(
   endpoint: string,
   body?: object,
   requiresAuth = true,
-  basePrefix: 'api' | 'tally' | 'app' = 'api',
+  basePrefix: 'api' | 'tally' = 'api',
   /** Internal: false on the replay so one expiry can never loop. */
-  allowRefresh = true
+  allowRefresh = true,
+  responseType: 'json' | 'text' = 'json',
 ): Promise<T> {
   const token = requiresAuth ? await getToken() : null;
   // Fail client-side before hitting backend (avoids "No token provided" spam)
@@ -213,6 +210,29 @@ async function request<T>(
     });
 
     setDeviceOnline(true);
+    if (responseType === 'text') {
+      if (!res.ok) {
+        const data = await safeParseJson(res);
+        const { message, code } = extractErrorMeta(data);
+        const kind = kindFromStatus(res.status, code);
+        const err = new ApiError(message || `HTTP ${res.status}`, { status: res.status, code, kind, raw: data });
+        if (res.status === 401) {
+          if (requiresAuth && allowRefresh) {
+            const outcome = await tryRefreshSession();
+            if (outcome === 'refreshed') {
+              clearTimeout(timer);
+              return await request<T>(method, endpoint, body, requiresAuth, basePrefix, false, responseType);
+            }
+            if (outcome === 'unavailable') throw err;
+          }
+          notifyAuthFailure(err);
+        } else if (res.status === 403 || res.status === 402 || res.status === 409) {
+          toastRbasError(err);
+        }
+        throw err;
+      }
+      return (await res.text()) as T;
+    }
     const data = await safeParseJson(res);
 
     // 304 / empty body: browsers & RN may cache GETs; treat as failure so callers retry
@@ -239,7 +259,7 @@ async function request<T>(
           const outcome = await tryRefreshSession();
           if (outcome === 'refreshed') {
             clearTimeout(timer);
-            return await request<T>(method, endpoint, body, requiresAuth, basePrefix, false);
+            return await request<T>(method, endpoint, body, requiresAuth, basePrefix, false, responseType);
           }
           if (outcome === 'unavailable') throw err;
         }
@@ -280,10 +300,39 @@ async function request<T>(
 
 const get      = <T>(endpoint: string, auth = true) => request<T>('GET', endpoint, undefined, auth);
 const tallyGet = <T>(endpoint: string, auth = true) => request<T>('GET', endpoint, undefined, auth, 'tally');
-const post = <T>(endpoint: string, body: object, auth = true) => request<T>('POST', endpoint, body, auth);
-const patch = <T>(endpoint: string, body: object) => request<T>('PATCH', endpoint, body);
+const post = <T>(endpoint: string, body?: object, auth = true) => request<T>('POST', endpoint, body, auth);
+const patch = <T>(endpoint: string, body?: object) => request<T>('PATCH', endpoint, body);
 const del   = <T>(endpoint: string, body?: object) => request<T>('DELETE', endpoint, body);
-const tallyPost = <T>(endpoint: string, body: object) => request<T>('POST', endpoint, body, true, 'tally');
+
+/** When the selected company is canonical Demo, writes go to /api/demo/entries — never write_queue. */
+let _writeAsDemo = false;
+export function setWriteAsDemo(enabled: boolean) {
+  _writeAsDemo = !!enabled;
+}
+export function getWriteAsDemo() {
+  return _writeAsDemo;
+}
+
+export const createDemoEntry = (entryType: string, payload: object) =>
+  post<any>('/demo/entries', { entryType, payload });
+export const listDemoEntries = () => get<any>('/demo/entries');
+export const deleteDemoEntry = (id: string) => del<any>(`/demo/entries/${encodeURIComponent(id)}`);
+export const clearDemoEntries = () => del<any>('/demo/entries');
+
+export function resolveWriteTarget(writeAsDemo: boolean, tallyEndpoint: string, demoEntryType?: string) {
+  if (writeAsDemo && demoEntryType) {
+    return { prefix: 'api' as const, endpoint: '/demo/entries', demo: true as const };
+  }
+  return { prefix: 'tally' as const, endpoint: tallyEndpoint, demo: false as const };
+}
+
+const tallyPost = <T>(endpoint: string, body: object, demoEntryType?: string) => {
+  const target = resolveWriteTarget(_writeAsDemo, endpoint, demoEntryType);
+  if (target.demo && demoEntryType) {
+    return createDemoEntry(demoEntryType, body) as Promise<T>;
+  }
+  return request<T>('POST', endpoint, body, true, 'tally');
+};
 
 // Helper: append companyGuid + optional fy= param to query string
 // fy = financial year in backend format e.g. '2025-2026'
@@ -341,6 +390,31 @@ export const registerUser = (data: Partial<{ name: string; email: string; langua
 export const getMe       = () => get<any>('/auth/me');
 export const updateMe    = (data: Partial<{ name: string; email: string; language: string }>) => patch<any>('/auth/me', data);
 export const logout      = (pushToken?: string) => post<any>('/auth/logout', pushToken ? { pushToken } : {});
+
+/**
+ * Server logout without the 401 → signOut interceptor (avoids a logout loop).
+ * Network failure is returned, never thrown — caller still clears local state.
+ */
+export async function logoutOnServer(pushToken?: string): Promise<{ ok: boolean; reason?: string }> {
+  const token = await getToken();
+  if (!token) return { ok: false, reason: 'no-token' };
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+    if (_activeWorkspaceId) headers['X-Workspace-Id'] = _activeWorkspaceId;
+    const res = await fetch(`${BASE_URL}/api/auth/logout`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(pushToken ? { pushToken } : {}),
+      cache: 'no-store',
+    });
+    return { ok: res.ok, reason: res.ok ? undefined : `http-${res.status}` };
+  } catch {
+    return { ok: false, reason: 'network' };
+  }
+}
 export const registerPushToken = (token: string, platform: string, deviceId?: string) =>
   post<any>('/push-token', { token, platform, deviceId });
 export const removePushToken = (token?: string) =>
@@ -419,8 +493,8 @@ export const getSalesOrders    = (companyGuid?: string, params?: any) => get<any
 export const getCreditNotes    = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/credit-notes', companyGuid, params));
 export const getDeliveryNotes  = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/delivery-notes', companyGuid, params));
 export const getEWayBills      = (companyGuid?: string, params?: any) => get<any>(withCompany('/sales/ewaybills', companyGuid, params));
-export const createSalesInvoice  = (payload: any) => tallyPost<any>('/voucher/sales', payload);
-export const createProformaInvoice = (payload: any) => tallyPost<any>('/voucher/proforma', payload);
+export const createSalesInvoice  = (payload: any) => tallyPost<any>('/voucher/sales', payload, 'sales');
+export const createProformaInvoice = (payload: any) => tallyPost<any>('/voucher/proforma', payload, 'proforma');
 export const convertProformaInvoice = (payload: any) => tallyPost<any>('/voucher/proforma/convert', payload);
 
 // Sales ledger accounts (Sales Accounts group only)
@@ -443,9 +517,9 @@ export const getGeoCountries = () => get<any>('/geo/countries');
 export const getGeoStates = (country: string) =>
   get<any>(`/geo/states?country=${encodeURIComponent(country)}`);
 
-export const createSalesOrder    = (payload: any) => tallyPost<any>('/voucher/sales-order', payload);
-export const createCreditNote    = (payload: any) => tallyPost<any>('/voucher/credit-note', payload);
-export const createDeliveryNote  = (payload: any) => tallyPost<any>('/voucher/delivery-note', payload);
+export const createSalesOrder    = (payload: any) => tallyPost<any>('/voucher/sales-order', payload, 'sales_order');
+export const createCreditNote    = (payload: any) => tallyPost<any>('/voucher/credit-note', payload, 'credit_note');
+export const createDeliveryNote  = (payload: any) => tallyPost<any>('/voucher/delivery-note', payload, 'delivery_note');
 
 // ══════════════════════════════════════════════════════════════
 // PURCHASE
@@ -460,9 +534,9 @@ export const getPurchaseOrders   = (companyGuid?: string, params?: any) => get<a
 export const getDebitNotes       = (companyGuid?: string, params?: any) => get<any>(withCompany('/purchase/debit-notes', companyGuid, params));
 export const getPurchaseLedgerAccounts = (companyGuid?: string) =>
   get<any>(withCompany('/purchase/ledger-accounts', companyGuid));
-export const createPurchaseInvoice = (payload: any) => tallyPost<any>('/voucher/purchase', payload);
-export const createPurchaseOrder   = (payload: any) => tallyPost<any>('/voucher/purchase-order', payload);
-export const createDebitNote       = (payload: any) => tallyPost<any>('/voucher/debit-note', payload);
+export const createPurchaseInvoice = (payload: any) => tallyPost<any>('/voucher/purchase', payload, 'purchase');
+export const createPurchaseOrder   = (payload: any) => tallyPost<any>('/voucher/purchase-order', payload, 'purchase_order');
+export const createDebitNote       = (payload: any) => tallyPost<any>('/voucher/debit-note', payload, 'debit_note');
 
 // ══════════════════════════════════════════════════════════════
 // VOUCHERS
@@ -470,8 +544,8 @@ export const createDebitNote       = (payload: any) => tallyPost<any>('/voucher/
 
 export const getVouchers       = (companyGuid?: string, type?: string, params?: any) => get<any>(withCompany('/vouchers', companyGuid, { ...(type ? { type } : {}), ...params }));
 export const getVoucherById    = (companyGuid?: string, guid?: string) => get<any>(withCompany(`/vouchers/${guid}`, companyGuid));
-export const createPaymentVoucher = (payload: any) => tallyPost<any>('/voucher/payment', payload);
-export const createReceiptVoucher = (payload: any) => tallyPost<any>('/voucher/receipt', payload);
+export const createPaymentVoucher = (payload: any) => tallyPost<any>('/voucher/payment', payload, 'payment');
+export const createReceiptVoucher = (payload: any) => tallyPost<any>('/voucher/receipt', payload, 'receipt');
 
 // 2026-07-09: Receipt Voucher screen — outstanding bills per party (bill_outstanding table).
 export const getPartyOutstandingBills = (
@@ -498,8 +572,8 @@ export const getStockAdjustmentPreview = (tdkRef: string, companyGuid: string) =
   request<any>('GET', `/invoice/${encodeURIComponent(tdkRef)}/preview?companyGuid=${companyGuid}`, undefined, true, 'tally');
 export const getStockTransferPreview = (tdkRef: string, companyGuid: string) =>
   request<any>('GET', `/invoice/${encodeURIComponent(tdkRef)}/preview?companyGuid=${companyGuid}`, undefined, true, 'tally');
-export const createJournalVoucher = (payload: any) => tallyPost<any>('/voucher/journal', payload);
-export const createContraVoucher  = (payload: any) => tallyPost<any>('/voucher/contra', payload);
+export const createJournalVoucher = (payload: any) => tallyPost<any>('/voucher/journal', payload, 'journal');
+export const createContraVoucher  = (payload: any) => tallyPost<any>('/voucher/contra', payload, 'contra');
 
 // ══════════════════════════════════════════════════════════════
 // LEDGERS
@@ -511,7 +585,7 @@ export const getBankLedgers    = (companyGuid?: string, type: 'bank' | 'cash' | 
 export const getLedgerFyBalances = (companyGuid?: string, fy?: string) => get<any>(withCompany('/ledgers/fy-balances', companyGuid, fy ? { fy } : {}));
 export const getLedgerDetail   = (companyGuid?: string, id?: string, params?: any) => get<any>(withCompany(`/ledgers/${id}`, companyGuid, params));
 export const getLedgerStatement = (companyGuid?: string, id?: string, fy?: string, params?: any) => get<any>(withCompany(`/ledgers/${id}/statement`, companyGuid, { ...(fy ? { fy } : {}), ...params }));
-export const createLedger      = (payload: any) => tallyPost<any>('/master/party', payload);
+export const createLedger      = (payload: any) => tallyPost<any>('/master/party', payload, 'party');
 
 /** Master/ledger preview keyed by write_queue.id (not TDK ref). */
 export const getMasterPreview = (queueId: string | number, companyGuid: string) =>
@@ -536,12 +610,12 @@ export const getStockItem    = (companyGuid?: string, id?: string, params?: any)
 export const getWarehouses       = (companyGuid?: string) => get<any>(withCompany('/stocks/warehouses', companyGuid));
 export const getWarehouseDetail  = (companyGuid?: string, id?: string) => get<any>(withCompany(`/stocks/warehouses/${id}`, companyGuid));
 export const getParties      = (companyGuid?: string, params?: any) => get<any>(withCompany('/parties', companyGuid, params));
-export const createStockItem       = (payload: any) => tallyPost<any>('/master/stock-item', payload);
-export const createWarehouse       = (payload: any) => tallyPost<any>('/master/warehouse', payload);
-export const createStockAdjustment = (payload: any) => tallyPost<any>('/voucher/stock-adjustment', payload);
-export const createStockTransfer   = (payload: any) => tallyPost<any>('/voucher/stock-transfer', payload);
+export const createStockItem       = (payload: any) => tallyPost<any>('/master/stock-item', payload, 'stock_item');
+export const createWarehouse       = (payload: any) => tallyPost<any>('/master/warehouse', payload, 'warehouse');
+export const createStockAdjustment = (payload: any) => tallyPost<any>('/voucher/stock-adjustment', payload, 'stock_adjustment');
+export const createStockTransfer   = (payload: any) => tallyPost<any>('/voucher/stock-transfer', payload, 'stock_transfer');
 export const cancelVoucher         = (payload: any) => tallyPost<any>('/voucher/cancel', payload);
-export const createParty           = (payload: any) => tallyPost<any>('/master/party', payload);
+export const createParty           = (payload: any) => tallyPost<any>('/master/party', payload, 'party');
 
 // ══════════════════════════════════════════════════════════════
 // REPORTS
@@ -632,7 +706,8 @@ export const verifyBillingRecharge = (payload: {
 
 export const getAuditTrail    = (companyGuid?: string) => tallyGet<any>(withCompany('/audit-trail', companyGuid));
 export const retryAuditEntry  = (id: string) => tallyPost<any>(`/audit-trail/${id}/retry`, {});
-export const getMyEntries     = (companyGuid?: string, params?: any) => get<any>(withCompany('/vouchers/my-entries', companyGuid, params));
+export const getMyEntries     = (companyGuid?: string, params?: any) =>
+  _writeAsDemo ? listDemoEntries() : get<any>(withCompany('/vouchers/my-entries', companyGuid, params));
 
 // ══════════════════════════════════════════════════════════════
 // AI INSIGHTS
@@ -806,41 +881,16 @@ export const pushPendingBarcodes = (companyGuid: string) =>
   post<any>('/inventory/barcodes/push-pending', { companyGuid });
 
 // Returns raw CSV text (not JSON) — pre-filled with all company stocks
-export const downloadBarcodeTemplate = async (companyGuid: string): Promise<string> => {
-  const token = await getToken();
-  if (!token) throw new ApiError('Not authenticated', { status: 401, kind: 'auth', code: 'NO_TOKEN' });
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    const res = await fetch(`${BASE_URL}/api/inventory/barcodes/template?companyGuid=${companyGuid}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: controller.signal,
-    });
-    setDeviceOnline(true);
-    if (!res.ok) {
-      const err = new ApiError(`Template fetch failed: ${res.status}`, {
-        status: res.status,
-        kind: kindFromStatus(res.status),
-      });
-      if (res.status === 401) notifyAuthFailure(err);
-      throw err;
-    }
-    return res.text();
-  } catch (e: any) {
-    if (e instanceof ApiError) throw e;
-    if (e?.name === 'AbortError' || controller.signal.aborted) {
-      throw new ApiError('Request timed out. Please try again.', {
-        status: null, kind: 'timeout', code: 'TIMEOUT',
-      });
-    }
-    setDeviceOnline(false);
-    throw new ApiError(e?.message || 'Network error. Please check your connection.', {
-      status: null, kind: 'network', code: 'NETWORK', raw: e,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-};
+export const downloadBarcodeTemplate = (companyGuid: string): Promise<string> =>
+  request<string>(
+    'GET',
+    `/inventory/barcodes/template?companyGuid=${encodeURIComponent(companyGuid)}`,
+    undefined,
+    true,
+    'api',
+    true,
+    'text',
+  );
 
 export const getBarcodesByGuids = (companyGuid: string, stockGuids: string[]) =>
   post<any>('/inventory/barcodes/by-guids', { companyGuid, stockGuids });
