@@ -12,6 +12,7 @@ import { safePush } from '../../src/utils/safeNavigation';
 import { barcodePicker } from '../../src/utils/barcodePicker';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
+import { currentTenantKey, prefillFeature } from '../../src/utils/tenantStorage';
 import {
   getParties, createSalesOrder, getStocks, getWarehouses,
   getSalesLedgerAccounts, getTaxLedgers, getChargeLedgers, getStockGodowns,
@@ -840,7 +841,7 @@ export default function CreateSalesOrderScreen() {
         dueDate,
         savedAt: Date.now(),
       };
-      await AsyncStorage.setItem(`tdso_to_invoice_prefill_${company.guid}`, JSON.stringify(prefill));
+      await AsyncStorage.setItem(currentTenantKey(company.guid, prefillFeature('tdso')), JSON.stringify(prefill));
       setShowSuccess(false);
       router.replace('/sales/create-invoice');
     } catch (err: any) {

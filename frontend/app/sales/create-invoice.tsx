@@ -23,8 +23,10 @@ import {
 } from '../../src/services/api';
 import {
   proformaPrefillStorageKey,
+  legacyProformaPrefillKey,
   buildProformaToInvoicePrefillFromForm,
 } from '../../src/utils/proformaToInvoicePrefill';
+import { currentTenantKey, draftFeature, prefillFeature, dropLegacyKeys } from '../../src/utils/tenantStorage';
 import { toVoucherDocument } from '../../src/utils/voucherDocumentAdapter';
 import { shareVoucherPdf } from '../../src/utils/voucherPdf';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
@@ -769,7 +771,8 @@ export default function CreateSalesInvoiceScreen() {
   const fyStart = selectedFY?.startDate || `${new Date().getFullYear()}-04-01`;
   const pathname = usePathname();
   const isProforma = (pathname || '').includes('create-proforma');
-  const draftPrefix = isProforma ? 'tdproforma_draft' : 'tdinvoice_draft';
+  const draftKey = () => currentTenantKey(company?.guid, draftFeature(isProforma ? 'proforma' : 'invoice'));
+  const legacyDraftKey = () => `${isProforma ? 'tdproforma_draft' : 'tdinvoice_draft'}_${company?.guid || ''}`;
 
   // ── Core state ───────────────────────────────────────────────────────────────
   const { entryMode, filterScoped, hasCapability } = useWorkspace();
@@ -958,10 +961,10 @@ export default function CreateSalesInvoiceScreen() {
       console.warn('[bank-ledgers] no company guid yet — skipping fetch');
       return;
     }
-    console.log('[bank-ledgers] fetching for company:', company.guid);
+    if (__DEV__) console.log('[bank-ledgers] fetching');
     getBankLedgers(company.guid).then((res: any) => {
       const list: any[] = res?.data || [];
-      console.log(`[bank-ledgers] loaded ${list.length} ledgers`);
+      if (__DEV__) console.log(`[bank-ledgers] loaded ${list.length} ledgers`);
       const mapped = list.map(l => {
         const bal = parseFloat(l.balance || 0);
         const balStr = bal !== 0
@@ -990,7 +993,7 @@ export default function CreateSalesInvoiceScreen() {
   // Safety net — refetch on entering Step 3 if list is empty
   useEffect(() => {
     if (step === 3 && bankLedgers.length === 0 && company?.guid) {
-      console.log('[bank-ledgers] step 3 reached with empty list — retrying');
+      if (__DEV__) console.log('[bank-ledgers] empty list — retrying');
       fetchBankLedgers();
     }
   }, [step, bankLedgers.length, company?.guid, fetchBankLedgers]);
@@ -1053,8 +1056,9 @@ export default function CreateSalesInvoiceScreen() {
   // ── Draft: check for saved draft on mount ────────────────────────────────
   useEffect(() => {
     if (!company?.guid) return;
-    const key = `${draftPrefix}_${company.guid}`;
+    const key = draftKey();
     const convertKey = proformaPrefillStorageKey(company.guid);
+    dropLegacyKeys([legacyDraftKey(), legacyProformaPrefillKey(company.guid)]);
     Promise.all([AsyncStorage.getItem(key), AsyncStorage.getItem(convertKey)]).then(([raw, convertRaw]) => {
       if (convertRaw) return; // Proforma convert owns the form — don't overlay an old invoice draft
       if (!raw) return;
@@ -1078,7 +1082,8 @@ export default function CreateSalesInvoiceScreen() {
   //    surfaces its own Resume banner independently of this conversion flow.
   useEffect(() => {
     if (!company?.guid) return;
-    const key = `tdso_to_invoice_prefill_${company.guid}`;
+    const key = currentTenantKey(company.guid, prefillFeature('tdso'));
+    dropLegacyKeys([`tdso_to_invoice_prefill_${company.guid}`]);
     AsyncStorage.getItem(key).then(raw => {
       if (!raw) return;
       try {
@@ -1162,7 +1167,7 @@ export default function CreateSalesInvoiceScreen() {
         numberingPolicy,
         savedAt: Date.now(),
       };
-      AsyncStorage.setItem(`${draftPrefix}_${company.guid}`, JSON.stringify(draft)).catch(() => {});
+      AsyncStorage.setItem(draftKey(), JSON.stringify(draft)).catch(() => {});
     }, 800);
     return () => { if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1177,7 +1182,7 @@ export default function CreateSalesInvoiceScreen() {
 
   const restoreDraft = useCallback(() => {
     if (!company?.guid) return;
-    AsyncStorage.getItem(`${draftPrefix}_${company.guid}`).then(raw => {
+    AsyncStorage.getItem(draftKey()).then(raw => {
       if (!raw) return;
       try {
         const d = JSON.parse(raw);
@@ -1237,13 +1242,13 @@ export default function CreateSalesInvoiceScreen() {
 
   const discardDraft = useCallback(() => {
     if (!company?.guid) return;
-    AsyncStorage.removeItem(`${draftPrefix}_${company.guid}`).catch(() => {});
+    AsyncStorage.removeItem(draftKey()).catch(() => {});
     setShowDraftBanner(false);
   }, [company?.guid]);
 
   const clearDraftOnSubmit = useCallback(() => {
     if (!company?.guid) return;
-    AsyncStorage.removeItem(`${draftPrefix}_${company.guid}`).catch(() => {});
+    AsyncStorage.removeItem(draftKey()).catch(() => {});
   }, [company?.guid]);
 
   // Due date auto-calc

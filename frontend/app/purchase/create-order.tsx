@@ -12,6 +12,7 @@ import { safePush } from '../../src/utils/safeNavigation';
 import { barcodePicker } from '../../src/utils/barcodePicker';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
+import { currentTenantKey, prefillFeature } from '../../src/utils/tenantStorage';
 import {
   getParties, createPurchaseOrder, getStocks, getWarehouses,
   getPurchaseLedgerAccounts, getTaxLedgers, getChargeLedgers, getStockGodowns,
@@ -847,7 +848,7 @@ export default function CreatePurchaseOrderScreen() {
         dueDate,
         savedAt: Date.now(),
       };
-      await AsyncStorage.setItem(`tdpo_to_invoice_prefill_${company.guid}`, JSON.stringify(prefill));
+      await AsyncStorage.setItem(currentTenantKey(company.guid, prefillFeature('tdpo')), JSON.stringify(prefill));
       setShowSuccess(false);
       router.replace('/purchase/create-invoice');
     } catch (err: any) {

@@ -127,7 +127,9 @@ export async function loadCompanyLogo(companyGuid?: string | null): Promise<stri
     /* fall through to cache */
   }
   try {
-    const cached = await AsyncStorage.getItem(`company_logo_${companyGuid}`);
+    const { currentTenantKey, logoFeature, dropLegacyKeys } = await import('./tenantStorage');
+    await dropLegacyKeys([`company_logo_${companyGuid}`]);
+    const cached = await AsyncStorage.getItem(currentTenantKey(companyGuid, logoFeature()));
     return await toSafePdfImageSrc(cached);
   } catch {
     return null;

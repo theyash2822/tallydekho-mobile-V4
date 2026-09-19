@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
+import { currentTenantKey, logoFeature, dropLegacyKeys } from '../../src/utils/tenantStorage';
 import { getUserSettings, updateUserSettings, getBankLedgers, getCompanyLogo, getComplianceConfig, saveComplianceConfig } from '../../src/services/api';
 import { generateDocumentHTML, DocumentFormat, resolveDocumentFormat } from '../../src/utils/documentHelpers';
 import { clearVoucherConfigCache } from '../../src/utils/voucherPdf';
@@ -328,7 +329,8 @@ export default function VoucherConfigScreen() {
   // Load company logo for PDF preview
   useEffect(() => {
     if (!company?.guid) return;
-    const key = `company_logo_${company.guid}`;
+    const key = currentTenantKey(company.guid, logoFeature());
+    dropLegacyKeys([`company_logo_${company.guid}`]);
     getCompanyLogo(company.guid).then(async (res: any) => {
       const url = res?.data?.logo_url;
       if (url) {

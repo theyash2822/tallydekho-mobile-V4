@@ -23,11 +23,12 @@ import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
+import { currentTenantKey, prefillFeature } from '../../src/utils/tenantStorage';
 import { getOrderPreview } from '../../src/services/api';
 import DocumentPreviewPage from '../../src/components/document/DocumentPreviewPage';
 import { VoucherDocument } from '../../src/types/document';
 import { toVoucherDocument } from '../../src/utils/voucherDocumentAdapter';
-import { getSocket } from '../../src/services/socketService';
+import { getSocket, isEventForActiveWorkspace } from '../../src/services/socketService';
 
 /** Format ISO YYYY-MM-DD → DD/MM/YY (matches create-order.tsx's date fields) */
 function isoToDMY(iso: string): string {
@@ -79,6 +80,7 @@ export default function OrderPreviewScreen() {
     const socket = getSocket();
     if (!socket || !tdkRef) return;
     const handler = (payload: any) => {
+      if (!isEventForActiveWorkspace('invoice_posting_updated', payload)) return;
       if (payload?.referenceNumber === tdkRef && payload?.postingTag === 'Posted') {
         fetchPreview();
       }
@@ -165,7 +167,7 @@ export default function OrderPreviewScreen() {
         dueDate: rawPayload.dueDate ? isoToDMY(rawPayload.dueDate) : '',
         savedAt: Date.now(),
       };
-      await AsyncStorage.setItem(`tdso_to_invoice_prefill_${company.guid}`, JSON.stringify(prefill));
+      await AsyncStorage.setItem(currentTenantKey(company.guid, prefillFeature('tdso')), JSON.stringify(prefill));
       router.replace('/sales/create-invoice');
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Could not start invoice', text2: err?.message || '' });

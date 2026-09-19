@@ -12,6 +12,7 @@ import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
+import { currentTenantKey, logoFeature, dropLegacyKeys } from '../../src/utils/tenantStorage';
 import { getCompanyProfile, updateCompanyProfile, uploadCompanyLogo, getCompanyLogo } from '../../src/services/api';
 import { useTranslation } from 'react-i18next';
 
@@ -195,11 +196,11 @@ export default function CompanyScreen() {
   // Logo — load from backend (cross-device), fallback to AsyncStorage cache
   const [logoUri, setLogoUri] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
-  const logoKey = company?.guid ? `company_logo_${company.guid}` : null;
+  const logoKey = company?.guid ? currentTenantKey(company.guid, logoFeature()) : null;
 
   useEffect(() => {
     if (!company?.guid) return;
-    // Try backend first for cross-device sync
+    dropLegacyKeys([`company_logo_${company.guid}`]);
     getCompanyLogo(company.guid).then((res: any) => {
       const url = res?.data?.logo_url;
       if (url) {

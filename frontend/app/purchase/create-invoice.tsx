@@ -14,6 +14,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { barcodePicker } from '../../src/utils/barcodePicker';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
+import { currentTenantKey, prefillFeature, dropLegacyKeys } from '../../src/utils/tenantStorage';
 import {
   getParties, createPurchaseInvoice, getStocks, getWarehouses,
   getPurchaseLedgerAccounts, getTaxLedgers, createTallyParty,
@@ -721,7 +722,8 @@ export default function CreatePurchaseInvoiceScreen() {
   //    before navigating here. Applied immediately (no banner).
   useEffect(() => {
     if (!company?.guid) return;
-    const key = `tdpo_to_invoice_prefill_${company.guid}`;
+    const key = currentTenantKey(company.guid, prefillFeature('tdpo'));
+    dropLegacyKeys([`tdpo_to_invoice_prefill_${company.guid}`]);
     AsyncStorage.getItem(key).then(raw => {
       if (!raw) return;
       try {

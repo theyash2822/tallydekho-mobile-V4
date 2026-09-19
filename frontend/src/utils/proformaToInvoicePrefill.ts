@@ -1,5 +1,7 @@
 /** Prefill Create Invoice from a Proforma (same Tally voucher on submit). */
 
+import { currentTenantKey, prefillFeature } from './tenantStorage';
+
 function nid() {
   return Date.now().toString() + Math.random().toString(36).slice(2);
 }
@@ -14,6 +16,10 @@ export function isoToDMY(iso: string): string {
 }
 
 export function proformaPrefillStorageKey(companyGuid: string) {
+  return currentTenantKey(companyGuid, prefillFeature('tdprf'));
+}
+
+export function legacyProformaPrefillKey(companyGuid: string) {
   return `tdprf_to_invoice_prefill_${companyGuid}`;
 }
 
