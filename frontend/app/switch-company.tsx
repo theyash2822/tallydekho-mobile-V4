@@ -13,15 +13,11 @@ import { useAuth } from '../src/context/AuthContext';
 import { useWorkspace } from '../src/context/WorkspaceContext';
 import { getCompanies } from '../src/services/api';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../src/constants/colors';
-
-function isDemoCompany(c: any): boolean {
-  const name = String(c?.name || '').toLowerCase().trim();
-  const guid = String(c?.guid || c?.id || '');
-  return name.startsWith('demo') || guid.startsWith('dddddddd-dddd-4ddd-8ddd-') || guid.startsWith('DEMO');
-}
+import { filterCompaniesForPairing } from '../src/utils/isDemoCompany';
+import { toAuthCompany, companyExternalId } from '../src/utils/companyIdentity';
 
 function companyGuid(c: any): string {
-  return String(c?.guid || c?.id || '').trim();
+  return companyExternalId(c);
 }
 
 export default function SwitchCompanyScreen() {
@@ -43,11 +39,10 @@ export default function SwitchCompanyScreen() {
       try {
         const res: any = await getCompanies();
         const list = Array.isArray(res?.data) ? res.data : [];
-        const status = String(pairingStatus || '').toUpperCase();
-        const paired = status === 'CONNECTED'
-          ? list.filter((c: any) => !isDemoCompany(c))
-          : list.filter((c: any) => isDemoCompany(c));
-        const cos = status === 'CONNECTED' ? filterScoped(paired, 'companies') : paired;
+        const paired = filterCompaniesForPairing(list, pairingStatus);
+        const live = String(pairingStatus || '').toUpperCase() === 'CONNECTED'
+          || String(pairingStatus || '').toUpperCase() === 'RECONNECTING';
+        const cos = live ? filterScoped(paired, 'companies') : paired;
         if (!cancelled) setRows(cos);
       } catch {
         if (!cancelled) setRows([]);
@@ -72,7 +67,7 @@ export default function SwitchCompanyScreen() {
     }
     setBusy(true);
     try {
-      await setCompany({ guid, name: co.name, gstin: co.gstin || null });
+      await setCompany(toAuthCompany({ ...co, guid }) || { guid, name: co.name, gstin: co.gstin || null });
       router.back();
     } catch {
       setBusy(false);

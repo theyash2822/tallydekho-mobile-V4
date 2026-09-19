@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ActivityIndicator,
-  Modal, ScrollView,
+  ScrollView, Pressable, Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -12,27 +12,10 @@ import { useAuth } from '../context/AuthContext';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { getCompanies, getCompanyYears } from '../services/api';
 import { safePush } from '../utils/safeNavigation';
-
-function companyGuid(c: any): string {
-  return String(c?.guid || c?.id || '').trim();
-}
-
-function isDemoCompany(c: any): boolean {
-  const name = String(c?.name || '').toLowerCase().trim();
-  const guid = companyGuid(c);
-  return name.startsWith('demo') || guid.startsWith('dddddddd-dddd-4ddd-8ddd-') || guid.startsWith('DEMO');
-}
-
-function filterCompaniesForPairing(list: any[], pairingStatus: string): any[] {
-  const rows = Array.isArray(list) ? list : [];
-  const status = String(pairingStatus || '').toUpperCase();
-  if (status === 'CONNECTED') return rows.filter((c) => !isDemoCompany(c));
-  return rows.filter((c) => isDemoCompany(c));
-}
+import { filterCompaniesForPairing } from '../utils/isDemoCompany';
+import { fyEquals, normalizeFy } from '../utils/fyIdentity';
 
 type FyObj = { label: string; startDate: string; endDate: string; finYear?: string };
-
-const MOCK_LAST_SYNCED = '15 Jun 2025, 11:42 AM';
 
 interface HeaderProps {
   companyName?: string;
@@ -50,13 +33,13 @@ interface HeaderProps {
  * Home header.
  * - Demo Mode: company switch disabled (Demo Company only).
  * - CONNECTED: company switch via dedicated screen (avoids Android Modal hang).
- * - FY: compact dropdown Modal (previous UX), not a full page.
+ * - FY: compact overlay (same chrome as before; not RN Modal — hangs under bottom-sheet).
  */
 const Header: React.FC<HeaderProps> = ({
   companyName = 'YK Industries Pvt. Ltd.',
   fyYear = 'FY 2025-26',
   notificationCount = 1,
-  lastSyncTime = MOCK_LAST_SYNCED,
+  lastSyncTime,
   userName = 'Ashish Agarwal',
   onNotificationPress,
   onFYChange,
@@ -118,12 +101,12 @@ const Header: React.FC<HeaderProps> = ({
           setLiveFYObjects([]);
           return;
         }
-        const mapped: FyObj[] = rows.map((r: any) => ({
+        const mapped: FyObj[] = rows.map((r: any) => normalizeFy({
           label: r.label,
-          startDate: r.begin_date,
-          endDate: r.end_date,
-          finYear: r.fin_year,
-        }));
+          startDate: r.begin_date || r.startDate,
+          endDate: r.end_date || r.endDate,
+          finYear: r.fin_year || r.finYear,
+        })).filter((f: FyObj | null): f is FyObj => !!f);
         const fyObjs = (demoMode || String(pairingStatus).toUpperCase() !== 'CONNECTED')
           ? mapped
           : (filterScoped(mapped, 'fys') as FyObj[]);
@@ -134,9 +117,7 @@ const Header: React.FC<HeaderProps> = ({
         setLiveFYObjects(fyObjs);
         const labels = fyObjs.map((f) => f.label);
         setSelectedFY((prev) => (prev && labels.includes(prev) ? prev : labels[0]));
-        const keep =
-          !!contextFyStartRef.current &&
-          fyObjs.some((f) => f.startDate === contextFyStartRef.current);
+        const keep = fyObjs.some((f) => fyEquals(f, { startDate: contextFyStartRef.current, label: '' }));
         if (!keep) setContextFY(fyObjs[0]);
       })
       .catch(() => {})
@@ -199,7 +180,7 @@ const Header: React.FC<HeaderProps> = ({
     : selectedCompany;
 
   return (
-    <>
+    <View style={{ zIndex: 20, overflow: 'visible' }}>
       <View testID="app-header" style={styles.container}>
         <TouchableOpacity
           testID="company-selector"
@@ -261,18 +242,14 @@ const Header: React.FC<HeaderProps> = ({
         </View>
       </View>
 
-      {/* FY dropdown — previous compact Modal UX (not a full page) */}
-      <Modal
-        visible={showFYModal}
-        transparent
-        animationType="none"
-        onRequestClose={() => setShowFYModal(false)}
-      >
-        <View style={{ flex: 1 }}>
-          <TouchableOpacity
+      {showFYModal ? (
+        <View
+          pointerEvents="box-none"
+          style={[styles.fyHost, { height: Dimensions.get('window').height }]}
+        >
+          <Pressable
             style={StyleSheet.absoluteFillObject}
             onPress={() => setShowFYModal(false)}
-            activeOpacity={1}
           />
           <View style={[styles.dropdown, { top: dropdownTop, right: SPACING.md }]}>
             <View style={styles.dropdownArrowRight} />
@@ -297,12 +274,20 @@ const Header: React.FC<HeaderProps> = ({
             </ScrollView>
           </View>
         </View>
-      </Modal>
-    </>
+      ) : null}
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  fyHost: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 999,
+    elevation: 24,
+  },
   container: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: SPACING.md, paddingVertical: 10,

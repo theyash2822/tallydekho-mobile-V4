@@ -8,7 +8,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { SettingsProvider } from '../src/context/SettingsContext';
 import { WorkspaceProvider } from '../src/context/WorkspaceContext';
-import { getMe } from '../src/services/api';
+import { getMe, getActiveWorkspaceId } from '../src/services/api';
+import { captureWorkspaceGeneration, isCurrentWorkspaceGeneration } from '../src/utils/workspaceGeneration';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
@@ -54,7 +55,7 @@ function StatusBarCover() {
 }
 
 function RootNavigation() {
-  const { isAuthenticated, isLoading, company, setCompany, setUser } = useAuth();
+  const { isAuthenticated, isLoading, setUser } = useAuth();
   const router = useRouter();
   const segments = useSegments();
 
@@ -65,17 +66,16 @@ function RootNavigation() {
     return setupNotificationHandlers(router);
   }, [isAuthenticated]);
 
-  // Bootstrap: if authenticated but no company, fetch /api/auth/me to restore state
+  // Bootstrap user profile only. /auth/me company is not workspace-authoritative.
   useEffect(() => {
-    if (!isAuthenticated || company?.guid) return;
+    if (!isAuthenticated) return;
+    const snap = captureWorkspaceGeneration();
     getMe().then((res: any) => {
+      if (!isCurrentWorkspaceGeneration(snap.gen, snap.workspaceId || getActiveWorkspaceId())) return;
       const d = res?.data ?? res;
-      if (d?.company?.guid) setCompany({ guid: d.company.guid, name: d.company.name, gstin: d.company.gstin });
-      // /auth/me also returns a user-level is_paired; it is deliberately ignored
-      // because pairing is per-workspace (WorkspaceContext owns it).
       if (d?.name || d?.phone) setUser({ id: d.id, name: d.name, phone: d.phone, email: d.email, language: d.language });
     }).catch(() => {});
-  }, [isAuthenticated, company?.guid]);
+  }, [isAuthenticated, setUser]);
 
   useEffect(() => {
     if (isLoading) return;

@@ -427,8 +427,8 @@ export default function HomeScreen() {
   }, []);
 
   // ── Detect live pairing state change (not demo/unpaired) ────
-  // Only CONNECTED is live: RECONNECTING still serves Demo books, so announcing
-  // "Tally connected" for it told the user the opposite of what they were seeing.
+  // CONNECTED is the only status that should toast "Tally connected".
+  // RECONNECTING stays real/paired-offline — do not treat it as Demo.
   useEffect(() => {
     if (toastedWsRef.current !== workspaceId) {
       // Fresh workspace — adopt its state silently instead of toasting.

@@ -26,6 +26,10 @@ import {
 import { socketService, isEventForActiveWorkspace } from '../services/socketService';
 import Toast from 'react-native-toast-message';
 import { wsCompanyKey, wsFyKey } from '../utils/workspaceStorage';
+import { setWorkspaceGeneration } from '../utils/workspaceGeneration';
+import { isDemoCompany, isDemoMode, filterCompaniesForPairing } from '../utils/isDemoCompany';
+import { toAuthCompany } from '../utils/companyIdentity';
+import { tenantKey, companySelectionFeature, fyFeature, setTenantKeyContext } from '../utils/tenantStorage';
 import { normalizeScopes, filterByScopeGuidsOrNames, type ScopeBag } from '../utils/rbasScope';
 import { toastRbasError } from '../utils/rbasErrors';
 import { setRbasCapabilityChecker, setTallyConnectedChecker } from '../utils/rbasGate';
@@ -45,6 +49,10 @@ export interface WorkspaceSummary {
   membershipType?: string;
   membershipStatus?: string;
   roleId?: string | null;
+  roleDisplayName?: string;
+  role_display_name?: string;
+  roleSystemKey?: string;
+  role_system_key?: string;
   isBase?: boolean;
 }
 
@@ -88,7 +96,7 @@ export interface WorkspaceContextValue {
     items: T[],
     kind: 'ledgers' | 'godowns' | 'companies' | 'fys' | 'costCentres'
   ) => T[];
-  refreshInvitations: () => Promise<void>;
+  refreshInvitations: () => Promise<any>;
   acceptInvite: (id: string) => Promise<any>;
   declineInvite: (id: string) => Promise<void>;
   isWorkspaceUnavailable: (w: WorkspaceSummary) => boolean;
@@ -120,7 +128,7 @@ const WorkspaceContext = createContext<WorkspaceContextValue>({
   renameWorkspace: async () => {},
   hasCapability: () => false,
   filterScoped: (items) => items,
-  refreshInvitations: async () => {},
+  refreshInvitations: async () => [],
   acceptInvite: async () => ({}),
   declineInvite: async () => {},
   isWorkspaceUnavailable: () => false,
@@ -238,8 +246,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   );
   const applyActiveWorkspace = React.useCallback((id: string | null) => {
     if (getActiveWorkspaceId() !== id) wsGenRef.current += 1;
+    setWorkspaceGeneration(id);
     setWorkspaceId(id);
     setActiveWorkspaceId(id);
+    setTenantKeyContext(undefined, id, 'workspace');
   }, []);
 
   const refreshInvitations = useCallback(async () => {
@@ -313,40 +323,25 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       // CONNECTED → never Demo. UNPAIRED / RECONNECTING → Demo only.
       const cos: any[] = Array.isArray(d?.companies) ? d.companies : [];
-      const isDemo = (c: any) => {
-        const name = String(c?.name || '').toLowerCase();
-        const guid = String(c?.guid || c?.id || '');
-        return name.startsWith('demo') || guid.startsWith('dddddddd-dddd-4ddd-8ddd-');
-      };
-      const connected = status === 'CONNECTED';
-      const visible = connected
-        ? cos.filter((c) => !isDemo(c) && c.is_active !== false)
-        : cos.filter((c) => isDemo(c) && c.is_active !== false);
+      const isLive = status === 'CONNECTED' || status === 'RECONNECTING';
+      const visible = filterCompaniesForPairing(cos, status);
 
       if (isStale(gen, forWorkspaceId)) return;
       await setCompanyRef.current((cur: any) => {
         if (visible.length) {
-          const currentIsDemo = cur && isDemo(cur);
-          const curGuid = String(cur?.guid || cur?.id || '');
           const stillValid =
-            !!curGuid &&
-            visible.some((c) => String(c.guid || c.id || '') === curGuid) &&
-            !(connected && currentIsDemo);
+            !!cur &&
+            visible.some((c) => String(c.guid || '') === String(cur.guid || '') || String(c.id || '') === String(cur.guid || '')) &&
+            !(isLive && isDemoCompany(cur));
           if (stillValid) return cur;
-          const pick = connected
-            ? visible[0]
-            : (visible.find(isDemo) || visible[0]);
-          if (curGuid && curGuid === String(pick.guid || pick.id || '')) return cur;
-          return {
-            guid: pick.guid || pick.id,
-            name: pick.name,
-            gstin: pick.gstin ?? null,
-          };
+          const pick = visible.find((c) => !isDemoCompany(c) && isLive)
+            || visible.find((c) => isDemoCompany(c) && !isLive)
+            || visible[0];
+          const next = toAuthCompany(pick);
+          if (next && cur && next.guid === cur.guid && !!next.is_demo === !!cur.is_demo) return cur;
+          return next;
         }
-        // CONNECTED + zero real companies → clear Demo selection (empty live state)
-        if (connected) {
-          return null;
-        }
+        if (isLive) return null;
         return cur;
       });
     } catch (e) {
@@ -631,13 +626,13 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const membershipType = access?.membershipType || workspace?.membershipType || '';
   const isOwner = membershipType === 'OWNER';
-  const roleSystemKey = access?.role?.systemKey || access?.role?.system_key || null;
+  const roleSystemKey = access?.role?.systemKey || null;
   const isOwnerOrAdmin = isOwner || roleSystemKey === 'ADMIN';
   const entryMode: EntryMode =
     (access?.entryMode as EntryMode) ||
     (access?.role?.entryMode as EntryMode) ||
     'BOTH';
-  const demoMode = pairingStatus === 'UNPAIRED' || pairingStatus === 'RECONNECTING';
+  const demoMode = isDemoMode(pairingStatus);
   const tallyConnected = pairingStatus === 'CONNECTED';
 
   const hasCapability = useCallback(
