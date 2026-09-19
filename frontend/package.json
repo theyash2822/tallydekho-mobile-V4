@@ -11,7 +11,8 @@
     "lint": "expo lint",
     "verify:config": "node --experimental-strip-types --no-warnings scripts/verify-backend-config.mjs",
     "verify:isolation": "node --experimental-strip-types --no-warnings scripts/verify-workspace-isolation.mjs",
-    "test": "npm run verify:config && npm run verify:isolation"
+    "verify:remediation": "node --experimental-strip-types --no-warnings scripts/verify-mobile-remediation.mjs",
+    "test": "npm run verify:config && npm run verify:isolation && npm run verify:remediation"
   },
   "dependencies": {
     "@babel/runtime": "^7.20.6",

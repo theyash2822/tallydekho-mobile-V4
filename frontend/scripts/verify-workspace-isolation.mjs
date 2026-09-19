@@ -96,8 +96,7 @@ check('the home screen takes its live-Tally state from the workspace', () => {
     /tallyConnected\s*&&\s*!isDesktopOnline/,
     'the desktop-offline badge must be gated on the workspace being CONNECTED'
   );
-  // RECONNECTING still serves Demo books, so it must not drive the toast that
-  // tells the user their live Tally link is up.
+  // Only CONNECTED toasts "Tally connected". RECONNECTING is paired-offline real books.
   const tracked = [...home.matchAll(/wasPaired\.current\s*=\s*([^;]+);/g)].map((m) => m[1].trim());
   assert.ok(tracked.length > 0, 'the connect/disconnect toast no longer tracks a previous state');
   assert.deepEqual(
@@ -117,7 +116,7 @@ check('the home screen takes its live-Tally state from the workspace', () => {
 check('logging out clears the workspace-scoped caches and the refresh token', () => {
   const auth = stripComments(read('src/context/AuthContext.tsx'));
   assert.match(auth, /clearRefreshToken\(\)/, 'removeToken must clear the refresh token');
-  assert.match(auth, /TENANT_KEY_PATTERNS/, 'tenant keys must still be swept by pattern');
+  assert.match(auth, /sweepTenantAsyncStorage/, 'tenant keys must still be swept by pattern');
 });
 
 // ── 2. Socket events are filtered by the active workspace ───────────────────
@@ -266,7 +265,7 @@ check('one 401 triggers at most one refresh, then one replay', () => {
   const api = stripComments(read('src/services/api.ts'));
   assert.match(
     api,
-    /if \(_refreshPromise\) return _refreshPromise/,
+    /beginSingleFlight\(_refreshSlot,\s*performRefresh\)/,
     'concurrent 401s must await the single in-flight refresh instead of starting their own'
   );
   assert.match(
@@ -276,7 +275,7 @@ check('one 401 triggers at most one refresh, then one replay', () => {
   );
   assert.match(
     api,
-    /return await request<T>\([^)]*false\)/,
+    /return await request<T>\([^)]*false/,
     'the replay must disable a second refresh attempt'
   );
 });

@@ -1,5 +1,23 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-19 — Mobile production remediation (P0/P1 closure)
+
+Logout now calls `POST /api/auth/logout`, then always clears local tenant state
+even if the network call fails. Invoice/proforma drafts, prefills, logos, FY,
+company selection, ledger/stock caches, and `pre_auth_token` are swept. Tenant
+keys are `user + workspace + company + feature`; ambiguous GUID-only leftovers
+are deleted, never adopted. Biometric PIN is phone-bound in SecureStore.
+
+`AuthContext.company` is the only company authority. `/auth/me` no longer writes
+company. The 10s poll compares guid vs id correctly and does not rewrite a valid
+selection. FY uses a non-native overlay (same chrome), equality + workspace+company
+persistence. Demo authority is `companies.is_demo` only. RECONNECTING stays real.
+Demo writes go to `/api/demo/entries`. Tenant sockets require workspaceId.
+Barcode template uses the central client. Stock create sends the entered HSN.
+Submit success is after API. Reports clear on workspace/company/FY change.
+Production ATS `NSAllowsArbitraryLoads` is false. `tsc --noEmit` is 0.
+Unused `switch-fy.tsx` deleted. Physical Android company/FY still MANUAL.
+
 ## 2026-09-18 — Workspace isolation: no global pairing, scoped sockets, token refresh
 
 ### Why

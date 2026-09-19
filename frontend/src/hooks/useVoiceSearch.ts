@@ -39,13 +39,13 @@ export function useVoiceSearch() {
       speechModule.addListener('end', () => {
         setIsListening(false);
       }),
-      speechModule.addListener('result', (event) => {
-        const text = (event.results[0]?.transcript || '').trim();
+      speechModule.addListener('result', (event: { results?: Array<{ transcript?: string }>; isFinal?: boolean }) => {
+        const text = (event.results?.[0]?.transcript || '').trim();
         if (!text) return;
         setTranscript(text);
         if (event.isFinal) finalTextRef.current = text;
       }),
-      speechModule.addListener('error', (event) => {
+      speechModule.addListener('error', (event: { error?: string; message?: string }) => {
         setIsListening(false);
         if (event.error === 'aborted') return;
         setError(event.message || 'Could not recognize speech. Try again.');

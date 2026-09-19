@@ -2,7 +2,7 @@
 
 Source: `src/services/api.ts`
 Base: `EXPO_PUBLIC_BACKEND_URL` (default: http://192.168.29.243:3001)
-Prefix: `/api/*` for most calls, `/tally/*` for write-back, `/app/*` for legacy
+Prefix: `/api/*` for most calls, `/tally/*` for write-back. Live Mobile has no `/app` callers.
 
 ## Auth Header
 Token from AsyncStorage `auth_token` → `Authorization: Bearer <token>`
@@ -27,8 +27,7 @@ post('/endpoint', body)   // POST /api/endpoint
 patch('/endpoint', body)  // PATCH /api/endpoint
 del('/endpoint')          // DELETE /api/endpoint
 tallyGet('/endpoint')     // GET /tally/endpoint
-tallyPost('/endpoint', b) // POST /tally/endpoint
-appPost('/endpoint', b)   // POST /app/endpoint
+tallyPost('/endpoint', b) // POST /tally/endpoint — Demo context routes to /api/demo/entries
 ```
 
 ## Auth Endpoints
