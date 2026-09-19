@@ -9,8 +9,8 @@ Stale tree: `td-source/mobile` — not modified
 Nothing pushed: YES  
 origin/cursor unchanged: YES (`53c4abc90242dca32334a53ed8cbb680340b6993`)  
 origin/main unchanged: YES (`07a875a43ea05e774e450fc910e6449371f94310`)  
-Local HEAD: see commits below (branch `cursor`, was `303536f1` before this pass)  
-Local commits: reviewable local-only commits on `cursor`  
+Local HEAD: `9ddcac87` (branch `cursor`)  
+Local commits: 7 new on `cursor` (ahead 11 of `origin/cursor`; 4 pre-existing + 7 this pass)  
 Working tree clean: YES (mobile repo, after commits)
 
 ========================================
