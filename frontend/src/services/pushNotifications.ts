@@ -4,12 +4,16 @@
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
-import { registerPushToken } from './api';
+import { getActiveWorkspaceId, registerPushToken } from './api';
 import { safePush } from '../utils/safeNavigation';
 
 // SDK 53+: executionEnvironment is 'storeClient' in Expo Go, 'standalone'/'bare' in dev/prod builds
 // appOwnership is deprecated since SDK 46 — do NOT use it
 const isExpoGo = Constants.executionEnvironment === 'storeClient';
+let _lastPushToken: string | null = null;
+export function getLastPushToken(): string | null {
+  return _lastPushToken;
+}
 
 // Lazily import expo-notifications ONLY in dev/prod builds
 // This avoids the "removed from Expo Go" error that fires at import time
@@ -46,12 +50,18 @@ export async function registerForPushNotifications(): Promise<string | null> {
   }
 
   // Request permission
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  const permissionStatus = (res: unknown) => {
+    if (typeof res === 'string') return res;
+    if (res && typeof res === 'object' && 'status' in res) {
+      return String((res as { status?: string }).status || '');
+    }
+    return '';
+  };
+  const existingStatus = permissionStatus(await Notifications.getPermissionsAsync());
   let finalStatus = existingStatus;
 
   if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
+    finalStatus = permissionStatus(await Notifications.requestPermissionsAsync());
   }
 
   if (finalStatus !== 'granted') {
@@ -82,6 +92,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
     const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData.data;
+    _lastPushToken = token;
     if (__DEV__) console.log('[Push] Expo push token registered');
 
     // Save to backend
@@ -101,14 +112,17 @@ export function setupNotificationHandlers(router: any) {
   if (isExpoGo || !Notifications) return () => {};
 
   // Foreground notification received
-  const foregroundSub = Notifications.addNotificationReceivedListener(notification => {
-    console.log('[Push] Foreground notification:', notification.request.content);
+  const foregroundSub = Notifications.addNotificationReceivedListener(() => {
+    if (__DEV__) console.log('[Push] Foreground notification received');
   });
 
   // User tapped on notification
   const responseSub = Notifications.addNotificationResponseReceivedListener(response => {
     const data = response.notification.request.content.data as any;
     if (!data?.type) return;
+    const eventWs = data.workspaceId || data.workspace_id;
+    const active = getActiveWorkspaceId();
+    if (eventWs && active && String(eventWs) !== String(active)) return;
 
     // Navigate based on notification type
     switch (data.type) {

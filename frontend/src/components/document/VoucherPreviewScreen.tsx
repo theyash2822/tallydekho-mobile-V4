@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
 import { getInvoicePreview } from '../../services/api';
-import { getSocket } from '../../services/socketService';
+import { getSocket, isEventForActiveWorkspace } from '../../services/socketService';
 import { VoucherDocument, DocumentType } from '../../types/document';
 import { toVoucherDocument } from '../../utils/voucherDocumentAdapter';
 import DocumentPreviewPage from './DocumentPreviewPage';
@@ -76,6 +76,8 @@ export default function VoucherPreviewScreen({
     const socket: any = getSocket();
     if (!socket || !tdkRef) return;
     const onSynced = (payload: any) => {
+      if (!isEventForActiveWorkspace('voucher:tallySynced', payload)
+        && !isEventForActiveWorkspace('invoice_posting_updated', payload)) return;
       const ref = payload?.tdkRef || payload?.tdk_ref || payload?.referenceNumber;
       if (ref === tdkRef) fetchPreview();
     };

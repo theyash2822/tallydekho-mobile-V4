@@ -139,6 +139,7 @@ export const socketService = {
 
     // 🧾 Voucher number reconciled: backend fires after ingestProcessor matches TDK ref
     socket.on('voucher:tallySynced', (payload: any) => {
+      if (!isEventForActiveWorkspace('voucher:tallySynced', payload)) return;
       const tdkRef: string = payload.tdkRef ?? payload.tdkReferenceNo ?? '';
       const tallyVoucherNo: string = payload.tallyVoucherNo ?? '';
       onVoucherSyncedCallback?.({ tdkRef, tallyVoucherNo });

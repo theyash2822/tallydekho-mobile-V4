@@ -27,6 +27,8 @@ export const WORKSPACE_SCOPED_EVENTS: ReadonlySet<string> = new Set([
   'hard_sync_status',
   'restore_request',
   'restore_status',
+  'voucher:tallySynced',
+  'invoice_posting_updated',
 ]);
 
 /** Accepts the camelCase the backend emits plus the snake_case variants. */
