@@ -616,8 +616,12 @@ function renderTallyPrimeItemsTable(model: CommercialPrintModel): string {
         ...model.charges.map(
           (c) => `<tr>
       <td style="${CELL}"></td>
-      <td style="${CELL}">${esc(c.label)}</td>
-      <td style="${CELL}" colspan="5"></td>
+      <td style="${CELL};text-align:right">${esc(c.label)}</td>
+      <td style="${CELL}"></td>
+      <td style="${CELL}"></td>
+      <td style="${CELL}"></td>
+      <td style="${CELL}"></td>
+      <td style="${CELL};text-align:right">${c.rate ? formatInr(c.rate) + ' %' : ''}</td>
       <td style="${CELL};text-align:right">${formatInr(c.amount)}</td>
     </tr>`
         ),

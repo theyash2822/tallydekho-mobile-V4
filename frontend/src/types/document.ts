@@ -101,6 +101,8 @@ export interface Totals {
   chargeTotal?: number;
   taxTotal?: number;
   roundOff?: number;
+  /** Ledger name Tally used for round-off (e.g. "Rounded Off"). */
+  roundOffLabel?: string;
   total: number;
   totalQty?: number;
   totalInWords?: string;

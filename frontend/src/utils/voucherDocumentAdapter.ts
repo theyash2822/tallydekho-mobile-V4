@@ -326,6 +326,7 @@ export function toVoucherDocument(
       chargeTotal: num(totals.chargeTotal) || undefined,
       taxTotal: num(totals.taxTotal) || undefined,
       roundOff: num(totals.roundOff),
+      roundOffLabel: totals.roundOffLabel || undefined,
       total: num(totals.grandTotal, num(totals.total)),
       totalQty: num(totals.totalQty) || undefined,
       totalInWords: raw.totalInWords || undefined,

@@ -11,6 +11,8 @@ export type CommercialChargeLine = {
   sequence: number;
   label: string;
   amount: Money;
+  /** Present on tax-on-charge rows (GST on freight, etc.). */
+  rate?: Money | null;
   taxable?: boolean;
 };
 

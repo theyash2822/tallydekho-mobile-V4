@@ -306,13 +306,36 @@ function mapItems(items: ItemLine[] = []): CommercialPrintModel['items'] {
   });
 }
 
-function mapCharges(charges: VoucherDocument['additionalCharges'] = []): CommercialChargeLine[] {
-  return charges.map((c, idx) => ({
-    sequence: idx + 1,
-    label: c.description,
-    amount: moneyFromNumber(c.amount),
-    taxable: !!(c.taxes && c.taxes.length > 0),
-  }));
+function mapCharges(doc: VoucherDocument): CommercialChargeLine[] {
+  const rows: CommercialChargeLine[] = [];
+  let seq = 1;
+  for (const c of doc.additionalCharges || []) {
+    if (!c.description && !c.amount) continue;
+    rows.push({
+      sequence: seq++,
+      label: c.description || 'Charge',
+      amount: moneyFromNumber(c.amount),
+      taxable: !!(c.taxes && c.taxes.length > 0),
+    });
+    for (const t of c.taxes || []) {
+      if (!t.amount) continue;
+      rows.push({
+        sequence: seq++,
+        label: t.description || 'Tax',
+        amount: moneyFromNumber(t.amount),
+        rate: t.rate ? moneyFromNumber(t.rate) : null,
+      });
+    }
+  }
+  const roundOff = doc.totals?.roundOff;
+  if (roundOff) {
+    rows.push({
+      sequence: seq++,
+      label: doc.totals?.roundOffLabel || 'Round Off',
+      amount: moneyFromNumber(roundOff),
+    });
+  }
+  return rows;
 }
 
 function mapTaxSummary(
@@ -496,7 +519,7 @@ export function toCommercialPrintModel(
     parties,
     references: mapReferences(doc, printType),
     items: mappedItems,
-    charges: mapCharges(doc.additionalCharges),
+    charges: mapCharges(doc),
     taxSummary: mapTaxSummary(doc.hsnSummary, doc.taxes),
     totals: {
       primaryQuantity:
