@@ -1551,8 +1551,8 @@ export default function CreateSalesInvoiceScreen() {
       setSubmitResult({ tdkRef, isQueued, message: result?.message || '', invoiceUuid, numberingPolicy: respNumberingPolicy, invoiceNumber });
       setShowSuccess(true);
       clearDraftOnSubmit();
-      // Keep the lock after success so a second tap cannot mint another invoice
-      // while the success overlay is still up.
+      // Clear button spinner; keep submittingRef locked against double-submit.
+      setSubmitting(false);
       return;
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Submit Failed', text2: err?.message || 'Check Tally connection.' });
@@ -1590,116 +1590,6 @@ export default function CreateSalesInvoiceScreen() {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      {/* Success Overlay */}
-      {showSuccess && submitResult && (
-        <View style={ss.overlay}>
-          <View style={ss.card}>
-            <View style={ss.iconWrap}>
-              <Ionicons
-                name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
-                size={56}
-                color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
-              />
-            </View>
-            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : (isProforma ? 'Proforma Submitted!' : (convertProformaTdkRef ? 'Converted to Sales Invoice!' : 'Invoice Submitted!'))}</Text>
-            <Text style={ss.sub}>
-              {submitResult.isQueued
-                ? 'Entry queued. Will push to Tally when desktop reconnects.'
-                : (isProforma ? 'Proforma pushed to Tally as optional Sales.' : (convertProformaTdkRef ? 'Same Tally voucher is now a regular Sales Invoice.' : 'Invoice pushed to Tally successfully.'))}
-            </Text>
-            {/* TallyDekho Series: show invoice number immediately */}
-            {!!submitResult.invoiceNumber && (
-              <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
-                <Text style={ss.refLabel}>Invoice No.</Text>
-                <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.invoiceNumber}</Text>
-              </View>
-            )}
-            {!!submitResult.tdkRef && (
-              <View style={ss.refBadge}>
-                <Text style={ss.refLabel}>Reference No.</Text>
-                <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
-              </View>
-            )}
-
-            {/* Preview — opens instantly with provisional/final data */}
-            <TouchableOpacity
-              style={ss.previewBtn}
-              activeOpacity={0.85}
-              onPress={() => {
-                if (!submitResult.tdkRef) return;
-                const typeQ = isProforma ? '&type=proforma_invoice' : '&type=sales_invoice';
-                safePush(router, `/sales/invoice-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}${typeQ}` as any);
-              }}
-            >
-              <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
-              <Text style={ss.previewBtnTxt}>Preview</Text>
-            </TouchableOpacity>
-
-            {/* Share PDF — waits up to 10s for Tally number (TALLY_PRIME_SERIES) */}
-            {canSharePdf ? (
-            <TouchableOpacity
-              style={[ss.pdfBtn, sharePdfLoading && { opacity: 0.7 }]}
-              activeOpacity={0.85}
-              disabled={sharePdfLoading}
-              onPress={async () => {
-                if (!submitResult.tdkRef || !company?.guid) return;
-                setSharePdfLoading(true);
-                try {
-                  // TallyDekho Series: number is immediate — no wait needed
-                  // TallyPrime Series: wait up to 10s for Tally to assign the number
-                  const isTDSeries = submitResult.numberingPolicy === 'tallydekho_series';
-                  const res = await invoiceSharePdf(submitResult.tdkRef, company.guid, !isTDSeries, isTDSeries ? 0 : 10000);
-                  const docData = res?.data;
-                  if (!docData) throw new Error('No invoice data returned');
-
-                  const pdfDoc = toVoucherDocument(docData);
-                  const fileName = docData.fileName
-                    || `${pdfDoc.documentTitle.split(' - ')[0].replace(/\s+/g, '-')}-${submitResult.tdkRef}.pdf`;
-                  await shareVoucherPdf(pdfDoc, {
-                    companyGuid: company.guid,
-                    fileName,
-                    onBeforeShare: () => setSharePdfLoading(false),
-                    fallback: async () => {
-                      Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
-                    },
-                  });
-                } catch (err: any) {
-                  Toast.show({ type: 'error', text1: 'PDF Error', text2: err?.message || 'Could not generate PDF' });
-                } finally {
-                  setSharePdfLoading(false);
-                }
-              }}
-            >
-              {sharePdfLoading
-                ? <ActivityIndicator size="small" color={COLORS.white} />
-                : <Ionicons name="document-outline" size={18} color={COLORS.white} />}
-              <Text style={ss.pdfBtnTxt}>{sharePdfLoading ? 'PDF is creating...' : 'Share PDF'}</Text>
-            </TouchableOpacity>
-            ) : null}
-
-            {isProforma && !convertProformaTdkRef && (
-              <TouchableOpacity
-                style={ss.convertBtn}
-                activeOpacity={0.85}
-                onPress={handleConvertProformaFromSuccess}
-              >
-                <Ionicons name="repeat-outline" size={18} color={COLORS.white} />
-                <Text style={ss.convertBtnTxt}>Convert to Sales Invoice</Text>
-              </TouchableOpacity>
-            )}
-
-            {/* Done — navigates away without waiting for Tally */}
-            <TouchableOpacity style={ss.doneBtn} activeOpacity={0.85} onPress={() => {
-              setShowSuccess(false);
-              setSharePdfLoading(false);
-              router.back();
-            }}>
-              <Text style={ss.doneTxt}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
       {/* Draft Restore Banner */}
       {showDraftBanner && (
         <View style={s.draftBanner}>
@@ -2318,7 +2208,8 @@ export default function CreateSalesInvoiceScreen() {
           )}
         </ScrollView>
 
-        {/* Footer */}
+        {/* Footer — hide under success so Submitting/total never bleed through */}
+        {!showSuccess && (
         <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           {step === 3 && (
             <View style={s.grandTotalBar}>
@@ -2360,6 +2251,7 @@ export default function CreateSalesInvoiceScreen() {
             )}
           </View>
         </View>
+        )}
       </KeyboardAvoidingView>
 
       {/* Modals */}
@@ -2393,6 +2285,117 @@ export default function CreateSalesInvoiceScreen() {
           if (success !== false) Alert.alert('✓ Customer Added', `"${name}" has been added and selected.`);
         }}
       />
+
+      {/* Success Overlay */}
+      {showSuccess && submitResult && (
+        <View style={ss.overlay}>
+          <View style={ss.card}>
+            <View style={ss.iconWrap}>
+              <Ionicons
+                name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
+                size={56}
+                color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
+              />
+            </View>
+            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : (isProforma ? 'Proforma Submitted!' : (convertProformaTdkRef ? 'Converted to Sales Invoice!' : 'Invoice Submitted!'))}</Text>
+            <Text style={ss.sub}>
+              {submitResult.isQueued
+                ? 'Entry queued. Will push to Tally when desktop reconnects.'
+                : (isProforma ? 'Proforma pushed to Tally as optional Sales.' : (convertProformaTdkRef ? 'Same Tally voucher is now a regular Sales Invoice.' : 'Invoice pushed to Tally successfully.'))}
+            </Text>
+            {/* TallyDekho Series: show invoice number immediately */}
+            {!!submitResult.invoiceNumber && (
+              <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
+                <Text style={ss.refLabel}>Invoice No.</Text>
+                <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.invoiceNumber}</Text>
+              </View>
+            )}
+            {!!submitResult.tdkRef && (
+              <View style={ss.refBadge}>
+                <Text style={ss.refLabel}>Reference No.</Text>
+                <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
+              </View>
+            )}
+
+            {/* Preview — opens instantly with provisional/final data */}
+            <TouchableOpacity
+              style={ss.previewBtn}
+              activeOpacity={0.85}
+              onPress={() => {
+                if (!submitResult.tdkRef) return;
+                const typeQ = isProforma ? '&type=proforma_invoice' : '&type=sales_invoice';
+                safePush(router, `/sales/invoice-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}${typeQ}` as any);
+              }}
+            >
+              <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
+              <Text style={ss.previewBtnTxt}>Preview</Text>
+            </TouchableOpacity>
+
+            {/* Share PDF — waits up to 10s for Tally number (TALLY_PRIME_SERIES) */}
+            {canSharePdf ? (
+            <TouchableOpacity
+              style={[ss.pdfBtn, sharePdfLoading && { opacity: 0.7 }]}
+              activeOpacity={0.85}
+              disabled={sharePdfLoading}
+              onPress={async () => {
+                if (!submitResult.tdkRef || !company?.guid) return;
+                setSharePdfLoading(true);
+                try {
+                  // TallyDekho Series: number is immediate — no wait needed
+                  // TallyPrime Series: wait up to 10s for Tally to assign the number
+                  const isTDSeries = submitResult.numberingPolicy === 'tallydekho_series';
+                  const res = await invoiceSharePdf(submitResult.tdkRef, company.guid, !isTDSeries, isTDSeries ? 0 : 10000);
+                  const docData = res?.data;
+                  if (!docData) throw new Error('No invoice data returned');
+
+                  const pdfDoc = toVoucherDocument(docData);
+                  const fileName = docData.fileName
+                    || `${pdfDoc.documentTitle.split(' - ')[0].replace(/\s+/g, '-')}-${submitResult.tdkRef}.pdf`;
+                  await shareVoucherPdf(pdfDoc, {
+                    companyGuid: company.guid,
+                    fileName,
+                    onBeforeShare: () => setSharePdfLoading(false),
+                    fallback: async () => {
+                      Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
+                    },
+                  });
+                } catch (err: any) {
+                  Toast.show({ type: 'error', text1: 'PDF Error', text2: err?.message || 'Could not generate PDF' });
+                } finally {
+                  setSharePdfLoading(false);
+                }
+              }}
+            >
+              {sharePdfLoading
+                ? <ActivityIndicator size="small" color={COLORS.white} />
+                : <Ionicons name="document-outline" size={18} color={COLORS.white} />}
+              <Text style={ss.pdfBtnTxt}>{sharePdfLoading ? 'PDF is creating...' : 'Share PDF'}</Text>
+            </TouchableOpacity>
+            ) : null}
+
+            {isProforma && !convertProformaTdkRef && (
+              <TouchableOpacity
+                style={ss.convertBtn}
+                activeOpacity={0.85}
+                onPress={handleConvertProformaFromSuccess}
+              >
+                <Ionicons name="repeat-outline" size={18} color={COLORS.white} />
+                <Text style={ss.convertBtnTxt}>Convert to Sales Invoice</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Done — navigates away without waiting for Tally */}
+            <TouchableOpacity style={ss.doneBtn} activeOpacity={0.85} onPress={() => {
+              setShowSuccess(false);
+              setSharePdfLoading(false);
+              router.back();
+            }}>
+              <Text style={ss.doneTxt}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
     </SafeAreaView>
   );
 }
@@ -2608,7 +2611,7 @@ const si = StyleSheet.create({
 });
 
 const ss = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 999 },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 999, elevation: 24 },
   card: { backgroundColor: COLORS.cardBg, borderRadius: 24, padding: 28, width: '88%', alignItems: 'center', gap: 10 },
   iconWrap: { marginBottom: 4 },
   title: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary, textAlign: 'center' },

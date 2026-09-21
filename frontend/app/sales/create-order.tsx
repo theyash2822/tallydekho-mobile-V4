@@ -854,98 +854,6 @@ export default function CreateSalesOrderScreen() {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      {/* Success Overlay */}
-      {showSuccess && submitResult && (
-        <View style={ss.overlay}>
-          <View style={ss.card}>
-            <View style={ss.iconWrap}>
-              <Ionicons
-                name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
-                size={56}
-                color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
-              />
-            </View>
-            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : 'Sales Order Submitted!'}</Text>
-            <Text style={ss.sub}>
-              {submitResult.isQueued
-                ? 'Entry queued. Will push to Tally when desktop reconnects.'
-                : 'Sales order pushed to Tally successfully.'}
-            </Text>
-            {!!submitResult.voucherNumber && (
-              <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
-                <Text style={ss.refLabel}>Order No.</Text>
-                <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.voucherNumber}</Text>
-              </View>
-            )}
-            {!!submitResult.tdkRef && (
-              <View style={ss.refBadge}>
-                <Text style={ss.refLabel}>Reference No.</Text>
-                <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
-              </View>
-            )}
-
-            {/* Preview */}
-            <TouchableOpacity
-              style={ss.previewBtn}
-              activeOpacity={0.85}
-              onPress={() => {
-                if (!submitResult.tdkRef) return;
-                safePush(router, `/sales/order-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}` as any);
-              }}
-            >
-              <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
-              <Text style={ss.previewBtnTxt}>Preview</Text>
-            </TouchableOpacity>
-
-            {/* Share PDF — built locally from the submitted form snapshot */}
-            <TouchableOpacity
-              style={[ss.pdfBtn, sharePdfLoading && { opacity: 0.7 }]}
-              activeOpacity={0.85}
-              disabled={sharePdfLoading}
-              onPress={async () => {
-                setSharePdfLoading(true);
-                try {
-                  const pdfDoc = buildLocalDoc();
-                  await shareVoucherPdfSafely(pdfDoc as any, {
-                    companyGuid: company?.guid,
-                    dialogTitle: `SalesOrder-${submitResult.voucherNumber || submitResult.tdkRef || Date.now()}.pdf`,
-                    onBeforeShare: () => setSharePdfLoading(false),
-                  });
-                } catch (err: any) {
-                  Toast.show({ type: 'error', text1: 'PDF Error', text2: err?.message || 'Could not generate PDF' });
-                } finally {
-                  setSharePdfLoading(false);
-                }
-              }}
-            >
-              {sharePdfLoading
-                ? <ActivityIndicator size="small" color={COLORS.white} />
-                : <Ionicons name="document-outline" size={18} color={COLORS.white} />}
-              <Text style={ss.pdfBtnTxt}>{sharePdfLoading ? 'PDF is creating...' : 'Share PDF'}</Text>
-            </TouchableOpacity>
-
-            {/* Convert to Sales Invoice */}
-            <TouchableOpacity
-              style={ss.convertBtn}
-              activeOpacity={0.85}
-              onPress={handleConvertToInvoice}
-            >
-              <Ionicons name="repeat-outline" size={18} color={COLORS.white} />
-              <Text style={ss.convertBtnTxt}>Convert to Sales Invoice</Text>
-            </TouchableOpacity>
-
-            {/* Done */}
-            <TouchableOpacity style={ss.doneBtn} activeOpacity={0.85} onPress={() => {
-              setShowSuccess(false);
-              setSharePdfLoading(false);
-              router.back();
-            }}>
-              <Text style={ss.doneTxt}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity onPress={step === 1 ? () => router.back() : goBack} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -1167,7 +1075,8 @@ export default function CreateSalesOrderScreen() {
           )}
         </ScrollView>
 
-        {/* Footer */}
+        {/* Footer — hide under success overlay */}
+        {!showSuccess && (
         <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           {step === 2 && (
             <View style={s.grandTotalBar}>
@@ -1199,6 +1108,7 @@ export default function CreateSalesOrderScreen() {
             )}
           </View>
         </View>
+        )}
       </KeyboardAvoidingView>
 
       {/* Modals */}
@@ -1220,6 +1130,99 @@ export default function CreateSalesOrderScreen() {
 
       <DatePickerModal visible={showDatePicker} value={date} minDate={fyStart} onSelect={(d) => { setDate(d); setShowDatePicker(false); }} onClose={() => setShowDatePicker(false)} title="Order Date" />
       <DatePickerModal visible={showDueDatePicker} value={dueDate || date} onSelect={(d) => { setDueDate(d); setShowDueDatePicker(false); }} onClose={() => setShowDueDatePicker(false)} title="Due Date" />
+
+      {/* Success Overlay */}
+      {showSuccess && submitResult && (
+        <View style={ss.overlay}>
+          <View style={ss.card}>
+            <View style={ss.iconWrap}>
+              <Ionicons
+                name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
+                size={56}
+                color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
+              />
+            </View>
+            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : 'Sales Order Submitted!'}</Text>
+            <Text style={ss.sub}>
+              {submitResult.isQueued
+                ? 'Entry queued. Will push to Tally when desktop reconnects.'
+                : 'Sales order pushed to Tally successfully.'}
+            </Text>
+            {!!submitResult.voucherNumber && (
+              <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
+                <Text style={ss.refLabel}>Order No.</Text>
+                <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.voucherNumber}</Text>
+              </View>
+            )}
+            {!!submitResult.tdkRef && (
+              <View style={ss.refBadge}>
+                <Text style={ss.refLabel}>Reference No.</Text>
+                <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
+              </View>
+            )}
+
+            {/* Preview */}
+            <TouchableOpacity
+              style={ss.previewBtn}
+              activeOpacity={0.85}
+              onPress={() => {
+                if (!submitResult.tdkRef) return;
+                safePush(router, `/sales/order-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}` as any);
+              }}
+            >
+              <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
+              <Text style={ss.previewBtnTxt}>Preview</Text>
+            </TouchableOpacity>
+
+            {/* Share PDF — built locally from the submitted form snapshot */}
+            <TouchableOpacity
+              style={[ss.pdfBtn, sharePdfLoading && { opacity: 0.7 }]}
+              activeOpacity={0.85}
+              disabled={sharePdfLoading}
+              onPress={async () => {
+                setSharePdfLoading(true);
+                try {
+                  const pdfDoc = buildLocalDoc();
+                  await shareVoucherPdfSafely(pdfDoc as any, {
+                    companyGuid: company?.guid,
+                    dialogTitle: `SalesOrder-${submitResult.voucherNumber || submitResult.tdkRef || Date.now()}.pdf`,
+                    onBeforeShare: () => setSharePdfLoading(false),
+                  });
+                } catch (err: any) {
+                  Toast.show({ type: 'error', text1: 'PDF Error', text2: err?.message || 'Could not generate PDF' });
+                } finally {
+                  setSharePdfLoading(false);
+                }
+              }}
+            >
+              {sharePdfLoading
+                ? <ActivityIndicator size="small" color={COLORS.white} />
+                : <Ionicons name="document-outline" size={18} color={COLORS.white} />}
+              <Text style={ss.pdfBtnTxt}>{sharePdfLoading ? 'PDF is creating...' : 'Share PDF'}</Text>
+            </TouchableOpacity>
+
+            {/* Convert to Sales Invoice */}
+            <TouchableOpacity
+              style={ss.convertBtn}
+              activeOpacity={0.85}
+              onPress={handleConvertToInvoice}
+            >
+              <Ionicons name="repeat-outline" size={18} color={COLORS.white} />
+              <Text style={ss.convertBtnTxt}>Convert to Sales Invoice</Text>
+            </TouchableOpacity>
+
+            {/* Done */}
+            <TouchableOpacity style={ss.doneBtn} activeOpacity={0.85} onPress={() => {
+              setShowSuccess(false);
+              setSharePdfLoading(false);
+              router.back();
+            }}>
+              <Text style={ss.doneTxt}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
     </SafeAreaView>
   );
 }
@@ -1343,7 +1346,7 @@ const si = StyleSheet.create({
 });
 
 const ss = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 999 },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 999, elevation: 24 },
   card: { backgroundColor: COLORS.cardBg, borderRadius: 24, padding: 28, width: '88%', alignItems: 'center', gap: 10 },
   iconWrap: { marginBottom: 4 },
   title: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary, textAlign: 'center' },

@@ -1024,6 +1024,7 @@ export default function CreateDeliveryNoteScreen() {
       const voucherNumber = result?.voucherNumber || result?.data?.voucherNumber || undefined;
       setSubmitResult({ tdkRef, isQueued, message: result?.message || '', voucherNumber });
       setShowSuccess(true);
+      setSubmitting(false);
       return;
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Submit Failed', text2: err?.message || 'Check Tally connection.' });
@@ -1042,67 +1043,6 @@ export default function CreateDeliveryNoteScreen() {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      {/* Success Overlay */}
-      {showSuccess && submitResult && (
-        <View style={ss.overlay}>
-          <View style={ss.card}>
-            <View style={ss.iconWrap}>
-              <Ionicons
-                name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
-                size={56}
-                color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
-              />
-            </View>
-            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : 'Delivery Note Submitted!'}</Text>
-            <Text style={ss.sub}>
-              {submitResult.isQueued
-                ? 'Entry queued. Will push to Tally when desktop reconnects.'
-                : 'Delivery note pushed to Tally successfully.'}
-            </Text>
-            <View style={[ss.refBadge, submitResult.voucherNumber ? { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' } : null]}>
-              <Text style={ss.refLabel}>Delivery Note No.</Text>
-              <Text style={[ss.refVal, submitResult.voucherNumber ? { color: '#166534' } : { color: COLORS.textSecondary }]}>
-                {submitResult.voucherNumber || 'Pending from TallyPrime'}
-              </Text>
-            </View>
-            {!!submitResult.tdkRef && (
-              <View style={ss.refBadge}>
-                <Text style={ss.refLabel}>Reference No.</Text>
-                <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
-              </View>
-            )}
-
-            {!!submitResult.tdkRef && (
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <TouchableOpacity
-                  style={[ss.previewBtn, { flex: 1 }]}
-                  activeOpacity={0.85}
-                  onPress={() => safePush(router, `/sales/delivery-note-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef!)}` as any)}
-                >
-                  <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
-                  <Text style={ss.previewBtnTxt}>Preview</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[ss.previewBtn, { flex: 1 }]}
-                  activeOpacity={0.85}
-                  disabled={sharingPdf}
-                  onPress={shareSubmitted}
-                >
-                  {sharingPdf
-                    ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
-                    : <Ionicons name="share-outline" size={18} color={COLORS.brandPrimary} />}
-                  <Text style={ss.previewBtnTxt}>{sharingPdf ? 'Generating…' : 'Share PDF'}</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            <TouchableOpacity style={ss.doneBtn} activeOpacity={0.85} onPress={() => { setShowSuccess(false); router.back(); }}>
-              <Text style={ss.doneTxt}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity onPress={step === 1 ? () => router.back() : goBack} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -1441,7 +1381,8 @@ export default function CreateDeliveryNoteScreen() {
           )}
         </ScrollView>
 
-        {/* Footer */}
+        {/* Footer — hide under success overlay */}
+        {!showSuccess && (
         <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           {step === 3 && (
             <View style={s.grandTotalBar}>
@@ -1483,6 +1424,7 @@ export default function CreateDeliveryNoteScreen() {
             )}
           </View>
         </View>
+        )}
       </KeyboardAvoidingView>
 
       <DatePickerModal
@@ -1501,6 +1443,68 @@ export default function CreateDeliveryNoteScreen() {
         onClose={() => setShowLrDatePicker(false)}
         title="LR / Bill of Lading Date"
       />
+
+      {/* Success Overlay */}
+      {showSuccess && submitResult && (
+        <View style={ss.overlay}>
+          <View style={ss.card}>
+            <View style={ss.iconWrap}>
+              <Ionicons
+                name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
+                size={56}
+                color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
+              />
+            </View>
+            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : 'Delivery Note Submitted!'}</Text>
+            <Text style={ss.sub}>
+              {submitResult.isQueued
+                ? 'Entry queued. Will push to Tally when desktop reconnects.'
+                : 'Delivery note pushed to Tally successfully.'}
+            </Text>
+            <View style={[ss.refBadge, submitResult.voucherNumber ? { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' } : null]}>
+              <Text style={ss.refLabel}>Delivery Note No.</Text>
+              <Text style={[ss.refVal, submitResult.voucherNumber ? { color: '#166534' } : { color: COLORS.textSecondary }]}>
+                {submitResult.voucherNumber || 'Pending from TallyPrime'}
+              </Text>
+            </View>
+            {!!submitResult.tdkRef && (
+              <View style={ss.refBadge}>
+                <Text style={ss.refLabel}>Reference No.</Text>
+                <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
+              </View>
+            )}
+
+            {!!submitResult.tdkRef && (
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  style={[ss.previewBtn, { flex: 1 }]}
+                  activeOpacity={0.85}
+                  onPress={() => safePush(router, `/sales/delivery-note-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef!)}` as any)}
+                >
+                  <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
+                  <Text style={ss.previewBtnTxt}>Preview</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[ss.previewBtn, { flex: 1 }]}
+                  activeOpacity={0.85}
+                  disabled={sharingPdf}
+                  onPress={shareSubmitted}
+                >
+                  {sharingPdf
+                    ? <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+                    : <Ionicons name="share-outline" size={18} color={COLORS.brandPrimary} />}
+                  <Text style={ss.previewBtnTxt}>{sharingPdf ? 'Generating…' : 'Share PDF'}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <TouchableOpacity style={ss.doneBtn} activeOpacity={0.85} onPress={() => { setShowSuccess(false); router.back(); }}>
+              <Text style={ss.doneTxt}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
     </SafeAreaView>
   );
 }
@@ -1619,7 +1623,7 @@ const si = StyleSheet.create({
 });
 
 const ss = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 999 },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 999, elevation: 24 },
   card: { backgroundColor: COLORS.cardBg, borderRadius: 24, padding: 28, width: '88%', alignItems: 'center', gap: 10 },
   iconWrap: { marginBottom: 4 },
   title: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary, textAlign: 'center' },

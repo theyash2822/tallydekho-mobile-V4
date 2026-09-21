@@ -1169,6 +1169,7 @@ export default function CreatePurchaseInvoiceScreen() {
       const invoiceNumber = result?.invoiceNumber || result?.data?.invoiceNumber || undefined;
       setSubmitResult({ tdkRef, isQueued, message: result?.message || '', invoiceUuid, numberingPolicy: respNumberingPolicy, invoiceNumber });
       setShowSuccess(true);
+      setSubmitting(false);
       return;
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Submit Failed', text2: err?.message || 'Check Tally connection.' });
@@ -1186,94 +1187,6 @@ export default function CreatePurchaseInvoiceScreen() {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      {/* Success Overlay */}
-      {showSuccess && submitResult && (
-        <View style={ss.overlay}>
-          <View style={ss.card}>
-            <View style={ss.iconWrap}>
-              <Ionicons
-                name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
-                size={56}
-                color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
-              />
-            </View>
-            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : 'Purchase Invoice Submitted!'}</Text>
-            <Text style={ss.sub}>
-              {submitResult.isQueued
-                ? 'Entry queued. Will push to Tally when desktop reconnects.'
-                : 'Purchase invoice pushed to Tally successfully.'}
-            </Text>
-            {submitResult.numberingPolicy === 'tallydekho_series' && submitResult.invoiceNumber && (
-              <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
-                <Text style={ss.refLabel}>Invoice No.</Text>
-                <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.invoiceNumber}</Text>
-              </View>
-            )}
-            {!!submitResult.tdkRef && (
-              <View style={ss.refBadge}>
-                <Text style={ss.refLabel}>Reference No.</Text>
-                <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
-              </View>
-            )}
-
-            <TouchableOpacity
-              style={ss.previewBtn}
-              activeOpacity={0.85}
-              onPress={() => {
-                if (!submitResult.tdkRef) return;
-                safePush(router, `/sales/invoice-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}&type=purchase_invoice` as any);
-              }}
-            >
-              <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
-              <Text style={ss.previewBtnTxt}>Preview</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[ss.pdfBtn, sharePdfLoading && { opacity: 0.7 }]}
-              activeOpacity={0.85}
-              disabled={sharePdfLoading}
-              onPress={async () => {
-                if (!submitResult.tdkRef || !company?.guid) return;
-                setSharePdfLoading(true);
-                try {
-                  const isTDSeries = submitResult.numberingPolicy === 'tallydekho_series';
-                  const res = await invoiceSharePdf(submitResult.tdkRef, company.guid, !isTDSeries, isTDSeries ? 0 : 10000);
-                  const docData = res?.data;
-                  if (!docData) throw new Error('No invoice data returned');
-
-                  const pdfDoc = toVoucherDocument(docData, { documentType: 'purchase_invoice' });
-                  await shareVoucherPdf(pdfDoc, {
-                    companyGuid: company.guid,
-                    fileName: docData.fileName || `PurchaseInvoice-${submitResult.tdkRef}.pdf`,
-                    onBeforeShare: () => setSharePdfLoading(false),
-                    fallback: async () => {
-                      Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
-                    },
-                  });
-                } catch (err: any) {
-                  Toast.show({ type: 'error', text1: 'PDF Error', text2: err?.message || 'Could not generate PDF' });
-                } finally {
-                  setSharePdfLoading(false);
-                }
-              }}
-            >
-              {sharePdfLoading
-                ? <ActivityIndicator size="small" color={COLORS.white} />
-                : <Ionicons name="document-outline" size={18} color={COLORS.white} />}
-              <Text style={ss.pdfBtnTxt}>{sharePdfLoading ? 'PDF is creating...' : 'Share PDF'}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={ss.doneBtn} activeOpacity={0.85} onPress={() => {
-              setShowSuccess(false);
-              setSharePdfLoading(false);
-              router.back();
-            }}>
-              <Text style={ss.doneTxt}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity onPress={step === 1 ? () => router.back() : goBack} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -1674,7 +1587,8 @@ export default function CreatePurchaseInvoiceScreen() {
           )}
         </ScrollView>
 
-        {/* Footer */}
+        {/* Footer — hide under success overlay */}
+        {!showSuccess && (
         <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           {step === 3 && (
             <View style={s.grandTotalBar}>
@@ -1716,6 +1630,7 @@ export default function CreatePurchaseInvoiceScreen() {
             )}
           </View>
         </View>
+        )}
       </KeyboardAvoidingView>
 
       {/* Unit Modal */}
@@ -1800,6 +1715,95 @@ export default function CreatePurchaseInvoiceScreen() {
           if (success !== false) Alert.alert('✓ Vendor Added', `"${name}" has been added and selected.`);
         }}
       />
+
+      {/* Success Overlay */}
+      {showSuccess && submitResult && (
+        <View style={ss.overlay}>
+          <View style={ss.card}>
+            <View style={ss.iconWrap}>
+              <Ionicons
+                name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
+                size={56}
+                color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
+              />
+            </View>
+            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : 'Purchase Invoice Submitted!'}</Text>
+            <Text style={ss.sub}>
+              {submitResult.isQueued
+                ? 'Entry queued. Will push to Tally when desktop reconnects.'
+                : 'Purchase invoice pushed to Tally successfully.'}
+            </Text>
+            {submitResult.numberingPolicy === 'tallydekho_series' && submitResult.invoiceNumber && (
+              <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
+                <Text style={ss.refLabel}>Invoice No.</Text>
+                <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.invoiceNumber}</Text>
+              </View>
+            )}
+            {!!submitResult.tdkRef && (
+              <View style={ss.refBadge}>
+                <Text style={ss.refLabel}>Reference No.</Text>
+                <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={ss.previewBtn}
+              activeOpacity={0.85}
+              onPress={() => {
+                if (!submitResult.tdkRef) return;
+                safePush(router, `/sales/invoice-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}&type=purchase_invoice` as any);
+              }}
+            >
+              <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
+              <Text style={ss.previewBtnTxt}>Preview</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[ss.pdfBtn, sharePdfLoading && { opacity: 0.7 }]}
+              activeOpacity={0.85}
+              disabled={sharePdfLoading}
+              onPress={async () => {
+                if (!submitResult.tdkRef || !company?.guid) return;
+                setSharePdfLoading(true);
+                try {
+                  const isTDSeries = submitResult.numberingPolicy === 'tallydekho_series';
+                  const res = await invoiceSharePdf(submitResult.tdkRef, company.guid, !isTDSeries, isTDSeries ? 0 : 10000);
+                  const docData = res?.data;
+                  if (!docData) throw new Error('No invoice data returned');
+
+                  const pdfDoc = toVoucherDocument(docData, { documentType: 'purchase_invoice' });
+                  await shareVoucherPdf(pdfDoc, {
+                    companyGuid: company.guid,
+                    fileName: docData.fileName || `PurchaseInvoice-${submitResult.tdkRef}.pdf`,
+                    onBeforeShare: () => setSharePdfLoading(false),
+                    fallback: async () => {
+                      Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
+                    },
+                  });
+                } catch (err: any) {
+                  Toast.show({ type: 'error', text1: 'PDF Error', text2: err?.message || 'Could not generate PDF' });
+                } finally {
+                  setSharePdfLoading(false);
+                }
+              }}
+            >
+              {sharePdfLoading
+                ? <ActivityIndicator size="small" color={COLORS.white} />
+                : <Ionicons name="document-outline" size={18} color={COLORS.white} />}
+              <Text style={ss.pdfBtnTxt}>{sharePdfLoading ? 'PDF is creating...' : 'Share PDF'}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={ss.doneBtn} activeOpacity={0.85} onPress={() => {
+              setShowSuccess(false);
+              setSharePdfLoading(false);
+              router.back();
+            }}>
+              <Text style={ss.doneTxt}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
     </SafeAreaView>
   );
 }
@@ -1976,7 +1980,7 @@ const m = StyleSheet.create({
 });
 
 const ss = StyleSheet.create({
-  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: SPACING.lg },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 999, elevation: 24, padding: SPACING.lg },
   card: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.xl, alignItems: 'center', width: '100%', maxWidth: 400, gap: 6 },
   iconWrap: { marginBottom: 6 },
   title: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary, textAlign: 'center' },
