@@ -387,7 +387,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setLoading(false);
       return;
     }
-    setLoading(true);
+    // Only the first load may flip `loading`. Background re-lists (20s timer,
+    // lastSyncAt after voucher create/sync) must NOT — create screens use
+    // useRequireCapability which unmounts the form whenever loading goes true.
+    const bootstrapping = workspacesRef.current.length === 0;
+    if (bootstrapping) setLoading(true);
     // This runs on a 20s timer, so a switch can easily land mid-flight. The id
     // it picked is only valid for the generation it was read in.
     const gen = wsGenRef.current;
@@ -671,13 +675,19 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         kind === 'companies' ? scopes.companies :
         kind === 'fys' ? scopes.financialYears :
         scopes.costCentres;
+      const mode =
+        kind === 'ledgers' ? scopes.modes?.ledgers :
+        kind === 'godowns' ? scopes.modes?.godowns :
+        kind === 'companies' ? scopes.modes?.companies :
+        kind === 'fys' ? scopes.modes?.financialYears :
+        scopes.modes?.costCentres;
       const fields =
         kind === 'fys'
           ? ['label', 'finYear', 'fin_year', 'name', 'id', 'guid', 'startDate', 'begin_date']
           : kind === 'costCentres'
             ? ['guid', 'id', 'name', 'cost_centre', 'costCentre']
             : ['guid', 'id', 'name', 'ledger_name', 'party_name'];
-      return filterByScopeGuidsOrNames(items, allow, fields);
+      return filterByScopeGuidsOrNames(items, allow, fields, mode);
     },
     [scopes, membershipType, demoMode]
   );

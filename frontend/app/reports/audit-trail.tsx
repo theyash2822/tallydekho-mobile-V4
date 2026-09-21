@@ -901,7 +901,9 @@ export default function AuditTrailScreen() {
         return;
       }
     }
-    const docId = entry.tallyVoucherNo || entry.ref;
+    // Prefer vouchers.guid — voucher_number alone can collide across FYs and
+    // unencoded path segments (spaces / slashes) crash Expo Router on open.
+    const docId = entry.guid || entry.tallyVoucherNo || entry.ref;
     if (!docId) {
       if (entry.tdkRef) {
         const ref = entry.tdkRef;
@@ -946,10 +948,11 @@ export default function AuditTrailScreen() {
       return;
     }
     const routeType = TX_TO_DOC_TYPE[entry.type] || resolveDocTypeFromParam(entry.type);
-    safePush(router, 
+    const encId = encodeURIComponent(String(docId));
+    safePush(router,
       (routeType
-        ? `/document/${docId}?type=${routeType}`
-        : `/document/${docId}`) as any
+        ? `/document/${encId}?type=${encodeURIComponent(routeType)}`
+        : `/document/${encId}`) as any
     );
   };
 

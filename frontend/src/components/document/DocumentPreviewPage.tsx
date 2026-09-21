@@ -753,17 +753,8 @@ function ActionBar({ doc }: { doc: VoucherDocument }) {
   const handleShare = () => generateAndSharePDF(setShareLoading, t('pdf.shareDoc', { number: doc.documentNumber }));
   const handlePDF   = () => generateAndSharePDF(setPdfLoading, `${doc.documentNumber}.pdf`);
 
-  if (!canSharePdf) {
-    return (
-      <View style={[ds.actionBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
-        <Text style={{ color: COLORS.white, opacity: 0.85, fontSize: 13, textAlign: 'center', flex: 1 }}>
-          PDF share not available for your role
-        </Text>
-      </View>
-    );
-  }
-
-    return (
+  // Always show Share / PDF chrome (pre-RBAC layout). Capability is enforced on press.
+  return (
     <View style={[ds.actionBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
       <TouchableOpacity style={ds.actionBtn} onPress={handleShare} activeOpacity={0.75} disabled={shareLoading}>
         {shareLoading

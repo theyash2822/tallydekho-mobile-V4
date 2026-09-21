@@ -98,16 +98,17 @@ function mapItems(raw: any): ItemLine[] {
 }
 
 function mapTaxes(raw: any): TaxLine[] {
-  return (raw?.taxLines || []).map((t: any): TaxLine => ({
-    description: t.description || 'Tax',
+  const rows = raw?.taxLines || raw?.taxes || [];
+  return rows.map((t: any): TaxLine => ({
+    description: t.description || t.ledgerName || 'Tax',
     kind: t.kind || undefined,
-    rate: num(t.rate),
-    taxableAmount: num(t.taxableAmount),
+    rate: num(t.rate ?? t.taxRate),
+    taxableAmount: num(t.taxableAmount ?? t.taxableValue),
     cgst: num(t.cgst) || undefined,
     sgst: num(t.sgst) || undefined,
     igst: num(t.igst) || undefined,
     cess: num(t.cess) || undefined,
-    total: num(t.total),
+    total: num(t.total ?? t.taxAmount),
   }));
 }
 
@@ -524,20 +525,66 @@ export function fromTallyVoucher(
     batch: item.batch_name || undefined,
   }));
 
-  // A gst_voucher_details row exists even for exempt goods, where the amounts are
-  // zero but the registration type and place of supply still need to print.
-  const taxes: TaxLine[] = gst ? [{
-    description: gst.gst_reg_type ? `GST (${gst.gst_reg_type})` : 'GST',
-    rate: 0,
-    taxableAmount: num(gst.taxable_amount),
-    cgst: num(gst.cgst_amount) || undefined,
-    sgst: num(gst.sgst_amount) || undefined,
-    igst: num(gst.igst_amount) || undefined,
-    total: num(gst.cgst_amount) + num(gst.sgst_amount) + num(gst.igst_amount),
-  }] : [];
+  // Prefer gst_voucher_details when amounts are present. Many recent syncs leave
+  // that row at 0 while CGST/SGST still sit on voucher_ledger_entries — fall back
+  // so preview/PDF still show a tax breakdown.
+  const gstCgst = num(gst?.cgst_amount);
+  const gstSgst = num(gst?.sgst_amount);
+  const gstIgst = num(gst?.igst_amount);
+  const gstTaxable = num(gst?.taxable_amount);
+  let taxes: TaxLine[] = [];
+  if (gst && (gstCgst > 0 || gstSgst > 0 || gstIgst > 0 || gstTaxable > 0)) {
+    taxes = [{
+      description: gst.gst_reg_type ? `GST (${gst.gst_reg_type})` : 'GST',
+      rate: 0,
+      taxableAmount: gstTaxable,
+      cgst: gstCgst || undefined,
+      sgst: gstSgst || undefined,
+      igst: gstIgst || undefined,
+      total: gstCgst + gstSgst + gstIgst,
+    }];
+  } else {
+    const taxFromLedgers = (data.ledger_entries || []).filter((e: any) =>
+      /cgst|sgst|igst|utgst|\bcess\b/i.test(String(e.ledger_name || ''))
+    );
+    if (taxFromLedgers.length) {
+      let cgst = 0, sgst = 0, igst = 0, cess = 0;
+      for (const e of taxFromLedgers) {
+        const amt = Math.abs(num(e.amount));
+        const n = String(e.ledger_name || '').toLowerCase();
+        if (n.includes('cgst')) cgst += amt;
+        else if (n.includes('sgst') || n.includes('utgst')) sgst += amt;
+        else if (n.includes('igst')) igst += amt;
+        else if (n.includes('cess')) cess += amt;
+      }
+      const total = cgst + sgst + igst + cess;
+      if (total > 0) {
+        taxes = [{
+          description: 'GST',
+          rate: 0,
+          taxableAmount: Math.max(0, totalAmount - total),
+          cgst: cgst || undefined,
+          sgst: sgst || undefined,
+          igst: igst || undefined,
+          cess: cess || undefined,
+          total,
+        }];
+      }
+    } else if (gst) {
+      taxes = [{
+        description: gst.gst_reg_type ? `GST (${gst.gst_reg_type})` : 'GST',
+        rate: 0,
+        taxableAmount: gstTaxable,
+        cgst: gstCgst || undefined,
+        sgst: gstSgst || undefined,
+        igst: gstIgst || undefined,
+        total: gstCgst + gstSgst + gstIgst,
+      }];
+    }
+  }
 
   const taxTotal = taxes.reduce((s, t) => s + t.total, 0);
-  const taxableAmount = num(gst?.taxable_amount) || (totalAmount - taxTotal);
+  const taxableAmount = gstTaxable || (taxTotal > 0 ? totalAmount - taxTotal : totalAmount);
 
   const tallyMeta: TallyMetadata = {
     referenceNo: v.reference || undefined,

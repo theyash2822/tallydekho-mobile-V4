@@ -18,10 +18,16 @@ export function useRequireCapability(capability: string, opts?: Options): boolea
   const { hasCapability, loading } = useWorkspace();
   const router = useRouter();
   const redirected = useRef(false);
-  const allowed = !loading && hasCapability(capability);
+  // Once granted for this mount, stay true across background workspace re-lists.
+  // Without this, refreshWorkspaces → loading=true remounts every create-voucher form.
+  const grantedOnce = useRef(false);
+  if (!loading && hasCapability(capability)) {
+    grantedOnce.current = true;
+  }
+  const allowed = grantedOnce.current || (!loading && hasCapability(capability));
 
   useEffect(() => {
-    if (loading || redirected.current) return;
+    if (loading || redirected.current || grantedOnce.current) return;
     if (hasCapability(capability)) return;
     redirected.current = true;
     Toast.show({

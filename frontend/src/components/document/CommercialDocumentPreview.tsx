@@ -89,10 +89,34 @@ export default function CommercialDocumentPreview({
   const { company: authCompany } = useAuth();
   const [sharing, setSharing] = useState(false);
 
-  const model = useMemo(
-    () => toCommercialPrintModel(doc, { companyGuid: authCompany?.guid }),
-    [doc, authCompany?.guid],
-  );
+  const model = useMemo(() => {
+    try {
+      return toCommercialPrintModel(doc, { companyGuid: authCompany?.guid });
+    } catch {
+      // Never let a mapper throw take down the whole RN app (Day Book → invoice).
+      return null;
+    }
+  }, [doc, authCompany?.guid]);
+
+  if (!model) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.pageBg }} edges={['top', 'left', 'right']}>
+        <DocNavBar title={DOC_TYPE_CONFIG[doc.documentType]?.label || 'Document'} onBack={() => router.back()} />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <Ionicons name="document-text-outline" size={48} color={COLORS.textTertiary} />
+          <Text style={{ marginTop: 12, fontSize: 15, fontWeight: '600', color: COLORS.textSecondary, textAlign: 'center' }}>
+            Could not render this document
+          </Text>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={{ marginTop: 16, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: COLORS.brandPrimary, borderRadius: 8 }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const ribbon = model.identity.title || commercialTitle(model.identity.documentType) || 'DOCUMENT';
   const navTitle = DOC_TYPE_CONFIG[doc.documentType]?.label || ribbon;
@@ -140,15 +164,24 @@ export default function CommercialDocumentPreview({
   const totalQty = items.reduce((s, i) => s + (i.qty || 0), 0);
 
   const t = doc.totals;
+  const hsnRows = model.taxSummary || [];
+  const taxFromDoc = doc.taxes || [];
+  const sumTaxField = (field: 'cgst' | 'sgst' | 'igst' | 'cess') =>
+    taxFromDoc.reduce((s, row) => s + (Number(row[field]) || 0), 0);
   const totRows: { label: string; value: number }[] = [];
   if (!hideAmt) {
     if (t.subtotal != null) totRows.push({ label: 'Sub Total', value: t.subtotal });
     if (t.discount) totRows.push({ label: 'Discount (−)', value: t.discount });
-    if (t.taxableAmount != null && t.discount) totRows.push({ label: 'Taxable Value', value: t.taxableAmount });
-    if (t.cgstTotal) totRows.push({ label: 'Output CGST', value: t.cgstTotal });
-    if (t.sgstTotal) totRows.push({ label: 'Output SGST', value: t.sgstTotal });
-    if (t.igstTotal) totRows.push({ label: 'Output IGST', value: t.igstTotal });
-    if (t.cessTotal) totRows.push({ label: 'Cess', value: t.cessTotal });
+    if (t.taxableAmount != null && (t.discount || t.taxTotal || sumTaxField('cgst') || sumTaxField('sgst') || sumTaxField('igst'))) {
+      totRows.push({ label: 'Taxable Value', value: t.taxableAmount });
+    }
+    const cgst = t.cgstTotal || sumTaxField('cgst');
+    const sgst = t.sgstTotal || sumTaxField('sgst');
+    const igst = t.igstTotal || sumTaxField('igst');
+    if (cgst) totRows.push({ label: 'Output CGST', value: cgst });
+    if (sgst) totRows.push({ label: 'Output SGST', value: sgst });
+    if (igst) totRows.push({ label: 'Output IGST', value: igst });
+    if (t.cessTotal || sumTaxField('cess')) totRows.push({ label: 'Cess', value: t.cessTotal || sumTaxField('cess') });
     for (const c of model.charges) {
       const n = parseFloat(String(c.amount).replace(/,/g, ''));
       if (Number.isFinite(n) && n !== 0) totRows.push({ label: c.label, value: n });
@@ -158,7 +191,6 @@ export default function CommercialDocumentPreview({
 
   const words = model.amountInWords || t.totalInWords || amountInWords(t.total || 0);
   const taxWords = model.taxAmountInWords;
-  const hsnRows = model.taxSummary || [];
 
   const handleShare = async () => {
     if (sharing) return;
