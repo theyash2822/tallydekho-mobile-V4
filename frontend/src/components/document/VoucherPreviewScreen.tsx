@@ -50,11 +50,20 @@ export default function VoucherPreviewScreen({
   const [isProvisional, setIsProvisional] = useState(false);
 
   const fetchPreview = useCallback(async () => {
-    if (!tdkRef || !company?.guid) return;
+    const ref = Array.isArray(tdkRef) ? tdkRef[0] : tdkRef;
+    if (!ref) {
+      setLoading(false);
+      setError('Missing document reference');
+      return;
+    }
+    if (!company?.guid) {
+      // Company still hydrating — keep spinner; effect re-runs when guid arrives.
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
-      const res: any = await fetcher(tdkRef, company.guid);
+      const res: any = await fetcher(String(ref), company.guid);
       if (res?.status && res?.data) {
         setRaw(res.data);
         setDoc(toVoucherDocument(res.data, documentType ? { documentType } : {}));
