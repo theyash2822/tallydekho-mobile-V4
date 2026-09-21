@@ -42,6 +42,7 @@ import {
 } from '@gorhom/bottom-sheet';
 import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import { useTranslation } from 'react-i18next';
+import { todayLocalISO } from '../../src/utils/periodDates';
 import { useRequireCapability } from '../../src/components/RequireCapability';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1415,7 +1416,7 @@ export default function CreatePurchaseInvoiceScreen() {
                     <Text style={s.fLabel}>Vendor Invoice No.</Text>
                     <ThemedFInput value={vendorInvNo} onChangeText={setVendorInvNo} placeholder="Optional" />
                   </View>
-                  <DateInput label="Vendor Inv. Date" value={vendorInvDate} onChange={setVendorInvDate} maxDate={new Date().toISOString().slice(0, 10)} />
+                  <DateInput label="Vendor Inv. Date" value={vendorInvDate} onChange={setVendorInvDate} maxDate={todayLocalISO()} />
                 </View>
                 <FormField
                   label="Purchase Reference No."
@@ -1734,7 +1735,7 @@ export default function CreatePurchaseInvoiceScreen() {
         </TouchableOpacity>
       </Modal>
 
-      <DatePickerModal visible={showDatePicker} value={date} minDate={fyStart} maxDate={new Date().toISOString().slice(0, 10)} onSelect={(d) => { setDate(d); setShowDatePicker(false); }} onClose={() => setShowDatePicker(false)} />
+      <DatePickerModal visible={showDatePicker} value={date} minDate={fyStart} maxDate={todayLocalISO()} onSelect={(d) => { setDate(d); setShowDatePicker(false); }} onClose={() => setShowDatePicker(false)} />
 
       {/* QR Camera Modal — overlay OUTSIDE CameraView so close button receives touches */}
       <Modal visible={showCamera} animationType="slide" statusBarTranslucent onRequestClose={closeCamera}>

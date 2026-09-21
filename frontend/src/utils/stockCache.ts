@@ -19,7 +19,15 @@ export function stockCacheKey(companyGuid: string, lastSyncAt: string | number |
   return `${getActiveWorkspaceId() ?? 'no-ws'}:${companyGuid}:${lastSyncAt ?? ''}`;
 }
 
-/** Clear Total Stock list cache — call after transfer/adjust/sync, and on logout. */
-export function clearStockListCache() {
-  Object.keys(_stockCache).forEach(k => delete _stockCache[k]);
+/** Clear Total Stock list cache — workspace-scoped unless `{ all: true }` (logout). */
+export function clearStockListCache(opts?: { all?: boolean; companyGuid?: string }) {
+  if (opts?.all) {
+    Object.keys(_stockCache).forEach((k) => delete _stockCache[k]);
+    return;
+  }
+  const ws = getActiveWorkspaceId() ?? 'no-ws';
+  const prefix = opts?.companyGuid ? `${ws}:${opts.companyGuid}:` : `${ws}:`;
+  Object.keys(_stockCache).forEach((k) => {
+    if (k.startsWith(prefix)) delete _stockCache[k];
+  });
 }

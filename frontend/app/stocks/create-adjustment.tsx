@@ -16,6 +16,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
 import { useRbasCreate } from '../../src/hooks/useRbasCreate';
+import { todayLocalISO } from '../../src/utils/periodDates';
 import { getStocks, createStockAdjustment, getStockGodowns } from '../../src/services/api';
 import { StockItem } from '../../src/data/stockData';
 import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomSheetSearch';
@@ -342,7 +343,7 @@ export default function CreateStockAdjustmentScreen() {
           unit: r.item.unit || 'pcs',
           note,
           numbering_policy: numberingPolicy,
-          date: new Date().toISOString().slice(0, 10),
+          date: todayLocalISO(),
         });
         ok += 1;
         lastResult = res;

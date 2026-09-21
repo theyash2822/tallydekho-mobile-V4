@@ -4,6 +4,7 @@ import Toast from 'react-native-toast-message';
 import { StockItem } from '../../data/stockData';
 import { getWarehouses, getStockGodowns, createStockTransfer } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { todayLocalISO } from '../../utils/periodDates';
 import { clearStockListCache } from '../../utils/stockCache';
 import { useRbasCreate } from '../../hooks/useRbasCreate';
 
@@ -111,7 +112,7 @@ export function StockTransferModal({
       const res: any = await createStockTransfer({
         companyGuid: company.guid,
         companyName: company.name || '',
-        date:        new Date().toISOString().slice(0, 10),
+        date:        todayLocalISO(),
         narration,
         fromGodown:  sourceWhName,
         toGodown:    destWhName,

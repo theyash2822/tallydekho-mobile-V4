@@ -137,7 +137,7 @@
     "searchResults": "Search Results",
     "noResults": "No results for \"{{query}}\"",
     "cashflow": "Cashflow",
-    "netCash": "Net Cash",
+    "netCash": "Cash & Bank Balance",
     "income": "Income",
     "expense": "Expense",
     "healthy": "Healthy",

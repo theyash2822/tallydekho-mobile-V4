@@ -247,7 +247,7 @@ export default function CashflowReportScreen() {
         <View style={s.heroCard}>
           <View style={s.heroRow}>
             <View>
-              <Text style={s.heroLabel}>Net Cash</Text>
+              <Text style={s.heroLabel}>Cash & Bank Balance</Text>
               <Text style={s.heroValue}>₹{netCash.toLocaleString('en-IN')}</Text>
               <Text style={s.heroSub}>Updated {cf?.updatedAt || 'just now'}</Text>
             </View>

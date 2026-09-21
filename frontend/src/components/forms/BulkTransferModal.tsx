@@ -8,6 +8,7 @@ import Toast from 'react-native-toast-message';
 import { StockItem } from '../../data/stockData';
 import { getWarehouses, createStockTransfer } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { todayLocalISO } from '../../utils/periodDates';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/colors';
 import { clearStockListCache } from '../../utils/stockCache';
 import { useRbasCreate } from '../../hooks/useRbasCreate';
@@ -94,7 +95,7 @@ export function BulkTransferModal({
       const res: any = await createStockTransfer({
         companyGuid: company.guid,
         companyName: company.name || '',
-        date:        new Date().toISOString().slice(0, 10),
+        date:        todayLocalISO(),
         narration:   narration || `Bulk transfer → ${toLabel}`,
         fromGodown:  preselectedItems[0]?.warehouse || 'Main Location',
         toGodown:    toLabel,

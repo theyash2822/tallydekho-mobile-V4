@@ -22,6 +22,7 @@ import BottomSheetSearch, { BSSOption } from '../../src/components/forms/BottomS
 import { CompactQtyInput, SubmitButton } from '../../src/components/forms/StockFormHelpers';
 import { clearStockListCache } from '../../src/utils/stockCache';
 import { useTranslation } from 'react-i18next';
+import { todayLocalISO } from '../../src/utils/periodDates';
 import { useRequireCapability } from '../../src/components/RequireCapability';
 
 type GodownRow = { name: string; qty: number };
@@ -302,7 +303,7 @@ export default function CreateStockTransferScreen() {
       const res: any = await createStockTransfer({
         companyGuid: company.guid,
         companyName: company.name || '',
-        date: new Date().toISOString().slice(0, 10),
+        date: todayLocalISO(),
         toGodown: destWh,
         narration: note || `Transfer ${rows.length} item(s) → ${destWh}`,
         note,

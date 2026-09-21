@@ -49,6 +49,7 @@ import {
 } from '@gorhom/bottom-sheet';
 import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import { useTranslation } from 'react-i18next';
+import { todayLocalISO } from '../../src/utils/periodDates';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const todayStr = () => {
@@ -2378,8 +2379,8 @@ export default function CreateSalesInvoiceScreen() {
         </TouchableOpacity>
       </Modal>
 
-      <DatePickerModal visible={showDatePicker} value={date} minDate={fyStart} maxDate={new Date().toISOString().slice(0, 10)} onSelect={(d) => { setDate(d); setShowDatePicker(false); }} onClose={() => setShowDatePicker(false)} />
-      <DatePickerModal visible={showTransportDocDatePicker} value={transportDocDate || todayStr()} maxDate={new Date().toISOString().slice(0, 10)} onSelect={(d) => { setTransportDocDate(d); setShowTransportDocDatePicker(false); }} onClose={() => setShowTransportDocDatePicker(false)} />
+      <DatePickerModal visible={showDatePicker} value={date} minDate={fyStart} maxDate={todayLocalISO()} onSelect={(d) => { setDate(d); setShowDatePicker(false); }} onClose={() => setShowDatePicker(false)} />
+      <DatePickerModal visible={showTransportDocDatePicker} value={transportDocDate || todayStr()} maxDate={todayLocalISO()} onSelect={(d) => { setTransportDocDate(d); setShowTransportDocDatePicker(false); }} onClose={() => setShowTransportDocDatePicker(false)} />
 
       <AddCustomerDrawer
         ref={addCustomerRef}

@@ -16,6 +16,14 @@ export function todayLocalISO(d: Date = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Add days to a YYYY-MM-DD accounting date without UTC shift. */
+export function addLocalDays(date: string, days: number): string {
+  if (!date) return '';
+  const d = new Date(`${String(date).slice(0, 10)}T00:00:00`);
+  d.setDate(d.getDate() + Number(days || 0));
+  return todayLocalISO(d);
+}
+
 function toISO(d: Date): string {
   return todayLocalISO(d);
 }

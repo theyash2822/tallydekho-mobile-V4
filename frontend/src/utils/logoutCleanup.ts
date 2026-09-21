@@ -25,7 +25,7 @@ export async function sweepTenantAsyncStorage(): Promise<string[]> {
   const remove = [...new Set([...LOGOUT_ALWAYS_REMOVE, ...scoped])];
   if (remove.length) await AsyncStorage.multiRemove(remove);
   clearLedgerCache();
-  clearStockListCache();
+  clearStockListCache({ all: true });
   return remove;
 }
 

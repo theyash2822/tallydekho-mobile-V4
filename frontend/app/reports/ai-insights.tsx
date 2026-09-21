@@ -15,6 +15,7 @@ import { getAIInsights, getAIInsightsHistory } from '../../src/services/api';
 import { fyInfoToParam } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { shareSummaryTablePdf, companyFromAuth } from '../../src/utils/multiShare';
+import { todayLocalISO } from '../../src/utils/periodDates';
 
 const AMBER       = '#A89060';
 const AMBER_LIGHT = '#D4BC94';
@@ -384,7 +385,7 @@ export default function AIInsightsScreen() {
   // Detect if selectedFY is the current (active) financial year
   const isCurrFY = useMemo(() => {
     if (!selectedFY?.endDate) return true;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocalISO();
     return today <= selectedFY.endDate;
   }, [selectedFY?.endDate]);
 

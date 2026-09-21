@@ -43,6 +43,7 @@ import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
 import { useRbasCreate } from '../../src/hooks/useRbasCreate';
 import { shareVoucherPdfByRef } from '../../src/utils/voucherPdf';
 import { useTranslation } from 'react-i18next';
+import { todayLocalISO } from '../../src/utils/periodDates';
 import { useRequireCapability } from '../../src/components/RequireCapability';
 
 // ── Helpers (mirrors create-invoice.tsx) ─────────────────────────────────────
@@ -768,14 +769,14 @@ export default function CreateReceiptVoucher() {
         visible={showDatePicker}
         value={date}
         minDate={fyStart}
-        maxDate={new Date().toISOString().slice(0, 10)}
+        maxDate={todayLocalISO()}
         onSelect={(d) => { setDate(d); setShowDatePicker(false); }}
         onClose={() => setShowDatePicker(false)}
       />
       <DatePickerModal
         visible={showInstrumentDatePicker}
         value={instrumentDate || todayStr()}
-        maxDate={new Date().toISOString().slice(0, 10)}
+        maxDate={todayLocalISO()}
         onSelect={(d) => { setInstrumentDate(d); setShowInstrumentDatePicker(false); }}
         onClose={() => setShowInstrumentDatePicker(false)}
       />

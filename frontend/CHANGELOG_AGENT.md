@@ -1,5 +1,19 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-21 — Cash/bank label + workspace-scoped stock cache clear
+
+Dashboard `netCash` string is “Cash & Bank Balance”. `clearStockListCache()`
+clears the active workspace only; logout still clears all.
+
+---
+
+## 2026-09-21 — Create/maxDate uses device calendar
+
+Invoice, receipt, payment, stock transfer/adjust, and AI insights date-only
+fields use `todayLocalISO()` instead of UTC `toISOString().slice(0,10)`.
+
+---
+
 ## 2026-09-19 — Insufficient credits is 402, not logout
 
 `kindFromStatus(402)` is validation. Existing `INSUFFICIENT_CREDITS` toast codes
