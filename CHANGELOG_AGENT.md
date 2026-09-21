@@ -1,3 +1,9 @@
+## 2026-09-21 — Browser-local period dates
+
+`todayLocalISO` / `resolvePeriodDates` use the device calendar, not UTC.
+
+---
+
 ## 2026-09-19 — Snapshot branch `19-09-2026-final-code`
 
 Pushed local `cursor` tip (billing 402 = validation; mixed/split codes removed)

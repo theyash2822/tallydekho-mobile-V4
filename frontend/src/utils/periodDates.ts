@@ -8,8 +8,16 @@ const PERIOD_DAYS: Record<DashboardPeriod, number> = {
   '6M': 180,
 };
 
+/** Calendar date in the device timezone (not UTC). */
+export function todayLocalISO(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function toISO(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return todayLocalISO(d);
 }
 
 export type FyBounds = { from?: string; to?: string };
