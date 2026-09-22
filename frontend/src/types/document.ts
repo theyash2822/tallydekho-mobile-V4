@@ -64,6 +64,8 @@ export interface ItemLine {
   amount: number;
   godown?: string;
   batch?: string;
+  /** Sales / purchase ledger this line is posted to (Tally accounting allocation). */
+  ledgerName?: string;
   /** Stock Journal only: 'out' is Source (Consumption), 'in' is Destination. */
   direction?: 'in' | 'out';
 }

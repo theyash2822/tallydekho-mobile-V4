@@ -1716,33 +1716,43 @@ export default function CreatePurchaseInvoiceScreen() {
         }}
       />
 
-      {/* Success Overlay */}
-      {showSuccess && submitResult && (
+      {/* Success Overlay — native Modal sits above Expo Dev Client FAB (blue gear) */}
+      <Modal
+        visible={!!(showSuccess && submitResult)}
+        transparent
+        animationType="fade"
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        onRequestClose={() => {
+          setShowSuccess(false);
+          router.back();
+        }}
+      >
         <View style={ss.overlay}>
           <View style={ss.card}>
             <View style={ss.iconWrap}>
               <Ionicons
-                name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
+                name={submitResult?.isQueued ? 'time-outline' : 'checkmark-circle'}
                 size={56}
-                color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
+                color={submitResult?.isQueued ? COLORS.warning : COLORS.positive}
               />
             </View>
-            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : 'Purchase Invoice Submitted!'}</Text>
+            <Text style={ss.title}>{submitResult?.isQueued ? 'Saved. Pending Sync' : 'Purchase Invoice Submitted!'}</Text>
             <Text style={ss.sub}>
-              {submitResult.isQueued
+              {submitResult?.isQueued
                 ? 'Entry queued. Will push to Tally when desktop reconnects.'
                 : 'Purchase invoice pushed to Tally successfully.'}
             </Text>
-            {submitResult.numberingPolicy === 'tallydekho_series' && submitResult.invoiceNumber && (
+            {submitResult?.numberingPolicy === 'tallydekho_series' && submitResult?.invoiceNumber && (
               <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
                 <Text style={ss.refLabel}>Invoice No.</Text>
-                <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.invoiceNumber}</Text>
+                <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult?.invoiceNumber}</Text>
               </View>
             )}
-            {!!submitResult.tdkRef && (
+            {!!submitResult?.tdkRef && (
               <View style={ss.refBadge}>
                 <Text style={ss.refLabel}>Reference No.</Text>
-                <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
+                <Text style={ss.refVal}>{submitResult?.tdkRef}</Text>
               </View>
             )}
 
@@ -1750,8 +1760,8 @@ export default function CreatePurchaseInvoiceScreen() {
               style={ss.previewBtn}
               activeOpacity={0.85}
               onPress={() => {
-                if (!submitResult.tdkRef) return;
-                safePush(router, `/sales/invoice-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}&type=purchase_invoice` as any);
+                if (!submitResult?.tdkRef) return;
+                safePush(router, `/sales/invoice-preview?tdkRef=${encodeURIComponent(submitResult?.tdkRef)}&type=purchase_invoice` as any);
               }}
             >
               <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
@@ -1763,18 +1773,18 @@ export default function CreatePurchaseInvoiceScreen() {
               activeOpacity={0.85}
               disabled={sharePdfLoading}
               onPress={async () => {
-                if (!submitResult.tdkRef || !company?.guid) return;
+                if (!submitResult?.tdkRef || !company?.guid) return;
                 setSharePdfLoading(true);
                 try {
-                  const isTDSeries = submitResult.numberingPolicy === 'tallydekho_series';
-                  const res = await invoiceSharePdf(submitResult.tdkRef, company.guid, !isTDSeries, isTDSeries ? 0 : 10000);
+                  const isTDSeries = submitResult?.numberingPolicy === 'tallydekho_series';
+                  const res = await invoiceSharePdf(submitResult?.tdkRef, company.guid, !isTDSeries, isTDSeries ? 0 : 10000);
                   const docData = res?.data;
                   if (!docData) throw new Error('No invoice data returned');
 
                   const pdfDoc = toVoucherDocument(docData, { documentType: 'purchase_invoice' });
                   await shareVoucherPdf(pdfDoc, {
                     companyGuid: company.guid,
-                    fileName: docData.fileName || `PurchaseInvoice-${submitResult.tdkRef}.pdf`,
+                    fileName: docData.fileName || `PurchaseInvoice-${submitResult?.tdkRef}.pdf`,
                     onBeforeShare: () => setSharePdfLoading(false),
                     fallback: async () => {
                       Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
@@ -1802,7 +1812,7 @@ export default function CreatePurchaseInvoiceScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      )}
+      </Modal>
 
     </SafeAreaView>
   );

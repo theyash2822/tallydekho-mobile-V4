@@ -12,7 +12,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Platform, TextInput, TextInputProps, ActivityIndicator, Keyboard, KeyboardAvoidingView,
+  Platform, TextInput, TextInputProps, ActivityIndicator, Keyboard, KeyboardAvoidingView, Modal,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1444,42 +1444,52 @@ export default function CreateDeliveryNoteScreen() {
         title="LR / Bill of Lading Date"
       />
 
-      {/* Success Overlay */}
-      {showSuccess && submitResult && (
+      {/* Success Overlay — native Modal sits above Expo Dev Client FAB (blue gear) */}
+      <Modal
+        visible={!!(showSuccess && submitResult)}
+        transparent
+        animationType="fade"
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        onRequestClose={() => {
+          setShowSuccess(false);
+          router.back();
+        }}
+      >
         <View style={ss.overlay}>
           <View style={ss.card}>
             <View style={ss.iconWrap}>
               <Ionicons
-                name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
+                name={submitResult?.isQueued ? 'time-outline' : 'checkmark-circle'}
                 size={56}
-                color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
+                color={submitResult?.isQueued ? COLORS.warning : COLORS.positive}
               />
             </View>
-            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : 'Delivery Note Submitted!'}</Text>
+            <Text style={ss.title}>{submitResult?.isQueued ? 'Saved. Pending Sync' : 'Delivery Note Submitted!'}</Text>
             <Text style={ss.sub}>
-              {submitResult.isQueued
+              {submitResult?.isQueued
                 ? 'Entry queued. Will push to Tally when desktop reconnects.'
                 : 'Delivery note pushed to Tally successfully.'}
             </Text>
-            <View style={[ss.refBadge, submitResult.voucherNumber ? { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' } : null]}>
+            <View style={[ss.refBadge, submitResult?.voucherNumber ? { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' } : null]}>
               <Text style={ss.refLabel}>Delivery Note No.</Text>
-              <Text style={[ss.refVal, submitResult.voucherNumber ? { color: '#166534' } : { color: COLORS.textSecondary }]}>
-                {submitResult.voucherNumber || 'Pending from TallyPrime'}
+              <Text style={[ss.refVal, submitResult?.voucherNumber ? { color: '#166534' } : { color: COLORS.textSecondary }]}>
+                {submitResult?.voucherNumber || 'Pending from TallyPrime'}
               </Text>
             </View>
-            {!!submitResult.tdkRef && (
+            {!!submitResult?.tdkRef && (
               <View style={ss.refBadge}>
                 <Text style={ss.refLabel}>Reference No.</Text>
-                <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
+                <Text style={ss.refVal}>{submitResult?.tdkRef}</Text>
               </View>
             )}
 
-            {!!submitResult.tdkRef && (
+            {!!submitResult?.tdkRef && (
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <TouchableOpacity
                   style={[ss.previewBtn, { flex: 1 }]}
                   activeOpacity={0.85}
-                  onPress={() => safePush(router, `/sales/delivery-note-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef!)}` as any)}
+                  onPress={() => safePush(router, `/sales/delivery-note-preview?tdkRef=${encodeURIComponent(submitResult?.tdkRef!)}` as any)}
                 >
                   <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
                   <Text style={ss.previewBtnTxt}>Preview</Text>
@@ -1503,7 +1513,7 @@ export default function CreateDeliveryNoteScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      )}
+      </Modal>
 
     </SafeAreaView>
   );

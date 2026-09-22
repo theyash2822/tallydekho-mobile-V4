@@ -279,6 +279,7 @@ function mapItems(items: ItemLine[] = []): CommercialPrintModel['items'] {
     };
     const secQty = ext.secondaryQty ?? ext.alternateQty;
     const descLines: string[] = [];
+    if (item.ledgerName) descLines.push(item.ledgerName);
     if (item.description && item.description !== item.name) {
       descLines.push(item.description);
     }

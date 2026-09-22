@@ -182,11 +182,15 @@ export default function CommercialDocumentPreview({
     if (sgst) totRows.push({ label: 'Output SGST', value: sgst });
     if (igst) totRows.push({ label: 'Output IGST', value: igst });
     if (t.cessTotal || sumTaxField('cess')) totRows.push({ label: 'Cess', value: t.cessTotal || sumTaxField('cess') });
+    let chargeHasRoundOff = false;
     for (const c of model.charges) {
       const n = parseFloat(String(c.amount).replace(/,/g, ''));
+      if (/round\s*(ed)?\s*off/i.test(c.label || '')) chargeHasRoundOff = true;
       if (Number.isFinite(n) && n !== 0) totRows.push({ label: c.label, value: n });
     }
-    if (t.roundOff) totRows.push({ label: 'Round Off', value: t.roundOff });
+    if (t.roundOff && !chargeHasRoundOff) {
+      totRows.push({ label: t.roundOffLabel || 'Round Off', value: t.roundOff });
+    }
   }
 
   const words = model.amountInWords || t.totalInWords || amountInWords(t.total || 0);
@@ -298,6 +302,7 @@ export default function CommercialDocumentPreview({
                         <Text style={[p.gCell, { width: COL.sl, color: INK_FAINT }]}>{idx + 1}</Text>
                         <View style={[p.gCellBox, { width: COL.name }]}>
                           <Text style={p.gCellName}>{item.name}</Text>
+                          {!!item.ledgerName && <Text style={p.gCellSub}>{item.ledgerName}</Text>}
                           {!!item.description && <Text style={p.gCellSub}>{item.description}</Text>}
                           {!!sec && (
                             <Text style={p.gCellSub}>

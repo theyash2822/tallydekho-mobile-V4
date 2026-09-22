@@ -1146,41 +1146,51 @@ export default function CreatePurchaseOrderScreen() {
       <DatePickerModal visible={showDatePicker} value={date} minDate={fyStart} onSelect={(d) => { setDate(d); setShowDatePicker(false); }} onClose={() => setShowDatePicker(false)} title="Order Date" />
       <DatePickerModal visible={showDueDatePicker} value={dueDate || date} onSelect={(d) => { setDueDate(d); setShowDueDatePicker(false); }} onClose={() => setShowDueDatePicker(false)} title="Due Date" />
 
-      {/* Success Overlay */}
-      {showSuccess && submitResult && (
+      {/* Success Overlay — native Modal sits above Expo Dev Client FAB (blue gear) */}
+      <Modal
+        visible={!!(showSuccess && submitResult)}
+        transparent
+        animationType="fade"
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        onRequestClose={() => {
+          setShowSuccess(false);
+          router.back();
+        }}
+      >
         <View style={ss.overlay}>
           <View style={ss.card}>
             <View style={ss.iconWrap}>
               <Ionicons
-                name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
+                name={submitResult?.isQueued ? 'time-outline' : 'checkmark-circle'}
                 size={56}
-                color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
+                color={submitResult?.isQueued ? COLORS.warning : COLORS.positive}
               />
             </View>
-            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : 'Purchase Order Submitted!'}</Text>
+            <Text style={ss.title}>{submitResult?.isQueued ? 'Saved. Pending Sync' : 'Purchase Order Submitted!'}</Text>
             <Text style={ss.sub}>
-              {submitResult.isQueued
+              {submitResult?.isQueued
                 ? 'Entry queued. Will push to Tally when desktop reconnects.'
                 : 'Purchase order pushed to Tally successfully.'}
             </Text>
-            {!!submitResult.voucherNumber && (
+            {!!submitResult?.voucherNumber && (
               <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
                 <Text style={ss.refLabel}>Order No.</Text>
-                <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.voucherNumber}</Text>
+                <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult?.voucherNumber}</Text>
               </View>
             )}
-            {!!submitResult.tdkRef && (
+            {!!submitResult?.tdkRef && (
               <View style={ss.refBadge}>
                 <Text style={ss.refLabel}>Reference No.</Text>
-                <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
+                <Text style={ss.refVal}>{submitResult?.tdkRef}</Text>
               </View>
             )}
 
-            {!!submitResult.tdkRef && (
+            {!!submitResult?.tdkRef && (
               <TouchableOpacity
                 style={ss.previewBtn}
                 activeOpacity={0.85}
-                onPress={() => safePush(router, `/purchase/order-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}` as any)}
+                onPress={() => safePush(router, `/purchase/order-preview?tdkRef=${encodeURIComponent(submitResult?.tdkRef)}` as any)}
               >
                 <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
                 <Text style={ss.previewBtnTxt}>Preview</Text>
@@ -1196,12 +1206,12 @@ export default function CreatePurchaseOrderScreen() {
               onPress={async () => {
                 setSharePdfLoading(true);
                 try {
-                  const fileName = `PurchaseOrder-${submitResult.voucherNumber || submitResult.tdkRef || Date.now()}.pdf`;
+                  const fileName = `PurchaseOrder-${submitResult?.voucherNumber || submitResult?.tdkRef || Date.now()}.pdf`;
                   const noSharing = async () => {
                     Toast.show({ type: 'info', text1: 'Sharing not available on this device' });
                   };
-                  if (submitResult.tdkRef && company?.guid) {
-                    await shareVoucherPdfByRef(submitResult.tdkRef, company.guid, {
+                  if (submitResult?.tdkRef && company?.guid) {
+                    await shareVoucherPdfByRef(submitResult?.tdkRef, company.guid, {
                       documentType: 'purchase_order',
                       fileName,
                       onBeforeShare: () => setSharePdfLoading(false),
@@ -1248,7 +1258,7 @@ export default function CreatePurchaseOrderScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      )}
+      </Modal>
 
     </SafeAreaView>
   );

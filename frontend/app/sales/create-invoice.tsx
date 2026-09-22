@@ -190,12 +190,13 @@ interface InvoiceItem {
   discountType: '%' | 'flat';
   discount: string;
   taxEntries: TaxLedgerEntry[];
+  hsn?: string;
 }
 
 const newItem = (warehouseName = ''): InvoiceItem => ({
   id: Date.now().toString() + Math.random().toString(36).slice(2),
   warehouse: warehouseName, product: '', qty: '1', unit: 'pcs', rate: '',
-  discountType: '%', discount: '0', taxEntries: [],
+  discountType: '%', discount: '0', taxEntries: [], hsn: undefined,
 });
 
 type ModalState = { type: 'unit'; itemId: string } | null;
@@ -1291,6 +1292,7 @@ export default function CreateSalesInvoiceScreen() {
       product: opt.value,
       unit: si?.unit || i.unit,
       rate: si?.rate != null ? String(si.rate) : i.rate,
+      hsn: si?.hsn || undefined,
       warehouse: '',
     } : i));
     if (!si || !company?.guid) {
@@ -1318,7 +1320,7 @@ export default function CreateSalesInvoiceScreen() {
   }, [stockItems, company?.guid, warehouses, updateItem]);
 
   const handleProductClear = useCallback((itemId: string) => {
-    setItems(prev => prev.map(i => i.id === itemId ? { ...i, product: '', unit: 'pcs', rate: '', warehouse: '' } : i));
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, product: '', unit: 'pcs', rate: '', warehouse: '', hsn: undefined } : i));
     setItemGodowns(prev => { const n = { ...prev }; delete n[itemId]; return n; });
   }, []);
 
@@ -1492,6 +1494,7 @@ export default function CreateSalesInvoiceScreen() {
           salesLedger: ledger,
           godown: item.warehouse || warehouses[0]?.name || 'Main Location',
           unit: item.unit || '',
+          hsn: item.hsn || stockItems.find(s => s.name === item.product)?.hsn || undefined,
           discountType: item.discountType,
           discount: parseFloat(item.discount) || 0,
           taxEntries: item.taxEntries,
@@ -2286,31 +2289,42 @@ export default function CreateSalesInvoiceScreen() {
         }}
       />
 
-      {/* Success Overlay */}
-      {showSuccess && submitResult && (
+      {/* Success Overlay — native Modal sits above Expo Dev Client FAB (blue gear) */}
+      <Modal
+        visible={!!(showSuccess && submitResult)}
+        transparent
+        animationType="fade"
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        onRequestClose={() => {
+          setShowSuccess(false);
+          setSharePdfLoading(false);
+          router.back();
+        }}
+      >
         <View style={ss.overlay}>
           <View style={ss.card}>
             <View style={ss.iconWrap}>
               <Ionicons
-                name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
+                name={submitResult?.isQueued ? 'time-outline' : 'checkmark-circle'}
                 size={56}
-                color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
+                color={submitResult?.isQueued ? COLORS.warning : COLORS.positive}
               />
             </View>
-            <Text style={ss.title}>{submitResult.isQueued ? 'Saved. Pending Sync' : (isProforma ? 'Proforma Submitted!' : (convertProformaTdkRef ? 'Converted to Sales Invoice!' : 'Invoice Submitted!'))}</Text>
+            <Text style={ss.title}>{submitResult?.isQueued ? 'Saved. Pending Sync' : (isProforma ? 'Proforma Submitted!' : (convertProformaTdkRef ? 'Converted to Sales Invoice!' : 'Invoice Submitted!'))}</Text>
             <Text style={ss.sub}>
-              {submitResult.isQueued
+              {submitResult?.isQueued
                 ? 'Entry queued. Will push to Tally when desktop reconnects.'
                 : (isProforma ? 'Proforma pushed to Tally as optional Sales.' : (convertProformaTdkRef ? 'Same Tally voucher is now a regular Sales Invoice.' : 'Invoice pushed to Tally successfully.'))}
             </Text>
             {/* TallyDekho Series: show invoice number immediately */}
-            {!!submitResult.invoiceNumber && (
+            {!!submitResult?.invoiceNumber && (
               <View style={[ss.refBadge, { backgroundColor: '#F0FDF4', borderColor: '#22C55E44' }]}>
                 <Text style={ss.refLabel}>Invoice No.</Text>
                 <Text style={[ss.refVal, { color: '#166534' }]}>{submitResult.invoiceNumber}</Text>
               </View>
             )}
-            {!!submitResult.tdkRef && (
+            {!!submitResult?.tdkRef && (
               <View style={ss.refBadge}>
                 <Text style={ss.refLabel}>Reference No.</Text>
                 <Text style={ss.refVal}>{submitResult.tdkRef}</Text>
@@ -2322,7 +2336,7 @@ export default function CreateSalesInvoiceScreen() {
               style={ss.previewBtn}
               activeOpacity={0.85}
               onPress={() => {
-                if (!submitResult.tdkRef) return;
+                if (!submitResult?.tdkRef) return;
                 const typeQ = isProforma ? '&type=proforma_invoice' : '&type=sales_invoice';
                 safePush(router, `/sales/invoice-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}${typeQ}` as any);
               }}
@@ -2338,7 +2352,7 @@ export default function CreateSalesInvoiceScreen() {
               activeOpacity={0.85}
               disabled={sharePdfLoading}
               onPress={async () => {
-                if (!submitResult.tdkRef || !company?.guid) return;
+                if (!submitResult?.tdkRef || !company?.guid) return;
                 setSharePdfLoading(true);
                 try {
                   // TallyDekho Series: number is immediate — no wait needed
@@ -2394,7 +2408,7 @@ export default function CreateSalesInvoiceScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      )}
+      </Modal>
 
     </SafeAreaView>
   );

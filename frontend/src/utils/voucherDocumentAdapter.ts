@@ -93,6 +93,7 @@ function mapItems(raw: any): ItemLine[] {
     amount: num(item.amount),
     godown: item.godown || undefined,
     batch: item.batch || undefined,
+    ledgerName: item.ledgerName || item.salesLedger || item.purchaseLedger || undefined,
     direction: item.direction === 'in' || item.direction === 'out' ? item.direction : undefined,
   }));
 }
@@ -483,6 +484,151 @@ function mapSyncedLedgerEntries(
 }
 
 /** Maps the Tally-synced voucher payload from GET /vouchers/:guid. */
+function isTaxOrRoundOffLedger(name: string): boolean {
+  return /cgst|sgst|igst|utgst|\bcess\b|round\s*(ed)?\s*off/i.test(name);
+}
+
+function isBankOrCashLedger(name: string): boolean {
+  return /\b(bank|cash|petty\s*cash|od\s*a\/?c|overdraft)\b/i.test(name);
+}
+
+/** Recover party when Tally left it null or stamped the bank on Receipt/Payment. */
+function resolvePartyName(voucher: any, ledgerEntries: any[], documentType: string): string | undefined {
+  const stored = String(voucher?.party_name || '').trim();
+  const vt = String(voucher?.voucher_type || documentType || '');
+  const isReceipt = /receipt/i.test(vt);
+  const isPayment = /payment/i.test(vt);
+  const purchase = /purchase|debit\s*note/i.test(vt);
+
+  if (stored && !(isReceipt || isPayment) && !isBankOrCashLedger(stored)) return stored;
+  if (stored && (isReceipt || isPayment) && !isBankOrCashLedger(stored)) return stored;
+
+  const preferredSide = isReceipt ? 'cr' : isPayment || !purchase ? 'dr' : 'cr';
+  const candidates = (ledgerEntries || [])
+    .map((e) => ({
+      name: String(e.ledger_name || e.ledgerName || '').trim(),
+      amount: Math.abs(num(e.amount)),
+      side: String(e.dr_cr || '').toLowerCase() || (num(e.amount) < 0 ? 'dr' : 'cr'),
+    }))
+    .filter((e) => e.name && !isTaxOrRoundOffLedger(e.name) && !isBankOrCashLedger(e.name));
+
+  const preferred = candidates
+    .filter((e) => e.side === preferredSide)
+    .sort((a, b) => b.amount - a.amount);
+  if (preferred[0]?.name) return preferred[0].name;
+  candidates.sort((a, b) => b.amount - a.amount);
+  return candidates[0]?.name || (stored && !isBankOrCashLedger(stored) ? stored : undefined);
+}
+
+/**
+ * Tally prints the sales/purchase ledger under each goods line. Synced inventory
+ * rows don't carry it — it lives on voucher_ledger_entries. Match a non-party,
+ * non-tax ledger whose amount equals the line (or the goods total).
+ */
+function isRoundOffName(name: string): boolean {
+  return /round\s*(ed)?\s*off/i.test(name);
+}
+
+/**
+ * Extra lines Tally prints under the goods row: freight, packing, their tax,
+ * and round-off. Prefer the app payload (`logistics`), then any synced ledger
+ * that is not the party, the sales ledger, or CGST/SGST/IGST.
+ */
+function chargesFromSyncedVoucher(
+  data: any,
+  partyName: string,
+  itemLedgerNames: Set<string>
+): { additionalCharges: ChargeLine[]; roundOff: number; roundOffLabel?: string } {
+  const additionalCharges: ChargeLine[] = [];
+  let roundOff = 0;
+  let roundOffLabel: string | undefined;
+  const known = new Set<string>();
+
+  const remember = (name: string) => {
+    const key = name.trim().toLowerCase();
+    if (key) known.add(key);
+  };
+
+  for (const l of Array.isArray(data.logistics) ? data.logistics : []) {
+    const name = String(l.ledgerName || l.description || '').trim();
+    if (!name) continue;
+    const amount = num(l.amount);
+    if (isRoundOffName(name)) {
+      roundOff += amount;
+      roundOffLabel = name;
+      remember(name);
+      continue;
+    }
+    const taxes = (Array.isArray(l.taxes) ? l.taxes : []).map((t: any) => {
+      const description = String(t.ledgerName || t.description || 'Tax').trim();
+      remember(description);
+      return {
+        description,
+        rate: num(t.taxRate ?? t.rate),
+        amount: num(t.taxAmount ?? t.amount),
+      };
+    }).filter((t: { amount: number }) => t.amount);
+    additionalCharges.push({ description: name, amount, taxes });
+    remember(name);
+  }
+
+  const skip = new Set<string>([partyName.trim().toLowerCase(), ...itemLedgerNames]);
+  for (const e of data.ledger_entries || []) {
+    const name = String(e.ledger_name || e.ledgerName || '').trim();
+    const key = name.toLowerCase();
+    if (!name || known.has(key) || skip.has(key)) continue;
+    if (isBankOrCashLedger(name)) continue;
+    if (/cgst|sgst|igst|utgst|\bcess\b/i.test(name)) continue;
+    const signed = num(e.amount);
+    if (!signed) continue;
+    if (isRoundOffName(name)) {
+      roundOff += signed;
+      roundOffLabel = roundOffLabel || name;
+      remember(name);
+      continue;
+    }
+    additionalCharges.push({ description: name, amount: signed });
+    remember(name);
+  }
+
+  return { additionalCharges, roundOff, roundOffLabel };
+}
+
+function salesLedgerByItemIndex(
+  items: any[],
+  ledgerEntries: any[],
+  partyName?: string
+): Map<number, string> {
+  const out = new Map<number, string>();
+  const party = String(partyName || '').trim().toLowerCase();
+  const candidates = (ledgerEntries || [])
+    .map((e) => ({
+      name: String(e.ledger_name || e.ledgerName || '').trim(),
+      amount: Math.abs(num(e.amount)),
+    }))
+    .filter((e) => e.name && e.name.toLowerCase() !== party && !isTaxOrRoundOffLedger(e.name) && !isBankOrCashLedger(e.name));
+
+  const used = new Set<number>();
+  items.forEach((item, i) => {
+    const amt = Math.abs(num(item.amount));
+    const idx = candidates.findIndex((c, ci) => !used.has(ci) && Math.abs(c.amount - amt) < 0.05);
+    if (idx >= 0) {
+      used.add(idx);
+      out.set(i, candidates[idx].name);
+    }
+  });
+
+  const missing = items.map((_, i) => i).filter((i) => !out.has(i));
+  if (missing.length) {
+    const sum = missing.reduce((s, i) => s + Math.abs(num(items[i].amount)), 0);
+    const cover = candidates.findIndex((c, ci) => !used.has(ci) && Math.abs(c.amount - sum) < 0.05);
+    if (cover >= 0) {
+      for (const i of missing) out.set(i, candidates[cover].name);
+    }
+  }
+  return out;
+}
+
 export function fromTallyVoucher(
   data: any,
   companyName: string,
@@ -498,6 +644,7 @@ export function fromTallyVoucher(
   const dd = data.dispatch_details || null;
   const collectPayment = data.collect_payment || null;
   const layout = deriveLayout(documentType);
+  const partyName = resolvePartyName(v, data.ledger_entries || [], documentType);
 
   // party_amount is the per-party ledger entry; v.amount is wrong on
   // multi-party vouchers.
@@ -505,14 +652,16 @@ export function fromTallyVoucher(
   const ledgerEntries = mapSyncedLedgerEntries(
     data,
     documentType,
-    v.party_name,
+    partyName,
     totalAmount
   );
   const drTotal = ledgerEntries.reduce((s, e) => s + num(e.debit), 0);
   const crTotal = ledgerEntries.reduce((s, e) => s + num(e.credit), 0);
   const throughEntry = ledgerEntries.find((e) => e.reference === 'Through');
 
-  const items: ItemLine[] = (data.items || []).map((item: any, i: number) => ({
+  const rawItems = data.items || [];
+  const ledgerByIndex = salesLedgerByItemIndex(rawItems, data.ledger_entries || [], partyName);
+  const items: ItemLine[] = rawItems.map((item: any, i: number) => ({
     id: String(item.id || i),
     name: item.stock_item_name || '—',
     hsn: item.hsn || undefined,
@@ -524,6 +673,13 @@ export function fromTallyVoucher(
     amount: num(item.amount),
     godown: item.godown_name || undefined,
     batch: item.batch_name || undefined,
+    ledgerName:
+      item.sales_ledger ||
+      item.salesLedger ||
+      item.purchaseLedger ||
+      item.ledgerName ||
+      ledgerByIndex.get(i) ||
+      undefined,
   }));
 
   // Prefer gst_voucher_details when amounts are present. Many recent syncs leave
@@ -560,10 +716,11 @@ export function fromTallyVoucher(
       }
       const total = cgst + sgst + igst + cess;
       if (total > 0) {
+        const goods = items.reduce((s, i) => s + Math.abs(i.amount), 0);
         taxes = [{
           description: 'GST',
           rate: 0,
-          taxableAmount: Math.max(0, totalAmount - total),
+          taxableAmount: goods > 0 ? goods : Math.max(0, totalAmount - total),
           cgst: cgst || undefined,
           sgst: sgst || undefined,
           igst: igst || undefined,
@@ -585,7 +742,18 @@ export function fromTallyVoucher(
   }
 
   const taxTotal = taxes.reduce((s, t) => s + t.total, 0);
-  const taxableAmount = gstTaxable || (taxTotal > 0 ? totalAmount - taxTotal : totalAmount);
+  const goodsTotal = items.reduce((s, i) => s + Math.abs(i.amount), 0);
+  const taxableAmount = gstTaxable > 0
+    ? gstTaxable
+    : (goodsTotal > 0 ? goodsTotal : (taxTotal > 0 ? totalAmount - taxTotal : totalAmount));
+  const itemLedgers = new Set(
+    items.map((i) => (i.ledgerName || '').trim().toLowerCase()).filter(Boolean)
+  );
+  const { additionalCharges, roundOff, roundOffLabel } = chargesFromSyncedVoucher(
+    data,
+    partyName || '',
+    itemLedgers
+  );
 
   const tallyMeta: TallyMetadata = {
     referenceNo: v.reference || undefined,
@@ -621,20 +789,20 @@ export function fromTallyVoucher(
       email: co?.email || undefined,
       phone: co?.phone || undefined,
     },
-    party: v.party_name ? {
-      name: v.party_name,
+    party: partyName ? {
+      name: partyName,
       gstin: partyLedger?.gstin || undefined,
       address: partyLedger?.address || undefined,
       phone: partyLedger?.phone || undefined,
       state: partyLedger?.state_name || undefined,
     } : undefined,
-    billing: v.party_name ? {
-      name: v.party_name,
+    billing: partyName ? {
+      name: partyName,
       line1: partyLedger?.address || undefined,
       state: partyLedger?.state_name || undefined,
     } : undefined,
     shipping: dd?.ship_to || dd?.ship_to_address ? {
-      name: v.party_name || undefined,
+      name: partyName || undefined,
       line1: dd.ship_to_address || dd.ship_to_place || dd.ship_to,
       state: dd.ship_to_state || undefined,
     } : undefined,
@@ -642,6 +810,7 @@ export function fromTallyVoucher(
     tallyMeta,
     items: items.length ? items : undefined,
     taxes: taxes.length ? taxes : undefined,
+    additionalCharges: additionalCharges.length ? additionalCharges : undefined,
     ledgerEntries: ledgerEntries.length ? ledgerEntries : undefined,
     narration: v.narration || data.app_narration || undefined,
     reference: v.reference || undefined,
@@ -660,6 +829,8 @@ export function fromTallyVoucher(
       subtotal: taxableAmount > 0 ? taxableAmount : totalAmount,
       taxableAmount: taxableAmount > 0 ? taxableAmount : undefined,
       taxTotal: taxTotal > 0 ? taxTotal : undefined,
+      roundOff: roundOff || undefined,
+      roundOffLabel,
       cgstTotal: taxes[0]?.cgst,
       sgstTotal: taxes[0]?.sgst,
       igstTotal: taxes[0]?.igst,
