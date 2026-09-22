@@ -2574,8 +2574,9 @@ const ir = StyleSheet.create({
 });
 
 const acd = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
+  // Dim on flex root — absoluteFill inside transparent Modal collapses the scrim
+  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
+  backdrop: { flex: 1 },
   sheet: { width: '100%', maxHeight: '92%', backgroundColor: COLORS.cardBg, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
   footer: { paddingHorizontal: SPACING.md, paddingTop: 12, paddingBottom: 4, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
   handle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 4 },

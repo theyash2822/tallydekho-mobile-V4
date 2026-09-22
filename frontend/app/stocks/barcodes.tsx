@@ -1711,8 +1711,9 @@ const s = StyleSheet.create({
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 0 },
   headerIcon:    { width: 38, height: 44, alignItems: 'center', justifyContent: 'center' },
 
-  modalRoot:            { flex: 1, justifyContent: 'flex-end' },
-  modalBackdrop:        { ...StyleSheet.absoluteFillObject, backgroundColor: COLORS.overlay },
+  // Dim on flex root — absoluteFill inside transparent Modal collapses the scrim
+  modalRoot:            { flex: 1, justifyContent: 'flex-end', backgroundColor: COLORS.overlay },
+  modalBackdrop:        { flex: 1 },
   modalSheetContainer:  { width: '100%' },
   actionSheet:          { backgroundColor: COLORS.cardBg, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, paddingHorizontal: SPACING.md, width: '100%' },
   actionSheetHeader:    { width: '100%', alignSelf: 'stretch', paddingBottom: SPACING.sm },

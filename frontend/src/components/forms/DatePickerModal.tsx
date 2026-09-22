@@ -185,8 +185,9 @@ export default function DatePickerModal({ visible, value, onSelect, onClose, tit
 const CELL_SIZE = 44;
 
 const s = StyleSheet.create({
-  root: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
+  // Dim on flex root — absoluteFill inside transparent Modal collapses the scrim
+  root: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
+  backdrop: { flex: 1 },
   sheet: {
     backgroundColor: COLORS.cardBg,
     borderTopLeftRadius: 24, borderTopRightRadius: 24,

@@ -1479,8 +1479,8 @@ export default function LedgerScreen() {
       />
       {/* Ledger Type Selection Sheet */}
       <Modal visible={showTypeSheet} transparent animationType="slide" onRequestClose={() => setShowTypeSheet(false)}>
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setShowTypeSheet(false)} />
+        <View style={fm.tsOverlay}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setShowTypeSheet(false)} />
           <View style={fm.tsSheet}>
             <View style={fm.tsHandle} />
             <Text style={fm.tsTitle}>Add Ledger</Text>
@@ -1681,8 +1681,9 @@ const styles = StyleSheet.create({
 
 // Create Ledger Modal Styles
 const cs = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
+  // Dim on flex root — absoluteFill inside transparent Modal collapses the scrim
+  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
+  backdrop: { flex: 1 },
   sheetWrap: { maxHeight: '92%' },
   sheet: {
     backgroundColor: COLORS.cardBg,
@@ -1813,7 +1814,7 @@ const fm = StyleSheet.create({
   searchInput: { flex: 1, fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary },
   groupHint: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary, paddingHorizontal: SPACING.md },
   // Type Sheet styles (kept for the "Add Ledger" type sheet)
-  tsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
+  tsOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
   tsSheet: { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingBottom: 30 },
   tsHandle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   tsTitle: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary, paddingHorizontal: SPACING.md, marginBottom: 4 },

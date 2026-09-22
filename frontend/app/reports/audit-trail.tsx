@@ -403,8 +403,9 @@ function VTypeDropdown({
 }
 
 const dd = StyleSheet.create({
-  overlay:     { flex: 1, justifyContent: 'flex-end' },
-  backdrop:    { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.42)' },
+  // Dim on flex root — absoluteFill inside transparent Modal collapses the scrim
+  overlay:     { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.42)' },
+  backdrop:    { flex: 1 },
   sheetWrap:   { width: '100%' },
   sheet: {
     backgroundColor: COLORS.cardBg,

@@ -112,8 +112,9 @@ export default function AddPartyModal({ visible, type, onSave, onClose }: Props)
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, justifyContent: 'flex-end' },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
+  // Dim on flex root — absoluteFill inside transparent Modal collapses the scrim
+  root: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
+  overlay: { flex: 1 },
   sheet: { backgroundColor: COLORS.cardBg, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '88%', paddingTop: 12, width: '100%' },
   handle: { width: 40, height: 4, backgroundColor: COLORS.borderStrong, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.md, marginBottom: 0, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },

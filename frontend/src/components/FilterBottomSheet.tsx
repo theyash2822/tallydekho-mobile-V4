@@ -326,13 +326,14 @@ export function FilterChipGroup({
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
+  // Dim on flex root — absoluteFill inside transparent Modal collapses the scrim
   root: {
     flex: 1,
     justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    flex: 1,
   },
   sheet: {
     backgroundColor: COLORS.cardBg,
