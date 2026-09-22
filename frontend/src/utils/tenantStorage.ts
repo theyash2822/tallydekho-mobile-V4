@@ -73,6 +73,11 @@ export function prefillFeature(kind: 'tdso' | 'tdpo' | 'tdprf'): string {
   return `${kind}_to_invoice_prefill`;
 }
 
+/** Low Stock screen → Purchase Order line prefill (qty 0, rate from stock). */
+export function lowStockToPoPrefillFeature(): string {
+  return 'low_stock_to_po_prefill';
+}
+
 export function fyFeature(): string {
   return 'selected_fy';
 }

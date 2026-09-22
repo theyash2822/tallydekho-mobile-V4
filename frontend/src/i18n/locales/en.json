@@ -523,6 +523,7 @@
     "last7Days": "Last 7 days",
     "lowStock": "Low-Stock",
     "itemsBelowReorder": "Items below reorder",
+    "itemsBelowDefaultLevel": "Below default level",
     "fastMoving": "Fast-Moving",
     "activeSkus": "Active SKUs",
     "agedStock": "Aged Stock",

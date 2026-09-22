@@ -12,7 +12,7 @@ import { safePush } from '../../src/utils/safeNavigation';
 import { barcodePicker } from '../../src/utils/barcodePicker';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { currentTenantKey, prefillFeature } from '../../src/utils/tenantStorage';
+import { currentTenantKey, prefillFeature, lowStockToPoPrefillFeature } from '../../src/utils/tenantStorage';
 import {
   getParties, createPurchaseOrder, getStocks, getWarehouses,
   getPurchaseLedgerAccounts, getTaxLedgers, getChargeLedgers, getStockGodowns,
@@ -509,6 +509,46 @@ export default function CreatePurchaseOrderScreen() {
 
   // Universal numbering — Settings → Voucher Config only (no on-screen override)
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
+
+  // Low Stock → PO prefill (qty 0, rate from stock when available)
+  useEffect(() => {
+    if (!company?.guid) return;
+    const key = currentTenantKey(company.guid, lowStockToPoPrefillFeature());
+    AsyncStorage.getItem(key).then(raw => {
+      if (!raw) return;
+      try {
+        const d = JSON.parse(raw);
+        const PREFILL_TTL_MS = 30 * 60 * 1000;
+        const isFresh = d?.savedAt && (Date.now() - d.savedAt) < PREFILL_TTL_MS;
+        if (!isFresh || !Array.isArray(d.items) || d.items.length === 0) {
+          AsyncStorage.removeItem(key).catch(() => {});
+          return;
+        }
+        const autoWh = ''; // warehouses may not be loaded yet; user/auto-fill later
+        const mapped: OrderItem[] = d.items.map((it: any) => ({
+          id: Date.now().toString() + Math.random().toString(36).slice(2),
+          warehouse: String(it.warehouse || autoWh || ''),
+          product: String(it.product || ''),
+          qty: '0',
+          unit: String(it.unit || 'pcs'),
+          rate: it.rate != null && String(it.rate).trim() !== '' ? String(it.rate) : '',
+          discountType: (it.discountType === 'flat' ? 'flat' : '%') as '%' | 'flat',
+          discount: String(it.discount ?? '0'),
+          taxEntries: Array.isArray(it.taxEntries) ? it.taxEntries : [],
+        })).filter((it: OrderItem) => !!it.product);
+        if (mapped.length) {
+          setItems(mapped);
+          setStep(2);
+          Toast.show({
+            type: 'success',
+            text1: 'Items added to PO',
+            text2: `${mapped.length} stock line${mapped.length === 1 ? '' : 's'} · set qty to continue`,
+          });
+        }
+      } catch { /* ignore bad prefill */ }
+      AsyncStorage.removeItem(key).catch(() => {});
+    }).catch(() => {});
+  }, [company?.guid]);
 
   // Auto-scroll to top whenever step changes
   useEffect(() => {

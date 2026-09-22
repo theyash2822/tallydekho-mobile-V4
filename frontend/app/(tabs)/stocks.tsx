@@ -172,9 +172,9 @@ export default function StocksDashboard() {
     {
       id: 'low', label: t('stocks.lowStock'),
       value: String(d.lowStock ?? 0),
-      sub: t('stocks.itemsBelowReorder'),
+      sub: t('stocks.itemsBelowDefaultLevel', { defaultValue: 'Below default level' }),
       icon: 'alert-circle-outline', accent: COLORS.negative, tint: COLORS.negativeBg,
-      route: '/stocks/reorder-queue',
+      route: '/stocks/low-stock',
     },
     {
       id: 'fast', label: t('stocks.fastMoving'),
