@@ -21,7 +21,7 @@ import { safePush } from '../../src/utils/safeNavigation';
 import { currentTenantKey, lowStockToPoPrefillFeature } from '../../src/utils/tenantStorage';
 import { useTranslation } from 'react-i18next';
 
-type Bucket = 'all' | 'low' | 'out';
+type Bucket = 'low' | 'out';
 
 type LowStockRow = {
   id: string;
@@ -36,7 +36,6 @@ type LowStockRow = {
 };
 
 const TABS: { key: Bucket; label: string }[] = [
-  { key: 'all', label: 'All' },
   { key: 'low', label: 'Low stock' },
   { key: 'out', label: 'Out of stock' },
 ];
@@ -140,7 +139,7 @@ export default function LowStockScreen() {
 
   const [threshold, setThreshold] = useState(20);
   const [rows, setRows] = useState<LowStockRow[]>([]);
-  const [bucket, setBucket] = useState<Bucket>('all');
+  const [bucket, setBucket] = useState<Bucket>('low');
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
@@ -208,9 +207,8 @@ export default function LowStockScreen() {
   const outCount = useMemo(() => rows.filter(r => r.kind === 'out').length, [rows]);
 
   const filtered = useMemo(() => {
-    if (bucket === 'low') return rows.filter(r => r.kind === 'low');
     if (bucket === 'out') return rows.filter(r => r.kind === 'out');
-    return rows;
+    return rows.filter(r => r.kind === 'low');
   }, [rows, bucket]);
 
   const exitMultiSelect = useCallback(() => {
@@ -273,11 +271,9 @@ export default function LowStockScreen() {
     filtered.length > 0 && filtered.every(r => selectedIds.includes(r.id));
 
   const emptyTitle =
-    bucket === 'low'
-      ? `No items at or below ${threshold} units`
-      : bucket === 'out'
-        ? 'No zero-qty items'
-        : 'No low or out-of-stock items';
+    bucket === 'out'
+      ? 'No zero-qty items'
+      : `No items at or below ${threshold} units`;
 
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
