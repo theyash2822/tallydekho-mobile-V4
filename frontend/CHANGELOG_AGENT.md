@@ -1,5 +1,17 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-22 — Low Stock screen + Modal scrim restore
+
+New `/stocks/low-stock`: Low / Out tabs only; threshold =
+`default_low_stock_level` from inventory settings. Long-press multi-select and
+row Add to PO prefills create-order (qty 0, rate from closing when present).
+Hub Low-Stock tile routes here (Reorder Queue untouched). Shared Modal dim
+restored (flex root, not absoluteFill) for FAB Quick Actions, BottomModalShell,
+DatePicker, AddParty, FilterBottomSheet, ledger/audit/barcodes sheets.
+Branch `cursor` `1f71adf8`.
+
+---
+
 ## 2026-09-21 — Cash/bank label + workspace-scoped stock cache clear
 
 Dashboard `netCash` string is “Cash & Bank Balance”. `clearStockListCache()`
