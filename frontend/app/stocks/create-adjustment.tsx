@@ -529,6 +529,7 @@ export default function CreateStockAdjustmentScreen() {
                 style={ss.previewBtn}
                 activeOpacity={0.85}
                 onPress={() => {
+                  setShowSuccess(false);
                   router.replace(`/stocks/adjustment-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef!)}` as any);
                 }}
               >

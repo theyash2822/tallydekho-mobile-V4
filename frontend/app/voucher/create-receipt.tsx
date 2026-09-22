@@ -730,7 +730,8 @@ export default function CreateReceiptVoucher() {
               style={ss.previewBtn}
               activeOpacity={0.85}
               onPress={() => {
-                if (!submitResult.tdkRef) return;
+                if (!submitResult?.tdkRef) return;
+                setShowSuccess(false);
                 router.replace(`/voucher/receipt-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}` as any);
               }}
             >

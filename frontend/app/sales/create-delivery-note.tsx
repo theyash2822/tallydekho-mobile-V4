@@ -1489,7 +1489,11 @@ export default function CreateDeliveryNoteScreen() {
                 <TouchableOpacity
                   style={[ss.previewBtn, { flex: 1 }]}
                   activeOpacity={0.85}
-                  onPress={() => safePush(router, `/sales/delivery-note-preview?tdkRef=${encodeURIComponent(submitResult?.tdkRef!)}` as any)}
+                  onPress={() => {
+                    if (!submitResult?.tdkRef) return;
+                    setShowSuccess(false);
+                    safePush(router, `/sales/delivery-note-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}` as any);
+                  }}
                 >
                   <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
                   <Text style={ss.previewBtnTxt}>Preview</Text>

@@ -1190,7 +1190,11 @@ export default function CreatePurchaseOrderScreen() {
               <TouchableOpacity
                 style={ss.previewBtn}
                 activeOpacity={0.85}
-                onPress={() => safePush(router, `/purchase/order-preview?tdkRef=${encodeURIComponent(submitResult?.tdkRef)}` as any)}
+                onPress={() => {
+                  if (!submitResult?.tdkRef) return;
+                  setShowSuccess(false);
+                  safePush(router, `/purchase/order-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}` as any);
+                }}
               >
                 <Ionicons name="eye-outline" size={18} color={COLORS.brandPrimary} />
                 <Text style={ss.previewBtnTxt}>Preview</Text>

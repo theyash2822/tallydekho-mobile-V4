@@ -1761,6 +1761,7 @@ export default function CreatePurchaseInvoiceScreen() {
               activeOpacity={0.85}
               onPress={() => {
                 if (!submitResult?.tdkRef) return;
+                setShowSuccess(false);
                 safePush(router, `/sales/invoice-preview?tdkRef=${encodeURIComponent(submitResult?.tdkRef)}&type=purchase_invoice` as any);
               }}
             >

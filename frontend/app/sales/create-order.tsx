@@ -1177,6 +1177,7 @@ export default function CreateSalesOrderScreen() {
               activeOpacity={0.85}
               onPress={() => {
                 if (!submitResult?.tdkRef) return;
+                setShowSuccess(false);
                 safePush(router, `/sales/order-preview?tdkRef=${encodeURIComponent(submitResult?.tdkRef)}` as any);
               }}
             >

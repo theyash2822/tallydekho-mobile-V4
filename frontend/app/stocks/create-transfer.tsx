@@ -473,6 +473,7 @@ export default function CreateStockTransferScreen() {
                 style={ss.previewBtn}
                 activeOpacity={0.85}
                 onPress={() => {
+                  setShowSuccess(false);
                   router.replace(`/stocks/transfer-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef!)}` as any);
                 }}
               >

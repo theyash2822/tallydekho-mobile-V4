@@ -2338,6 +2338,7 @@ export default function CreateSalesInvoiceScreen() {
               onPress={() => {
                 if (!submitResult?.tdkRef) return;
                 const typeQ = isProforma ? '&type=proforma_invoice' : '&type=sales_invoice';
+                setShowSuccess(false);
                 safePush(router, `/sales/invoice-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}${typeQ}` as any);
               }}
             >
