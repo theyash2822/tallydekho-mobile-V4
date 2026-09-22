@@ -167,6 +167,7 @@ const QuickActionsModal: React.FC<QuickActionsModalProps> = ({ visible, onClose,
       onRequestClose={onClose}
     >
       <View style={s.overlay}>
+        {/* flex:1 (not absoluteFill) — absoluteFill inside RN Modal collapses and kills the dim */}
         <TouchableOpacity style={s.backdrop} onPress={onClose} activeOpacity={1} />
 
         <View style={[s.sheet, { maxHeight: sheetMaxHeight, paddingBottom: sheetBottomPad }]}>
@@ -265,10 +266,10 @@ const s = StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    flex: 1,
   },
   sheet: {
     backgroundColor: '#F4F4F4',

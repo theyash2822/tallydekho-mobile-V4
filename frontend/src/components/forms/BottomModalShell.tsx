@@ -131,6 +131,7 @@ export function BottomModalShell({
       onRequestClose={onClose}
     >
       <View style={shell.root}>
+        {/* flex:1 (not absoluteFill) so the dim fills the Modal — same as Quick Actions */}
         <TouchableOpacity
           style={shell.backdrop}
           activeOpacity={1}
@@ -156,10 +157,10 @@ const shell = StyleSheet.create({
   root: {
     flex: 1,
     justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.48)',
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.48)',
+    flex: 1,
   },
   kav: {
     width: '100%',
