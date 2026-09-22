@@ -1444,7 +1444,7 @@ export default function CreateDeliveryNoteScreen() {
         title="LR / Bill of Lading Date"
       />
 
-      {/* Success Overlay — native Modal sits above Expo Dev Client FAB (blue gear) */}
+      {/* Success Overlay — full-screen Modal + flex backdrop (absoluteFill collapses inside Modal) */}
       <Modal
         visible={!!(showSuccess && submitResult)}
         transparent
@@ -1633,7 +1633,7 @@ const si = StyleSheet.create({
 });
 
 const ss = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 999, elevation: 24 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   card: { backgroundColor: COLORS.cardBg, borderRadius: 24, padding: 28, width: '88%', alignItems: 'center', gap: 10 },
   iconWrap: { marginBottom: 4 },
   title: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary, textAlign: 'center' },

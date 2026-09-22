@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Keyboard,
+  TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Keyboard, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -348,28 +348,36 @@ export default function CreateExpenseVoucher() {
         onClose={() => setShowDatePicker(false)}
       />
 
-      {showSuccess && submitResult && (
+      {/* Success Overlay — full-screen Modal + flex backdrop */}
+      <Modal
+        visible={!!(showSuccess && submitResult)}
+        transparent
+        animationType="fade"
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        onRequestClose={() => { setShowSuccess(false); router.back(); }}
+      >
         <View style={s.successOverlay}>
           <View style={s.successCard}>
             <Ionicons
-              name={submitResult.isQueued ? 'time-outline' : 'checkmark-circle'}
+              name={submitResult?.isQueued ? 'time-outline' : 'checkmark-circle'}
               size={48}
-              color={submitResult.isQueued ? COLORS.warning : COLORS.positive}
+              color={submitResult?.isQueued ? COLORS.warning : COLORS.positive}
             />
             <Text style={s.successTitle}>
-              {submitResult.isQueued ? t('voucher.expenseQueued') : t('voucher.expenseSaved')}
+              {submitResult?.isQueued ? t('voucher.expenseQueued') : t('voucher.expenseSaved')}
             </Text>
             <Text style={s.successSub}>
-              {submitResult.isQueued
+              {submitResult?.isQueued
                 ? 'Entry queued. Will push to Tally when desktop reconnects.'
                 : 'Expense recorded as payment voucher.'}
             </Text>
-            {!!submitResult.tdkRef && <Text style={s.successRef}>{submitResult.tdkRef}</Text>}
+            {!!submitResult?.tdkRef && <Text style={s.successRef}>{submitResult.tdkRef}</Text>}
             <TouchableOpacity
               style={[s.btnPrimary, { width: '100%' }]}
               onPress={() => {
                 setShowSuccess(false);
-                if (submitResult.tdkRef) {
+                if (submitResult?.tdkRef) {
                   router.replace(`/voucher/expense-preview?tdkRef=${encodeURIComponent(submitResult.tdkRef)}` as any);
                 } else {
                   router.back();
@@ -384,7 +392,7 @@ export default function CreateExpenseVoucher() {
               activeOpacity={0.85}
               disabled={sharePdfLoading}
               onPress={async () => {
-                if (!submitResult.tdkRef || !company?.guid) return;
+                if (!submitResult?.tdkRef || !company?.guid) return;
                 setSharePdfLoading(true);
                 try {
                   await shareVoucherPdfByRef(submitResult.tdkRef, company.guid, {
@@ -411,7 +419,7 @@ export default function CreateExpenseVoucher() {
             </TouchableOpacity>
           </View>
         </View>
-      )}
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -484,8 +492,8 @@ const s = StyleSheet.create({
   pdfBtn: { flexDirection: 'row', gap: 8, backgroundColor: COLORS.brandPrimary, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, width: '100%', justifyContent: 'center', alignItems: 'center' },
   pdfBtnTxt: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.white },
   successOverlay: {
-    ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 50,
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center', justifyContent: 'center', padding: 24,
   },
   successCard: {
     width: '100%', backgroundColor: COLORS.cardBg, borderRadius: RADIUS.xl,

@@ -576,7 +576,15 @@ export default function CreateJournalVoucher() {
         </SafeAreaView>
       </Modal>
 
-      {showSuccess && submitResult && (
+      {/* Success Overlay — full-screen Modal + flex backdrop */}
+      <Modal
+        visible={!!(showSuccess && submitResult)}
+        transparent
+        animationType="fade"
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        onRequestClose={() => { setShowSuccess(false); router.back(); }}
+      >
         <View style={ss.overlay}>
           <View style={ss.card}>
             <View style={ss.iconWrap}>
@@ -647,7 +655,7 @@ export default function CreateJournalVoucher() {
             </TouchableOpacity>
           </View>
         </View>
-      )}
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -744,10 +752,7 @@ const s = StyleSheet.create({
 });
 
 const ss = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 50,
-  },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   card: {
     width: '100%', backgroundColor: COLORS.cardBg, borderRadius: 20, padding: 24, alignItems: 'center', gap: 12,
   },

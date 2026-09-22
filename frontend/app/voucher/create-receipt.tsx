@@ -690,8 +690,15 @@ export default function CreateReceiptVoucher() {
         </TouchableOpacity>
       </Modal>
 
-      {/* ── Success overlay (mirrors Sales Invoice) ─────────────── */}
-      {showSuccess && submitResult && (
+      {/* Success Overlay — full-screen Modal + flex backdrop */}
+      <Modal
+        visible={!!(showSuccess && submitResult)}
+        transparent
+        animationType="fade"
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        onRequestClose={() => { setShowSuccess(false); router.back(); }}
+      >
         <View style={ss.overlay2}>
           <View style={ss.card}>
             <View style={ss.iconWrap}>
@@ -762,7 +769,7 @@ export default function CreateReceiptVoucher() {
             </TouchableOpacity>
           </View>
         </View>
-      )}
+      </Modal>
 
       {/* Date pickers */}
       <DatePickerModal
@@ -850,7 +857,7 @@ const ss = StyleSheet.create({
   sheetOptActive: { backgroundColor: COLORS.brandPrimary + '11', borderColor: COLORS.brandPrimary },
   sheetOptTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textPrimary, fontWeight: '600' },
   sheetOptActiveTxt: { color: COLORS.brandPrimary, fontWeight: '800' },
-  overlay2: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 24, zIndex: 10 },
+  overlay2: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   card: { width: '100%', maxWidth: 400, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: 24, alignItems: 'center', gap: 12 },
   iconWrap: { marginBottom: 4 },
   title: { fontSize: 20, fontWeight: '800', color: COLORS.textPrimary },

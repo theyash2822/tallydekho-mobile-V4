@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator,
-  TextInput,
+  TextInput, Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -431,7 +431,15 @@ export default function CreateStockTransferScreen() {
         />
       </View>
 
-      {showSuccess && submitResult && (
+      {/* Success Overlay — full-screen Modal + flex backdrop */}
+      <Modal
+        visible={!!(showSuccess && submitResult)}
+        transparent
+        animationType="fade"
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        onRequestClose={() => { setShowSuccess(false); router.back(); }}
+      >
         <View style={ss.overlay}>
           <View style={ss.card}>
             <View style={ss.iconWrap}>
@@ -481,7 +489,7 @@ export default function CreateStockTransferScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      )}
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -541,11 +549,7 @@ const s = StyleSheet.create({
 });
 
 const ss = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.52)',
-    alignItems: 'center', justifyContent: 'center', padding: SPACING.lg, zIndex: 100,
-  },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   card: {
     width: '100%', maxWidth: 360, backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg,
     padding: SPACING.lg, alignItems: 'center', gap: 12,

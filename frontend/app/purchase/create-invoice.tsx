@@ -1716,7 +1716,7 @@ export default function CreatePurchaseInvoiceScreen() {
         }}
       />
 
-      {/* Success Overlay — native Modal sits above Expo Dev Client FAB (blue gear) */}
+      {/* Success Overlay — full-screen Modal + flex backdrop (absoluteFill collapses inside Modal) */}
       <Modal
         visible={!!(showSuccess && submitResult)}
         transparent
@@ -1990,7 +1990,7 @@ const m = StyleSheet.create({
 });
 
 const ss = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 999, elevation: 24, padding: SPACING.lg },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: SPACING.lg },
   card: { backgroundColor: COLORS.cardBg, borderRadius: RADIUS.lg, padding: SPACING.xl, alignItems: 'center', width: '100%', maxWidth: 400, gap: 6 },
   iconWrap: { marginBottom: 6 },
   title: { fontSize: TYPOGRAPHY.lg, fontWeight: '800', color: COLORS.textPrimary, textAlign: 'center' },
