@@ -15,16 +15,17 @@ import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { EntityListTile } from '../../src/components/EntityListTile';
 import { ScreenHeader } from '../../src/components/ScreenHeader';
-import { getStocks } from '../../src/services/api';
+import { getStocks, getInventorySettings } from '../../src/services/api';
 import { useTranslation } from 'react-i18next';
 
 const STOCK_ICON_BG = '#E8E7E1';
 
 function OnHandCard({
-  item, onPress,
+  item, onPress, lowThreshold,
 }: {
-  item: any; onPress: () => void;
+  item: any; onPress: () => void; lowThreshold: number;
 }) {
+  const isLow = item.qty > 0 && item.qty <= lowThreshold;
   return (
     <EntityListTile
       name={item.displayName || item.name}
@@ -36,8 +37,8 @@ function OnHandCard({
       trailing={(
         <View style={sc.right}>
           <Text style={sc.value}>{item.value}</Text>
-          <View style={[sc.qtyBadge, item.qty <= 10 && sc.qtyLow]}>
-            <Text style={[sc.qtyTxt, item.qty <= 10 && sc.qtyLowTxt]}>{item.qty} units</Text>
+          <View style={[sc.qtyBadge, isLow && sc.qtyLow]}>
+            <Text style={[sc.qtyTxt, isLow && sc.qtyLowTxt]}>{item.qty} units</Text>
           </View>
         </View>
       )}
@@ -65,6 +66,7 @@ export default function OnHandStockScreen() {
   const fyTo = selectedFY?.endDate ?? '';
 
   const [items, setItems] = useState<any[]>([]);
+  const [lowThreshold, setLowThreshold] = useState(20);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -80,8 +82,30 @@ export default function OnHandStockScreen() {
     }
     setIsLoading(true);
     setApiError(null);
-    getStocks(companyGuid, { limit: '1000' })
-      .then((res: any) => {
+    Promise.all([
+      getInventorySettings(companyGuid).catch(() => null),
+      getStocks(companyGuid, { limit: '5000' }),
+    ])
+      .then(([settingsRes, res]: any[]) => {
+        const settings =
+          settingsRes?.data?.settings
+          ?? settingsRes?.settings
+          ?? settingsRes?.data
+          ?? {};
+        const T = Math.max(
+          0,
+          parseInt(
+            String(
+              settings.default_low_stock_level
+              ?? res?.data?.summary?.low_stock_threshold
+              ?? res?.meta?.low_stock_threshold
+              ?? 20,
+            ),
+            10,
+          ) || 20,
+        );
+        setLowThreshold(T);
+
         const raw = res?.data?.items ?? [];
         const mapped = raw
           .filter((r: any) => +(r.closing_qty || 0) > 0)
@@ -111,7 +135,7 @@ export default function OnHandStockScreen() {
   );
 
   const totalQty = items.reduce((s: number, i: any) => s + (i.qty || 0), 0);
-  const lowStock = items.filter((i: any) => (i.qty || 0) <= 10).length;
+  const lowStock = items.filter((i: any) => (i.qty || 0) > 0 && (i.qty || 0) <= lowThreshold).length;
   const dateLabel = dateFrom && dateTo ? `${formatDate(dateFrom)} – ${formatDate(dateTo)}` : 'All Time';
 
   return (
@@ -172,6 +196,7 @@ export default function OnHandStockScreen() {
           <OnHandCard
             key={item.id}
             item={item}
+            lowThreshold={lowThreshold}
             onPress={() => safePush(router, `/stocks/item-detail?id=${item.id}` as any)}
           />
         ))}

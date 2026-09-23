@@ -1,5 +1,16 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-23 — P0/P1 stock semantics alignment
+
+Unified “Low Stock” = settings `default_low_stock_level` (qty 1…T); Reorder =
+Tally item/group reorder. Low Stock + Reorder fetch via `stockHealth` (limit
+5000). Reorder Add to PO prefills create-order like Low Stock. Hub Movements →
+movement-analytics; Fast Moving → fast-slow. Settings subtitle corrected.
+On-hand + total-stock badges use threshold (not hardcoded 10 / reorder).
+Transfer details: mock removed; loads real transfer by `voucher_guid`.
+
+---
+
 ## 2026-09-22 — Low Stock screen + Modal scrim restore
 
 New `/stocks/low-stock`: Low / Out tabs only; threshold =

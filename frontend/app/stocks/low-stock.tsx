@@ -155,9 +155,10 @@ export default function LowStockScreen() {
     setApiError(null);
     Promise.all([
       getInventorySettings(companyGuid).catch(() => null),
-      getStocks(companyGuid, { limit: '1000' }),
+      getStocks(companyGuid, { limit: '5000', stockHealth: 'low' }),
+      getStocks(companyGuid, { limit: '5000', stockHealth: 'out' }),
     ])
-      .then(([settingsRes, stocksRes]: any[]) => {
+      .then(([settingsRes, lowRes, outRes]: any[]) => {
         const settings =
           settingsRes?.data?.settings
           ?? settingsRes?.settings
@@ -165,33 +166,33 @@ export default function LowStockScreen() {
           ?? {};
         const T = Math.max(
           0,
-          parseInt(String(settings.default_low_stock_level ?? 20), 10) || 20,
+          parseInt(
+            String(
+              settings.default_low_stock_level
+              ?? lowRes?.data?.summary?.low_stock_threshold
+              ?? lowRes?.meta?.low_stock_threshold
+              ?? 20,
+            ),
+            10,
+          ) || 20,
         );
         setThreshold(T);
 
-        const raw: any[] = stocksRes?.data?.items ?? stocksRes?.data ?? [];
-        const mapped: LowStockRow[] = [];
-        for (const r of raw) {
-          const qty = parseFloat(r.closing_qty ?? 0);
-          if (!Number.isFinite(qty)) continue;
-          const id = String(r.guid || r.id || r.name);
-          const base = {
-            id,
-            name: r.name || '—',
-            displayName: r.displayName || r.name || '—',
-            sku: r.sku || r.alias || '',
-            category: r.category || r.group_name || 'Other',
-            qty,
-            unit: r.unit || '',
-            rate: stockRateString(r),
-          };
-          if (qty === 0) {
-            mapped.push({ ...base, kind: 'out' });
-          } else if (qty > 0 && qty <= T) {
-            mapped.push({ ...base, kind: 'low' });
-          }
-        }
-        mapped.sort((a, b) => {
+        const mapRow = (r: any, kind: 'low' | 'out'): LowStockRow => ({
+          id: String(r.guid || r.id || r.name),
+          name: r.name || '—',
+          displayName: r.displayName || r.name || '—',
+          sku: r.sku || r.alias || '',
+          category: r.category || r.group_name || 'Other',
+          qty: parseFloat(r.closing_qty ?? 0) || 0,
+          unit: r.unit || '',
+          rate: stockRateString(r),
+          kind,
+        });
+
+        const lowRows = (lowRes?.data?.items ?? []).map((r: any) => mapRow(r, 'low'));
+        const outRows = (outRes?.data?.items ?? []).map((r: any) => mapRow(r, 'out'));
+        const mapped = [...outRows, ...lowRows].sort((a, b) => {
           if (a.kind !== b.kind) return a.kind === 'out' ? -1 : 1;
           return a.qty - b.qty || a.displayName.localeCompare(b.displayName);
         });

@@ -322,25 +322,36 @@ function FilterModal({ visible, onClose, onApply, initWh, initGrp, whOptions, gr
 
 // ─── (EditStockModal, StockTransferModal, BulkTransferModal → src/components/forms/) ─
 
-function mapStockRows(items: any[], formatAmount: (n: number) => string): StockItem[] {
-  return items.map((r: any) => ({
-    id: r.guid || String(r.id),
-    name: r.displayName || r.name || '',
-    sku: r.sku || r.alias || r.hsn || '',
-    category: r.category || '',
-    group: r.group_name || '',
-    qty: +(r.closing_qty || 0),
-    value: r.closing_value ? formatAmount(Math.round(+r.closing_value)) : formatAmount(0),
-    unit: r.unit || 'pcs',
-    warehouse: r.primary_warehouse || r.warehouse_name || 'Default',
-    warehouseId: r.primary_warehouse || r.warehouse_name || 'WH01',
-    reorderLevel: +(r.reorder_level || 0),
-    status: +r.closing_qty <= 0 ? 'out_of_stock' : +r.closing_qty <= +(r.reorder_level || 0) ? 'low_stock' : 'in_stock',
-    // UI uses a fixed cube icon; keep StockItem type satisfied for multi-select/share paths.
-    icon: 'cube-outline',
-    iconColor: '#1A1A1A',
-    iconBg: '#E8E7E1',
-  }));
+function mapStockRows(
+  items: any[],
+  formatAmount: (n: number) => string,
+  lowThreshold = 20,
+): StockItem[] {
+  const T = Number(lowThreshold) || 20;
+  return items.map((r: any) => {
+    const qty = +(r.closing_qty || 0);
+    let status: StockItem['status'] = 'in_stock';
+    if (qty <= 0) status = 'out_of_stock';
+    else if (qty <= T) status = 'low_stock';
+    return {
+      id: r.guid || String(r.id),
+      name: r.displayName || r.name || '',
+      sku: r.sku || r.alias || r.hsn || '',
+      category: r.category || '',
+      group: r.group_name || '',
+      qty,
+      value: r.closing_value ? formatAmount(Math.round(+r.closing_value)) : formatAmount(0),
+      unit: r.unit || 'pcs',
+      warehouse: r.primary_warehouse || r.warehouse_name || 'Default',
+      warehouseId: r.primary_warehouse || r.warehouse_name || 'WH01',
+      reorderLevel: +(r.reorder_level || 0),
+      status,
+      // UI uses a fixed cube icon; keep StockItem type satisfied for multi-select/share paths.
+      icon: 'cube-outline',
+      iconColor: '#1A1A1A',
+      iconBg: '#E8E7E1',
+    };
+  });
 }
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
@@ -397,7 +408,8 @@ export default function TotalStockScreen() {
       if (warehouses.length) params.warehouse = warehouses.join(',');
       if (groups.length) params.group = groups.join(',');
       const res: any = await getStocks(companyGuid, params);
-      setWhFilteredStocks(mapStockRows(res?.data?.items ?? [], formatAmount));
+      const T = Number(res?.data?.summary?.low_stock_threshold ?? res?.meta?.low_stock_threshold ?? 20) || 20;
+      setWhFilteredStocks(mapStockRows(res?.data?.items ?? [], formatAmount, T));
     } catch {
       setWhFilteredStocks([]);
     } finally {
@@ -425,8 +437,9 @@ export default function TotalStockScreen() {
     }
 
     setIsLoading(true);
-    getStocks(companyGuid, { limit: '1000' }).then((res: any) => {
-      const mapped = mapStockRows(res?.data?.items ?? [], formatAmount);
+    getStocks(companyGuid, { limit: '5000' }).then((res: any) => {
+      const T = Number(res?.data?.summary?.low_stock_threshold ?? res?.meta?.low_stock_threshold ?? 20) || 20;
+      const mapped = mapStockRows(res?.data?.items ?? [], formatAmount, T);
       const _stockCache = getStockListCache();
       _stockCache[cacheKey] = { data: mapped, ts: Date.now() };
       if (mapped.length) setLiveStocks(mapped);

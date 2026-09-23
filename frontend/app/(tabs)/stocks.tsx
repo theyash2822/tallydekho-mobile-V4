@@ -167,7 +167,7 @@ export default function StocksDashboard() {
       value: String(d.recentMovements ?? 0),
       sub: t('stocks.last7Days'),
       icon: 'swap-vertical-outline', accent: NEUTRAL, tint: NEUTRAL_BG,
-      route: '/stocks/fast-slow',
+      route: '/stocks/movement-analytics',
     },
     {
       id: 'low', label: t('stocks.lowStock'),
@@ -181,7 +181,7 @@ export default function StocksDashboard() {
       value: String(d.fastMovingCount ?? 0),
       sub: t('stocks.activeSkus'),
       icon: 'flash-outline', accent: NEUTRAL, tint: NEUTRAL_BG,
-      route: '/stocks/movement-analytics',
+      route: '/stocks/fast-slow',
     },
     {
       id: 'aged', label: t('stocks.agedStock'),

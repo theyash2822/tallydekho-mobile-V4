@@ -798,7 +798,7 @@ export default function StockSettingsScreen() {
               <View style={s.fieldRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.fieldLabel}>Default Low Stock Level</Text>
-                  <Text style={s.fieldSub}>Fallback when item has no reorder level in Tally</Text>
+                  <Text style={s.fieldSub}>Items with qty 1…this level count as Low Stock (reorder level ignored)</Text>
                 </View>
                 <View style={s.inputWithUnit}>
                   <TextInput
