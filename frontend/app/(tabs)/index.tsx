@@ -64,7 +64,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { isDesktopOnline, company, user, selectedFY, lastSyncAt } = useAuth();
-  const { workspaceId, pairingStatus, invitations, demoMode, tallyConnected, sensitivePolicies } = useWorkspace();
+  const { workspaceId, pairingStatus, invitations, demoMode, tallyConnected, sensitivePolicies, refreshContext } = useWorkspace();
   // Product 1A: CONNECTED with no company → empty CTA (dataReady false until company exists)
   const dataReady =
     !!company?.guid &&
@@ -538,7 +538,10 @@ export default function HomeScreen() {
         />
         <ErrorState
           message={fatalError}
-          onRetry={() => loadData({ soft: false })}
+          onRetry={async () => {
+            try { await refreshContext?.(); } catch { /* ignore */ }
+            loadData({ soft: false });
+          }}
         />
       </SafeAreaView>
     );

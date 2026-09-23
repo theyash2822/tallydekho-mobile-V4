@@ -475,7 +475,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [isAuthenticated, setSelectedFY, applyActiveWorkspace]);
 
   const switchWorkspace = useCallback(async (id: string) => {
-    // Safe switch (§10): clear in-memory company, restore per-workspace cache if any
+    // Safe switch (§10): clear in-memory company/FY first — never restore a
+    // cached company before context validates it against this workspace
+    // (stale cache → "Company not in this workspace" on Home).
     await setCompany(null);
     try {
       await setSelectedFY?.(null);
@@ -495,20 +497,17 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (wsGenRef.current !== gen) return;
     socketService.setWorkspaceContext?.(id);
 
+    // FY may restore; company always comes from refreshContext visible list
     try {
-      const companyJson = await AsyncStorage.getItem(wsCompanyKey(id));
-      if (wsGenRef.current !== gen) return;
-      if (companyJson) {
-        const c = JSON.parse(companyJson);
-        if (c?.guid) await setCompany(c);
-      }
       const fyJson = await AsyncStorage.getItem(wsFyKey(id));
       if (wsGenRef.current !== gen) return;
       if (fyJson) {
         try { await setSelectedFY?.(JSON.parse(fyJson)); } catch { /* ignore */ }
       }
     } catch { /* ignore */ }
-  }, [setCompany, setSelectedFY, applyActiveWorkspace]);
+
+    await refreshContext();
+  }, [setCompany, setSelectedFY, applyActiveWorkspace, refreshContext]);
 
   switchWorkspaceRef.current = switchWorkspace;
 

@@ -3,13 +3,14 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SPACING, RADIUS } from '../constants/colors';
+import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '../constants/colors';
+import { friendlyUserMessage } from '../services/apiErrors';
 
 // ── Loading ────────────────────────────────────────────────────
 export function LoadingState({ message = 'Loading...' }: { message?: string }) {
   return (
     <View style={s.center}>
-      <ActivityIndicator size="large" color={COLORS.brandPrimary || '#3F5263'} />
+      <ActivityIndicator size="large" color={COLORS.brandPrimary} />
       <Text style={s.subText}>{message}</Text>
     </View>
   );
@@ -19,17 +20,19 @@ export function LoadingState({ message = 'Loading...' }: { message?: string }) {
 export function ErrorState({
   message,
   onRetry,
-}: { message?: string; onRetry?: () => void }) {
+  title = 'Something went wrong',
+}: { message?: string; onRetry?: () => void; title?: string }) {
+  const detail = friendlyUserMessage(message);
   return (
     <View style={s.center}>
       <View style={s.iconCircle}>
-        <Ionicons name="alert-circle-outline" size={32} color="#DC2626" />
+        <Ionicons name="alert-circle-outline" size={32} color={COLORS.negative} />
       </View>
-      <Text style={s.title}>Something went wrong</Text>
-      <Text style={s.subText}>{message || 'Failed to load data'}</Text>
+      <Text style={s.title}>{title}</Text>
+      <Text style={s.subText}>{detail}</Text>
       {onRetry && (
         <TouchableOpacity style={s.retryBtn} onPress={onRetry} activeOpacity={0.8}>
-          <Ionicons name="refresh-outline" size={16} color="#fff" />
+          <Ionicons name="refresh-outline" size={16} color={COLORS.white} />
           <Text style={s.retryText}>Retry</Text>
         </TouchableOpacity>
       )}
@@ -45,8 +48,8 @@ export function EmptyState({
 }: { title?: string; subtitle?: string; icon?: any }) {
   return (
     <View style={s.center}>
-      <View style={[s.iconCircle, { backgroundColor: '#F5F4EF' }]}>
-        <Ionicons name={icon} size={32} color="#787774" />
+      <View style={[s.iconCircle, { backgroundColor: COLORS.activeBg }]}>
+        <Ionicons name={icon} size={32} color={COLORS.textSecondary} />
       </View>
       <Text style={s.title}>{title}</Text>
       {subtitle && <Text style={s.subText}>{subtitle}</Text>}
@@ -59,10 +62,11 @@ export function ErrorBanner({
   message,
   onRetry,
 }: { message: string; onRetry?: () => void }) {
+  const detail = friendlyUserMessage(message);
   return (
     <View style={s.banner}>
-      <Ionicons name="alert-circle-outline" size={16} color="#DC2626" />
-      <Text style={s.bannerText} numberOfLines={2}>{message}</Text>
+      <Ionicons name="alert-circle-outline" size={16} color={COLORS.negative} />
+      <Text style={s.bannerText} numberOfLines={2}>{detail}</Text>
       {onRetry && (
         <TouchableOpacity onPress={onRetry} style={s.bannerRetry}>
           <Text style={s.bannerRetryText}>Retry</Text>
@@ -77,10 +81,11 @@ export function SectionError({
   message,
   onRetry,
 }: { message: string; onRetry?: () => void }) {
+  const detail = friendlyUserMessage(message);
   return (
     <View style={s.sectionErr}>
-      <Ionicons name="alert-circle-outline" size={16} color="#DC2626" />
-      <Text style={s.sectionErrText} numberOfLines={2}>{message}</Text>
+      <Ionicons name="alert-circle-outline" size={16} color={COLORS.negative} />
+      <Text style={s.sectionErrText} numberOfLines={2}>{detail}</Text>
       {onRetry && (
         <TouchableOpacity onPress={onRetry} style={s.bannerRetry}>
           <Text style={s.bannerRetryText}>Retry</Text>
@@ -95,69 +100,76 @@ const s = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: SPACING?.lg || 24,
+    padding: SPACING.lg,
     gap: 12,
+    backgroundColor: COLORS.pageBg,
   },
   iconCircle: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: COLORS.negativeBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
-    fontSize: 16,
+    fontSize: TYPOGRAPHY.base,
     fontWeight: '600',
-    color: '#1A1A1A',
+    color: COLORS.textPrimary,
     textAlign: 'center',
   },
   subText: {
-    fontSize: 13,
-    color: '#787774',
+    fontSize: TYPOGRAPHY.sm,
+    color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
+    paddingHorizontal: SPACING.md,
   },
   retryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#3F5263',
+    backgroundColor: COLORS.brandPrimary,
     paddingVertical: 10,
     paddingHorizontal: 20,
-    borderRadius: RADIUS?.md || 8,
+    borderRadius: RADIUS.md,
     marginTop: 4,
   },
-  retryText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  retryText: { color: COLORS.white, fontSize: TYPOGRAPHY.sm, fontWeight: '600' },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: COLORS.negativeBg,
     borderWidth: 1,
-    borderColor: '#FECACA',
-    borderRadius: RADIUS?.md || 8,
+    borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.md,
     paddingVertical: 10,
     paddingHorizontal: 14,
     marginHorizontal: 16,
     marginBottom: 8,
   },
-  bannerText: { flex: 1, fontSize: 13, color: '#DC2626' },
+  bannerText: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.negative },
   bannerRetry: { paddingVertical: 2, paddingHorizontal: 8 },
-  bannerRetryText: { fontSize: 13, color: '#DC2626', fontWeight: '600', textDecorationLine: 'underline' },
+  bannerRetryText: {
+    fontSize: TYPOGRAPHY.sm,
+    color: COLORS.brandPrimary,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
   sectionErr: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: COLORS.negativeBg,
     borderWidth: 1,
-    borderColor: '#FECACA',
-    borderRadius: RADIUS?.md || 8,
+    borderColor: COLORS.borderDefault,
+    borderRadius: RADIUS.md,
     paddingVertical: 12,
     paddingHorizontal: 14,
     marginHorizontal: 16,
     marginTop: 12,
     minHeight: 48,
   },
-  sectionErrText: { flex: 1, fontSize: 13, color: '#DC2626' },
+  sectionErrText: { flex: 1, fontSize: TYPOGRAPHY.sm, color: COLORS.negative },
 });

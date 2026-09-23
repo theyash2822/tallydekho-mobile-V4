@@ -13,6 +13,7 @@ import {
   kindFromStatus,
   notifyAuthFailure,
   setDeviceOnline,
+  friendlyUserMessage,
 } from './apiErrors';
 import { toastRbasError } from '../utils/rbasErrors';
 import { BACKEND_URL } from '../config/backend';
@@ -25,6 +26,7 @@ export {
   setAuthFailureHandler,
   subscribeDeviceOnline,
   getDeviceOnline,
+  friendlyUserMessage,
   type ApiErrorKind,
 } from './apiErrors';
 
@@ -165,12 +167,16 @@ function extractErrorMeta(data: any): { message: string; code: string | null } {
     data?.code ??
     data?.error_code ??
     null;
-  const message =
+  const raw =
     data?.error?.message ||
     data?.message ||
     (typeof data?.error === 'string' ? data.error : null) ||
     null;
-  return { message: message || '', code: code ? String(code) : null };
+  const codeStr = code ? String(code) : null;
+  return {
+    message: friendlyUserMessage(raw, codeStr) || '',
+    code: codeStr,
+  };
 }
 
 // ── Core HTTP ────────────────────────────────────────────────

@@ -1,5 +1,14 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-23 — Error UI theme + company/workspace heal
+
+`ApiStateViews` Retry uses `COLORS.brandPrimary` (#1A1A1A), not hardcoded
+slate `#3F5263`. Friendly map for COMPANY_SCOPE_DENIED. Workspace switch no
+longer restores stale company cache before context validation; Home Retry
+refreshes workspace context first.
+
+---
+
 ## 2026-09-23 — P0/P1 stock semantics alignment
 
 Unified “Low Stock” = settings `default_low_stock_level` (qty 1…T); Reorder =

@@ -56,10 +56,44 @@ export function isApiError(err: unknown): err is ApiError {
 }
 
 export function errorMessage(err: unknown, fallback = 'Request failed'): string {
-  if (err instanceof ApiError) return err.message || fallback;
-  if (err instanceof Error) return err.message || fallback;
-  if (typeof err === 'string') return err;
+  if (err instanceof ApiError) return friendlyUserMessage(err.message, err.code) || fallback;
+  if (err instanceof Error) return friendlyUserMessage(err.message) || fallback;
+  if (typeof err === 'string') return friendlyUserMessage(err) || fallback;
   return fallback;
+}
+
+/**
+ * Map raw backend / network copy to on-brand user-facing text.
+ * Keeps technical codes out of full-page ErrorState.
+ */
+export function friendlyUserMessage(
+  message?: string | null,
+  code?: string | null,
+): string {
+  const raw = String(message || '').trim();
+  const c = String(code || '').toUpperCase();
+
+  if (
+    c === 'COMPANY_SCOPE_DENIED'
+    || c === 'COMPANY_NOT_IN_WORKSPACE'
+    || /company not in (this )?workspace/i.test(raw)
+  ) {
+    return 'This company is not in the selected workspace. Switch company or workspace, then retry.';
+  }
+  if (c === 'WORKSPACE_ACCESS_DENIED' || /workspace membership required/i.test(raw)) {
+    return 'You do not have access to this workspace. Switch workspace and try again.';
+  }
+  if (c === 'WORKSPACE_REQUIRED' || /workspace authorization required/i.test(raw)) {
+    return 'Workspace is required. Pull to refresh or re-open the app.';
+  }
+  if (c === 'CAPABILITY_DENIED' || /not allowed\. ask your workspace/i.test(raw)) {
+    return 'Not allowed. Ask your Workspace administrator.';
+  }
+  if (c === 'MEMBERSHIP_SUSPENDED') {
+    return 'Your membership in this workspace is suspended.';
+  }
+  if (!raw) return 'Failed to load data';
+  return raw;
 }
 
 /** Classify HTTP status + optional backend code into ApiErrorKind. 403 ≠ auth. */
