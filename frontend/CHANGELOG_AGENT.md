@@ -1,5 +1,13 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-23 — QA: refreshContext uses active workspace id
+
+Testing Agent: `refreshContext` now reads `getActiveWorkspaceId()` instead of
+stale React `workspaceId`, so `switchWorkspace` → `await refreshContext()`
+validates the switched workspace before the next render.
+
+---
+
 ## 2026-09-23 — Error UI theme + company/workspace heal
 
 `ApiStateViews` Retry uses `COLORS.brandPrimary` (#1A1A1A), not hardcoded

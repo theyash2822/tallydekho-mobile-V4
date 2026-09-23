@@ -283,7 +283,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [isAuthenticated]);
 
   const refreshContext = useCallback(async () => {
-    if (!isAuthenticated || !workspaceId) {
+    // Prefer module-level active id so callers (e.g. switchWorkspace) that
+    // applyActiveWorkspace() then await refreshContext() hit the NEW workspace
+    // before React re-renders with updated workspaceId state.
+    const activeId = getActiveWorkspaceId();
+    if (!isAuthenticated || !activeId) {
       setAccess(null);
       accessJsonRef.current = '';
       setPairingStatus('UNPAIRED');
@@ -298,7 +302,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
     refreshInFlightRef.current = true;
     const gen = wsGenRef.current;
-    const forWorkspaceId = workspaceId;
+    const forWorkspaceId = activeId;
     try {
       const res: any = await getWorkspaceContext(forWorkspaceId);
       if (isStale(gen, forWorkspaceId)) return;
@@ -378,7 +382,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         refreshContext();
       }
     }
-  }, [isAuthenticated, workspaceId, isStale]);
+  }, [isAuthenticated, isStale]);
 
   const refreshWorkspaces = useCallback(async () => {
     if (!isAuthenticated) {
