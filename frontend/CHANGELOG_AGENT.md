@@ -1,5 +1,14 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-24 — Stock General settings: unit fallback + buffer + cleanup
+
+Removed Reorder Calc Mode, Low Stock Threshold Mode, Archive Old Stock Activity
+from Settings UI. Default Unit = app/web display fallback when Tally unit blank
+(`displayUnit`). Purchase Buffer Days drives Reorder Suggest horizon. UoM list
+merges `units` master ∪ stocks. Create Item untouched.
+
+---
+
 ## 2026-09-23 — QA: refreshContext uses active workspace id
 
 Testing Agent: `refreshContext` now reads `getActiveWorkspaceId()` instead of

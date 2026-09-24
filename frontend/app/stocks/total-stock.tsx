@@ -12,6 +12,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors'
 
 import { useAuth } from '../../src/context/AuthContext';
 import { getStocks, getWarehouses } from '../../src/services/api';
+import { displayUnit } from '../../src/utils/displayUnit';
 import { AddItemModal } from '../../src/components/forms/AddItemModal';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { EditStockModal } from '../../src/components/forms/EditStockModal';
@@ -326,6 +327,7 @@ function mapStockRows(
   items: any[],
   formatAmount: (n: number) => string,
   lowThreshold = 20,
+  defaultUnit = 'Nos',
 ): StockItem[] {
   const T = Number(lowThreshold) || 20;
   return items.map((r: any) => {
@@ -341,7 +343,7 @@ function mapStockRows(
       group: r.group_name || '',
       qty,
       value: r.closing_value ? formatAmount(Math.round(+r.closing_value)) : formatAmount(0),
-      unit: r.unit || 'pcs',
+      unit: displayUnit(r.unit, defaultUnit),
       warehouse: r.primary_warehouse || r.warehouse_name || 'Default',
       warehouseId: r.primary_warehouse || r.warehouse_name || 'WH01',
       reorderLevel: +(r.reorder_level || 0),
@@ -409,7 +411,8 @@ export default function TotalStockScreen() {
       if (groups.length) params.group = groups.join(',');
       const res: any = await getStocks(companyGuid, params);
       const T = Number(res?.data?.summary?.low_stock_threshold ?? res?.meta?.low_stock_threshold ?? 20) || 20;
-      setWhFilteredStocks(mapStockRows(res?.data?.items ?? [], formatAmount, T));
+      const defaultUnit = res?.data?.summary?.default_unit ?? res?.meta?.default_unit ?? 'Nos';
+      setWhFilteredStocks(mapStockRows(res?.data?.items ?? [], formatAmount, T, defaultUnit));
     } catch {
       setWhFilteredStocks([]);
     } finally {
@@ -439,7 +442,8 @@ export default function TotalStockScreen() {
     setIsLoading(true);
     getStocks(companyGuid, { limit: '5000' }).then((res: any) => {
       const T = Number(res?.data?.summary?.low_stock_threshold ?? res?.meta?.low_stock_threshold ?? 20) || 20;
-      const mapped = mapStockRows(res?.data?.items ?? [], formatAmount, T);
+      const defaultUnit = res?.data?.summary?.default_unit ?? res?.meta?.default_unit ?? 'Nos';
+      const mapped = mapStockRows(res?.data?.items ?? [], formatAmount, T, defaultUnit);
       const _stockCache = getStockListCache();
       _stockCache[cacheKey] = { data: mapped, ts: Date.now() };
       if (mapped.length) setLiveStocks(mapped);

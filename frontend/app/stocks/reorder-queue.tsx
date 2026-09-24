@@ -8,12 +8,13 @@ import Toast from 'react-native-toast-message';
 import { safePush } from '../../src/utils/safeNavigation';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { getStocks } from '../../src/services/api';
+import { getStocks, getInventorySettings } from '../../src/services/api';
 import { LoadingState, ErrorState, EmptyState } from '../../src/components/ApiStateViews';
 import { EntityListTile } from '../../src/components/EntityListTile';
 import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { useTranslation } from 'react-i18next';
 import { currentTenantKey, lowStockToPoPrefillFeature } from '../../src/utils/tenantStorage';
+import { displayUnit } from '../../src/utils/displayUnit';
 
 type Priority = 'critical' | 'high' | 'medium' | 'low';
 
@@ -70,9 +71,34 @@ export default function ReorderQueueScreen() {
     if (!companyGuid) return;
     setLoading(true);
     setError(null);
-    // Server filters reorder (item or group reorder_level) — full list, not truncated client slice
-    getStocks(companyGuid, { limit: '5000', stockHealth: 'reorder' })
-      .then((res: any) => {
+    Promise.all([
+      getInventorySettings(companyGuid).catch(() => null),
+      getStocks(companyGuid, { limit: '5000', stockHealth: 'reorder' }),
+    ])
+      .then(([settingsRes, res]: any[]) => {
+        const settings =
+          settingsRes?.data?.settings
+          ?? settingsRes?.settings
+          ?? settingsRes?.data
+          ?? {};
+        const bufferDays = Math.max(
+          0,
+          parseInt(
+            String(
+              settings.purchase_buffer_days
+              ?? res?.data?.summary?.purchase_buffer_days
+              ?? res?.meta?.purchase_buffer_days
+              ?? 7,
+            ),
+            10,
+          ) || 7,
+        );
+        const defaultUnit =
+          settings.default_unit_for_new_items
+          ?? res?.data?.summary?.default_unit
+          ?? res?.meta?.default_unit
+          ?? 'Nos';
+
         const rows: any[] = res?.data?.items || res?.data || [];
         const mapped: ReorderItem[] = rows.map((r: any) => {
           const qty = parseFloat(r.closing_qty ?? 0);
@@ -81,15 +107,17 @@ export default function ReorderQueueScreen() {
           const reorder = itemReorder > 0 ? itemReorder : groupReorder;
           const avgDaily = parseFloat(r.avg_daily_consumption ?? 0);
           const deficit = Math.max(reorder - qty, 0);
+          // Suggest = velocity×buffer days (or 30 if no buffer) + deficit vs Tally reorder
+          const horizon = bufferDays > 0 ? bufferDays : 30;
           const suggest = avgDaily > 0
-            ? Math.ceil(avgDaily * 30) + deficit
+            ? Math.ceil(avgDaily * horizon) + deficit
             : Math.max(reorder * 2 - qty, reorder);
           return {
             id: r.guid || String(r.id),
             name: r.name || '—',
             displayName: r.displayName || undefined,
             sku: r.sku || r.alias || '',
-            unit: r.unit || 'pcs',
+            unit: displayUnit(r.unit, defaultUnit),
             rate: stockRateString(r),
             current: qty,
             reorderAt: reorder,

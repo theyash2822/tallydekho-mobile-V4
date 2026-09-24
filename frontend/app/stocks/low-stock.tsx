@@ -17,6 +17,7 @@ import { ErrorBanner } from '../../src/components/ApiStateViews';
 import { LedgerRowSkeleton } from '../../src/components/ShimmerPlaceholder';
 import { useAuth } from '../../src/context/AuthContext';
 import { getInventorySettings, getStocks } from '../../src/services/api';
+import { displayUnit } from '../../src/utils/displayUnit';
 import { safePush } from '../../src/utils/safeNavigation';
 import { currentTenantKey, lowStockToPoPrefillFeature } from '../../src/utils/tenantStorage';
 import { useTranslation } from 'react-i18next';
@@ -177,6 +178,11 @@ export default function LowStockScreen() {
           ) || 20,
         );
         setThreshold(T);
+        const defaultUnit =
+          settings.default_unit_for_new_items
+          ?? lowRes?.data?.summary?.default_unit
+          ?? lowRes?.meta?.default_unit
+          ?? 'Nos';
 
         const mapRow = (r: any, kind: 'low' | 'out'): LowStockRow => ({
           id: String(r.guid || r.id || r.name),
@@ -185,7 +191,7 @@ export default function LowStockScreen() {
           sku: r.sku || r.alias || '',
           category: r.category || r.group_name || 'Other',
           qty: parseFloat(r.closing_qty ?? 0) || 0,
-          unit: r.unit || '',
+          unit: displayUnit(r.unit, defaultUnit),
           rate: stockRateString(r),
           kind,
         });

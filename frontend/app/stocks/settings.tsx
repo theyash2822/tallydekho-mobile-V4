@@ -133,11 +133,8 @@ export default function StockSettingsScreen() {
 
   // ── Sub-open state inside sections
   const [uomOpen,        setUomOpen]        = useState(false);
-  const [itemsUomOpen,   setItemsUomOpen]   = useState(false);
   const [expandedWh,     setExpandedWh]     = useState<string | null>(null);
   const [productDispOpen, setProductDispOpen] = useState(false);
-  const [reorderModeOpen, setReorderModeOpen] = useState(false);
-  const [lowStockModeOpen, setLowStockModeOpen] = useState(false);
   const [agingOpen,      setAgingOpen]      = useState(false);
   const [fastSlowOpen,   setFastSlowOpen]   = useState(false);
 
@@ -254,7 +251,7 @@ export default function StockSettingsScreen() {
     try {
       // Flush numeric drafts into settings snapshot
       const numKeys: Array<keyof Settings> = [
-        'purchase_buffer_days', 'archive_old_stock_months', 'default_low_stock_level',
+        'purchase_buffer_days', 'default_low_stock_level',
         'fast_moving_top_pct', 'slow_moving_no_movement_days', 'dead_stock_no_movement_days',
       ];
       const flushed: Partial<Settings> = {};
@@ -359,14 +356,6 @@ export default function StockSettingsScreen() {
     auto: 'Auto Detect (Recommended)', name: 'Stock Name',
     alias: 'Alias', part_number: 'Part Number', description: 'Description',
   };
-  const reorderModeLabel: Record<string, string> = {
-    hybrid: 'Hybrid Recommended', tally_reorder: 'Tally Reorder Level',
-    sales_velocity: 'Sales Velocity', default_low_stock: 'Default Low Stock Level',
-  };
-  const lowStockModeLabel: Record<string, string> = {
-    reorder_level: 'Reorder Level', safety_stock: 'Safety Stock',
-    days_of_cover: 'Days of Cover', custom_percentage: 'Custom Percentage',
-  };
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -451,15 +440,15 @@ export default function StockSettingsScreen() {
 
               <View style={s.divider} />
 
-              {/* Default Unit for New Items */}
+              {/* Default Unit (display fallback when Tally unit is blank) */}
               <TouchableOpacity
                 style={s.fieldRow}
                 onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setUomOpen(v => !v); }}
                 activeOpacity={0.7}
               >
                 <View style={{ flex: 1 }}>
-                  <Text style={s.fieldLabel}>Default Unit for New Items</Text>
-                  <Text style={s.fieldSub}>From Tally masters — Hybrid</Text>
+                  <Text style={s.fieldLabel}>Default Unit</Text>
+                  <Text style={s.fieldSub}>App/web only — used when an item or voucher line has no unit from Tally</Text>
                 </View>
                 <View style={s.dropdownTrigger}>
                   <Text style={s.dropdownValue}>{s_obj.default_unit_for_new_items || 'Nos'}</Text>
@@ -491,7 +480,7 @@ export default function StockSettingsScreen() {
               <View style={s.fieldRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.fieldLabel}>Purchase Buffer Days</Text>
-                  <Text style={s.fieldSub}>Extra buffer added to reorder recommendations</Text>
+                  <Text style={s.fieldSub}>App-only — added into Reorder Queue suggest qty (not written to Tally)</Text>
                 </View>
                 <View style={s.inputWithUnit}>
                   <TextInput
@@ -502,96 +491,6 @@ export default function StockSettingsScreen() {
                     maxLength={4}
                   />
                   <Text style={s.unitLabel}>Days</Text>
-                </View>
-              </View>
-
-              <View style={s.divider} />
-
-              {/* Reorder Calculation Mode */}
-              <TouchableOpacity
-                style={s.fieldRow}
-                onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setReorderModeOpen(v => !v); }}
-                activeOpacity={0.7}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={s.fieldLabel}>Reorder Calculation Mode</Text>
-                </View>
-                <View style={s.dropdownTrigger}>
-                  <Text style={s.dropdownValue}>{reorderModeLabel[s_obj.reorder_calc_mode] || 'Hybrid'}</Text>
-                  <Ionicons name={reorderModeOpen ? 'chevron-up' : 'chevron-down'} size={14} color={COLORS.textTertiary} />
-                </View>
-              </TouchableOpacity>
-              {reorderModeOpen && (
-                <View style={s.radioGroup}>
-                  {([
-                    ['hybrid',           'Hybrid Recommended',    'Combines Tally levels + sales velocity'],
-                    ['tally_reorder',    'Tally Reorder Level',   'Uses reorder level set in Tally masters'],
-                    ['sales_velocity',   'Sales Velocity',        'Based on historical movement rate'],
-                    ['default_low_stock','Default Low Stock Level','Uses fixed threshold from settings'],
-                  ] as [string, string, string][]).map(([val, label, sub]) => (
-                    <RadioRow
-                      key={val}
-                      label={label}
-                      sublabel={sub}
-                      selected={s_obj.reorder_calc_mode === val}
-                      onPress={() => { update('reorder_calc_mode', val); setReorderModeOpen(false); }}
-                    />
-                  ))}
-                </View>
-              )}
-
-              <View style={s.divider} />
-
-              {/* Low Stock Threshold Mode */}
-              <TouchableOpacity
-                style={s.fieldRow}
-                onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setLowStockModeOpen(v => !v); }}
-                activeOpacity={0.7}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={s.fieldLabel}>Low Stock Threshold Mode</Text>
-                </View>
-                <View style={s.dropdownTrigger}>
-                  <Text style={s.dropdownValue}>{lowStockModeLabel[s_obj.low_stock_threshold_mode] || 'Reorder Level'}</Text>
-                  <Ionicons name={lowStockModeOpen ? 'chevron-up' : 'chevron-down'} size={14} color={COLORS.textTertiary} />
-                </View>
-              </TouchableOpacity>
-              {lowStockModeOpen && (
-                <View style={s.radioGroup}>
-                  {([
-                    ['reorder_level',    'Reorder Level',       undefined],
-                    ['safety_stock',     'Safety Stock',        undefined],
-                    ['days_of_cover',    'Days of Cover',       undefined],
-                    ['custom_percentage','Custom Percentage',   undefined],
-                  ] as [string, string, string | undefined][]).map(([val, label, sub]) => (
-                    <RadioRow
-                      key={val}
-                      label={label}
-                      sublabel={sub}
-                      selected={s_obj.low_stock_threshold_mode === val}
-                      onPress={() => { update('low_stock_threshold_mode', val); setLowStockModeOpen(false); }}
-                    />
-                  ))}
-                </View>
-              )}
-
-              <View style={s.divider} />
-
-              {/* Archive Old Stock Activity */}
-              <View style={s.fieldRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.fieldLabel}>Archive Old Stock Activity</Text>
-                  <Text style={s.fieldSub}>Auto-archive ledger entries older than</Text>
-                </View>
-                <View style={s.inputWithUnit}>
-                  <TextInput
-                    style={s.inlineInput}
-                    value={dv('archive_old_stock_months', s_obj.archive_old_stock_months)}
-                    onChangeText={v => numChange('archive_old_stock_months', v)}
-                    keyboardType="numeric"
-                    maxLength={3}
-                  />
-                  <Text style={s.unitLabel}>Months</Text>
                 </View>
               </View>
 
@@ -923,42 +822,6 @@ export default function StockSettingsScreen() {
                     />
                     <Text style={s.unitLabel}>Days</Text>
                   </View>
-                </View>
-              )}
-
-              <View style={s.divider} />
-
-              {/* Unit for New Items (Items section) */}
-              <TouchableOpacity
-                style={s.fieldRow}
-                onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setItemsUomOpen(v => !v); }}
-                activeOpacity={0.7}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={s.fieldLabel}>Unit for New Items</Text>
-                  <Text style={s.fieldSub}>Hybrid — from Tally UoM masters</Text>
-                </View>
-                <View style={s.dropdownTrigger}>
-                  <Text style={s.dropdownValue}>{s_obj.default_unit_for_new_items || 'Nos'}</Text>
-                  <Ionicons name={itemsUomOpen ? 'chevron-up' : 'chevron-down'} size={14} color={COLORS.textTertiary} />
-                </View>
-              </TouchableOpacity>
-              {itemsUomOpen && (
-                <View style={s.uomList}>
-                  {availableUoms.map(uom => {
-                    const selected = s_obj.default_unit_for_new_items === uom;
-                    return (
-                      <TouchableOpacity
-                        key={uom}
-                        style={s.uomRow}
-                        onPress={() => { update('default_unit_for_new_items', uom); setItemsUomOpen(false); }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[s.uomText, selected && s.uomTextActive]}>{uom}</Text>
-                        {selected && <Ionicons name="checkmark" size={16} color={AMBER} />}
-                      </TouchableOpacity>
-                    );
-                  })}
                 </View>
               )}
 
