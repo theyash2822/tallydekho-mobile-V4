@@ -823,6 +823,10 @@ export const getInventorySettings  = (companyGuid: string) =>
   get<any>(`/inventory/settings?companyGuid=${companyGuid}`);
 export const saveInventorySettings = (companyGuid: string, payload: Record<string, any>) =>
   post<any>(`/inventory/settings?companyGuid=${companyGuid}`, payload);
+export const checkHsnCode = (code: string) =>
+  get<any>(`/inventory/hsn/check?code=${encodeURIComponent(code || '')}`);
+export const getHsnValidation = (companyGuid?: string) =>
+  get<any>(withCompany('/stocks/hsn-validation', companyGuid));
 
 // ── Barcode Module ──────────────────────────────────────────────────────────────
 export interface BarcodeItem {

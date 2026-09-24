@@ -43,15 +43,15 @@ interface Settings {
   slow_moving_no_movement_days:   number;
   dead_stock_no_movement_days:    number;
   movement_analysis_period_days:  number;
+  batch_tracking_app_enabled:     boolean;
+  expiry_tracking_app_enabled:    boolean;
+  allow_negative_stock_app:       boolean;
+  hsn_verification_enabled:       boolean;
   // Alerts
   low_stock_alerts:               AlertChannels;
   negative_stock_alerts:          AlertChannels;
   expiry_alerts:                  ExpiryAlerts;
   fast_slow_moving_alerts:        AlertChannels;
-  // App-level intent for Tally-controlled settings
-  batch_tracking_app_enabled:     boolean;
-  expiry_tracking_app_enabled:    boolean;
-  allow_negative_stock_app:       boolean;
 }
 
 interface Warehouse { id: string; name: string; parent: string; address: string; }
@@ -79,10 +79,8 @@ const DEFAULT_SETTINGS: Settings = {
   batch_tracking_app_enabled:     false,
   expiry_tracking_app_enabled:    false,
   allow_negative_stock_app:       false,
+  hsn_verification_enabled:       true,
 };
-
-const CYCLE_OPTIONS = ['Daily', 'Weekly', 'Monthly', 'Quarterly'];
-const ANALYSIS_PERIOD_OPTIONS = [30, 60, 90, 180];
 
 // ─── Radio option row ─────────────────────────────────────────────────────────
 function RadioRow({
@@ -116,7 +114,7 @@ export default function StockSettingsScreen() {
   const [loadError, setLoadError] = useState(false);
 
   // ── Numeric draft state: allows clearing and retyping without snapping to 0
-  // Keys: Settings field names + 'expiry_days' + 'wh_arch_<guid>'
+  // Keys: Settings field names + 'expiry_days'
   const [drafts, setDrafts] = useState<Record<string, string>>({});
 
   // ── API data
@@ -135,8 +133,8 @@ export default function StockSettingsScreen() {
   const [uomOpen,        setUomOpen]        = useState(false);
   const [expandedWh,     setExpandedWh]     = useState<string | null>(null);
   const [productDispOpen, setProductDispOpen] = useState(false);
-  const [agingOpen,      setAgingOpen]      = useState(false);
   const [fastSlowOpen,   setFastSlowOpen]   = useState(false);
+  const [tallyBatchStats, setTallyBatchStats] = useState<{ batch_enabled_count: number; expiry_enabled_count: number; total_stock_items: number } | null>(null);
 
   // ── Load settings on mount
   const loadSettings = useCallback(async () => {
@@ -145,7 +143,8 @@ export default function StockSettingsScreen() {
     try {
       const res = await getInventorySettings(companyGuid);
       if (res?.success && res.data) {
-        const { settings: srv, available_uoms, warehouses: wh } = res.data;
+        const { settings: srv, available_uoms, warehouses: wh, tally_derived } = res.data;
+        if (tally_derived?.batch_stats) setTallyBatchStats(tally_derived.batch_stats);
         // Merge UoMs — if loaded unit isn't in the list, prepend it so checkmark shows
         if (available_uoms?.length) {
           const loadedUnit = srv?.default_unit_for_new_items;
@@ -224,25 +223,6 @@ export default function StockSettingsScreen() {
     setSettings(prev => ({ ...prev, warehouse_code_map: { ...prev.warehouse_code_map, [whId]: code } }));
     setIsDirty(true);
   };
-  const updateWhCycle = (whId: string, freq: string) => {
-    setSettings(prev => ({ ...prev, cycle_count_frequency_map: { ...prev.cycle_count_frequency_map, [whId]: freq } }));
-    setIsDirty(true);
-  };
-  // Per-warehouse archive: draft-aware so user can clear and retype
-  const whArchiveDv = (whId: string): string => {
-    const k = `wh_arch_${whId}`;
-    return drafts[k] !== undefined ? drafts[k] : String(settings?.archive_stock_layers_map?.[whId] ?? 24);
-  };
-  const onWhArchiveChange = (whId: string, raw: string) => {
-    const k = `wh_arch_${whId}`;
-    setDrafts(prev => ({ ...prev, [k]: raw }));
-    setIsDirty(true);
-    if (raw === '') return;
-    const n = parseInt(raw, 10);
-    if (!isNaN(n) && n >= 1) {
-      setSettings(prev => ({ ...prev, archive_stock_layers_map: { ...prev.archive_stock_layers_map, [whId]: n } }));
-    }
-  };
 
   // ── Save — flush any remaining drafts before sending
   const handleSave = async () => {
@@ -262,15 +242,6 @@ export default function StockSettingsScreen() {
           if (!isNaN(n) && n >= 0) (flushed as any)[key] = n;
         }
       }
-      // Flush per-warehouse archive drafts
-      const flushedArchive = { ...settings.archive_stock_layers_map };
-      for (const [k, v] of Object.entries(drafts)) {
-        if (k.startsWith('wh_arch_')) {
-          const whId = k.replace('wh_arch_', '');
-          const n = parseInt(v, 10);
-          if (!isNaN(n) && n >= 1) flushedArchive[whId] = n;
-        }
-      }
       // Flush expiry days draft
       let flushedExpiry = settings.expiry_alerts;
       if (drafts['expiry_days'] !== undefined) {
@@ -280,7 +251,6 @@ export default function StockSettingsScreen() {
       const finalSettings: Settings = {
         ...settings,
         ...flushed,
-        archive_stock_layers_map: flushedArchive,
         expiry_alerts: flushedExpiry,
       };
       await saveInventorySettings(companyGuid, finalSettings);
@@ -543,11 +513,11 @@ export default function StockSettingsScreen() {
                   {/* Expanded warehouse fields */}
                   {expandedWh === wh.id && (
                     <View style={s.whFields}>
-                      {/* Warehouse Code */}
-                      <View style={s.whFieldRow}>
+                      {/* Warehouse Code → Tally Godown Alias (append-only) */}
+                      <View style={s.whFieldColRow}>
                         <Text style={s.whFieldLabel}>Warehouse Code</Text>
                         <TextInput
-                          style={s.whInput}
+                          style={[s.whInput, { maxWidth: undefined, width: '100%', textAlign: 'left', marginTop: 6 }]}
                           value={s_obj.warehouse_code_map[wh.id] || ''}
                           onChangeText={v => updateWhCode(wh.id, v)}
                           placeholder="e.g. JPR-MAIN"
@@ -555,42 +525,9 @@ export default function StockSettingsScreen() {
                           autoCapitalize="characters"
                           maxLength={20}
                         />
-                      </View>
-
-                      {/* Cycle-count frequency */}
-                      <View style={s.whFieldColRow}>
-                        <Text style={s.whFieldLabel}>Cycle Count Frequency</Text>
-                        <View style={s.cycleOptions}>
-                          {CYCLE_OPTIONS.map(opt => {
-                            const active = (s_obj.cycle_count_frequency_map[wh.id] || 'Weekly') === opt;
-                            return (
-                              <TouchableOpacity
-                                key={opt}
-                                style={[s.cyclePill, active && s.cyclePillActive]}
-                                onPress={() => updateWhCycle(wh.id, opt)}
-                                activeOpacity={0.7}
-                              >
-                                <Text style={[s.cyclePillText, active && s.cyclePillTextActive]}>{opt}</Text>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-                      </View>
-
-                      {/* Archive Stock Layers */}
-                      <View style={s.whFieldRow}>
-                        <Text style={s.whFieldLabel}>Archive Stock Layers older than</Text>
-                        <View style={s.inputWithUnit}>
-                          <TextInput
-                            style={s.inlineInput}
-                            value={whArchiveDv(wh.id)}
-                            onChangeText={v => onWhArchiveChange(wh.id, v)}
-                            keyboardType="numeric"
-                            maxLength={3}
-                            placeholderTextColor={COLORS.textTertiary}
-                          />
-                          <Text style={s.unitLabel}>Months</Text>
-                        </View>
+                        <Text style={[s.fieldSub, { marginTop: 6 }]}>
+                          Saved as Tally Godown Alias. Existing aliases are kept — we only add this code.
+                        </Text>
                       </View>
                     </View>
                   )}
@@ -615,11 +552,16 @@ export default function StockSettingsScreen() {
           {openSections.items && (
             <View style={s.sectionBody}>
 
-              {/* Batch / Lot Tracking */}
+              {/* Batch / Lot Tracking — UX gate; sync default from Tally */}
               <View style={s.toggleRow}>
                 <View style={s.toggleInfo}>
                   <Text style={s.fieldLabel}>Batch / Lot Tracking</Text>
-                  <Text style={s.fieldSub}>Applies to future items. Tally update requires desktop sync.</Text>
+                  <Text style={s.fieldSub}>
+                    Shows batch fields in the app. Enable the same in Tally for books to match.
+                    {tallyBatchStats
+                      ? ` Tally: ${tallyBatchStats.batch_enabled_count}/${tallyBatchStats.total_stock_items} items.`
+                      : ''}
+                  </Text>
                 </View>
                 <BrandSwitch
                   value={s_obj.batch_tracking_app_enabled}
@@ -628,16 +570,10 @@ export default function StockSettingsScreen() {
               </View>
               {s_obj.batch_tracking_app_enabled && (
                 <View style={s.tallyPendingWrap}>
-                  <Ionicons name="time-outline" size={12} color={AMBER} />
-                  <Text style={s.tallyPendingText}>Preference saved. Enable batch tracking in Tally Prime to apply to existing items.</Text>
+                  <Ionicons name="information-circle-outline" size={12} color={AMBER} />
+                  <Text style={s.tallyPendingText}>App preference. We don’t change Tally company features from here.</Text>
                 </View>
               )}
-              <View style={s.tallyBadgeWrap}>
-                <View style={s.tallyBadge}>
-                  <Ionicons name="sync-outline" size={10} color={AMBER} />
-                  <Text style={s.tallyBadgeText}>Tally Controlled</Text>
-                </View>
-              </View>
 
               <View style={s.divider} />
 
@@ -645,7 +581,12 @@ export default function StockSettingsScreen() {
               <View style={s.toggleRow}>
                 <View style={s.toggleInfo}>
                   <Text style={s.fieldLabel}>Expiry-Date Tracking</Text>
-                  <Text style={s.fieldSub}>Requires batch tracking enabled in Tally</Text>
+                  <Text style={s.fieldSub}>
+                    Shows expiry fields when batch is used.
+                    {tallyBatchStats
+                      ? ` Tally: ${tallyBatchStats.expiry_enabled_count}/${tallyBatchStats.total_stock_items} items.`
+                      : ''}
+                  </Text>
                 </View>
                 <BrandSwitch
                   value={s_obj.expiry_tracking_app_enabled}
@@ -654,16 +595,10 @@ export default function StockSettingsScreen() {
               </View>
               {s_obj.expiry_tracking_app_enabled && (
                 <View style={s.tallyPendingWrap}>
-                  <Ionicons name="time-outline" size={12} color={AMBER} />
-                  <Text style={s.tallyPendingText}>Preference saved. Enable expiry dates in Tally Prime per stock item.</Text>
+                  <Ionicons name="information-circle-outline" size={12} color={AMBER} />
+                  <Text style={s.tallyPendingText}>App preference. Enable expiry on stock items in Tally Prime for existing items.</Text>
                 </View>
               )}
-              <View style={s.tallyBadgeWrap}>
-                <View style={s.tallyBadge}>
-                  <Ionicons name="sync-outline" size={10} color={AMBER} />
-                  <Text style={s.tallyBadgeText}>Tally Controlled</Text>
-                </View>
-              </View>
 
               <View style={s.divider} />
 
@@ -671,24 +606,26 @@ export default function StockSettingsScreen() {
               <View style={s.toggleRow}>
                 <View style={s.toggleInfo}>
                   <Text style={s.fieldLabel}>Allow Negative Stock</Text>
-                  <Text style={s.fieldSub}>Permit stock quantity to go below zero</Text>
+                  <Text style={s.fieldSub}>When off, the app warns before an outbound that would go below zero (no hard block)</Text>
                 </View>
                 <BrandSwitch
                   value={s_obj.allow_negative_stock_app}
                   onValueChange={v => update('allow_negative_stock_app', v)}
                 />
               </View>
-              {s_obj.allow_negative_stock_app && (
-                <View style={s.tallyPendingWrap}>
-                  <Ionicons name="time-outline" size={12} color={AMBER} />
-                  <Text style={s.tallyPendingText}>Preference saved. Update F11 company features in Tally Prime to apply.</Text>
+
+              <View style={s.divider} />
+
+              {/* HSN Code Verification */}
+              <View style={s.toggleRow}>
+                <View style={s.toggleInfo}>
+                  <Text style={s.fieldLabel}>HSN Code Verification</Text>
+                  <Text style={s.fieldSub}>Flag items whose HSN is missing or not in our GST list. Soft warning only — never blocks save.</Text>
                 </View>
-              )}
-              <View style={s.tallyBadgeWrap}>
-                <View style={s.tallyBadge}>
-                  <Ionicons name="sync-outline" size={10} color={AMBER} />
-                  <Text style={s.tallyBadgeText}>Tally Controlled</Text>
-                </View>
+                <BrandSwitch
+                  value={s_obj.hsn_verification_enabled !== false}
+                  onValueChange={v => update('hsn_verification_enabled', v)}
+                />
               </View>
 
               <View style={s.divider} />
@@ -697,7 +634,7 @@ export default function StockSettingsScreen() {
               <View style={s.fieldRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.fieldLabel}>Default Low Stock Level</Text>
-                  <Text style={s.fieldSub}>Items with qty 1…this level count as Low Stock (reorder level ignored)</Text>
+                  <Text style={s.fieldSub}>Items with qty 1…this level count as Low Stock</Text>
                 </View>
                 <View style={s.inputWithUnit}>
                   <TextInput
@@ -713,78 +650,20 @@ export default function StockSettingsScreen() {
 
               <View style={s.divider} />
 
-              {/* Inventory Aging Rules */}
-              <TouchableOpacity
-                style={s.fieldRow}
-                onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setAgingOpen(v => !v); }}
-                activeOpacity={0.7}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={s.fieldLabel}>Inventory Aging Rules</Text>
-                  <Text style={s.fieldSub}>Define stock age classification buckets</Text>
-                </View>
-                <Ionicons name={agingOpen ? 'chevron-up' : 'chevron-down'} size={14} color={COLORS.textTertiary} />
-              </TouchableOpacity>
-              {agingOpen && (
-                <View style={s.agingWrap}>
-                  {(['0-30 Days','31-60 Days','61-90 Days','90+ Days'] as string[]).map((label, i) => {
-                    const bucket = ['0-30','31-60','61-90','90+'][i];
-                    const active  = s_obj.inventory_aging_rules.buckets.includes(bucket);
-                    return (
-                      <TouchableOpacity
-                        key={bucket}
-                        style={[s.agingPill, active && s.agingPillActive]}
-                        onPress={() => {
-                          const buckets = active
-                            ? s_obj.inventory_aging_rules.buckets.filter(b => b !== bucket)
-                            : [...s_obj.inventory_aging_rules.buckets, bucket];
-                          update('inventory_aging_rules', { buckets });
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[s.agingPillText, active && s.agingPillTextActive]}>{label}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              )}
-
-              <View style={s.divider} />
-
-              {/* Fast / Slow Moving Analysis */}
+              {/* Fast / Slow / Dead — FY-based, app+web read only */}
               <TouchableOpacity
                 style={s.fieldRow}
                 onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setFastSlowOpen(v => !v); }}
                 activeOpacity={0.7}
               >
                 <View style={{ flex: 1 }}>
-                  <Text style={s.fieldLabel}>Fast / Slow Moving Analysis</Text>
-                  <Text style={s.fieldSub}>Thresholds for classifying stock movement</Text>
+                  <Text style={s.fieldLabel}>Fast / Slow / Dead Moving</Text>
+                  <Text style={s.fieldSub}>Classification for stock reports (current FY)</Text>
                 </View>
                 <Ionicons name={fastSlowOpen ? 'chevron-up' : 'chevron-down'} size={14} color={COLORS.textTertiary} />
               </TouchableOpacity>
               {fastSlowOpen && (
                 <View style={s.fastSlowWrap}>
-
-                  {/* Analysis Period */}
-                  <Text style={s.fastSlowSectionLabel}>Analysis Period</Text>
-                  <View style={s.periodPillRow}>
-                    {ANALYSIS_PERIOD_OPTIONS.map(days => {
-                      const active = s_obj.movement_analysis_period_days === days;
-                      return (
-                        <TouchableOpacity
-                          key={days}
-                          style={[s.cyclePill, active && s.cyclePillActive]}
-                          onPress={() => update('movement_analysis_period_days', days)}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[s.cyclePillText, active && s.cyclePillTextActive]}>{days}d</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
-                  {/* Fast Moving */}
                   <Text style={s.fastSlowSectionLabel}>Fast Moving — Top %</Text>
                   <View style={s.fastSlowRow}>
                     <TextInput
@@ -794,10 +673,9 @@ export default function StockSettingsScreen() {
                       keyboardType="numeric"
                       maxLength={3}
                     />
-                    <Text style={s.unitLabel}>% of items by sales volume</Text>
+                    <Text style={s.unitLabel}>% of active items by outward qty</Text>
                   </View>
 
-                  {/* Slow Moving */}
                   <Text style={s.fastSlowSectionLabel}>Slow Moving — No movement for</Text>
                   <View style={s.fastSlowRow}>
                     <TextInput
@@ -810,7 +688,6 @@ export default function StockSettingsScreen() {
                     <Text style={s.unitLabel}>Days</Text>
                   </View>
 
-                  {/* Dead Stock */}
                   <Text style={s.fastSlowSectionLabel}>Dead Stock — No movement for</Text>
                   <View style={s.fastSlowRow}>
                     <TextInput

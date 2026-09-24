@@ -28,6 +28,7 @@ import {
 } from '../../src/utils/proformaToInvoicePrefill';
 import { currentTenantKey, draftFeature, prefillFeature, dropLegacyKeys } from '../../src/utils/tenantStorage';
 import { toVoucherDocument } from '../../src/utils/voucherDocumentAdapter';
+import { confirmIfNegativeStockRisk } from '../../src/utils/negativeStockWarn';
 import { shareVoucherPdf } from '../../src/utils/voucherPdf';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
@@ -1457,6 +1458,19 @@ export default function CreateSalesInvoiceScreen() {
         return;
       }
     }
+
+    const okNeg = await confirmIfNegativeStockRisk({
+      companyGuid: company?.guid,
+      lines: items.filter(i => i.product).map(i => {
+        const master = stockItems.find(s => s.name === i.product);
+        return {
+          name: i.product,
+          qty: parseFloat(i.qty) || 0,
+          available: master != null ? parseFloat(String((master as any).closing_qty ?? (master as any).qty ?? NaN)) : undefined,
+        };
+      }),
+    });
+    if (!okNeg) return;
 
     setSubmitting(true);
     submittingRef.current = true;

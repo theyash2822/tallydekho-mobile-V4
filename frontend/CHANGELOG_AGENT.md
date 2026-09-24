@@ -1,5 +1,20 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-24 — Items settings + HSN validation report
+
+Removed Aging / Analysis Period. Fast/Slow/Dead tabs. HSN Verification toggle
++ report screen. Create Item gates batch/expiry; soft HSN hint. Sales invoice
+warns on negative stock when setting OFF.
+
+---
+
+## 2026-09-24 — Warehouse Code display + settings cleanup
+
+Warehouse list/detail show code (searchable). Settings: Cycle Count + Archive
+Layers removed; Warehouse Code saved as Tally Godown Alias (append-only).
+
+---
+
 ## 2026-09-24 — Stock General settings: unit fallback + buffer + cleanup
 
 Removed Reorder Calc Mode, Low Stock Threshold Mode, Archive Old Stock Activity

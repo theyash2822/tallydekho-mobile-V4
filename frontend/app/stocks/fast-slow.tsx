@@ -37,7 +37,7 @@ interface StockItem {
   avg_daily_outward: number;
   days_remaining: number | null;
   rank: number;
-  tab: 'fast' | 'slow';
+  tab: 'fast' | 'slow' | 'dead';
 }
 
 // ── Screen ───────────────────────────────────────────────────────────────────
@@ -55,13 +55,14 @@ export default function FastSlowMovingScreen() {
   const [apiError,  setApiError]    = useState<string | null>(null);
   const [fastItems, setFastItems]   = useState<StockItem[]>([]);
   const [slowItems, setSlowItems]   = useState<StockItem[]>([]);
+  const [deadItems, setDeadItems]   = useState<StockItem[]>([]);
   const [summary,   setSummary]     = useState<{ total: number; active: number; inactive: number; fy: string } | null>(null);
 
   // Chart interaction
   const [focusedBar, setFocusedBar] = useState<number | null>(null);
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<'fast' | 'slow'>('fast');
+  const [activeTab, setActiveTab] = useState<'fast' | 'slow' | 'dead'>('fast');
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -72,7 +73,7 @@ export default function FastSlowMovingScreen() {
   const [isSharing,       setIsSharing]       = useState(false);
 
   const handleShareSelected = async () => {
-    const pool = [...fastItems, ...slowItems];
+    const pool = [...fastItems, ...slowItems, ...deadItems];
     const items = pool.filter(i => selectedIds.has(i.id));
     if (!items.length || isSharing) return;
     setIsSharing(true);
@@ -108,6 +109,7 @@ export default function FastSlowMovingScreen() {
       const d = res?.data;
       setFastItems(d?.fast   ?? []);
       setSlowItems(d?.slow   ?? []);
+      setDeadItems(d?.dead   ?? []);
       setSummary({
         total:    d?.total_items    ?? 0,
         active:   d?.active_items   ?? 0,
@@ -141,7 +143,7 @@ export default function FastSlowMovingScreen() {
     [chartItems]
   );
 
-  const allVisible  = activeTab === 'fast' ? fastItems : slowItems;
+  const allVisible  = activeTab === 'fast' ? fastItems : activeTab === 'dead' ? deadItems : slowItems;
   const visibleItems = allVisible.slice(0, page * PAGE_SIZE);
   const hasMore      = visibleItems.length < allVisible.length;
 
@@ -229,8 +231,8 @@ export default function FastSlowMovingScreen() {
               </View>
               <View style={s.summaryDivider} />
               <View style={s.summaryItem}>
-                <Text style={[s.summaryVal, { color: COLORS.textSecondary }]}>{summary.inactive}</Text>
-                <Text style={s.summaryLbl}>No Movement</Text>
+                <Text style={[s.summaryVal, { color: COLORS.negative }]}>{deadItems.length}</Text>
+                <Text style={s.summaryLbl}>Dead Stock</Text>
               </View>
             </View>
           )}
@@ -302,7 +304,7 @@ export default function FastSlowMovingScreen() {
             </View>
           )}
 
-          {/* ── Fast / Slow Pill Toggle ─────────────────────────────────── */}
+          {/* ── Fast / Slow / Dead Pill Toggle ──────────────────────────── */}
           <View style={s.pillToggle}>
             <TouchableOpacity
               style={[s.pillBtn, activeTab === 'fast' && s.pillBtnFast]}
@@ -332,6 +334,20 @@ export default function FastSlowMovingScreen() {
                 Slow ({slowItems.length})
               </Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.pillBtn, activeTab === 'dead' && s.pillBtnDead]}
+              onPress={() => { setActiveTab('dead'); cancelSelection(); setPage(1); }}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="skull-outline"
+                size={14}
+                color={activeTab === 'dead' ? '#fff' : COLORS.textSecondary}
+              />
+              <Text style={[s.pillTxt, activeTab === 'dead' && s.pillTxtDeadActive]}>
+                Dead ({deadItems.length})
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* ── Classification note ───────────────────────────────────── */}
@@ -339,8 +355,10 @@ export default function FastSlowMovingScreen() {
             <Ionicons name="information-circle-outline" size={14} color={COLORS.textTertiary} />
             <Text style={s.noteTxt}>
               {activeTab === 'fast'
-                ? 'Items with highest outward movement in the FY'
-                : 'Items with low/no outward movement in the FY'}
+                ? 'Top movers by outward qty in the current FY'
+                : activeTab === 'dead'
+                  ? 'On-hand items with no outward movement for the Dead threshold'
+                  : 'Items below Fast cut or quiet for the Slow threshold'}
             </Text>
           </View>
 
@@ -529,9 +547,11 @@ const s = StyleSheet.create({
   pillBtn:       { flex: 1, paddingVertical: 13, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 },
   pillBtnFast:   { backgroundColor: COLORS.brandPrimary },
   pillBtnSlow:   { backgroundColor: COLORS.brandPrimary },
+  pillBtnDead:   { backgroundColor: COLORS.negative },
   pillTxt:       { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
   pillTxtFastActive: { color: '#fff', fontWeight: '700' },
   pillTxtSlowActive: { color: '#fff', fontWeight: '700' },
+  pillTxtDeadActive: { color: '#fff', fontWeight: '700' },
 
   // Note + hint
   noteRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },

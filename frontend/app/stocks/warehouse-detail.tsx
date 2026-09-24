@@ -95,8 +95,10 @@ export default function WarehouseDetailScreen() {
           <Text style={s.headerTitle} numberOfLines={1}>
             {warehouseName || 'Warehouse Detail'}
           </Text>
-          {wh?.address ? (
-            <Text style={s.headerSub} numberOfLines={1}>{wh.address}</Text>
+          {(wh?.code || wh?.address) ? (
+            <Text style={s.headerSub} numberOfLines={1}>
+              {[wh?.code, wh?.address].filter(Boolean).join(' · ')}
+            </Text>
           ) : null}
         </View>
       </View>

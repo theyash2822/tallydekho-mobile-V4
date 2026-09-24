@@ -88,6 +88,7 @@ export default function WarehousesScreen() {
           name: r.name,
           location: r.address || r.parent || '',
           parent: r.parent || '',
+          code: r.code || r.alias || '',
           total_qty: parseFloat(r.total_qty || 0),
           skus: parseInt(r.skus || 0),
           // utilization not available without capacity data — computed as 0
@@ -101,10 +102,12 @@ export default function WarehousesScreen() {
       .finally(() => setIsLoading(false));
   }, [companyGuid]);
 
+  const q = query.toLowerCase();
   const filtered = warehouses.filter(
     w =>
-      w.name.toLowerCase().includes(query.toLowerCase()) ||
-      w.location.toLowerCase().includes(query.toLowerCase()),
+      w.name.toLowerCase().includes(q) ||
+      w.location.toLowerCase().includes(q) ||
+      (w.code || '').toLowerCase().includes(q),
   );
 
   // Compute total qty across all warehouses for relative ring fill
@@ -193,6 +196,9 @@ export default function WarehousesScreen() {
                 {/* Info */}
                 <View style={styles.whInfo}>
                   <Text style={styles.whName}>{wh.name}</Text>
+                  {wh.code ? (
+                    <Text style={styles.codeTxt}>{wh.code}</Text>
+                  ) : null}
                   {wh.location ? (
                     <View style={styles.locationRow}>
                       <Ionicons name="location-outline" size={11} color={COLORS.textTertiary} />
@@ -279,6 +285,7 @@ const styles = StyleSheet.create({
   },
   whInfo:      { flex: 1, gap: 4 },
   whName:      { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary },
+  codeTxt:     { fontSize: TYPOGRAPHY.xs, fontWeight: '600', color: COLORS.textSecondary, letterSpacing: 0.3 },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   locationTxt: { fontSize: TYPOGRAPHY.xs, color: COLORS.textTertiary },
   badgeRow:    { flexDirection: 'row', gap: 6, marginTop: 2 },

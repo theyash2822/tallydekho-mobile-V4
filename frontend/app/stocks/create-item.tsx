@@ -9,7 +9,7 @@ import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
-import { createStockItem, getStockGroups, getStockUnits, getWarehouses } from '../../src/services/api';
+import { createStockItem, getStockGroups, getStockUnits, getWarehouses, getInventorySettings, checkHsnCode } from '../../src/services/api';
 import { clearStockListCache } from '../../src/utils/stockCache';
 import FormDropdown from '../../src/components/forms/FormDropdown';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
@@ -87,6 +87,10 @@ export default function CreateStockItemScreen() {
   const [groupOptions,     setGroupOptions]     = useState<{label:string;value:string}[]>([]);
   const [warehouseOptions, setWarehouseOptions] = useState<{label:string;value:string}[]>([]);
   const [unitOptions,      setUnitOptions]      = useState<{label:string;value:string}[]>([]);
+  const [showBatchFields, setShowBatchFields] = useState(false);
+  const [showExpiryFields, setShowExpiryFields] = useState(false);
+  const [hsnVerifyOn, setHsnVerifyOn] = useState(true);
+  const [hsnHint, setHsnHint] = useState<string | null>(null);
 
   useEffect(() => {
     if (!company?.guid) return;
@@ -97,6 +101,14 @@ export default function CreateStockItemScreen() {
     // Load real units from Tally
     getStockUnits(company.guid)
       .then((res: any) => setUnitOptions((res?.data || []).map((u: string) => ({ label: u, value: u }))))
+      .catch(() => {});
+    getInventorySettings(company.guid)
+      .then((res: any) => {
+        const st = res?.data?.settings;
+        setShowBatchFields(!!st?.batch_tracking_app_enabled);
+        setShowExpiryFields(!!st?.expiry_tracking_app_enabled);
+        setHsnVerifyOn(st?.hsn_verification_enabled !== false);
+      })
       .catch(() => {});
     // Load real warehouses from Tally
     getWarehouses(company.guid)
@@ -258,7 +270,30 @@ export default function CreateStockItemScreen() {
           <ThemedInput placeholder="Enter product name" value={productName} onChangeText={setProductName} />
 
           <Text style={s.label}>HSN</Text>
-          <ThemedInput placeholder="HSN / SAC" value={hsnCode} onChangeText={setHsnCode} keyboardType="numeric" />
+          <ThemedInput
+            placeholder="HSN / SAC"
+            value={hsnCode}
+            onChangeText={(v) => {
+              setHsnCode(v);
+              setHsnHint(null);
+            }}
+            onBlur={async () => {
+              if (!hsnVerifyOn || !hsnCode.trim()) { setHsnHint(null); return; }
+              try {
+                const res: any = await checkHsnCode(hsnCode.trim());
+                const d = res?.data;
+                if (d && d.valid === false) {
+                  setHsnHint('System finds this HSN invalid. Please correct it, or you can proceed.');
+                } else {
+                  setHsnHint(null);
+                }
+              } catch {
+                setHsnHint(null);
+              }
+            }}
+            keyboardType="numeric"
+          />
+          {!!hsnHint && <Text style={s.hsnHint}>{hsnHint}</Text>}
 
           {/* Unit + Tax Rate — shared field geometry so labels/controls align */}
           <View style={s.row2}>
@@ -303,8 +338,10 @@ export default function CreateStockItemScreen() {
             </View>
           </View>
 
-          {/* Expiry Date + Batch Number */}
+          {/* Expiry Date + Batch Number — gated by Items settings */}
+          {(showBatchFields || showExpiryFields) && (
           <View style={s.row2}>
+            {showExpiryFields ? (
             <View style={{ flex: 1 }}>
               <Text style={s.label}>Expiry Date</Text>
               <TouchableOpacity style={s.dateBtn} activeOpacity={0.7}>
@@ -313,11 +350,15 @@ export default function CreateStockItemScreen() {
                 <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
+            ) : <View style={{ flex: 1 }} />}
+            {showBatchFields ? (
             <View style={{ flex: 1 }}>
               <Text style={s.label}>Batch Number</Text>
               <ThemedInput placeholder="Enter batch number" value={batchNo} onChangeText={setBatchNo} />
             </View>
+            ) : <View style={{ flex: 1 }} />}
           </View>
+          )}
 
           {/* Generate Barcode toggle */}
           <View style={s.toggleRow}>
@@ -374,6 +415,7 @@ const s = StyleSheet.create({
   headerTitle: { flex: 1, fontSize: TYPOGRAPHY.md, fontWeight: '700', color: COLORS.textPrimary },
   form: { padding: SPACING.md },
   label: { fontSize: TYPOGRAPHY.sm, color: COLORS.textSecondary, marginBottom: 8, marginTop: 16 },
+  hsnHint: { fontSize: 11, color: '#92400E', marginTop: 6, lineHeight: 15 },
   star: { color: COLORS.negative },
   input: {
     borderWidth: 1, borderColor: COLORS.borderDefault, borderRadius: RADIUS.md,

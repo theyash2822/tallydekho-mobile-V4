@@ -21,6 +21,7 @@ const REPORTS: ReportItem[] = [
   { id: 'valuation',    label: 'Valuation Summary',         desc: 'Total stock value by category',    icon: 'document-text-outline',   route: '/stocks/valuation-summary' },
   { id: 'expiry',       label: 'Expiry Schedule',           desc: 'Items expiring by date',           icon: 'timer-outline',           route: '/stocks/expiry-schedule' },
   { id: 'fast-slow',    label: 'Fast vs Slow Moving',       desc: 'Velocity analysis of all SKUs',    icon: 'swap-horizontal-outline', route: '/stocks/fast-slow' },
+  { id: 'hsn-validation', label: 'HSN Validation',         desc: 'Items with missing or unknown HSN', icon: 'shield-checkmark-outline', route: '/stocks/hsn-validation' },
   { id: 'transfer',     label: 'Transfer History',          desc: 'Inter-warehouse stock transfers',  icon: 'repeat-outline',          route: '/stocks/transfer-history' },
   { id: 'snapshot',     label: 'Stock Snapshot',            desc: 'Point-in-time stock position',     icon: 'camera-outline',          route: '/stocks/stock-snapshot' },
   { id: 'negative',     label: 'Negative Stock Exceptions', desc: 'Items with below-zero quantities', icon: 'alert-circle-outline',    route: '/stocks/negative-stock' },
