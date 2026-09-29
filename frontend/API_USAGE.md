@@ -95,7 +95,11 @@ Purchase Invoice (3-step create, `purchase/create-invoice.tsx`):
 - `getPurchaseLedgerAccounts(companyGuid)` — `GET /api/purchase/ledger-accounts` — Purchase Accounts group ledgers only (now consumed by the create screen; wrapper pre-existed in `api.ts`)
 - `getParties(companyGuid, { type: 'vendor' })` — `GET /api/parties?type=vendor` — server-side filters to `parent ILIKE '%Sundry Creditor%'`
 - `createTallyParty({ ..., parent: 'Sundry Creditors' })` — "Add New Vendor" drawer
-- `createPurchaseInvoice(payload)` — `POST /tally/voucher/purchase` with `voucherType: 'Purchase'`, `items`, `taxes`, `logistics`, `make_payment`, `isOptional`/`original_entry_type`, `numbering_policy`
+- `createPurchaseInvoice(payload)` — `POST /tally/voucher/purchase` with `voucherType: 'Purchase'`, `items`, `taxes`, `logistics`, `make_payment`, `isOptional`/`original_entry_type`, `numbering_policy`, optional `einvoiceImport` (app DB only; `409 DUPLICATE_IRN` → "Already booked" alert)
+- `resolveEinvoiceQr(companyGuid, { sellerGstin, irn })` — `GET /api/purchase/einvoice-qr-resolve` — vendor match by GSTIN + duplicate IRN for the QR review sheet
+- `analyzePurchaseBill({ companyGuid, file })` — `POST /api/purchase/bill-analyze` — 45 s timeout (own override); blocks non-bills, returns candidates for warn-only match; `OCR_BUSY` / timeout → Try again alert
+- `uploadPurchaseBillAttachment({ companyGuid, invoiceUuid, file })` — `POST /api/purchase/bill-attachment` — after a successful save
+- `getPurchaseBillAttachment(companyGuid, invoiceUuid)` — `GET /api/purchase/bill-attachment/:invoiceUuid` — wrapper only (no screen yet)
 
 ## Vouchers
 getVouchers, getMyEntries, getVoucherById, retryVoucherEntry

@@ -189,6 +189,7 @@ async function request<T>(
   /** Internal: false on the replay so one expiry can never loop. */
   allowRefresh = true,
   responseType: 'json' | 'text' = 'json',
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<T> {
   const token = requiresAuth ? await getToken() : null;
   // Fail client-side before hitting backend (avoids "No token provided" spam)
@@ -203,7 +204,7 @@ async function request<T>(
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const res = await fetch(`${BASE_URL}/${basePrefix}${endpoint}`, {
@@ -227,7 +228,7 @@ async function request<T>(
             const outcome = await tryRefreshSession();
             if (outcome === 'refreshed') {
               clearTimeout(timer);
-              return await request<T>(method, endpoint, body, requiresAuth, basePrefix, false, responseType);
+              return await request<T>(method, endpoint, body, requiresAuth, basePrefix, false, responseType, timeoutMs);
             }
             if (outcome === 'unavailable') throw err;
           }
@@ -265,7 +266,7 @@ async function request<T>(
           const outcome = await tryRefreshSession();
           if (outcome === 'refreshed') {
             clearTimeout(timer);
-            return await request<T>(method, endpoint, body, requiresAuth, basePrefix, false, responseType);
+            return await request<T>(method, endpoint, body, requiresAuth, basePrefix, false, responseType, timeoutMs);
           }
           if (outcome === 'unavailable') throw err;
         }
@@ -620,9 +621,11 @@ export const resolveEinvoiceQr = (companyGuid: string, params: { sellerGstin: st
   get<any>(withCompany('/purchase/einvoice-qr-resolve', companyGuid, params));
 export const uploadPurchaseBillAttachment = (payload: { companyGuid: string; invoiceUuid: string; file: string }) =>
   post<any>('/purchase/bill-attachment', payload);
+/** Must exceed the server's queue wait + OCR budget (billDocumentAnalyzer.js). */
+const BILL_ANALYZE_TIMEOUT_MS = 45_000;
 /** Reads a bill photo/PDF on the server (text layer or OCR) and says whether it looks like a bill. */
 export const analyzePurchaseBill = (payload: { companyGuid: string; file: string }) =>
-  post<any>('/purchase/bill-analyze', payload);
+  request<any>('POST', '/purchase/bill-analyze', payload, true, 'api', true, 'json', BILL_ANALYZE_TIMEOUT_MS);
 export const getPurchaseBillAttachment = (companyGuid: string, invoiceUuid: string) =>
   get<any>(withCompany(`/purchase/bill-attachment/${encodeURIComponent(invoiceUuid)}`, companyGuid));
 export const createStockItem       = (payload: any) => tallyPost<any>('/master/stock-item', payload, 'stock_item');

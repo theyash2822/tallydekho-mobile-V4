@@ -49,6 +49,7 @@ type BillAttachment = {
   qr: EinvoiceQrSummary | null;
 };
 type BillCheck = { key: string; state: 'ok' | 'warn' | 'na'; text: string };
+type BillFileInput = { uri: string; base64: string; mime: string; name: string | null; isImage: boolean };
 
 const normRef = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
@@ -777,6 +778,7 @@ export default function CreatePurchaseInvoiceScreen() {
   const [billAttachment, setBillAttachment] = useState<BillAttachment | null>(null);
   const [billChecking, setBillChecking] = useState(false);
   const billSessionRef = useRef(0);
+  const retryBillRef = useRef<((file: BillFileInput) => void) | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const scannedRef = useRef(false);
 
@@ -1066,7 +1068,7 @@ export default function CreatePurchaseInvoiceScreen() {
 
   // A file is attached only if it has a valid e-Invoice QR or the server reads it as a bill.
   // Nothing on the form is changed except via the QR review sheet (user taps Apply).
-  const processBillFile = useCallback(async (file: { uri: string; base64: string; mime: string; name: string | null; isImage: boolean }) => {
+  const processBillFile = useCallback(async (file: BillFileInput) => {
     const guid = companyGuid;
     if (!guid) {
       Toast.show({ type: 'error', text1: 'Select a company first' });
@@ -1081,12 +1083,22 @@ export default function CreatePurchaseInvoiceScreen() {
     const dataUri = `data:${file.mime};base64,${file.base64}`;
     const qr = file.isImage ? await findEinvoiceQrInImage(file.uri) : null;
     let analysis: BillAnalysis | null = null;
+    let failTitle = 'Could not check this bill';
     let failMsg = '';
     try {
       const res: any = await analyzePurchaseBill({ companyGuid: guid, file: dataUri });
       analysis = res?.data || null;
     } catch (err: any) {
-      failMsg = err?.message || 'Could not check the bill.';
+      const code = err?.code || '';
+      if (code === 'OCR_BUSY') {
+        failTitle = 'Bill reader is busy';
+        failMsg = 'Other bills are being checked right now. Please try again in a few seconds.';
+      } else if (code === 'TIMEOUT' || code === 'ANALYZE_TIMEOUT') {
+        failTitle = 'Checking took too long';
+        failMsg = 'The bill could not be checked in time. Check your connection, or try a clearer photo of just the bill.';
+      } else {
+        failMsg = err?.message || 'Please check your connection.';
+      }
     }
     if (session !== billSessionRef.current) return;
     setBillChecking(false);
@@ -1095,7 +1107,10 @@ export default function CreatePurchaseInvoiceScreen() {
     const kind = file.isImage ? 'photo' : 'PDF';
     if (!qr) {
       if (!analysis) {
-        Alert.alert('Could not check this bill', `${failMsg}\n\nThe file was not attached. Please try again.`);
+        Alert.alert(failTitle, `${failMsg}\n\nThe file was not attached.`, [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Try again', onPress: () => { retryBillRef.current?.(file); } },
+        ]);
         return;
       }
       if (!analysis.readable) {
@@ -1120,6 +1135,8 @@ export default function CreatePurchaseInvoiceScreen() {
       Toast.show({ type: 'success', text1: 'Bill checked and attached', text2: 'Fill the details; match notes appear under the bill.' });
     }
   }, [companyGuid, startQrReview]);
+
+  useEffect(() => { retryBillRef.current = processBillFile; }, [processBillFile]);
 
   const processBillPhoto = useCallback((asset: ImagePicker.ImagePickerAsset | undefined) => {
     if (!asset?.uri || !asset.base64) {
@@ -1538,7 +1555,11 @@ export default function CreatePurchaseInvoiceScreen() {
       if (billAttachment && company?.guid) uploadBillPhoto(company.guid, invoiceUuid, billAttachment.dataUri);
       return;
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Submit Failed', text2: err?.message || 'Check Tally connection.' });
+      if (err?.code === 'DUPLICATE_IRN') {
+        Alert.alert('Already booked', err?.message || 'This e-Invoice (IRN) is already booked as a purchase invoice.');
+      } else {
+        Toast.show({ type: 'error', text1: 'Submit Failed', text2: err?.message || 'Check Tally connection.' });
+      }
       submittingRef.current = false;
       setSubmitting(false);
     }

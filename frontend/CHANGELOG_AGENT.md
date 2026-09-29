@@ -1,5 +1,14 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-29 — QA follow-ups: bill-check timeout, duplicate IRN alert, API docs
+
+- `request()` takes an optional `timeoutMs`; `analyzePurchaseBill` uses 45 s (others stay 25 s).
+- Bill check failures (busy / too slow / network) show an alert with **Try again**.
+- `409 DUPLICATE_IRN` on save → "Already booked" alert instead of "Submit Failed".
+- `API_USAGE.md` lists the new purchase endpoints.
+
+---
+
 ## 2026-09-29 — Purchase Invoice: e-Invoice QR import, bill validation, universal item scanner
 
 - **e-Invoice QR:** strict JWS parser (`src/utils/einvoiceQr.ts`, no signature verification yet) + `EinvoiceQrPreviewSheet` (vendor by GSTIN, duplicate IRN block, buyer GSTIN warning). Apply fills vendor / inv no / date — all editable, never auto-saves. `einvoiceImport` sent with submit; QR total mismatch warning. `npm run verify:einvoice` (13 checks).
