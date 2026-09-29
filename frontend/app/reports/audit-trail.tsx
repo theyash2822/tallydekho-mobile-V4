@@ -27,6 +27,7 @@ import { useSettings } from '../../src/context/SettingsContext';
 import { socketService } from '../../src/services/socketService';
 import { useTranslation } from 'react-i18next';
 import { TX_TO_DOC_TYPE, resolveDocTypeFromParam } from '../../src/utils/documentHelpers';
+import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import {
   promptShareMode,
   shareDayBookPdf,
@@ -905,56 +906,12 @@ export default function AuditTrailScreen() {
     // Prefer vouchers.guid — voucher_number alone can collide across FYs and
     // unencoded path segments (spaces / slashes) crash Expo Router on open.
     const docId = entry.guid || entry.tallyVoucherNo || entry.ref;
-    if (!docId) {
-      if (entry.tdkRef) {
-        const ref = entry.tdkRef;
-        let route = `/sales/invoice-preview?tdkRef=${encodeURIComponent(ref)}`;
-        if (/TDK-(?:OPT-)?SOR-/i.test(ref) || entry.type === 'Sales Order') {
-          route = `/sales/order-preview?tdkRef=${encodeURIComponent(ref)}`;
-        } else if (/TDK-(?:OPT-)?CON-/i.test(ref)) {
-          route = `/voucher/contra-preview?tdkRef=${encodeURIComponent(ref)}`;
-        } else if (/TDK-(?:OPT-)?JOR-/i.test(ref)) {
-          route = `/voucher/journal-preview?tdkRef=${encodeURIComponent(ref)}`;
-        } else if (/TDK-(?:OPT-)?PAY-/i.test(ref)) {
-          route = `/voucher/payment-preview?tdkRef=${encodeURIComponent(ref)}`;
-        } else if (/TDK-(?:OPT-)?RCP-/i.test(ref)) {
-          route = `/voucher/receipt-preview?tdkRef=${encodeURIComponent(ref)}`;
-        } else if (/TDK-(?:OPT-)?PHY-/i.test(ref)) {
-          route = `/stocks/adjustment-preview?tdkRef=${encodeURIComponent(ref)}`;
-        } else if (/TDK-(?:OPT-)?STJ-/i.test(ref)) {
-          route = `/stocks/transfer-preview?tdkRef=${encodeURIComponent(ref)}`;
-        } else if (/TDK-(?:OPT-)?CN-/i.test(ref)) {
-          route = `/sales/credit-note-preview?tdkRef=${encodeURIComponent(ref)}`;
-        } else if (/TDK-(?:OPT-)?DBN-/i.test(ref)) {
-          route = `/purchase/debit-note-preview?tdkRef=${encodeURIComponent(ref)}`;
-        } else if (/TDK-(?:OPT-)?DN-/i.test(ref)) {
-          route = `/sales/delivery-note-preview?tdkRef=${encodeURIComponent(ref)}`;
-        } else if (/TDK-(?:OPT-)?POR-/i.test(ref)) {
-          route = `/purchase/order-preview?tdkRef=${encodeURIComponent(ref)}`;
-        } else if (/TDK-(?:OPT-)?PUR-/i.test(ref) || entry.type === 'Purchase') {
-          route = `/sales/invoice-preview?tdkRef=${encodeURIComponent(ref)}&type=purchase_invoice`;
-        } else if (/TDK-(?:OPT-)?PRF-/i.test(ref) || entry.type === 'Proforma Invoice') {
-          route = `/sales/invoice-preview?tdkRef=${encodeURIComponent(ref)}&type=proforma_invoice`;
-        } else if (/TDK-(?:OPT-)?QTN-/i.test(ref) || /quotation/i.test(entry.type || '')) {
-          route = `/sales/invoice-preview?tdkRef=${encodeURIComponent(ref)}&type=quotation`;
-        }
-        safePush(router, route as any);
-      } else {
-        Alert.alert(
-          'Not yet synced',
-          'Preview is not available yet. Check again after Tally syncs.',
-          [{ text: 'OK' }]
-        );
-      }
-      return;
-    }
-    const routeType = TX_TO_DOC_TYPE[entry.type] || resolveDocTypeFromParam(entry.type);
-    const encId = encodeURIComponent(String(docId));
-    safePush(router,
-      (routeType
-        ? `/document/${encId}?type=${encodeURIComponent(routeType)}`
-        : `/document/${encId}`) as any
-    );
+    openVoucherPreview(router, {
+      guid: docId,
+      tdkRef: entry.tdkRef,
+      docType: docId ? (TX_TO_DOC_TYPE[entry.type] || resolveDocTypeFromParam(entry.type)) : null,
+      entryType: entry.type,
+    });
   };
 
   const runShare = async (mode: 'individual' | 'combined') => {

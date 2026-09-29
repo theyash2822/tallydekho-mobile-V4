@@ -11,7 +11,6 @@ import Svg, {
   Path, Circle, Rect, Line, G, Text as SvgText, Defs, LinearGradient, Stop,
 } from 'react-native-svg';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
-import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSettings } from '../../src/context/SettingsContext';
 import { getKPICashInHand } from '../../src/services/api';
@@ -397,7 +396,7 @@ export default function CashInHandScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { company, selectedFY, lastSyncAt } = useAuth();
-  const { formatAmountCompact, formatAmount, formatDate } = useSettings();
+  const { formatAmountCompact, formatAmount } = useSettings();
   const { sensitivePolicies } = useWorkspace();
   const companyGuid = company?.guid;
   const fmtCash = (n: number) =>
@@ -410,21 +409,11 @@ export default function CashInHandScreen() {
   const sumRef = useRef<FlatList>(null);
   const [sumIdx, setSumIdx] = useState(0);
   const [chartDayIdx, setChartDayIdx] = useState<number | null>(null);
-  const [showDatePick, setShowDatePick] = useState(false);
-  const [dateFrom, setDateFrom] = useState(fyFrom);
-  const [dateTo, setDateTo] = useState(fyTo);
   const [apiData, setApiData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
   const hasDataRef = useRef(false);
   const dataAsOfRef = useRef<Date | null>(null);
-
-  useEffect(() => {
-    if (fyFrom && fyTo) {
-      setDateFrom(fyFrom);
-      setDateTo(fyTo);
-    }
-  }, [fyFrom, fyTo]);
 
   const load = useCallback(async (opts?: { soft?: boolean }) => {
     if (!companyGuid) return;
@@ -433,8 +422,8 @@ export default function CashInHandScreen() {
     // Soft refresh: keep stale data + banner until success (no wipe, no toast)
     if (!soft) setApiError(null);
     try {
-      const from = dateFrom || fyFrom || undefined;
-      const to = dateTo || fyTo || undefined;
+      const from = fyFrom || undefined;
+      const to = fyTo || undefined;
       const res: any = await getKPICashInHand(companyGuid, { from, to });
       setApiData(res?.data ?? res);
       hasDataRef.current = true;
@@ -452,7 +441,7 @@ export default function CashInHandScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [companyGuid, dateFrom, dateTo, fyFrom, fyTo, lastSyncAt]);
+  }, [companyGuid, fyFrom, fyTo, lastSyncAt]);
 
   useEffect(() => { load({ soft: hasDataRef.current }); }, [load]);
 
@@ -527,25 +516,9 @@ export default function CashInHandScreen() {
     }));
   }, [apiData]);
 
-  const fmtRange = () => {
-    const f = dateFrom || fyFrom;
-    const t = dateTo || fyTo;
-    if (!f && !t) return 'Select Range';
-    if (f && t) return `${formatDate(f)} – ${formatDate(t)}`;
-    return formatDate(f || t);
-  };
-
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       <ScreenHeader title={t('kpi.cashInHand')} onBack={() => router.back()} />
-
-      <View style={s.filterRow}>
-        <TouchableOpacity style={s.dateChip} onPress={() => setShowDatePick(true)} activeOpacity={0.7}>
-          <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
-          <Text style={s.dateChipTxt}>{fmtRange()}</Text>
-          <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-      </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
         {apiError && <ErrorBanner message={apiError} onRetry={() => load({ soft: hasDataRef.current })} />}
@@ -672,16 +645,6 @@ export default function CashInHandScreen() {
         )}
         <View style={{ height: 100 }} />
       </ScrollView>
-
-      <DateRangePickerModal
-        visible={showDatePick}
-        fromDate={dateFrom || fyFrom}
-        toDate={dateTo || fyTo}
-        onApply={(f, t) => { setDateFrom(f); setDateTo(t); }}
-        onClose={() => setShowDatePick(false)}
-        minDate={fyFrom || undefined}
-        maxDate={fyTo || undefined}
-      />
     </SafeAreaView>
   );
 }
@@ -692,10 +655,6 @@ const s = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 14, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   headerBtn: { width: 40 },
   headerTitle: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
-
-  filterRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  dateChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault },
-  dateChipTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
 
   carouselWrap: { marginTop: SPACING.md, marginBottom: SPACING.sm },
 

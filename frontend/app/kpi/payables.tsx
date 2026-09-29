@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useRouter } from 'expo-router';
-import { safePush } from '../../src/utils/safeNavigation';
+import { openVoucherPreview } from '../../src/utils/openVoucherPreview';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 import { useAuth } from '../../src/context/AuthContext';
@@ -19,6 +19,10 @@ import {
   KPICarouselCard, KPICarouselPage, KPICarouselDots, KPI_CAROUSEL_PAGE_WIDTH,
 } from '../../src/components/KPICarouselCard';
 import { ScreenHeader } from '../../src/components/ScreenHeader';
+import { ListTileShell } from '../../src/components/ListTileShell';
+import { VoucherListTile } from '../../src/components/VoucherListTile';
+import { FilterIconWithBadge, ActiveFilterChips } from '../../src/components/voucherHomeFilters';
+import ArApFilterSheet, { ArApView, arApActiveFilterCount } from '../../src/components/ArApFilterSheet';
 import { useTranslation } from 'react-i18next';
 
 function fmtDate(iso?: string) {
@@ -45,7 +49,7 @@ export default function PayablesScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { company, selectedFY, lastSyncAt } = useAuth();
-  const { formatAmountCompact, formatAmount, formatDate } = useSettings();
+  const { formatAmountCompact, formatAmount } = useSettings();
   const companyGuid = company?.guid;
 
   const fyFrom = selectedFY?.startDate ?? '';
@@ -57,7 +61,9 @@ export default function PayablesScreen() {
   const [showDatePick, setShowDatePick] = useState(false);
   const [dateFrom, setDateFrom] = useState(fyFrom);
   const [dateTo, setDateTo] = useState(fyTo);
-  const [activeChips, setActiveChips] = useState<Set<string>>(new Set());
+  const [view, setView] = useState<ArApView>('bills');
+  const [overdueOn, setOverdueOn] = useState(false);
+  const [showFilter, setShowFilter] = useState(false);
   const [apiData, setApiData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -71,8 +77,7 @@ export default function PayablesScreen() {
     }
   }, [fyFrom, fyTo]);
 
-  const overdueOn = activeChips.has('overdue');
-  const paymentsOn = activeChips.has('payments');
+  const paymentsOn = view === 'settlements';
 
   const load = useCallback(async (opts?: { soft?: boolean }) => {
     if (!companyGuid) return;
@@ -159,6 +164,7 @@ export default function PayablesScreen() {
       date: b.date || b.dueDate || b.billDate,
       amount: Math.abs(Number(b.amount) || 0),
       voucherGuid: b.voucherGuid || b.voucher_guid || null,
+      tdkRef: b.tdkRef || null,
     }));
   }, [apiData]);
 
@@ -188,51 +194,42 @@ export default function PayablesScreen() {
     }));
   }, [apiData]);
 
-  const toggleChip = (chip: 'overdue' | 'payments') => {
-    setActiveChips((prev) => {
-      const next = new Set(prev);
-      if (next.has(chip)) {
-        next.delete(chip);
-        if (chip === 'overdue') setActiveTab('recent');
-      } else {
-        next.add(chip);
-        if (chip === 'overdue') setActiveTab('overdue');
-      }
-      return next;
-    });
+  const applyFilters = (nextView: ArApView, nextOverdue: boolean) => {
+    const overdue = nextView === 'bills' && nextOverdue;
+    if (overdue !== overdueOn) setActiveTab(overdue ? 'overdue' : 'recent');
+    setView(nextView);
+    setOverdueOn(overdue);
+    setShowFilter(false);
   };
 
-  const fmtRange = () => {
-    if (!dateFrom && !dateTo) return 'All dates';
-    if (dateFrom && dateTo) return `${formatDate(dateFrom)} – ${formatDate(dateTo)}`;
-    return formatDate(dateFrom || dateTo);
-  };
+  const filterChips = [
+    ...(paymentsOn ? [{ id: 'view', label: t('kpi.paymentsFilter') }] : []),
+    ...(overdueOn ? [{ id: 'overdue', label: t('kpi.overdue') }] : []),
+  ];
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      <ScreenHeader title={t('kpi.payables')} onBack={() => router.back()} />
+      <ScreenHeader
+        title={t('kpi.payables')}
+        onBack={() => router.back()}
+        right={(
+          <View style={s.headerActions}>
+            <TouchableOpacity style={s.headerIconBtn} onPress={() => setShowDatePick(true)} activeOpacity={0.7}>
+              <Ionicons name="calendar-outline" size={20} color={COLORS.textPrimary} />
+            </TouchableOpacity>
+            <FilterIconWithBadge count={arApActiveFilterCount(view, overdueOn)} onPress={() => setShowFilter(true)} />
+          </View>
+        )}
+      />
 
-      <View style={s.filterRow}>
-        <TouchableOpacity style={s.dateChip} onPress={() => setShowDatePick(true)} activeOpacity={0.7}>
-          <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
-          <Text style={s.dateChipTxt}>{fmtRange()}</Text>
-          <Ionicons name="chevron-down" size={13} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.filterChip, overdueOn && s.filterChipActive]}
-          onPress={() => toggleChip('overdue')}
-          activeOpacity={0.7}
-        >
-          <Text style={[s.filterChipTxt, overdueOn && s.filterChipActiveTxt]}>{t('kpi.overdue')}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.filterChip, paymentsOn && s.filterChipActive]}
-          onPress={() => toggleChip('payments')}
-          activeOpacity={0.7}
-        >
-          <Text style={[s.filterChipTxt, paymentsOn && s.filterChipActiveTxt]}>{t('kpi.paymentsFilter')}</Text>
-        </TouchableOpacity>
-      </View>
+      {filterChips.length > 0 && (
+        <ActiveFilterChips
+          variant="amber"
+          chips={filterChips}
+          onRemove={(id: string) => applyFilters(id === 'view' ? 'bills' : view, id === 'overdue' ? false : overdueOn)}
+          onClearAll={() => applyFilters('bills', false)}
+        />
+      )}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
         {apiError && <ErrorBanner message={apiError} onRetry={() => load({ soft: hasDataRef.current })} />}
@@ -282,28 +279,23 @@ export default function PayablesScreen() {
                   <Text style={s.sectionHint}>Live payments (party settlements)</Text>
                   {payments.length === 0 ? (
                     <View style={s.empty}><Text style={s.emptyTxt}>No payments in range</Text></View>
-                  ) : payments.map((item: any, idx: number) => (
-                    <TouchableOpacity
-                      key={item.id}
-                      style={[s.listRow, idx < payments.length - 1 && s.listRowBorder]}
-                      activeOpacity={0.7}
-                      onPress={() => item.guid && safePush(router, `/document/${item.guid}` as any)}
-                    >
-                      <View style={s.partyIconBox}>
-                        <Ionicons name="arrow-up-outline" size={18} color={COLORS.negative} />
-                      </View>
-                      <View style={s.listInfo}>
-                        <View style={s.listTopRow}>
-                          <Text style={s.listParty} numberOfLines={1}>{item.party || '—'}</Text>
-                          <Text style={s.listRef}>{` · ${item.ref || '—'}`}</Text>
-                        </View>
-                        <Text style={s.listDate}>{fmtDate(item.date)} · {item.type || 'Payment'}</Text>
-                      </View>
-                      <Text style={[s.listAmount, { color: COLORS.negative }]}>
-                        −{formatAmount(Math.round(item.amount))}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                  ) : (
+                    <View style={s.cardList}>
+                      {payments.map((item: any) => (
+                        <ListTileShell
+                          key={item.id}
+                          onPress={() => openVoucherPreview(router, { guid: item.guid })}
+                        >
+                          <VoucherListTile
+                            party={item.party}
+                            voucherNo={item.ref}
+                            date={`${fmtDate(item.date)} · ${item.type || 'Payment'}`}
+                            amount={`−${formatAmount(Math.round(item.amount))}`}
+                          />
+                        </ListTileShell>
+                      ))}
+                    </View>
+                  )}
                 </View>
               ) : (
                 <>
@@ -326,33 +318,23 @@ export default function PayablesScreen() {
                     <View style={s.listWrap}>
                       {bills.length === 0 ? (
                         <View style={s.empty}><Text style={s.emptyTxt}>No outstanding bills</Text></View>
-                      ) : bills.map((item: any, idx: number) => (
-                        <TouchableOpacity
-                          key={item.id}
-                          style={[s.listRow, idx < bills.length - 1 && s.listRowBorder]}
-                          activeOpacity={item.voucherGuid ? 0.7 : 1}
-                          disabled={!item.voucherGuid}
-                          onPress={() => {
-                            if (!item.voucherGuid) return;
-                            safePush(router, `/document/${item.voucherGuid}?type=purchase_invoice` as any);
-                          }}
-                        >
-                          <View style={s.partyIconBox}>
-                            <Ionicons name="document-text-outline" size={18} color={COLORS.textSecondary} />
-                          </View>
-                          <View style={s.listInfo}>
-                            <View style={s.listTopRow}>
-                              <Text style={s.listParty} numberOfLines={1}>{item.party}</Text>
-                              <Text style={s.listRef}>{` · ${item.ref || '—'}`}</Text>
-                            </View>
-                            <Text style={s.listDate}>{fmtDate(item.date)}</Text>
-                          </View>
-                          <Text style={s.listAmount}>{formatAmount(Math.round(item.amount))}</Text>
-                          {!!item.voucherGuid && (
-                            <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
-                          )}
-                        </TouchableOpacity>
-                      ))}
+                      ) : (
+                        <View style={s.cardList}>
+                          {bills.map((item: any) => (
+                            <ListTileShell
+                              key={item.id}
+                              onPress={() => openVoucherPreview(router, { guid: item.voucherGuid, tdkRef: item.tdkRef })}
+                            >
+                              <VoucherListTile
+                                party={item.party}
+                                voucherNo={item.ref}
+                                date={fmtDate(item.date)}
+                                amount={formatAmount(Math.round(item.amount))}
+                              />
+                            </ListTileShell>
+                          ))}
+                        </View>
+                      )}
                     </View>
                   ) : (
                     <View style={s.listWrap}>
@@ -404,6 +386,15 @@ export default function PayablesScreen() {
         minDate={fyFrom || undefined}
         maxDate={fyTo || undefined}
       />
+
+      <ArApFilterSheet
+        visible={showFilter}
+        onClose={() => setShowFilter(false)}
+        view={view}
+        overdueOnly={overdueOn}
+        settlementsLabel={t('kpi.paymentsFilter')}
+        onApply={applyFilters}
+      />
     </SafeAreaView>
   );
 }
@@ -415,13 +406,8 @@ const s = StyleSheet.create({
   headerBtn: { width: 40 },
   headerTitle: { flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'center' },
 
-  filterRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.cardBg, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
-  dateChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault },
-  dateChipTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.borderDefault, backgroundColor: COLORS.pageBg },
-  filterChipTxt: { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textSecondary },
-  filterChipActive: { backgroundColor: '#1A1A1A', borderColor: '#1A1A1A' },
-  filterChipActiveTxt: { color: '#FFFFFF' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  headerIconBtn: { width: 36, height: 36, borderRadius: RADIUS.sm, alignItems: 'center', justifyContent: 'center' },
 
   agingSection: { marginTop: SPACING.md, marginBottom: SPACING.sm },
 
@@ -438,9 +424,8 @@ const s = StyleSheet.create({
   listRowBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },
   partyIconBox: { width: 42, height: 42, borderRadius: 8, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   listInfo: { flex: 1 },
-  listTopRow: { flexDirection: 'row', alignItems: 'center' },
   listParty: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, flexShrink: 1 },
-  listRef: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary },
+  cardList: { paddingTop: 4, gap: 8 },
   listDate: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
   listAmount: { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, flexShrink: 0 },
   contactRow: { flexDirection: 'row', gap: 6 },

@@ -1,5 +1,13 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-29 — Receivables/Payables filter sheet + unified voucher preview
+
+- Receivables / Payables: header calendar + filter icon; `ArApFilterSheet` (Show: Outstanding bills / Receipts-Payments; Status: Overdue only, disabled for settlements); amber active chips; old chip row removed.
+- Cash in Hand: date pill removed; always uses the selected FY.
+- `src/utils/openVoucherPreview.ts`: one rule for voucher taps — GUID → `/document/[id]`, TDK ref → TDK preview route, else "Not yet synced". Used by My Entries (audit trail), Receivables and Payables bill + receipt/payment tiles.
+
+---
+
 ## 2026-09-29 — QA follow-ups: bill-check timeout, duplicate IRN alert, API docs
 
 - `request()` takes an optional `timeoutMs`; `analyzePurchaseBill` uses 45 s (others stay 25 s).
