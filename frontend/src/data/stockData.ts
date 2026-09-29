@@ -5,6 +5,10 @@ export type StockItem = {
   group: string; warehouse: string; warehouseId?: string; qty: number; value: string;
   icon: string; iconColor: string; iconBg: string;
   unit?: string; reorderLevel?: number; status?: string;
+  /** GST HSN/SAC from stock master (not SKU/alias) */
+  hsn?: string;
+  /** Exact Tally stock item name for Alter XML (may differ from display name) */
+  tallyName?: string;
 };
 
 export const STOCK_ITEMS: StockItem[] = [

@@ -2,16 +2,68 @@ import React, { useState, useMemo, useCallback, useEffect, useRef, useImperative
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Platform, Alert, TextInput, Modal, TextInputProps, ActivityIndicator, Keyboard, KeyboardAvoidingView,
+  Platform, Alert, TextInput, Modal, TextInputProps, ActivityIndicator, Keyboard, KeyboardAvoidingView, Image,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { safePush } from '../../src/utils/safeNavigation';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions, scanFromURLAsync, type BarcodeType } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import { File as FsFile } from 'expo-file-system';
 import { barcodePicker } from '../../src/utils/barcodePicker';
+import { cameraDiag } from '../../src/utils/cameraDiag';
+import { useCameraMountId, useCameraOwnerGate } from '../../src/hooks/useCameraOwnerGate';
+
+/** Purchase Invoice e-Invoice QR scan window (locked square). */
+const QR_FRAME = 260;
+/** Must match backend BILL_ATTACHMENT_MAX_BYTES. */
+const BILL_PHOTO_MAX_BYTES = 6 * 1024 * 1024;
+const BILL_PHOTO_QUALITY = 0.5;
+const BILL_MIME_ALLOW = /^(image\/(jpeg|png|webp)|application\/pdf)$/;
+
+type BillAnalysis = {
+  readable: boolean;
+  isBill?: boolean;
+  score?: number;
+  found?: string[];
+  missing?: string[];
+  reason?: string;
+  extracted?: {
+    gstins: string[];
+    invoiceNos: string[];
+    totalCandidates: number[];
+    amounts: number[];
+    irns: string[];
+    tokens: string[];
+  };
+};
+type BillAttachment = {
+  uri: string;
+  dataUri: string;
+  mime: string;
+  name: string | null;
+  analysis: BillAnalysis | null;
+  qr: EinvoiceQrSummary | null;
+};
+type BillCheck = { key: string; state: 'ok' | 'warn' | 'na'; text: string };
+
+const normRef = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+async function findEinvoiceQrInImage(uri: string): Promise<EinvoiceQrSummary | null> {
+  try {
+    const hits = await scanFromURLAsync(uri, ['qr'] as BarcodeType[]);
+    for (const h of hits || []) {
+      const parsed = parseEinvoiceQr(h.data);
+      if (parsed.kind === 'ok') return parsed.summary;
+    }
+  } catch {
+    // Unsupported image / no decoder — the server text check still runs.
+  }
+  return null;
+}
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { currentTenantKey, prefillFeature, dropLegacyKeys } from '../../src/utils/tenantStorage';
@@ -19,8 +71,10 @@ import {
   getParties, createPurchaseInvoice, getStocks, getWarehouses,
   getPurchaseLedgerAccounts, getTaxLedgers, createTallyParty,
   getChargeLedgers, getStockGodowns, getBankLedgers,
-  invoiceSharePdf,
+  invoiceSharePdf, resolveEinvoiceQr, uploadPurchaseBillAttachment, analyzePurchaseBill,
 } from '../../src/services/api';
+import { parseEinvoiceQr, einvoiceDateToFormDate, EINVOICE_TOTAL_TOLERANCE, type EinvoiceQrSummary } from '../../src/utils/einvoiceQr';
+import EinvoiceQrPreviewSheet, { type EinvoiceResolveState, type EinvoiceVendorMatch } from '../../src/components/forms/EinvoiceQrPreviewSheet';
 import { toVoucherDocument } from '../../src/utils/voucherDocumentAdapter';
 import { shareVoucherPdf } from '../../src/utils/voucherPdf';
 import { useNumberingPolicy } from '../../src/hooks/useNumberingPolicy';
@@ -193,7 +247,7 @@ function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
 }
 
 // ─── AddVendorDrawer ──────────────────────────────────────────────────────────
-export interface AddVendorDrawerMethods { present: () => void; }
+export interface AddVendorDrawerMethods { present: (prefill?: { gstin?: string }) => void; }
 
 const AddVendorDrawer = forwardRef<AddVendorDrawerMethods, {
   onClose: () => void;
@@ -205,8 +259,15 @@ const AddVendorDrawer = forwardRef<AddVendorDrawerMethods, {
   const insets    = useSafeAreaInsets();
   const snapPoints = useMemo(() => ['92%'], []);
 
+  const [prefillGstin, setPrefillGstin] = useState('');
+  const [formKey, setFormKey] = useState(0);
+
   useImperativeHandle(ref, () => ({
-    present: () => sheetRef.current?.present(),
+    present: (prefill?: { gstin?: string }) => {
+      setPrefillGstin(prefill?.gstin || '');
+      setFormKey(k => k + 1);
+      sheetRef.current?.present();
+    },
   }));
 
   const [name,    setName]    = useState('');
@@ -332,7 +393,12 @@ const AddVendorDrawer = forwardRef<AddVendorDrawerMethods, {
 
         <View style={acd.divider} />
         <View style={{ paddingBottom: SPACING.sm }}>
-          <PartyForm ref={formRef} InputComponent={BottomSheetTextInput as any} />
+          <PartyForm
+            key={formKey}
+            ref={formRef}
+            InputComponent={BottomSheetTextInput as any}
+            initialData={prefillGstin ? { gstin: prefillGstin } : undefined}
+          />
         </View>
       </BottomSheetScrollView>
 
@@ -708,9 +774,42 @@ export default function CreatePurchaseInvoiceScreen() {
 
   // e-Invoice QR / Bill scan
   const [showCamera, setShowCamera] = useState(false);
-  const [billAttachmentUri, setBillAttachmentUri] = useState<string | null>(null);
+  const [billAttachment, setBillAttachment] = useState<BillAttachment | null>(null);
+  const [billChecking, setBillChecking] = useState(false);
+  const billSessionRef = useRef(0);
   const [permission, requestPermission] = useCameraPermissions();
   const scannedRef = useRef(false);
+
+  // e-Invoice QR import (header only, not signature-verified). Applied values stay editable.
+  const [qrSummary, setQrSummary] = useState<EinvoiceQrSummary | null>(null);
+  const [qrResolve, setQrResolve] = useState<EinvoiceResolveState>({ status: 'loading' });
+  const [showQrPreview, setShowQrPreview] = useState(false);
+  const [qrPreferredVendor, setQrPreferredVendor] = useState<string | null>(null);
+  const [einvoiceImport, setEinvoiceImport] = useState<(EinvoiceQrSummary & { buyerGstinMismatch: boolean }) | null>(null);
+  const qrSessionRef = useRef(0);
+  const qrAddVendorPendingRef = useRef(false);
+  const companyGuid = company?.guid;
+  const companyGuidRef = useRef(companyGuid);
+  useEffect(() => { companyGuidRef.current = companyGuid; }, [companyGuid]);
+
+  /** Modal camera host — measure then size CameraView in pixels (ios-retry-warm / MD). */
+  const [camHostSize, setCamHostSize] = useState({ w: 0, h: 0 });
+  const [camViewSize, setCamViewSize] = useState({ w: 0, h: 0 });
+  const camMountId = useCameraMountId('pi-qr-modal');
+  const qrScannerSettings = useMemo(
+    () => ({ barcodeTypes: ['qr'] as BarcodeType[] }),
+    [],
+  );
+  const {
+    isFocused: camFocused,
+    appForeground: camFg,
+    mountCamera: mountCamQr,
+    barcodeListenReady: qrListenReady,
+  } = useCameraOwnerGate({
+    permissionGranted: !!permission?.granted,
+    bounds: camHostSize,
+    scannerOpen: showCamera,
+  });
 
   // Universal numbering — Settings → Voucher Config only (no on-screen override)
   const { numberingPolicy } = useNumberingPolicy(company?.guid);
@@ -916,95 +1015,237 @@ export default function CreatePurchaseInvoiceScreen() {
     setShowCamera(true);
   }, [permission, requestPermission]);
 
-  const openBillScanner = useCallback(() => {
-    Alert.alert('Scan / Upload Bill', 'Capture the vendor bill to attach it. Details must still be entered manually.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Take Photo', onPress: async () => {
-          try {
-            const camPerm = await ImagePicker.requestCameraPermissionsAsync();
-            if (!camPerm.granted) {
-              Toast.show({ type: 'error', text1: 'Permission required', text2: 'Allow camera access to photograph the bill.' });
-              return;
-            }
-            const result = await ImagePicker.launchCameraAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              quality: 0.75,
-              allowsEditing: false,
-            });
-            if (!result.canceled && result.assets?.[0]?.uri) {
-              setBillAttachmentUri(result.assets[0].uri);
-              Toast.show({ type: 'success', text1: 'Bill photo attached', text2: 'Enter invoice details manually below.' });
-            }
-          } catch {
-            Toast.show({ type: 'error', text1: 'Could not open camera' });
-          }
-        },
-      },
-      {
-        text: 'Choose from Library', onPress: async () => {
-          try {
-            const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (!perm.granted) {
-              Toast.show({ type: 'error', text1: 'Permission required', text2: 'Allow photo library access to pick a bill image.' });
-              return;
-            }
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              quality: 0.75,
-            });
-            if (!result.canceled && result.assets?.[0]?.uri) {
-              setBillAttachmentUri(result.assets[0].uri);
-              Toast.show({ type: 'success', text1: 'Bill attached', text2: 'Enter invoice details manually below.' });
-            }
-          } catch {
-            Toast.show({ type: 'error', text1: 'Could not open photo library' });
-          }
-        },
-      },
-    ]);
-  }, []);
-
-  // Best-effort GST e-invoice QR payload parsing.
-  const applyEInvoiceQrData = useCallback((raw: string) => {
-    try {
-      const data = JSON.parse(raw);
-      const docNo = data.DocNo || data.Docno || data.docNo || data.doc_no;
-      const docDt = data.DocDt || data.Docdt || data.docDt || data.doc_dt;
-      const sellerGstin = data.SellerGstin || data.Seller_Gstin || data.SellerGSTIN;
-      const buyerGstin = data.BuyerGstin || data.Buyer_Gstin || data.BuyerGSTIN;
-      const itemList = data.ItemList || data.itemList || data.Items;
-
-      if (docNo) setVendorInvNo(String(docNo));
-      if (docDt) {
-        const parsed = typeof docDt === 'string' && docDt.includes('-')
-          ? (() => { const parts = docDt.split(/[-/]/); return parts.length === 3 ? `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[2].slice(-2)}` : ''; })()
-          : '';
-        if (parsed) setVendorInvDate(parsed);
-      }
-
-      const parts: string[] = [];
-      if (sellerGstin) parts.push(`Seller GSTIN: ${sellerGstin}`);
-      if (buyerGstin) parts.push(`Buyer GSTIN: ${buyerGstin}`);
-      if (Array.isArray(itemList) && itemList.length > 0) parts.push(`${itemList.length} item(s) found — add manually`);
-
-      Toast.show({
-        type: 'success',
-        text1: 'e-Invoice QR scanned',
-        text2: parts.length > 0 ? parts.join(' · ') : 'Vendor invoice details auto-filled where available.',
+  const runQrResolve = useCallback((summary: EinvoiceQrSummary) => {
+    if (!companyGuid) { setQrResolve({ status: 'error' }); return; }
+    const session = qrSessionRef.current;
+    setQrResolve({ status: 'loading' });
+    resolveEinvoiceQr(companyGuid, { sellerGstin: summary.sellerGstin, irn: summary.irn })
+      .then((res: any) => {
+        if (session !== qrSessionRef.current || companyGuidRef.current !== companyGuid) return;
+        const d = res?.data || {};
+        const scopedNames = new Set(vendors.map(v => v.value));
+        const matches: EinvoiceVendorMatch[] = (Array.isArray(d.vendors) ? d.vendors : []).map((v: any) => ({
+          name: v.name,
+          gstin: v.gstin || summary.sellerGstin,
+          gst_registration_type: v.gst_registration_type || '',
+          parent: v.parent || '',
+          selectable: scopedNames.has(v.name),
+        }));
+        setQrResolve({ status: 'done', matches, duplicate: d.duplicate || null });
+      })
+      .catch(() => {
+        if (session !== qrSessionRef.current || companyGuidRef.current !== companyGuid) return;
+        setQrResolve({ status: 'error' });
       });
-    } catch {
-      setVendorInvNo(raw.slice(0, 120));
-      Toast.show({ type: 'info', text1: 'Could not parse QR as e-Invoice JSON', text2: 'Raw value saved to Vendor Invoice No.' });
-    }
-  }, []);
+  }, [companyGuid, vendors]);
+
+  const startQrReview = useCallback((summary: EinvoiceQrSummary) => {
+    qrSessionRef.current += 1;
+    setQrSummary(summary);
+    setQrPreferredVendor(null);
+    runQrResolve(summary);
+    // iOS cannot present a second RN Modal while the camera/picker is still dismissing.
+    setTimeout(() => setShowQrPreview(true), Platform.OS === 'ios' ? 450 : 50);
+  }, [runQrResolve]);
 
   const handleBarcodeScanned = useCallback(({ data }: { data: string }) => {
     if (scannedRef.current) return;
     scannedRef.current = true;
     setShowCamera(false);
-    applyEInvoiceQrData(data);
-  }, [applyEInvoiceQrData]);
+    const parsed = parseEinvoiceQr(data);
+    if (parsed.kind !== 'ok') {
+      Toast.show({
+        type: 'error',
+        text1: parsed.kind === 'not_einvoice' ? 'Not an e-Invoice QR' : 'Could not read e-Invoice QR',
+        text2: `${parsed.reason} Nothing was filled.`,
+      });
+      return;
+    }
+    startQrReview(parsed.summary);
+  }, [startQrReview]);
+
+  // A file is attached only if it has a valid e-Invoice QR or the server reads it as a bill.
+  // Nothing on the form is changed except via the QR review sheet (user taps Apply).
+  const processBillFile = useCallback(async (file: { uri: string; base64: string; mime: string; name: string | null; isImage: boolean }) => {
+    const guid = companyGuid;
+    if (!guid) {
+      Toast.show({ type: 'error', text1: 'Select a company first' });
+      return;
+    }
+    if (file.base64.length * 0.75 > BILL_PHOTO_MAX_BYTES) {
+      Toast.show({ type: 'error', text1: 'File too large', text2: 'Max 6 MB. Try a smaller PDF or take the photo a little further away.' });
+      return;
+    }
+    const session = ++billSessionRef.current;
+    setBillChecking(true);
+    const dataUri = `data:${file.mime};base64,${file.base64}`;
+    const qr = file.isImage ? await findEinvoiceQrInImage(file.uri) : null;
+    let analysis: BillAnalysis | null = null;
+    let failMsg = '';
+    try {
+      const res: any = await analyzePurchaseBill({ companyGuid: guid, file: dataUri });
+      analysis = res?.data || null;
+    } catch (err: any) {
+      failMsg = err?.message || 'Could not check the bill.';
+    }
+    if (session !== billSessionRef.current) return;
+    setBillChecking(false);
+    if (companyGuidRef.current !== guid) return;
+
+    const kind = file.isImage ? 'photo' : 'PDF';
+    if (!qr) {
+      if (!analysis) {
+        Alert.alert('Could not check this bill', `${failMsg}\n\nThe file was not attached. Please try again.`);
+        return;
+      }
+      if (!analysis.readable) {
+        Alert.alert('Bill not attached', analysis.reason || `No readable text found in this ${kind}.`);
+        return;
+      }
+      if (!analysis.isBill) {
+        const missing = (analysis.missing || []).join(', ');
+        Alert.alert(
+          'This does not look like a bill',
+          `We could not find enough bill details in this ${kind}.${missing ? `\n\nNot found: ${missing}` : ''}\n\nPlease attach the vendor's tax invoice. The file was not attached.`,
+        );
+        return;
+      }
+    }
+
+    setBillAttachment({ uri: file.uri, dataUri, mime: file.mime, name: file.name, analysis, qr });
+    if (qr) {
+      Toast.show({ type: 'success', text1: 'e-Invoice QR found on the bill', text2: 'Review the details, then tap Apply.' });
+      startQrReview(qr);
+    } else {
+      Toast.show({ type: 'success', text1: 'Bill checked and attached', text2: 'Fill the details; match notes appear under the bill.' });
+    }
+  }, [companyGuid, startQrReview]);
+
+  const processBillPhoto = useCallback((asset: ImagePicker.ImagePickerAsset | undefined) => {
+    if (!asset?.uri || !asset.base64) {
+      Toast.show({ type: 'error', text1: 'Could not read the photo', text2: 'Please try again.' });
+      return;
+    }
+    const mime = asset.mimeType && BILL_MIME_ALLOW.test(asset.mimeType) && asset.mimeType !== 'application/pdf'
+      ? asset.mimeType : 'image/jpeg';
+    processBillFile({ uri: asset.uri, base64: asset.base64, mime, name: asset.fileName || null, isImage: true });
+  }, [processBillFile]);
+
+  const pickBillPdf = useCallback(async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', copyToCacheDirectory: true, multiple: false });
+      if (result.canceled) return;
+      const doc = result.assets?.[0];
+      if (!doc?.uri) return;
+      if (doc.size && doc.size > BILL_PHOTO_MAX_BYTES) {
+        Toast.show({ type: 'error', text1: 'PDF too large', text2: 'Max 6 MB.' });
+        return;
+      }
+      const base64 = await new FsFile(doc.uri).base64();
+      processBillFile({ uri: doc.uri, base64, mime: 'application/pdf', name: doc.name || null, isImage: false });
+    } catch {
+      Toast.show({ type: 'error', text1: 'Could not open the PDF', text2: 'Please try again.' });
+    }
+  }, [processBillFile]);
+
+  const takeBillPhoto = useCallback(async () => {
+    try {
+      const camPerm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!camPerm.granted) {
+        Toast.show({ type: 'error', text1: 'Permission required', text2: 'Allow camera access to photograph the bill.' });
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: BILL_PHOTO_QUALITY,
+        allowsEditing: false,
+        base64: true,
+      });
+      if (!result.canceled) processBillPhoto(result.assets?.[0]);
+    } catch {
+      Toast.show({ type: 'error', text1: 'Could not open camera' });
+    }
+  }, [processBillPhoto]);
+
+  const pickBillFromLibrary = useCallback(async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Toast.show({ type: 'error', text1: 'Permission required', text2: 'Allow photo library access to pick a bill image.' });
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: BILL_PHOTO_QUALITY,
+        base64: true,
+      });
+      if (!result.canceled) processBillPhoto(result.assets?.[0]);
+    } catch {
+      Toast.show({ type: 'error', text1: 'Could not open photo library' });
+    }
+  }, [processBillPhoto]);
+
+  // Android Alert shows at most 3 buttons, so upload sources are a second step.
+  const openBillScanner = useCallback(() => {
+    if (billChecking) return;
+    Alert.alert('Scan / Upload Bill', 'Attach the vendor bill (photo or PDF). We check it is a bill before attaching. If it has an e-Invoice QR, you can review and fill the details.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Take Photo', onPress: takeBillPhoto },
+      {
+        text: 'Upload', onPress: () => {
+          Alert.alert('Upload Bill', 'Choose a bill photo or PDF.', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Photo Library', onPress: pickBillFromLibrary },
+            { text: 'PDF', onPress: pickBillPdf },
+          ]);
+        },
+      },
+    ]);
+  }, [billChecking, takeBillPhoto, pickBillFromLibrary, pickBillPdf]);
+
+  const cancelQrPreview = useCallback(() => {
+    qrSessionRef.current += 1;
+    setShowQrPreview(false);
+    setQrSummary(null);
+  }, []);
+
+  const applyQrPreview = useCallback((match: EinvoiceVendorMatch | null, flags: { buyerGstinMismatch: boolean }) => {
+    if (!qrSummary) return;
+    setVendorInvNo(qrSummary.docNo);
+    const d = einvoiceDateToFormDate(qrSummary.docDate);
+    if (d) setVendorInvDate(d);
+    if (match) {
+      setVendor(match.name);
+      setVendorGstin(match.gstin || '');
+      setVendorGstRegType(match.gst_registration_type || '');
+    }
+    setEinvoiceImport({ ...qrSummary, buyerGstinMismatch: flags.buyerGstinMismatch });
+    setShowQrPreview(false);
+    Toast.show({
+      type: 'success',
+      text1: 'Details filled from e-Invoice QR',
+      text2: match ? 'Review and edit if needed. Add items in the next step.' : 'Select the vendor, then add items. All fields are editable.',
+    });
+  }, [qrSummary]);
+
+  const addVendorFromQr = useCallback(() => {
+    if (!qrSummary) return;
+    qrAddVendorPendingRef.current = true;
+    setShowQrPreview(false);
+    setTimeout(() => addVendorRef.current?.present({ gstin: qrSummary.sellerGstin }), Platform.OS === 'ios' ? 450 : 50);
+  }, [qrSummary]);
+
+  // Company switch invalidates any pending QR preview/import (stale lookups are
+  // also dropped in runQrResolve via companyGuidRef).
+  const [qrCompanyGuid, setQrCompanyGuid] = useState(company?.guid);
+  if (qrCompanyGuid !== company?.guid) {
+    setQrCompanyGuid(company?.guid);
+    setShowQrPreview(false);
+    setQrSummary(null);
+    setEinvoiceImport(null);
+    setBillAttachment(null);
+    setBillChecking(false);
+  }
 
   const closeCamera = useCallback(() => {
     scannedRef.current = false;
@@ -1054,6 +1295,94 @@ export default function CreatePurchaseInvoiceScreen() {
     return { gross, discTotal, taxTotal, logisticsTotal: chargesOnly, roundOff, grand };
   }, [items, logEntries, roundOffAmount]);
 
+  const qrTotalNotice = useMemo(() => {
+    if (!einvoiceImport || !items.some(i => i.product)) return null;
+    const diff = totals.grand - einvoiceImport.totalInvoiceValue;
+    if (Math.abs(diff) <= EINVOICE_TOTAL_TOLERANCE) return null;
+    const fmt = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return (
+      <View style={s.qrWarnBanner}>
+        <Ionicons name="warning-outline" size={15} color={COLORS.warning} />
+        <Text style={s.qrInfoTxt}>
+          Total does not match the e-Invoice QR. QR total {fmt(einvoiceImport.totalInvoiceValue)}, this entry {fmt(totals.grand)} (difference {fmt(Math.abs(diff))}). Please check items, taxes and charges.
+        </Text>
+      </View>
+    );
+  }, [einvoiceImport, items, totals.grand]);
+
+  // Layer 3: compare what the bill shows with what the user entered. Warn only — never blocks save.
+  const billChecks = useMemo<BillCheck[] | null>(() => {
+    if (!billAttachment) return null;
+    const ex = billAttachment.analysis ? billAttachment.analysis.extracted : undefined;
+    const qr = billAttachment.qr;
+    const fmt = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const out: BillCheck[] = [];
+
+    const billGstins = new Set<string>([...(ex ? ex.gstins : []), ...(qr ? [qr.sellerGstin] : [])]);
+    const vg = vendorGstin.trim().toUpperCase();
+    if (!vg) {
+      out.push({ key: 'gstin', state: 'na', text: vendor ? 'Vendor has no GSTIN to compare' : 'Select vendor to compare GSTIN' });
+    } else if (billGstins.size === 0) {
+      out.push({ key: 'gstin', state: 'na', text: 'GSTIN not readable on the bill' });
+    } else if (billGstins.has(vg)) {
+      out.push({ key: 'gstin', state: 'ok', text: 'Vendor GSTIN matches the bill' });
+    } else {
+      out.push({ key: 'gstin', state: 'warn', text: `Vendor GSTIN ${vg} not found on the bill (bill shows ${[...billGstins].slice(0, 2).join(', ')})` });
+    }
+
+    const inv = normRef(vendorInvNo);
+    const invPool = new Set<string>([
+      ...(ex ? ex.invoiceNos.map(normRef) : []),
+      ...(ex ? ex.tokens : []),
+      ...(qr ? [normRef(qr.docNo)] : []),
+    ]);
+    if (!inv) {
+      out.push({ key: 'inv', state: 'na', text: 'Enter vendor invoice no. to compare' });
+    } else if (invPool.size === 0) {
+      out.push({ key: 'inv', state: 'na', text: 'Invoice no. not readable on the bill' });
+    } else if (invPool.has(inv)) {
+      out.push({ key: 'inv', state: 'ok', text: 'Vendor invoice no. matches the bill' });
+    } else {
+      const shown = ex && ex.invoiceNos.length ? ex.invoiceNos : qr ? [qr.docNo] : [];
+      out.push({ key: 'inv', state: 'warn', text: `Invoice no. ${vendorInvNo.trim()} not found on the bill${shown.length ? ` (bill shows ${shown.slice(0, 2).join(', ')})` : ''}` });
+    }
+
+    const totalCands = [...(ex ? ex.totalCandidates : []), ...(qr ? [qr.totalInvoiceValue] : [])];
+    const totalPool = totalCands.length ? totalCands : ex ? ex.amounts : [];
+    if (!items.some(i => i.product)) {
+      out.push({ key: 'total', state: 'na', text: 'Add items to compare the total' });
+    } else if (totalPool.length === 0) {
+      out.push({ key: 'total', state: 'na', text: 'Total not readable on the bill' });
+    } else if (totalPool.some(v => Math.abs(v - totals.grand) <= EINVOICE_TOTAL_TOLERANCE)) {
+      out.push({ key: 'total', state: 'ok', text: 'Grand total matches the bill' });
+    } else {
+      out.push({
+        key: 'total', state: 'warn',
+        text: `Grand total ${fmt(totals.grand)} not found on the bill${totalCands.length ? ` (bill total ${fmt(Math.max(...totalCands))})` : ''}`,
+      });
+    }
+    return out;
+  }, [billAttachment, vendor, vendorGstin, vendorInvNo, items, totals.grand]);
+
+  const billChecksView = useMemo(() => {
+    if (!billChecks) return null;
+    return (
+      <View style={s.billChecksBox}>
+        <Text style={s.billChecksTitle}>Bill match check (warning only)</Text>
+        {billChecks.map(c => (
+          <View key={c.key} style={s.billCheckRow}>
+            <Ionicons
+              name={c.state === 'ok' ? 'checkmark-circle' : c.state === 'warn' ? 'warning' : 'remove-circle-outline'}
+              size={14}
+              color={c.state === 'ok' ? COLORS.positive : c.state === 'warn' ? COLORS.warning : COLORS.textTertiary}
+            />
+            <Text style={[s.billCheckTxt, c.state === 'na' && { color: COLORS.textSecondary }]}>{c.text}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  }, [billChecks]);
+
   const paymentStatus = useMemo(() => {
     if (!makePayNow) return 'pending';
     const paidAmt = parseFloat(payNowAmount) || 0;
@@ -1075,6 +1404,29 @@ export default function CreatePurchaseInvoiceScreen() {
     if (filled.length === 1) return firstName;
     return `${firstName} + ${filled.length - 1} more`;
   }, [items, stockItems]);
+
+  // Invoice is already saved at this point; a failed photo upload never undoes it.
+  const uploadBillPhoto = useCallback((companyGuid: string, invoiceUuid: string | undefined, dataUri: string) => {
+    if (!invoiceUuid) {
+      Toast.show({ type: 'info', text1: 'Bill not saved', text2: 'Invoice saved, but it has no app reference to attach the bill to.' });
+      return;
+    }
+    const attempt = () => {
+      uploadPurchaseBillAttachment({ companyGuid, invoiceUuid, file: dataUri })
+        .then(() => {
+          setBillAttachment(null);
+          Toast.show({ type: 'success', text1: 'Bill saved with invoice' });
+        })
+        .catch((err: any) => {
+          Alert.alert(
+            'Bill not saved',
+            `The invoice is saved, but the bill file failed to upload.${err?.message ? `\n\n${err.message}` : ''}`,
+            [{ text: 'Skip', style: 'cancel' }, { text: 'Retry', onPress: attempt }],
+          );
+        });
+    };
+    attempt();
+  }, []);
 
   // ── Submit ────────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
@@ -1160,6 +1512,19 @@ export default function CreatePurchaseInvoiceScreen() {
         vendorInvoiceNo: vendorInvNo || undefined,
         vendorInvoiceDate: vendorInvDate ? dmyToISO(vendorInvDate) : undefined,
         againstOrderNo: againstOrderNo || undefined,
+        einvoiceImport: einvoiceImport ? {
+          irn: einvoiceImport.irn,
+          irnDate: einvoiceImport.irnDate,
+          sellerGstin: einvoiceImport.sellerGstin,
+          buyerGstin: einvoiceImport.buyerGstin,
+          docNo: einvoiceImport.docNo,
+          docDate: einvoiceImport.docDate,
+          docType: einvoiceImport.docType,
+          qrTotal: einvoiceImport.totalInvoiceValue,
+          itemCount: einvoiceImport.itemCount,
+          mainHsnCode: einvoiceImport.mainHsnCode,
+          buyerGstinMismatch: einvoiceImport.buyerGstinMismatch,
+        } : undefined,
       });
 
       const tdkRef = result?.tdkReferenceNo || result?.tdkRef || result?.data?.tdkReferenceNo || '';
@@ -1170,6 +1535,7 @@ export default function CreatePurchaseInvoiceScreen() {
       setSubmitResult({ tdkRef, isQueued, message: result?.message || '', invoiceUuid, numberingPolicy: respNumberingPolicy, invoiceNumber });
       setShowSuccess(true);
       setSubmitting(false);
+      if (billAttachment && company?.guid) uploadBillPhoto(company.guid, invoiceUuid, billAttachment.dataUri);
       return;
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Submit Failed', text2: err?.message || 'Check Tally connection.' });
@@ -1179,7 +1545,8 @@ export default function CreatePurchaseInvoiceScreen() {
   }, [
     vendor, items, company, date, purchaseLedger, entryType, totals.grand, narration, warehouses,
     makePayNow, payNowMode, payNowAmount, payNowRef, payNowLedger, logEntries, roundOffLedger, roundOffAmount,
-    numberingPolicy, vendorInvNo, vendorInvDate, purchaseRefNo, againstOrderNo,
+    numberingPolicy, vendorInvNo, vendorInvDate, purchaseRefNo, againstOrderNo, einvoiceImport,
+    billAttachment, uploadBillPhoto,
   ]);
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -1223,19 +1590,33 @@ export default function CreatePurchaseInvoiceScreen() {
                     <Ionicons name="qr-code-outline" size={16} color={COLORS.white} />
                     <Text style={s.scanBtnTxt}>Scan e-Invoice QR</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={s.scanBtnOutline} onPress={openBillScanner} activeOpacity={0.7}>
+                  <TouchableOpacity style={[s.scanBtnOutline, billChecking && { opacity: 0.6 }]} onPress={openBillScanner} activeOpacity={0.7} disabled={billChecking}>
                     <Ionicons name="camera-outline" size={16} color={COLORS.brandPrimary} />
                     <Text style={s.scanBtnOutlineTxt}>Scan / Upload Bill</Text>
                   </TouchableOpacity>
                 </View>
-                {billAttachmentUri ? (
-                  <View style={s.billAttachedRow}>
-                    <Ionicons name="checkmark-circle" size={16} color={COLORS.positive} />
-                    <Text style={s.billAttachedTxt} numberOfLines={1}>Bill photo attached</Text>
-                    <TouchableOpacity onPress={() => setBillAttachmentUri(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Ionicons name="close-circle" size={18} color={COLORS.textTertiary} />
-                    </TouchableOpacity>
+                {billChecking ? (
+                  <View style={s.billCheckingRow}>
+                    <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+                    <Text style={s.billCheckingTxt}>Checking bill… this can take a few seconds</Text>
                   </View>
+                ) : billAttachment ? (
+                  <>
+                    <View style={s.billAttachedRow}>
+                      {billAttachment.mime === 'application/pdf' ? (
+                        <Ionicons name="document-text-outline" size={24} color={COLORS.positive} />
+                      ) : (
+                        <Image source={{ uri: billAttachment.uri }} style={s.billThumb} />
+                      )}
+                      <Text style={s.billAttachedTxt} numberOfLines={1}>
+                        {billAttachment.qr ? 'Bill with e-Invoice QR' : billAttachment.mime === 'application/pdf' ? 'Bill PDF checked' : 'Bill photo checked'} · saved with invoice
+                      </Text>
+                      <TouchableOpacity onPress={() => { billSessionRef.current += 1; setBillAttachment(null); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Ionicons name="close-circle" size={18} color={COLORS.textTertiary} />
+                      </TouchableOpacity>
+                    </View>
+                    {billChecksView}
+                  </>
                 ) : null}
               </View>
 
@@ -1324,6 +1705,17 @@ export default function CreatePurchaseInvoiceScreen() {
                   <Ionicons name="receipt-outline" size={18} color={COLORS.textSecondary} />
                   <Text style={s.cardTitle}>Vendor Invoice Details</Text>
                 </View>
+                {einvoiceImport ? (
+                  <View style={s.qrFilledRow}>
+                    <Ionicons name="qr-code-outline" size={14} color={COLORS.brandPrimary} />
+                    <Text style={s.qrFilledTxt} numberOfLines={2}>
+                      Filled from e-Invoice QR (not verified) · QR total ₹{einvoiceImport.totalInvoiceValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })} · You can edit
+                    </Text>
+                    <TouchableOpacity onPress={() => setEinvoiceImport(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="close-circle" size={16} color={COLORS.textTertiary} />
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
                 <View style={s.row2}>
                   <View style={{ flex: 1 }}>
                     <Text style={s.fLabel}>Vendor Invoice No.</Text>
@@ -1345,6 +1737,15 @@ export default function CreatePurchaseInvoiceScreen() {
           {/* ═══════════ STEP 2 ═══════════ */}
           {step === 2 && (
             <>
+              {einvoiceImport ? (
+                <View style={s.qrInfoBanner}>
+                  <Ionicons name="list-outline" size={15} color={COLORS.info} />
+                  <Text style={s.qrInfoTxt}>
+                    e-Invoice QR says this bill has {einvoiceImport.itemCount} item{einvoiceImport.itemCount === 1 ? '' : 's'}
+                    {einvoiceImport.mainHsnCode ? ` (main HSN ${einvoiceImport.mainHsnCode})` : ''}. Add them below — the QR does not include item names, quantities or rates.
+                  </Text>
+                </View>
+              ) : null}
               <View style={s.sectionHdr}>
                 <Ionicons name="cube-outline" size={16} color={COLORS.textPrimary} />
                 <Text style={s.sectionTitle}>Items</Text>
@@ -1369,7 +1770,7 @@ export default function CreatePurchaseInvoiceScreen() {
                     barcodePicker.set((result) => {
                       handleProductSelect(itemId, { label: result.productName, value: result.productName });
                     });
-                    safePush(router, `/sales/product-scanner?companyGuid=${company?.guid}` as any);
+                    safePush(router, `/stocks/barcode-scanner?mode=pick&companyGuid=${encodeURIComponent(company?.guid || '')}` as any);
                   }}
                   onAddTaxEntry={addTaxEntry}
                   onUpdateTaxEntry={updateTaxEntry}
@@ -1431,6 +1832,7 @@ export default function CreatePurchaseInvoiceScreen() {
                   <Text style={s.runTotalGrandVal}>₹{totals.grand.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
                 </View>
               </View>
+              {qrTotalNotice}
             </>
           )}
 
@@ -1559,6 +1961,8 @@ export default function CreatePurchaseInvoiceScreen() {
                   <Text style={s.grandVal}>₹{totals.grand.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
                 </View>
               </View>
+              {qrTotalNotice}
+              {billChecksView}
 
               {/* Narration */}
               <View
@@ -1652,18 +2056,63 @@ export default function CreatePurchaseInvoiceScreen() {
 
       <DatePickerModal visible={showDatePicker} value={date} minDate={fyStart} maxDate={todayLocalISO()} onSelect={(d) => { setDate(d); setShowDatePicker(false); }} onClose={() => setShowDatePicker(false)} />
 
-      {/* QR Camera Modal — overlay OUTSIDE CameraView so close button receives touches */}
+      {/* QR Camera Modal — full-screen measured CameraView + 260 guide overlay (MD/Jun 11 pattern) */}
       <Modal visible={showCamera} animationType="slide" statusBarTranslucent onRequestClose={closeCamera}>
-        <View style={cam.container}>
-          {permission?.granted ? (
+        <View
+          style={cam.container}
+          onLayout={(e) => {
+            const { width, height } = e.nativeEvent.layout;
+            setCamHostSize({ w: width, h: height });
+            cameraDiag(camMountId, 'host_layout', {
+              width, height, platform: Platform.OS, frame: QR_FRAME,
+            }, 'purchase/create-invoice');
+          }}
+        >
+          {showCamera && permission?.granted ? (
             <>
-              <CameraView
-                style={StyleSheet.absoluteFillObject}
-                facing="back"
-                barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-                onBarcodeScanned={handleBarcodeScanned}
-              />
-              <View style={[cam.overlay, StyleSheet.absoluteFillObject]} pointerEvents="box-none">
+              {mountCamQr ? (
+                <CameraView
+                  style={{
+                    width: camHostSize.w,
+                    height: camHostSize.h,
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                  }}
+                  facing="back"
+                  active={showCamera && camFocused && camFg}
+                  barcodeScannerSettings={qrScannerSettings}
+                  onBarcodeScanned={qrListenReady ? handleBarcodeScanned : undefined}
+                  onLayout={(e) => {
+                    const { width, height } = e.nativeEvent.layout;
+                    setCamViewSize({ w: width, h: height });
+                    cameraDiag(camMountId, 'camera_layout', {
+                      width, height, platform: Platform.OS,
+                      hostW: camHostSize.w, hostH: camHostSize.h,
+                    }, 'purchase/create-invoice');
+                  }}
+                  onCameraReady={() => cameraDiag(camMountId, 'onCameraReady', {
+                    platform: Platform.OS,
+                    hostW: camHostSize.w, hostH: camHostSize.h,
+                    cameraW: camViewSize.w, cameraH: camViewSize.h,
+                  }, 'purchase/create-invoice')}
+                  onMountError={(ev) => cameraDiag(camMountId, 'onMountError', {
+                    message: ev?.message ?? 'unknown',
+                    platform: Platform.OS,
+                  }, 'purchase/create-invoice')}
+                />
+              ) : (
+                <View style={cam.frameBoot}>
+                  <ActivityIndicator color="#fff" />
+                </View>
+              )}
+
+              <View
+                style={camHostSize.w > 0 && camHostSize.h > 0
+                  ? { position: 'absolute', top: 0, left: 0, width: camHostSize.w, height: camHostSize.h }
+                  : cam.overlay}
+                pointerEvents="box-none"
+              >
                 <SafeAreaView edges={['top']} style={cam.topBar} pointerEvents="box-none">
                   <TouchableOpacity style={cam.closeBtn} onPress={closeCamera} activeOpacity={0.7} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                     <Ionicons name="close" size={26} color="#fff" />
@@ -1671,14 +2120,18 @@ export default function CreatePurchaseInvoiceScreen() {
                   <Text style={cam.topTitle}>Scan e-Invoice QR</Text>
                   <View style={{ width: 44 }} />
                 </SafeAreaView>
+
                 <View style={cam.frameArea} pointerEvents="none">
                   <View style={cam.scanFrame}>
-                    <View style={[cam.corner, cam.tl]} /><View style={[cam.corner, cam.tr]} />
-                    <View style={[cam.corner, cam.bl]} /><View style={[cam.corner, cam.br]} />
+                    <View style={[cam.corner, cam.tl]} />
+                    <View style={[cam.corner, cam.tr]} />
+                    <View style={[cam.corner, cam.bl]} />
+                    <View style={[cam.corner, cam.br]} />
                     <View style={cam.scanLine} />
                   </View>
                   <Text style={cam.frameHint}>Align the e-Invoice QR code within the frame</Text>
                 </View>
+
                 <View style={cam.bottomBar} pointerEvents="box-none">
                   <Text style={cam.captureLabel}>Waiting for QR code...</Text>
                   <TouchableOpacity style={cam.skipBtn} onPress={closeCamera} activeOpacity={0.7}>
@@ -1707,13 +2160,41 @@ export default function CreatePurchaseInvoiceScreen() {
       <AddVendorDrawer
         ref={addVendorRef}
         company={company}
-        onClose={() => {}}
+        onClose={() => {
+          if (!qrAddVendorPendingRef.current) return;
+          qrAddVendorPendingRef.current = false;
+          if (qrSummary) setTimeout(() => setShowQrPreview(true), 300);
+        }}
         onSaved={(name, success) => {
           const newOpt: BSSOption = { label: name, value: name };
           setVendors(prev => [...prev, newOpt]);
+          if (qrSummary && qrAddVendorPendingRef.current) {
+            const sellerGstin = qrSummary.sellerGstin;
+            setQrResolve(prev => prev.status === 'done'
+              ? { ...prev, matches: [...prev.matches.filter(m => m.name !== name), { name, gstin: sellerGstin, selectable: true }] }
+              : { status: 'done', matches: [{ name, gstin: sellerGstin, selectable: true }], duplicate: null });
+            setQrPreferredVendor(name);
+            qrAddVendorPendingRef.current = false;
+            setTimeout(() => setShowQrPreview(true), 300);
+            return;
+          }
           setVendor(name);
           if (success !== false) Alert.alert('✓ Vendor Added', `"${name}" has been added and selected.`);
         }}
+      />
+
+      <EinvoiceQrPreviewSheet
+        key={qrSummary?.irn || 'no-qr'}
+        visible={showQrPreview}
+        summary={qrSummary}
+        companyGstin={company?.gstin}
+        resolve={qrResolve}
+        current={{ vendor, vendorInvNo, vendorInvDate }}
+        preferredVendor={qrPreferredVendor}
+        onCancel={cancelQrPreview}
+        onApply={applyQrPreview}
+        onAddVendor={addVendorFromQr}
+        onRetryResolve={() => { if (qrSummary) runQrResolve(qrSummary); }}
       />
 
       {/* Success Overlay — full-screen Modal + flex backdrop (absoluteFill collapses inside Modal) */}
@@ -1834,6 +2315,18 @@ const s = StyleSheet.create({
   scanSub: { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, marginTop: 2 },
   scanBtns: { flexDirection: 'row', gap: 10 },
   billAttachedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, backgroundColor: COLORS.positive + '12', borderRadius: RADIUS.sm, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.positive + '40' },
+  qrFilledRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.brandPrimary + '10', borderRadius: RADIUS.sm, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 10 },
+  qrFilledTxt: { flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary, fontWeight: '600' },
+  qrInfoBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: COLORS.infoBg, borderRadius: RADIUS.sm, padding: 10, marginBottom: 12 },
+  qrWarnBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: COLORS.warningBg, borderRadius: RADIUS.sm, padding: 10, marginTop: 10 },
+  qrInfoTxt: { flex: 1, fontSize: TYPOGRAPHY.xs, lineHeight: 17, color: COLORS.textPrimary },
+  billThumb: { width: 28, height: 28, borderRadius: 4, backgroundColor: COLORS.pageBg },
+  billCheckingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, backgroundColor: COLORS.infoBg, borderRadius: RADIUS.sm, paddingHorizontal: 12, paddingVertical: 10 },
+  billCheckingTxt: { flex: 1, fontSize: TYPOGRAPHY.xs, color: COLORS.textPrimary },
+  billChecksBox: { marginTop: 8, gap: 6, backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm, padding: 10 },
+  billChecksTitle: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textSecondary },
+  billCheckRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  billCheckTxt: { flex: 1, fontSize: TYPOGRAPHY.xs, lineHeight: 17, color: COLORS.textPrimary },
   billAttachedTxt: { flex: 1, fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.positive },
   scanBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: COLORS.brandPrimary, borderRadius: RADIUS.md, paddingVertical: 12 },
   scanBtnTxt: { fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.white, textAlign: 'center' },
@@ -2009,23 +2502,28 @@ const ss = StyleSheet.create({
 
 const cam = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' },
+  // Inside RN Modal on iOS, absoluteFill overlay collapses to ~0 height; use measured host size when available.
+  overlay: { ...StyleSheet.absoluteFillObject },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 12 },
   closeBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
   topTitle: { fontSize: 17, fontWeight: '700', color: '#fff' },
   frameArea: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 18 },
-  scanFrame: { width: 260, height: 260, borderRadius: 6, position: 'relative', overflow: 'visible' },
-  corner: { position: 'absolute', width: 26, height: 26, borderColor: COLORS.brandPrimary, borderWidth: 3 },
-  tl: { top: -1, left: -1, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 6 },
-  tr: { top: -1, right: -1, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 6 },
-  bl: { bottom: -1, left: -1, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 6 },
-  br: { bottom: -1, right: -1, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 6 },
-  scanLine: { position: 'absolute', top: '48%', left: 10, right: 10, height: 2, backgroundColor: COLORS.brandPrimary, opacity: 0.7, borderRadius: 1 },
+  scanFrame: {
+    width: QR_FRAME, height: QR_FRAME, borderRadius: 6,
+    position: 'relative', backgroundColor: 'transparent',
+  },
+  frameBoot: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: '#000',
+  },
+  corner: { position: 'absolute', width: 26, height: 26, borderColor: COLORS.brandPrimary, borderWidth: 3, zIndex: 2 },
+  tl: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 6 },
+  tr: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 6 },
+  bl: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 6 },
+  br: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 6 },
+  scanLine: { position: 'absolute', top: '48%', left: 10, right: 10, height: 2, backgroundColor: COLORS.brandPrimary, opacity: 0.7, borderRadius: 1, zIndex: 2 },
   frameHint: { fontSize: 14, color: 'rgba(255,255,255,0.82)', textAlign: 'center', fontWeight: '500', paddingHorizontal: 30 },
   bottomBar: { paddingBottom: 52, paddingHorizontal: 32, alignItems: 'center', gap: 14 },
-  captureBtn: { width: 76, height: 76, borderRadius: 38, borderWidth: 3, borderColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center' },
-  captureRing: { width: 62, height: 62, borderRadius: 31, borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)', alignItems: 'center', justifyContent: 'center' },
-  captureDot: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#fff' },
   captureLabel: { fontSize: 12, color: 'rgba(255,255,255,0.65)', fontWeight: '500' },
   permBox: { flex: 1, backgroundColor: COLORS.pageBg, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 18 },
   permIconBox: { width: 100, height: 100, borderRadius: 50, backgroundColor: COLORS.pageBg, borderWidth: 1.5, borderColor: COLORS.borderDefault, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },

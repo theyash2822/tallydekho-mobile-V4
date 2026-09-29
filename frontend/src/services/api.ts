@@ -616,6 +616,15 @@ export const getStockItem    = (companyGuid?: string, id?: string, params?: any)
 export const getWarehouses       = (companyGuid?: string) => get<any>(withCompany('/stocks/warehouses', companyGuid));
 export const getWarehouseDetail  = (companyGuid?: string, id?: string) => get<any>(withCompany(`/stocks/warehouses/${id}`, companyGuid));
 export const getParties      = (companyGuid?: string, params?: any) => get<any>(withCompany('/parties', companyGuid, params));
+export const resolveEinvoiceQr = (companyGuid: string, params: { sellerGstin: string; irn: string }) =>
+  get<any>(withCompany('/purchase/einvoice-qr-resolve', companyGuid, params));
+export const uploadPurchaseBillAttachment = (payload: { companyGuid: string; invoiceUuid: string; file: string }) =>
+  post<any>('/purchase/bill-attachment', payload);
+/** Reads a bill photo/PDF on the server (text layer or OCR) and says whether it looks like a bill. */
+export const analyzePurchaseBill = (payload: { companyGuid: string; file: string }) =>
+  post<any>('/purchase/bill-analyze', payload);
+export const getPurchaseBillAttachment = (companyGuid: string, invoiceUuid: string) =>
+  get<any>(withCompany(`/purchase/bill-attachment/${encodeURIComponent(invoiceUuid)}`, companyGuid));
 export const createStockItem       = (payload: any) => tallyPost<any>('/master/stock-item', payload, 'stock_item');
 export const createWarehouse       = (payload: any) => tallyPost<any>('/master/warehouse', payload, 'warehouse');
 export const createStockAdjustment = (payload: any) => tallyPost<any>('/voucher/stock-adjustment', payload, 'stock_adjustment');

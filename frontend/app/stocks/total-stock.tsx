@@ -338,7 +338,9 @@ function mapStockRows(
     return {
       id: r.guid || String(r.id),
       name: r.displayName || r.name || '',
-      sku: r.sku || r.alias || r.hsn || '',
+      tallyName: r.name || '',
+      sku: r.sku || r.alias || '',
+      hsn: r.hsn || '',
       category: r.category || '',
       group: r.group_name || '',
       qty,

@@ -1,5 +1,102 @@
 # CHANGELOG_AGENT.md — tallydekho-mobile-V4 (Mobile)
 
+## 2026-09-29 — Purchase Invoice: e-Invoice QR import, bill validation, universal item scanner
+
+- **e-Invoice QR:** strict JWS parser (`src/utils/einvoiceQr.ts`, no signature verification yet) + `EinvoiceQrPreviewSheet` (vendor by GSTIN, duplicate IRN block, buyer GSTIN warning). Apply fills vendor / inv no / date — all editable, never auto-saves. `einvoiceImport` sent with submit; QR total mismatch warning. `npm run verify:einvoice` (13 checks).
+- **Bill upload:** Take Photo / Upload (Photo Library, PDF). QR in photo → review sheet; server `/purchase/bill-analyze` blocks non-bills; warn-only match of vendor GSTIN / inv no / grand total (±₹1). File uploaded after save.
+- **Universal scanner:** item-row scan on Sales Invoice / Sales Order / Purchase Order / Purchase Invoice → `/stocks/barcode-scanner?mode=pick` (locked Stocks scanner; pipeline unchanged). `sales/product-scanner.tsx` kept until tested.
+- PI QR camera overlay no longer touches the top.
+- QA: YELLOW (no blockers). Device testing by user pending.
+
+---
+
+## 2026-09-25 — Printed barcode speed (stable native listener)
+
+**CONFIRMED:** `expo-camera@57.0.5` disables barcode scanning when
+`onBarcodeScanned` is undefined (iOS removes session outputs). Fix: keep
+listener attached; gate accept in JS. Also: `zoom={0}` (no auto-zoom), drop
+iOS 450ms listen delay, same-unknown suppress 2.5s (no 1.6s global re-arm),
+`autofocus="off"`. Incident: `docs/incidents/2026-09-25-printed-barcode-speed.md`.
+Build `2026-09-25-printed-speed`. Physical timing **NOT RUN**.
+
+---
+
+## 2026-09-25 — Camera: full-screen preview + bracket spatial filter (Jun 11 + MD)
+
+Reverted frame-nested CameraView. Pattern: measured full-screen host + explicit
+CameraView pixels; overlay dims + transparent strip/square + corners; spatial
+filter accepts only in-bracket codes. Fixes scan failures from tiny preview
+and restores full-screen live video. Build `2026-09-25-fullscreen-jun11`.
+
+---
+
+Implemented `TallyDekho_Camera_Stability_and_Debugging_Standard.md` as source of truth:
+
+- **Layout:** `absoluteFill` → measured host + explicit CameraView pixels; preview nested in product frames (Stocks 130 / Sales 240 / PI QR 260).
+- **Lifecycle:** `useCameraOwnerGate` (permission ∧ focus ∧ AppState ∧ open ∧ bounds); unique mount IDs.
+- **Diag:** `__DEV__` only; optional `EXPO_PUBLIC_CAMERA_DIAG_URL`; Settings → Camera diagnostic (dev); probe inert in release.
+- **Docs:** `docs/engineering/DEBUGGING_STANDARD.md`, `CAMERA_SCANNER_STANDARD.md`, incident `2026-09-25-camera-preview.md`; Cursor rule `tallydekho-camera-debugging.mdc`.
+- Deps unchanged. Probe live preview CONFIRMED; Stocks/Sales/PI QR device matrix pending Yash.
+
+---
+
+## 2026-09-25 — Stocks scanner: Jun 11 UI on full-screen route
+
+Hybrid fix: keep Jun 11 design (130px strip frame, spatial filter, torch,
+zoom, result panel) but mount it on `/stocks/barcode-scanner` stack screen
+— not RN Modal (black preview + frame stuck at top on iOS). Expo
+`useCameraPermissions` + focus remount for CameraView. List screen navigates
+via `stocksBarcodeScan` bridge. Not the purchase QR Modal / 240² product frame.
+
+---
+
+## 2026-09-24 — Scanner Jun 11 restore + hard HSN validation
+
+Stock barcode scanner restored to Jun 11 behavior (spatial frame filter,
+torch, zoom, out-of-frame hint). Overlay uses flex:1 so frame centers in
+Modal. Invalid HSN is blocked on item detail, HSN validation, Edit Stock,
+and Create Item (no soft “you can still save”).
+
+---
+
+Forensic: frame pushed up came from flexGrow overlay hack; black preview from
+`cameraActive` gate (known since b59e2886). Restored Option A styles
+(`flex:1` / 130 / `flex:1`) and mount CameraView whenever permission granted.
+
+---
+
+Barcode scanner overlay: frame was stuck at top — centered with safe-area.
+Item-detail Generate now reads Barcode Settings (storage mode + type) so
+Tally Alias / Part Number sync applies the same as the Barcodes screen.
+
+---
+
+## 2026-09-24 — Stock detail: HSN inline in Pricing & Cost
+
+Removed standalone HSN card. HSN sits under Last Selling Price with pencil;
+once digits differ from saved, icon becomes save (checkmark) → Tally Alter.
+
+---
+
+## 2026-09-24 — HSN validation UX + edit bug + detail enter HSN
+
+Cross-check: 218 items have valid HSN (hidden from report); 283 truly empty
+in `stocks.hsn` from Tally — not a false “all missing”.
+Removed “N needs attention” tile. Enter HSN on validation + item detail.
+Edit Stock modal was binding HSN to SKU — fixed; alter pushes HSN to Tally
+and optimistically updates local `stocks.hsn`. Removed Generate Barcode on
+item detail.
+
+---
+
+## 2026-09-24 — Stock alerts: remove duplicate settings + map to Stocks
+
+Settings → Notifications “Stock Alerts” opens Stocks → Settings → Alerts
+(`?section=alerts`). Legacy `/settings/stock-alerts` redirects there.
+Hint: Email/WhatsApp use profile contact; delivery when channels configured.
+
+---
+
 ## 2026-09-24 — Items settings + HSN validation report
 
 Removed Aging / Analysis Period. Fast/Slow/Dead tabs. HSN Verification toggle

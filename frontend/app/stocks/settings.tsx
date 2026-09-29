@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import BrandSwitch from '../../src/components/forms/BrandSwitch';
@@ -103,6 +103,7 @@ function RadioRow({
 export default function StockSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const { section } = useLocalSearchParams<{ section?: string }>();
   const insets = useSafeAreaInsets();
   const { company } = useAuth();
   const companyGuid = company?.guid;
@@ -124,9 +125,9 @@ export default function StockSettingsScreen() {
   // ── Settings state
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
 
-  // ── Accordion state
+  // ── Accordion state (Alerts open when deep-linked from Settings → Stock Alerts)
   const [openSections, setOpenSections] = useState({
-    general: true, warehouse: false, items: false, alerts: false,
+    general: section !== 'alerts', warehouse: false, items: false, alerts: section === 'alerts',
   });
 
   // ── Sub-open state inside sections
@@ -720,6 +721,9 @@ export default function StockSettingsScreen() {
 
           {openSections.alerts && (
             <View style={s.sectionBody}>
+              <Text style={s.alertHint}>
+                In-App shows in the notification inbox and Expo push. Email and WhatsApp use your profile email and mobile — delivery starts once those channels are configured.
+              </Text>
 
               {/* Low Stock Alerts */}
               <View style={s.alertBlock}>
@@ -739,30 +743,30 @@ export default function StockSettingsScreen() {
 
               {/* Expiry Alerts */}
               <View style={s.alertBlock}>
-                <View style={s.alertExpiryRow}>
-                  <Text style={s.alertLabel}>Expiry Alerts</Text>
-                  <View style={s.inputWithUnit}>
-                    <TextInput
-                      style={s.inlineInput}
-                      value={drafts['expiry_days'] !== undefined ? drafts['expiry_days'] : String(s_obj.expiry_alerts.daysBefore)}
-                      onChangeText={v => {
-                        setDrafts(prev => ({ ...prev, expiry_days: v }));
-                        setIsDirty(true);
-                        if (v !== '') {
-                          const n = parseInt(v, 10);
-                          if (!isNaN(n) && n >= 1) update('expiry_alerts', { ...s_obj.expiry_alerts, daysBefore: n });
-                        }
-                      }}
-                      keyboardType="numeric"
-                      maxLength={3}
-                    />
-                    <Text style={s.unitLabel}>Days before</Text>
-                  </View>
-                </View>
+                <Text style={s.alertLabel}>Expiry Alerts</Text>
                 {renderChips(
                   { inApp: s_obj.expiry_alerts.inApp, email: s_obj.expiry_alerts.email, whatsapp: s_obj.expiry_alerts.whatsapp },
                   ch => updateExpiryAlert(ch),
                 )}
+                <View style={s.expiryDaysRow}>
+                  <Text style={s.expiryDaysLbl}>Warn</Text>
+                  <TextInput
+                    style={s.expiryDaysInput}
+                    value={drafts['expiry_days'] !== undefined ? drafts['expiry_days'] : String(s_obj.expiry_alerts.daysBefore ?? 30)}
+                    onChangeText={v => {
+                      setDrafts(prev => ({ ...prev, expiry_days: v }));
+                      setIsDirty(true);
+                      if (v !== '') {
+                        const n = parseInt(v, 10);
+                        if (!isNaN(n) && n >= 1) update('expiry_alerts', { ...s_obj.expiry_alerts, daysBefore: n });
+                      }
+                    }}
+                    keyboardType="numeric"
+                    maxLength={3}
+                    selectTextOnFocus
+                  />
+                  <Text style={s.expiryDaysLbl}>days before expiry</Text>
+                </View>
               </View>
 
               <View style={s.divider} />
@@ -1002,10 +1006,13 @@ const s = StyleSheet.create({
   periodPillRow:{ flexDirection: 'row', gap: 8 },
 
   // Alerts
+  alertHint: {
+    fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, lineHeight: 18,
+    paddingHorizontal: SPACING.md, paddingBottom: 8, paddingTop: 4,
+  },
   alertBlock:     { paddingHorizontal: SPACING.md, paddingVertical: 12 },
   alertLabel:     { fontSize: TYPOGRAPHY.sm, fontWeight: '600', color: COLORS.textPrimary, marginBottom: 10 },
-  alertExpiryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  chipRow:        { flexDirection: 'row', gap: 8 },
+  chipRow:        { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 12, paddingVertical: 7,
@@ -1015,6 +1022,21 @@ const s = StyleSheet.create({
   chipActive:     { backgroundColor: COLORS.textPrimary, borderColor: COLORS.textPrimary },
   chipText:       { fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500' },
   chipTextActive: { color: '#fff', fontWeight: '600' },
+  expiryDaysRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginTop: 12, paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: COLORS.borderDefault,
+  },
+  expiryDaysLbl: {
+    fontSize: TYPOGRAPHY.xs, color: COLORS.textSecondary, fontWeight: '500',
+  },
+  expiryDaysInput: {
+    width: 44, height: 30, paddingHorizontal: 6,
+    backgroundColor: COLORS.pageBg,
+    borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.borderStrong,
+    fontSize: TYPOGRAPHY.xs, fontWeight: '700', color: COLORS.textPrimary,
+    textAlign: 'center',
+  },
 
   // Bottom action bar
   bottomBar: {

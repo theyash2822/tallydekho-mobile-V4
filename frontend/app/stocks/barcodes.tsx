@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { useBarcodeScanner } from '../../src/hooks/useBarcodeScanner';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Modal, FlatList, Pressable, Animated,
-  Platform, Vibration, Alert, ActivityIndicator, Switch, RefreshControl, Linking,
+  TextInput, Modal, FlatList, Pressable,
+  Vibration, Alert, ActivityIndicator, Switch, RefreshControl,
   useWindowDimensions, Dimensions,
 } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';
@@ -12,7 +11,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { safePush } from '../../src/utils/safeNavigation';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { stocksBarcodeScan } from '../../src/utils/stocksBarcodeScan';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -342,8 +341,6 @@ export default function BarcodesScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const { company } = useAuth();
   const companyGuid = company?.guid ?? '';
-  const [permission, requestPermission] = useCameraPermissions();
-
   // ── Data state ─────────────────────────────────────────────────────────────
   const [items,     setItems]     = useState<BarcodeItem[]>([]);
   const [loading,   setLoading]   = useState(false);
@@ -371,142 +368,11 @@ export default function BarcodesScreen() {
   const bulkPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Modals ──────────────────────────────────────────────────────────────────
-  const [scannerVisible,  setScannerVisible]  = useState(false);
-  const [cameraActive,    setCameraActive]    = useState(false);
-
-  // ── Memoized barcode types — stable reference, prevents iOS AVFoundation re-init
-  const barcodeScannerSettings = useMemo(
-    () => ({ barcodeTypes: ['qr', 'code128', 'ean13', 'ean8', 'upc_a'] as any }),
-    []
-  );
-
-  // ── Torch + auto-zoom + helper text + out-of-frame hint ────────────────────
-  const [torchOn,           setTorchOn]           = useState(false);
-  const [zoom,              setZoom]              = useState(0);
-  const [showHelper,        setShowHelper]        = useState(false);
-  const [outOfFrame,        setOutOfFrame]        = useState(false);
-  const [frameScreenBounds, setFrameScreenBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
-  const zoomTimerRef       = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const helperTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const zoomStepRef        = useRef(0);
-  const frameMeasureRef    = useRef<View>(null);
-  const outOfFrameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Android dedup: rolling window of recently detected codes (no reliable screen coords on Android)
-  const recentDataRef      = useRef<{ data: string; time: number }[]>([]);
-
-  // Auto-zoom: 0 → slight (0.08) → more (0.18) at 800ms intervals
-  // Resets when scanner closes or scan succeeds
-  const startZoomTimer = useCallback(() => {
-    zoomStepRef.current = 0;
-    const step = () => {
-      zoomStepRef.current += 1;
-      if (zoomStepRef.current === 1) {
-        setZoom(0.08);
-        zoomTimerRef.current = setTimeout(step, 800);
-      } else if (zoomStepRef.current === 2) {
-        setZoom(0.18);
-        zoomTimerRef.current = null;
-      }
-    };
-    zoomTimerRef.current = setTimeout(step, 800);
-  }, []);
-
-  const clearScannerTimers = useCallback(() => {
-    if (zoomTimerRef.current)       { clearTimeout(zoomTimerRef.current);       zoomTimerRef.current       = null; }
-    if (helperTimerRef.current)     { clearTimeout(helperTimerRef.current);     helperTimerRef.current     = null; }
-    if (outOfFrameTimerRef.current) { clearTimeout(outOfFrameTimerRef.current); outOfFrameTimerRef.current = null; }
-  }, []);
-
-  const resetScannerUI = useCallback(() => {
-    clearScannerTimers();
-    setZoom(0);
-    setTorchOn(false);
-    setShowHelper(false);
-    setOutOfFrame(false);
-    recentDataRef.current = [];
-    zoomStepRef.current = 0;
-  }, [clearScannerTimers]);
   const [importVisible,   setImportVisible]   = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [linkVisible,     setLinkVisible]     = useState(false);
   const [viewBarcodeItem, setViewBarcodeItem] = useState<BarcodeItem | null>(null);
   const [linkedActionItem, setLinkedActionItem] = useState<BarcodeItem | null>(null);
-
-  // ── Barcode scanner hook — scan state + lookup, no inline API calls ────────
-  const {
-    scanned, scanLookingUp, scanResult,
-    handleBarcodeScanned, resetScanner, isProcessingRef,
-  } = useBarcodeScanner(companyGuid);
-
-  // ── Measure scan frame absolute position on screen ───────────────────────
-  const handleFrameLayout = useCallback(() => {
-    frameMeasureRef.current?.measureInWindow((x, y, width, height) => {
-      if (width > 0 && height > 0) setFrameScreenBounds({ x, y, width, height });
-    });
-  }, []);
-
-  // ── Bounds-aware scan handler — cross-platform ──────────────────────────────
-  //
-  // Android coordinate pipeline (confirmed from ExpoCameraView.kt):
-  //   1. ML Kit corner points in analysis-image pixel space
-  //   2. transformBarcodeScannerResultToViewCoordinates() scales to preview
-  //      pixel space using previewView.width/height vs image width/height
-  //   3. /density → screen dp  (same unit as measureInWindow)
-  //   RESULT: bounds ARE in screen dp when previewView is sized (non-zero).
-  //
-  // Primary path (both platforms): spatial bounds check using screen dp.
-  // Fallback (bounds zero/invalid, e.g. first frames before preview sizes):
-  //   deduplication — reject when 2+ different barcodes fire in 400 ms.
-  const handleBarcodeScanWithBoundsCheck = useCallback(
-    (result: { data: string; bounds?: { origin: { x: number; y: number }; size: { width: number; height: number } } }) => {
-      if (isProcessingRef.current) return;
-
-      // Bounds are valid when the preview is sized and the transform was applied.
-      // Guard: size must be at least 1dp to rule out un-transformed zero frames.
-      const boundsValid =
-        !!result.bounds &&
-        !!frameScreenBounds &&
-        result.bounds.size.width  >= 1 &&
-        result.bounds.size.height >= 1;
-
-      if (boundsValid && result.bounds && frameScreenBounds) {
-        // ── Spatial filter (both iOS + Android when preview ready) ─────────
-        const cx = result.bounds.origin.x + result.bounds.size.width  / 2;
-        const cy = result.bounds.origin.y + result.bounds.size.height / 2;
-        const inside =
-          cx >= frameScreenBounds.x &&
-          cx <= frameScreenBounds.x + frameScreenBounds.width &&
-          cy >= frameScreenBounds.y &&
-          cy <= frameScreenBounds.y + frameScreenBounds.height;
-
-        if (!inside) {
-          setOutOfFrame(true);
-          if (outOfFrameTimerRef.current) clearTimeout(outOfFrameTimerRef.current);
-          outOfFrameTimerRef.current = setTimeout(() => setOutOfFrame(false), 900);
-          return;
-        }
-      } else {
-        // ── Dedup fallback (bounds not ready / zero) ─────────────────────
-        const now = Date.now();
-        recentDataRef.current = recentDataRef.current.filter(r => now - r.time < 400);
-        recentDataRef.current.push({ data: result.data, time: now });
-        const uniqueCodes = new Set(recentDataRef.current.map(r => r.data));
-        if (uniqueCodes.size > 1) {
-          setOutOfFrame(true);
-          if (outOfFrameTimerRef.current) clearTimeout(outOfFrameTimerRef.current);
-          outOfFrameTimerRef.current = setTimeout(() => setOutOfFrame(false), 900);
-          return;
-        }
-      }
-
-      // Accept — barcode is inside the frame (or dedup passed)
-      setOutOfFrame(false);
-      if (outOfFrameTimerRef.current) { clearTimeout(outOfFrameTimerRef.current); outOfFrameTimerRef.current = null; }
-      recentDataRef.current = [];
-      handleBarcodeScanned(result);
-    },
-    [frameScreenBounds, handleBarcodeScanned, isProcessingRef],
-  );
 
   const [pasteText,       setPasteText]       = useState('');
   const [importing,       setImporting]       = useState(false);
@@ -701,45 +567,25 @@ export default function BarcodesScreen() {
   };
   const exitMultiSelect = () => { setIsMultiSelect(false); setSelectedIds(new Set()); };
 
-  // ── Scanner open / close ─────────────────────────────────────────────────
-  const openScanner = async () => {
-    let granted = permission?.granted ?? false;
-    if (!granted) {
-      if (permission?.canAskAgain === false) {
-        Alert.alert(
-          'Camera Access Denied',
-          'TallyDekho needs camera access to scan barcodes.\n\nGo to Settings → Privacy → Camera → TallyDekho and enable it.',
-          [{ text: 'Cancel', style: 'cancel' }, { text: 'Open Settings', onPress: () => Linking.openSettings() }]
-        );
-        return;
-      }
-      const result = await requestPermission();
-      granted = result?.granted ?? false;
-    }
-    if (!granted) {
-      Alert.alert('Camera Permission Required', 'Please allow camera access to scan barcodes.', [{ text: 'OK' }]);
+  // ── Scanner open — full-screen Jun 11 UI (Modal CameraView = black on iOS)
+  const openScanner = () => {
+    if (!companyGuid) {
+      Alert.alert('No company', 'Select a company before scanning.');
       return;
     }
-    resetScanner();
-    resetScannerUI();
-    setCameraActive(false);
-    setScannerVisible(true);
+    stocksBarcodeScan.set((result) => {
+      if (result.found && result.item?.stockGuid) {
+        safePush(router, `/stocks/item-detail?id=${result.item.stockGuid}` as any);
+        return;
+      }
+      openLinkBarcodeSheet({
+        scanned: result.barcode,
+        barcode: result.barcode,
+        delayMs: 350,
+      });
+    });
+    safePush(router, `/stocks/barcode-scanner?companyGuid=${encodeURIComponent(companyGuid)}` as any);
   };
-
-  // handleBarcodeScanned comes from useBarcodeScanner hook
-  // Reset also resets zoom + torch + helper
-  const handleScanAgain = useCallback(() => {
-    resetScanner();
-    resetScannerUI();
-    startZoomTimer();
-  }, [resetScanner, resetScannerUI, startZoomTimer]);
-
-  const closeScanner = useCallback(() => {
-    resetScanner();
-    resetScannerUI();
-    setScannerVisible(false);
-    setCameraActive(false);
-  }, [resetScanner, resetScannerUI]);
 
   // ── Generate barcode inline (single item, updates row in-place) ──────────
   const handleGenerateInline = async (item: BarcodeItem) => {
@@ -1037,7 +883,6 @@ export default function BarcodesScreen() {
           </View>
         </View>
       )}
-
       {/* ── Search + active filters */}
       <SearchBar
         value={search}
@@ -1105,207 +950,6 @@ export default function BarcodesScreen() {
           </TouchableOpacity>
         </View>
       )}
-
-      {/* ════════════════════════════════════════════
-          BARCODE SCANNER MODAL
-      ════════════════════════════════════════════ */}
-      <Modal
-        visible={scannerVisible}
-        animationType="slide"
-        onRequestClose={closeScanner}
-        onShow={() => {
-          // iOS: AVFoundation needs ~400ms after modal slide-in before firing onBarcodeScanned
-          const delay = Platform.OS === 'ios' ? 450 : 0;
-          setTimeout(() => {
-            setCameraActive(true);
-            startZoomTimer();
-            // Helper text after 2s: "Move closer or turn on flash"
-            helperTimerRef.current = setTimeout(() => setShowHelper(true), 2000);
-          }, delay);
-        }}
-      >
-        <View style={s.scannerModal}>
-          {permission?.granted ? (
-            // Only render CameraView after cameraActive=true.
-            // This prevents iOS from mounting the camera before the modal slide
-            // animation completes, which causes AVFoundation to miss the first
-            // several barcode frames.
-            cameraActive ? (
-              <CameraView
-                style={StyleSheet.absoluteFillObject}
-                facing="back"
-                zoom={zoom}
-                enableTorch={torchOn}
-                onBarcodeScanned={handleBarcodeScanWithBoundsCheck}
-                barcodeScannerSettings={barcodeScannerSettings}
-              />
-            ) : (
-              <View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]}>
-                <ActivityIndicator color="#fff" />
-              </View>
-            )
-          ) : (
-            <View style={s.scannerNoPermission}>
-              <Ionicons name="camera-outline" size={60} color="rgba(255,255,255,0.4)" />
-              <Text style={s.scannerNoPermText}>Camera permission required to scan barcodes</Text>
-              {permission?.canAskAgain !== false ? (
-                <TouchableOpacity style={s.permBtn} onPress={async () => {
-                  const result = await requestPermission();
-                  if (!result?.granted) {
-                    Alert.alert('Permission Denied', 'Camera access is required to scan barcodes.');
-                  }
-                }} activeOpacity={0.8}>
-                  <Text style={s.permBtnText}>Grant Permission</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity style={s.permBtn} onPress={() => Linking.openSettings()} activeOpacity={0.8}>
-                  <Text style={s.permBtnText}>Open Settings</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity onPress={closeScanner} activeOpacity={0.7} style={{ marginTop: 8 }}>
-                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: TYPOGRAPHY.sm }}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* ── Scan frame overlay ── */}
-          <View style={s.scanOverlay}>
-
-            {/* Torch toggle — top right */}
-            <TouchableOpacity style={s.torchBtn} onPress={() => setTorchOn(v => !v)} activeOpacity={0.8}>
-              <Ionicons name={torchOn ? 'flash' : 'flash-outline'} size={22} color={torchOn ? '#FFD700' : '#fff'} />
-            </TouchableOpacity>
-
-            <View style={s.scanDimTop}>
-              <Text style={s.scanTopHint}>Aim barcode at the frame to scan</Text>
-            </View>
-            <View style={s.scanMiddleRow}>
-              <View style={s.scanDimSide} />
-              <View ref={frameMeasureRef} style={s.scanFrame} onLayout={handleFrameLayout}>
-                <View style={[s.corner, s.cornerTL]} />
-                <View style={[s.corner, s.cornerTR]} />
-                <View style={[s.corner, s.cornerBL]} />
-                <View style={[s.corner, s.cornerBR]} />
-              </View>
-              <View style={s.scanDimSide} />
-            </View>
-
-            {/* ── Bottom: hint / looking-up spinner / scan result panel ── */}
-            <View style={s.scanDimBottom}>
-              {/* No result yet — show hint + optional helper */}
-              {!scanLookingUp && !scanResult && (
-                <>
-                  {outOfFrame ? (
-                    <Text style={[s.scanHint, s.scanHintOutOfFrame]}>📦 Move barcode into frame</Text>
-                  ) : showHelper ? (
-                    <Text style={s.scanHelperText}>Move closer or turn on flash 💡</Text>
-                  ) : (
-                    <Text style={s.scanHint}>Hold barcode steady in view</Text>
-                  )}
-                  <TouchableOpacity style={s.scanCloseBtn} onPress={closeScanner} activeOpacity={0.8}>
-                    <Text style={s.scanCloseBtnText}>Cancel</Text>
-                  </TouchableOpacity>
-                </>
-              )}
-
-              {/* Looking up — spinner */}
-              {scanLookingUp && (
-                <View style={s.scanResultPanel}>
-                  <ActivityIndicator size="large" color="#fff" />
-                  <Text style={s.scanResultLooking}>Looking up barcode…</Text>
-                </View>
-              )}
-
-              {/* Result panel — found */}
-              {scanResult?.found && scanResult.item && (
-                <View style={s.scanResultPanel}>
-                  <View style={s.scanResultBadgeFound}>
-                    <Ionicons name="checkmark-circle" size={16} color="#fff" />
-                    <Text style={s.scanResultBadgeText}>Product Found</Text>
-                  </View>
-
-                  {/* Product info */}
-                  <Text style={s.scanResultName} numberOfLines={2}>{scanResult.item.displayName}</Text>
-                  <Text style={s.scanResultBarcode}>{scanResult.barcode}</Text>
-
-                  <View style={s.scanResultMeta}>
-                    <View style={s.scanResultMetaItem}>
-                      <Text style={s.scanResultMetaLabel}>Qty</Text>
-                      <Text style={s.scanResultMetaValue}>{Math.round(scanResult.item.currentQty).toLocaleString()} {scanResult.item.unit}</Text>
-                    </View>
-                    {scanResult.item.sku && (
-                      <View style={s.scanResultMetaItem}>
-                        <Text style={s.scanResultMetaLabel}>SKU</Text>
-                        <Text style={s.scanResultMetaValue} numberOfLines={1}>{scanResult.item.sku}</Text>
-                      </View>
-                    )}
-                    {scanResult.item.groupName && (
-                      <View style={s.scanResultMetaItem}>
-                        <Text style={s.scanResultMetaLabel}>Group</Text>
-                        <Text style={s.scanResultMetaValue} numberOfLines={1}>{scanResult.item.groupName}</Text>
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Actions */}
-                  <View style={s.scanResultActions}>
-                    <TouchableOpacity
-                      style={s.scanResultBtnPrimary}
-                      activeOpacity={0.85}
-                      onPress={() => {
-                        closeScanner();
-                        safePush(router, `/stocks/item-detail?id=${scanResult.item!.stockGuid}` as any);
-                      }}
-                    >
-                      <Ionicons name="open-outline" size={16} color="#fff" />
-                      <Text style={s.scanResultBtnPrimaryText}>View Full Details</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={s.scanResultBtnSecondary} activeOpacity={0.8} onPress={handleScanAgain}>
-                      <Ionicons name="scan-outline" size={16} color="#fff" />
-                      <Text style={s.scanResultBtnSecondaryText}>Scan Again</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-
-              {/* Result panel — not found */}
-              {scanResult && !scanResult.found && (
-                <View style={s.scanResultPanel}>
-                  <View style={s.scanResultBadgeNotFound}>
-                    <Ionicons name="help-circle" size={16} color="#fff" />
-                    <Text style={s.scanResultBadgeText}>Not Linked</Text>
-                  </View>
-
-                  <Text style={s.scanResultName}>Barcode not linked to any product</Text>
-                  <Text style={s.scanResultBarcode}>{scanResult.barcode}</Text>
-
-                  <View style={s.scanResultActions}>
-                    <TouchableOpacity
-                      style={s.scanResultBtnPrimary}
-                      activeOpacity={0.85}
-                      onPress={() => {
-                        closeScanner();
-                        openLinkBarcodeSheet({
-                          scanned: scanResult.barcode,
-                          barcode: scanResult.barcode,
-                          delayMs: 350,
-                        });
-                      }}
-                    >
-                      <Ionicons name="link-outline" size={16} color="#fff" />
-                      <Text style={s.scanResultBtnPrimaryText}>Link to Product</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={s.scanResultBtnSecondary} activeOpacity={0.8} onPress={handleScanAgain}>
-                      <Ionicons name="scan-outline" size={16} color="#fff" />
-                      <Text style={s.scanResultBtnSecondaryText}>Scan Again</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* ════════════════════════════════════════════
           IMPORT BULK BARCODES MODAL
@@ -1755,50 +1399,6 @@ const s = StyleSheet.create({
   printQueueBar: { paddingHorizontal: SPACING.md, paddingTop: SPACING.md, backgroundColor: COLORS.cardBg, borderTopWidth: 1, borderTopColor: COLORS.borderDefault },
   printQueueBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: COLORS.brandPrimary, paddingVertical: 15, borderRadius: RADIUS.md },
   printQueueBtnText: { fontSize: TYPOGRAPHY.base, fontWeight: '700', color: '#fff' },
-
-  scannerModal:        { flex: 1, backgroundColor: '#000' },
-  scannerNoPermission: { flex: 1, backgroundColor: '#111', alignItems: 'center', justifyContent: 'center', gap: 20 },
-  scannerNoPermText:   { color: 'rgba(255,255,255,0.6)', fontSize: TYPOGRAPHY.base, textAlign: 'center', paddingHorizontal: 40 },
-  permBtn:             { backgroundColor: COLORS.brandPrimary, paddingHorizontal: 28, paddingVertical: 12, borderRadius: RADIUS.full },
-  permBtnText:         { color: '#fff', fontSize: TYPOGRAPHY.sm, fontWeight: '700' },
-  scanOverlay:         { ...StyleSheet.absoluteFillObject },
-  // Frame is a real scan constraint — barcodes outside it are rejected.
-  // measureInWindow maps this View to absolute screen coordinates for bounds check.
-  scanDimTop:          { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 10 },
-  scanTopHint:         { color: 'rgba(255,255,255,0.6)', fontSize: 11, letterSpacing: 0.3 },
-  scanMiddleRow:       { flexDirection: 'row', height: 130 },
-  scanDimSide:         { width: 12, backgroundColor: 'rgba(0,0,0,0.45)' },
-  scanFrame:           { flex: 1, height: 130, position: 'relative' },
-  corner:              { position: 'absolute', width: 24, height: 24 },
-  cornerTL:            { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderColor: '#fff', borderTopLeftRadius: 4 },
-  cornerTR:            { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderColor: '#fff', borderTopRightRadius: 4 },
-  cornerBL:            { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderColor: '#fff', borderBottomLeftRadius: 4 },
-  cornerBR:            { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderColor: '#fff', borderBottomRightRadius: 4 },
-  scanDimBottom:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 60, gap: 20 },
-  scanHint:            { color: 'rgba(255,255,255,0.7)', fontSize: TYPOGRAPHY.sm, textAlign: 'center' },
-  scanHintOutOfFrame:  { color: '#FF6B35', fontWeight: '700', fontSize: TYPOGRAPHY.sm },
-  scanHelperText:      { color: '#FFD700', fontSize: 13, fontWeight: '600', textAlign: 'center', paddingHorizontal: 20 },
-  scanCloseBtn:        { paddingHorizontal: 36, paddingVertical: 13, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: RADIUS.full, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
-  scanCloseBtnText:    { color: '#fff', fontSize: TYPOGRAPHY.sm, fontWeight: '700' },
-  torchBtn:            { position: 'absolute', top: 54, right: 20, zIndex: 10, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
-
-  // ── Scan result panel (shown inside scanner overlay)
-  scanResultPanel:        { width: '100%', paddingHorizontal: 20, paddingVertical: 20, alignItems: 'center', gap: 10 },
-  scanResultLooking:      { color: 'rgba(255,255,255,0.8)', fontSize: TYPOGRAPHY.sm, marginTop: 8 },
-  scanResultBadgeFound:   { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 5, backgroundColor: '#22c55e', borderRadius: RADIUS.full },
-  scanResultBadgeNotFound:{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 5, backgroundColor: AMBER,    borderRadius: RADIUS.full },
-  scanResultBadgeText:    { color: '#fff', fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
-  scanResultName:         { fontSize: TYPOGRAPHY.md, fontWeight: '700', color: '#fff', textAlign: 'center', paddingHorizontal: 10 },
-  scanResultBarcode:      { fontSize: TYPOGRAPHY.xs, color: 'rgba(255,255,255,0.6)', letterSpacing: 1.5, fontFamily: 'monospace' },
-  scanResultMeta:         { flexDirection: 'row', gap: 16, marginTop: 2 },
-  scanResultMetaItem:     { alignItems: 'center', gap: 2 },
-  scanResultMetaLabel:    { fontSize: 10, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 },
-  scanResultMetaValue:    { fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: '#fff', maxWidth: 100 },
-  scanResultActions:      { flexDirection: 'row', gap: 10, marginTop: 4, width: '100%' },
-  scanResultBtnPrimary:   { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 13, borderRadius: RADIUS.full, backgroundColor: COLORS.brandPrimary },
-  scanResultBtnPrimaryText:   { color: '#fff', fontSize: TYPOGRAPHY.sm, fontWeight: '700' },
-  scanResultBtnSecondary: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 13, borderRadius: RADIUS.full, backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
-  scanResultBtnSecondaryText: { color: '#fff', fontSize: TYPOGRAPHY.xs, fontWeight: '700' },
 
   modalHandle:   { width: 38, height: 4, borderRadius: 2, backgroundColor: COLORS.borderStrong, alignSelf: 'center', marginTop: 10, marginBottom: 6 },
   importHeader:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: COLORS.borderDefault },

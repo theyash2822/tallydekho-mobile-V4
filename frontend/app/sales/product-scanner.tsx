@@ -15,7 +15,7 @@
 
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Linking, Alert,
+  View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Linking, Alert, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -24,50 +24,73 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import { useBarcodeScanner } from '../../src/hooks/useBarcodeScanner';
 import { barcodePicker } from '../../src/utils/barcodePicker';
+import { CAMERA_DIAG_BUILD, cameraDiag } from '../../src/utils/cameraDiag';
+import { useCameraMountId, useCameraOwnerGate } from '../../src/hooks/useCameraOwnerGate';
+import { useAutoTorchAssist } from '../../src/hooks/useAutoTorchAssist';
+import { barcodeCenterInFrame } from '../../src/utils/barcodeFrameHit';
+
+/** Product barcode scan window — locked square (not Jun 11 strip). */
+const FRAME_SIZE = 240;
 
 export default function ProductScannerScreen() {
   const router = useRouter();
   const { companyGuid } = useLocalSearchParams<{ companyGuid?: string }>();
   const [permission, requestPermission] = useCameraPermissions();
+  const [hostSize, setHostSize] = useState({ w: 0, h: 0 });
+  const [cameraSize, setCameraSize] = useState({ w: 0, h: 0 });
+  const mountId = useCameraMountId('sales-product');
+  const { isFocused, appForeground, mountCamera, barcodeListenReady } = useCameraOwnerGate({
+    permissionGranted: !!permission?.granted,
+    bounds: hostSize,
+  });
 
   const {
     scanned, scanLookingUp, scanResult,
     handleBarcodeScanned, resetScanner, isProcessingRef,
   } = useBarcodeScanner(companyGuid);
 
-  // ── Torch + auto-zoom ───────────────────────────────────────────────────────
-  const [torchOn, setTorchOn] = useState(false);
   const [zoom, setZoom] = useState(0);
   const zoomTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const zoomStepRef    = useRef(0);
 
-  // ── Frame constraint ────────────────────────────────────────────────────────
   const [outOfFrame, setOutOfFrame]               = useState(false);
   const [frameScreenBounds, setFrameScreenBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const frameMeasureRef    = useRef<View>(null);
+  const cameraMeasureRef   = useRef<View>(null);
   const outOfFrameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recentDataRef      = useRef<{ data: string; time: number }[]>([]);
 
-  // ── Stable barcode type setting ─────────────────────────────────────────────
+  const listening = barcodeListenReady && !scanned && !scanLookingUp;
+
+  const {
+    torchOn, toggleTorch, torchAutoOn, resetTorchAssist,
+  } = useAutoTorchAssist({
+    active: mountCamera && listening && !scanResult?.found,
+    delayMs: 2000,
+    onAutoOn: () => cameraDiag(mountId, 'torch_auto_on', {
+      platform: Platform.OS,
+    }, '/sales/product-scanner'),
+  });
+
+  // c1cef8f8 — stable settings; iOS re-inits barcode pipeline on new object
   const barcodeScannerSettings = useMemo(
-    () => ({ barcodeTypes: ['qr', 'code128', 'ean13', 'ean8', 'upc_a'] as any }),
+    () => ({
+      barcodeTypes: [
+        'qr', 'code128', 'code39', 'ean13', 'ean8', 'upc_a', 'upc_e', 'codabar', 'itf14',
+      ] as any,
+    }),
     [],
   );
 
-  // ── Auto-zoom: 0 → 0.08 → 0.18 at 800ms steps ─────────────────────────────
+  // Delay zoom until after first listen window (esp. iOS)
   const startZoomTimer = useCallback(() => {
     zoomStepRef.current = 0;
-    const step = () => {
-      zoomStepRef.current += 1;
-      if (zoomStepRef.current === 1) {
-        setZoom(0.08);
-        zoomTimerRef.current = setTimeout(step, 800);
-      } else if (zoomStepRef.current === 2) {
-        setZoom(0.18);
-        zoomTimerRef.current = null;
-      }
-    };
-    zoomTimerRef.current = setTimeout(step, 800);
+    const delay = Platform.OS === 'ios' ? 2200 : 1200;
+    zoomTimerRef.current = setTimeout(() => {
+      zoomStepRef.current = 1;
+      setZoom(0.08);
+      zoomTimerRef.current = null;
+    }, delay);
   }, []);
 
   const clearTimers = useCallback(() => {
@@ -76,47 +99,60 @@ export default function ProductScannerScreen() {
   }, []);
 
   useEffect(() => {
-    // Start zoom on mount
     startZoomTimer();
     return clearTimers;
   }, [startZoomTimer, clearTimers]);
 
-  // ── Measure frame absolute screen coords ────────────────────────────────────
+  useEffect(() => {
+    cameraDiag(mountId, 'screen', {
+      build: CAMERA_DIAG_BUILD,
+      focused: isFocused,
+      appForeground,
+      granted: !!permission?.granted,
+      platform: Platform.OS,
+      hostW: hostSize.w,
+      hostH: hostSize.h,
+      cameraW: cameraSize.w,
+      cameraH: cameraSize.h,
+    }, '/sales/product-scanner');
+  }, [mountId, isFocused, appForeground, permission?.granted, hostSize, cameraSize]);
+
   const handleFrameLayout = useCallback(() => {
     frameMeasureRef.current?.measureInWindow((x, y, width, height) => {
       if (width > 0 && height > 0) setFrameScreenBounds({ x, y, width, height });
     });
   }, []);
 
-  // ── Spatial + dedup bounds check (same as stocks scanner) ──────────────────
+  // June ab4df78f: screen-dp spatial for BOTH platforms; dedup only when bounds invalid
   const handleBarcodeScanWithBoundsCheck = useCallback(
     (result: { data: string; bounds?: { origin: { x: number; y: number }; size: { width: number; height: number } } }) => {
       if (isProcessingRef.current) return;
 
-      const boundsValid =
-        !!result.bounds && !!frameScreenBounds &&
-        result.bounds.size.width >= 1 && result.bounds.size.height >= 1;
+      cameraDiag(mountId, 'scan_fire', {
+        platform: Platform.OS,
+        hasBounds: !!result.bounds,
+        bw: result.bounds?.size.width ?? 0,
+        bh: result.bounds?.size.height ?? 0,
+      }, '/sales/product-scanner');
 
-      if (boundsValid && result.bounds && frameScreenBounds) {
-        const cx = result.bounds.origin.x + result.bounds.size.width  / 2;
-        const cy = result.bounds.origin.y + result.bounds.size.height / 2;
-        const inside =
-          cx >= frameScreenBounds.x &&
-          cx <= frameScreenBounds.x + frameScreenBounds.width  &&
-          cy >= frameScreenBounds.y &&
-          cy <= frameScreenBounds.y + frameScreenBounds.height;
+      const hit = barcodeCenterInFrame({
+        bounds: result.bounds,
+        frame: frameScreenBounds,
+      });
 
-        if (!inside) {
-          setOutOfFrame(true);
-          if (outOfFrameTimerRef.current) clearTimeout(outOfFrameTimerRef.current);
-          outOfFrameTimerRef.current = setTimeout(() => setOutOfFrame(false), 900);
-          return;
-        }
-      } else {
+      if (hit === 'outside') {
+        setOutOfFrame(true);
+        if (outOfFrameTimerRef.current) clearTimeout(outOfFrameTimerRef.current);
+        outOfFrameTimerRef.current = setTimeout(() => setOutOfFrame(false), 900);
+        return;
+      }
+
+      if (hit === 'unknown') {
         const now = Date.now();
         recentDataRef.current = recentDataRef.current.filter(r => now - r.time < 400);
         recentDataRef.current.push({ data: result.data, time: now });
-        if (new Set(recentDataRef.current.map(r => r.data)).size > 1) {
+        const uniqueCodes = new Set(recentDataRef.current.map(r => r.data));
+        if (uniqueCodes.size > 1) {
           setOutOfFrame(true);
           if (outOfFrameTimerRef.current) clearTimeout(outOfFrameTimerRef.current);
           outOfFrameTimerRef.current = setTimeout(() => setOutOfFrame(false), 900);
@@ -129,7 +165,7 @@ export default function ProductScannerScreen() {
       recentDataRef.current = [];
       handleBarcodeScanned(result);
     },
-    [frameScreenBounds, handleBarcodeScanned, isProcessingRef],
+    [frameScreenBounds, handleBarcodeScanned, isProcessingRef, mountId],
   );
 
   // ── When scan resolves → hand off to barcodePicker ─────────────────────────
@@ -150,11 +186,11 @@ export default function ProductScannerScreen() {
     resetScanner();
     clearTimers();
     setZoom(0);
-    setTorchOn(false);
+    resetTorchAssist();
     setOutOfFrame(false);
     recentDataRef.current = [];
     startZoomTimer();
-  }, [resetScanner, clearTimers, startZoomTimer]);
+  }, [resetScanner, clearTimers, startZoomTimer, resetTorchAssist]);
 
   const handleCancel = useCallback(() => {
     barcodePicker.clear();
@@ -188,16 +224,51 @@ export default function ProductScannerScreen() {
   }
 
   return (
-    <View style={s.root}>
-      {/* ── Camera ── */}
-      <CameraView
-        style={StyleSheet.absoluteFill}
-        facing="back"
-        zoom={zoom}
-        enableTorch={torchOn}
-        barcodeScannerSettings={barcodeScannerSettings}
-        onBarcodeScanned={!scanned ? handleBarcodeScanWithBoundsCheck : undefined}
-      />
+    <View
+      style={s.root}
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        setHostSize({ w: width, h: height });
+        cameraDiag(mountId, 'host_layout', {
+          width, height, platform: Platform.OS, frameSize: FRAME_SIZE,
+        }, '/sales/product-scanner');
+      }}
+    >
+      {/* Full-screen CameraView — 240 frame is guide + spatial filter only */}
+      <View
+        ref={cameraMeasureRef}
+        collapsable={false}
+        style={hostSize.w > 0 && hostSize.h > 0
+          ? { width: hostSize.w, height: hostSize.h, position: 'absolute', top: 0, left: 0 }
+          : StyleSheet.absoluteFillObject}
+      >
+        {mountCamera ? (
+          <CameraView
+            style={{ width: hostSize.w, height: hostSize.h }}
+            facing="back"
+            zoom={zoom}
+            enableTorch={torchOn}
+            active={isFocused && appForeground}
+            barcodeScannerSettings={barcodeScannerSettings}
+            onBarcodeScanned={listening ? handleBarcodeScanWithBoundsCheck : undefined}
+            onLayout={(e) => {
+              const { width, height } = e.nativeEvent.layout;
+              setCameraSize({ w: width, h: height });
+              cameraDiag(mountId, 'camera_layout', {
+                width, height, platform: Platform.OS, hostW: hostSize.w, hostH: hostSize.h,
+              }, '/sales/product-scanner');
+            }}
+            onCameraReady={() => cameraDiag(mountId, 'onCameraReady', {
+              platform: Platform.OS, hostW: hostSize.w, hostH: hostSize.h,
+              cameraW: cameraSize.w, cameraH: cameraSize.h,
+            }, '/sales/product-scanner')}
+            onMountError={(ev) => cameraDiag(mountId, 'onMountError', {
+              message: ev?.message ?? 'unknown',
+              platform: Platform.OS,
+            }, '/sales/product-scanner')}
+          />
+        ) : null}
+      </View>
 
       {/* ── Top header ── */}
       <SafeAreaView style={s.headerWrap} edges={['top']}>
@@ -206,13 +277,13 @@ export default function ProductScannerScreen() {
             <Ionicons name="close" size={22} color="#fff" />
           </TouchableOpacity>
           <Text style={s.headerTitle}>Scan Product Barcode</Text>
-          <TouchableOpacity style={[s.iconBtn, torchOn && s.torchActive]} onPress={() => setTorchOn(v => !v)} activeOpacity={0.8}>
+          <TouchableOpacity style={[s.iconBtn, torchOn && s.torchActive]} onPress={toggleTorch} activeOpacity={0.8}>
             <Ionicons name={torchOn ? 'flashlight' : 'flashlight-outline'} size={22} color="#fff" />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
 
-      {/* ── Dark vignette + scan frame ── */}
+      {/* ── Dark vignette + transparent 240 frame (no CameraView nested here) ── */}
       <View style={s.vignette} pointerEvents="none">
         <View style={s.vigTop} />
         <View style={s.vigMid}>
@@ -239,7 +310,10 @@ export default function ProductScannerScreen() {
             <Text style={s.hintTxt}>📦 Move barcode into frame</Text>
           </View>
         )}
-        {!scanned && !outOfFrame && (
+        {!scanned && !outOfFrame && torchAutoOn && (
+          <Text style={s.prompt}>Flash on — hold barcode in the frame</Text>
+        )}
+        {!scanned && !outOfFrame && !torchAutoOn && (
           <Text style={s.prompt}>Point camera at product barcode</Text>
         )}
       </View>
@@ -276,9 +350,6 @@ export default function ProductScannerScreen() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const DARK = 'rgba(0,0,0,0.55)';
-const FRAME_SIZE = 240;
-
 const s = StyleSheet.create({
   root:    { flex: 1, backgroundColor: '#000' },
   permSafe:{ flex: 1, backgroundColor: COLORS.pageBg },
@@ -291,19 +362,19 @@ const s = StyleSheet.create({
   cancelTxt: { fontSize: TYPOGRAPHY.base, color: COLORS.textSecondary, fontWeight: '600' },
 
   // Header
-  headerWrap:{ position: 'absolute', top: 0, left: 0, right: 0 },
+  headerWrap:{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 5 },
   header:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 12, gap: 12 },
   headerTitle:{ flex: 1, fontSize: TYPOGRAPHY.base, fontWeight: '700', color: '#fff', textAlign: 'center' },
   iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
   torchActive:{ backgroundColor: 'rgba(255,200,0,0.35)' },
 
-  // Vignette / frame
-  vignette:{ ...StyleSheet.absoluteFillObject },
-  vigTop:  { flex: 1, backgroundColor: DARK },
-  vigMid:  { flexDirection: 'row', height: FRAME_SIZE },
-  vigSide: { flex: 1, backgroundColor: DARK },
-  vigBottom:{ flex: 1.5, backgroundColor: DARK },
-  frame:   { width: FRAME_SIZE, height: FRAME_SIZE, borderRadius: 4 },
+  // Vignette — flex:1 on stack (absoluteFill pins frame to top). Camera is full-screen underneath.
+  vignette:{ flex: 1 },
+  vigTop:  { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' },
+  vigMid:  { flexDirection: 'row', height: FRAME_SIZE, flexGrow: 0, flexShrink: 0 },
+  vigSide: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' },
+  vigBottom:{ flex: 1.5, backgroundColor: 'rgba(0,0,0,0.55)' },
+  frame:   { width: FRAME_SIZE, height: FRAME_SIZE, borderRadius: 4, backgroundColor: 'transparent' },
   frameWarn:{ opacity: 0.6 },
 
   // Corner brackets

@@ -1,18 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useWindowDimensions } from 'react-native';
+import Toast from 'react-native-toast-message';
 import Svg, { Rect } from 'react-native-svg';
 import { encodeCode128B } from '../../src/utils/barcode';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../src/constants/colors';
 import DateRangePickerModal from '../../src/components/DateRangePickerModal';
 
 import { useAuth, fyInfoToParam } from '../../src/context/AuthContext';
-import { getStockItem, getStockMovements, getStockGodowns, getBarcodesByGuids, generateBarcode } from '../../src/services/api';
+import {
+  getStockItem, getStockMovements, getStockGodowns, getBarcodesByGuids,
+  generateBarcode, alterStockItem, checkHsnCode, getBarcodeSettings,
+} from '../../src/services/api';
 import { useSettings } from '../../src/context/SettingsContext';
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -23,8 +27,6 @@ const fmtRs = (n: number | null | undefined, unit = '') =>
     : '—';
 
 // ─── REAL CODE128B BARCODE ──────────────────────────────────────────────────
-// Uses encodeCode128B from barcode.ts — same encoder as label-preview.tsx.
-// Integer virtual coords + viewBox scaling → bar ratios exact, no drift.
 function BarcodeSVG({ code, height = 56 }: { code: string; height?: number }) {
   const { width: screenWidth } = useWindowDimensions();
   const barcodeW = screenWidth - 80;
@@ -32,10 +34,10 @@ function BarcodeSVG({ code, height = 56 }: { code: string; height?: number }) {
   const { bars, totalModules } = encodeCode128B(code);
   if (!bars.length || !totalModules) return null;
 
-  const QUIET          = 10;                         // quiet modules each side
+  const QUIET          = 10;
   const totalWithQuiet = totalModules + QUIET * 2;
-  const VMOD           = 3;                          // integer virtual units per module
-  const vw             = totalWithQuiet * VMOD;      // virtual canvas width
+  const VMOD           = 3;
+  const vw             = totalWithQuiet * VMOD;
 
   const rects: React.ReactElement[] = [];
   let mp = QUIET;
@@ -123,18 +125,27 @@ export default function ItemDetailScreen() {
   const [calOpen,    setCalOpen]    = useState(false);
   const [dateFrom,   setDateFrom]   = useState('');
   const [dateTo,     setDateTo]     = useState('');
+  const [hsnDraft,   setHsnDraft]   = useState('');
+  const [hsnHint,    setHsnHint]    = useState<string | null>(null);
+  const [hsnSaving,  setHsnSaving]  = useState(false);
+  const [hsnEditing, setHsnEditing] = useState(false);
+  const [itemBarcode,       setItemBarcode]       = useState<string | null>(null);
+  const [barcodeGenerating, setBarcodeGenerating] = useState(false);
   useEffect(() => {
     setDateFrom('');
     setDateTo('');
   }, [selectedFY?.startDate, selectedFY?.endDate]);
-  const [itemBarcode,       setItemBarcode]       = useState<string | null>(null);
-  const [barcodeGenerating, setBarcodeGenerating] = useState(false);
 
   useEffect(() => {
     if (!companyGuid || !id) return;
     setItemLoading(true);
     getStockItem(companyGuid, id as string, fyParam ? { fy: fyParam } : undefined)
-      .then((res: any) => { if (res?.data) setLiveItem(res.data); })
+      .then((res: any) => {
+        if (res?.data) {
+          setLiveItem(res.data);
+          setHsnDraft(res.data.hsn || '');
+        }
+      })
       .catch(() => {})
       .finally(() => setItemLoading(false));
     // Fetch warehouse breakdown
@@ -151,7 +162,7 @@ export default function ItemDetailScreen() {
         }
       })
       .catch(() => {});
-    // Fetch primary barcode from stock_barcodes
+    // Primary barcode from stock_barcodes
     getBarcodesByGuids(companyGuid, [id as string])
       .then((res: any) => {
         const bc = (res?.data?.items || res?.items || [])[0]?.barcode || null;
@@ -240,11 +251,31 @@ export default function ItemDetailScreen() {
                   if (!companyGuid || !id) return;
                   setBarcodeGenerating(true);
                   try {
-                    const res = await generateBarcode(companyGuid, id as string);
+                    let barcodeType = 'CODE128';
+                    let syncTarget = 'app_only';
+                    try {
+                      const st: any = await getBarcodeSettings(companyGuid);
+                      const d = st?.data || st;
+                      if (d?.defaultBarcodeType) barcodeType = d.defaultBarcodeType;
+                      if (d?.barcodeStorageMode) syncTarget = d.barcodeStorageMode;
+                    } catch { /* use defaults */ }
+                    const res: any = await generateBarcode(companyGuid, id as string, barcodeType, syncTarget);
                     const bc = res?.data?.barcode || res?.barcode;
-                    if (bc) { setItemBarcode(bc); }
-                  } catch {}
-                  finally { setBarcodeGenerating(false); }
+                    if (bc) {
+                      setItemBarcode(bc);
+                      Toast.show({
+                        type: 'success',
+                        text1: 'Barcode generated',
+                        text2: syncTarget !== 'app_only' ? `${bc} · syncing to Tally` : bc,
+                      });
+                    } else {
+                      Toast.show({ type: 'error', text1: 'Generate failed', text2: 'No barcode returned' });
+                    }
+                  } catch (e: any) {
+                    Toast.show({ type: 'error', text1: 'Generate failed', text2: e?.message || 'Try again' });
+                  } finally {
+                    setBarcodeGenerating(false);
+                  }
                 }}
               >
                 {barcodeGenerating
@@ -305,14 +336,11 @@ export default function ItemDetailScreen() {
           )}
 
           {/* Item Details */}
-          {(liveItem?.sku || liveItem?.alias || liveItem?.hsn || liveItem?.description) && (
+          {(liveItem?.sku || liveItem?.alias || liveItem?.description) && (
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Item Details</Text>
               {(liveItem?.sku || liveItem?.alias) && (
                 <PricingRow label="Part Number" value={liveItem?.sku || liveItem?.alias} />
-              )}
-              {liveItem?.hsn && (
-                <PricingRow label="HSN Code" value={liveItem.hsn} />
               )}
               {liveItem?.tax_rate != null && +liveItem.tax_rate > 0 && (
                 <PricingRow label="Tax Rate" value={`${liveItem.tax_rate}%`} />
@@ -329,6 +357,99 @@ export default function ItemDetailScreen() {
             <PricingRow label="Last Purchase Rate"         value={lastPurchRate} />
             <PricingRow label="Average Purchase Rate"      value={avgPurchRate} />
             <PricingRow label="Last Selling Price"         value={sellingPrice} />
+            {/* HSN — inline under Last Selling Price; edit → save */}
+            <View style={[pr.row, { borderBottomWidth: 0 }]}>
+              <Text style={pr.label}>HSN</Text>
+              <View style={hsnInline.valueWrap}>
+                {hsnEditing ? (
+                  <TextInput
+                    style={hsnInline.input}
+                    value={hsnDraft}
+                    onChangeText={(v) => { setHsnDraft(v.replace(/\D/g, '').slice(0, 8)); setHsnHint(null); }}
+                    placeholder="e.g. 38089190"
+                    placeholderTextColor={COLORS.textTertiary}
+                    keyboardType="number-pad"
+                    maxLength={8}
+                    autoFocus
+                    onBlur={async () => {
+                      const code = hsnDraft.trim();
+                      if (!code) { setHsnHint(null); return; }
+                      try {
+                        const res: any = await checkHsnCode(code);
+                        if (res?.data?.valid === false) {
+                          setHsnHint('Invalid HSN — enter a valid GST HSN/SAC code to save.');
+                        } else setHsnHint(null);
+                      } catch { setHsnHint(null); }
+                    }}
+                  />
+                ) : (
+                  <Text style={[pr.value, !liveItem?.hsn && { color: COLORS.textTertiary, fontWeight: '500' }]}>
+                    {liveItem?.hsn || '—'}
+                  </Text>
+                )}
+                <TouchableOpacity
+                  style={hsnInline.iconBtn}
+                  activeOpacity={0.7}
+                  disabled={hsnSaving}
+                  onPress={async () => {
+                    if (!hsnEditing) {
+                      setHsnDraft(liveItem?.hsn || '');
+                      setHsnHint(null);
+                      setHsnEditing(true);
+                      return;
+                    }
+                    const code = hsnDraft.trim();
+                    const saved = liveItem?.hsn || '';
+                    // No change yet → cancel edit
+                    if (!code || code === saved) {
+                      setHsnDraft(saved);
+                      setHsnHint(null);
+                      setHsnEditing(false);
+                      return;
+                    }
+                    if (!companyGuid || !liveItem?.name) return;
+                    setHsnSaving(true);
+                    try {
+                      const check: any = await checkHsnCode(code);
+                      if (check?.data?.valid === false) {
+                        setHsnHint('Invalid HSN — enter a valid GST HSN/SAC code to save.');
+                        Toast.show({ type: 'error', text1: 'Invalid HSN', text2: 'This code is not accepted.' });
+                        return;
+                      }
+                      const res: any = await alterStockItem({
+                        companyGuid,
+                        companyName: company?.name || '',
+                        existingName: liveItem.name,
+                        changes: { hsnCode: code },
+                      });
+                      setLiveItem((prev: any) => prev ? { ...prev, hsn: code } : prev);
+                      setHsnEditing(false);
+                      setHsnHint(null);
+                      Toast.show({
+                        type: 'success',
+                        text1: res?.queued ? 'HSN queued' : 'HSN saved',
+                        text2: res?.queued
+                          ? 'Will update in Tally when desktop connects.'
+                          : 'Updated in Tally',
+                      });
+                    } catch (e: any) {
+                      Toast.show({ type: 'error', text1: 'HSN update failed', text2: e?.message || 'Try again' });
+                    } finally {
+                      setHsnSaving(false);
+                    }
+                  }}
+                >
+                  {hsnSaving ? (
+                    <ActivityIndicator size="small" color={COLORS.brandPrimary} />
+                  ) : hsnEditing && hsnDraft.trim() && hsnDraft.trim() !== (liveItem?.hsn || '') ? (
+                    <Ionicons name="checkmark-circle" size={22} color={COLORS.brandPrimary} />
+                  ) : (
+                    <Ionicons name="pencil-outline" size={16} color={COLORS.textTertiary} />
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+            {!!hsnHint && <Text style={hsnInline.hint}>{hsnHint}</Text>}
           </View>
 
           {/* Narration / Alias */}
@@ -447,4 +568,16 @@ const styles = StyleSheet.create({
   },
   reconcileTxt: { flex: 1, fontSize: TYPOGRAPHY.xs, color: '#B45309', lineHeight: 16 },
   whPct: { fontSize: 10, color: COLORS.textTertiary, marginTop: 2 },
+});
+
+const hsnInline = StyleSheet.create({
+  valueWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, maxWidth: '62%' },
+  input: {
+    minWidth: 96, maxWidth: 140, height: 32, paddingHorizontal: 8, paddingVertical: 0,
+    backgroundColor: COLORS.pageBg, borderRadius: RADIUS.sm,
+    borderWidth: 1, borderColor: COLORS.borderStrong,
+    fontSize: TYPOGRAPHY.sm, fontWeight: '700', color: COLORS.textPrimary, textAlign: 'right',
+  },
+  iconBtn: { padding: 2, minWidth: 28, alignItems: 'center', justifyContent: 'center' },
+  hint: { fontSize: 11, color: '#92400E', marginTop: 4, lineHeight: 15 },
 });

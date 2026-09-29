@@ -1037,7 +1037,7 @@ export default function CreatePurchaseOrderScreen() {
                         };
                       }));
                     });
-                    safePush(router, `/sales/product-scanner?companyGuid=${company?.guid}` as any);
+                    safePush(router, `/stocks/barcode-scanner?mode=pick&companyGuid=${encodeURIComponent(company?.guid || '')}` as any);
                   }}
                   onAddTaxEntry={addTaxEntry}
                   onUpdateTaxEntry={updateTaxEntry}

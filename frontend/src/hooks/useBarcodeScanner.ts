@@ -1,13 +1,17 @@
 /**
  * useBarcodeScanner.ts
  *
- * Encapsulates all barcode scan state + lookup logic.
- * Keeps camera callback clean — no inline API calls in UI.
+ * Encapsulates barcode scan state + lookup.
+ * Locks while looking up / after a found hit; auto-unlocks after a miss so
+ * iOS can take a second aim without tapping Scan Again.
  */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Vibration } from 'react-native';
 import { lookupBarcode } from '../services/api';
+
+/** After not-found / error, re-arm the camera listener (ms). */
+export const SCAN_RETRY_UNLOCK_MS = 1600;
 
 export interface ScanResultItem {
   stockGuid:   string;
@@ -27,18 +31,37 @@ export interface ScanResult {
 
 export function useBarcodeScanner(companyGuid: string | undefined) {
   // Ref-based guard: synchronous, no stale-closure issues.
-  // Camera fires onBarcodeScanned many times per second — ref blocks all
-  // subsequent calls after the first one until resetScanner() is called.
   const isProcessingRef = useRef(false);
+  const unlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [scanned,       setScanned]       = useState(false);
   const [scanLookingUp, setScanLookingUp] = useState(false);
   const [scanResult,    setScanResult]    = useState<ScanResult | null>(null);
 
+  const clearUnlockTimer = useCallback(() => {
+    if (unlockTimerRef.current) {
+      clearTimeout(unlockTimerRef.current);
+      unlockTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => clearUnlockTimer(), [clearUnlockTimer]);
+
+  /** Re-arm listening after a miss; keep not-found panel until next accept / Scan Again. */
+  const scheduleRetryUnlock = useCallback(() => {
+    clearUnlockTimer();
+    unlockTimerRef.current = setTimeout(() => {
+      unlockTimerRef.current = null;
+      isProcessingRef.current = false;
+      setScanned(false);
+    }, SCAN_RETRY_UNLOCK_MS);
+  }, [clearUnlockTimer]);
+
   const handleBarcodeScanned = useCallback(
     async ({ data }: { data: string }) => {
       if (isProcessingRef.current) return;
       isProcessingRef.current = true;
+      clearUnlockTimer();
 
       setScanned(true);
       Vibration.vibrate(80);
@@ -47,33 +70,43 @@ export function useBarcodeScanner(companyGuid: string | undefined) {
 
       if (!companyGuid) {
         setScanLookingUp(false);
-        isProcessingRef.current = false;
+        setScanResult({ found: false, barcode: data });
+        scheduleRetryUnlock();
         return;
       }
       try {
         const res = await lookupBarcode(companyGuid, data);
         const d = res?.data ?? res;
-        if (d?.found && d?.item?.stockGuid) {
-          setScanResult({ found: true, barcode: data, item: d.item });
+        const item = d?.item;
+        const stockGuid = item?.stockGuid || item?.guid || item?.id;
+        if (d?.found && item && stockGuid) {
+          setScanResult({
+            found: true,
+            barcode: data,
+            item: { ...item, stockGuid: String(stockGuid) },
+          });
+          // Stay locked until Scan Again / navigate away
         } else {
           setScanResult({ found: false, barcode: data });
+          scheduleRetryUnlock();
         }
       } catch {
         setScanResult({ found: false, barcode: data });
+        scheduleRetryUnlock();
       } finally {
         setScanLookingUp(false);
-        // isProcessingRef stays true until resetScanner() — prevents duplicate API calls
       }
     },
-    [companyGuid],
+    [companyGuid, clearUnlockTimer, scheduleRetryUnlock],
   );
 
   const resetScanner = useCallback(() => {
+    clearUnlockTimer();
     isProcessingRef.current = false;
     setScanned(false);
     setScanResult(null);
     setScanLookingUp(false);
-  }, []);
+  }, [clearUnlockTimer]);
 
   return {
     scanned,

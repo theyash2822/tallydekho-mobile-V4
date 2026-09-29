@@ -10,6 +10,11 @@ Do NOT read or modify: td-backend, td-web-portal, td-source/desktop, td-website.
 3. Read NAVIGATION_MAP.md
 4. Read only the source files listed for your task
 
+## Engineering standards
+- Debugging method: `docs/engineering/DEBUGGING_STANDARD.md`
+- Camera scanners: `docs/engineering/CAMERA_SCANNER_STANDARD.md`
+- Camera incident (2026-09-25): `docs/incidents/2026-09-25-camera-preview.md`
+
 ## Full Scan Rule
 Full codebase scan is FORBIDDEN by default.
 Only allowed when user explicitly says: **DO FULL CODEBASE REVIEW**

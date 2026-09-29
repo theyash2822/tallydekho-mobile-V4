@@ -153,6 +153,16 @@ export default function CreateStockItemScreen() {
       return;
     }
     if (!assertCanCreate('stock_item.create')) return;
+    if (hsnVerifyOn && hsnCode.trim()) {
+      try {
+        const check: any = await checkHsnCode(hsnCode.trim());
+        if (check?.data?.valid === false) {
+          setHsnHint('Invalid HSN — enter a valid GST HSN/SAC code to save.');
+          Toast.show({ type: 'error', text1: 'Invalid HSN', text2: 'This code is not accepted.' });
+          return;
+        }
+      } catch { /* allow if check API fails */ }
+    }
     try {
       setSubmitting(true);
       const igst = parseFloat(String(taxRate).replace('%', '')) || 0;
@@ -283,7 +293,7 @@ export default function CreateStockItemScreen() {
                 const res: any = await checkHsnCode(hsnCode.trim());
                 const d = res?.data;
                 if (d && d.valid === false) {
-                  setHsnHint('System finds this HSN invalid. Please correct it, or you can proceed.');
+                  setHsnHint('Invalid HSN — enter a valid GST HSN/SAC code to save.');
                 } else {
                   setHsnHint(null);
                 }

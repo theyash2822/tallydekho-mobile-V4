@@ -982,7 +982,7 @@ export default function CreateSalesOrderScreen() {
                         return { ...i, product: result.productName, unit: result.unit || si2?.unit || i.unit, rate: si2?.rate != null ? String(si2.rate) : i.rate };
                       }));
                     });
-                    safePush(router, `/sales/product-scanner?companyGuid=${company?.guid}` as any);
+                    safePush(router, `/stocks/barcode-scanner?mode=pick&companyGuid=${encodeURIComponent(company?.guid || '')}` as any);
                   }}
                   onAddTaxEntry={addTaxEntry}
                   onUpdateTaxEntry={updateTaxEntry}

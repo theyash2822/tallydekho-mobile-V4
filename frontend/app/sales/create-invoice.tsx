@@ -1756,7 +1756,7 @@ export default function CreateSalesInvoiceScreen() {
                         return { ...i, product: result.productName, unit: result.unit || si?.unit || i.unit, rate: si?.rate != null ? String(si.rate) : i.rate };
                       }));
                     });
-                    safePush(router, `/sales/product-scanner?companyGuid=${company?.guid}` as any);
+                    safePush(router, `/stocks/barcode-scanner?mode=pick&companyGuid=${encodeURIComponent(company?.guid || '')}` as any);
                   }}
                   onAddTaxEntry={addTaxEntry}
                   onUpdateTaxEntry={updateTaxEntry}
