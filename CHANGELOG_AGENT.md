@@ -1,3 +1,12 @@
+## 2026-09-30 — Header company switch back to a dropdown; FY dropdown taps fixed
+
+- Company switch opens the header dropdown again (as before `cc3a9b1a`) instead of pushing `/switch-company`. Picking a company calls `AuthContext.setCompany` the same way the screen did.
+- Both dropdowns render through `@gorhom/portal` (the root host that `BottomSheetModalProvider` already mounts; its name is `bottom-sheet-portal-<id>`, read via `useBottomSheetModalInternal().hostName` — a bare `<Portal>` targets `'root'`, which no host renders), so no RN `Modal` (the Android hang under bottom-sheet that caused the screen) and no in-header absolute overlay. The FY overlay extended past the header's bounds, where Android drops touches, so FY options often did nothing.
+- FY tick follows the AuthContext FY (start/end dates), not just the label. Android back closes an open dropdown.
+- `@gorhom/portal@1.0.14` added as a direct dependency (the version already installed via bottom-sheet). `app/switch-company.tsx` stays, but nothing links to it.
+
+---
+
 ## 2026-09-21 — Browser-local period dates
 
 `todayLocalISO` / `resolvePeriodDates` use the device calendar, not UTC.
