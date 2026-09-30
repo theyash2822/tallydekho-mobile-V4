@@ -1,3 +1,9 @@
+## 2026-09-30 — Rolled back header dropdown change
+
+- Reverted `6e318c11` (company + FY dropdowns via `@gorhom/portal`) at Yash's request: dropdowns did not work on device. Header is back to `6ce51ef0` behaviour (company → `/switch-company` screen, FY in-header overlay). The FY tap issue is still open.
+
+---
+
 ## 2026-09-21 — Browser-local period dates
 
 `todayLocalISO` / `resolvePeriodDates` use the device calendar, not UTC.
